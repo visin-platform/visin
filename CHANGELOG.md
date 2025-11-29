@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.6](https://github.com/av-research/visin/compare/v0.0.5...v0.0.6) (2025-11-29)
+
+
+### Features
+
+* Add public landing page ([7382b68](https://github.com/av-research/visin/commit/7382b68b0cbbd6b88deb2c5a958485a0c2c2a90a))
+
 ### [0.0.5](https://github.com/av-research/visin/compare/v0.0.4...v0.0.5) (2025-11-29)
 
 
