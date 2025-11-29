@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.8](https://github.com/av-research/visin/compare/v0.0.7...v0.0.8) (2025-11-29)
+
+
+### Features
+
+* Rename public front to landing front app ([83eea20](https://github.com/av-research/visin/commit/83eea208757bf0cc7b795c1a15f11512325e9ab1))
+
 ### [0.0.7](https://github.com/av-research/visin/compare/v0.0.6...v0.0.7) (2025-11-29)
 
 
