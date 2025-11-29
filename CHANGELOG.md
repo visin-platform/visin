@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.9](https://github.com/av-research/visin/compare/v0.0.8...v0.0.9) (2025-11-29)
+
+
+### Features
+
+* Rework design for trainings and details ([9bb96a2](https://github.com/av-research/visin/commit/9bb96a2df670c9eff56b7dcba4c58420dfa941fd))
+
 ### [0.0.8](https://github.com/av-research/visin/compare/v0.0.7...v0.0.8) (2025-11-29)
 
 
