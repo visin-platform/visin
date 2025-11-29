@@ -1,0 +1,18 @@
+services:
+  public-front:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: toomastahves/public-front:latest
+    restart: unless-stopped
+    environment:
+      VISION_API_URL: ${VISION_API_URL}
+    ports:
+      - '3000:80'
+    init: true
+    networks:
+      - visinnet
+
+networks:
+  visinnet:
+    external: true
