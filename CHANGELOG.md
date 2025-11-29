@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.4](https://github.com/av-research/visin/compare/v0.0.3...v0.0.4) (2025-11-29)
+
+
+### Bug Fixes
+
+* Set server user for single service deploy ([45861e0](https://github.com/av-research/visin/commit/45861e043e9aeb5045abe157055463adf76b070e))
+
 ### [0.0.3](https://github.com/av-research/visin/compare/v0.0.2...v0.0.3) (2025-11-29)
 
 
