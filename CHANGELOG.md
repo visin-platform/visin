@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.7](https://github.com/av-research/visin/compare/v0.0.6...v0.0.7) (2025-11-29)
+
+
+### Features
+
+* Add landing page to proxy ([861218a](https://github.com/av-research/visin/commit/861218ac716788262253266bee29d0dd16a51096))
+
 ### [0.0.6](https://github.com/av-research/visin/compare/v0.0.5...v0.0.6) (2025-11-29)
 
 
