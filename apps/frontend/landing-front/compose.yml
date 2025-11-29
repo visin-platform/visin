@@ -1,12 +1,12 @@
 services:
-  public-front:
+  landing-front:
     build:
       context: .
       dockerfile: Dockerfile
-    image: toomastahves/public-front:latest
+    image: toomastahves/landing-front:latest
     restart: unless-stopped
     environment:
-      VISION_API_URL: ${VISION_API_URL}
+      APP_URL: ${APP_URL}
     ports:
       - '3000:80'
     init: true

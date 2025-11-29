@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:back\" \"npm run dev:front\"",
     "dev:back": "concurrently \"npm run dev --workspace=vision-service\"",
-    "dev:front": "concurrently \"npm run dev --workspace=vision-front\" \"npm run dev --workspace=public-front\"",
+    "dev:front": "concurrently \"npm run dev --workspace=vision-front\" \"npm run dev --workspace=landing-front\"",
     "lint": "npm run lint --workspaces",
     "test": "npm run test --workspaces",
     "format": "prettier --write ."

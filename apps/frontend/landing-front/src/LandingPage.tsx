@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import './LandingPage.css';
+import { useConfig } from './config/ConfigProvider';
 
 function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const config = useConfig();
+  const appUrl = config.APP_URL || '#';
 
   return (
     <div className="App">
@@ -16,7 +19,7 @@ function LandingPage() {
             <li><a href="#home" onClick={() => setMenuOpen(false)}>Home</a></li>
             <li><a href="#features" onClick={() => setMenuOpen(false)}>Features</a></li>
             <li><a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a></li>
-            <li><a href="#get-started" className="nav-cta" onClick={() => setMenuOpen(false)}>Get Started</a></li>
+            <li><a href={appUrl} className="nav-cta">Get Started</a></li>
           </ul>
         </nav>
         <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)}>
@@ -30,7 +33,7 @@ function LandingPage() {
             Accelerate your computer vision lifecycle with VisIn. From dataset curation and model training to advanced benchmarking and visualization, we provide the tools you need to build state-of-the-art vision systems.
           </p>
           <div className="hero-actions">
-            <button className="cta-button">Get Started</button>
+            <button className="cta-button" onClick={() => window.location.href = appUrl}>Get Started</button>
             <button className="cta-button outline">View Documentation</button>
           </div>
         </div>
@@ -95,9 +98,9 @@ function LandingPage() {
               <li>✓ Unlimited Public Projects</li>
               <li>✓ 5GB Storage</li>
               <li>✓ Community Support</li>
-              <li>✓ Shared Training Queue</li>
+              <li>✓ Standard Training Queue</li>
             </ul>
-            <button className="cta-button full-width">Get Started Free</button>
+            <button className="cta-button full-width" onClick={() => window.location.href = appUrl}>Get Started Free</button>
           </div>
           <div className="pricing-card disabled">
             <div className="pricing-header">
@@ -119,7 +122,7 @@ function LandingPage() {
         <div className="cta-content">
           <h2>Accelerate Your Vision Projects</h2>
           <p>Join researchers and developers using VisIn to streamline their computer vision workflows.</p>
-          <button className="cta-button secondary">Start Now</button>
+          <button className="cta-button secondary" onClick={() => window.location.href = appUrl}>Start Now</button>
         </div>
       </section>
       <footer className="footer">
