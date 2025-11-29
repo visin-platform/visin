@@ -10,7 +10,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Chip
+  useTheme,
+  alpha
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -27,12 +28,14 @@ import { getAllAnalyses, type DatasetAnalysis } from '../services/analysisServic
 import { Training, Config } from '../types';
 import TrainingsTable from '../components/TrainingsTable';
 import TrainingFilters from '../components/TrainingFilters';
+import TrainingStats from '../components/TrainingStats';
 import TrainingFormDialog from '../components/TrainingFormDialog';
 import { exportTrainingsToCSV } from '../utils/csvExport';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 const TrainingsPage: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Set page title
@@ -447,9 +450,14 @@ const TrainingsPage: React.FC = () => {
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-        <Typography variant="h4" component="h1">
-          Training Runs
-        </Typography>
+        <Box>
+          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+            Training Runs
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Manage and monitor your model training sessions
+          </Typography>
+        </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="contained"
@@ -467,14 +475,34 @@ const TrainingsPage: React.FC = () => {
               setEditingTrainingId(null);
               setCreateModalOpen(true);
             }}
+            sx={{ 
+              px: 3,
+              py: 1,
+              borderRadius: 2,
+              boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+            }}
           >
-            Create Training
+            New Training
           </Button>
-          <IconButton onClick={() => refetch()} disabled={isLoading}>
+          <IconButton 
+            onClick={() => refetch()} 
+            disabled={isLoading}
+            sx={{ 
+              bgcolor: 'background.paper',
+              border: `1px solid ${theme.palette.divider}`,
+              borderRadius: 2,
+              '&:hover': { bgcolor: theme.palette.action.hover }
+            }}
+          >
             <RefreshIcon />
           </IconButton>
         </Box>
       </Box>
+
+      {/* Training Statistics */}
+      {stats && (
+        <TrainingStats stats={stats} selectedTags={selectedTags} />
+      )}
 
       <TrainingFilters
         searchTerm={searchTerm}
@@ -486,104 +514,36 @@ const TrainingsPage: React.FC = () => {
         availableTags={availableTags}
       />
 
-      {/* Training Statistics */}
-      {stats && (
-        <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <Typography variant="h6">
-              Training Statistics
-            </Typography>
-            {selectedTags.length > 0 && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  (filtered by tags:
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                  {selectedTags.map((tag) => (
-                    <Chip
-                      key={tag}
-                      label={tag}
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        height: '20px',
-                        fontSize: '0.7rem',
-                        '& .MuiChip-label': {
-                          px: 0.5,
-                          py: 0
-                        }
-                      }}
-                    />
-                  ))}
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  )
-                </Typography>
-              </Box>
-            )}
-          </Box>
-          <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                Total Trainings
-              </Typography>
-              <Typography variant="h6">
-                {stats.totalTrainings}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                Total Time
-              </Typography>
-              <Typography variant="h6">
-                {Math.round(stats.totalTime / 3600 * 10) / 10}h
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                CPU Cost
-              </Typography>
-              <Typography variant="h6">
-                €{stats.totalCpuCost.toFixed(2)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                GPU Cost
-              </Typography>
-              <Typography variant="h6">
-                €{stats.totalGpuCost.toFixed(2)}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                Total Cost
-              </Typography>
-              <Typography variant="h6">
-                €{stats.totalCost.toFixed(2)}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-      )}
-
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
           {error instanceof Error ? error.message : 'Failed to load training runs'}
         </Alert>
       )}
 
-      {/* Bulk Delete UI */}
+      {/* Bulk Actions Bar */}
       {selectedTrainingIds.size > 0 && (
-        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            {selectedTrainingIds.size} training(s) selected
+        <Box 
+          sx={{ 
+            mb: 2, 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 2,
+            bgcolor: alpha(theme.palette.primary.main, 0.05),
+            border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+            borderRadius: 2
+          }}
+        >
+          <Typography variant="body2" fontWeight={600} color="primary">
+            {selectedTrainingIds.size} selected
           </Typography>
+          <Box sx={{ flexGrow: 1 }} />
           <Button
             variant="outlined"
             startIcon={<DownloadIcon />}
             onClick={exportToCSV}
             size="small"
+            sx={{ borderRadius: 2 }}
           >
             Export CSV
           </Button>
@@ -593,6 +553,8 @@ const TrainingsPage: React.FC = () => {
               startIcon={<CompareIcon />}
               onClick={handleCompareSelected}
               color="primary"
+              size="small"
+              sx={{ borderRadius: 2 }}
             >
               Compare
             </Button>
@@ -603,8 +565,9 @@ const TrainingsPage: React.FC = () => {
             size="small"
             startIcon={<DeleteOutlineIcon />}
             onClick={() => setDeleteMultipleDialogOpen(true)}
+            sx={{ borderRadius: 2 }}
           >
-            Delete Selected
+            Delete
           </Button>
         </Box>
       )}
@@ -658,15 +621,23 @@ const TrainingsPage: React.FC = () => {
       />
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+      <Dialog 
+        open={deleteDialogOpen} 
+        onClose={() => setDeleteDialogOpen(false)}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
         <DialogTitle>Delete Training</DialogTitle>
         <DialogContent>
           <Typography>
             Are you sure you want to delete this training? This action cannot be undone.
           </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)} disabled={creating}>
+        <DialogActions sx={{ p: 2.5 }}>
+          <Button 
+            onClick={() => setDeleteDialogOpen(false)} 
+            disabled={creating}
+            sx={{ borderRadius: 2 }}
+          >
             Cancel
           </Button>
           <Button
@@ -674,6 +645,7 @@ const TrainingsPage: React.FC = () => {
             color="error"
             variant="contained"
             disabled={creating}
+            sx={{ borderRadius: 2 }}
           >
             {creating ? 'Deleting...' : 'Delete'}
           </Button>
@@ -684,6 +656,7 @@ const TrainingsPage: React.FC = () => {
       <Dialog
         open={deleteMultipleDialogOpen}
         onClose={() => setDeleteMultipleDialogOpen(false)}
+        PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <DialogTitle>Delete Selected Trainings</DialogTitle>
         <DialogContent>
@@ -691,8 +664,12 @@ const TrainingsPage: React.FC = () => {
             Are you sure you want to delete {selectedTrainingIds.size} training(s)? This action cannot be undone.
           </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteMultipleDialogOpen(false)} disabled={creating}>
+        <DialogActions sx={{ p: 2.5 }}>
+          <Button 
+            onClick={() => setDeleteMultipleDialogOpen(false)} 
+            disabled={creating}
+            sx={{ borderRadius: 2 }}
+          >
             Cancel
           </Button>
           <Button
@@ -700,6 +677,7 @@ const TrainingsPage: React.FC = () => {
             color="error"
             variant="contained"
             disabled={creating}
+            sx={{ borderRadius: 2 }}
           >
             {creating ? 'Deleting...' : 'Delete'}
           </Button>

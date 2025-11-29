@@ -14,13 +14,19 @@ import {
   Chip,
   IconButton,
   Tooltip,
-  Checkbox
+  Checkbox,
+  useTheme,
+  alpha
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
+  ArrowDownward as ArrowDownwardIcon,
+  PlayArrow as RunIcon,
+  CheckCircle as SuccessIcon,
+  Error as ErrorIcon,
+  Schedule as PendingIcon
 } from '@mui/icons-material';
 import { Link, useNavigate } from 'react-router-dom';
 import { Training } from '../types';
@@ -44,33 +50,68 @@ interface TrainingsTableProps {
   onSort: (column: 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount') => void;
 }
 
-const getStatusColor = (status: Training['status']): 'success' | 'error' | 'default' | 'warning' => {
+const StatusChip: React.FC<{ status: Training['status'] }> = ({ status }) => {
+  const theme = useTheme();
+  
+  let color = theme.palette.text.secondary;
+  let bgcolor = theme.palette.action.hover;
+  let icon = <PendingIcon style={{ fontSize: 16 }} />;
+  let label = status;
+
   switch (status) {
     case 'completed':
-      return 'success';
+      color = theme.palette.success.main;
+      bgcolor = alpha(theme.palette.success.main, 0.1);
+      icon = <SuccessIcon style={{ fontSize: 16 }} />;
+      break;
     case 'running':
-      return 'default';
+      color = theme.palette.info.main;
+      bgcolor = alpha(theme.palette.info.main, 0.1);
+      icon = <RunIcon style={{ fontSize: 16 }} />;
+      break;
     case 'failed':
-      return 'error';
+      color = theme.palette.error.main;
+      bgcolor = alpha(theme.palette.error.main, 0.1);
+      icon = <ErrorIcon style={{ fontSize: 16 }} />;
+      break;
     case 'pending':
-      return 'default';
-    default:
-      return 'default';
+      color = theme.palette.warning.main;
+      bgcolor = alpha(theme.palette.warning.main, 0.1);
+      icon = <PendingIcon style={{ fontSize: 16 }} />;
+      break;
   }
+
+  return (
+    <Box 
+      sx={{ 
+        display: 'inline-flex', 
+        alignItems: 'center', 
+        gap: 0.5,
+        px: 1,
+        py: 0.5,
+        borderRadius: 1,
+        bgcolor: bgcolor,
+        color: color,
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        textTransform: 'capitalize'
+      }}
+    >
+      {icon}
+      {label}
+    </Box>
+  );
 };
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const year = date.getFullYear();
-  const time = date.toLocaleTimeString('en-GB', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit',
-    hour12: false 
-  });
-  return `${day}.${month}.${year} ${time}`;
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
 };
 
 const formatDuration = (seconds: number) => {
@@ -80,12 +121,9 @@ const formatDuration = (seconds: number) => {
   const minutes = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
   
-  const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0) parts.push(`${minutes}m`);
-  if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
-  
-  return parts.join(' ');
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
 };
 
 interface SortableTableCellProps {
@@ -106,25 +144,30 @@ const SortableTableCell: React.FC<SortableTableCellProps> = ({
   align = 'left'
 }) => {
   const isActive = sortBy === column;
+  const theme = useTheme();
   
   return (
     <TableCell 
       align={align} 
       sx={{ 
-        fontWeight: 'bold',
+        fontWeight: 600,
         cursor: 'pointer',
         userSelect: 'none',
-        '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
+        color: isActive ? theme.palette.primary.main : 'text.primary',
+        transition: 'background-color 0.2s',
+        '&:hover': { backgroundColor: theme.palette.action.hover }
       }}
       onClick={() => onSort(column)}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: align === 'center' ? 'center' : 'flex-start' }}>
         {children}
-        {isActive && (
-          sortOrder === 'asc' ? 
-            <ArrowUpwardIcon fontSize="small" /> : 
-            <ArrowDownwardIcon fontSize="small" />
-        )}
+        <Box sx={{ width: 20, display: 'flex', justifyContent: 'center' }}>
+          {isActive && (
+            sortOrder === 'asc' ? 
+              <ArrowUpwardIcon fontSize="small" /> : 
+              <ArrowDownwardIcon fontSize="small" />
+          )}
+        </Box>
       </Box>
     </TableCell>
   );
@@ -149,6 +192,8 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
   onSort
 }) => {
   const navigate = useNavigate();
+  const theme = useTheme();
+
   if (isLoading) {
     return (
       <Box display="flex" justifyContent="center" py={8}>
@@ -159,23 +204,42 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
 
   if (trainings.length === 0) {
     return (
-      <Paper sx={{ p: 4, textAlign: 'center' }}>
-        <Typography variant="h6" color="text.secondary">
+      <Paper 
+        elevation={0} 
+        sx={{ 
+          p: 6, 
+          textAlign: 'center', 
+          borderRadius: 2,
+          border: `1px solid ${theme.palette.divider}`,
+          bgcolor: 'background.paper'
+        }}
+      >
+        <Typography variant="h6" color="text.secondary" gutterBottom>
           {searchTerm
             ? 'No trainings found matching your search'
             : 'No training runs available'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {searchTerm ? 'Try adjusting your filters' : 'Create a new training to get started'}
         </Typography>
       </Paper>
     );
   }
 
   return (
-    <Paper>
-      <TableContainer>
-        <Table>
-          <TableHead>
+    <Paper 
+      elevation={0} 
+      sx={{ 
+        borderRadius: 2, 
+        border: `1px solid ${theme.palette.divider}`,
+        overflow: 'hidden'
+      }}
+    >
+      <TableContainer sx={{ overflowX: 'auto' }}>
+        <Table sx={{ minWidth: 650 }}>
+          <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
             <TableRow>
-              <TableCell padding="checkbox" sx={{ fontWeight: 'bold' }}>
+              <TableCell padding="checkbox">
                 <Checkbox
                   indeterminate={
                     selectedTrainingIds.size > 0 && selectedTrainingIds.size < trainings.length
@@ -183,12 +247,13 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                   checked={trainings.length > 0 && selectedTrainingIds.size === trainings.length}
                   onChange={onSelectAll}
                   disabled={trainings.length === 0}
+                  color="primary"
                 />
               </TableCell>
               <SortableTableCell column="name" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
                 Name
               </SortableTableCell>
-              <TableCell><strong>Description</strong></TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
               <SortableTableCell column="status" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="center">
                 Status
               </SortableTableCell>
@@ -198,172 +263,150 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
               <SortableTableCell column="totalTime" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="center">
                 Time
               </SortableTableCell>
-              <SortableTableCell column="cpuCost" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="center">
-                CPU Cost
-              </SortableTableCell>
-              <SortableTableCell column="gpuCost" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="center">
-                GPU Cost
-              </SortableTableCell>
               <SortableTableCell column="totalCost" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="center">
-                Total Cost
+                Cost
               </SortableTableCell>
               <SortableTableCell column="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
                 Created
               </SortableTableCell>
-              <SortableTableCell column="updatedAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
-                Updated
-              </SortableTableCell>
-              <TableCell align="center"><strong>Actions</strong></TableCell>
+              <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {trainings.map((training: Training) => (
-              <TableRow
-                key={training._id}
-                hover
-                selected={selectedTrainingIds.has(training._id)}
-                sx={{
-                  cursor: 'pointer',
-                  backgroundColor: selectedTrainingIds.has(training._id)
-                    ? 'rgba(25, 118, 210, 0.08)'
-                    : 'inherit'
-                }}
-                onClick={() => navigate(`/trainings/${training._id}`)}
-              >
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    checked={selectedTrainingIds.has(training._id)}
-                    onChange={() => onSelectTraining(training._id)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Box>
-                    <Link 
-                      to={`/trainings/${training._id}`} 
-                      style={{ textDecoration: 'none', color: 'inherit' }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        navigate(`/trainings/${training._id}`);
-                      }}
-                    >
-                      <Typography variant="body2" fontWeight={600}>
-                        {training.name}
-                      </Typography>
-                    </Link>
-                    {training.tags && training.tags.length > 0 && (
-                      <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {training.tags.map((tag) => (
-                          <Chip
-                            key={tag}
-                            label={tag}
-                            size="small"
-                            variant="outlined"
-                            sx={{
-                              height: '18px',
-                              fontSize: '0.7rem',
-                              '& .MuiChip-label': {
-                                px: 0.5,
-                                py: 0
-                              }
-                            }}
-                          />
-                        ))}
-                      </Box>
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 250 }}>
-                    {training.description || '-'}
-                  </Typography>
-                </TableCell>
-                <TableCell align="center">
-                  <Chip
-                    label={training.status}
-                    color={getStatusColor(training.status)}
-                    size="small"
-                    sx={{ textTransform: 'capitalize' }}
-                  />
-                </TableCell>
-                <TableCell align="center">
-                  <Typography variant="body2" color="text.secondary">
-                    {training.metrics ? training.metrics.maxEpoch || 0 : 0}
-                  </Typography>
-                </TableCell>
-                <TableCell align="center">
-                  <Typography variant="body2" color="text.secondary">
-                    {training.metrics ? formatDuration(training.metrics.totalTime) : '-'}
-                  </Typography>
-                </TableCell>
-                <TableCell align="center">
-                  <Typography variant="body2" color="text.secondary">
-                    {training.metrics ? `€${training.metrics.cpuCost.toFixed(3)}` : '-'}
-                  </Typography>
-                </TableCell>
-                <TableCell align="center">
-                  <Typography variant="body2" color="text.secondary">
-                    {training.metrics ? `€${training.metrics.gpuCost.toFixed(3)}` : '-'}
-                  </Typography>
-                </TableCell>
-                <TableCell align="center">
-                  <Typography variant="body2" color="text.secondary">
-                    {training.metrics ? `€${((training.metrics.cpuCost || 0) + (training.metrics.gpuCost || 0)).toFixed(3)}` : '-'}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatDate(training.createdAt)}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatDate(training.updatedAt)}
-                  </Typography>
-                </TableCell>
-                <TableCell align="center">
-                  <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                    <Tooltip title="Edit training">
-                      <IconButton
-                        size="small"
-                        color="primary"
+            {trainings.map((training: Training) => {
+              const isSelected = selectedTrainingIds.has(training._id);
+              return (
+                <TableRow
+                  key={training._id}
+                  hover
+                  selected={isSelected}
+                  sx={{
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s',
+                    '&.Mui-selected': {
+                      backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                      '&:hover': {
+                        backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                      }
+                    }
+                  }}
+                  onClick={() => navigate(`/trainings/${training._id}`)}
+                >
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      checked={isSelected}
+                      onChange={() => onSelectTraining(training._id)}
+                      onClick={(e) => e.stopPropagation()}
+                      color="primary"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Box>
+                      <Link 
+                        to={`/trainings/${training._id}`} 
+                        style={{ textDecoration: 'none', color: 'inherit' }}
                         onClick={(e) => {
                           e.preventDefault();
-                          e.stopPropagation();
-                          onEdit(training);
+                          navigate(`/trainings/${training._id}`);
                         }}
                       >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete training">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onDelete(training._id);
-                        }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ))}
+                        <Typography variant="body2" fontWeight={600} color="primary">
+                          {training.name}
+                        </Typography>
+                      </Link>
+                      {training.tags && training.tags.length > 0 && (
+                        <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {training.tags.map((tag) => (
+                            <Chip
+                              key={tag}
+                              label={tag}
+                              size="small"
+                              variant="outlined"
+                              sx={{
+                                height: '20px',
+                                fontSize: '0.65rem',
+                                borderColor: alpha(theme.palette.divider, 0.8),
+                                '& .MuiChip-label': { px: 0.5, py: 0 }
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
+                      {training.description || '-'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="center">
+                    <StatusChip status={training.status} />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Typography variant="body2" fontWeight={500}>
+                      {training.metrics ? training.metrics.maxEpoch || 0 : 0}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Typography variant="body2" color="text.secondary">
+                      {training.metrics ? formatDuration(training.metrics.totalTime) : '-'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Typography variant="body2" fontWeight={500}>
+                      {training.metrics ? `€${((training.metrics.cpuCost || 0) + (training.metrics.gpuCost || 0)).toFixed(2)}` : '-'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatDate(training.createdAt)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="center">
+                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                      <Tooltip title="Edit training">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onEdit(training);
+                          }}
+                          sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.primary.main } }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete training">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onDelete(training._id);
+                          }}
+                          sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.error.main } }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>
       <TablePagination
-        rowsPerPageOptions={[5, 10, 25, 50, 100]}
+        rowsPerPageOptions={[10, 25, 50, 100]}
         component="div"
         count={total}
         rowsPerPage={rowsPerPage}
         page={page}
         onPageChange={onPageChange}
         onRowsPerPageChange={onRowsPerPageChange}
+        sx={{ borderTop: `1px solid ${theme.palette.divider}` }}
       />
     </Paper>
   );

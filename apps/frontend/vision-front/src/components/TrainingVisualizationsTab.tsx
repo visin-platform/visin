@@ -20,13 +20,23 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
-  TextField
+  TextField,
+  Stack,
+  Grid,
+  useTheme,
+  alpha,
+  Tooltip,
+  Divider
 } from '@mui/material';
 import {
   Upload as UploadIcon,
   Delete as DeleteIcon,
   CompareArrows as CompareIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  FilterList as FilterListIcon,
+  Image as ImageIcon,
+  ZoomIn as ZoomInIcon,
+  CloudUpload as CloudUploadIcon
 } from '@mui/icons-material';
 import { visualizationService } from '../services/visualizationService';
 import { Visualization, Epoch } from '../types';
@@ -56,6 +66,7 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
   const [selectedForCompare, setSelectedForCompare] = useState<Visualization[]>([]);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<Visualization | null>(null);
+  const theme = useTheme();
 
   // Load visualizations
   const loadVisualizations = async () => {
@@ -198,162 +209,265 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
   return (
     <Box>
       {/* Header Actions */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
-          <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel>Filter by Type</InputLabel>
-              <Select
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                label="Filter by Type"
-              >
-                <MenuItem value="all">All Types</MenuItem>
-                {types.map(type => (
-                  <MenuItem key={type} value={type}>{type}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>Filter by Epoch</InputLabel>
-              <Select
-                value={selectedEpochFilter}
-                onChange={(e) => setSelectedEpochFilter(e.target.value)}
-                label="Filter by Epoch"
-              >
-                <MenuItem value="all">All Epochs</MenuItem>
-                {epochs.map(epoch => (
-                  <MenuItem key={epoch.epoch_uuid} value={epoch.epoch.toString()}>
-                    Epoch {epoch.epoch}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <TextField
-              size="small"
-              label="Filter by Image Name"
-              value={selectedImageName}
-              onChange={(e) => setSelectedImageName(e.target.value)}
-              placeholder="Enter image name..."
-              sx={{ minWidth: 200 }}
-            />
-            
-            {selectedForCompare.length > 0 && (
-              <Chip
-                label={`${selectedForCompare.length} selected for compare`}
-                onDelete={() => setSelectedForCompare([])}
-                color="primary"
-              />
-            )}
-          </Box>
-
-          <Box display="flex" gap={1}>
-            {selectedForCompare.length >= 2 && (
-              <Button
-                variant="contained"
-                startIcon={<CompareIcon />}
-                onClick={() => setCompareDialogOpen(true)}
-              >
-                Compare ({selectedForCompare.length})
-              </Button>
-            )}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h6" fontWeight="bold">
+          Visualizations
+        </Typography>
+        <Stack direction="row" spacing={2}>
+          {selectedForCompare.length >= 2 && (
             <Button
-              variant="contained"
-              startIcon={<UploadIcon />}
-              onClick={() => setUploadDialogOpen(true)}
+              variant="outlined"
+              startIcon={<CompareIcon />}
+              onClick={() => setCompareDialogOpen(true)}
             >
-              Upload Visualization
+              Compare ({selectedForCompare.length})
             </Button>
+          )}
+          <Button
+            variant="contained"
+            startIcon={<UploadIcon />}
+            onClick={() => setUploadDialogOpen(true)}
+          >
+            Upload New
+          </Button>
+        </Stack>
+      </Box>
+
+      {/* Filters */}
+      <Paper 
+        elevation={0} 
+        variant="outlined" 
+        sx={{ 
+          p: 2, 
+          mb: 3, 
+          borderRadius: 2,
+          bgcolor: 'background.paper'
+        }}
+      >
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
+          <Box display="flex" alignItems="center" color="text.secondary">
+            <FilterListIcon sx={{ mr: 1 }} />
+            <Typography variant="subtitle2" fontWeight={600}>Filters:</Typography>
           </Box>
-        </Box>
+          
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <InputLabel>Type</InputLabel>
+            <Select
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
+              label="Type"
+            >
+              <MenuItem value="all">All Types</MenuItem>
+              {types.map(type => (
+                <MenuItem key={type} value={type}>{type}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Epoch</InputLabel>
+            <Select
+              value={selectedEpochFilter}
+              onChange={(e) => setSelectedEpochFilter(e.target.value)}
+              label="Epoch"
+            >
+              <MenuItem value="all">All Epochs</MenuItem>
+              {epochs.map(epoch => (
+                <MenuItem key={epoch.epoch_uuid} value={epoch.epoch.toString()}>
+                  Epoch {epoch.epoch}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <TextField
+            size="small"
+            label="Search by Name"
+            value={selectedImageName}
+            onChange={(e) => setSelectedImageName(e.target.value)}
+            placeholder="e.g. image_001"
+            sx={{ flexGrow: 1 }}
+          />
+          
+          {selectedForCompare.length > 0 && (
+            <Chip
+              label={`${selectedForCompare.length} selected`}
+              onDelete={() => setSelectedForCompare([])}
+              color="primary"
+              variant="outlined"
+            />
+          )}
+        </Stack>
       </Paper>
 
       {/* Error Alert */}
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
 
       {/* Loading State */}
       {loading && (
-        <Box display="flex" justifyContent="center" py={4}>
+        <Box display="flex" justifyContent="center" py={8}>
           <CircularProgress />
         </Box>
       )}
 
       {/* Visualizations Grid */}
       {!loading && visualizations.length === 0 && (
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <Typography color="text.secondary">
-            No visualizations found. Upload your first visualization to get started.
+        <Paper 
+          elevation={0} 
+          variant="outlined" 
+          sx={{ 
+            p: 6, 
+            textAlign: 'center', 
+            borderRadius: 2,
+            bgcolor: 'background.paper'
+          }}
+        >
+          <ImageIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            No visualizations found
           </Typography>
+          <Typography variant="body2" color="text.secondary" mb={3}>
+            Try adjusting your filters or upload a new visualization.
+          </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<UploadIcon />}
+            onClick={() => setUploadDialogOpen(true)}
+          >
+            Upload Visualization
+          </Button>
         </Paper>
       )}
 
       {!loading && Object.values(groupedVisualizations).map((group, groupIdx) => (
-        <Paper key={groupIdx} sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            {group.type} {group.epoch !== undefined && `- Epoch ${group.epoch}`}
-          </Typography>
-          <Box display="flex" flexWrap="wrap" gap={2}>
+        <Box key={groupIdx} mb={4}>
+          <Box display="flex" alignItems="center" mb={2}>
+            <Typography variant="h6" fontWeight={600} sx={{ mr: 2 }}>
+              {group.type}
+            </Typography>
+            {group.epoch !== undefined && (
+              <Chip label={`Epoch ${group.epoch}`} size="small" color="primary" variant="outlined" />
+            )}
+          </Box>
+          
+          <Grid container spacing={2}>
             {group.items.map(viz => (
-              <Box key={viz.visualization_uuid} sx={{ width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 11px)', lg: 'calc(25% - 12px)' } }}>
+              <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={viz.visualization_uuid}>
                 <Card
+                  variant="outlined"
                   sx={{
-                    cursor: 'pointer',
-                    border: selectedForCompare.find(v => v.visualization_uuid === viz.visualization_uuid)
-                      ? '2px solid'
-                      : 'none',
-                    borderColor: 'primary.main'
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    position: 'relative',
+                    transition: 'all 0.2s',
+                    borderColor: selectedForCompare.find(v => v.visualization_uuid === viz.visualization_uuid)
+                      ? 'primary.main'
+                      : 'divider',
+                    borderWidth: selectedForCompare.find(v => v.visualization_uuid === viz.visualization_uuid)
+                      ? 2
+                      : 1,
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      transform: 'translateY(-2px)',
+                      boxShadow: theme.shadows[2]
+                    }
                   }}
                 >
-                  <CardMedia
-                    component="img"
-                    height="200"
-                    image={viz.signedUrl || ''}
-                    alt={viz.filename}
-                    onClick={() => handleImageClick(viz)}
-                    sx={{ objectFit: 'contain', bgcolor: 'grey.100' }}
-                  />
-                  <CardContent>
-                    <Typography variant="body2" noWrap title={viz.filename}>
+                  <Box sx={{ position: 'relative', pt: '75%', bgcolor: 'grey.100', overflow: 'hidden' }}>
+                    <CardMedia
+                      component="img"
+                      image={viz.signedUrl || ''}
+                      alt={viz.filename}
+                      onClick={() => handleImageClick(viz)}
+                      sx={{ 
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        p: 1
+                      }}
+                    />
+                    <Box 
+                      className="hover-actions"
+                      sx={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        opacity: 0,
+                        transition: 'opacity 0.2s',
+                        bgcolor: 'rgba(255,255,255,0.8)',
+                        borderRadius: 1,
+                        '.MuiCard-root:hover &': { opacity: 1 }
+                      }}
+                    >
+                      <Tooltip title="View Full Size">
+                        <IconButton size="small" onClick={() => handleImageClick(viz)}>
+                          <ZoomInIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </Box>
+                  
+                  <CardContent sx={{ p: 1.5, flexGrow: 1 }}>
+                    <Typography variant="body2" noWrap title={viz.filename} fontWeight={500}>
                       {viz.filename}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {viz.type} • Epoch {viz.epoch}
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {new Date(viz.uploadedAt).toLocaleDateString()}
                     </Typography>
                   </CardContent>
-                  <CardActions>
+                  
+                  <Divider />
+                  
+                  <CardActions sx={{ p: 1, justifyContent: 'space-between' }}>
                     <Button
                       size="small"
+                      startIcon={<CompareIcon />}
                       onClick={() => handleCompareToggle(viz)}
                       disabled={selectedForCompare.length >= 4 && !selectedForCompare.find(v => v.visualization_uuid === viz.visualization_uuid)}
+                      color={selectedForCompare.find(v => v.visualization_uuid === viz.visualization_uuid) ? "primary" : "inherit"}
                     >
-                      {selectedForCompare.find(v => v.visualization_uuid === viz.visualization_uuid) ? 'Unselect' : 'Compare'}
+                      {selectedForCompare.find(v => v.visualization_uuid === viz.visualization_uuid) ? 'Selected' : 'Compare'}
                     </Button>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(viz.visualization_uuid)}
-                      color="error"
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    <Tooltip title="Delete">
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDelete(viz.visualization_uuid)}
+                        sx={{ 
+                          color: 'text.secondary',
+                          '&:hover': { color: 'error.main' }
+                        }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </CardActions>
                 </Card>
-              </Box>
+              </Grid>
             ))}
-          </Box>
-        </Paper>
+          </Grid>
+        </Box>
       ))}
 
       {/* Upload Dialog */}
-      <Dialog open={uploadDialogOpen} onClose={() => setUploadDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={uploadDialogOpen} 
+        onClose={() => setUploadDialogOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
         <DialogTitle>Upload Visualization</DialogTitle>
         <DialogContent>
-          <Box display="flex" flexDirection="column" gap={2} mt={2}>
+          <Stack spacing={3} mt={1}>
             <FormControl fullWidth>
               <InputLabel>Epoch</InputLabel>
               <Select
@@ -371,34 +485,51 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
 
             <TextField
               fullWidth
-              label="Type"
+              label="Visualization Type"
               value={uploadType}
               onChange={(e) => setUploadType(e.target.value)}
-              placeholder="e.g., segment, overlay, correct_only, compare"
-              helperText="Enter a visualization type (e.g., segment, overlay, correct_only, compare)"
+              placeholder="e.g., segment, overlay, correct_only"
+              helperText="Categorize this visualization (e.g., segment, overlay)"
             />
 
-            <Button
-              variant="outlined"
+            <Box 
+              sx={{ 
+                border: `2px dashed ${theme.palette.divider}`,
+                borderRadius: 2,
+                p: 4,
+                textAlign: 'center',
+                bgcolor: 'background.default',
+                cursor: 'pointer',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                  bgcolor: alpha(theme.palette.primary.main, 0.02)
+                }
+              }}
               component="label"
-              fullWidth
             >
-              {selectedFile ? selectedFile.name : 'Select Image File'}
               <input
                 type="file"
                 hidden
                 accept="image/*"
                 onChange={handleFileSelect}
               />
-            </Button>
-          </Box>
+              <CloudUploadIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
+              <Typography variant="body1" fontWeight={500} gutterBottom>
+                {selectedFile ? selectedFile.name : 'Click to Select Image'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Supports PNG, JPG, JPEG
+              </Typography>
+            </Box>
+          </Stack>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setUploadDialogOpen(false)}>Cancel</Button>
+        <DialogActions sx={{ p: 2.5 }}>
+          <Button onClick={() => setUploadDialogOpen(false)} color="inherit">Cancel</Button>
           <Button
             onClick={handleUpload}
             variant="contained"
             disabled={!selectedFile || !selectedEpoch || !uploadType || uploading}
+            startIcon={<UploadIcon />}
           >
             {uploading ? 'Uploading...' : 'Upload'}
           </Button>
@@ -406,91 +537,121 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
       </Dialog>
 
       {/* Compare Dialog */}
-      <Dialog open={compareDialogOpen} onClose={() => setCompareDialogOpen(false)} maxWidth="xl" fullWidth>
-        <DialogTitle>
-          Compare Visualizations
-          <IconButton
-            onClick={() => setCompareDialogOpen(false)}
-            sx={{ position: 'absolute', right: 8, top: 8 }}
-          >
+      <Dialog 
+        open={compareDialogOpen} 
+        onClose={() => setCompareDialogOpen(false)} 
+        maxWidth="xl" 
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2, height: '90vh' } }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">Compare Visualizations</Typography>
+          <IconButton onClick={() => setCompareDialogOpen(false)}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
-        <DialogContent>
-          <Box display="flex" flexWrap="wrap" gap={2}>
+        <DialogContent dividers>
+          <Grid container spacing={2} sx={{ height: '100%' }}>
             {selectedForCompare.map(viz => (
-              <Box key={viz.visualization_uuid} sx={{ width: { xs: '100%', md: selectedForCompare.length === 2 ? 'calc(50% - 8px)' : 'calc(50% - 8px)', lg: selectedForCompare.length === 2 ? 'calc(50% - 8px)' : 'calc(25% - 12px)' } }}>
-                <Paper sx={{ p: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    {viz.type} - Epoch {viz.epoch}
-                  </Typography>
-                  <Box
-                    component="img"
-                    src={viz.signedUrl || ''}
-                    alt={viz.filename}
-                    sx={{
-                      width: '100%',
-                      height: 'auto',
-                      maxHeight: 500,
-                      objectFit: 'contain',
-                      bgcolor: 'grey.100'
+              <Grid size={{ xs: 12, md: selectedForCompare.length === 2 ? 6 : 6, lg: selectedForCompare.length === 2 ? 6 : 3 }} key={viz.visualization_uuid}>
+                <Paper 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    height: '100%', 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    bgcolor: 'background.default'
+                  }}
+                >
+                  <Box mb={2}>
+                    <Chip 
+                      label={viz.type} 
+                      size="small" 
+                      color="primary" 
+                      sx={{ mr: 1, textTransform: 'uppercase', fontWeight: 600, fontSize: '0.7rem' }} 
+                    />
+                    <Chip 
+                      label={`Epoch ${viz.epoch}`} 
+                      size="small" 
+                      variant="outlined" 
+                      sx={{ fontWeight: 600, fontSize: '0.7rem' }} 
+                    />
+                  </Box>
+                  
+                  <Box 
+                    sx={{ 
+                      flexGrow: 1, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                      mb: 2
                     }}
-                  />
-                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                  >
+                    <Box
+                      component="img"
+                      src={viz.signedUrl || ''}
+                      alt={viz.filename}
+                      sx={{
+                        maxWidth: '100%',
+                        maxHeight: '60vh',
+                        objectFit: 'contain'
+                      }}
+                    />
+                  </Box>
+                  
+                  <Typography variant="caption" color="text.secondary" align="center" display="block" fontFamily="monospace">
                     {viz.filename}
                   </Typography>
                 </Paper>
-              </Box>
+              </Grid>
             ))}
-          </Box>
+          </Grid>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setCompareDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 
       {/* Image View Dialog */}
-      <Dialog open={imageDialogOpen} onClose={() => setImageDialogOpen(false)} maxWidth="lg" fullWidth>
-        <DialogTitle>
-          {selectedImage?.filename}
-          <IconButton
-            onClick={() => setImageDialogOpen(false)}
-            sx={{ position: 'absolute', right: 8, top: 8 }}
-          >
+      <Dialog 
+        open={imageDialogOpen} 
+        onClose={() => setImageDialogOpen(false)} 
+        maxWidth="lg" 
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2, bgcolor: 'black' } }}
+      >
+        <DialogTitle sx={{ color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="subtitle1">{selectedImage?.filename}</Typography>
+          <IconButton onClick={() => setImageDialogOpen(false)} sx={{ color: 'white' }}>
             <CloseIcon />
           </IconButton>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ p: 0, display: 'flex', justifyContent: 'center', bgcolor: 'black' }}>
           {selectedImage && (
-            <Box>
-              <Box
-                component="img"
-                src={selectedImage.signedUrl || ''}
-                alt={selectedImage.filename}
-                sx={{
-                  width: '100%',
-                  height: 'auto',
-                  maxHeight: '70vh',
-                  objectFit: 'contain',
-                  bgcolor: 'grey.100'
-                }}
-              />
-              <Box mt={2}>
-                <Typography variant="body2">
-                  <strong>Type:</strong> {selectedImage.type}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Epoch:</strong> {selectedImage.epoch}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Uploaded:</strong> {new Date(selectedImage.uploadedAt).toLocaleString()}
-                </Typography>
-              </Box>
-            </Box>
+            <Box
+              component="img"
+              src={selectedImage.signedUrl || ''}
+              alt={selectedImage.filename}
+              sx={{
+                maxWidth: '100%',
+                maxHeight: '85vh',
+                objectFit: 'contain'
+              }}
+            />
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setImageDialogOpen(false)}>Close</Button>
+        <DialogActions sx={{ bgcolor: 'black', p: 2 }}>
+          {selectedImage && (
+            <Box display="flex" gap={2} mr="auto">
+              <Chip label={selectedImage.type} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
+              <Chip label={`Epoch ${selectedImage.epoch}`} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
+            </Box>
+          )}
+          <Button onClick={() => setImageDialogOpen(false)} sx={{ color: 'white' }}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

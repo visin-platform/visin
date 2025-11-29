@@ -1,13 +1,44 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
+  Drawer,
+  List,
+  Typography,
+  Divider,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Avatar,
+  Menu,
+  MenuItem,
+  Select,
+  FormControl,
+  useTheme,
+  alpha,
+  CssBaseline,
   AppBar,
   Toolbar,
-  Typography,
-  Container,
-  Button
+  IconButton
 } from '@mui/material';
+import {
+  ModelTraining,
+  Settings,
+  Storage,
+  Assessment,
+  BarChart,
+  Speed,
+  CompareArrows,
+  Image as ImageIcon,
+  ExpandMore,
+  Menu as MenuIcon,
+  ChevronLeft,
+  ChevronRight
+} from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
+
+const DRAWER_WIDTH = 280;
+const COLLAPSED_DRAWER_WIDTH = 88;
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -15,174 +46,341 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
+  const theme = useTheme();
+  
+  // State for placeholders
+  const [tenant, setTenant] = useState('default');
+  const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(true);
+
+  const handleDrawerClose = () => {
+    setIsClosing(true);
+    setMobileOpen(false);
+  };
+
+  const handleDrawerTransitionEnd = () => {
+    setIsClosing(false);
+  };
+
+  const handleDrawerToggle = () => {
+    if (!isClosing) {
+      setMobileOpen(!mobileOpen);
+    }
+  };
+
+  const handleDesktopDrawerToggle = () => {
+    setDesktopOpen(!desktopOpen);
+  };
+
+  const handleOpenUserMenu = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorElUser(event.currentTarget);
+  };
+
+  const handleCloseUserMenu = () => {
+    setAnchorElUser(null);
+  };
+
+  const menuItems = [
+    { text: 'Trainings', icon: <ModelTraining />, path: '/trainings' },
+    { text: 'Configs', icon: <Settings />, path: '/configs' },
+    { text: 'Datasets', icon: <Storage />, path: '/analysis' },
+    { text: 'Test Results', icon: <Assessment />, path: '/test-results' },
+    { text: 'Visualizations', icon: <BarChart />, path: '/visualizations' },
+    { text: 'Benchmarks', icon: <Speed />, path: '/benchmarks' },
+    { text: 'Comparisons', icon: <CompareArrows />, path: '/comparisons' },
+    { text: 'Image Labeling', icon: <ImageIcon />, path: '/image-labeling' },
+  ];
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
+  const getDrawerContent = (collapsed: boolean) => (
+    <>
+      {/* logo.svg & Tenant Selector Area */}
+      <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: collapsed ? 'center' : 'flex-start' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, width: '100%', justifyContent: collapsed ? 'center' : 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box 
+              component="img"
+              src="/logo.svg"
+              alt="Visin Logo"
+              sx={{ 
+                width: 32, 
+                height: 32, 
+                flexShrink: 0
+              }}
+            />
+            {!collapsed && (
+              <Typography variant="h6" fontWeight={700} color="inherit">
+                Visin
+              </Typography>
+            )}
+          </Box>
+          
+          {/* Desktop Toggle Button */}
+          {!collapsed && (
+            <IconButton 
+              onClick={handleDesktopDrawerToggle}
+              sx={{ 
+                color: 'rgba(255,255,255,0.5)',
+                display: { xs: 'none', sm: 'flex' },
+                p: 0.5
+              }}
+            >
+              <ChevronLeft />
+            </IconButton>
+          )}
+        </Box>
+
+        {collapsed ? (
+           <IconButton 
+            onClick={handleDesktopDrawerToggle}
+            sx={{ 
+              mb: 0,
+              color: 'rgba(255,255,255,0.5)',
+              display: { xs: 'none', sm: 'flex' }
+            }}
+          >
+            <ChevronRight />
+          </IconButton>
+        ) : (
+          <FormControl fullWidth size="small" variant="outlined">
+            <Select
+              value={tenant}
+              onChange={(e) => setTenant(e.target.value)}
+              sx={{
+                bgcolor: 'rgba(255,255,255,0.05)',
+                color: '#fff',
+                '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
+                '.MuiSvgIcon-root': { color: 'rgba(255,255,255,0.5)' }
+              }}
+            >
+              <MenuItem value="default">Default Project</MenuItem>
+              <MenuItem value="demo">Demo Project</MenuItem>
+              <MenuItem value="new">+ New Project</MenuItem>
+            </Select>
+          </FormControl>
+        )}
+      </Box>
+
+      <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
+
+      {/* Navigation Items */}
+      <List sx={{ px: 2, py: 2 }}>
+        {menuItems.map((item) => {
+          const active = isActive(item.path);
+          return (
+            <ListItem key={item.text} disablePadding sx={{ mb: 0.5, display: 'block' }}>
+              <ListItemButton
+                component={Link}
+                to={item.path}
+                selected={active}
+                onClick={() => {
+                  // Close drawer on mobile when item is clicked
+                  if (mobileOpen) handleDrawerClose();
+                }}
+                sx={{
+                  minHeight: 48,
+                  justifyContent: collapsed ? 'center' : 'initial',
+                  px: 2.5,
+                  borderRadius: 2,
+                  '&.Mui-selected': {
+                    bgcolor: alpha(theme.palette.primary.main, 0.15),
+                    color: theme.palette.primary.light,
+                    '&:hover': {
+                      bgcolor: alpha(theme.palette.primary.main, 0.25),
+                    },
+                    '& .MuiListItemIcon-root': {
+                      color: theme.palette.primary.light,
+                    }
+                  },
+                  '&:hover': {
+                    bgcolor: 'rgba(255,255,255,0.05)',
+                  }
+                }}
+              >
+                <ListItemIcon 
+                  sx={{ 
+                    minWidth: 0,
+                    mr: collapsed ? 0 : 3,
+                    justifyContent: 'center',
+                    color: 'rgba(255,255,255,0.5)' 
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText 
+                  primary={item.text} 
+                  sx={{ opacity: collapsed ? 0 : 1, display: collapsed ? 'none' : 'block' }}
+                  primaryTypographyProps={{ 
+                    fontSize: '0.9rem', 
+                    fontWeight: active ? 600 : 400 
+                  }} 
+                />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
+      </List>
+
+      <Box sx={{ flexGrow: 1 }} />
+      
+      <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
+
+      {/* User Account Section */}
+      <Box sx={{ p: 2, display: 'flex', justifyContent: collapsed ? 'center' : 'flex-start' }}>
+        <ListItemButton
+          onClick={handleOpenUserMenu}
+          sx={{
+            borderRadius: 2,
+            justifyContent: collapsed ? 'center' : 'initial',
+            px: collapsed ? 1 : 2,
+            '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
+          }}
+        >
+          <Avatar sx={{ width: 32, height: 32, mr: collapsed ? 0 : 2, bgcolor: theme.palette.secondary.main }}>T</Avatar>
+          {!collapsed && (
+            <>
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="body2" fontWeight={600}>Tom User</Typography>
+                <Typography variant="caption" color="rgba(255,255,255,0.5)">tom@visin.eu</Typography>
+              </Box>
+              <ExpandMore sx={{ color: 'rgba(255,255,255,0.5)' }} />
+            </>
+          )}
+        </ListItemButton>
+        <Menu
+          sx={{ mt: -1 }}
+          id="menu-appbar"
+          anchorEl={anchorElUser}
+          anchorOrigin={{
+            vertical: 'top',
+            horizontal: 'right',
+          }}
+          keepMounted
+          transformOrigin={{
+            vertical: 'bottom',
+            horizontal: 'right',
+          }}
+          open={Boolean(anchorElUser)}
+          onClose={handleCloseUserMenu}
+        >
+          <MenuItem onClick={handleCloseUserMenu}>Profile</MenuItem>
+          <MenuItem onClick={handleCloseUserMenu}>Account</MenuItem>
+          <Divider />
+          <MenuItem onClick={handleCloseUserMenu}>Logout</MenuItem>
+        </Menu>
+      </Box>
+    </>
+  );
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <CssBaseline />
+      
+      {/* Mobile App Bar */}
       <AppBar
-        position="static"
-        elevation={0}
+        position="fixed"
         sx={{
-          background: 'transparent',
-          color: '#222',
-          boxShadow: 'none',
-          borderBottom: '1px solid rgba(0,0,0,0.1)'
+          width: { sm: `calc(100% - ${desktopOpen ? DRAWER_WIDTH : COLLAPSED_DRAWER_WIDTH}px)` },
+          ml: { sm: `${desktopOpen ? DRAWER_WIDTH : COLLAPSED_DRAWER_WIDTH}px` },
+          display: { sm: 'none' },
+          bgcolor: '#111827',
+          color: '#fff'
         }}
       >
         <Toolbar>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              component={Link}
-              to="/trainings"
-              color="inherit"
-              sx={{
-                fontWeight: isActive('/trainings') ? 700 : 500,
-                textTransform: 'none',
-                background: 'none',
-                borderRadius: 2,
-                px: 2,
-                color: isActive('/trainings') ? 'primary.main' : '#222',
-                '&:hover': { background: 'rgba(0,0,0,0.04)' }
-              }}
-            >
-              Trainings
-            </Button>
-            <Button
-              component={Link}
-              to="/configs"
-              color="inherit"
-              sx={{
-                fontWeight: isActive('/configs') ? 700 : 500,
-                textTransform: 'none',
-                background: 'none',
-                borderRadius: 2,
-                px: 2,
-                color: isActive('/configs') ? 'primary.main' : '#222',
-                '&:hover': { background: 'rgba(0,0,0,0.04)' }
-              }}
-            >
-              Configs
-            </Button>
-            <Button
-              component={Link}
-              to="/analysis"
-              color="inherit"
-              sx={{
-                fontWeight: isActive('/analysis') ? 700 : 500,
-                textTransform: 'none',
-                background: 'none',
-                borderRadius: 2,
-                px: 2,
-                color: isActive('/analysis') ? 'primary.main' : '#222',
-                '&:hover': { background: 'rgba(0,0,0,0.04)' }
-              }}
-            >
-              Datasets
-            </Button>
-            <Button
-              component={Link}
-              to="/test-results"
-              color="inherit"
-              sx={{
-                fontWeight: isActive('/test-results') ? 700 : 500,
-                textTransform: 'none',
-                background: 'none',
-                borderRadius: 2,
-                px: 2,
-                color: isActive('/test-results') ? 'primary.main' : '#222',
-                '&:hover': { background: 'rgba(0,0,0,0.04)' }
-              }}
-            >
-              Test Results
-            </Button>
-            <Button
-              component={Link}
-              to="/visualizations"
-              color="inherit"
-              sx={{
-                fontWeight: isActive('/visualizations') ? 700 : 500,
-                textTransform: 'none',
-                background: 'none',
-                borderRadius: 2,
-                px: 2,
-                color: isActive('/visualizations') ? 'primary.main' : '#222',
-                '&:hover': { background: 'rgba(0,0,0,0.04)' }
-              }}
-            >
-              Visualizations
-            </Button>
-            <Button
-              component={Link}
-              to="/benchmarks"
-              color="inherit"
-              sx={{
-                fontWeight: isActive('/benchmarks') ? 700 : 500,
-                textTransform: 'none',
-                background: 'none',
-                borderRadius: 2,
-                px: 2,
-                color: isActive('/benchmarks') ? 'primary.main' : '#222',
-                '&:hover': { background: 'rgba(0,0,0,0.04)' }
-              }}
-            >
-              Benchmarks
-            </Button>
-            <Button
-              component={Link}
-              to="/comparisons"
-              color="inherit"
-              sx={{
-                fontWeight: isActive('/comparisons') ? 700 : 500,
-                textTransform: 'none',
-                background: 'none',
-                borderRadius: 2,
-                px: 2,
-                color: isActive('/comparisons') ? 'primary.main' : '#222',
-                '&:hover': { background: 'rgba(0,0,0,0.04)' }
-              }}
-            >
-              Comparisons
-            </Button>
-            <Button
-              component={Link}
-              to="/image-labeling"
-              color="inherit"
-              sx={{
-                fontWeight: isActive('/image-labeling') ? 700 : 500,
-                textTransform: 'none',
-                background: 'none',
-                borderRadius: 2,
-                px: 2,
-                color: isActive('/image-labeling') ? 'primary.main' : '#222',
-                '&:hover': { background: 'rgba(0,0,0,0.04)' }
-              }}
-            >
-              Image Labeling
-            </Button>
+          <IconButton
+            color="inherit"
+            aria-label="open drawer"
+            edge="start"
+            onClick={handleDrawerToggle}
+            sx={{ mr: 2, display: { sm: 'none' } }}
+          >
+            <MenuIcon />
+          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box component="img" src="/logo.svg" alt="Visin Logo" sx={{ width: 24, height: 24 }} />
+            <Typography variant="h6" noWrap component="div" fontWeight={700}>
+              Visin
+            </Typography>
           </Box>
         </Toolbar>
       </AppBar>
 
-      <Box component="main" sx={{ flexGrow: 1, bgcolor: '#fafafa' }}>
-        {children}
+      {/* Sidebar Navigation */}
+      <Box
+        component="nav"
+        sx={{ width: { sm: desktopOpen ? DRAWER_WIDTH : COLLAPSED_DRAWER_WIDTH }, flexShrink: { sm: 0 }, transition: 'width 0.2s' }}
+        aria-label="mailbox folders"
+      >
+        {/* Mobile Drawer */}
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onTransitionEnd={handleDrawerTransitionEnd}
+          onClose={handleDrawerClose}
+          ModalProps={{
+            keepMounted: true, // Better open performance on mobile.
+          }}
+          sx={{
+            display: { xs: 'block', sm: 'none' },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: DRAWER_WIDTH,
+              bgcolor: '#111827',
+              color: '#fff',
+            },
+          }}
+        >
+          {getDrawerContent(false)}
+        </Drawer>
+        
+        {/* Desktop Drawer */}
+        <Drawer
+          variant="permanent"
+          sx={{
+            display: { xs: 'none', sm: 'block' },
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
+              width: desktopOpen ? DRAWER_WIDTH : COLLAPSED_DRAWER_WIDTH,
+              bgcolor: '#111827',
+              color: '#fff',
+              borderRight: '1px solid rgba(255,255,255,0.1)',
+              transition: 'width 0.2s',
+              overflowX: 'hidden'
+            },
+          }}
+          open
+        >
+          {getDrawerContent(!desktopOpen)}
+        </Drawer>
       </Box>
 
-      <Box
-        component="footer"
-        sx={{
-          py: 2,
-          px: 2,
-          mt: 'auto',
-          bgcolor: '#fff',
-          borderTop: '1px solid rgba(0,0,0,0.1)'
+      {/* Main Content */}
+      <Box 
+        component="main" 
+        sx={{ 
+          flexGrow: 1, 
+          bgcolor: '#f3f4f6', 
+          minHeight: '100vh', 
+          display: 'flex', 
+          flexDirection: 'column',
+          width: { xs: '100%', sm: `calc(100% - ${desktopOpen ? DRAWER_WIDTH : COLLAPSED_DRAWER_WIDTH}px)` },
+          transition: 'width 0.2s',
+          overflowX: 'hidden' // Prevent horizontal scroll on main content
         }}
       >
-        <Container maxWidth="xl">
-          <Typography variant="body2" color="text.secondary" align="center">
-
-          </Typography>
-        </Container>
+        {/* Toolbar spacer for mobile */}
+        <Toolbar sx={{ display: { sm: 'none' } }} />
+        
+        {/* Content Area */}
+        <Box sx={{ p: { xs: 2, sm: 4 }, flexGrow: 1 }}>
+          {children}
+        </Box>
       </Box>
     </Box>
   );

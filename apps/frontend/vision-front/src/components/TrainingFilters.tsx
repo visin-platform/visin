@@ -4,9 +4,12 @@ import {
   TextField,
   InputAdornment,
   Autocomplete,
-  Chip
+  Chip,
+  Paper,
+  useTheme,
+  alpha
 } from '@mui/material';
-import { Search as SearchIcon } from '@mui/icons-material';
+import { Search as SearchIcon, FilterList as FilterIcon } from '@mui/icons-material';
 
 interface TrainingFiltersProps {
   searchTerm: string;
@@ -27,62 +30,113 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
   onExcludedTagsChange,
   availableTags
 }) => {
+  const theme = useTheme();
+
   return (
-    <Box mb={3} display="flex" gap={2} flexWrap="wrap" alignItems="center">
-      <TextField
-        placeholder="Search trainings by name or description..."
-        value={searchTerm}
-        onChange={(e) => onSearchChange(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          )
-        }}
-        sx={{ flexGrow: 1, maxWidth: 500 }}
-      />
+    <Paper 
+      elevation={0}
+      sx={{ 
+        p: 2, 
+        mb: 3, 
+        borderRadius: 2,
+        border: `1px solid ${theme.palette.divider}`,
+        bgcolor: 'background.paper'
+      }}
+    >
+      <Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
+        <TextField
+          placeholder="Search trainings..."
+          value={searchTerm}
+          onChange={(e) => onSearchChange(e.target.value)}
+          variant="outlined"
+          size="small"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon color="action" />
+              </InputAdornment>
+            ),
+            sx: { borderRadius: 2 }
+          }}
+          sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 300 } }}
+        />
 
-      <Autocomplete
-        multiple
-        options={availableTags}
-        value={selectedTags}
-        onChange={(_, newValue) => onTagsChange(newValue)}
-        renderTags={(value, getTagProps) =>
-          value.map((option, index) => (
-            <Chip {...getTagProps({ index })} key={option} label={option} size="small" />
-          ))
-        }
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            placeholder={selectedTags.length === 0 ? "Filter by tags..." : undefined}
-            sx={{ minWidth: 200 }}
+        <Box sx={{ display: 'flex', gap: 2, flexGrow: 1, flexWrap: 'wrap' }}>
+          <Autocomplete
+            multiple
+            options={availableTags}
+            value={selectedTags}
+            onChange={(_, newValue) => onTagsChange(newValue)}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip 
+                  {...getTagProps({ index })} 
+                  key={option} 
+                  label={option} 
+                  size="small"
+                  sx={{ 
+                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                    color: theme.palette.primary.main,
+                    fontWeight: 500
+                  }}
+                />
+              ))
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                placeholder={selectedTags.length === 0 ? "Filter by tags" : undefined}
+                size="small"
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: (
+                    <>
+                      <InputAdornment position="start">
+                        <FilterIcon fontSize="small" color="action" />
+                      </InputAdornment>
+                      {params.InputProps.startAdornment}
+                    </>
+                  ),
+                  sx: { borderRadius: 2 }
+                }}
+              />
+            )}
+            sx={{ minWidth: 250, flexGrow: 1 }}
           />
-        )}
-        size="small"
-      />
 
-      <Autocomplete
-        multiple
-        options={availableTags}
-        value={excludedTags}
-        onChange={(_, newValue) => onExcludedTagsChange(newValue)}
-        renderTags={(value, getTagProps) =>
-          value.map((option, index) => (
-            <Chip {...getTagProps({ index })} key={option} label={option} size="small" color="error" />
-          ))
-        }
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            placeholder={excludedTags.length === 0 ? "Hide by tags..." : undefined}
-            sx={{ minWidth: 200 }}
+          <Autocomplete
+            multiple
+            options={availableTags}
+            value={excludedTags}
+            onChange={(_, newValue) => onExcludedTagsChange(newValue)}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip 
+                  {...getTagProps({ index })} 
+                  key={option} 
+                  label={option} 
+                  size="small" 
+                  color="error"
+                  variant="outlined"
+                />
+              ))
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                placeholder={excludedTags.length === 0 ? "Exclude tags" : undefined}
+                size="small"
+                InputProps={{
+                  ...params.InputProps,
+                  sx: { borderRadius: 2 }
+                }}
+              />
+            )}
+            sx={{ minWidth: 250, flexGrow: 1 }}
           />
-        )}
-        size="small"
-      />
-    </Box>
+        </Box>
+      </Box>
+    </Paper>
   );
 };
 

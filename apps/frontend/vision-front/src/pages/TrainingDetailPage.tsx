@@ -8,20 +8,27 @@ import {
   Paper,
   CircularProgress,
   Alert,
-  IconButton,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Tabs,
-  Tab
+  Tab,
+  Chip,
+  Stack,
+  useTheme,
+  alpha
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   Refresh as RefreshIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  PlayArrow as RunIcon,
+  CheckCircle as SuccessIcon,
+  Error as ErrorIcon,
+  Schedule as PendingIcon
 } from '@mui/icons-material';
 import { trainingService } from '../services/trainingService';
 import { epochService } from '../services/epochService';
@@ -39,6 +46,59 @@ import TrainingSystemInfoTab from '../components/TrainingSystemInfoTab';
 import TrainingBenchmarksTab from '../components/TrainingBenchmarksTab';
 import TrainingFormDialog from '../components/TrainingFormDialog';
 import { usePageTitle } from '../hooks/usePageTitle';
+
+const StatusChip: React.FC<{ status: Training['status'] }> = ({ status }) => {
+  const theme = useTheme();
+  
+  let color = theme.palette.text.secondary;
+  let bgcolor = theme.palette.action.hover;
+  let icon = <PendingIcon style={{ fontSize: 16 }} />;
+  let label = status;
+
+  switch (status) {
+    case 'completed':
+      color = theme.palette.success.main;
+      bgcolor = alpha(theme.palette.success.main, 0.1);
+      icon = <SuccessIcon style={{ fontSize: 16 }} />;
+      break;
+    case 'running':
+      color = theme.palette.info.main;
+      bgcolor = alpha(theme.palette.info.main, 0.1);
+      icon = <RunIcon style={{ fontSize: 16 }} />;
+      break;
+    case 'failed':
+      color = theme.palette.error.main;
+      bgcolor = alpha(theme.palette.error.main, 0.1);
+      icon = <ErrorIcon style={{ fontSize: 16 }} />;
+      break;
+    case 'pending':
+      color = theme.palette.warning.main;
+      bgcolor = alpha(theme.palette.warning.main, 0.1);
+      icon = <PendingIcon style={{ fontSize: 16 }} />;
+      break;
+  }
+
+  return (
+    <Box 
+      sx={{ 
+        display: 'inline-flex', 
+        alignItems: 'center', 
+        gap: 0.5,
+        px: 1.5,
+        py: 0.75,
+        borderRadius: 2,
+        bgcolor: bgcolor,
+        color: color,
+        fontSize: '0.875rem',
+        fontWeight: 600,
+        textTransform: 'capitalize'
+      }}
+    >
+      {icon}
+      {label}
+    </Box>
+  );
+};
 
 const TrainingDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -707,31 +767,100 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Box display="flex" alignItems="center" gap={2}>
-          <IconButton onClick={() => navigate('/trainings')}>
-            <ArrowBackIcon />
-          </IconButton>
-          <Typography variant="h4" component="h1">
-            Training Details
-          </Typography>
-        </Box>
-        <Box display="flex" gap={1}>
-          <IconButton onClick={handleEditTraining} disabled={isLoading}>
-            <EditIcon />
-          </IconButton>
-          <IconButton onClick={handleDeleteTraining} disabled={isLoading}>
-            <DeleteIcon />
-          </IconButton>
-          <IconButton onClick={() => refetch()} disabled={isLoading}>
-            <RefreshIcon />
-          </IconButton>
+      <Box mb={4}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/trainings')}
+          sx={{ mb: 2, color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
+        >
+          Back to Trainings
+        </Button>
+
+        <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'flex-start' }} gap={3}>
+          <Box>
+            <Box display="flex" alignItems="center" gap={2} mb={1} flexWrap="wrap">
+              <Typography variant="h4" component="h1" fontWeight="bold">
+                {training.name}
+              </Typography>
+              <StatusChip status={training.status} />
+            </Box>
+            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 800, mb: 2 }}>
+              {training.description || 'No description provided'}
+            </Typography>
+            
+            {training.tags && training.tags.length > 0 && (
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                {training.tags.map((tag) => (
+                  <Chip 
+                    key={tag} 
+                    label={tag} 
+                    size="small" 
+                    variant="outlined"
+                    sx={{ borderRadius: 1 }}
+                  />
+                ))}
+              </Stack>
+            )}
+          </Box>
+
+          <Stack direction="row" spacing={1}>
+            <Button 
+              startIcon={<RefreshIcon />} 
+              onClick={() => refetch()} 
+              variant="outlined" 
+              color="inherit"
+              disabled={isLoading}
+            >
+              Refresh
+            </Button>
+            <Button 
+              startIcon={<EditIcon />} 
+              onClick={handleEditTraining} 
+              variant="outlined"
+              disabled={isLoading}
+            >
+              Edit
+            </Button>
+            <Button 
+              startIcon={<DeleteIcon />} 
+              onClick={handleDeleteTraining} 
+              color="error" 
+              variant="outlined"
+              disabled={isLoading}
+            >
+              Delete
+            </Button>
+          </Stack>
         </Box>
       </Box>
 
       {/* Tab Navigation */}
-      <Paper sx={{ mb: 3 }}>
-        <Tabs value={detailTab} onChange={handleTabChange}>
+      <Paper 
+        elevation={0} 
+        variant="outlined" 
+        sx={{ 
+          mb: 3, 
+          borderRadius: 2, 
+          overflow: 'hidden',
+          bgcolor: 'background.paper'
+        }}
+      >
+        <Tabs 
+          value={detailTab} 
+          onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            '& .MuiTab-root': { 
+              textTransform: 'none',
+              fontWeight: 600,
+              minHeight: 48,
+              px: 3
+            }
+          }}
+        >
           <Tab label="Overview" />
           <Tab label="Epochs" />
           <Tab label="Test Results" />
