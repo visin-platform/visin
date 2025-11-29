@@ -1,0 +1,7 @@
+{
+  "VISION_API_URL": "http://localhost:4010",
+  "AUTH_SERVICE_URL": "http://localhost:4001",
+  "AUTH_FRONT_URL": "http://localhost:3001",
+  "PUBLIC_API_URL": "http://localhost:4009",
+  "SHELL_FRONT_URL": "http://localhost:3000"
+}

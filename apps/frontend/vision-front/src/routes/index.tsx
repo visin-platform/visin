@@ -1,0 +1,44 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
+import TrainingsPage from '../pages/TrainingsPage';
+import TrainingDetailPage from '../pages/TrainingDetailPage';
+import TrainingComparisonPage from '../pages/TrainingComparisonPage';
+import EpochsPage from '../pages/EpochsPage';
+import ConfigsPage from '../pages/ConfigsPage';
+import AnalysisPage from '../pages/AnalysisPage';
+import DatasetComparisonPage from '../pages/DatasetComparisonPage';
+import DatasetDetailPage from '../pages/DatasetDetailPage';
+import ImageLabelingPage from '../pages/ImageLabelingPage';
+import TestResultsPage from '../pages/TestResultsPage';
+import TestResultsComparisonPage from '../pages/TestResultsComparisonPage';
+import VisualizationsPage from '../pages/VisualizationsPage';
+import VisualizationsComparisonPage from '../pages/VisualizationsComparisonPage';
+import TrainingVisualizationsComparisonPage from '../pages/TrainingVisualizationsComparisonPage';
+import BenchmarksPage from '../pages/BenchmarksPage';
+import ComparisonsPage from '../pages/ComparisonsPage';
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/trainings" replace />} />
+      <Route path="/trainings" element={<TrainingsPage />} />
+      <Route path="/trainings/:id" element={<TrainingDetailPage />} />
+      <Route path="/trainings/compare" element={<TrainingComparisonPage />} />
+      <Route path="/epochs" element={<EpochsPage />} />
+      <Route path="/configs" element={<ConfigsPage />} />
+      <Route path="/analysis" element={<AnalysisPage />} />
+      <Route path="/analysis/:id" element={<DatasetDetailPage />} />
+      <Route path="/analysis/compare" element={<DatasetComparisonPage />} />
+      <Route path="/image-labeling" element={<ImageLabelingPage />} />
+      <Route path="/image-labeling/:imageId" element={<ImageLabelingPage />} />
+      <Route path="/test-results" element={<TestResultsPage />} />
+      <Route path="/test-results/compare" element={<TestResultsComparisonPage />} />
+      <Route path="/visualizations" element={<VisualizationsPage />} />
+      <Route path="/visualizations/compare" element={<VisualizationsComparisonPage />} />
+      <Route path="/visualizations/compare-trainings" element={<TrainingVisualizationsComparisonPage />} />
+      <Route path="/benchmarks" element={<BenchmarksPage />} />
+      <Route path="/comparisons" element={<ComparisonsPage />} />
+    </Routes>
+  );
+}
+
+export default AppRoutes;

@@ -1,0 +1,54 @@
+name: Conventional Changelog & Tag
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set git user
+        run: |
+          git config --global user.name "Visinbot"
+          git config --global user.email "bot@visin.eu"
+
+      - name: Fetch all tags
+        run: git fetch --tags
+
+      - name: Get next version
+        id: next_version
+        run: |
+          current_version=$(node -p "require('./package.json').version")
+          next_version=$(npx semver $current_version -i patch)
+          echo "next_version=$next_version" >> $GITHUB_OUTPUT
+
+      - name: Delete existing next version tag if exists
+        run: |
+          if git show-ref --tags | grep -q "refs/tags/v${{ steps.next_version.outputs.next_version }}"; then
+            git push origin :v${{ steps.next_version.outputs.next_version }} || true
+            git tag -d v${{ steps.next_version.outputs.next_version }} || true
+          fi
+
+      - name: Copy .versionrc.json from .github to workflow directory
+        run: |
+          cp .github/.versionrc.json $GITHUB_WORKSPACE/.versionrc.json
+
+      - name: Run standard-version
+        run: npx standard-version
+
+      - name: Push changes and tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git push origin main
+          git push --tags origin

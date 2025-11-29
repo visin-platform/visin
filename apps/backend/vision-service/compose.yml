@@ -1,0 +1,27 @@
+services:
+  vision-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: toomastahves/vision-service:latest
+    restart: unless-stopped
+    ports:
+      - "4010:4010"
+    environment:
+      - PORT=4010
+      - MONGODB_URI=${MONGODB_URI}
+      - NODE_ENV=production
+      # MinIO configuration
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_PORT=443
+      - MINIO_USE_SSL=true
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=vision
+    init: true
+    networks:
+      - visinnet
+
+networks:
+  visinnet:
+    external: true

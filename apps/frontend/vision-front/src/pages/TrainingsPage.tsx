@@ -1,0 +1,712 @@
+import React, { useState } from 'react';
+import {
+  Box,
+  Container,
+  Typography,
+  Button,
+  Alert,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Chip
+} from '@mui/material';
+import {
+  Refresh as RefreshIcon,
+  Add as AddIcon,
+  DeleteOutline as DeleteOutlineIcon,
+  Compare as CompareIcon,
+  Download as DownloadIcon
+} from '@mui/icons-material';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { trainingService } from '../services/trainingService';
+import { configService } from '../services/configService';
+import { getAllAnalyses, type DatasetAnalysis } from '../services/analysisService';
+import { Training, Config } from '../types';
+import TrainingsTable from '../components/TrainingsTable';
+import TrainingFilters from '../components/TrainingFilters';
+import TrainingFormDialog from '../components/TrainingFormDialog';
+import { exportTrainingsToCSV } from '../utils/csvExport';
+import { usePageTitle } from '../hooks/usePageTitle';
+
+const TrainingsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Set page title
+  usePageTitle('Trainings - Vision');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount'>('updatedAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [trainingName, setTrainingName] = useState('');
+  const [trainingDescription, setTrainingDescription] = useState('');
+  const [selectedDatasetId, setSelectedDatasetId] = useState('');
+  const [selectedConfigId, setSelectedConfigId] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<Training['status']>('pending');
+  const [trainingTags, setTrainingTags] = useState<string[]>([]);
+  const [datasets, setDatasets] = useState<DatasetAnalysis[]>([]);
+  const [configs, setConfigs] = useState<Config[]>([]);
+  const [loadingDatasets, setLoadingDatasets] = useState(false);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [editingTrainingId, setEditingTrainingId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTrainingId, setDeleteTrainingId] = useState<string | null>(null);
+  const [selectedTrainingIds, setSelectedTrainingIds] = useState<Set<string>>(new Set());
+  const [deleteMultipleDialogOpen, setDeleteMultipleDialogOpen] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [excludedTags, setExcludedTags] = useState<string[]>([]);
+
+  // Initialize selectedTags and excludedTags from URL parameters
+  React.useEffect(() => {
+    const tagsParam = searchParams.get('tags');
+    if (tagsParam) {
+      const tags = tagsParam.split(',').filter(tag => tag.trim().length > 0);
+      setSelectedTags(tags);
+    }
+    
+    const excludeTagsParam = searchParams.get('excludeTags');
+    if (excludeTagsParam) {
+      const excludeTags = excludeTagsParam.split(',').filter(tag => tag.trim().length > 0);
+      setExcludedTags(excludeTags);
+    }
+  }, [searchParams]);
+
+  // Update URL parameters when selectedTags or excludedTags changes
+  React.useEffect(() => {
+    const newSearchParams = new URLSearchParams(searchParams);
+    if (selectedTags.length > 0) {
+      newSearchParams.set('tags', selectedTags.join(','));
+    } else {
+      newSearchParams.delete('tags');
+    }
+    if (excludedTags.length > 0) {
+      newSearchParams.set('excludeTags', excludedTags.join(','));
+    } else {
+      newSearchParams.delete('excludeTags');
+    }
+    setSearchParams(newSearchParams, { replace: true });
+  }, [selectedTags, excludedTags, searchParams, setSearchParams]);
+
+  // Reset to first page when exclude tags change
+  React.useEffect(() => {
+    setPage(0);
+  }, [excludedTags]);
+
+  // Debounce search
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(0);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Load configs and datasets when modal opens
+  React.useEffect(() => {
+    if (createModalOpen) {
+      const loadData = async () => {
+        try {
+          setLoadingConfigs(true);
+          setLoadingDatasets(true);
+          
+          const [configsRes, analysisRes] = await Promise.all([
+            configService.getAllConfigs(),
+            getAllAnalyses(100, 0)
+          ]);
+          
+          setConfigs(configsRes.data.configs || []);
+          setDatasets(analysisRes.data || []);
+        } catch (err) {
+          console.error('Failed to load configs/datasets:', err);
+          setConfigs([]);
+          setDatasets([]);
+        } finally {
+          setLoadingConfigs(false);
+          setLoadingDatasets(false);
+        }
+      };
+      loadData();
+    }
+  }, [createModalOpen]);
+
+  // Determine if we need to fetch all data for frontend filtering
+  const shouldFetchAll = excludedTags.length > 0;
+
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: shouldFetchAll 
+      ? ['trainings-all', debouncedSearch, sortBy, sortOrder, selectedTags, excludedTags]
+      : ['trainings', page + 1, rowsPerPage, debouncedSearch, sortBy, sortOrder, selectedTags],
+    queryFn: () => {
+      if (shouldFetchAll) {
+        // Fetch all trainings for frontend filtering and pagination
+        return trainingService.getTrainings({
+          page: 1,
+          limit: 10000, // Large limit to get all trainings
+          search: debouncedSearch || undefined,
+          sortBy,
+          order: sortOrder,
+          tags: selectedTags.length > 0 ? selectedTags : undefined
+        });
+      } else {
+        // Normal paginated query
+        return trainingService.getTrainings({
+          page: page + 1,
+          limit: rowsPerPage,
+          search: debouncedSearch || undefined,
+          sortBy,
+          order: sortOrder,
+          tags: selectedTags.length > 0 ? selectedTags : undefined
+        });
+      }
+    }
+  });
+
+  const { data: statsData } = useQuery({
+    queryKey: ['training-stats', selectedTags],
+    queryFn: () => trainingService.getTrainingStats({
+      tags: selectedTags.length > 0 ? selectedTags : undefined
+    })
+  });
+
+  // Load available tags
+  const loadTags = React.useCallback(async () => {
+    try {
+      const allTrainings = await trainingService.getTrainings({
+        page: 1,
+        limit: 1000 // Get a large number to collect all tags
+      });
+      const tags = new Set<string>();
+      allTrainings.data.trainings.forEach((training: Training) => {
+        if (training.tags) {
+          training.tags.forEach(tag => tags.add(tag));
+        }
+      });
+      setAvailableTags(Array.from(tags).sort());
+    } catch (err) {
+      console.error('Failed to load tags:', err);
+      setAvailableTags([]);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadTags();
+  }, [loadTags]);
+
+  const allTrainings = data?.data?.trainings || [];
+  const backendTotal = data?.data?.pagination?.total || 0;
+  const stats = statsData?.data;
+
+  // Filter out trainings that have excluded tags
+  const filteredTrainings = React.useMemo(() => {
+    let trainingsToFilter = allTrainings;
+    
+    // If we're fetching all data, we need to filter from the full dataset
+    // If we're using backend pagination, the data is already filtered by selectedTags
+    if (excludedTags.length === 0) {
+      return shouldFetchAll ? allTrainings : trainingsToFilter;
+    }
+    
+    return trainingsToFilter.filter((training: Training) => {
+      if (!training.tags) return true;
+      return !excludedTags.some(excludedTag => training.tags!.includes(excludedTag));
+    });
+  }, [allTrainings, excludedTags, shouldFetchAll]);
+
+  // Apply frontend pagination when fetching all data
+  const paginatedTrainings = React.useMemo(() => {
+    if (!shouldFetchAll) {
+      return filteredTrainings;
+    }
+    const startIndex = page * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
+    return filteredTrainings.slice(startIndex, endIndex);
+  }, [filteredTrainings, page, rowsPerPage, shouldFetchAll]);
+
+  // Calculate total count for pagination
+  const totalCount = React.useMemo(() => {
+    return shouldFetchAll ? filteredTrainings.length : backendTotal;
+  }, [shouldFetchAll, filteredTrainings.length, backendTotal]);
+
+  // Use paginated trainings for display
+  const displayTrainings = shouldFetchAll ? paginatedTrainings : filteredTrainings;
+
+  // CSV Export function
+  const exportToCSV = () => {
+    const selectedTrainings = filteredTrainings.filter((training: Training) => selectedTrainingIds.has(training._id));
+    exportTrainingsToCSV(selectedTrainings);
+  };
+
+  const handleChangePage = (_event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const handleSort = (column: 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount') => {
+    if (sortBy === column) {
+      // Toggle sort order if same column
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new column and default to descending
+      setSortBy(column);
+      setSortOrder('desc');
+    }
+    setPage(0); // Reset to first page when sorting changes
+  };
+
+  const handleCreateTraining = async () => {
+    if (!trainingName.trim()) {
+      setCreateError('Training name is required');
+      return;
+    }
+
+    try {
+      setCreating(true);
+      setCreateError(null);
+      setCreateSuccess(null);
+
+      if (editingTrainingId) {
+        // Update existing training
+        await trainingService.updateTraining(editingTrainingId, {
+          name: trainingName.trim(),
+          description: trainingDescription.trim() || undefined,
+          datasetId: selectedDatasetId || undefined,
+          configId: selectedConfigId || undefined,
+          status: selectedStatus,
+          tags: trainingTags,
+        });
+        setCreateSuccess('Training updated successfully!');
+      } else {
+        // Create new training
+        await trainingService.createTraining({
+          name: trainingName.trim(),
+          description: trainingDescription.trim() || undefined,
+          datasetId: selectedDatasetId || undefined,
+          configId: selectedConfigId || undefined,
+          status: selectedStatus,
+          tags: trainingTags,
+        });
+        setCreateSuccess(`Training "${trainingName}" created successfully!`);
+      }
+
+      // Close modal immediately and refresh
+      setCreateModalOpen(false);
+      setEditingTrainingId(null);
+      setTrainingName('');
+      setTrainingDescription('');
+      setSelectedDatasetId('');
+      setSelectedConfigId('');
+      refetch();
+      // Refresh available tags to include any new tags that were added
+      loadTags();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to save training');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCloseModal = () => {
+    if (!creating) {
+      setCreateModalOpen(false);
+      setTrainingName('');
+      setTrainingDescription('');
+      setSelectedDatasetId('');
+      setSelectedConfigId('');
+      setSelectedStatus('pending');
+      setTrainingTags([]);
+      setCreateError(null);
+      setCreateSuccess(null);
+      setEditingTrainingId(null);
+    }
+  };
+
+  const handleEditTraining = async (training: Training) => {
+    try {
+      setLoadingConfigs(true);
+      setLoadingDatasets(true);
+
+      // Load configs and datasets
+      const [configsRes, analysisRes] = await Promise.all([
+        configService.getAllConfigs(),
+        getAllAnalyses(100, 0)
+      ]);
+
+      setConfigs(configsRes.data.configs || []);
+      setDatasets(analysisRes.data || []);
+
+      // Populate form with training data
+      setEditingTrainingId(training._id);
+      setTrainingName(training.name);
+      setTrainingDescription(training.description || '');
+      setSelectedDatasetId(training.datasetId || '');
+      setSelectedConfigId(training.configId || '');
+      setSelectedStatus(training.status);
+      setTrainingTags(training.tags || []);
+      setCreateModalOpen(true);
+    } catch (err) {
+      console.error('Failed to load data for editing:', err);
+    } finally {
+      setLoadingConfigs(false);
+      setLoadingDatasets(false);
+    }
+  };
+
+  const handleDeleteClick = (trainingId: string) => {
+    setDeleteTrainingId(trainingId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTrainingId) return;
+
+    try {
+      setCreating(true);
+      await trainingService.deleteTraining(deleteTrainingId);
+      setCreateSuccess('Training deleted successfully!');
+      setDeleteDialogOpen(false);
+      setDeleteTrainingId(null);
+      setTimeout(() => {
+        refetch();
+        // Refresh available tags in case some tags are no longer used
+        loadTags();
+      }, 500);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to delete training');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Handle checkbox change
+  const handleSelectTraining = (trainingId: string) => {
+    const newSelected = new Set(selectedTrainingIds);
+    if (newSelected.has(trainingId)) {
+      newSelected.delete(trainingId);
+    } else {
+      newSelected.add(trainingId);
+    }
+    setSelectedTrainingIds(newSelected);
+  };
+
+  // Handle select all
+  const handleSelectAll = () => {
+    if (selectedTrainingIds.size === displayTrainings.length) {
+      setSelectedTrainingIds(new Set());
+    } else {
+      setSelectedTrainingIds(new Set(displayTrainings.map((t: Training) => t._id)));
+    }
+  };
+
+  // Handle compare selected
+  const handleCompareSelected = () => {
+    const selectedIds = Array.from(selectedTrainingIds);
+    if (selectedIds.length > 1) {
+      navigate(`/trainings/compare?ids=${selectedIds.join(',')}`);
+    }
+  };
+
+  // Handle delete selected
+  const handleDeleteSelected = async () => {
+    try {
+      setCreating(true);
+      const trainingsToDelete = Array.from(selectedTrainingIds);
+      
+      for (const trainingId of trainingsToDelete) {
+        await trainingService.deleteTraining(trainingId);
+      }
+      
+      setCreateSuccess(`${trainingsToDelete.length} training(s) deleted successfully!`);
+      setDeleteMultipleDialogOpen(false);
+      setSelectedTrainingIds(new Set());
+      setTimeout(() => {
+        refetch();
+        // Refresh available tags in case some tags are no longer used
+        loadTags();
+      }, 500);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to delete trainings');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Typography variant="h4" component="h1">
+          Training Runs
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              // Reset form state for new training creation
+              setTrainingName('');
+              setTrainingDescription('');
+              setSelectedDatasetId('');
+              setSelectedConfigId('');
+              setSelectedStatus('pending');
+              setTrainingTags([]);
+              setCreateError(null);
+              setCreateSuccess(null);
+              setEditingTrainingId(null);
+              setCreateModalOpen(true);
+            }}
+          >
+            Create Training
+          </Button>
+          <IconButton onClick={() => refetch()} disabled={isLoading}>
+            <RefreshIcon />
+          </IconButton>
+        </Box>
+      </Box>
+
+      <TrainingFilters
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        selectedTags={selectedTags}
+        onTagsChange={setSelectedTags}
+        excludedTags={excludedTags}
+        onExcludedTagsChange={setExcludedTags}
+        availableTags={availableTags}
+      />
+
+      {/* Training Statistics */}
+      {stats && (
+        <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Typography variant="h6">
+              Training Statistics
+            </Typography>
+            {selectedTags.length > 0 && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  (filtered by tags:
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                  {selectedTags.map((tag) => (
+                    <Chip
+                      key={tag}
+                      label={tag}
+                      size="small"
+                      variant="outlined"
+                      sx={{
+                        height: '20px',
+                        fontSize: '0.7rem',
+                        '& .MuiChip-label': {
+                          px: 0.5,
+                          py: 0
+                        }
+                      }}
+                    />
+                  ))}
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  )
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                Total Trainings
+              </Typography>
+              <Typography variant="h6">
+                {stats.totalTrainings}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                Total Time
+              </Typography>
+              <Typography variant="h6">
+                {Math.round(stats.totalTime / 3600 * 10) / 10}h
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                CPU Cost
+              </Typography>
+              <Typography variant="h6">
+                €{stats.totalCpuCost.toFixed(2)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                GPU Cost
+              </Typography>
+              <Typography variant="h6">
+                €{stats.totalGpuCost.toFixed(2)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                Total Cost
+              </Typography>
+              <Typography variant="h6">
+                €{stats.totalCost.toFixed(2)}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+      )}
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error instanceof Error ? error.message : 'Failed to load training runs'}
+        </Alert>
+      )}
+
+      {/* Bulk Delete UI */}
+      {selectedTrainingIds.size > 0 && (
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            {selectedTrainingIds.size} training(s) selected
+          </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={exportToCSV}
+            size="small"
+          >
+            Export CSV
+          </Button>
+          {selectedTrainingIds.size > 1 && (
+            <Button
+              variant="contained"
+              startIcon={<CompareIcon />}
+              onClick={handleCompareSelected}
+              color="primary"
+            >
+              Compare
+            </Button>
+          )}
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<DeleteOutlineIcon />}
+            onClick={() => setDeleteMultipleDialogOpen(true)}
+          >
+            Delete Selected
+          </Button>
+        </Box>
+      )}
+
+      <TrainingsTable
+        trainings={displayTrainings}
+        isLoading={isLoading}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        total={totalCount}
+        onPageChange={handleChangePage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+        onEdit={handleEditTraining}
+        onDelete={handleDeleteClick}
+        searchTerm={searchTerm}
+        selectedTrainingIds={selectedTrainingIds}
+        onSelectTraining={handleSelectTraining}
+        onSelectAll={handleSelectAll}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSort={handleSort}
+      />
+
+      {/* Create/Edit Training Modal */}
+      <TrainingFormDialog
+        open={createModalOpen}
+        onClose={handleCloseModal}
+        onSubmit={handleCreateTraining}
+        isEditing={!!editingTrainingId}
+        isCreating={creating}
+        isLoadingData={loadingConfigs || loadingDatasets}
+        trainingName={trainingName}
+        onNameChange={setTrainingName}
+        trainingDescription={trainingDescription}
+        onDescriptionChange={setTrainingDescription}
+        selectedConfigId={selectedConfigId}
+        onConfigChange={setSelectedConfigId}
+        selectedDatasetId={selectedDatasetId}
+        onDatasetChange={setSelectedDatasetId}
+        selectedStatus={selectedStatus}
+        onStatusChange={setSelectedStatus}
+        trainingTags={trainingTags}
+        onTagsChange={setTrainingTags}
+        availableTags={availableTags}
+        configs={configs}
+        datasets={datasets}
+        error={createError}
+        success={createSuccess}
+        loadingConfigs={loadingConfigs}
+        loadingDatasets={loadingDatasets}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Delete Training</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this training? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={creating}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+            disabled={creating}
+          >
+            {creating ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Multiple Confirmation Dialog */}
+      <Dialog
+        open={deleteMultipleDialogOpen}
+        onClose={() => setDeleteMultipleDialogOpen(false)}
+      >
+        <DialogTitle>Delete Selected Trainings</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete {selectedTrainingIds.size} training(s)? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteMultipleDialogOpen(false)} disabled={creating}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteSelected}
+            color="error"
+            variant="contained"
+            disabled={creating}
+          >
+            {creating ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Container>
+  );
+};
+
+export default TrainingsPage;

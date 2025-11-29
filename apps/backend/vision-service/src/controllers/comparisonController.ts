@@ -1,0 +1,368 @@
+import { Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import Comparison from '../models/Comparison';
+
+// Get all comparisons
+export const getComparisons = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      page = 1,
+      limit = 30,
+      search,
+      type,
+      sortBy = 'updatedAt',
+      order = 'desc'
+    } = req.query;
+
+    let query: any = { deletedAt: null };
+
+    // Search functionality
+    if (search) {
+      query.$text = { $search: search as string };
+    }
+
+    // Filter by type
+    if (type) {
+      query.type = type;
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const sortOrder = order === 'desc' ? -1 : 1;
+    const sortField = sortBy as string;
+
+    const [comparisons, total] = await Promise.all([
+      Comparison.find(query)
+        .sort({ [sortField]: sortOrder })
+        .skip(skip)
+        .limit(Number(limit)),
+      Comparison.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        comparisons,
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          total,
+          pages: Math.ceil(total / Number(limit))
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching comparisons:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch comparisons';
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch comparisons',
+      error: errorMessage
+    });
+  }
+};
+
+// Get comparison by ID
+export const getComparisonById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
+
+    if (!comparison) {
+      res.status(404).json({
+        success: false,
+        message: 'Comparison not found'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: comparison
+    });
+  } catch (error) {
+    console.error('Error fetching comparison:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch comparison';
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch comparison',
+      error: errorMessage
+    });
+  }
+};
+
+// Get comparison by UUID
+export const getComparisonByUuid = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { uuid } = req.params;
+
+    const comparison = await Comparison.findOne({ uuid, deletedAt: null });
+
+    if (!comparison) {
+      res.status(404).json({
+        success: false,
+        message: 'Comparison not found'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: comparison
+    });
+  } catch (error) {
+    console.error('Error fetching comparison:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch comparison';
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch comparison',
+      error: errorMessage
+    });
+  }
+};
+
+// Create comparison
+export const createComparison = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      name,
+      description,
+      type,
+      itemIds,
+      metadata
+    } = req.body;
+
+    if (!name || name.trim().length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Comparison name is required'
+      });
+      return;
+    }
+
+    if (!type || !['trainings', 'tests', 'benchmarks', 'epochs'].includes(type)) {
+      res.status(400).json({
+        success: false,
+        message: 'Valid comparison type is required (trainings, tests, benchmarks, epochs)'
+      });
+      return;
+    }
+
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Item IDs array is required and must not be empty'
+      });
+      return;
+    }
+
+    if (itemIds.length > 50) {
+      res.status(400).json({
+        success: false,
+        message: 'Maximum 50 items can be compared at once'
+      });
+      return;
+    }
+
+    // Generate UUID if not provided
+    const uuid = req.body.uuid || uuidv4();
+
+    const comparison = new Comparison({
+      uuid,
+      name: name.trim(),
+      description: description?.trim(),
+      type,
+      itemIds,
+      metadata
+    });
+
+    const savedComparison = await comparison.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Comparison created successfully',
+      data: savedComparison
+    });
+  } catch (error) {
+    console.error('Error creating comparison:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create comparison';
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create comparison',
+      error: errorMessage
+    });
+  }
+};
+
+// Update comparison
+export const updateComparison = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      description,
+      type,
+      itemIds,
+      metadata
+    } = req.body;
+
+    // Validate ID format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid comparison ID format'
+      });
+      return;
+    }
+
+    const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
+
+    if (!comparison) {
+      res.status(404).json({
+        success: false,
+        message: 'Comparison not found'
+      });
+      return;
+    }
+
+    // Validate type if provided
+    if (type && !['trainings', 'tests', 'benchmarks', 'epochs'].includes(type)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid comparison type'
+      });
+      return;
+    }
+
+    // Validate itemIds if provided
+    if (itemIds && (!Array.isArray(itemIds) || itemIds.length === 0)) {
+      res.status(400).json({
+        success: false,
+        message: 'Item IDs must be a non-empty array'
+      });
+      return;
+    }
+
+    if (itemIds && itemIds.length > 50) {
+      res.status(400).json({
+        success: false,
+        message: 'Maximum 50 items can be compared at once'
+      });
+      return;
+    }
+
+    // Update fields
+    if (name !== undefined) comparison.name = name.trim();
+    if (description !== undefined) comparison.description = description?.trim();
+    if (type !== undefined) comparison.type = type;
+    if (itemIds !== undefined) comparison.itemIds = itemIds;
+    if (metadata !== undefined) comparison.metadata = metadata;
+
+    const updatedComparison = await comparison.save();
+
+    res.json({
+      success: true,
+      message: 'Comparison updated successfully',
+      data: updatedComparison
+    });
+  } catch (error) {
+    console.error('Error updating comparison:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update comparison';
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update comparison',
+      error: errorMessage
+    });
+  }
+};
+
+// Delete comparison
+export const deleteComparison = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Validate ID format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid comparison ID format'
+      });
+      return;
+    }
+
+    const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
+
+    if (!comparison) {
+      res.status(404).json({
+        success: false,
+        message: 'Comparison not found'
+      });
+      return;
+    }
+
+    // Mark comparison as deleted (soft delete)
+    comparison.deletedAt = new Date();
+    await comparison.save();
+
+    res.json({
+      success: true,
+      message: 'Comparison deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting comparison:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to delete comparison';
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete comparison',
+      error: errorMessage
+    });
+  }
+};
+
+// Get comparison statistics
+export const getComparisonStats = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { type } = req.query;
+
+    let query: any = { deletedAt: null };
+
+    // Filter by type if provided
+    if (type) {
+      query.type = type;
+    }
+
+    const stats = await Comparison.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: '$type',
+          count: { $sum: 1 },
+          avgItemCount: { $avg: { $size: '$itemIds' } },
+          maxItemCount: { $max: { $size: '$itemIds' } },
+          minItemCount: { $min: { $size: '$itemIds' } }
+        }
+      }
+    ]);
+
+    const totalComparisons = await Comparison.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: {
+        totalComparisons,
+        byType: stats,
+        filters: {
+          type: type || null
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching comparison stats:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch comparison stats';
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch comparison stats',
+      error: errorMessage
+    });
+  }
+};

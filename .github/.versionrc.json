@@ -1,0 +1,9 @@
+{
+  "types": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" },
+    { "type": "chore", "section": "Chores", "hidden": false }
+  ],
+  "header": "# Visin Changelog",
+  "tagPrefix": "v"
+}
