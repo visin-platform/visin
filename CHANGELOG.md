@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.5](https://github.com/av-research/visin/compare/v0.0.4...v0.0.5) (2025-11-29)
+
+
+### Features
+
+* Add curl for proxy healthcheck ([9ac7906](https://github.com/av-research/visin/commit/9ac790668c8967a37f620a614bf0fd740e67a96e))
+
 ### [0.0.4](https://github.com/av-research/visin/compare/v0.0.3...v0.0.4) (2025-11-29)
 
 
