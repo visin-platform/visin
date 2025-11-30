@@ -1,0 +1,20 @@
+services:
+  auth-front:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: toomastahves/auth-front:latest
+    restart: unless-stopped
+    environment:
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      PUBLIC_API_URL: ${PUBLIC_API_URL}
+    ports:
+      - '3004:80'
+    init: true
+    networks:
+      - tumbanet
+
+networks:
+  tumbanet:
+    external: true

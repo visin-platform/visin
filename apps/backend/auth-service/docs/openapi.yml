@@ -1,0 +1,656 @@
+openapi: 3.0.3
+info:
+  title: Auth Service API
+  description: API for user authentication, authorization, and profile management
+  version: 1.0.0
+  contact:
+    name: Visin Team
+servers:
+  - url: http://localhost:5001
+    description: Development server
+  - url: https://auth-api.visin.eu
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication operations (login, logout, token management)
+  - name: Profile
+    description: User profile management
+  - name: Admin
+    description: Administrative operations for user management
+  - name: Internal
+    description: Internal service operations
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error description"
+      required:
+        - success
+        - message
+
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "507f1f77bcf86cd799439011"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        firstName:
+          type: string
+          example: "John"
+        lastName:
+          type: string
+          example: "Doe"
+        signupMethod:
+          type: string
+          example: "google"
+          enum: ["google"]
+        roles:
+          type: array
+          items:
+            type: string
+          example: ["user", "admin"]
+        isApproved:
+          type: boolean
+          example: true
+        lastLoginAt:
+          type: string
+          format: date-time
+          example: "2023-01-01T00:00:00.000Z"
+        tokenVersion:
+          type: integer
+          example: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - email
+        - signupMethod
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "507f1f77bcf86cd799439011"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        firstName:
+          type: string
+          example: "John"
+        lastName:
+          type: string
+          example: "Doe"
+        name:
+          type: string
+          example: "John Doe"
+        picture:
+          type: string
+          format: uri
+          example: "https://lh3.googleusercontent.com/photo.jpg"
+      required:
+        - id
+        - email
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        user:
+          $ref: '#/components/schemas/UserPayload'
+        approved:
+          type: boolean
+          example: true
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      required:
+        - success
+        - user
+        - approved
+        - token
+
+    UserPayload:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "507f1f77bcf86cd799439011"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          example: "John Doe"
+        picture:
+          type: string
+          format: uri
+          example: "https://lh3.googleusercontent.com/photo.jpg"
+        groups:
+          type: array
+          items:
+            type: string
+          example: ["group1", "group2"]
+        tokenVersion:
+          type: integer
+          example: 1
+      required:
+        - id
+        - email
+
+    VerifyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        authenticated:
+          type: boolean
+          example: true
+        user:
+          $ref: '#/components/schemas/UserPayload'
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      required:
+        - success
+        - authenticated
+        - user
+        - token
+
+    RefreshResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        groups:
+          type: array
+          items:
+            type: string
+          example: ["group1", "group2"]
+      required:
+        - success
+        - token
+        - groups
+
+    ProfileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        user:
+          $ref: '#/components/schemas/UserProfile'
+        approved:
+          type: boolean
+          example: true
+      required:
+        - success
+        - user
+        - approved
+
+    UsersListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+      required:
+        - success
+        - users
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+        data:
+          type: object
+          description: "Response data (varies by endpoint)"
+      required:
+        - success
+        - message
+
+    # Request schemas
+    ValidateTokenRequest:
+      type: object
+      properties:
+        idToken:
+          type: string
+          description: "Google OAuth ID token"
+          example: "eyJhbGciOiJSUzI1NiIsImtpZCI6..."
+      required:
+        - idToken
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          example: "John"
+        lastName:
+          type: string
+          example: "Doe"
+
+    ApproveUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+      required:
+        - email
+
+    InvalidateTokensRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+      required:
+        - email
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/validate endpoint
+    internalAuth:
+      type: apiKey
+      in: header
+      name: x-internal-token
+      description: Internal service token for inter-service communication
+
+paths:
+  # Authentication Endpoints
+  /auth/validate:
+    post:
+      tags: [Authentication]
+      summary: Validate Google OAuth token and authenticate user
+      description: |
+        Validates a Google OAuth ID token and creates/authenticates a user account.
+        This endpoint is public and used for initial login/authentication.
+        On success, returns a JWT token and sets an HTTP-only cookie.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateTokenRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Bad request - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid Google token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh JWT token
+      description: |
+        Refreshes the JWT token with updated user groups from the group service.
+        Requires a valid JWT token in the Authorization header.
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout user
+      description: |
+        Logs out the user by clearing the authentication cookie.
+        Requires a valid JWT token.
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+
+  /auth/verify:
+    get:
+      tags: [Authentication]
+      summary: Verify authentication and refresh token
+      description: |
+        Verifies the current authentication status and refreshes the JWT token
+        with the latest user groups. Requires a valid JWT token.
+      responses:
+        '200':
+          description: Authentication verified and token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+
+  # Profile Endpoints
+  /auth/profile:
+    get:
+      tags: [Profile]
+      summary: Get user profile
+      description: |
+        Retrieves the current user's profile information including
+        first name, last name, and other profile data.
+        Requires a valid JWT token.
+      responses:
+        '200':
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+
+    put:
+      tags: [Profile]
+      summary: Update user profile
+      description: |
+        Updates the current user's profile information (first name, last name).
+        Requires a valid JWT token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request - invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+
+  # Admin Endpoints
+  /auth/admin/approve:
+    post:
+      tags: [Admin]
+      summary: Approve user account
+      description: |
+        Approves a user account, allowing them to access protected resources.
+        Requires admin role and a valid JWT token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveUserRequest'
+      responses:
+        '200':
+          description: User approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request - missing email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - invalid token or insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+
+  /auth/admin/users:
+    get:
+      tags: [Admin]
+      summary: List all users
+      description: |
+        Retrieves a list of all users in the system (limited to 200 most recent).
+        Requires admin role and a valid JWT token.
+      responses:
+        '200':
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsersListResponse'
+        '401':
+          description: Unauthorized - invalid token or insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - admin role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+
+  # Internal Service Endpoints
+  /auth/internal/invalidate-tokens:
+    post:
+      tags: [Internal]
+      summary: Invalidate user tokens (Internal)
+      description: |
+        Invalidates all tokens for a user by incrementing their token version.
+        This is an internal endpoint used by other services to force token refresh.
+        Requires internal service authentication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvalidateTokensRequest'
+      responses:
+        '200':
+          description: Tokens invalidated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "User tokens invalidated successfully"
+                  newTokenVersion:
+                    type: integer
+                    example: 2
+        '400':
+          description: Bad request - missing email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - internalAuth: []

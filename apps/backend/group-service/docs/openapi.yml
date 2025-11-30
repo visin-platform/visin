@@ -1,0 +1,892 @@
+openapi: 3.0.3
+info:
+  title: Group Service API
+  description: API for managing user groups, memberships, and permissions
+  version: 1.0.0
+  contact:
+    name: Visin Team
+servers:
+  - url: http://localhost:5006
+    description: Development server
+  - url: https://group-api.visin.eu
+    description: Production server
+
+tags:
+  - name: Groups
+    description: Group creation, retrieval, and management operations
+  - name: My Groups
+    description: Operations on user's own groups and group listings
+  - name: Group Members
+    description: Group member management and role operations
+  - name: Group Membership
+    description: Group membership status and checking operations
+  - name: Health
+    description: Health check and monitoring endpoints
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error description"
+      required:
+        - success
+        - message
+
+    Group:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "507f1f77bcf86cd799439011"
+        name:
+          type: string
+          example: "Project Team Alpha"
+        createdBy:
+          type: string
+          format: email
+          example: "creator@example.com"
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupMember'
+        invites:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupInvite'
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - name
+        - createdBy
+        - members
+
+    GroupMember:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: "member@example.com"
+        role:
+          type: string
+          enum: ["owner", "admin", "member"]
+          example: "member"
+        joinedAt:
+          type: string
+          format: date-time
+          example: "2023-01-01T00:00:00.000Z"
+        lastActivity:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2023-01-15T10:30:00.000Z"
+      required:
+        - email
+        - role
+        - joinedAt
+
+    GroupInvite:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: "invitee@example.com"
+        role:
+          type: string
+          enum: ["owner", "admin", "member"]
+          example: "member"
+        token:
+          type: string
+          example: "invite-token-123"
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2023-01-08T00:00:00.000Z"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2023-01-01T00:00:00.000Z"
+      required:
+        - email
+        - role
+        - token
+        - expiresAt
+        - createdAt
+
+    GroupIdsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: string
+          example: ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012"]
+      required:
+        - success
+        - data
+
+    GroupsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Group'
+      required:
+        - success
+        - data
+
+    GroupResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Group'
+      required:
+        - success
+        - data
+
+    MembershipResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        isMember:
+          type: boolean
+          example: true
+        role:
+          type: string
+          enum: ["owner", "admin", "member"]
+          example: "member"
+        joinedAt:
+          type: string
+          format: date-time
+          example: "2023-01-01T00:00:00.000Z"
+        lastActivity:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2023-01-15T10:30:00.000Z"
+      required:
+        - success
+        - isMember
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+        data:
+          type: object
+          description: "Response data (varies by endpoint)"
+      required:
+        - success
+        - message
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: ["ok", "error"]
+          example: "ok"
+        service:
+          type: string
+          example: "group-service"
+        type:
+          type: string
+          example: "backend"
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: "1.0.0"
+        description:
+          type: string
+          example: "Group collaboration service"
+        dependencies:
+          type: object
+          properties:
+            mongodb:
+              type: string
+              enum: ["connected", "disconnected"]
+              example: "connected"
+        error:
+          type: string
+          nullable: true
+          example: null
+      required:
+        - status
+        - service
+        - type
+        - timestamp
+        - version
+        - description
+        - dependencies
+
+    # Request schemas
+    CreateGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Project Team Alpha"
+      required:
+        - name
+
+    UpdateGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Updated Project Team Alpha"
+      required:
+        - name
+
+    AddMemberRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: "newmember@example.com"
+        role:
+          type: string
+          enum: ["owner", "admin", "member"]
+          default: "member"
+          example: "member"
+      required:
+        - email
+
+    UpdateRoleRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: ["owner", "admin", "member"]
+          example: "admin"
+      required:
+        - role
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from auth service
+    internalAuth:
+      type: apiKey
+      in: header
+      name: x-internal-token
+      description: Internal service token for inter-service communication
+
+paths:
+  # Health check endpoint
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: |
+        Returns the health status of the group service including database connectivity.
+        Used for monitoring and load balancer health checks.
+        This endpoint is public and does not require authentication.
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # Group CRUD Endpoints
+  /api/groups:
+    post:
+      tags: [Groups]
+      summary: Create a new group
+      description: |
+        Creates a new group with the authenticated user as the owner.
+        The creator automatically becomes the first member with 'owner' role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGroupRequest'
+      responses:
+        '201':
+          description: Group created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '400':
+          description: Bad request - missing or invalid group name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+  /api/groups/mine:
+    get:
+      tags: [My Groups]
+      summary: List user's groups
+      description: |
+        Retrieves all groups where the authenticated user is a member.
+        Updates the user's last activity timestamp in each group.
+      responses:
+        '200':
+          description: Groups retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupsResponse'
+        '400':
+          description: Bad request - user email required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+  /api/groups/mine/deleted:
+    get:
+      tags: [My Groups]
+      summary: List user's deleted groups
+      description: |
+        Retrieves all groups where the authenticated user is a member
+        and the groups have been soft-deleted.
+      responses:
+        '200':
+          description: Deleted groups retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupsResponse'
+        '400':
+          description: Bad request - user email required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+  /api/groups/mine/ids:
+    get:
+      tags: [My Groups]
+      summary: Get user's group IDs
+      description: |
+        Retrieves the IDs of all groups where the authenticated user is a member.
+        This endpoint is optimized for use by other services.
+      responses:
+        '200':
+          description: Group IDs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupIdsResponse'
+        '400':
+          description: Bad request - user email required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+  /api/groups/{id}:
+    get:
+      tags: [Groups]
+      summary: Get group by ID
+      description: |
+        Retrieves a specific group by its ID.
+        User must be a member of the group to access it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Group ID
+      responses:
+        '200':
+          description: Group retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '403':
+          description: Forbidden - user is not a member of the group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+    patch:
+      tags: [Groups]
+      summary: Update group
+      description: |
+        Updates a group's information.
+        User must be an owner or admin of the group.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Group ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGroupRequest'
+      responses:
+        '200':
+          description: Group updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '400':
+          description: Bad request - invalid group name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+    delete:
+      tags: [Groups]
+      summary: Soft delete group
+      description: |
+        Soft deletes a group (marks as deleted).
+        User must be an owner of the group.
+        Group can be restored later.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Group ID
+      responses:
+        '204':
+          description: Group deleted successfully
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+  # Group Restoration Endpoints
+  /api/groups/{id}/restore:
+    post:
+      tags: [Groups]
+      summary: Restore deleted group
+      description: |
+        Restores a soft-deleted group.
+        User must be an owner of the group.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Group ID
+      responses:
+        '200':
+          description: Group restored successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+  /api/groups/{id}/permanent:
+    delete:
+      tags: [Groups]
+      summary: Permanently delete group
+      description: |
+        Permanently deletes a group and all its data.
+        This action cannot be undone.
+        User must be an owner of the group.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Group ID
+      responses:
+        '204':
+          description: Group permanently deleted successfully
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+  # Member Management Endpoints
+  /api/groups/{id}/members:
+    post:
+      tags: [Group Members]
+      summary: Add member to group
+      description: |
+        Adds a new member to the group.
+        User must be an owner or admin of the group.
+        Automatically invalidates the new member's tokens to refresh their group permissions.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Group ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberRequest'
+      responses:
+        '201':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '400':
+          description: Bad request - invalid email or user already a member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+  /api/groups/{id}/members/{memberEmail}:
+    patch:
+      tags: [Group Members]
+      summary: Update member role
+      description: |
+        Updates a member's role in the group.
+        User must be an owner or admin of the group.
+        Cannot change the role of the group owner.
+        Automatically invalidates the member's tokens to refresh their permissions.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Group ID
+        - name: memberEmail
+          in: path
+          required: true
+          schema:
+            type: string
+            format: email
+          description: Member's email address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+      responses:
+        '200':
+          description: Member role updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '400':
+          description: Bad request - invalid role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - insufficient permissions or cannot change owner role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Group or member not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+    delete:
+      tags: [Group Members]
+      summary: Remove member from group
+      description: |
+        Removes a member from the group.
+        User must be an owner or admin of the group.
+        Cannot remove the group owner.
+        Automatically invalidates the removed member's tokens.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Group ID
+        - name: memberEmail
+          in: path
+          required: true
+          schema:
+            type: string
+            format: email
+          description: Member's email address
+      responses:
+        '200':
+          description: Member removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupResponse'
+        '403':
+          description: Forbidden - insufficient permissions or cannot remove owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Group or member not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+  /api/groups/{id}/membership:
+    get:
+      tags: [Group Membership]
+      summary: Check membership status
+      description: |
+        Checks if the authenticated user is a member of the group
+        and returns their membership details.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Group ID
+      responses:
+        '200':
+          description: Membership status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipResponse'
+        '404':
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []

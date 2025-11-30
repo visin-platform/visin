@@ -1,0 +1,26 @@
+services:
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: toomastahves/auth-service:latest
+    restart: unless-stopped
+    ports:
+      - '5001:5001'
+    environment:
+      - PORT=5001
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - GROUP_API_URL=${GROUP_API_URL}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+    init: true
+    networks:
+      - tumbanet
+
+networks:
+  tumbanet:
+    external: true

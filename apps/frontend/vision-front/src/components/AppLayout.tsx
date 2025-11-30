@@ -33,9 +33,11 @@ import {
   ExpandMore,
   Menu as MenuIcon,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Login
 } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const DRAWER_WIDTH = 280;
 const COLLAPSED_DRAWER_WIDTH = 88;
@@ -47,6 +49,7 @@ interface AppLayoutProps {
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
   const theme = useTheme();
+  const { user, isAuthenticated, login, logout } = useAuth();
   
   // State for placeholders
   const [tenant, setTenant] = useState('default');
@@ -145,24 +148,32 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             <ChevronRight />
           </IconButton>
         ) : (
-          <FormControl fullWidth size="small" variant="outlined">
-            <Select
-              value={tenant}
-              onChange={(e) => setTenant(e.target.value)}
-              sx={{
-                bgcolor: 'rgba(255,255,255,0.05)',
-                color: '#fff',
-                '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
-                '.MuiSvgIcon-root': { color: 'rgba(255,255,255,0.5)' }
-              }}
-            >
-              <MenuItem value="default">Default Project</MenuItem>
-              <MenuItem value="demo">Demo Project</MenuItem>
-              <MenuItem value="new">+ New Project</MenuItem>
-            </Select>
-          </FormControl>
+          isAuthenticated ? (
+            <FormControl fullWidth size="small" variant="outlined">
+              <Select
+                value={tenant}
+                onChange={(e) => setTenant(e.target.value)}
+                sx={{
+                  bgcolor: 'rgba(255,255,255,0.05)',
+                  color: '#fff',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
+                  '.MuiSvgIcon-root': { color: 'rgba(255,255,255,0.5)' }
+                }}
+              >
+                <MenuItem value="default">Default Project</MenuItem>
+                {user?.groups?.map((group) => (
+                  <MenuItem key={group} value={group}>{group}</MenuItem>
+                ))}
+                <MenuItem value="new">+ New Project</MenuItem>
+              </Select>
+            </FormControl>
+          ) : (
+            <Typography variant="body2" color="rgba(255,255,255,0.5)" sx={{ width: '100%', textAlign: 'center' }}>
+              Please login to select project
+            </Typography>
+          )
         )}
       </Box>
 
@@ -232,47 +243,86 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
       {/* User Account Section */}
       <Box sx={{ p: 2, display: 'flex', justifyContent: collapsed ? 'center' : 'flex-start' }}>
-        <ListItemButton
-          onClick={handleOpenUserMenu}
-          sx={{
-            borderRadius: 2,
-            justifyContent: collapsed ? 'center' : 'initial',
-            px: collapsed ? 1 : 2,
-            '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
-          }}
-        >
-          <Avatar sx={{ width: 32, height: 32, mr: collapsed ? 0 : 2, bgcolor: theme.palette.secondary.main }}>T</Avatar>
-          {!collapsed && (
-            <>
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="body2" fontWeight={600}>Tom User</Typography>
-                <Typography variant="caption" color="rgba(255,255,255,0.5)">tom@visin.eu</Typography>
-              </Box>
-              <ExpandMore sx={{ color: 'rgba(255,255,255,0.5)' }} />
-            </>
-          )}
-        </ListItemButton>
-        <Menu
-          sx={{ mt: -1 }}
-          id="menu-appbar"
-          anchorEl={anchorElUser}
-          anchorOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-          keepMounted
-          transformOrigin={{
-            vertical: 'bottom',
-            horizontal: 'right',
-          }}
-          open={Boolean(anchorElUser)}
-          onClose={handleCloseUserMenu}
-        >
-          <MenuItem onClick={handleCloseUserMenu}>Profile</MenuItem>
-          <MenuItem onClick={handleCloseUserMenu}>Account</MenuItem>
-          <Divider />
-          <MenuItem onClick={handleCloseUserMenu}>Logout</MenuItem>
-        </Menu>
+        {isAuthenticated ? (
+          <>
+            <ListItemButton
+              onClick={handleOpenUserMenu}
+              sx={{
+                borderRadius: 2,
+                justifyContent: collapsed ? 'center' : 'initial',
+                px: collapsed ? 1 : 2,
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
+              }}
+            >
+              <Avatar 
+                src={user?.picture} 
+                sx={{ width: 32, height: 32, mr: collapsed ? 0 : 2, bgcolor: theme.palette.secondary.main }}
+              >
+                {user?.name?.charAt(0) || 'U'}
+              </Avatar>
+              {!collapsed && (
+                <>
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Typography variant="body2" fontWeight={600}>{user?.name}</Typography>
+                    <Typography variant="caption" color="rgba(255,255,255,0.5)">{user?.email}</Typography>
+                  </Box>
+                  <ExpandMore sx={{ color: 'rgba(255,255,255,0.5)' }} />
+                </>
+              )}
+            </ListItemButton>
+            <Menu
+              sx={{ mt: -1 }}
+              id="menu-appbar"
+              anchorEl={anchorElUser}
+              anchorOrigin={{
+                vertical: 'top',
+                horizontal: 'right',
+              }}
+              keepMounted
+              transformOrigin={{
+                vertical: 'bottom',
+                horizontal: 'right',
+              }}
+              open={Boolean(anchorElUser)}
+              onClose={handleCloseUserMenu}
+            >
+              <MenuItem onClick={handleCloseUserMenu}>Profile</MenuItem>
+              <MenuItem onClick={handleCloseUserMenu}>Account</MenuItem>
+              <Divider />
+              <MenuItem onClick={() => { handleCloseUserMenu(); logout(); }}>Logout</MenuItem>
+            </Menu>
+          </>
+        ) : (
+          <ListItemButton
+            onClick={login}
+            sx={{
+              borderRadius: 2,
+              justifyContent: collapsed ? 'center' : 'initial',
+              px: collapsed ? 1 : 2,
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
+            }}
+          >
+            <ListItemIcon 
+              sx={{ 
+                minWidth: 0,
+                mr: collapsed ? 0 : 2,
+                justifyContent: 'center',
+                color: 'rgba(255,255,255,0.5)' 
+              }}
+            >
+              <Login />
+            </ListItemIcon>
+            {!collapsed && (
+              <ListItemText 
+                primary="Login" 
+                primaryTypographyProps={{ 
+                  fontSize: '0.9rem', 
+                  fontWeight: 600 
+                }} 
+              />
+            )}
+          </ListItemButton>
+        )}
       </Box>
     </>
   );

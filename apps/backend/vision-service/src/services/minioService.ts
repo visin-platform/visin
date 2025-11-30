@@ -1,17 +1,28 @@
 import * as Minio from 'minio';
+import * as https from 'https';
 
 // MinIO client configuration for vision service - lazy loaded
 let minioClient: Minio.Client | null = null;
 
 function getMinioClient(): Minio.Client {
   if (!minioClient) {
-    minioClient = new Minio.Client({
+    const useSSL = process.env.MINIO_USE_SSL === 'true';
+    const options: Minio.ClientOptions = {
       endPoint: process.env.MINIO_ENDPOINT || 'localhost',
       port: parseInt(process.env.MINIO_PORT || '9000'),
-      useSSL: process.env.MINIO_USE_SSL === 'true',
-      accessKey: process.env.MINIO_ACCESS_KEY,
-      secretKey: process.env.MINIO_SECRET_KEY
-    });
+      useSSL: useSSL,
+      accessKey: process.env.MINIO_ACCESS_KEY || '',
+      secretKey: process.env.MINIO_SECRET_KEY || ''
+    };
+
+    if (useSSL) {
+      // Allow self-signed certificates
+      options.transportAgent = new https.Agent({
+        rejectUnauthorized: false
+      });
+    }
+
+    minioClient = new Minio.Client(options);
   }
   return minioClient;
 }

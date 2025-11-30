@@ -1,14 +1,13 @@
 import { useEffect, useState, ReactNode } from 'react';
 import { CssBaseline } from '@mui/material';
-import { Loader } from '../components/Loader';
-import { ErrorPage } from '../components/ErrorPage';
 import React from 'react';
+import { ErrorPage } from '../components/ErrorPage/ErrorPage';
+import { Loader } from '../components/Loader/Loader';
 
 export interface AppConfig {
-  VISION_API_URL?: string;
+  GOOGLE_CLIENT_ID?: string;
   AUTH_SERVICE_URL?: string;
-  AUTH_FRONT_URL?: string;
-  GROUP_SERVICE_URL?: string;
+  PUBLIC_API_URL?: string;
 }
 
 // Global configuration holder for non-React services
@@ -19,10 +18,9 @@ export const ConfigContext = React.createContext<AppConfig>({});
 // Helper function to create config from environment variables
 function createDevConfig(): AppConfig {
   return {
-    VISION_API_URL: import.meta.env.VITE_VISION_API_URL,
+    GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL,
-    AUTH_FRONT_URL: import.meta.env.VITE_AUTH_FRONT_URL,
-    GROUP_SERVICE_URL: import.meta.env.VITE_GROUP_SERVICE_URL
+    PUBLIC_API_URL: import.meta.env.VITE_PUBLIC_API_URL
   };
 }
 
