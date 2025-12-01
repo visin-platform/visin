@@ -16,6 +16,7 @@ services:
       - GROUP_SERVICE_URL=${GROUP_SERVICE_URL}
       - CORS_ORIGIN=${CORS_ORIGIN}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN}
     init: true
     networks:
       - visinnet
