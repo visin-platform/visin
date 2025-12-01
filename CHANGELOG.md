@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.16](https://github.com/av-research/visin/compare/v0.0.15...v0.0.16) (2025-12-01)
+
+
+### Bug Fixes
+
+* set cookie domain for auth service ([6508307](https://github.com/av-research/visin/commit/6508307fb372ffdc16d23000bb686f2e2b80939e))
+
 ### [0.0.15](https://github.com/av-research/visin/compare/v0.0.14...v0.0.15) (2025-12-01)
 
 
