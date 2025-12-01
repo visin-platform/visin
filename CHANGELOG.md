@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.15](https://github.com/av-research/visin/compare/v0.0.14...v0.0.15) (2025-12-01)
+
+
+### Bug Fixes
+
+* set GOOGLE_CLIENT_ID as variable ([4a00643](https://github.com/av-research/visin/commit/4a00643696e0885d71e614080349d28074f518c7))
+
 ### [0.0.14](https://github.com/av-research/visin/compare/v0.0.13...v0.0.14) (2025-12-01)
 
 
