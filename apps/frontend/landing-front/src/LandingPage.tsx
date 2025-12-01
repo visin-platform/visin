@@ -11,8 +11,8 @@ function LandingPage() {
     <div className="App">
       <header className="header">
         <div className="logo">
-          <img src="/logo.svg" alt="VisIn Logo" />
-          <span>VisIn</span>
+          <img src="/logo.svg" alt="Visin Logo" />
+          <span>Visin</span>
         </div>
         <nav className="nav">
           <ul className={menuOpen ? 'open' : ''}>
