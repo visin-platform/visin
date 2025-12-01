@@ -16,8 +16,8 @@ services:
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
     init: true
     networks:
-      - tumbanet
+      - visinnet
 
 networks:
-  tumbanet:
+  visinnet:
     external: true

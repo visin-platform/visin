@@ -18,8 +18,8 @@ services:
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
     init: true
     networks:
-      - tumbanet
+      - visinnet
 
 networks:
-  tumbanet:
+  visinnet:
     external: true
