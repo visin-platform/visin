@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.13](https://github.com/av-research/visin/compare/v0.0.12...v0.0.13) (2025-12-01)
+
+
+### Bug Fixes
+
+* set correct external network ([5ea4403](https://github.com/av-research/visin/commit/5ea4403526c90766630a2cf451caf9f92ac2fee6))
+
 ### [0.0.12](https://github.com/av-research/visin/compare/v0.0.11...v0.0.12) (2025-12-01)
 
 
