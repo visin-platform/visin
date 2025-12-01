@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.14](https://github.com/av-research/visin/compare/v0.0.13...v0.0.14) (2025-12-01)
+
+
+### Bug Fixes
+
+* add missing variables to vision front ([daccb37](https://github.com/av-research/visin/commit/daccb3787d8e00d92bfa8ea4c32d370a5d15947d))
+
 ### [0.0.13](https://github.com/av-research/visin/compare/v0.0.12...v0.0.13) (2025-12-01)
 
 
