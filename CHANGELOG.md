@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.18](https://github.com/av-research/visin/compare/v0.0.17...v0.0.18) (2025-12-01)
+
+
+### Bug Fixes
+
+* mongo healthcheck ([f69141b](https://github.com/av-research/visin/commit/f69141b11d41c3a7804a3077853a2e73851de61e))
+
 ### [0.0.17](https://github.com/av-research/visin/compare/v0.0.16...v0.0.17) (2025-12-01)
 
 
