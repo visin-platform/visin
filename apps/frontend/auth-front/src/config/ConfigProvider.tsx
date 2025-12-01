@@ -7,7 +7,7 @@ import { Loader } from '../components/Loader/Loader';
 export interface AppConfig {
   GOOGLE_CLIENT_ID?: string;
   AUTH_SERVICE_URL?: string;
-  PUBLIC_API_URL?: string;
+  VISION_API_URL?: string;
 }
 
 // Global configuration holder for non-React services
@@ -20,7 +20,7 @@ function createDevConfig(): AppConfig {
   return {
     GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL,
-    PUBLIC_API_URL: import.meta.env.VITE_PUBLIC_API_URL
+    VISION_API_URL: import.meta.env.VISION_API_URL
   };
 }
 

@@ -5,7 +5,7 @@ cat > /usr/share/nginx/html/config.json << EOF
 {
   "GOOGLE_CLIENT_ID": "${GOOGLE_CLIENT_ID}",
   "AUTH_SERVICE_URL": "${AUTH_SERVICE_URL}",
-  "PUBLIC_API_URL": "${PUBLIC_API_URL}"
+  "VISION_API_URL": "${VISION_API_URL}"
 }
 EOF
 

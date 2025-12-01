@@ -133,7 +133,7 @@ const getUserGroups = async (email: string): Promise<string[]> => {
   // Fetch fresh data from group service
   let userGroups: string[] = [];
   try {
-    const groupServiceUrl = process.env.GROUP_API_URL;
+    const groupServiceUrl = process.env.GROUP_SERVICE_URL;
     const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
 
     if (groupServiceUrl && internalToken) {

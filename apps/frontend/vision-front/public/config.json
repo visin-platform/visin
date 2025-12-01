@@ -1,8 +1,0 @@
-{
-  "VISION_API_URL": "https://vision-api.visin.eu",
-  "AUTH_SERVICE_URL": "https://auth-api.visin.eu",
-  "AUTH_FRONT_URL": "https://auth.visin.eu",
-  "GROUP_SERVICE_URL": "https://group-api.visin.eu",
-  "PUBLIC_API_URL": "https://vision-api.visin.eu",
-  "SHELL_FRONT_URL": "https://visin.eu"
-}

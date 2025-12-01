@@ -5,7 +5,7 @@ import { GroupRole } from '../models/Group';
 
 // Helper function to invalidate user tokens when membership changes
 const invalidateUserTokens = async (userEmails: string[]): Promise<void> => {
-  const authServiceUrl = process.env.AUTH_API_URL;
+  const authServiceUrl = process.env.AUTH_SERVICE_URL;
   const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
 
   if (!authServiceUrl || !internalToken) {
