@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.12](https://github.com/av-research/visin/compare/v0.0.11...v0.0.12) (2025-12-01)
+
+
+### Features
+
+* Setup google auth for visin domain ([9c5c87c](https://github.com/av-research/visin/commit/9c5c87c91d4e08605107b579e379bbc4960ad141))
+
 ### [0.0.11](https://github.com/av-research/visin/compare/v0.0.10...v0.0.11) (2025-11-30)
 
 
