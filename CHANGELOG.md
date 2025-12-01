@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.11](https://github.com/av-research/visin/compare/v0.0.10...v0.0.11) (2025-11-30)
+
+
+### Features
+
+* Setup auth front and service ([b150bb1](https://github.com/av-research/visin/commit/b150bb140b032d293f60e6ef8be18544b5dfabeb))
+
 ### [0.0.10](https://github.com/av-research/visin/compare/v0.0.9...v0.0.10) (2025-11-29)
 
 ### [0.0.9](https://github.com/av-research/visin/compare/v0.0.8...v0.0.9) (2025-11-29)
