@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.17](https://github.com/av-research/visin/compare/v0.0.16...v0.0.17) (2025-12-01)
+
+
+### Features
+
+* add mongodb infra ([3fb2970](https://github.com/av-research/visin/commit/3fb2970014e97bfba4d454e26adf5c956140b828))
+
 ### [0.0.16](https://github.com/av-research/visin/compare/v0.0.15...v0.0.16) (2025-12-01)
 
 
