@@ -62,7 +62,7 @@ function TabPanel(props: TabPanelProps) {
 const ProjectDashboardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [tabValue, setTabValue] = useState(0);
 
   // Table state
@@ -371,6 +371,7 @@ const ProjectDashboardPage: React.FC = () => {
                 sortBy="updatedAt"
                 sortOrder="desc"
                 onSort={() => {}}
+                isAuthenticated={isAuthenticated}
               />
             ) : (
               <Box sx={{ textAlign: 'center', py: 8, bgcolor: 'background.default', borderRadius: 2 }}>
@@ -421,6 +422,7 @@ const ProjectDashboardPage: React.FC = () => {
               sortBy={sortBy}
               sortOrder={sortOrder}
               onSort={handleSort}
+              isAuthenticated={isAuthenticated}
             />
           </Box>
         </TabPanel>
