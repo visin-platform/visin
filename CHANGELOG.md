@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.19](https://github.com/av-research/visin/compare/v0.0.18...v0.0.19) (2025-12-04)
+
+
+### Features
+
+* add projects ([6fe1c48](https://github.com/av-research/visin/commit/6fe1c488dd1669675355cbef6079c89d45116302))
+
 ### [0.0.18](https://github.com/av-research/visin/compare/v0.0.17...v0.0.18) (2025-12-01)
 
 
