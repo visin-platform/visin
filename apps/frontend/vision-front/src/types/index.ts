@@ -7,6 +7,7 @@ export interface Training {
   description?: string;
   datasetId?: string;
   configId?: string;
+  projectId?: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
   tags?: string[];
   startTime?: string;
@@ -302,6 +303,7 @@ export interface CreateTrainingData {
   description?: string;
   datasetId?: string;
   configId?: string;
+  projectId?: string;
   status?: 'pending' | 'running' | 'completed' | 'failed';
   tags?: string[];
   startTime?: string;

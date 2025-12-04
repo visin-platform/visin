@@ -59,6 +59,7 @@ export interface TrainingStats {
   filters: {
     status: string | null;
     datasetId: string | null;
+    projectId: string | null;
   };
 }
 
@@ -70,6 +71,7 @@ export const trainingService = {
     search?: string;
     status?: 'pending' | 'running' | 'completed' | 'failed';
     datasetId?: string;
+    projectId?: string;
     tags?: string[];
     sortBy?: string;
     order?: 'asc' | 'desc';
@@ -103,6 +105,7 @@ export const trainingService = {
   async getTrainingStats(params?: {
     status?: 'pending' | 'running' | 'completed' | 'failed';
     datasetId?: string;
+    projectId?: string;
     tags?: string[];
   }): Promise<ApiResponse<TrainingStats>> {
     const response = await visionApi.get('/trainings/stats', { params });

@@ -17,6 +17,7 @@ import {
   Box
 } from '@mui/material';
 import { Config, Training } from '../types';
+import { Project } from '../types/Project';
 import { DatasetAnalysis } from '../services/analysisService';
 import TagInput from './TagInput';
 
@@ -35,6 +36,8 @@ interface TrainingFormDialogProps {
   onConfigChange: (value: string) => void;
   selectedDatasetId: string;
   onDatasetChange: (value: string) => void;
+  selectedProjectId: string;
+  onProjectChange: (value: string) => void;
   selectedStatus: Training['status'];
   onStatusChange: (value: Training['status']) => void;
   trainingTags: string[];
@@ -42,10 +45,12 @@ interface TrainingFormDialogProps {
   availableTags?: string[];
   configs: Config[];
   datasets: DatasetAnalysis[];
+  projects: Project[];
   error: string | null;
   success: string | null;
   loadingConfigs: boolean;
   loadingDatasets: boolean;
+  loadingProjects: boolean;
 }
 
 export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
@@ -63,6 +68,8 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
   onConfigChange,
   selectedDatasetId,
   onDatasetChange,
+  selectedProjectId,
+  onProjectChange,
   selectedStatus,
   onStatusChange,
   trainingTags,
@@ -70,10 +77,12 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
   availableTags = [],
   configs,
   datasets,
+  projects,
   error,
   success,
   loadingConfigs,
-  loadingDatasets
+  loadingDatasets,
+  loadingProjects
 }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -119,6 +128,24 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
           disabled={isCreating || isLoadingData}
           sx={{ mb: 2 }}
         />
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel>Select Project (Optional)</InputLabel>
+          <Select
+            value={selectedProjectId}
+            onChange={(e: SelectChangeEvent<string>) => onProjectChange(e.target.value)}
+            label="Select Project (Optional)"
+            disabled={isCreating || isLoadingData || loadingProjects}
+          >
+            <MenuItem value="">
+              <em>None</em>
+            </MenuItem>
+            {projects.map((project: Project) => (
+              <MenuItem key={project._id} value={project._id}>
+                {project.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
         <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel>Select Config (Optional)</InputLabel>
           <Select

@@ -15,7 +15,10 @@ import testResultRoutes from './routes/testResultRoutes';
 import visualizationRoutes from './routes/visualizationRoutes';
 import benchmarkRoutes from './routes/benchmarkRoutes';
 import comparisonRoutes from './routes/comparisonRoutes';
+import projectRoutes from './routes/projectRoutes';
+import apiTokenRoutes from './routes/apiTokenRoutes';
 import { healthCheck } from './controllers/healthController';
+import { apiTokenMiddleware } from './middleware/apiTokenMiddleware';
 
 // Load environment variables
 dotenv.config();
@@ -35,6 +38,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' })); // Increased limit for large training data
 
+// Global Middleware
+app.use(apiTokenMiddleware);
+
 // Routes
 app.use('/api/datasets', datasetRoutes);
 app.use('/api/trainings', trainingRoutes);
@@ -48,6 +54,8 @@ app.use('/api/test-results', testResultRoutes);
 app.use('/api/visualizations', visualizationRoutes);
 app.use('/api/benchmarks', benchmarkRoutes);
 app.use('/api/comparisons', comparisonRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/api-tokens', apiTokenRoutes);
 
 // Serve OpenAPI docs as static files
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));

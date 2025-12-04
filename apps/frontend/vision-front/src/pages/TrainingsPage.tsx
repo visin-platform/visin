@@ -24,8 +24,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { trainingService } from '../services/trainingService';
 import { configService } from '../services/configService';
+import { projectService } from '../services/projectService';
 import { getAllAnalyses, type DatasetAnalysis } from '../services/analysisService';
 import { Training, Config } from '../types';
+import { Project } from '../types/Project';
 import TrainingsTable from '../components/TrainingsTable';
 import TrainingFilters from '../components/TrainingFilters';
 import TrainingStats from '../components/TrainingStats';
@@ -51,12 +53,15 @@ const TrainingsPage: React.FC = () => {
   const [trainingDescription, setTrainingDescription] = useState('');
   const [selectedDatasetId, setSelectedDatasetId] = useState('');
   const [selectedConfigId, setSelectedConfigId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<Training['status']>('pending');
   const [trainingTags, setTrainingTags] = useState<string[]>([]);
   const [datasets, setDatasets] = useState<DatasetAnalysis[]>([]);
   const [configs, setConfigs] = useState<Config[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [loadingProjects, setLoadingProjects] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
@@ -121,21 +126,26 @@ const TrainingsPage: React.FC = () => {
         try {
           setLoadingConfigs(true);
           setLoadingDatasets(true);
+          setLoadingProjects(true);
           
-          const [configsRes, analysisRes] = await Promise.all([
+          const [configsRes, analysisRes, projectsRes] = await Promise.all([
             configService.getAllConfigs(),
-            getAllAnalyses(100, 0)
+            getAllAnalyses(100, 0),
+            projectService.getProjects()
           ]);
           
           setConfigs(configsRes.data.configs || []);
           setDatasets(analysisRes.data || []);
+          setProjects(projectsRes.data || []);
         } catch (err) {
-          console.error('Failed to load configs/datasets:', err);
+          console.error('Failed to load configs/datasets/projects:', err);
           setConfigs([]);
           setDatasets([]);
+          setProjects([]);
         } finally {
           setLoadingConfigs(false);
           setLoadingDatasets(false);
+          setLoadingProjects(false);
         }
       };
       loadData();
@@ -288,6 +298,7 @@ const TrainingsPage: React.FC = () => {
           description: trainingDescription.trim() || undefined,
           datasetId: selectedDatasetId || undefined,
           configId: selectedConfigId || undefined,
+          projectId: selectedProjectId || undefined,
           status: selectedStatus,
           tags: trainingTags,
         });
@@ -299,6 +310,7 @@ const TrainingsPage: React.FC = () => {
           description: trainingDescription.trim() || undefined,
           datasetId: selectedDatasetId || undefined,
           configId: selectedConfigId || undefined,
+          projectId: selectedProjectId || undefined,
           status: selectedStatus,
           tags: trainingTags,
         });
@@ -312,6 +324,7 @@ const TrainingsPage: React.FC = () => {
       setTrainingDescription('');
       setSelectedDatasetId('');
       setSelectedConfigId('');
+      setSelectedProjectId('');
       refetch();
       // Refresh available tags to include any new tags that were added
       loadTags();
@@ -329,6 +342,7 @@ const TrainingsPage: React.FC = () => {
       setTrainingDescription('');
       setSelectedDatasetId('');
       setSelectedConfigId('');
+      setSelectedProjectId('');
       setSelectedStatus('pending');
       setTrainingTags([]);
       setCreateError(null);
@@ -341,15 +355,18 @@ const TrainingsPage: React.FC = () => {
     try {
       setLoadingConfigs(true);
       setLoadingDatasets(true);
+      setLoadingProjects(true);
 
       // Load configs and datasets
-      const [configsRes, analysisRes] = await Promise.all([
+      const [configsRes, analysisRes, projectsRes] = await Promise.all([
         configService.getAllConfigs(),
-        getAllAnalyses(100, 0)
+        getAllAnalyses(100, 0),
+        projectService.getProjects()
       ]);
 
       setConfigs(configsRes.data.configs || []);
       setDatasets(analysisRes.data || []);
+      setProjects(projectsRes.data || []);
 
       // Populate form with training data
       setEditingTrainingId(training._id);
@@ -357,6 +374,7 @@ const TrainingsPage: React.FC = () => {
       setTrainingDescription(training.description || '');
       setSelectedDatasetId(training.datasetId || '');
       setSelectedConfigId(training.configId || '');
+      setSelectedProjectId(training.projectId || '');
       setSelectedStatus(training.status);
       setTrainingTags(training.tags || []);
       setCreateModalOpen(true);
@@ -365,6 +383,7 @@ const TrainingsPage: React.FC = () => {
     } finally {
       setLoadingConfigs(false);
       setLoadingDatasets(false);
+      setLoadingProjects(false);
     }
   };
 
@@ -468,6 +487,7 @@ const TrainingsPage: React.FC = () => {
               setTrainingDescription('');
               setSelectedDatasetId('');
               setSelectedConfigId('');
+              setSelectedProjectId('');
               setSelectedStatus('pending');
               setTrainingTags([]);
               setCreateError(null);
@@ -598,7 +618,7 @@ const TrainingsPage: React.FC = () => {
         onSubmit={handleCreateTraining}
         isEditing={!!editingTrainingId}
         isCreating={creating}
-        isLoadingData={loadingConfigs || loadingDatasets}
+        isLoadingData={loadingConfigs || loadingDatasets || loadingProjects}
         trainingName={trainingName}
         onNameChange={setTrainingName}
         trainingDescription={trainingDescription}
@@ -607,6 +627,8 @@ const TrainingsPage: React.FC = () => {
         onConfigChange={setSelectedConfigId}
         selectedDatasetId={selectedDatasetId}
         onDatasetChange={setSelectedDatasetId}
+        selectedProjectId={selectedProjectId}
+        onProjectChange={setSelectedProjectId}
         selectedStatus={selectedStatus}
         onStatusChange={setSelectedStatus}
         trainingTags={trainingTags}
@@ -614,10 +636,12 @@ const TrainingsPage: React.FC = () => {
         availableTags={availableTags}
         configs={configs}
         datasets={datasets}
+        projects={projects}
         error={createError}
         success={createSuccess}
         loadingConfigs={loadingConfigs}
         loadingDatasets={loadingDatasets}
+        loadingProjects={loadingProjects}
       />
 
       {/* Delete Confirmation Dialog */}

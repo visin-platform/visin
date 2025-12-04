@@ -15,11 +15,15 @@ import VisualizationsComparisonPage from '../pages/VisualizationsComparisonPage'
 import TrainingVisualizationsComparisonPage from '../pages/TrainingVisualizationsComparisonPage';
 import BenchmarksPage from '../pages/BenchmarksPage';
 import ComparisonsPage from '../pages/ComparisonsPage';
+import ProjectsPage from '../pages/ProjectsPage';
+import ProjectDashboardPage from '../pages/ProjectDashboardPage';
 
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/trainings" replace />} />
+      <Route path="/" element={<Navigate to="/projects" replace />} />
+      <Route path="/projects" element={<ProjectsPage />} />
+      <Route path="/projects/:id" element={<ProjectDashboardPage />} />
       <Route path="/trainings" element={<TrainingsPage />} />
       <Route path="/trainings/:id" element={<TrainingDetailPage />} />
       <Route path="/trainings/compare" element={<TrainingComparisonPage />} />

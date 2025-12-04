@@ -13,6 +13,7 @@ export const getTrainings = async (req: Request, res: Response): Promise<void> =
       search, 
       status, 
       datasetId,
+      projectId,
       tags,
       sortBy = 'updatedAt', 
       order = 'desc' 
@@ -33,6 +34,11 @@ export const getTrainings = async (req: Request, res: Response): Promise<void> =
     // Filter by dataset
     if (datasetId) {
       query.datasetId = datasetId;
+    }
+
+    // Filter by project
+    if (projectId) {
+      query.projectId = projectId;
     }
 
     // Filter by tags
@@ -307,7 +313,8 @@ export const createTraining = async (req: Request, res: Response): Promise<void>
       name, 
       description, 
       datasetId,
-      configId, 
+      configId,
+      projectId,
       status = 'pending',
       tags,
       startTime,
@@ -332,6 +339,7 @@ export const createTraining = async (req: Request, res: Response): Promise<void>
       description: description?.trim(),
       datasetId,
       configId,
+      projectId,
       status,
       tags: tags ? (Array.isArray(tags) ? tags : [tags]) : [],
       startTime,
@@ -361,11 +369,12 @@ export const createTraining = async (req: Request, res: Response): Promise<void>
 export const updateTraining = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { 
+    const {
       name, 
       description, 
       datasetId,
-      configId, 
+      configId,
+      projectId,
       status,
       tags,
       startTime,
@@ -391,12 +400,11 @@ export const updateTraining = async (req: Request, res: Response): Promise<void>
       });
       return;
     }
-
-    // Update fields
     if (name !== undefined) training.name = name.trim();
     if (description !== undefined) training.description = description?.trim();
     if (datasetId !== undefined) training.datasetId = datasetId;
     if (configId !== undefined) training.configId = configId;
+    if (projectId !== undefined) training.projectId = projectId;
     if (status !== undefined) training.status = status;
     if (tags !== undefined) training.tags = tags ? (Array.isArray(tags) ? tags : [tags]) : [];
     if (startTime !== undefined) training.startTime = startTime;
@@ -481,7 +489,7 @@ export const deleteTraining = async (req: Request, res: Response): Promise<void>
 // Get training statistics
 export const getTrainingStats = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { status, datasetId, tags } = req.query;
+    const { status, datasetId, tags, projectId } = req.query;
 
     let matchQuery: any = { deletedAt: null };
 
@@ -493,6 +501,11 @@ export const getTrainingStats = async (req: Request, res: Response): Promise<voi
     // Filter by dataset if provided
     if (datasetId) {
       matchQuery.datasetId = datasetId;
+    }
+
+    // Filter by project if provided
+    if (projectId) {
+      matchQuery.projectId = projectId;
     }
 
     // Filter by tags if provided
@@ -578,7 +591,8 @@ export const getTrainingStats = async (req: Request, res: Response): Promise<voi
         totalCost: stats.totalCost,
         filters: {
           status: status || null,
-          datasetId: datasetId || null
+          datasetId: datasetId || null,
+          projectId: projectId || null
         }
       }
     });

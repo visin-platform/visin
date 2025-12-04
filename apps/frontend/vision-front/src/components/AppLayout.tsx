@@ -34,7 +34,8 @@ import {
   Menu as MenuIcon,
   ChevronLeft,
   ChevronRight,
-  Login
+  Login,
+  Folder
 } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -86,6 +87,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   const menuItems = [
+    { text: 'Projects', icon: <Folder />, path: '/projects' },
     { text: 'Trainings', icon: <ModelTraining />, path: '/trainings' },
     { text: 'Configs', icon: <Settings />, path: '/configs' },
     { text: 'Datasets', icon: <Storage />, path: '/analysis' },

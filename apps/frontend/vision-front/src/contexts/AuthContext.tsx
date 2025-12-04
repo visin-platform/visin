@@ -36,22 +36,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
 
+      const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json'
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${config.AUTH_SERVICE_URL}/auth/verify`, {
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers
       });
 
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
           setUser(data.user);
+          if (data.token) {
+            localStorage.setItem('authToken', data.token);
+          }
         } else {
           setUser(null);
+          localStorage.removeItem('authToken');
         }
       } else {
         setUser(null);
+        localStorage.removeItem('authToken');
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -75,12 +87,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const config = getGlobalConfig();
       if (config.AUTH_SERVICE_URL) {
+        const token = localStorage.getItem('authToken');
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json'
+        };
+
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         await fetch(`${config.AUTH_SERVICE_URL}/auth/logout`, {
           method: 'POST',
-          credentials: 'include'
+          credentials: 'include',
+          headers
         });
       }
       setUser(null);
+      localStorage.removeItem('authToken');
       // Optional: Redirect to home or refresh
       window.location.reload();
     } catch (error) {

@@ -17,5 +17,5 @@
 
 4. Enter Server
    ```sh
-   ssh tom@192.168.0.96
+   ssh admin@192.168.0.96
    ```
