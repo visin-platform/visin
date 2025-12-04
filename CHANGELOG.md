@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.21](https://github.com/av-research/visin/compare/v0.0.20...v0.0.21) (2025-12-04)
+
+
+### Features
+
+* add auth to trainings ([19c3e6f](https://github.com/av-research/visin/commit/19c3e6f234166e747b209766607e3fc39133289e))
+
 ### [0.0.20](https://github.com/av-research/visin/compare/v0.0.19...v0.0.20) (2025-12-04)
 
 
