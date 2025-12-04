@@ -36,7 +36,9 @@ import { configService } from '../services/configService';
 import { testResultService } from '../services/testResultService';
 import { commentService } from '../services/commentService';
 import { getAllAnalyses, type DatasetAnalysis } from '../services/analysisService';
+import { projectService } from '../services/projectService';
 import { Epoch, TestResult, Config, Training, Comment } from '../types';
+import { Project } from '../types/Project';
 import TrainingOverviewTab from '../components/TrainingOverviewTab';
 import TrainingEpochsTab from '../components/TrainingEpochsTab';
 import TrainingTestResultsTab from '../components/TrainingTestResultsTab';
@@ -131,8 +133,11 @@ const TrainingDetailPage: React.FC = () => {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [editConfigs, setEditConfigs] = useState<Config[]>([]);
   const [editDatasets, setEditDatasets] = useState<DatasetAnalysis[]>([]);
+  const [editProjects, setEditProjects] = useState<Project[]>([]);
   const [editLoadingConfigs, setEditLoadingConfigs] = useState(false);
   const [editLoadingDatasets, setEditLoadingDatasets] = useState(false);
+  const [editLoadingProjects, setEditLoadingProjects] = useState(false);
+  const [editProjectId, setEditProjectId] = useState('');
   const [config, setConfig] = useState<any>(null);
   const [configLoading, setConfigLoading] = useState(false);
   const [uploadResultsOpen, setUploadResultsOpen] = useState(false);
@@ -543,15 +548,18 @@ const TrainingDetailPage: React.FC = () => {
     try {
       setEditLoadingConfigs(true);
       setEditLoadingDatasets(true);
+      setEditLoadingProjects(true);
 
-      // Load configs and datasets
-      const [configsRes, analysisRes] = await Promise.all([
+      // Load configs, datasets, and projects
+      const [configsRes, analysisRes, projectsRes] = await Promise.all([
         configService.getAllConfigs(),
-        getAllAnalyses(100, 0)
+        getAllAnalyses(100, 0),
+        projectService.getProjects()
       ]);
 
       setEditConfigs(configsRes.data.configs || []);
       setEditDatasets(analysisRes.data || []);
+      setEditProjects(projectsRes.data || []);
 
       // Load available tags
       const allTrainings = await trainingService.getTrainings({
@@ -571,6 +579,7 @@ const TrainingDetailPage: React.FC = () => {
       setEditDescription(training.description || '');
       setEditConfigId(training.configId || '');
       setEditDatasetId(training.datasetId || '');
+      setEditProjectId(training.projectId || '');
       setEditStatus(training.status);
       setEditTags(training.tags || []);
       setEditDialogOpen(true);
@@ -579,6 +588,7 @@ const TrainingDetailPage: React.FC = () => {
     } finally {
       setEditLoadingConfigs(false);
       setEditLoadingDatasets(false);
+      setEditLoadingProjects(false);
     }
   };
 
@@ -592,6 +602,7 @@ const TrainingDetailPage: React.FC = () => {
         description: editDescription.trim(),
         configId: editConfigId || undefined,
         datasetId: editDatasetId || undefined,
+        projectId: editProjectId || undefined,
         status: editStatus,
         tags: editTags,
       });
@@ -1060,7 +1071,7 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
         onSubmit={handleEditConfirm}
         isEditing={true}
         isCreating={uploading}
-        isLoadingData={editLoadingConfigs || editLoadingDatasets}
+        isLoadingData={editLoadingConfigs || editLoadingDatasets || editLoadingProjects}
         trainingName={editName}
         onNameChange={setEditName}
         trainingDescription={editDescription}
@@ -1069,6 +1080,8 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
         onConfigChange={setEditConfigId}
         selectedDatasetId={editDatasetId}
         onDatasetChange={setEditDatasetId}
+        selectedProjectId={editProjectId}
+        onProjectChange={setEditProjectId}
         selectedStatus={editStatus}
         onStatusChange={setEditStatus}
         trainingTags={editTags}
@@ -1076,10 +1089,12 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
         availableTags={availableTags}
         configs={editConfigs}
         datasets={editDatasets}
+        projects={editProjects}
         error={uploadError}
         success={uploadSuccess}
         loadingConfigs={editLoadingConfigs}
         loadingDatasets={editLoadingDatasets}
+        loadingProjects={editLoadingProjects}
       />
 
       {/* Delete Training Confirmation Dialog */}
