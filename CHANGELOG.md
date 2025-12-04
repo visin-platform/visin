@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.20](https://github.com/av-research/visin/compare/v0.0.19...v0.0.20) (2025-12-04)
+
+
+### Bug Fixes
+
+* training details page ([9b1183c](https://github.com/av-research/visin/commit/9b1183c8ded676fab86d4b77a89ab281a473946a))
+
 ### [0.0.19](https://github.com/av-research/visin/compare/v0.0.18...v0.0.19) (2025-12-04)
 
 
