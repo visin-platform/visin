@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.22](https://github.com/av-research/visin/compare/v0.0.21...v0.0.22) (2025-12-04)
+
+
+### Bug Fixes
+
+*  vision front build ([7f719a1](https://github.com/av-research/visin/commit/7f719a16a56e21b5bbec6e6f39059a1ada7fdf27))
+
 ### [0.0.21](https://github.com/av-research/visin/compare/v0.0.20...v0.0.21) (2025-12-04)
 
 
