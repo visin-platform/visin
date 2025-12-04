@@ -3,10 +3,28 @@ import { v4 as uuidv4 } from 'uuid';
 import Training from '../models/Training';
 import Epoch from '../models/Epoch';
 import TestResult from '../models/TestResult';
+import Project from '../models/Project';
+import { AuthRequest } from '../middleware/authMiddleware';
+
+// Helper function to check if user has access to a project
+async function checkProjectAccess(userId: string | undefined, projectId: string | undefined): Promise<boolean> {
+  if (!projectId) return true; // If no project, allow (maybe public trainings)
+
+  const project = await Project.findById(projectId);
+  if (!project) return false;
+
+  // Allow access if project is public
+  if (project.isPublic) return true;
+
+  // For private projects, require authentication and ownership
+  if (!userId) return false;
+  return project.ownerId === userId;
+}
 
 // Get all trainings
-export const getTrainings = async (req: Request, res: Response): Promise<void> => {
+export const getTrainings = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.id;
     const { 
       page = 1, 
       limit = 30, 
@@ -39,6 +57,30 @@ export const getTrainings = async (req: Request, res: Response): Promise<void> =
     // Filter by project
     if (projectId) {
       query.projectId = projectId;
+    } else {
+      // If no specific project filter, show trainings from accessible projects
+      if (userId) {
+        // Authenticated user: show trainings from public projects or projects they own, or without project
+        const accessibleProjects = await Project.find({
+          $or: [
+            { isPublic: true },
+            { ownerId: userId }
+          ]
+        }).select('_id');
+        const projectIds = accessibleProjects.map(p => p._id.toString());
+        query.$or = [
+          { projectId: { $in: projectIds } },
+          { projectId: { $exists: false } }
+        ];
+      } else {
+        // Unauthenticated user: only show trainings in public projects or without project
+        const publicProjects = await Project.find({ isPublic: true }).select('_id');
+        const projectIds = publicProjects.map(p => p._id.toString());
+        query.$or = [
+          { projectId: { $in: projectIds } },
+          { projectId: { $exists: false } }
+        ];
+      }
     }
 
     // Filter by tags
@@ -207,9 +249,10 @@ export const getTrainings = async (req: Request, res: Response): Promise<void> =
 };
 
 // Get training by ID
-export const getTrainingById = async (req: Request, res: Response): Promise<void> => {
+export const getTrainingById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
 
     const training = await Training.findOne({ _id: id, deletedAt: null });
 
@@ -217,6 +260,16 @@ export const getTrainingById = async (req: Request, res: Response): Promise<void
       res.status(404).json({
         success: false,
         message: 'Training not found'
+      });
+      return;
+    }
+
+    // Check project access
+    const hasAccess = await checkProjectAccess(userId, training.projectId);
+    if (!hasAccess) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied'
       });
       return;
     }
@@ -237,9 +290,10 @@ export const getTrainingById = async (req: Request, res: Response): Promise<void
 };
 
 // Get training by UUID
-export const getTrainingByUuid = async (req: Request, res: Response): Promise<void> => {
+export const getTrainingByUuid = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { uuid } = req.params;
+    const userId = req.user?.id;
 
     const training = await Training.findOne({ uuid, deletedAt: null });
 
@@ -247,6 +301,16 @@ export const getTrainingByUuid = async (req: Request, res: Response): Promise<vo
       res.status(404).json({
         success: false,
         message: 'Training not found'
+      });
+      return;
+    }
+
+    // Check project access
+    const hasAccess = await checkProjectAccess(userId, training.projectId);
+    if (!hasAccess) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied'
       });
       return;
     }
@@ -267,9 +331,10 @@ export const getTrainingByUuid = async (req: Request, res: Response): Promise<vo
 };
 
 // Get training with epochs
-export const getTrainingWithEpochs = async (req: Request, res: Response): Promise<void> => {
+export const getTrainingWithEpochs = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id;
     const { sortBy = 'epoch', order = 'asc' } = req.query;
 
     const training = await Training.findOne({ _id: id, deletedAt: null });
@@ -278,6 +343,16 @@ export const getTrainingWithEpochs = async (req: Request, res: Response): Promis
       res.status(404).json({
         success: false,
         message: 'Training not found'
+      });
+      return;
+    }
+
+    // Check project access
+    const hasAccess = await checkProjectAccess(userId, training.projectId);
+    if (!hasAccess) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied'
       });
       return;
     }
@@ -307,8 +382,17 @@ export const getTrainingWithEpochs = async (req: Request, res: Response): Promis
 };
 
 // Create training
-export const createTraining = async (req: Request, res: Response): Promise<void> => {
+export const createTraining = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+      return;
+    }
+
     const { 
       name, 
       description, 
@@ -328,6 +412,18 @@ export const createTraining = async (req: Request, res: Response): Promise<void>
         message: 'Training name is required'
       });
       return;
+    }
+
+    // Check project access if projectId is provided
+    if (projectId) {
+      const hasAccess = await checkProjectAccess(userId, projectId);
+      if (!hasAccess) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied to project'
+        });
+        return;
+      }
     }
 
     // Generate UUID if not provided
@@ -366,8 +462,17 @@ export const createTraining = async (req: Request, res: Response): Promise<void>
 };
 
 // Update training
-export const updateTraining = async (req: Request, res: Response): Promise<void> => {
+export const updateTraining = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+      return;
+    }
+
     const { id } = req.params;
     const {
       name, 
@@ -400,6 +505,29 @@ export const updateTraining = async (req: Request, res: Response): Promise<void>
       });
       return;
     }
+
+    // Check project access
+    const hasAccess = await checkProjectAccess(userId, training.projectId);
+    if (!hasAccess) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+      return;
+    }
+
+    // If changing project, check access to new project
+    if (projectId && projectId !== training.projectId) {
+      const hasNewAccess = await checkProjectAccess(userId, projectId);
+      if (!hasNewAccess) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied to new project'
+        });
+        return;
+      }
+    }
+
     if (name !== undefined) training.name = name.trim();
     if (description !== undefined) training.description = description?.trim();
     if (datasetId !== undefined) training.datasetId = datasetId;
@@ -430,8 +558,17 @@ export const updateTraining = async (req: Request, res: Response): Promise<void>
 };
 
 // Delete training
-export const deleteTraining = async (req: Request, res: Response): Promise<void> => {
+export const deleteTraining = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+      return;
+    }
+
     const { id } = req.params;
 
     // Validate ID format
@@ -449,6 +586,16 @@ export const deleteTraining = async (req: Request, res: Response): Promise<void>
       res.status(404).json({
         success: false,
         message: 'Training not found'
+      });
+      return;
+    }
+
+    // Check project access
+    const hasAccess = await checkProjectAccess(userId, training.projectId);
+    if (!hasAccess) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied'
       });
       return;
     }

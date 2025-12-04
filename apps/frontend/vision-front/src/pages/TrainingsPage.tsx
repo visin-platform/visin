@@ -34,10 +34,12 @@ import TrainingStats from '../components/TrainingStats';
 import TrainingFormDialog from '../components/TrainingFormDialog';
 import { exportTrainingsToCSV } from '../utils/csvExport';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 
 const TrainingsPage: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
+  const { isAuthenticated } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Set page title
@@ -478,32 +480,34 @@ const TrainingsPage: React.FC = () => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => {
-              // Reset form state for new training creation
-              setTrainingName('');
-              setTrainingDescription('');
-              setSelectedDatasetId('');
-              setSelectedConfigId('');
-              setSelectedProjectId('');
-              setSelectedStatus('pending');
-              setTrainingTags([]);
-              setCreateError(null);
-              setCreateSuccess(null);
-              setEditingTrainingId(null);
-              setCreateModalOpen(true);
-            }}
-            sx={{ 
-              px: 3,
-              py: 1,
+          {isAuthenticated && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                // Reset form state for new training creation
+                setTrainingName('');
+                setTrainingDescription('');
+                setSelectedDatasetId('');
+                setSelectedConfigId('');
+                setSelectedProjectId('');
+                setSelectedStatus('pending');
+                setTrainingTags([]);
+                setCreateError(null);
+                setCreateSuccess(null);
+                setEditingTrainingId(null);
+                setCreateModalOpen(true);
+              }}
+              sx={{ 
+                px: 3,
+                py: 1,
               borderRadius: 2,
               boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
             }}
           >
             New Training
           </Button>
+          )}
           <IconButton 
             onClick={() => refetch()} 
             disabled={isLoading}
@@ -579,16 +583,18 @@ const TrainingsPage: React.FC = () => {
               Compare
             </Button>
           )}
-          <Button
-            variant="outlined"
-            color="error"
-            size="small"
-            startIcon={<DeleteOutlineIcon />}
-            onClick={() => setDeleteMultipleDialogOpen(true)}
-            sx={{ borderRadius: 2 }}
-          >
-            Delete
-          </Button>
+          {isAuthenticated && (
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              startIcon={<DeleteOutlineIcon />}
+              onClick={() => setDeleteMultipleDialogOpen(true)}
+              sx={{ borderRadius: 2 }}
+            >
+              Delete
+            </Button>
+          )}
         </Box>
       )}
 
@@ -609,6 +615,7 @@ const TrainingsPage: React.FC = () => {
         sortBy={sortBy}
         sortOrder={sortOrder}
         onSort={handleSort}
+        isAuthenticated={isAuthenticated}
       />
 
       {/* Create/Edit Training Modal */}

@@ -48,6 +48,7 @@ import TrainingSystemInfoTab from '../components/TrainingSystemInfoTab';
 import TrainingBenchmarksTab from '../components/TrainingBenchmarksTab';
 import TrainingFormDialog from '../components/TrainingFormDialog';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 
 const StatusChip: React.FC<{ status: Training['status'] }> = ({ status }) => {
   const theme = useTheme();
@@ -108,6 +109,7 @@ const TrainingDetailPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const testResultFileInputRef = useRef<HTMLInputElement>(null);
+  const { isAuthenticated } = useAuth();
 
   // Tab mapping
   const tabNames = ['overview', 'epochs', 'test-results', 'visualizations', 'system-info', 'config', 'benchmarks'];
@@ -824,23 +826,27 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
             >
               Refresh
             </Button>
-            <Button 
-              startIcon={<EditIcon />} 
-              onClick={handleEditTraining} 
-              variant="outlined"
-              disabled={isLoading}
-            >
-              Edit
-            </Button>
-            <Button 
-              startIcon={<DeleteIcon />} 
-              onClick={handleDeleteTraining} 
-              color="error" 
-              variant="outlined"
-              disabled={isLoading}
-            >
-              Delete
-            </Button>
+            {isAuthenticated && (
+              <>
+                <Button 
+                  startIcon={<EditIcon />} 
+                  onClick={handleEditTraining} 
+                  variant="outlined"
+                  disabled={isLoading}
+                >
+                  Edit
+                </Button>
+                <Button 
+                  startIcon={<DeleteIcon />} 
+                  onClick={handleDeleteTraining} 
+                  color="error" 
+                  variant="outlined"
+                  disabled={isLoading}
+                >
+                  Delete
+                </Button>
+              </>
+            )}
           </Stack>
         </Box>
       </Box>

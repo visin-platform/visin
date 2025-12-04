@@ -48,6 +48,7 @@ interface TrainingsTableProps {
   sortBy: 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
   sortOrder: 'asc' | 'desc';
   onSort: (column: 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount') => void;
+  isAuthenticated: boolean;
 }
 
 const StatusChip: React.FC<{ status: Training['status'] }> = ({ status }) => {
@@ -189,7 +190,8 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
   onSelectAll,
   sortBy,
   sortOrder,
-  onSort
+  onSort,
+  isAuthenticated
 }) => {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -364,32 +366,36 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                   </TableCell>
                   <TableCell align="center">
                     <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                      <Tooltip title="Edit training">
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onEdit(training);
-                          }}
-                          sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.primary.main } }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete training">
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onDelete(training._id);
-                          }}
-                          sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.error.main } }}
+                      {isAuthenticated && (
+                        <>
+                          <Tooltip title="Edit training">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onEdit(training);
+                              }}
+                              sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.primary.main } }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete training">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onDelete(training._id);
+                              }}
+                              sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.error.main } }}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                        </>
+                      )}
                     </Box>
                   </TableCell>
                 </TableRow>

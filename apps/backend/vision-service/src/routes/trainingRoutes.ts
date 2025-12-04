@@ -10,10 +10,13 @@ import {
   getTrainingStats,
   compareTrainings
 } from '../controllers/trainingController';
+import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = express.Router();
 
-// Training routes - more specific routes first!
+// Apply auth middleware to all routes
+router.use(authMiddleware);
+
 router.get('/uuid/:uuid', getTrainingByUuid);
 router.get('/:id/epochs', getTrainingWithEpochs);
 router.get('/stats', getTrainingStats);
