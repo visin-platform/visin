@@ -44,11 +44,13 @@ import { Visualization, Epoch } from '../types';
 interface TrainingVisualizationsTabProps {
   training_uuid: string;
   epochs: Epoch[];
+  isAuthenticated: boolean;
 }
 
 const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
   training_uuid,
-  epochs
+  epochs,
+  isAuthenticated
 }) => {
   const [visualizations, setVisualizations] = useState<Visualization[]>([]);
   const [loading, setLoading] = useState(false);
@@ -223,13 +225,15 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
               Compare ({selectedForCompare.length})
             </Button>
           )}
-          <Button
-            variant="contained"
-            startIcon={<UploadIcon />}
-            onClick={() => setUploadDialogOpen(true)}
-          >
-            Upload New
-          </Button>
+          {isAuthenticated && (
+            <Button
+              variant="contained"
+              startIcon={<UploadIcon />}
+              onClick={() => setUploadDialogOpen(true)}
+            >
+              Upload New
+            </Button>
+          )}
         </Stack>
       </Box>
 
@@ -333,13 +337,15 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
           <Typography variant="body2" color="text.secondary" mb={3}>
             Try adjusting your filters or upload a new visualization.
           </Typography>
-          <Button
-            variant="outlined"
-            startIcon={<UploadIcon />}
-            onClick={() => setUploadDialogOpen(true)}
-          >
-            Upload Visualization
-          </Button>
+          {isAuthenticated && (
+            <Button
+              variant="outlined"
+              startIcon={<UploadIcon />}
+              onClick={() => setUploadDialogOpen(true)}
+            >
+              Upload Visualization
+            </Button>
+          )}
         </Paper>
       )}
 
@@ -437,18 +443,20 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
                     >
                       {selectedForCompare.find(v => v.visualization_uuid === viz.visualization_uuid) ? 'Selected' : 'Compare'}
                     </Button>
-                    <Tooltip title="Delete">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDelete(viz.visualization_uuid)}
-                        sx={{ 
-                          color: 'text.secondary',
-                          '&:hover': { color: 'error.main' }
-                        }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    {isAuthenticated && (
+                      <Tooltip title="Delete">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDelete(viz.visualization_uuid)}
+                          sx={{ 
+                            color: 'text.secondary',
+                            '&:hover': { color: 'error.main' }
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </CardActions>
                 </Card>
               </Grid>

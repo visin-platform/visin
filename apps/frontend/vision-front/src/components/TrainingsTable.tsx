@@ -271,6 +271,9 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
               <SortableTableCell column="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
                 Created
               </SortableTableCell>
+              <SortableTableCell column="updatedAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
+                Updated
+              </SortableTableCell>
               <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -362,6 +365,11 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                   <TableCell>
                     <Typography variant="body2" color="text.secondary">
                       {formatDate(training.createdAt)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatDate(training.updatedAt)}
                     </Typography>
                   </TableCell>
                   <TableCell align="center">

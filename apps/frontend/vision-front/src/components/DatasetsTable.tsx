@@ -19,7 +19,9 @@ import {
   Checkbox,
   Tooltip,
   IconButton,
-  TextField
+  TextField,
+  useTheme,
+  alpha
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -30,6 +32,7 @@ import {
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { getAllAnalyses, DatasetAnalysis, deleteAnalysis, updateAnalysis } from '../services/analysisService';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AnalysisTableProps {
   selectedAnalysisIds?: Set<string>;
@@ -44,6 +47,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   onSelectAll = () => {},
   onCompareSelected = () => {}
 }) => {
+  const theme = useTheme();
+  const { isAuthenticated, user } = useAuth();
   const [analyses, setAnalyses] = useState<DatasetAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +76,11 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Permission check function
+  const canDeleteDatasets = () => {
+    return isAuthenticated && user?.groups && (user.groups.includes('owner') || user.groups.includes('admin'));
   };
 
   const handleDeleteClick = (analysis: DatasetAnalysis) => {
@@ -204,66 +214,95 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
 
       {/* Bulk Selection UI */}
       {selectedAnalysisIds.size > 0 && (
-        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            {selectedAnalysisIds.size} analysis(es) selected
+        <Box 
+          sx={{ 
+            mb: 2, 
+            p: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 2,
+            bgcolor: alpha(theme.palette.primary.main, 0.05),
+            border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+            borderRadius: 2
+          }}
+        >
+          <Typography variant="body2" fontWeight={600} color="primary">
+            {selectedAnalysisIds.size} selected
           </Typography>
+          <Box sx={{ flexGrow: 1 }} />
+          {selectedAnalysisIds.size > 1 && (
+            <Button
+              variant="outlined"
+              startIcon={<CompareIcon />}
+              onClick={onCompareSelected}
+              size="small"
+              sx={{ borderRadius: 2 }}
+            >
+              Compare
+            </Button>
+          )}
         </Box>
       )}
 
-      {error && <Alert severity="error">{error}</Alert>}
+      {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-              <TableCell padding="checkbox" sx={{ fontWeight: 'bold' }}>
-                <Checkbox
-                  indeterminate={
-                    selectedAnalysisIds.size > 0 && selectedAnalysisIds.size < sortedAnalyses.length
-                  }
-                  checked={sortedAnalyses.length > 0 && selectedAnalysisIds.size === sortedAnalyses.length}
-                  onChange={() => {
-                    if (selectedAnalysisIds.size === sortedAnalyses.length) {
-                      // Deselect all
-                      onSelectAll?.([]);
-                    } else {
-                      // Select all
-                      onSelectAll?.(sortedAnalyses.map(a => a._id));
+      <Paper 
+        elevation={0} 
+        sx={{ 
+          borderRadius: 2, 
+          border: `1px solid ${theme.palette.divider}`,
+          overflow: 'hidden'
+        }}
+      >
+        <TableContainer sx={{ overflowX: 'auto' }}>
+          <Table sx={{ minWidth: 650 }}>
+            <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+              <TableRow>
+                <TableCell padding="checkbox" sx={{ fontWeight: 600 }}>
+                  <Checkbox
+                    indeterminate={
+                      selectedAnalysisIds.size > 0 && selectedAnalysisIds.size < sortedAnalyses.length
                     }
-                  }}
-                  disabled={sortedAnalyses.length === 0}
-                />
-              </TableCell>
-              <TableCell sx={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('dataset')}>
-                <Box sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
-                  Dataset
-                  {sortField === 'dataset' && (
-                    sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
-                  )}
-                </Box>
-              </TableCell>
-              <TableCell sx={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('createdAt')}>
-                <Box sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
-                  Created At
-                  {sortField === 'createdAt' && (
-                    sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
-                  )}
-                </Box>
-              </TableCell>
-              <TableCell sx={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('updatedAt')}>
-                <Box sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>
-                  Updated At
-                  {sortField === 'updatedAt' && (
-                    sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
-                  )}
-                </Box>
-              </TableCell>
-              <TableCell align="center">
-                <strong>Actions</strong>
-              </TableCell>
-            </TableRow>
-          </TableHead>
+                    checked={sortedAnalyses.length > 0 && selectedAnalysisIds.size === sortedAnalyses.length}
+                    onChange={() => {
+                      if (selectedAnalysisIds.size === sortedAnalyses.length) {
+                        // Deselect all
+                        onSelectAll?.([]);
+                      } else {
+                        // Select all
+                        onSelectAll?.(sortedAnalyses.map(a => a._id));
+                      }
+                    }}
+                    disabled={sortedAnalyses.length === 0}
+                  />
+                </TableCell>
+                <TableCell sx={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600 }} onClick={() => handleSort('dataset')}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Dataset
+                    {sortField === 'dataset' && (
+                      sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell sx={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600 }} onClick={() => handleSort('createdAt')}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Created
+                    {sortField === 'createdAt' && (
+                      sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell sx={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600 }} onClick={() => handleSort('updatedAt')}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Updated
+                    {sortField === 'updatedAt' && (
+                      sortDirection === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                    )}
+                  </Box>
+                </TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
+              </TableRow>
+            </TableHead>
           <TableBody>
             {sortedAnalyses.length === 0 ? (
               <TableRow>
@@ -272,64 +311,98 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                 </TableCell>
               </TableRow>
             ) : (
-              sortedAnalyses.map((analysis) => (
-                <TableRow
-                  key={analysis._id}
-                  hover
-                  selected={selectedAnalysisIds.has(analysis._id)}
-                  component={Link}
-                  to={`/analysis/${analysis._id}`}
-                  sx={{
-                    backgroundColor: selectedAnalysisIds.has(analysis._id)
-                      ? 'rgba(25, 118, 210, 0.08)'
-                      : 'inherit',
-                    cursor: 'pointer',
-                    textDecoration: 'none',
-                    color: 'inherit'
-                  }}
-                >
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      checked={selectedAnalysisIds.has(analysis._id)}
-                      onChange={() => onSelectAnalysis(analysis._id)}
-                    />
-                  </TableCell>
-                  <TableCell>{analysis.dataset}</TableCell>
-                  <TableCell>{new Date(analysis.createdAt).toLocaleString()}</TableCell>
-                  <TableCell>{new Date(analysis.updatedAt).toLocaleString()}</TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="Edit dataset name">
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
+              sortedAnalyses.map((analysis) => {
+                const isSelected = selectedAnalysisIds.has(analysis._id);
+                return (
+                  <TableRow
+                    key={analysis._id}
+                    hover
+                    selected={isSelected}
+                    component={Link}
+                    to={`/datasets/${analysis._id}`}
+                    sx={{
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s',
+                      '&.Mui-selected': {
+                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                        '&:hover': {
+                          backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                        }
+                      },
+                      textDecoration: 'none',
+                      color: 'inherit'
+                    }}
+                  >
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={(e) => {
                           e.stopPropagation();
-                          handleEditClick(analysis);
+                          onSelectAnalysis(analysis._id);
                         }}
-                        disabled={deleteLoading}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete analysis">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClick(analysis);
-                        }}
-                        disabled={deleteLoading}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))
+                      />
+                    </TableCell>
+                    <TableCell>{analysis.dataset}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {new Date(analysis.createdAt).toLocaleString()}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {new Date(analysis.updatedAt).toLocaleString()}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                        {canDeleteDatasets() && (
+                          <Tooltip title="Edit dataset name">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleEditClick(analysis);
+                              }}
+                              disabled={deleteLoading}
+                              sx={{ 
+                                color: 'text.secondary',
+                                '&:hover': { color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.1) }
+                              }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {canDeleteDatasets() && (
+                          <Tooltip title="Delete analysis">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeleteClick(analysis);
+                              }}
+                              disabled={deleteLoading}
+                              sx={{ 
+                                color: 'text.secondary',
+                                '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) }
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
       </TableContainer>
+      </Paper>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onClose={handleCancelDelete}>

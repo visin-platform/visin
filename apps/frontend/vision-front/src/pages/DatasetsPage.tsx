@@ -5,20 +5,25 @@ import {
   Alert,
   Typography,
   Container,
-  IconButton
+  IconButton,
+  useTheme,
+  alpha
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { Refresh as RefreshIcon, Add as AddIcon } from '@mui/icons-material';
 import { createAnalysis } from '../services/analysisService';
-import AnalysisTable from '../components/AnalysisTable';
+import DatasetsTable from '../components/DatasetsTable';
 import CreateAnalysisModal from '../components/CreateAnalysisModal';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 
-export const AnalysisPage: React.FC = () => {
+export const DatasetsPage: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const { isAuthenticated } = useAuth();
 
   // Set page title
-  usePageTitle('Analysis - Vision');
+  usePageTitle('Datasets - Vision');
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedAnalysisIds, setSelectedAnalysisIds] = useState<Set<string>>(new Set());
@@ -50,7 +55,7 @@ export const AnalysisPage: React.FC = () => {
     // Navigate to comparison page with selected analysis IDs
     const selectedIds = Array.from(selectedAnalysisIds);
     if (selectedIds.length > 1) {
-      navigate(`/analysis/compare?ids=${selectedIds.join(',')}`);
+      navigate(`/datasets/compare?ids=${selectedIds.join(',')}`);
     }
   };
 
@@ -63,7 +68,7 @@ export const AnalysisPage: React.FC = () => {
       const newAnalysis = await createAnalysis(datasetName);
       
       // Navigate to the detail page
-      navigate(`/analysis/${newAnalysis._id}`);
+      navigate(`/datasets/${newAnalysis._id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create analysis');
     } finally {
@@ -75,19 +80,41 @@ export const AnalysisPage: React.FC = () => {
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-        <Typography variant="h4" component="h1">
-          Datasets
-        </Typography>
+        <Box>
+          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+            Datasets
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Manage and analyze your dataset collections
+          </Typography>
+        </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setShowCreateModal(true)}
+          {isAuthenticated && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setShowCreateModal(true)}
+              disabled={creating}
+              sx={{ 
+                px: 3,
+                py: 1,
+                borderRadius: 2,
+                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+              }}
+            >
+              Create Dataset
+            </Button>
+          )}
+          <IconButton 
+            onClick={handleRefresh} 
             disabled={creating}
+            sx={{ 
+              bgcolor: 'background.paper',
+              border: `1px solid ${theme.palette.divider}`,
+              borderRadius: 2,
+              '&:hover': { bgcolor: theme.palette.action.hover }
+            }}
           >
-            Create Dataset
-          </Button>
-          <IconButton onClick={handleRefresh} disabled={creating}>
             <RefreshIcon />
           </IconButton>
         </Box>
@@ -95,14 +122,14 @@ export const AnalysisPage: React.FC = () => {
 
       {/* Messages */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
           {error}
         </Alert>
       )}
 
       {/* Analyses Table */}
       <Box key={refreshKey}>
-        <AnalysisTable
+        <DatasetsTable
           selectedAnalysisIds={selectedAnalysisIds}
           onSelectAnalysis={handleSelectAnalysis}
           onSelectAll={handleSelectAll}
@@ -121,4 +148,4 @@ export const AnalysisPage: React.FC = () => {
   );
 };
 
-export default AnalysisPage;
+export default DatasetsPage;

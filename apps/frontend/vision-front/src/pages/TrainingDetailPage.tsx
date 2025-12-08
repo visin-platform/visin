@@ -916,6 +916,7 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
           onConfirmDelete={handleConfirmDelete}
           onSetDeleteOpen={setDeleteOpen}
           onSetUploadResultsOpen={setUploadResultsOpen}
+          isAuthenticated={isAuthenticated}
         />
       )}
 
@@ -939,6 +940,7 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
           onSetUploadResultsOpen={setUploadResultsOpen}
           onSetLatexModalOpen={setLatexModalOpen}
           onDeleteTestResult={handleDeleteTestResult}
+          isAuthenticated={isAuthenticated}
         />
       )}
 
@@ -947,6 +949,7 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
         <TrainingVisualizationsTab
           training_uuid={training.uuid}
           epochs={epochs}
+          isAuthenticated={isAuthenticated}
         />
       )}
 
@@ -970,6 +973,7 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
       {detailTab === 6 && (
         <TrainingBenchmarksTab
           training_uuid={training.uuid}
+          isAuthenticated={isAuthenticated}
         />
       )}
 

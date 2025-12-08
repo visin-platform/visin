@@ -22,6 +22,9 @@ import {
   Chip,
   TextField,
   Checkbox,
+  Container,
+  useTheme,
+  alpha
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -34,6 +37,7 @@ import {
 import { Comparison } from '@/types';
 import { comparisonService } from '@/services/comparisonService';
 import { trainingService } from '@/services/trainingService';
+import { useAuth } from '../contexts/AuthContext';
 
 const ComparisonsPage: React.FC = () => {
   const [comparisons, setComparisons] = useState<Comparison[]>([]);
@@ -49,9 +53,11 @@ const ComparisonsPage: React.FC = () => {
   const [updating, setUpdating] = useState(false);
   const [trainingData, setTrainingData] = useState<Record<string, string>>({});
   const [loadingTrainings, setLoadingTrainings] = useState(false);
+  const navigate = useNavigate();
+  const theme = useTheme();
+  const { user, isAuthenticated } = useAuth();
   const [sortBy, setSortBy] = useState<'name' | 'type' | 'createdAt' | 'itemCount'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadComparisons();
@@ -124,6 +130,12 @@ const ComparisonsPage: React.FC = () => {
   const handleCancelDelete = () => {
     setDeleteDialogOpen(false);
     setComparisonToDelete(null);
+  };
+
+  // Check if user has permission to delete comparisons (owner or admin role)
+  const canDeleteComparisons = () => {
+    if (!isAuthenticated || !user) return false;
+    return user.groups.some(group => group.includes('owner') || group.includes('admin'));
   };
 
   const handleEditComparison = async (comparison: Comparison) => {
@@ -268,16 +280,27 @@ const ComparisonsPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Comparisons
-        </Typography>
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Box>
+          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+            Comparisons
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Compare and analyze model performance across different test results
+          </Typography>
+        </Box>
         <Box>
           <Tooltip title="Refresh">
             <IconButton
               onClick={() => {
                 loadComparisons();
+              }}
+              sx={{ 
+                bgcolor: 'background.paper',
+                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: 2,
+                '&:hover': { bgcolor: theme.palette.action.hover }
               }}
             >
               <RefreshIcon />
@@ -293,11 +316,19 @@ const ComparisonsPage: React.FC = () => {
       )}
 
       {/* Comparisons Table */}
-      <TableContainer component={Paper}>
+      <TableContainer 
+        component={Paper} 
+        elevation={0} 
+        sx={{ 
+          borderRadius: 2, 
+          border: `1px solid ${theme.palette.divider}`,
+          overflow: 'hidden'
+        }}
+      >
         <Table>
           <TableHead>
-            <TableRow>
-              <TableCell>
+            <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+              <TableCell sx={{ fontWeight: 600 }}>
                 <Box
                   sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
                   onClick={() => handleSort('name')}
@@ -308,8 +339,8 @@ const ComparisonsPage: React.FC = () => {
                   )}
                 </Box>
               </TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>
                 <Box
                   sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
                   onClick={() => handleSort('type')}
@@ -320,7 +351,7 @@ const ComparisonsPage: React.FC = () => {
                   )}
                 </Box>
               </TableCell>
-              <TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>
                 <Box
                   sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
                   onClick={() => handleSort('itemCount')}
@@ -331,7 +362,7 @@ const ComparisonsPage: React.FC = () => {
                   )}
                 </Box>
               </TableCell>
-              <TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>
                 <Box
                   sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
                   onClick={() => handleSort('createdAt')}
@@ -342,7 +373,7 @@ const ComparisonsPage: React.FC = () => {
                   )}
                 </Box>
               </TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -383,29 +414,33 @@ const ComparisonsPage: React.FC = () => {
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Tooltip title="Edit">
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditComparison(comparison);
-                        }}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteComparison(comparison._id);
-                        }}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
+                    {canDeleteComparisons() && (
+                      <Tooltip title="Edit">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditComparison(comparison);
+                          }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {canDeleteComparisons() && (
+                      <Tooltip title="Delete">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteComparison(comparison._id);
+                          }}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Box>
                 </TableCell>
               </TableRow>
@@ -533,7 +568,7 @@ const ComparisonsPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Container>
   );
 };
 

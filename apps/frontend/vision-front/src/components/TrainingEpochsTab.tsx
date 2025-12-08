@@ -45,6 +45,7 @@ interface TrainingEpochsTabProps {
   onConfirmDelete: () => Promise<void>;
   onSetDeleteOpen: (open: boolean) => void;
   onSetUploadResultsOpen: (open: boolean) => void;
+  isAuthenticated: boolean;
 }
 
 const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
@@ -60,7 +61,8 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
   onDeleteClick,
   onConfirmDelete,
   onSetDeleteOpen,
-  onSetUploadResultsOpen
+  onSetUploadResultsOpen,
+  isAuthenticated
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const theme = useTheme();
@@ -97,6 +99,7 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
             onChange={handleFileChange}
             style={{ display: 'none' }}
           />
+        {isAuthenticated && (
           <Button
             variant="contained"
             startIcon={<CloudUploadIcon />}
@@ -105,6 +108,7 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
           >
             {uploading ? 'Uploading...' : 'Upload Epochs'}
           </Button>
+        )}
         </Box>
       </Box>
 
@@ -206,18 +210,20 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
                       {epoch.epoch_time?.toFixed(2) || '-'}
                     </TableCell>
                     <TableCell align="center">
-                      <Tooltip title="Delete Epoch">
-                        <IconButton 
-                          size="small" 
-                          onClick={() => onDeleteClick(epoch)}
-                          sx={{ 
-                            color: 'text.secondary',
-                            '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) }
-                          }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      {isAuthenticated && (
+                        <Tooltip title="Delete Epoch">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => onDeleteClick(epoch)}
+                            sx={{ 
+                              color: 'text.secondary',
+                              '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) }
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

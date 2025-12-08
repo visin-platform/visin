@@ -4,7 +4,7 @@ import TrainingDetailPage from '../pages/TrainingDetailPage';
 import TrainingComparisonPage from '../pages/TrainingComparisonPage';
 import EpochsPage from '../pages/EpochsPage';
 import ConfigsPage from '../pages/ConfigsPage';
-import AnalysisPage from '../pages/AnalysisPage';
+import DatasetsPage from '../pages/DatasetsPage';
 import DatasetComparisonPage from '../pages/DatasetComparisonPage';
 import DatasetDetailPage from '../pages/DatasetDetailPage';
 import ImageLabelingPage from '../pages/ImageLabelingPage';
@@ -29,9 +29,9 @@ function AppRoutes() {
       <Route path="/trainings/compare" element={<TrainingComparisonPage />} />
       <Route path="/epochs" element={<EpochsPage />} />
       <Route path="/configs" element={<ConfigsPage />} />
-      <Route path="/analysis" element={<AnalysisPage />} />
-      <Route path="/analysis/:id" element={<DatasetDetailPage />} />
-      <Route path="/analysis/compare" element={<DatasetComparisonPage />} />
+      <Route path="/datasets" element={<DatasetsPage />} />
+      <Route path="/datasets/:id" element={<DatasetDetailPage />} />
+      <Route path="/datasets/compare" element={<DatasetComparisonPage />} />
       <Route path="/image-labeling" element={<ImageLabelingPage />} />
       <Route path="/image-labeling/:imageId" element={<ImageLabelingPage />} />
       <Route path="/test-results" element={<TestResultsPage />} />

@@ -19,22 +19,28 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Checkbox
+  Checkbox,
+  useTheme,
+  alpha
 } from '@mui/material';
 import {
   Code as CodeIcon,
   Close as CloseIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { testResultService } from '../services/testResultService';
 import { comparisonService } from '../services/comparisonService';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 
 const TestResultsComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const { isAuthenticated, user } = useAuth();
 
   // Set page title
   usePageTitle('Test Results Comparison - Vision');
@@ -56,6 +62,11 @@ const TestResultsComparisonPage: React.FC = () => {
   useEffect(() => {
     setSelectedTestResultIds(testResultIds);
   }, [testResultIds]);
+
+  // Permission check function
+  const canSaveComparisons = () => {
+    return isAuthenticated && user?.groups && (user.groups.includes('owner') || user.groups.includes('admin'));
+  };
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['testResultsComparison', testResultIds],
@@ -504,52 +515,65 @@ const TestResultsComparisonPage: React.FC = () => {
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h4" component="h1" sx={{ mb: 1 }}>
-            Test Results Comparison
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Comparing {comparisonData.length} test result{comparisonData.length !== 1 ? 's' : ''}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<CodeIcon />}
-            onClick={handleGeneratePerformanceLatex}
-            disabled={comparisonData.length === 0}
-          >
-            LaTeX
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<SaveIcon />}
-            onClick={() => {
-              setSaveModalOpen(true);
-              // Reset form when opening modal
-              setComparisonName('');
-              setComparisonDescription('');
-              setSelectedTestResultIds(testResultIds);
-            }}
-            disabled={comparisonData.length === 0}
-            color="secondary"
-          >
-            Save
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => navigate('/test-results')}
-          >
-            Back to Test Results
-          </Button>
+      <Box sx={{ mb: 4 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/test-results')}
+          sx={{ mb: 2, color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
+        >
+          Back to Test Results
+        </Button>
+
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+              Test Results Comparison
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Comparing {comparisonData.length} test result{comparisonData.length !== 1 ? 's' : ''}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<CodeIcon />}
+              onClick={handleGeneratePerformanceLatex}
+              disabled={comparisonData.length === 0}
+            >
+              LaTeX
+            </Button>
+            {canSaveComparisons() && (
+              <Button
+                variant="contained"
+                startIcon={<SaveIcon />}
+                onClick={() => {
+                  setSaveModalOpen(true);
+                  // Reset form when opening modal
+                  setComparisonName('');
+                  setComparisonDescription('');
+                  setSelectedTestResultIds(testResultIds);
+                }}
+                disabled={comparisonData.length === 0}
+                color="secondary"
+              >
+                Save
+              </Button>
+            )}
+          </Box>
         </Box>
       </Box>
 
       {/* Compact Performance Comparison Table */}
       {comparisonData.length > 0 && (
-        <Paper sx={{ mb: 4 }}>
+        <Paper 
+          sx={{ 
+            mb: 4,
+            boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
+            bgcolor: alpha(theme.palette.primary.main, 0.05),
+            border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
+          }}
+        >
           <Box sx={{ p: 3, pb: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -777,7 +801,14 @@ const TestResultsComparisonPage: React.FC = () => {
 
       {/* Per-Class Comparison */}
       {comparisonData.length > 0 && (
-      <Paper sx={{ mb: 4 }}>
+      <Paper 
+        sx={{ 
+          mb: 4,
+          boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
+          bgcolor: alpha(theme.palette.primary.main, 0.05),
+          border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
+        }}
+      >
         <Box sx={{ p: 3, pb: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary' }}>

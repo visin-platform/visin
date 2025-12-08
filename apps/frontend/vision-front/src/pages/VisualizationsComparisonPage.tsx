@@ -6,7 +6,8 @@ import {
   Paper,
   Button,
   Alert,
-  CircularProgress
+  CircularProgress,
+  useTheme
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -17,6 +18,7 @@ import { Visualization } from '../types';
 const VisualizationsComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const theme = useTheme();
 
   usePageTitle('Visualizations Comparison - Vision');
 
@@ -91,9 +93,9 @@ const VisualizationsComparisonPage: React.FC = () => {
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Box>
-          <Typography variant="h4" component="h1" sx={{ mb: 1 }}>
+          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
             Visualizations Comparison
           </Typography>
           <Typography variant="body1" color="text.secondary">
@@ -102,8 +104,15 @@ const VisualizationsComparisonPage: React.FC = () => {
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
-            variant="contained"
+            variant="outlined"
             onClick={() => navigate('/visualizations')}
+            sx={{ 
+              px: 3,
+              py: 1,
+              borderRadius: 2,
+              border: `1px solid ${theme.palette.divider}`,
+              '&:hover': { bgcolor: theme.palette.action.hover }
+            }}
           >
             Back to Visualizations
           </Button>

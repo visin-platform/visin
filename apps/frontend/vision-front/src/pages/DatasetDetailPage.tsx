@@ -31,7 +31,9 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Autocomplete
+  Autocomplete,
+  Stack,
+  useTheme
 } from '@mui/material';
 import {
   CloudUpload as CloudUploadIcon,
@@ -41,7 +43,8 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
   ArrowBack as ArrowBackIcon,
-  ArrowForward as ArrowForwardIcon
+  ArrowForward as ArrowForwardIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getAnalysisById, updateAnalysis, deleteAnalysis } from '../services/analysisService';
@@ -60,6 +63,7 @@ import {
 import { getGlobalConfig } from '../config/ConfigProvider';
 import FileUpload from '../components/FileUpload';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 
 // Weather condition options
 const WEATHER_CONDITIONS: { value: WeatherCondition; label: string }[] = [
@@ -73,6 +77,8 @@ const WEATHER_CONDITIONS: { value: WeatherCondition; label: string }[] = [
 const DatasetDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const { isAuthenticated, user } = useAuth();
 
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -113,7 +119,7 @@ const DatasetDetailPage: React.FC = () => {
   // Export state
   const [exporting, setExporting] = useState<'good' | 'bad' | 'all' | null>(null);
 
-  const { data: analysis, isLoading, error } = useQuery({
+  const { data: analysis, isLoading, error, refetch } = useQuery({
     queryKey: ['analysis', id],
     queryFn: () => getAnalysisById(id!),
     enabled: Boolean(id)
@@ -176,6 +182,11 @@ const DatasetDetailPage: React.FC = () => {
     console.log('Pagination data:', pagination);
     console.log('Images count:', images.length);
   }, [pagination, images.length]);
+
+  // Permission check function
+  const canDeleteDatasets = () => {
+    return isAuthenticated && user?.groups && (user.groups.includes('owner') || user.groups.includes('admin'));
+  };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -240,7 +251,7 @@ const DatasetDetailPage: React.FC = () => {
     try {
       setDeleting(true);
       await deleteAnalysis(id);
-      navigate('/analysis');
+      navigate('/datasets');
     } catch (err) {
       console.error('Failed to delete analysis:', err);
       // You might want to show an error message here
@@ -487,8 +498,8 @@ const DatasetDetailPage: React.FC = () => {
           Failed to load dataset analysis: {error instanceof Error ? error.message : 'Analysis not found'}
         </Alert>
         <Box sx={{ mt: 2 }}>
-          <Button variant="contained" onClick={() => navigate('/analysis')}>
-            Back to Analyses
+          <Button variant="contained" onClick={() => navigate('/datasets')}>
+            Back to Datasets
           </Button>
         </Box>
       </Container>
@@ -498,36 +509,65 @@ const DatasetDetailPage: React.FC = () => {
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h4" component="h1" sx={{ mb: 1 }}>
-            Dataset Analysis: {analysis.dataset}
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Created: {new Date(analysis.createdAt).toLocaleString()}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={handleDeleteClick}
-          >
-            Delete
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() => navigate('/analysis')}
-          >
-            Back to Analyses
-          </Button>
+      <Box mb={4}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/datasets')}
+          sx={{ mb: 2, color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
+        >
+          Back to Datasets
+        </Button>
+
+        <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'flex-start' }} gap={3}>
+          <Box>
+            <Typography variant="h4" component="h1" fontWeight="bold">
+              {analysis.dataset}
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 800, mb: 2 }}>
+              Dataset analysis with {imagesData?.data?.pagination?.total || 0} images
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Created: {new Date(analysis.createdAt).toLocaleString()} • 
+              Updated: {new Date(analysis.updatedAt).toLocaleString()}
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1}>
+            <Button 
+              startIcon={<RefreshIcon />} 
+              onClick={() => refetch()} 
+              variant="outlined" 
+              color="inherit"
+              disabled={isLoading}
+            >
+              Refresh
+            </Button>
+            {canDeleteDatasets() && (
+              <Button 
+                startIcon={<DeleteIcon />} 
+                onClick={handleDeleteClick} 
+                color="error" 
+                variant="outlined"
+                disabled={isLoading}
+              >
+                Delete
+              </Button>
+            )}
+          </Stack>
         </Box>
       </Box>
 
       {/* Tabs */}
-      <Paper sx={{ mb: 4 }}>
-        <Tabs value={activeTab} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+      <Paper sx={{ mb: 4, borderRadius: 2, border: `1px solid ${theme.palette.divider}` }}>
+        <Tabs 
+          value={activeTab} 
+          onChange={handleTabChange} 
+          sx={{ 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            '& .MuiTab-root': { fontWeight: 500 }
+          }}
+        >
           <Tab label="Description" />
           <Tab label="Categories" />
           <Tab label="Images" />
@@ -556,14 +596,16 @@ const DatasetDetailPage: React.FC = () => {
                   >
                     {jsonExpanded ? 'Collapse' : 'Expand'}
                   </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={uploadingJson ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
-                    onClick={handleJsonFileClick}
-                    disabled={uploadingJson}
-                  >
-                    {uploadingJson ? 'Uploading...' : 'Upload JSON'}
-                  </Button>
+                  {canDeleteDatasets() && (
+                    <Button
+                      variant="contained"
+                      startIcon={uploadingJson ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
+                      onClick={handleJsonFileClick}
+                      disabled={uploadingJson}
+                    >
+                      {uploadingJson ? 'Uploading...' : 'Upload JSON'}
+                    </Button>
+                  )}
                 </Box>
               </Box>
 
@@ -700,20 +742,24 @@ const DatasetDetailPage: React.FC = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            <IconButton
-                              size="small"
-                              onClick={() => openEditCategoryModal(category)}
-                              color="primary"
-                            >
-                              <EditIcon />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleDeleteCategory(category._id)}
-                              color="error"
-                            >
-                              <DeleteIcon />
-                            </IconButton>
+                            {canDeleteDatasets() && (
+                              <>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => openEditCategoryModal(category)}
+                                  color="primary"
+                                >
+                                  <EditIcon />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleDeleteCategory(category._id)}
+                                  color="error"
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -732,13 +778,15 @@ const DatasetDetailPage: React.FC = () => {
                     Images ({pagination.total.toLocaleString()})
                   </Typography>
                 </Box>
-                <Button
-                  variant="contained"
-                  startIcon={<CloudUploadIcon />}
-                  onClick={() => setUploadDialogOpen(true)}
-                >
-                  Upload Images
-                </Button>
+                {canDeleteDatasets() && (
+                  <Button
+                    variant="contained"
+                    startIcon={<CloudUploadIcon />}
+                    onClick={() => setUploadDialogOpen(true)}
+                  >
+                    Upload Images
+                  </Button>
+                )}
               </Box>
 
               {/* Category Filter */}
@@ -904,52 +952,56 @@ const DatasetDetailPage: React.FC = () => {
                             }}
                           />
                           
-                          <IconButton
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditImageCategory(image);
-                            }}
-                            sx={{
-                              position: 'absolute',
-                              top: 8,
-                              left: 8,
-                              bgcolor: 'rgba(25, 118, 210, 0.8)',
-                              color: 'white',
-                              '&:hover': {
-                                bgcolor: 'rgba(21, 101, 192, 0.9)',
-                              },
-                            }}
-                            size="small"
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteImage(image._id);
-                            }}
-                            disabled={deletingImageId === image._id}
-                            sx={{
-                              position: 'absolute',
-                              top: 8,
-                              right: 8,
-                              bgcolor: 'rgba(244, 67, 54, 0.8)',
-                              color: 'white',
-                              '&:hover': {
-                                bgcolor: 'rgba(211, 47, 47, 0.9)',
-                              },
-                              '&:disabled': {
-                                bgcolor: 'rgba(244, 67, 54, 0.4)',
-                              },
-                            }}
-                            size="small"
-                          >
-                            {deletingImageId === image._id ? (
-                              <CircularProgress size={16} color="inherit" />
-                            ) : (
-                              <DeleteIcon fontSize="small" />
-                            )}
-                          </IconButton>
+                          {canDeleteDatasets() && (
+                            <IconButton
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditImageCategory(image);
+                              }}
+                              sx={{
+                                position: 'absolute',
+                                top: 8,
+                                left: 8,
+                                bgcolor: 'rgba(25, 118, 210, 0.8)',
+                                color: 'white',
+                                '&:hover': {
+                                  bgcolor: 'rgba(21, 101, 192, 0.9)',
+                                },
+                              }}
+                              size="small"
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                          {canDeleteDatasets() && (
+                            <IconButton
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteImage(image._id);
+                              }}
+                              disabled={deletingImageId === image._id}
+                              sx={{
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                bgcolor: 'rgba(244, 67, 54, 0.8)',
+                                color: 'white',
+                                '&:hover': {
+                                  bgcolor: 'rgba(211, 47, 47, 0.9)',
+                                },
+                                '&:disabled': {
+                                  bgcolor: 'rgba(244, 67, 54, 0.4)',
+                                },
+                              }}
+                              size="small"
+                            >
+                              {deletingImageId === image._id ? (
+                                <CircularProgress size={16} color="inherit" />
+                              ) : (
+                                <DeleteIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          )}
                         </Box>
                         <CardContent sx={{ flexGrow: 1 }}>
                           <Typography variant="subtitle2" noWrap>

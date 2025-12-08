@@ -32,9 +32,7 @@ export const getTrainings = async (req: AuthRequest, res: Response): Promise<voi
       status, 
       datasetId,
       projectId,
-      tags,
-      sortBy = 'updatedAt', 
-      order = 'desc' 
+      tags
     } = req.query;
 
     let query: any = { deletedAt: null };
@@ -100,75 +98,23 @@ export const getTrainings = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     const skip = (Number(page) - 1) * Number(limit);
-    const sortOrder = order === 'desc' ? -1 : 1;
-    const sortField = sortBy as string;
 
     // Cost calculation rates
     const CPU_RATE_PER_HOUR = 0.006;
     const GPU_RATE_PER_HOUR = 0.20;
 
-    let trainings: any[];
-    let total: number;
+    let trainings: any[] = [];
+    let total: number = 0;
 
-    if (['totalTime', 'cpuCost', 'gpuCost', 'totalCost', 'epochCount'].includes(sortBy as string)) {
-      // For metrics-based sorting, use aggregation to get trainings with metrics
-      const aggregationPipeline = [
-        { $match: query },
-        {
-          $lookup: {
-            from: 'training_epoches',
-            let: { trainingId: '$_id' },
-            pipeline: [
-              { $match: { $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] }, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] } }
-            ],
-            as: 'epochs'
-          }
-        },
-        {
-          $addFields: {
-            metrics: {
-              totalTime: { $ifNull: [{ $sum: '$epochs.epoch_time' }, 0] },
-              epochCount: { $size: '$epochs' },
-              maxEpoch: { $ifNull: [{ $max: '$epochs.epoch' }, 0] },
-              lastEpochTimestamp: { $ifNull: [{ $max: '$epochs.timestamp' }, null] }
-            }
-          }
-        },
-        {
-          $addFields: {
-            'metrics.cpuCost': { $multiply: [{ $divide: [{ $ifNull: ['$metrics.totalTime', 0] }, 3600] }, CPU_RATE_PER_HOUR] },
-            'metrics.gpuCost': { $multiply: [{ $divide: [{ $ifNull: ['$metrics.totalTime', 0] }, 3600] }, GPU_RATE_PER_HOUR] }
-          }
-        },
-        {
-          $sort: { [`metrics.${sortBy}`]: sortOrder as 1 | -1 }
-        },
-        {
-          $facet: {
-            totalCount: [{ $count: 'count' }],
-            trainings: [
-              { $skip: skip },
-              { $limit: Number(limit) },
-              { $project: { epochs: 0 } } // Remove epochs array from result
-            ]
-          }
-        }
-      ];
+    // Always sort by updatedAt desc
 
-      const result = await Training.aggregate(aggregationPipeline);
-      total = result[0]?.totalCount[0]?.count || 0;
-      trainings = result[0]?.trainings || [];
-    } else {
-      // Standard database sorting for non-metrics fields
-      [trainings, total] = await Promise.all([
-        Training.find(query)
-          .sort({ [sortField]: sortOrder })
-          .skip(skip)
-          .limit(Number(limit)),
-        Training.countDocuments(query)
-      ]);
-
-      // Get metrics using aggregation for better performance
+    [trainings, total] = await Promise.all([
+      Training.find(query)
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(Number(limit)),
+      Training.countDocuments(query)
+    ]);      // Get metrics using aggregation for better performance
       if (trainings.length > 0) {
         const trainingIds = trainings.map(t => t._id);
         const metricsAggregation = await Training.aggregate([
@@ -225,7 +171,7 @@ export const getTrainings = async (req: AuthRequest, res: Response): Promise<voi
           metrics: metricsMap.get(training._id.toString()) || { totalTime: 0, epochCount: 0, maxEpoch: 0, lastEpochTimestamp: null, cpuCost: 0, gpuCost: 0, totalCost: 0 }
         }));
       }
-    }    res.json({
+    res.json({
       success: true,
       data: {
         trainings,

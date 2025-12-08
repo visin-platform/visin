@@ -12,8 +12,6 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  Select,
-  FormControl,
   useTheme,
   alpha,
   CssBaseline,
@@ -23,7 +21,6 @@ import {
 } from '@mui/material';
 import {
   ModelTraining,
-  Settings,
   Storage,
   Assessment,
   BarChart,
@@ -53,7 +50,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user, isAuthenticated, login, logout } = useAuth();
   
   // State for placeholders
-  const [tenant, setTenant] = useState('default');
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -89,8 +85,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const menuItems = [
     { text: 'Projects', icon: <Folder />, path: '/projects' },
     { text: 'Trainings', icon: <ModelTraining />, path: '/trainings' },
-    { text: 'Configs', icon: <Settings />, path: '/configs' },
-    { text: 'Datasets', icon: <Storage />, path: '/analysis' },
+    { text: 'Datasets', icon: <Storage />, path: '/datasets' },
     { text: 'Test Results', icon: <Assessment />, path: '/test-results' },
     { text: 'Visualizations', icon: <BarChart />, path: '/visualizations' },
     { text: 'Benchmarks', icon: <Speed />, path: '/benchmarks' },
@@ -149,34 +144,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           >
             <ChevronRight />
           </IconButton>
-        ) : (
-          isAuthenticated ? (
-            <FormControl fullWidth size="small" variant="outlined">
-              <Select
-                value={tenant}
-                onChange={(e) => setTenant(e.target.value)}
-                sx={{
-                  bgcolor: 'rgba(255,255,255,0.05)',
-                  color: '#fff',
-                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
-                  '.MuiSvgIcon-root': { color: 'rgba(255,255,255,0.5)' }
-                }}
-              >
-                <MenuItem value="default">Default Project</MenuItem>
-                {user?.groups?.map((group) => (
-                  <MenuItem key={group} value={group}>{group}</MenuItem>
-                ))}
-                <MenuItem value="new">+ New Project</MenuItem>
-              </Select>
-            </FormControl>
-          ) : (
-            <Typography variant="body2" color="rgba(255,255,255,0.5)" sx={{ width: '100%', textAlign: 'center' }}>
-              Please login to select project
-            </Typography>
-          )
-        )}
+        ) : null}
       </Box>
 
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
@@ -288,8 +256,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               open={Boolean(anchorElUser)}
               onClose={handleCloseUserMenu}
             >
-              <MenuItem onClick={handleCloseUserMenu}>Profile</MenuItem>
-              <MenuItem onClick={handleCloseUserMenu}>Account</MenuItem>
               <Divider />
               <MenuItem onClick={() => { handleCloseUserMenu(); logout(); }}>Logout</MenuItem>
             </Menu>

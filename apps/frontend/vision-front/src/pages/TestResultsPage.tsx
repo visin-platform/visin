@@ -3,8 +3,6 @@ import { useNavigate, Link } from 'react-router-dom';
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   Alert,
   Typography,
@@ -22,7 +20,9 @@ import {
   DialogActions,
   IconButton,
   Tooltip,
-  Checkbox
+  Checkbox,
+  useTheme,
+  alpha
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -30,9 +30,12 @@ import {
 } from '@mui/icons-material';
 import { testResultService } from '../services/testResultService';
 import { TestResult, TestResultData, TestResultMetrics } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 export const TestResultsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
+  const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -44,6 +47,12 @@ export const TestResultsPage: React.FC = () => {
   useEffect(() => {
     loadTestResults();
   }, []);
+
+  // Check if user has permission to delete test results (owner or admin role)
+  const canDeleteTestResults = () => {
+    if (!isAuthenticated || !user) return false;
+    return user.groups.some(group => group.includes('owner') || group.includes('admin'));
+  };
 
   const loadTestResults = async () => {
     try {
@@ -162,10 +171,34 @@ export const TestResultsPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" sx={{ mb: 4 }}>
-        Test Results
-      </Typography>
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Box>
+          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+            Test Results
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            View and compare model performance test results
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            startIcon={<CompareIcon />}
+            onClick={handleCompare}
+            disabled={selectedTestResults.size < 2}
+            sx={{ 
+              px: 3,
+              py: 1,
+              borderRadius: 2,
+              border: `1px solid ${theme.palette.divider}`,
+              '&:hover': { bgcolor: theme.palette.action.hover }
+            }}
+          >
+            Compare Selected ({selectedTestResults.size})
+          </Button>
+        </Box>
+      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -180,34 +213,27 @@ export const TestResultsPage: React.FC = () => {
       )}
 
       {/* Test Results Table */}
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2 }}>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                variant="outlined"
-                startIcon={<CompareIcon />}
-                onClick={handleCompare}
-                disabled={selectedTestResults.size < 2}
-              >
-                Compare Selected ({selectedTestResults.size})
-              </Button>
-            </Box>
-          </Box>
-
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : testResults.length === 0 ? (
-            <Typography color="textSecondary">
-              No test results found
-            </Typography>
-          ) : (
-            <TableContainer component={Paper}>
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : testResults.length === 0 ? (
+        <Typography color="textSecondary">
+          No test results found
+        </Typography>
+      ) : (
+        <TableContainer 
+          component={Paper} 
+          elevation={0} 
+          sx={{ 
+            borderRadius: 2, 
+            border: `1px solid ${theme.palette.divider}`,
+            overflow: 'hidden'
+          }}
+        >
               <Table>
                 <TableHead>
-                  <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                  <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
                     <TableCell padding="checkbox">
                       <Checkbox
                         checked={selectedTestResults.size === testResults.length && testResults.length > 0}
@@ -215,29 +241,29 @@ export const TestResultsPage: React.FC = () => {
                         onChange={(e) => handleSelectAll(e.target.checked)}
                       />
                     </TableCell>
-                    <TableCell>
-                      <strong>Training Name</strong>
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      Training Name
                     </TableCell>
-                    <TableCell>
-                      <strong>Epoch</strong>
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      Epoch
                     </TableCell>
-                    <TableCell align="right">
-                      <strong>Avg IoU</strong>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      Avg IoU
                     </TableCell>
-                    <TableCell align="right">
-                      <strong>Avg Recall</strong>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      Avg Recall
                     </TableCell>
-                    <TableCell align="right">
-                      <strong>Avg F1</strong>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      Avg F1
                     </TableCell>
-                    <TableCell align="right">
-                      <strong>Avg Inference Time (ms)</strong>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      Avg Inference Time (ms)
                     </TableCell>
-                    <TableCell align="center">
-                      <strong>Timestamp</strong>
+                    <TableCell align="center" sx={{ fontWeight: 600 }}>
+                      Timestamp
                     </TableCell>
-                    <TableCell align="center">
-                      <strong>Actions</strong>
+                    <TableCell align="center" sx={{ fontWeight: 600 }}>
+                      Actions
                     </TableCell>
                   </TableRow>
                 </TableHead>
@@ -283,11 +309,13 @@ export const TestResultsPage: React.FC = () => {
                           {formatDate(testResult.timestamp)}
                         </TableCell>
                         <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                          <Tooltip title="Delete">
-                            <IconButton size="small" onClick={() => handleDeleteClick(testResult)}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          {canDeleteTestResults() && (
+                            <Tooltip title="Delete">
+                              <IconButton size="small" onClick={() => handleDeleteClick(testResult)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -296,8 +324,6 @@ export const TestResultsPage: React.FC = () => {
               </Table>
             </TableContainer>
           )}
-        </CardContent>
-      </Card>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>

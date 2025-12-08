@@ -42,8 +42,8 @@ export const DatasetComparisonPage: React.FC = () => {
           No analysis IDs provided. Please select analyses to compare from the analyses list.
         </Alert>
         <Box sx={{ mt: 2 }}>
-          <Button variant="contained" onClick={() => navigate('/analysis')}>
-            Back to Analyses
+          <Button variant="contained" onClick={() => navigate('/datasets')}>
+            Back to Datasets
           </Button>
         </Box>
       </Container>
@@ -68,8 +68,8 @@ export const DatasetComparisonPage: React.FC = () => {
           Failed to load analysis comparison: {error instanceof Error ? error.message : 'Unknown error'}
         </Alert>
         <Box sx={{ mt: 2 }}>
-          <Button variant="contained" onClick={() => navigate('/analysis')}>
-            Back to Analyses
+          <Button variant="contained" onClick={() => navigate('/datasets')}>
+            Back to Datasets
           </Button>
         </Box>
       </Container>
@@ -91,9 +91,9 @@ export const DatasetComparisonPage: React.FC = () => {
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="contained"
-            onClick={() => navigate('/analysis')}
+            onClick={() => navigate('/datasets')}
           >
-            Back to Analyses
+            Back to Datasets
           </Button>
         </Box>
       </Box>

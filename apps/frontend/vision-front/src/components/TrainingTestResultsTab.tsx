@@ -54,6 +54,7 @@ interface TrainingTestResultsTabProps {
   onSetUploadResultsOpen: (open: boolean) => void;
   onSetLatexModalOpen: (open: boolean) => void;
   onDeleteTestResult?: (testResultId: string) => void;
+  isAuthenticated: boolean;
 }
 
 const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
@@ -73,7 +74,8 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
   onLatexExport,
   onSetUploadResultsOpen,
   onSetLatexModalOpen,
-  onDeleteTestResult
+  onDeleteTestResult,
+  isAuthenticated
 }) => {
   const testResultFileInputRef = useRef<HTMLInputElement>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -139,6 +141,7 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
             onChange={handleTestResultFileChange}
             style={{ display: 'none' }}
           />
+        {isAuthenticated && (
           <Button
             variant="contained"
             startIcon={<CloudUploadIcon />}
@@ -147,6 +150,7 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
           >
             {uploading ? 'Uploading...' : 'Upload Results'}
           </Button>
+        )}
         </Box>
       </Box>
 
@@ -238,7 +242,7 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
               ? "Select an epoch to view its test results." 
               : "Upload test result JSON files to see performance metrics."}
           </Typography>
-          {availableTestEpochs.length === 0 && (
+          {availableTestEpochs.length === 0 && isAuthenticated && (
             <Button
               variant="outlined"
               startIcon={<CloudUploadIcon />}
@@ -291,7 +295,7 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
                   >
                     Export LaTeX
                   </Button>
-                  {onDeleteTestResult && (
+                  {onDeleteTestResult && isAuthenticated && (
                     <Tooltip title="Delete Result">
                       <IconButton
                         size="small"

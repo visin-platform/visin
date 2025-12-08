@@ -27,9 +27,10 @@ import { benchmarkService } from '../services/benchmarkService';
 
 interface TrainingBenchmarksTabProps {
   training_uuid: string;
+  isAuthenticated: boolean;
 }
 
-const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_uuid }) => {
+const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_uuid, isAuthenticated }) => {
   const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,15 +135,17 @@ const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_
                     <Typography variant="h6" component="h3">
                       Benchmark - {formatTimestamp(benchmark.timestamp)}
                     </Typography>
-                    <Tooltip title="Delete Benchmark">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteBenchmark(benchmark._id)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
+                    {isAuthenticated && (
+                      <Tooltip title="Delete Benchmark">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteBenchmark(benchmark._id)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Box>
 
                   {/* System Information */}

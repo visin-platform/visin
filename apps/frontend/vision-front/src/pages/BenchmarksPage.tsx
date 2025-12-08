@@ -20,6 +20,9 @@ import {
   DialogActions,
   Button,
   Collapse,
+  useTheme,
+  alpha,
+  Container
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -29,6 +32,7 @@ import {
 } from '@mui/icons-material';
 import { Benchmark } from '@/types';
 import { benchmarkService } from '@/services/benchmarkService';
+import { useAuth } from '../contexts/AuthContext';
 
 const BenchmarksPage: React.FC = () => {
   const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
@@ -38,6 +42,8 @@ const BenchmarksPage: React.FC = () => {
   const [benchmarkToDelete, setBenchmarkToDelete] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
+  const theme = useTheme();
 
   useEffect(() => {
     loadBenchmarks();
@@ -96,6 +102,11 @@ const BenchmarksPage: React.FC = () => {
     setExpandedRows(newExpandedRows);
   };
 
+  const canDeleteBenchmarks = () => {
+    if (!isAuthenticated || !user) return false;
+    return user.groups.some(group => group.includes('owner') || group.includes('admin'));
+  };
+
   const handleRowClick = (benchmark: Benchmark) => {
     if (benchmark.training_id && typeof benchmark.training_id === 'object' && '_id' in benchmark.training_id) {
       navigate(`/trainings/${(benchmark.training_id as any)._id}?tab=benchmarks`);
@@ -124,16 +135,27 @@ const BenchmarksPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Benchmarks
-        </Typography>
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Box>
+          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+            Benchmarks
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Performance benchmarking results for model evaluation
+          </Typography>
+        </Box>
         <Box>
           <Tooltip title="Refresh">
             <IconButton
               onClick={() => {
                 loadBenchmarks();
+              }}
+              sx={{ 
+                bgcolor: 'background.paper',
+                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: 2,
+                '&:hover': { bgcolor: theme.palette.action.hover }
               }}
             >
               <RefreshIcon />
@@ -149,19 +171,27 @@ const BenchmarksPage: React.FC = () => {
       )}
 
       {/* Benchmarks Table */}
-      <TableContainer component={Paper}>
+      <TableContainer 
+        component={Paper} 
+        elevation={0} 
+        sx={{ 
+          borderRadius: 2, 
+          border: `1px solid ${theme.palette.divider}`,
+          overflow: 'hidden'
+        }}
+      >
         <Table>
           <TableHead>
-            <TableRow>
-              <TableCell></TableCell>
-              <TableCell>Training Name</TableCell>
-              <TableCell>Mean FPS</TableCell>
-              <TableCell>Parameters (M)</TableCell>
-              <TableCell>FLOPs (G)</TableCell>
-              <TableCell>Mean Time (ms) GPU</TableCell>
-              <TableCell>Mean Time (ms) CPU</TableCell>
-              <TableCell>Timestamp</TableCell>
-              <TableCell>Actions</TableCell>
+            <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+              <TableCell sx={{ fontWeight: 600 }}></TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Training Name</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Mean FPS</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Parameters (M)</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>FLOPs (G)</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Mean Time (ms) GPU</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Mean Time (ms) CPU</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Timestamp</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -234,18 +264,20 @@ const BenchmarksPage: React.FC = () => {
                       {formatTimestamp(benchmark.timestamp)}
                     </TableCell>
                     <TableCell>
-                      <Tooltip title="Delete">
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteBenchmark(benchmark._id);
-                          }}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
+                      {canDeleteBenchmarks() && (
+                        <Tooltip title="Delete">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteBenchmark(benchmark._id);
+                            }}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                   <TableRow>
@@ -332,7 +364,7 @@ const BenchmarksPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Container>
   );
 };
 
