@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.23](https://github.com/av-research/visin/compare/v0.0.22...v0.0.23) (2025-12-08)
+
+
+### Features
+
+* rework design of vision front ([3eb4463](https://github.com/av-research/visin/commit/3eb44632dd62fe5ff68fa29e354c3ddf38f4257d))
+
 ### [0.0.22](https://github.com/av-research/visin/compare/v0.0.21...v0.0.22) (2025-12-04)
 
 
