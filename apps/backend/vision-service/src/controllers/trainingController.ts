@@ -344,6 +344,7 @@ export const createTraining = async (req: AuthRequest, res: Response): Promise<v
       description, 
       datasetId,
       configId,
+      projectId,
       status = 'pending',
       tags,
       startTime,
@@ -351,8 +352,8 @@ export const createTraining = async (req: AuthRequest, res: Response): Promise<v
       metadata 
     } = req.body;
 
-    // For API tokens, use the token's projectId; for JWT, projectId should be provided separately or handled differently
-    const effectiveProjectId = (req as any).projectId;
+    // Determine effective projectId: API tokens take precedence, otherwise use request body
+    const effectiveProjectId = (req as any).projectId || projectId;
 
     if (!name || name.trim().length === 0) {
       res.status(400).json({
