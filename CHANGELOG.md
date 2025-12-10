@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.25](https://github.com/av-research/visin/compare/v0.0.24...v0.0.25) (2025-12-10)
+
+
+### Bug Fixes
+
+* get projectid from api token ([85200f6](https://github.com/av-research/visin/commit/85200f61a4f4787f7e67d907a3bd69e88610dde5))
+
 ### [0.0.24](https://github.com/av-research/visin/compare/v0.0.23...v0.0.24) (2025-12-10)
 
 
