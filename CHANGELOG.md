@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.24](https://github.com/av-research/visin/compare/v0.0.23...v0.0.24) (2025-12-10)
+
+
+### Features
+
+* update docs ([c2a2e82](https://github.com/av-research/visin/commit/c2a2e821b6c0fb25fe8e2fcf637c8220d2b071f9))
+
 ### [0.0.23](https://github.com/av-research/visin/compare/v0.0.22...v0.0.23) (2025-12-08)
 
 
