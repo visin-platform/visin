@@ -36,8 +36,8 @@ export const apiTokenMiddleware = async (req: AuthRequest, res: Response, next: 
             // We can add a flag to indicate this is an API token session
           };
           
-          // Attach projectId to request to enforce scope if needed
-          // (req as any).projectId = apiToken.projectId;
+          // Attach projectId to request to enforce scope for API tokens
+          (req as any).projectId = apiToken.projectId;
           
           return next();
         }

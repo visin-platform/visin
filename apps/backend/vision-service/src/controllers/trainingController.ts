@@ -344,13 +344,15 @@ export const createTraining = async (req: AuthRequest, res: Response): Promise<v
       description, 
       datasetId,
       configId,
-      projectId,
       status = 'pending',
       tags,
       startTime,
       endTime,
       metadata 
     } = req.body;
+
+    // For API tokens, use the token's projectId; for JWT, projectId should be provided separately or handled differently
+    const effectiveProjectId = (req as any).projectId;
 
     if (!name || name.trim().length === 0) {
       res.status(400).json({
@@ -361,8 +363,8 @@ export const createTraining = async (req: AuthRequest, res: Response): Promise<v
     }
 
     // Check project access if projectId is provided
-    if (projectId) {
-      const hasAccess = await checkProjectAccess(userId, projectId);
+    if (effectiveProjectId) {
+      const hasAccess = await checkProjectAccess(userId, effectiveProjectId);
       if (!hasAccess) {
         res.status(403).json({
           success: false,
@@ -381,7 +383,7 @@ export const createTraining = async (req: AuthRequest, res: Response): Promise<v
       description: description?.trim(),
       datasetId,
       configId,
-      projectId,
+      projectId: effectiveProjectId,
       status,
       tags: tags ? (Array.isArray(tags) ? tags : [tags]) : [],
       startTime,
@@ -425,7 +427,6 @@ export const updateTraining = async (req: AuthRequest, res: Response): Promise<v
       description, 
       datasetId,
       configId,
-      projectId,
       status,
       tags,
       startTime,
@@ -462,23 +463,12 @@ export const updateTraining = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // If changing project, check access to new project
-    if (projectId && projectId !== training.projectId) {
-      const hasNewAccess = await checkProjectAccess(userId, projectId);
-      if (!hasNewAccess) {
-        res.status(403).json({
-          success: false,
-          message: 'Access denied to new project'
-        });
-        return;
-      }
-    }
+    // Note: projectId changes are not allowed via API - trainings are scoped to their creation project
 
     if (name !== undefined) training.name = name.trim();
     if (description !== undefined) training.description = description?.trim();
     if (datasetId !== undefined) training.datasetId = datasetId;
     if (configId !== undefined) training.configId = configId;
-    if (projectId !== undefined) training.projectId = projectId;
     if (status !== undefined) training.status = status;
     if (tags !== undefined) training.tags = tags ? (Array.isArray(tags) ? tags : [tags]) : [];
     if (startTime !== undefined) training.startTime = startTime;
