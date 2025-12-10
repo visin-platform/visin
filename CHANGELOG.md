@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.26](https://github.com/av-research/visin/compare/v0.0.25...v0.0.26) (2025-12-10)
+
+
+### Bug Fixes
+
+* set projectid for web users ([3a5613f](https://github.com/av-research/visin/commit/3a5613f2d618842225798f2eb137ea318a16717e))
+
 ### [0.0.25](https://github.com/av-research/visin/compare/v0.0.24...v0.0.25) (2025-12-10)
 
 
