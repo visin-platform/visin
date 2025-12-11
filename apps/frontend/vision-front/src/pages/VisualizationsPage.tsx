@@ -29,7 +29,7 @@ import {
 } from '@mui/icons-material';
 import { visualizationService } from '../services/visualizationService';
 import { trainingService } from '../services/trainingService';
-import { Visualization, Training } from '../types';
+import { Visualization, Training, PaginatedResponse } from '../types';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 interface TrainingWithVisualizations {
@@ -76,7 +76,7 @@ export const VisualizationsPage: React.FC = () => {
       ]);
 
       const allTrainings = trainingsResponse.data.trainings || [];
-      const allVisualizations = visualizationsResponse.data.visualizations || [];
+      const allVisualizations = (visualizationsResponse as PaginatedResponse<Visualization>).data.visualizations || [];
 
       // Group visualizations by training_uuid (from epoch data)
       const visualizationsByTraining = new Map<string, Visualization[]>();

@@ -36,10 +36,12 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { trainingService } from '../services/trainingService';
 import { comparisonService } from '../services/comparisonService';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useAuth } from '../contexts/AuthContext';
 
 const TrainingComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   // Set page title
   usePageTitle('Training Comparison - Vision');
@@ -436,21 +438,23 @@ const TrainingComparisonPage: React.FC = () => {
           >
             LaTeX Table
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<SaveIcon />}
-            onClick={() => {
-              setSaveModalOpen(true);
-              // Reset form when opening modal
-              setComparisonName('');
-              setComparisonDescription('');
-              setSelectedTrainingIds(trainingIds);
-            }}
-            disabled={comparisonData.length === 0}
-            color="secondary"
-          >
-            Save
-          </Button>
+          {isAuthenticated && (
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={() => {
+                setSaveModalOpen(true);
+                // Reset form when opening modal
+                setComparisonName('');
+                setComparisonDescription('');
+                setSelectedTrainingIds(trainingIds);
+              }}
+              disabled={comparisonData.length === 0}
+              color="secondary"
+            >
+              Save
+            </Button>
+          )}
           <Button
             variant="contained"
             onClick={() => navigate('/trainings')}

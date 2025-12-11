@@ -651,7 +651,8 @@ export const getTrainingStats = async (req: Request, res: Response): Promise<voi
           totalCost: { $add: [
             { $multiply: [{ $divide: ['$totalTime', 3600] }, CPU_RATE_PER_HOUR] },
             { $multiply: [{ $divide: ['$totalTime', 3600] }, GPU_RATE_PER_HOUR] }
-          ]}
+          ]},
+          avgEpochTime: { $cond: { if: { $gt: ['$totalEpochs', 0] }, then: { $divide: ['$totalTime', '$totalEpochs'] }, else: 0 } }
         }
       }
     ];
@@ -660,9 +661,11 @@ export const getTrainingStats = async (req: Request, res: Response): Promise<voi
     const stats = result[0] || {
       totalTrainings: 0,
       totalTime: 0,
+      totalEpochs: 0,
       totalCpuCost: 0,
       totalGpuCost: 0,
-      totalCost: 0
+      totalCost: 0,
+      avgEpochTime: 0
     };
 
     res.json({
@@ -670,6 +673,8 @@ export const getTrainingStats = async (req: Request, res: Response): Promise<voi
       data: {
         totalTrainings: stats.totalTrainings,
         totalTime: stats.totalTime,
+        totalEpochs: stats.totalEpochs,
+        avgEpochTime: stats.avgEpochTime,
         totalCpuCost: stats.totalCpuCost,
         totalGpuCost: stats.totalGpuCost,
         totalCost: stats.totalCost,

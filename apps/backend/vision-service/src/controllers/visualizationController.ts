@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import EpochVisualization from '../models/EpochVisualization';
 import Epoch from '../models/Epoch';
+import Training from '../models/Training';
 import { getSignedUrl, getUploadSignedUrl } from '../services/minioService';
 
 /**
@@ -188,21 +189,18 @@ export const getVisualizationsByEpoch = async (req: Request, res: Response) => {
 
 /**
  * Get visualizations by training ID (across all epochs)
- * If training_uuid is empty, get all visualizations
+ * If training_uuid is empty, get all visualizations grouped by training
  */
 export const getVisualizationsByTraining = async (req: Request, res: Response) => {
   try {
     const { training_uuid } = req.params;
-    const { type, limit = 50, page = 1 } = req.query;
+    const { type, limit = 50, page = 1, projectId, includeUrls = 'true' } = req.query;
 
-    let epochUuids: string[] = [];
-    let epochs: any[] = [];
-
-    // If training_uuid is provided and not empty, filter by training
+    // If specific training_uuid is provided, return flat list for that training
     if (training_uuid && training_uuid.trim() !== '') {
       // Find all epochs for this training
-      epochs = await Epoch.find({ training_uuid }).select('epoch_uuid epoch');
-      epochUuids = epochs.map(e => e.epoch_uuid);
+      const epochs = await Epoch.find({ training_uuid }).select('epoch_uuid epoch');
+      const epochUuids = epochs.map(e => e.epoch_uuid);
 
       if (epochUuids.length === 0) {
         return res.status(200).json({
@@ -219,13 +217,134 @@ export const getVisualizationsByTraining = async (req: Request, res: Response) =
           }
         });
       }
+
+      // Build query
+      const query: any = { epoch_uuid: { $in: epochUuids } };
+      if (type) {
+        query.type = type;
+      }
+
+      const skip = (Number(page) - 1) * Number(limit);
+      const total = await EpochVisualization.countDocuments(query);
+      const visualizations = await EpochVisualization.find(query)
+        .sort({ uploadedAt: -1 })
+        .skip(skip)
+        .limit(Number(limit));
+
+      // Generate signed URLs and add epoch info
+      const shouldIncludeUrls = includeUrls === 'true';
+      const visualizationsWithUrls = await Promise.all(
+        visualizations.map(async (viz) => {
+          const epoch = epochs.find(e => e.epoch_uuid === viz.epoch_uuid);
+          const result: any = {
+            ...viz.toObject(),
+            epoch: epoch?.epoch
+          };
+
+          if (shouldIncludeUrls) {
+            const signedUrlData = await getSignedUrl(viz.minioFileId, 60);
+            result.signedUrl = signedUrlData?.signedUrl;
+            result.urlExpiresAt = signedUrlData?.expiresAt;
+          }
+
+          return result;
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          visualizations: visualizationsWithUrls,
+          total,
+          pagination: {
+            page: Number(page),
+            limit: Number(limit),
+            total,
+            pages: Math.ceil(total / Number(limit))
+          }
+        }
+      });
     }
 
-    // Build query
-    const query: any = {};
-    if (epochUuids.length > 0) {
-      query.epoch_uuid = { $in: epochUuids };
+    // If no training_uuid but projectId provided, group by training
+    if (projectId) {
+      // Find all trainings for this project
+      const trainings = await Training.find({ projectId: projectId as string, deletedAt: null })
+        .select('uuid name')
+        .sort({ createdAt: -1 });
+
+      if (trainings.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            trainings: [],
+            total: 0
+          }
+        });
+      }
+
+      const trainingsData = await Promise.all(
+        trainings.map(async (training) => {
+          // Find all epochs for this training
+          const epochs = await Epoch.find({ training_uuid: training.uuid }).select('epoch_uuid epoch');
+          const epochUuids = epochs.map(e => e.epoch_uuid);
+
+          if (epochUuids.length === 0) {
+            return {
+              training_uuid: training.uuid,
+              training_name: training.name,
+              visualizations: []
+            };
+          }
+
+          // Build query for visualizations
+          const query: any = { epoch_uuid: { $in: epochUuids } };
+          if (type) {
+            query.type = type;
+          }
+
+          const visualizations = await EpochVisualization.find(query)
+            .sort({ uploadedAt: -1 });
+
+          // Generate signed URLs and add epoch info
+          const shouldIncludeUrls = includeUrls === 'true';
+          const visualizationsWithUrls = await Promise.all(
+            visualizations.map(async (viz) => {
+              const epoch = epochs.find(e => e.epoch_uuid === viz.epoch_uuid);
+              const result: any = {
+                ...viz.toObject(),
+                epoch: epoch?.epoch
+              };
+
+              if (shouldIncludeUrls) {
+                const signedUrlData = await getSignedUrl(viz.minioFileId, 60);
+                result.signedUrl = signedUrlData?.signedUrl;
+                result.urlExpiresAt = signedUrlData?.expiresAt;
+              }
+
+              return result;
+            })
+          );
+
+          return {
+            training_uuid: training.uuid,
+            training_name: training.name,
+            visualizations: visualizationsWithUrls
+          };
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          trainings: trainingsData,
+          total: trainingsData.reduce((sum, t) => sum + t.visualizations.length, 0)
+        }
+      });
     }
+
+    // Fallback: get all visualizations without grouping (shouldn't happen with current frontend)
+    const query: any = {};
     if (type) {
       query.type = type;
     }
@@ -237,39 +356,29 @@ export const getVisualizationsByTraining = async (req: Request, res: Response) =
       .skip(skip)
       .limit(Number(limit));
 
-    // If getting all visualizations, fetch all epochs at once for efficiency
-    let allEpochs: any[] = [];
-    if (epochUuids.length === 0 && visualizations.length > 0) {
-      const uniqueEpochUuids = [...new Set(visualizations.map(v => v.epoch_uuid))];
-      allEpochs = await Epoch.find({ epoch_uuid: { $in: uniqueEpochUuids } })
-        .select('epoch_uuid epoch training_uuid');
-    }
+    // Fetch epochs for all visualizations
+    const uniqueEpochUuids = [...new Set(visualizations.map(v => v.epoch_uuid))];
+    const allEpochs = await Epoch.find({ epoch_uuid: { $in: uniqueEpochUuids } })
+      .select('epoch_uuid epoch training_uuid');
 
     // Generate signed URLs and add epoch info
+    const shouldIncludeUrls = includeUrls === 'true';
     const visualizationsWithUrls = await Promise.all(
       visualizations.map(async (viz) => {
-        // Find epoch info
-        let epochNumber: number | undefined;
-        let trainingUuid: string | undefined;
-        
-        if (epochs.length > 0) {
-          const epoch = epochs.find(e => e.epoch_uuid === viz.epoch_uuid);
-          epochNumber = epoch?.epoch;
-          trainingUuid = epoch?.training_uuid;
-        } else if (allEpochs.length > 0) {
-          const epoch = allEpochs.find(e => e.epoch_uuid === viz.epoch_uuid);
-          epochNumber = epoch?.epoch;
-          trainingUuid = epoch?.training_uuid;
+        const epoch = allEpochs.find(e => e.epoch_uuid === viz.epoch_uuid);
+        const result: any = {
+          ...viz.toObject(),
+          epoch: epoch?.epoch,
+          training_uuid: epoch?.training_uuid
+        };
+
+        if (shouldIncludeUrls) {
+          const signedUrlData = await getSignedUrl(viz.minioFileId, 60);
+          result.signedUrl = signedUrlData?.signedUrl;
+          result.urlExpiresAt = signedUrlData?.expiresAt;
         }
 
-        const signedUrlData = await getSignedUrl(viz.minioFileId, 60);
-        return {
-          ...viz.toObject(),
-          epoch: epochNumber,
-          training_uuid: trainingUuid,
-          signedUrl: signedUrlData?.signedUrl,
-          urlExpiresAt: signedUrlData?.expiresAt
-        };
+        return result;
       })
     );
 

@@ -50,6 +50,7 @@ export const testResultService = {
     epoch?: number;
     epoch_uuids?: string;
     training_uuid?: string;
+    projectId?: string;
   }): Promise<PaginatedResponse<TestResult>> {
     const response = await visionApi.get('/test-results', { params });
     return response.data;

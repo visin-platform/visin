@@ -5,7 +5,8 @@ import {
   VisualizationUploadUrlRequest,
   VisualizationUploadUrlResponse,
   ApiResponse,
-  PaginatedResponse
+  PaginatedResponse,
+  VisualizationsGroupedResponse
 } from '../types';
 
 export const visualizationService = {
@@ -82,12 +83,21 @@ export const visualizationService = {
       type?: string;
       page?: number;
       limit?: number;
+      projectId?: string;
+      includeUrls?: boolean;
     }
-  ): Promise<PaginatedResponse<Visualization>> {
+  ): Promise<PaginatedResponse<Visualization> | ApiResponse<VisualizationsGroupedResponse>> {
     const endpoint = training_uuid && training_uuid.trim() !== '' 
       ? `/visualizations/training/${training_uuid}`
       : `/visualizations/training`;
-    const response = await visionApi.get(endpoint, { params });
+    
+    // Convert includeUrls boolean to string for query parameter
+    const queryParams: any = params ? { ...params } : {};
+    if (queryParams.includeUrls !== undefined) {
+      queryParams.includeUrls = queryParams.includeUrls.toString();
+    }
+    
+    const response = await visionApi.get(endpoint, { params: queryParams });
     return response.data;
   },
 

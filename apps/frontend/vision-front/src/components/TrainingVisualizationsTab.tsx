@@ -39,7 +39,7 @@ import {
   CloudUpload as CloudUploadIcon
 } from '@mui/icons-material';
 import { visualizationService } from '../services/visualizationService';
-import { Visualization, Epoch } from '../types';
+import { Visualization, Epoch, PaginatedResponse } from '../types';
 
 interface TrainingVisualizationsTabProps {
   training_uuid: string;
@@ -82,7 +82,7 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
           type: selectedType !== 'all' ? selectedType : undefined,
           limit: 100
         }
-      );
+      ) as PaginatedResponse<Visualization>;
 
       let visualizations = response.data.visualizations || [];
 

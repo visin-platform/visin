@@ -53,6 +53,8 @@ export interface TrainingComparisonResponse {
 export interface TrainingStats {
   totalTrainings: number;
   totalTime: number;
+  totalEpochs: number;
+  avgEpochTime: number;
   totalCpuCost: number;
   totalGpuCost: number;
   totalCost: number;

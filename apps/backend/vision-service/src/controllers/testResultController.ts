@@ -7,12 +7,61 @@ import Training from '../models/Training';
 // Get all test results
 export const getTestResults = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { page, limit, sortBy = 'timestamp', order = 'desc', epoch, epoch_uuids, training_uuid } = req.query;
+    const { page, limit, sortBy = 'timestamp', order = 'desc', epoch, epoch_uuids, training_uuid, projectId } = req.query;
 
     const sortOrder = order === 'desc' ? -1 : 1;
     const sortField = sortBy as string;
 
     let query = TestResult.find({ deletedAt: null });
+
+    // Filter by projectId if provided
+    if (projectId) {
+      // Find all trainings for this project
+      const trainings = await Training.find({ projectId: projectId as string, deletedAt: null });
+      if (trainings.length === 0) {
+        // No trainings found, return empty result
+        res.json({
+          success: true,
+          data: {
+            testResults: [],
+            total: 0,
+            pagination: {
+              page: Number(page) || 1,
+              limit: Number(limit) || 10,
+              total: 0,
+              totalPages: 0
+            }
+          }
+        });
+        return;
+      }
+
+      // Get all epochs for these trainings
+      const trainingIds = trainings.map(t => t._id.toString());
+      const trainingEpochs = await Epoch.find({ trainingId: { $in: trainingIds } }, 'epoch_uuid');
+      const trainingEpochUuids = trainingEpochs.map(e => e.epoch_uuid);
+
+      if (trainingEpochUuids.length === 0) {
+        // No epochs found, return empty result
+        res.json({
+          success: true,
+          data: {
+            testResults: [],
+            total: 0,
+            pagination: {
+              page: Number(page) || 1,
+              limit: Number(limit) || 10,
+              total: 0,
+              totalPages: 0
+            }
+          }
+        });
+        return;
+      }
+
+      // Filter by the epoch UUIDs of this project's trainings
+      query = query.where('epoch_uuid').in(trainingEpochUuids);
+    }
 
     // Filter by training_uuid if provided
     if (training_uuid) {
@@ -66,7 +115,17 @@ export const getTestResults = async (req: Request, res: Response): Promise<void>
 
       // Build count query based on filters
       let countQuery: any = { deletedAt: null };
-      if (training_uuid) {
+      if (projectId) {
+        const trainings = await Training.find({ projectId: projectId as string, deletedAt: null });
+        if (trainings.length > 0) {
+          const trainingIds = trainings.map(t => t._id.toString());
+          const trainingEpochs = await Epoch.find({ trainingId: { $in: trainingIds } }, 'epoch_uuid');
+          const trainingEpochUuids = trainingEpochs.map(e => e.epoch_uuid);
+          countQuery.epoch_uuid = { $in: trainingEpochUuids };
+        } else {
+          countQuery.epoch_uuid = { $in: [] }; // No epochs
+        }
+      } else if (training_uuid) {
         const training = await Training.findOne({ uuid: training_uuid as string, deletedAt: null });
         if (training) {
           const trainingEpochs = await Epoch.find({ trainingId: training._id.toString() }, 'epoch_uuid');

@@ -10,6 +10,7 @@ export const getBenchmarks = async (req: Request, res: Response): Promise<void> 
       page = 1,
       limit = 25,
       training_uuid,
+      projectId,
       sortBy = 'timestamp',
       order = 'desc'
     } = req.query;
@@ -19,8 +20,32 @@ export const getBenchmarks = async (req: Request, res: Response): Promise<void> 
 
     let query: any = { deletedAt: null };
 
+    // Filter by projectId if provided
+    if (projectId) {
+      // Find all trainings for this project
+      const trainings = await Training.find({ projectId: projectId as string, deletedAt: null });
+      if (trainings.length === 0) {
+        res.json({
+          success: true,
+          data: {
+            benchmarks: [],
+            pagination: {
+              page: Number(page),
+              limit: Number(limit),
+              total: 0,
+              pages: 0
+            }
+          }
+        });
+        return;
+      }
+
+      // Get training IDs for these trainings
+      const trainingIds = trainings.map(t => t._id.toString());
+      query.training_id = { $in: trainingIds };
+    }
     // Filter by training UUID if provided
-    if (training_uuid) {
+    else if (training_uuid) {
       query.training_uuid = training_uuid;
     }
 

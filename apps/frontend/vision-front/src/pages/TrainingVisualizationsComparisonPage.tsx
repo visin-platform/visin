@@ -60,23 +60,14 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Fetch all trainings and visualizations in parallel
-      const [allTrainingsResponse, allVisualizationsResponse] = await Promise.all([
-        trainingService.getTrainings({
-          page: 1,
-          limit: 1000
-        }),
-        visualizationService.getVisualizationsByTraining('', {
-          limit: 10000
-        })
-      ]);
-
+      // First, fetch the selected trainings to get projectId
+      const allTrainingsResponse = await trainingService.getTrainings({
+        page: 1,
+        limit: 1000
+      });
       const allTrainings = allTrainingsResponse.data.trainings || [];
-      const allVisualizations = allVisualizationsResponse.data.visualizations || [];
-
-      // Filter to only selected trainings
       const selectedTrainings = allTrainings.filter((t: Training) => 
-        trainingIds.includes(t._id)
+        trainingIds.includes(t.uuid)
       );
 
       if (selectedTrainings.length === 0) {
@@ -84,32 +75,44 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
         return;
       }
 
-      // Group visualizations by training
+      // Get projectId from first training (assuming all are from same project)
+      const projectId = selectedTrainings[0].projectId;
+
+      // Fetch grouped visualizations for the project
+      const visualizationsResponse = await visualizationService.getVisualizationsByTraining('', {
+        projectId,
+        includeUrls: true // Need URLs for display
+      }) as { data: { trainings: any[] } };
+
+      const groupedTrainings = visualizationsResponse.data.trainings || [];
+
+      // Filter to only selected trainings
+      const selectedGroupedTrainings = groupedTrainings.filter((gt: any) => 
+        trainingIds.includes(gt.training_uuid)
+      );
+
+      // Build trainingsWithViz from grouped data
       const trainingsWithViz: TrainingWithVisualizations[] = [];
       const allTypesSet = new Set<string>();
 
-      for (const training of selectedTrainings) {
-        const trainingUuid = training.uuid || training.training_uuid || '';
-        const visualizations = allVisualizations.filter((viz: Visualization) => 
-          (viz as any).training_uuid === trainingUuid
-        );
+      for (const groupedTraining of selectedGroupedTrainings) {
+        const training = selectedTrainings.find((t: Training) => t.uuid === groupedTraining.training_uuid);
+        if (!training) continue;
 
-        if (visualizations.length > 0) {
-          // Group visualizations by type
-          const visualizationsByType = new Map<string, Visualization[]>();
-          visualizations.forEach((viz: Visualization) => {
-            const existing = visualizationsByType.get(viz.type) || [];
-            existing.push(viz);
-            visualizationsByType.set(viz.type, existing);
-            allTypesSet.add(viz.type);
-          });
+        // Group visualizations by type
+        const visualizationsByType = new Map<string, Visualization[]>();
+        groupedTraining.visualizations.forEach((viz: Visualization) => {
+          const existing = visualizationsByType.get(viz.type) || [];
+          existing.push(viz);
+          visualizationsByType.set(viz.type, existing);
+          allTypesSet.add(viz.type);
+        });
 
-          trainingsWithViz.push({
-            training,
-            visualizations,
-            visualizationsByType
-          });
-        }
+        trainingsWithViz.push({
+          training,
+          visualizations: groupedTraining.visualizations,
+          visualizationsByType
+        });
       }
 
       setTrainings(trainingsWithViz);

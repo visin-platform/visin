@@ -4,7 +4,8 @@ import {
   getProjectById,
   createProject,
   updateProject,
-  deleteProject
+  deleteProject,
+  getProjectDashboardStats
 } from '../controllers/projectController';
 import { authMiddleware } from '../middleware/authMiddleware';
 
@@ -15,6 +16,7 @@ router.use(authMiddleware);
 
 router.get('/', getProjects);
 router.get('/:id', getProjectById);
+router.get('/:id/dashboard-stats', getProjectDashboardStats);
 router.post('/', createProject);
 router.put('/:id', updateProject);
 router.delete('/:id', deleteProject);

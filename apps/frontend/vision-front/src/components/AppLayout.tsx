@@ -22,9 +22,6 @@ import {
 import {
   ModelTraining,
   Storage,
-  Assessment,
-  BarChart,
-  Speed,
   CompareArrows,
   Image as ImageIcon,
   ExpandMore,
@@ -86,9 +83,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     { text: 'Projects', icon: <Folder />, path: '/projects' },
     { text: 'Trainings', icon: <ModelTraining />, path: '/trainings' },
     { text: 'Datasets', icon: <Storage />, path: '/datasets' },
-    { text: 'Test Results', icon: <Assessment />, path: '/test-results' },
-    { text: 'Visualizations', icon: <BarChart />, path: '/visualizations' },
-    { text: 'Benchmarks', icon: <Speed />, path: '/benchmarks' },
     { text: 'Comparisons', icon: <CompareArrows />, path: '/comparisons' },
     { text: 'Image Labeling', icon: <ImageIcon />, path: '/image-labeling' },
   ];

@@ -2,6 +2,21 @@ import { visionApi } from '../config/visionApi';
 import { Project, CreateProjectData } from '../types/Project';
 import { ApiResponse } from '../types';
 
+export interface ProjectDashboardStats {
+  trainingStats: {
+    totalTrainings: number;
+    totalTime: number;
+    totalEpochs: number;
+    avgEpochTime: number;
+    totalCpuCost: number;
+    totalGpuCost: number;
+    totalCost: number;
+  };
+  testResultsCount: number;
+  visualizationsCount: number;
+  benchmarksCount: number;
+}
+
 export const projectService = {
   // Get all projects
   async getProjects(params?: {
@@ -14,6 +29,12 @@ export const projectService = {
   // Get project by ID
   async getProjectById(id: string): Promise<ApiResponse<Project>> {
     const response = await visionApi.get(`/projects/${id}`);
+    return response.data;
+  },
+
+  // Get project dashboard stats
+  async getProjectDashboardStats(id: string): Promise<ApiResponse<ProjectDashboardStats>> {
+    const response = await visionApi.get(`/projects/${id}/dashboard-stats`);
     return response.data;
   },
 

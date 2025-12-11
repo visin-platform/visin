@@ -22,6 +22,7 @@ export const benchmarkService = {
     page?: number;
     limit?: number;
     training_uuid?: string;
+    projectId?: string;
     sortBy?: string;
     order?: 'asc' | 'desc';
   }): Promise<BenchmarksPaginatedResponse> {

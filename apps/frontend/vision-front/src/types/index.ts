@@ -519,8 +519,20 @@ export interface Visualization {
   signedUrl?: string;
   urlExpiresAt?: string;
   epoch?: number;
+  training_uuid?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TrainingVisualizations {
+  training_uuid: string;
+  training_name: string;
+  visualizations: Visualization[];
+}
+
+export interface VisualizationsGroupedResponse {
+  trainings: TrainingVisualizations[];
+  total: number;
 }
 
 export interface CreateVisualizationData {
