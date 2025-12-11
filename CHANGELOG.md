@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.27](https://github.com/av-research/visin/compare/v0.0.26...v0.0.27) (2025-12-11)
+
+
+### Features
+
+* rework project details dashboard ([7986e60](https://github.com/av-research/visin/commit/7986e6081a62b61eb76cffa83908c0659b5398b2))
+
 ### [0.0.26](https://github.com/av-research/visin/compare/v0.0.25...v0.0.26) (2025-12-10)
 
 
