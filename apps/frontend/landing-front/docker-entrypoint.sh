@@ -2,7 +2,7 @@
 
 cat > /usr/share/nginx/html/config.json << EOF
 {
-  "APP_URL": "${APP_URL}",
+  "VISION_FRONT_URL": "${VISION_FRONT_URL}",
   "VISION_API_URL": "${VISION_API_URL}"
 }
 EOF

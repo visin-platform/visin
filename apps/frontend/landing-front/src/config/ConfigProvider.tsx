@@ -1,7 +1,7 @@
 import React, { useEffect, useState, ReactNode, useContext } from 'react';
 
 export interface AppConfig {
-  APP_URL?: string;
+  VISION_FRONT_URL?: string;
   VISION_API_URL?: string;
 }
 
@@ -13,7 +13,7 @@ export const ConfigContext = React.createContext<AppConfig>({});
 // Helper function to create config from environment variables
 function createDevConfig(): AppConfig {
   return {
-    APP_URL: import.meta.env.VITE_APP_URL || 'http://localhost:3012',
+    VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL || 'http://localhost:3012',
     VISION_API_URL: import.meta.env.VITE_VISION_API_URL || 'http://localhost:4010',
   };
 }
@@ -62,7 +62,7 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
         console.error('Configuration load error:', err);
         // Fallback to defaults if fetch fails
         const fallback: AppConfig = {
-          APP_URL: 'https://app.visin.eu',
+          VISION_FRONT_URL: 'https://app.visin.eu',
           VISION_API_URL: 'https://api.visin.eu',
         };
         setConfig(fallback);

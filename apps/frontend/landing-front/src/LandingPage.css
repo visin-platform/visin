@@ -63,6 +63,25 @@ html {
   -webkit-text-fill-color: transparent;
 }
 
+.github-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-right: 1rem;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.github-link:hover {
+  color: var(--primary);
+}
+
+.github-link svg {
+  width: 24px;
+  height: 24px;
+}
+
 .nav ul {
   list-style: none;
   display: flex;
@@ -667,6 +686,16 @@ html {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
+/* Contact Section */
+.contact-section {
+  padding: 4rem 2rem;
+  background: var(--bg-light);
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Footer */
 .footer {
   background: var(--white);
@@ -726,6 +755,71 @@ html {
   
   .footer-links {
     justify-content: center;
+  }
+  
+  /* Pricing Mobile Styles */
+  .pricing {
+    padding: 4rem 1rem;
+  }
+  
+  .pricing h2 {
+    font-size: 2rem;
+    margin-bottom: 2rem;
+  }
+  
+  .pricing-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    padding: 0;
+  }
+  
+  .pricing-card {
+    padding: 2rem;
+  }
+  
+  .pricing-card.featured {
+    transform: none;
+    margin: 0 -0.25rem;
+    border-width: 2px;
+  }
+  
+  .pricing-header .price {
+    font-size: 2.5rem;
+  }
+  
+  .deployment-toggle {
+    margin-bottom: 2rem;
+  }
+  
+  .deployment-options {
+    flex-direction: column;
+    min-width: 280px;
+  }
+  
+  .deployment-option {
+    min-width: auto;
+    padding: 0.75rem 1.5rem;
+  }
+  
+  .self-hosted-section {
+    padding: 2rem 1.5rem;
+    margin: 1rem;
+  }
+  
+  .self-hosted-content {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .github-link {
+    margin-right: 0.5rem;
+  }
+  
+  @media (max-width: 768px) {
+    .github-link {
+      display: none;
+    }
   }
 }
 
