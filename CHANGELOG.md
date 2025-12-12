@@ -1,4 +1,74 @@
 # Visin Changelog
+### 0.0.30 (2025-12-12)
+
+
+### Features
+
+* add auth to trainings ([19c3e6f](https://github.com/visin-platform/visin-monorepo/commit/19c3e6f234166e747b209766607e3fc39133289e))
+* add contact form ([4ef395b](https://github.com/visin-platform/visin-monorepo/commit/4ef395b1c3917c3d5280ec3832c73ec693303505))
+* Add curl for proxy healthcheck ([9ac7906](https://github.com/visin-platform/visin-monorepo/commit/9ac790668c8967a37f620a614bf0fd740e67a96e))
+* Add landing page to proxy ([861218a](https://github.com/visin-platform/visin-monorepo/commit/861218ac716788262253266bee29d0dd16a51096))
+* add mongodb infra ([3fb2970](https://github.com/visin-platform/visin-monorepo/commit/3fb2970014e97bfba4d454e26adf5c956140b828))
+* add project slug option ([08a3920](https://github.com/visin-platform/visin-monorepo/commit/08a392092f7eaed5e3a485c3992095eea8023c8d))
+* add projects ([6fe1c48](https://github.com/visin-platform/visin-monorepo/commit/6fe1c488dd1669675355cbef6079c89d45116302))
+* Add public landing page ([7382b68](https://github.com/visin-platform/visin-monorepo/commit/7382b68b0cbbd6b88deb2c5a958485a0c2c2a90a))
+* Initialize application ([523c054](https://github.com/visin-platform/visin-monorepo/commit/523c05483a4dea9be8d9806ecaed630e5bfcf3a6))
+* Rename public front to landing front app ([83eea20](https://github.com/visin-platform/visin-monorepo/commit/83eea208757bf0cc7b795c1a15f11512325e9ab1))
+* Rework design for trainings and details ([9bb96a2](https://github.com/visin-platform/visin-monorepo/commit/9bb96a2df670c9eff56b7dcba4c58420dfa941fd))
+* rework design of vision front ([3eb4463](https://github.com/visin-platform/visin-monorepo/commit/3eb44632dd62fe5ff68fa29e354c3ddf38f4257d))
+* rework project details dashboard ([7986e60](https://github.com/visin-platform/visin-monorepo/commit/7986e6081a62b61eb76cffa83908c0659b5398b2))
+* Setup auth front and service ([b150bb1](https://github.com/visin-platform/visin-monorepo/commit/b150bb140b032d293f60e6ef8be18544b5dfabeb))
+* Setup google auth for visin domain ([9c5c87c](https://github.com/visin-platform/visin-monorepo/commit/9c5c87c91d4e08605107b579e379bbc4960ad141))
+* update docs ([c2a2e82](https://github.com/visin-platform/visin-monorepo/commit/c2a2e821b6c0fb25fe8e2fcf637c8220d2b071f9))
+
+
+### Bug Fixes
+
+*  vision front build ([7f719a1](https://github.com/visin-platform/visin-monorepo/commit/7f719a16a56e21b5bbec6e6f39059a1ada7fdf27))
+* add missing variables to vision front ([daccb37](https://github.com/visin-platform/visin-monorepo/commit/daccb3787d8e00d92bfa8ea4c32d370a5d15947d))
+* Add server user as variable ([42f3b38](https://github.com/visin-platform/visin-monorepo/commit/42f3b38a84229c11f2b99491eebbc0afd30d3ecd))
+* get projectid from api token ([85200f6](https://github.com/visin-platform/visin-monorepo/commit/85200f61a4f4787f7e67d907a3bd69e88610dde5))
+* mongo healthcheck ([f69141b](https://github.com/visin-platform/visin-monorepo/commit/f69141b11d41c3a7804a3077853a2e73851de61e))
+* project dashboard stats ([be6b2b0](https://github.com/visin-platform/visin-monorepo/commit/be6b2b01a4a08c60169e369bfd07ed09ab937e6a))
+* set cookie domain for auth service ([6508307](https://github.com/visin-platform/visin-monorepo/commit/6508307fb372ffdc16d23000bb686f2e2b80939e))
+* set correct external network ([5ea4403](https://github.com/visin-platform/visin-monorepo/commit/5ea4403526c90766630a2cf451caf9f92ac2fee6))
+* set GOOGLE_CLIENT_ID as variable ([4a00643](https://github.com/visin-platform/visin-monorepo/commit/4a00643696e0885d71e614080349d28074f518c7))
+* set projectid for web users ([3a5613f](https://github.com/visin-platform/visin-monorepo/commit/3a5613f2d618842225798f2eb137ea318a16717e))
+* Set server user for single service deploy ([45861e0](https://github.com/visin-platform/visin-monorepo/commit/45861e043e9aeb5045abe157055463adf76b070e))
+* training details page ([9b1183c](https://github.com/visin-platform/visin-monorepo/commit/9b1183c8ded676fab86d4b77a89ab281a473946a))
+
+
+### Chores
+
+* **release:** 0.0.10 ([acdcde3](https://github.com/visin-platform/visin-monorepo/commit/acdcde3480b76872b8badfa1cabc18b872da4618))
+* **release:** 0.0.11 ([8cacb0f](https://github.com/visin-platform/visin-monorepo/commit/8cacb0ff5f7c046f070934b98aaf44a59ab02f30))
+* **release:** 0.0.12 ([05417e8](https://github.com/visin-platform/visin-monorepo/commit/05417e8e661924922643675ca967c8e267ed77d5))
+* **release:** 0.0.13 ([95f0ed9](https://github.com/visin-platform/visin-monorepo/commit/95f0ed937545810e199d2455aeb4ecace92fadd7))
+* **release:** 0.0.14 ([f4cafe1](https://github.com/visin-platform/visin-monorepo/commit/f4cafe1f2c5fa8afb0fc22e27b247cca828ec007))
+* **release:** 0.0.15 ([b6d6514](https://github.com/visin-platform/visin-monorepo/commit/b6d6514fd043e663eb270063636e72e994642185))
+* **release:** 0.0.16 ([ba84baf](https://github.com/visin-platform/visin-monorepo/commit/ba84baf0ab8b7de255552b0a3215db35bd35598e))
+* **release:** 0.0.17 ([738afc2](https://github.com/visin-platform/visin-monorepo/commit/738afc2de3dfffc57d769285ee1cb7da00cc701e))
+* **release:** 0.0.18 ([afea377](https://github.com/visin-platform/visin-monorepo/commit/afea3776d465858e9260c75151ce2372abde8f95))
+* **release:** 0.0.19 ([9428b0a](https://github.com/visin-platform/visin-monorepo/commit/9428b0abe49296c59a56fab83cbc3d23169d2743))
+* **release:** 0.0.2 ([57a717c](https://github.com/visin-platform/visin-monorepo/commit/57a717ceeb3651c91b8b572bf1bacde7e485cc22))
+* **release:** 0.0.20 ([c89f5d6](https://github.com/visin-platform/visin-monorepo/commit/c89f5d60cf283ae127452702c722734ead9ca100))
+* **release:** 0.0.21 ([66e3b0b](https://github.com/visin-platform/visin-monorepo/commit/66e3b0b2b59f15e468b82e593ebe5ee6b6dc4908))
+* **release:** 0.0.22 ([e643eae](https://github.com/visin-platform/visin-monorepo/commit/e643eae9fedb142a885186dacf70e287b517d78b))
+* **release:** 0.0.23 ([c774fef](https://github.com/visin-platform/visin-monorepo/commit/c774fefb2ba8b493e0bc810288128e6a0f85455d))
+* **release:** 0.0.24 ([9c30591](https://github.com/visin-platform/visin-monorepo/commit/9c30591841da13da641804d897088b7c61960b1a))
+* **release:** 0.0.25 ([7a4569a](https://github.com/visin-platform/visin-monorepo/commit/7a4569a8ffc842e892a06190190ef4580fefc5f3))
+* **release:** 0.0.26 ([965bee9](https://github.com/visin-platform/visin-monorepo/commit/965bee9a63eb6ad2c97ea2e0fdf6e78bfa23eed5))
+* **release:** 0.0.27 ([a158ab2](https://github.com/visin-platform/visin-monorepo/commit/a158ab2bcd3e769b1cbc4555e61a08b45f78aae6))
+* **release:** 0.0.28 ([a28051d](https://github.com/visin-platform/visin-monorepo/commit/a28051dabe797d7b40c31f9c6117f75041e9a096))
+* **release:** 0.0.29 ([9a3e8c3](https://github.com/visin-platform/visin-monorepo/commit/9a3e8c346d7ad646bcfdb883b65119ed65b4fef5))
+* **release:** 0.0.3 ([d2663c5](https://github.com/visin-platform/visin-monorepo/commit/d2663c5397f4718c148b17ba16a4f3e405e10c71))
+* **release:** 0.0.4 ([1a34b00](https://github.com/visin-platform/visin-monorepo/commit/1a34b0079a00fccf77943ee0436424de5540bae3))
+* **release:** 0.0.5 ([dc8e569](https://github.com/visin-platform/visin-monorepo/commit/dc8e569023345d1b2e92f0600dab5b3af183a04d))
+* **release:** 0.0.6 ([9841b26](https://github.com/visin-platform/visin-monorepo/commit/9841b260d7158f2bd5f76a3a70f1d417a5cd6e29))
+* **release:** 0.0.7 ([a74fcb6](https://github.com/visin-platform/visin-monorepo/commit/a74fcb61f86333bfac9ee8e4ba11527950f5cfda))
+* **release:** 0.0.8 ([ab732d9](https://github.com/visin-platform/visin-monorepo/commit/ab732d9ea6f547546f9d7ab28850c8f2f07ed244))
+* **release:** 0.0.9 ([a3e93ef](https://github.com/visin-platform/visin-monorepo/commit/a3e93ef6dbeaf1b98696a1c7885651cd9ebb7088))
+
 ### [0.0.29](https://github.com/av-research/visin/compare/v0.0.28...v0.0.29) (2025-12-12)
 
 
