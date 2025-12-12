@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.32](https://github.com/visin-platform/visin-monorepo/compare/v0.0.31...v0.0.32) (2025-12-12)
+
+
+### Features
+
+* add licence ([961eb41](https://github.com/visin-platform/visin-monorepo/commit/961eb41d632dec90af65ccf9294bd69fee78b76d))
+
 ### [0.0.31](https://github.com/visin-platform/visin-monorepo/compare/v0.0.30...v0.0.31) (2025-12-12)
 
 
