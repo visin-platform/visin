@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.33](https://github.com/visin-platform/visin-monorepo/compare/v0.0.32...v0.0.33) (2025-12-12)
+
+
+### Bug Fixes
+
+* contact form ([e3e3345](https://github.com/visin-platform/visin-monorepo/commit/e3e3345731d2695293a1353e2e18e3bc25bb15ff))
+
 ### [0.0.32](https://github.com/visin-platform/visin-monorepo/compare/v0.0.31...v0.0.32) (2025-12-12)
 
 
