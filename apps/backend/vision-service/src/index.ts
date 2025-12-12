@@ -17,6 +17,7 @@ import benchmarkRoutes from './routes/benchmarkRoutes';
 import comparisonRoutes from './routes/comparisonRoutes';
 import projectRoutes from './routes/projectRoutes';
 import apiTokenRoutes from './routes/apiTokenRoutes';
+import contactRoutes from './routes/contactRoutes';
 import { healthCheck } from './controllers/healthController';
 import { apiTokenMiddleware } from './middleware/apiTokenMiddleware';
 
@@ -56,6 +57,7 @@ app.use('/api/benchmarks', benchmarkRoutes);
 app.use('/api/comparisons', comparisonRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/api-tokens', apiTokenRoutes);
+app.use('/api/contacts', contactRoutes);
 
 // Serve OpenAPI docs as static files
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));
