@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.29](https://github.com/av-research/visin/compare/v0.0.28...v0.0.29) (2025-12-12)
+
+
+### Bug Fixes
+
+* project dashboard stats ([be6b2b0](https://github.com/av-research/visin/commit/be6b2b01a4a08c60169e369bfd07ed09ab937e6a))
+
 ### [0.0.28](https://github.com/av-research/visin/compare/v0.0.27...v0.0.28) (2025-12-12)
 
 
