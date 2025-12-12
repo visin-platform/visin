@@ -6,7 +6,6 @@ import ContactForm from './ContactForm';
 function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [deploymentMode, setDeploymentMode] = useState('cloud');
-  const [showContactForm, setShowContactForm] = useState(false);
   const config = useConfig();
   const appUrl = config.VISION_FRONT_URL || '#';
 
@@ -24,14 +23,11 @@ function LandingPage() {
             <li><a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a></li>
             <li><a href="#contact" onClick={(e) => { 
               e.preventDefault();
-              setShowContactForm(true); 
               setMenuOpen(false);
-              setTimeout(() => {
-                const contactSection = document.getElementById('contact');
-                if (contactSection) {
-                  contactSection.scrollIntoView({ behavior: 'smooth' });
-                }
-              }, 100);
+              const contactSection = document.getElementById('contact');
+              if (contactSection) {
+                contactSection.scrollIntoView({ behavior: 'smooth' });
+              }
             }}>Contact</a></li>
             <li><a href={appUrl} className="nav-cta">Get Started</a></li>
           </ul>
@@ -117,7 +113,7 @@ function LandingPage() {
         </div>
       </section>
       <section id="pricing" className="pricing">
-        <h2>Simple, Transparent Pricing</h2>
+        <h2>Flexible Deployment Options</h2>
         <p className="pricing-subtitle">Start free and scale as you grow</p>
         
         <div className="deployment-toggle">
@@ -164,7 +160,10 @@ function LandingPage() {
                 <li>✓ Self-hosted Option</li>
               </ul>
               <button className="cta-button pricing-outline full-width" onClick={() => {
-                setShowContactForm(true);
+                const contactSection = document.getElementById('contact');
+                if (contactSection) {
+                  contactSection.scrollIntoView({ behavior: 'smooth' });
+                }
               }}>Contact</button>
             </div>
           </div>
@@ -204,11 +203,9 @@ function LandingPage() {
         </div>
       </section>
 
-      {showContactForm && (
-        <section id="contact" className="contact-section">
-          <ContactForm />
-        </section>
-      )}
+      <section id="contact" className="contact-section">
+        <ContactForm />
+      </section>
 
       <footer className="footer">
         <div className="footer-content">
@@ -222,13 +219,10 @@ function LandingPage() {
             <a href="#features">Features</a>
             <a href="#contact" onClick={(e) => {
               e.preventDefault();
-              setShowContactForm(true);
-              setTimeout(() => {
-                const contactSection = document.getElementById('contact');
-                if (contactSection) {
-                  contactSection.scrollIntoView({ behavior: 'smooth' });
-                }
-              }, 100);
+              const contactSection = document.getElementById('contact');
+              if (contactSection) {
+                contactSection.scrollIntoView({ behavior: 'smooth' });
+              }
             }}>Contact</a>
           </div>
         </div>
