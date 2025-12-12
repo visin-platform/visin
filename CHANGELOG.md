@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.28](https://github.com/av-research/visin/compare/v0.0.27...v0.0.28) (2025-12-12)
+
+
+### Features
+
+* add project slug option ([08a3920](https://github.com/av-research/visin/commit/08a392092f7eaed5e3a485c3992095eea8023c8d))
+
 ### [0.0.27](https://github.com/av-research/visin/compare/v0.0.26...v0.0.27) (2025-12-11)
 
 
