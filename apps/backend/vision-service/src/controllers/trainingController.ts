@@ -10,7 +10,11 @@ import { AuthRequest } from '../middleware/authMiddleware';
 async function checkProjectAccess(userId: string | undefined, projectId: string | undefined): Promise<boolean> {
   if (!projectId) return true; // If no project, allow (maybe public trainings)
 
-  const project = await Project.findById(projectId);
+  // Try to find by slug first, then by ID
+  let project = await Project.findOne({ slug: projectId });
+  if (!project) {
+    project = await Project.findById(projectId);
+  }
   if (!project) return false;
 
   // Allow access if project is public
@@ -54,7 +58,30 @@ export const getTrainings = async (req: AuthRequest, res: Response): Promise<voi
 
     // Filter by project
     if (projectId) {
-      query.projectId = projectId;
+      // Resolve projectId (could be slug or ID) to actual project
+      let project = await Project.findOne({ slug: projectId as string });
+      if (!project) {
+        project = await Project.findById(projectId);
+      }
+      if (!project) {
+        res.status(404).json({
+          success: false,
+          message: 'Project not found'
+        });
+        return;
+      }
+
+      // Check access to the project
+      const hasAccess = await checkProjectAccess(userId, project._id.toString());
+      if (!hasAccess) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied to project'
+        });
+        return;
+      }
+
+      query.projectId = project._id.toString();
     } else {
       // If no specific project filter, show trainings from accessible projects
       if (userId) {
@@ -364,6 +391,7 @@ export const createTraining = async (req: AuthRequest, res: Response): Promise<v
     }
 
     // Check project access if projectId is provided
+    let resolvedProjectId: string | undefined;
     if (effectiveProjectId) {
       const hasAccess = await checkProjectAccess(userId, effectiveProjectId);
       if (!hasAccess) {
@@ -372,6 +400,17 @@ export const createTraining = async (req: AuthRequest, res: Response): Promise<v
           message: 'Access denied to project'
         });
         return;
+      }
+
+      // Resolve to actual project _id for storage
+      let project = await Project.findOne({ slug: effectiveProjectId });
+      if (!project) {
+        project = await Project.findById(effectiveProjectId);
+      }
+      if (project) {
+        resolvedProjectId = project._id.toString();
+      } else {
+        resolvedProjectId = effectiveProjectId; // Fallback, though should not happen
       }
     }
 
@@ -384,7 +423,7 @@ export const createTraining = async (req: AuthRequest, res: Response): Promise<v
       description: description?.trim(),
       datasetId,
       configId,
-      projectId: effectiveProjectId,
+      projectId: resolvedProjectId,
       status,
       tags: tags ? (Array.isArray(tags) ? tags : [tags]) : [],
       startTime,
@@ -589,7 +628,16 @@ export const getTrainingStats = async (req: Request, res: Response): Promise<voi
 
     // Filter by project if provided
     if (projectId) {
-      matchQuery.projectId = projectId;
+      // Resolve projectId to _id
+      let project = await Project.findOne({ slug: projectId as string });
+      if (!project) {
+        project = await Project.findById(projectId);
+      }
+      if (project) {
+        matchQuery.projectId = project._id.toString();
+      } else {
+        matchQuery.projectId = projectId; // Fallback
+      }
     }
 
     // Filter by tags if provided

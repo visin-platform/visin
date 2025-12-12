@@ -334,8 +334,13 @@ export const getProjectDashboardStats = async (req: AuthRequest, res: Response):
     const { id } = req.params;
     const userId = req.user?.id;
 
-    // Check if project exists and user has access
-    const project = await Project.findById(id);
+    // Find project by slug or ID
+    let project;
+    project = await Project.findOne({ slug: id });
+    if (!project) {
+      project = await Project.findById(id);
+    }
+
     if (!project) {
       res.status(404).json({
         success: false,
@@ -358,7 +363,7 @@ export const getProjectDashboardStats = async (req: AuthRequest, res: Response):
 
     // Get training stats
     const trainingAggregationPipeline = [
-      { $match: { projectId: id, deletedAt: null } },
+      { $match: { projectId: project._id.toString(), deletedAt: null } },
       {
         $lookup: {
           from: 'training_epoches',
@@ -411,7 +416,7 @@ export const getProjectDashboardStats = async (req: AuthRequest, res: Response):
     // Get test results count
     const testResultsAggregation = [
       // Match trainings for this project
-      { $match: { projectId: id, deletedAt: null } },
+      { $match: { projectId: project._id.toString(), deletedAt: null } },
       // Lookup epochs for each training
       {
         $lookup: {
@@ -451,7 +456,7 @@ export const getProjectDashboardStats = async (req: AuthRequest, res: Response):
     // Get visualizations count
     const visualizationsAggregation = [
       // Match trainings for this project
-      { $match: { projectId: id, deletedAt: null } },
+      { $match: { projectId: project._id.toString(), deletedAt: null } },
       // Lookup epochs for each training
       {
         $lookup: {
@@ -490,7 +495,7 @@ export const getProjectDashboardStats = async (req: AuthRequest, res: Response):
 
     // Get benchmarks count
     const benchmarksCount = await Benchmark.countDocuments({
-      training_id: { $in: (await Training.find({ projectId: id, deletedAt: null })).map(t => t._id) },
+      training_id: { $in: (await Training.find({ projectId: project._id.toString(), deletedAt: null })).map(t => t._id) },
       $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
     });
 
