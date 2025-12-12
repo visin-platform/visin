@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getProjects,
   getProjectById,
+  getProjectByIdOrSlug,
   createProject,
   updateProject,
   deleteProject,
@@ -15,7 +16,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get('/', getProjects);
-router.get('/:id', getProjectById);
+router.get('/:identifier', getProjectByIdOrSlug);
 router.get('/:id/dashboard-stats', getProjectDashboardStats);
 router.post('/', createProject);
 router.put('/:id', updateProject);

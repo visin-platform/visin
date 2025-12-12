@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IProject extends Document {
   name: string;
+  slug?: string;
   description?: string;
   isPublic: boolean;
   ownerId: string;
@@ -16,6 +17,14 @@ const ProjectSchema: Schema = new Schema(
       required: true,
       trim: true,
       maxlength: 100
+    },
+    slug: {
+      type: String,
+      unique: true,
+      trim: true,
+      lowercase: true,
+      maxlength: 100,
+      sparse: true // Allow null/undefined values
     },
     description: {
       type: String,

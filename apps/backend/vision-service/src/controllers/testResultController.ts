@@ -760,10 +760,10 @@ export const compareTestResults = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    if (testResultIds.length > 10) {
+    if (testResultIds.length > 20) {
       res.status(400).json({
         success: false,
-        message: 'Maximum 10 test results can be compared at once'
+        message: 'Maximum 20 test results can be compared at once'
       });
       return;
     }

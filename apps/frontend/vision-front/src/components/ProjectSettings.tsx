@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -18,16 +19,23 @@ import {
   Alert,
   IconButton,
   Tooltip,
-  Chip
+  Chip,
+  Grid,
+  Card,
+  CardContent
 } from '@mui/material';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
-  ContentCopy as CopyIcon
+  ContentCopy as ContentCopyIcon,
+  Edit as EditIcon,
+  Save as SaveIcon,
+  Cancel as CancelIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiTokenService, ApiToken } from '../services/apiTokenService';
-import { Project } from '../types/Project';
+import { projectService } from '../services/projectService';
+import { Project, UpdateProjectData } from '../types/Project';
 
 interface ProjectSettingsProps {
   project: Project;
@@ -39,6 +47,14 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
   const [newTokenName, setNewTokenName] = useState('');
   const [expiresInDays, setExpiresInDays] = useState<string>('30');
   const [createdToken, setCreatedToken] = useState<ApiToken | null>(null);
+
+  // Project editing state
+  const [isEditingProject, setIsEditingProject] = useState(false);
+  const [editName, setEditName] = useState(project.name);
+  const [editSlug, setEditSlug] = useState(project.slug || '');
+  const [editDescription, setEditDescription] = useState(project.description || '');
+  const [editIsPublic, setEditIsPublic] = useState(project.isPublic);
+  const [projectUpdateError, setProjectUpdateError] = useState<string | null>(null);
 
   const { data: tokensResponse } = useQuery({
     queryKey: ['api-tokens', project._id],
@@ -61,6 +77,19 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
     }
   });
 
+  const updateProjectMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateProjectData }) => projectService.updateProject(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['project', project._id] });
+      setIsEditingProject(false);
+      setProjectUpdateError(null);
+    },
+    onError: (error: any) => {
+      setProjectUpdateError(error.response?.data?.message || 'Failed to update project');
+    }
+  });
+
   const handleCreate = () => {
     createMutation.mutate({
       name: newTokenName,
@@ -79,8 +108,149 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
     navigator.clipboard.writeText(text);
   };
 
+  const handleStartEditing = () => {
+    setEditName(project.name);
+    setEditSlug(project.slug || '');
+    setEditDescription(project.description || '');
+    setEditIsPublic(project.isPublic);
+    setIsEditingProject(true);
+    setProjectUpdateError(null);
+  };
+
+  const handleCancelEditing = () => {
+    setIsEditingProject(false);
+    setProjectUpdateError(null);
+  };
+
+  const handleSaveProject = () => {
+    const updateData: UpdateProjectData = {
+      name: editName,
+      description: editDescription,
+      isPublic: editIsPublic
+    };
+
+    if (editSlug.trim()) {
+      updateData.slug = editSlug.trim();
+    }
+
+    updateProjectMutation.mutate({
+      id: project._id,
+      data: updateData
+    });
+  };
+
   return (
     <Box>
+      {/* Project Settings */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h6">Project Settings</Typography>
+            {!isEditingProject ? (
+              <Button
+                variant="outlined"
+                startIcon={<EditIcon />}
+                onClick={handleStartEditing}
+              >
+                Edit
+              </Button>
+            ) : (
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<CancelIcon />}
+                  onClick={handleCancelEditing}
+                  disabled={updateProjectMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSaveProject}
+                  disabled={updateProjectMutation.isPending}
+                >
+                  Save
+                </Button>
+              </Box>
+            )}
+          </Box>
+
+          {projectUpdateError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {projectUpdateError}
+            </Alert>
+          )}
+
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                label="Project Name"
+                value={isEditingProject ? editName : project.name}
+                onChange={(e) => setEditName(e.target.value)}
+                disabled={!isEditingProject}
+                required
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                label="Project Slug (Optional)"
+                value={isEditingProject ? editSlug : (project.slug || '')}
+                onChange={(e) => setEditSlug(e.target.value)}
+                disabled={!isEditingProject}
+                helperText="Used in URLs for human-readable links. Leave it empty to use project ID."
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                fullWidth
+                label="Description"
+                value={isEditingProject ? editDescription : project.description || ''}
+                onChange={(e) => setEditDescription(e.target.value)}
+                disabled={!isEditingProject}
+                multiline
+                rows={3}
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Public URL:
+                </Typography>
+                <Link
+                  to={`/projects/${(isEditingProject ? editSlug : project.slug) || project._id}`}
+                  style={{ textDecoration: 'none', color: 'inherit' }}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'primary.main',
+                      textDecoration: 'underline',
+                      '&:hover': { textDecoration: 'underline' }
+                    }}
+                  >
+                    {window.location.origin}/projects/{(isEditingProject ? editSlug : project.slug) || project._id}
+                  </Typography>
+                </Link>
+                <Tooltip title="Copy URL">
+                  <IconButton
+                    size="small"
+                    onClick={() => copyToClipboard(`${window.location.origin}/projects/${(isEditingProject ? editSlug : project.slug) || project._id}`)}
+                  >
+                    <ContentCopyIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      {/* API Tokens Section */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h6">API Tokens</Typography>
         <Button
@@ -204,7 +374,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
                   {createdToken.token}
                 </Typography>
                 <IconButton onClick={() => copyToClipboard(createdToken.token || '')}>
-                  <CopyIcon />
+                  <ContentCopyIcon />
                 </IconButton>
               </Paper>
             </Box>

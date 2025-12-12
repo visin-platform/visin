@@ -1,5 +1,5 @@
 import { visionApi } from '../config/visionApi';
-import { Project, CreateProjectData } from '../types/Project';
+import { Project, CreateProjectData, UpdateProjectData } from '../types/Project';
 import { ApiResponse } from '../types';
 
 export interface ProjectDashboardStats {
@@ -45,7 +45,7 @@ export const projectService = {
   },
 
   // Update project
-  async updateProject(id: string, projectData: Partial<CreateProjectData>): Promise<ApiResponse<Project>> {
+  async updateProject(id: string, projectData: UpdateProjectData): Promise<ApiResponse<Project>> {
     const response = await visionApi.put(`/projects/${id}`, projectData);
     return response.data;
   },

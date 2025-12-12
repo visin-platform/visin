@@ -43,6 +43,44 @@ export const getProjects = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
+// Get project by slug
+export const getProjectBySlug = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { slug } = req.params;
+    const userId = req.user?.id;
+
+    const project = await Project.findOne({ slug });
+
+    if (!project) {
+      res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+      return;
+    }
+
+    // Check access
+    if (!project.isPublic && project.ownerId !== userId) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: project
+    });
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch project'
+    });
+  }
+};
+
 // Get project by ID
 export const getProjectById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -50,6 +88,52 @@ export const getProjectById = async (req: AuthRequest, res: Response): Promise<v
     const userId = req.user?.id;
 
     const project = await Project.findById(id);
+
+    if (!project) {
+      res.status(404).json({
+        success: false,
+        message: 'Project not found'
+      });
+      return;
+    }
+
+    // Check access
+    if (!project.isPublic && project.ownerId !== userId) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: project
+    });
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch project'
+    });
+  }
+};
+
+// Get project by ID or slug
+export const getProjectByIdOrSlug = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { identifier } = req.params;
+    const userId = req.user?.id;
+
+    let project;
+
+    // Try to find by slug first
+    project = await Project.findOne({ slug: identifier });
+
+    // If not found by slug, try by ID
+    if (!project) {
+      project = await Project.findById(identifier);
+    }
 
     if (!project) {
       res.status(404).json({
@@ -158,11 +242,28 @@ export const updateProject = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const { name, description, isPublic } = req.body;
+    const { name, description, isPublic, slug } = req.body;
 
     if (name) project.name = name;
     if (description !== undefined) project.description = description;
     if (isPublic !== undefined) project.isPublic = isPublic;
+    if (slug !== undefined) {
+      if (slug.trim()) {
+        // Check if slug is unique
+        const existingProject = await Project.findOne({ slug: slug.trim(), _id: { $ne: id } });
+        if (existingProject) {
+          res.status(400).json({
+            success: false,
+            message: 'Slug already exists'
+          });
+          return;
+        }
+        project.slug = slug.trim();
+      } else {
+        // Empty slug means remove it
+        project.slug = undefined;
+      }
+    }
 
     const updatedProject = await project.save();
 
