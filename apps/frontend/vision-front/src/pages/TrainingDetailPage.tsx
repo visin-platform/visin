@@ -783,7 +783,13 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
       <Box mb={4}>
         <Button
           startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/trainings')}
+          onClick={() => {
+            if (training?.projectId) {
+              navigate(`/projects/${training.projectId}?tab=trainings`);
+            } else {
+              navigate('/trainings');
+            }
+          }}
           sx={{ mb: 2, color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
         >
           Back to Trainings

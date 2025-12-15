@@ -20,7 +20,8 @@ import {
   IconButton,
   Tooltip,
   Chip,
-  Grid,
+  FormControlLabel,
+  Switch,
   Card,
   CardContent
 } from '@mui/material';
@@ -28,9 +29,7 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   ContentCopy as ContentCopyIcon,
-  Edit as EditIcon,
-  Save as SaveIcon,
-  Cancel as CancelIcon
+  Save as SaveIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiTokenService, ApiToken } from '../services/apiTokenService';
@@ -49,7 +48,6 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
   const [createdToken, setCreatedToken] = useState<ApiToken | null>(null);
 
   // Project editing state
-  const [isEditingProject, setIsEditingProject] = useState(false);
   const [editName, setEditName] = useState(project.name);
   const [editSlug, setEditSlug] = useState(project.slug || '');
   const [editDescription, setEditDescription] = useState(project.description || '');
@@ -82,7 +80,6 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['project', project._id] });
-      setIsEditingProject(false);
       setProjectUpdateError(null);
     },
     onError: (error: any) => {
@@ -108,19 +105,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
     navigator.clipboard.writeText(text);
   };
 
-  const handleStartEditing = () => {
-    setEditName(project.name);
-    setEditSlug(project.slug || '');
-    setEditDescription(project.description || '');
-    setEditIsPublic(project.isPublic);
-    setIsEditingProject(true);
-    setProjectUpdateError(null);
-  };
-
-  const handleCancelEditing = () => {
-    setIsEditingProject(false);
-    setProjectUpdateError(null);
-  };
+  // Form is always editable now — edit fields are initialized with project values
 
   const handleSaveProject = () => {
     const updateData: UpdateProjectData = {
@@ -146,34 +131,16 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography variant="h6">Project Settings</Typography>
-            {!isEditingProject ? (
+            <Box>
               <Button
-                variant="outlined"
-                startIcon={<EditIcon />}
-                onClick={handleStartEditing}
+                variant="contained"
+                startIcon={<SaveIcon />}
+                onClick={handleSaveProject}
+                disabled={updateProjectMutation.isPending}
               >
-                Edit
+                Save
               </Button>
-            ) : (
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<CancelIcon />}
-                  onClick={handleCancelEditing}
-                  disabled={updateProjectMutation.isPending}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="contained"
-                  startIcon={<SaveIcon />}
-                  onClick={handleSaveProject}
-                  disabled={updateProjectMutation.isPending}
-                >
-                  Save
-                </Button>
-              </Box>
-            )}
+            </Box>
           </Box>
 
           {projectUpdateError && (
@@ -182,71 +149,68 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
             </Alert>
           )}
 
-          <Grid container spacing={3}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="Project Name"
-                value={isEditingProject ? editName : project.name}
-                onChange={(e) => setEditName(e.target.value)}
-                disabled={!isEditingProject}
-                required
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="Project Slug (Optional)"
-                value={isEditingProject ? editSlug : (project.slug || '')}
-                onChange={(e) => setEditSlug(e.target.value)}
-                disabled={!isEditingProject}
-                helperText="Used in URLs for human-readable links. Leave it empty to use project ID."
-              />
-            </Grid>
-            <Grid size={{ xs: 12 }}>
-              <TextField
-                fullWidth
-                label="Description"
-                value={isEditingProject ? editDescription : project.description || ''}
-                onChange={(e) => setEditDescription(e.target.value)}
-                disabled={!isEditingProject}
-                multiline
-                rows={3}
-              />
-            </Grid>
-            <Grid size={{ xs: 12 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Public URL:
-                </Typography>
-                <Link
-                  to={`/projects/${(isEditingProject ? editSlug : project.slug) || project._id}`}
-                  style={{ textDecoration: 'none', color: 'inherit' }}
-                  target="_blank"
-                  rel="noopener noreferrer"
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TextField
+              fullWidth
+              label="Project Name"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              required
+            />
+
+            <TextField
+              fullWidth
+              label="Project Slug (Optional)"
+              value={editSlug}
+              onChange={(e) => setEditSlug(e.target.value)}
+              helperText="Used in URLs for human-readable links. Leave it empty to use project ID."
+            />
+
+            <TextField
+              fullWidth
+              label="Description"
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              multiline
+              rows={3}
+            />
+
+            <FormControlLabel
+              control={<Switch checked={editIsPublic} onChange={(e) => setEditIsPublic(e.target.checked)} />}
+              label="Public project"
+            />
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Public URL:
+              </Typography>
+              <Link
+                to={`/projects/${editSlug || project.slug || project._id}`}
+                style={{ textDecoration: 'none', color: 'inherit' }}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: 'primary.main',
+                    textDecoration: 'underline',
+                    '&:hover': { textDecoration: 'underline' }
+                  }}
                 >
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: 'primary.main',
-                      textDecoration: 'underline',
-                      '&:hover': { textDecoration: 'underline' }
-                    }}
-                  >
-                    {window.location.origin}/projects/{(isEditingProject ? editSlug : project.slug) || project._id}
-                  </Typography>
-                </Link>
-                <Tooltip title="Copy URL">
-                  <IconButton
-                    size="small"
-                    onClick={() => copyToClipboard(`${window.location.origin}/projects/${(isEditingProject ? editSlug : project.slug) || project._id}`)}
-                  >
-                    <ContentCopyIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            </Grid>
-          </Grid>
+                  {window.location.origin}/projects/{editSlug || project.slug || project._id}
+                </Typography>
+              </Link>
+              <Tooltip title="Copy URL">
+                <IconButton
+                  size="small"
+                  onClick={() => copyToClipboard(`${window.location.origin}/projects/${editSlug || project.slug || project._id}`)}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Box>
         </CardContent>
       </Card>
 
@@ -320,7 +284,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
                 </TableCell>
               </TableRow>
             ))}
-            {(!tokensResponse?.data || tokensResponse.data.length === 0) && (
+            {( !tokensResponse?.data || tokensResponse?.data?.length === 0) && (
               <TableRow>
                 <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                   <Typography color="text.secondary">No API tokens found</Typography>
@@ -371,9 +335,9 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
                 }}
               >
                 <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                  {createdToken.token}
+                  {createdToken?.token}
                 </Typography>
-                <IconButton onClick={() => copyToClipboard(createdToken.token || '')}>
+                <IconButton onClick={() => copyToClipboard(createdToken?.token || '')}>
                   <ContentCopyIcon />
                 </IconButton>
               </Paper>

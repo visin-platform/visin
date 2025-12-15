@@ -14,7 +14,8 @@ import {
   Alert,
   CircularProgress,
   Typography,
-  Box
+  Box,
+  FormHelperText
 } from '@mui/material';
 import { Config, Training } from '../types';
 import { Project } from '../types/Project';
@@ -134,7 +135,7 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
             value={selectedProjectId}
             onChange={(e: SelectChangeEvent<string>) => onProjectChange(e.target.value)}
             label="Select Project (Optional)"
-            disabled={isCreating || isLoadingData || loadingProjects}
+            disabled={isEditing || isCreating || isLoadingData || loadingProjects}
           >
             <MenuItem value="">
               <em>None</em>
@@ -145,6 +146,9 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
               </MenuItem>
             ))}
           </Select>
+          {isEditing && (
+            <FormHelperText>Project cannot be changed after creation.</FormHelperText>
+          )}
         </FormControl>
         <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel>Select Config (Optional)</InputLabel>

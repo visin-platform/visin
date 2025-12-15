@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -32,6 +33,7 @@ import {
   Switch,
   IconButton
 } from '@mui/material';
+import { Link } from 'react-router-dom';
 import {
   Timeline as TimelineIcon,
   AttachMoney as CostIcon,
@@ -51,6 +53,9 @@ import { trainingService } from '../services/trainingService';
 import { testResultService } from '../services/testResultService';
 import { visualizationService } from '../services/visualizationService';
 import { benchmarkService } from '../services/benchmarkService';
+import { configService } from '../services/configService';
+import { getAllAnalyses, type DatasetAnalysis } from '../services/analysisService';
+import TrainingFormDialog from '../components/TrainingFormDialog';
 import TrainingsTable from '../components/TrainingsTable';
 import ProjectSettings from '../components/ProjectSettings';
 import { useAuth } from '../contexts/AuthContext';
@@ -88,6 +93,23 @@ const ProjectDashboardPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
   const [tabValue, setTabValue] = useState(0);
+  const [searchParams] = useSearchParams();
+
+  const tabNameToIndex: Record<string, number> = {
+    overview: 0,
+    trainings: 1,
+    tests: 2,
+    visualizations: 3,
+    benchmarks: 4,
+    settings: 5
+  };
+
+  React.useEffect(() => {
+    const tabQuery = searchParams.get('tab');
+    if (tabQuery && tabNameToIndex[tabQuery] !== undefined) {
+      setTabValue(tabNameToIndex[tabQuery]);
+    }
+  }, [searchParams]);
 
   // Table state
   const [page, setPage] = useState(0);
@@ -120,6 +142,28 @@ const ProjectDashboardPage: React.FC = () => {
   });
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Training edit/delete modal state (for Trainings tab actions)
+  const [trainingModalOpen, setTrainingModalOpen] = useState(false);
+  const [editingTrainingId, setEditingTrainingId] = useState<string | null>(null);
+  const [trainingName, setTrainingName] = useState('');
+  const [trainingDescription, setTrainingDescription] = useState('');
+  const [selectedDatasetId, setSelectedDatasetId] = useState('');
+  const [selectedConfigId, setSelectedConfigId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<'pending' | 'running' | 'completed' | 'failed'>('pending');
+  const [trainingTags, setTrainingTags] = useState<string[]>([]);
+  const [datasets, setDatasets] = useState<DatasetAnalysis[]>([]);
+  const [configs, setConfigs] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loadingDatasets, setLoadingDatasets] = useState(false);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [savingTraining, setSavingTraining] = useState(false);
+  const [trainingError, setTrainingError] = useState<string | null>(null);
+  const [trainingSuccess, setTrainingSuccess] = useState<string | null>(null);
+  const [deleteTrainingDialogOpen, setDeleteTrainingDialogOpen] = useState(false);
+  const [deleteTrainingId, setDeleteTrainingId] = useState<string | null>(null);
 
   const { 
     data: projectResponse, 
@@ -171,13 +215,13 @@ const ProjectDashboardPage: React.FC = () => {
     data: testResultsResponse, 
     isLoading: isTestResultsLoading
   } = useQuery({
-    queryKey: ['project-test-results', id, testsPage, testsRowsPerPage],
+    queryKey: ['project-test-results', projectResponse?.data?._id, testsPage, testsRowsPerPage],
     queryFn: () => testResultService.getTestResults({ 
-      projectId: id, 
+      projectId: projectResponse?.data?._id, 
       page: testsPage + 1, 
       limit: testsRowsPerPage 
     }),
-    enabled: !!id && tabValue === 2
+    enabled: !!projectResponse?.data && tabValue === 2
   });
 
   // Visualizations for Visualizations tab
@@ -185,12 +229,12 @@ const ProjectDashboardPage: React.FC = () => {
     data: visualizationsResponse, 
     isLoading: isVisualizationsLoading
   } = useQuery({
-    queryKey: ['project-visualizations', id],
+    queryKey: ['project-visualizations', projectResponse?.data?._id],
     queryFn: () => visualizationService.getVisualizationsByTraining('', { 
-      projectId: id, 
+      projectId: projectResponse?.data?._id, 
       includeUrls: false 
     }),
-    enabled: !!id && tabValue === 3
+    enabled: !!projectResponse?.data && tabValue === 3
   });
 
   // Benchmarks for Benchmarks tab
@@ -198,13 +242,13 @@ const ProjectDashboardPage: React.FC = () => {
     data: benchmarksResponse, 
     isLoading: isBenchmarksLoading
   } = useQuery({
-    queryKey: ['project-benchmarks', id, benchmarksPage, benchmarksRowsPerPage],
+    queryKey: ['project-benchmarks', projectResponse?.data?._id, benchmarksPage, benchmarksRowsPerPage],
     queryFn: () => benchmarkService.getBenchmarks({ 
-      projectId: id, 
+      projectId: projectResponse?.data?._id, 
       page: benchmarksPage + 1, 
       limit: benchmarksRowsPerPage 
     }),
-    enabled: !!id && tabValue === 4
+    enabled: !!projectResponse?.data && tabValue === 4
   });
 
   // Extract stats for display
@@ -317,6 +361,88 @@ const ProjectDashboardPage: React.FC = () => {
     } else {
       const allIds = new Set<string>(fullTrainingsResponse?.data?.trainings.map((t: Training) => t._id) || []);
       setSelectedTrainingIds(allIds);
+    }
+  };
+
+  // Trainings tab: edit training
+  const handleEditTraining = async (training: Training) => {
+    try {
+      setLoadingConfigs(true);
+      setLoadingDatasets(true);
+      setLoadingProjects(true);
+
+      const [configsRes, analysesRes, projectsRes] = await Promise.all([
+        configService.getAllConfigs(),
+        getAllAnalyses(100, 0),
+        projectService.getProjects()
+      ]);
+
+      setConfigs(configsRes.data.configs || []);
+      setDatasets(analysesRes.data || []);
+      setProjects(projectsRes.data || []);
+
+      setEditingTrainingId(training._id);
+      setTrainingName(training.name);
+      setTrainingDescription(training.description || '');
+      setSelectedDatasetId(training.datasetId || '');
+      setSelectedConfigId(training.configId || '');
+      setSelectedProjectId(training.projectId || '');
+      setSelectedStatus(training.status);
+      setTrainingTags(training.tags || []);
+      setTrainingModalOpen(true);
+    } catch (err) {
+      console.error('Failed to load data for editing training:', err);
+    } finally {
+      setLoadingConfigs(false);
+      setLoadingDatasets(false);
+      setLoadingProjects(false);
+    }
+  };
+
+  const handleSubmitTraining = async () => {
+    if (!editingTrainingId) return;
+    try {
+      setSavingTraining(true);
+      await trainingService.updateTraining(editingTrainingId, {
+        name: trainingName,
+        description: trainingDescription,
+        datasetId: selectedDatasetId || undefined,
+        configId: selectedConfigId || undefined,
+        projectId: selectedProjectId || undefined,
+        status: selectedStatus,
+        tags: trainingTags
+      });
+      setTrainingSuccess('Training updated successfully');
+      setTrainingModalOpen(false);
+      setEditingTrainingId(null);
+      // Refresh trainings list
+      queryClient.invalidateQueries({ queryKey: ['project-trainings-full', id] });
+    } catch (err) {
+      console.error('Failed to update training:', err);
+      setTrainingError(err instanceof Error ? err.message : 'Failed to update training');
+    } finally {
+      setSavingTraining(false);
+    }
+  };
+
+  // Trainings tab: delete training
+  const handleDeleteTrainingClick = (trainingId: string) => {
+    setDeleteTrainingId(trainingId);
+    setDeleteTrainingDialogOpen(true);
+  };
+
+  const handleConfirmDeleteTraining = async () => {
+    if (!deleteTrainingId) return;
+    try {
+      setIsDeleting(true);
+      await trainingService.deleteTraining(deleteTrainingId);
+      setDeleteTrainingDialogOpen(false);
+      setDeleteTrainingId(null);
+      queryClient.invalidateQueries({ queryKey: ['project-trainings-full', id] });
+    } catch (err) {
+      console.error('Failed to delete training:', err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -637,8 +763,8 @@ const ProjectDashboardPage: React.FC = () => {
               total={fullTrainingsResponse?.data?.pagination.total || 0}
               onPageChange={handlePageChange}
               onRowsPerPageChange={handleRowsPerPageChange}
-              onEdit={() => {}} // TODO: Implement edit
-              onDelete={() => {}} // TODO: Implement delete
+              onEdit={handleEditTraining}
+              onDelete={handleDeleteTrainingClick}
               searchTerm=""
               selectedTrainingIds={selectedTrainingIds}
               onSelectTraining={handleSelectTraining}
@@ -826,14 +952,47 @@ const ProjectDashboardPage: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {benchmarksResponse.data.benchmarks.map((benchmark: any) => (
-                        <TableRow key={benchmark._id}>
-                          <TableCell>{benchmark.training_id?.name || 'Unknown'}</TableCell>
-                          <TableCell>{benchmark.results?.[0]?.fps?.toFixed(2) || '-'}</TableCell>
-                          <TableCell>{benchmark.results?.[0]?.parameters ? `${(benchmark.results[0].parameters / 1e6).toFixed(1)}M` : '-'}</TableCell>
-                          <TableCell>{new Date(benchmark.timestamp).toLocaleString()}</TableCell>
-                        </TableRow>
-                      ))}
+                      {benchmarksResponse.data.benchmarks.map((benchmark: any) => {
+                        const firstResult = benchmark.results && benchmark.results.length > 0 ? benchmark.results[0] : null;
+
+                        const formatParameters = (res: any) => {
+                          if (!res) return '-';
+                          // Prefer explicit million field if present
+                          if (res.total_parameters_m !== undefined && res.total_parameters_m !== null) {
+                            return `${Number(res.total_parameters_m).toFixed(1)}M`;
+                          }
+                          const paramVal = res.parameters ?? res.total_parameters ?? res.trainable_parameters;
+                          if (paramVal !== undefined && paramVal !== null) {
+                            const num = Number(paramVal);
+                            if (Number.isFinite(num)) return `${(num / 1e6).toFixed(1)}M`;
+                          }
+                          return '-';
+                        };
+
+                        // Determine training link id (prefer object _id)
+                        const trainingObj = benchmark.training_id && typeof benchmark.training_id === 'object' ? benchmark.training_id : null;
+                        const trainingId = trainingObj?._id || null;
+                        const trainingName = trainingObj?.name || benchmark.training_name || 'Unknown';
+
+                        return (
+                          <TableRow key={benchmark._id}>
+                            <TableCell>
+                              {trainingId ? (
+                                <Link to={`/trainings/${trainingId}?tab=benchmarks`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                                  <Typography variant="body2" color="primary" fontWeight={500}>
+                                    {trainingName}
+                                  </Typography>
+                                </Link>
+                              ) : (
+                                <Typography variant="body2">{trainingName}</Typography>
+                              )}
+                            </TableCell>
+                            <TableCell>{firstResult?.fps !== undefined && firstResult?.fps !== null ? firstResult.fps.toFixed(2) : '-'}</TableCell>
+                            <TableCell>{formatParameters(firstResult)}</TableCell>
+                            <TableCell>{new Date(benchmark.timestamp).toLocaleString()}</TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -924,6 +1083,72 @@ const ProjectDashboardPage: React.FC = () => {
           <Button 
             onClick={handleDeleteProject} 
             color="error" 
+            variant="contained"
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Training Dialog (used in Trainings tab) */}
+      <TrainingFormDialog
+        open={trainingModalOpen}
+        onClose={() => {
+          setTrainingModalOpen(false);
+          setEditingTrainingId(null);
+          setTrainingName('');
+          setTrainingDescription('');
+          setSelectedDatasetId('');
+          setSelectedConfigId('');
+          setSelectedProjectId('');
+          setSelectedStatus('pending');
+          setTrainingTags([]);
+          setTrainingError(null);
+          setTrainingSuccess(null);
+        }}
+        onSubmit={handleSubmitTraining}
+        isEditing={!!editingTrainingId}
+        isCreating={savingTraining}
+        isLoadingData={loadingConfigs || loadingDatasets || loadingProjects}
+        trainingName={trainingName}
+        onNameChange={setTrainingName}
+        trainingDescription={trainingDescription}
+        onDescriptionChange={setTrainingDescription}
+        selectedConfigId={selectedConfigId}
+        onConfigChange={setSelectedConfigId}
+        selectedDatasetId={selectedDatasetId}
+        onDatasetChange={setSelectedDatasetId}
+        selectedProjectId={selectedProjectId}
+        onProjectChange={setSelectedProjectId}
+        selectedStatus={selectedStatus}
+        onStatusChange={setSelectedStatus}
+        trainingTags={trainingTags}
+        onTagsChange={setTrainingTags}
+        availableTags={[]}
+        configs={configs}
+        datasets={datasets}
+        projects={projects}
+        error={trainingError}
+        success={trainingSuccess}
+        loadingConfigs={loadingConfigs}
+        loadingDatasets={loadingDatasets}
+        loadingProjects={loadingProjects}
+      />
+
+      {/* Delete Training Dialog */}
+      <Dialog open={deleteTrainingDialogOpen} onClose={() => setDeleteTrainingDialogOpen(false)}>
+        <DialogTitle>Delete Training</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this training? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTrainingDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDeleteTraining}
+            color="error"
             variant="contained"
             disabled={isDeleting}
           >
