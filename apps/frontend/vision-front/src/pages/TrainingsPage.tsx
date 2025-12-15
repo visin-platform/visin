@@ -5,7 +5,6 @@ import {
   Typography,
   Button,
   Alert,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -14,8 +13,6 @@ import {
   alpha
 } from '@mui/material';
 import {
-  Refresh as RefreshIcon,
-  Add as AddIcon,
   DeleteOutline as DeleteOutlineIcon,
   Compare as CompareIcon,
   Download as DownloadIcon
@@ -30,7 +27,6 @@ import { Training, Config } from '../types';
 import { Project } from '../types/Project';
 import TrainingsTable from '../components/TrainingsTable';
 import TrainingFilters from '../components/TrainingFilters';
-import TrainingStats from '../components/TrainingStats';
 import TrainingFormDialog from '../components/TrainingFormDialog';
 import { exportTrainingsToCSV } from '../utils/csvExport';
 import { usePageTitle } from '../hooks/usePageTitle';
@@ -186,12 +182,6 @@ const TrainingsPage: React.FC = () => {
     }
   });
 
-  const { data: statsData } = useQuery({
-    queryKey: ['training-stats', selectedTags],
-    queryFn: () => trainingService.getTrainingStats({
-      tags: selectedTags.length > 0 ? selectedTags : undefined
-    })
-  });
 
   // Load available tags
   const loadTags = React.useCallback(async () => {
@@ -219,7 +209,7 @@ const TrainingsPage: React.FC = () => {
 
   const allTrainings = data?.data?.trainings || [];
   const backendTotal = data?.data?.pagination?.total || 0;
-  const stats = statsData?.data;
+  // stats removed from global trainings page — stats are shown per-project on Project page
 
   // Filter out trainings that have excluded tags
   const filteredTrainings = React.useMemo(() => {
@@ -470,64 +460,6 @@ const TrainingsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-        <Box>
-          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
-            Training Runs
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Manage and monitor your model training sessions
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          {isAuthenticated && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => {
-                // Reset form state for new training creation
-                setTrainingName('');
-                setTrainingDescription('');
-                setSelectedDatasetId('');
-                setSelectedConfigId('');
-                setSelectedProjectId('');
-                setSelectedStatus('pending');
-                setTrainingTags([]);
-                setCreateError(null);
-                setCreateSuccess(null);
-                setEditingTrainingId(null);
-                setCreateModalOpen(true);
-              }}
-              sx={{ 
-                px: 3,
-                py: 1,
-              borderRadius: 2,
-              boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-            }}
-          >
-            New Training
-          </Button>
-          )}
-          <IconButton 
-            onClick={() => refetch()} 
-            disabled={isLoading}
-            sx={{ 
-              bgcolor: 'background.paper',
-              border: `1px solid ${theme.palette.divider}`,
-              borderRadius: 2,
-              '&:hover': { bgcolor: theme.palette.action.hover }
-            }}
-          >
-            <RefreshIcon />
-          </IconButton>
-        </Box>
-      </Box>
-
-      {/* Training Statistics */}
-      {stats && (
-        <TrainingStats stats={stats} selectedTags={selectedTags} />
-      )}
-
       <TrainingFilters
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
