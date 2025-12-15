@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.34](https://github.com/visin-platform/visin-monorepo/compare/v0.0.33...v0.0.34) (2025-12-15)
+
+
+### Bug Fixes
+
+* various front bugs ([bad9107](https://github.com/visin-platform/visin-monorepo/commit/bad9107a54d2521c3b7fed863b1c38a66e743968))
+
 ### [0.0.33](https://github.com/visin-platform/visin-monorepo/compare/v0.0.32...v0.0.33) (2025-12-12)
 
 
