@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.37](https://github.com/visin-platform/visin-monorepo/compare/v0.0.36...v0.0.37) (2025-12-18)
+
+
+### Bug Fixes
+
+* add ACCOUNT_FRONT_URL to vision front build ([7eff8f7](https://github.com/visin-platform/visin-monorepo/commit/7eff8f754e7d529e70b89570c01f1f7cd4ea22c5))
+
 ### [0.0.36](https://github.com/visin-platform/visin-monorepo/compare/v0.0.35...v0.0.36) (2025-12-18)
 
 
