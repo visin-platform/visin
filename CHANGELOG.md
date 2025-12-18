@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.36](https://github.com/visin-platform/visin-monorepo/compare/v0.0.35...v0.0.36) (2025-12-18)
+
+
+### Features
+
+* add account front ([3d7651c](https://github.com/visin-platform/visin-monorepo/commit/3d7651cf31aacf1865b30d1939e1f16753e4d20a))
+
 ### [0.0.35](https://github.com/visin-platform/visin-monorepo/compare/v0.0.34...v0.0.35) (2025-12-15)
 
 
