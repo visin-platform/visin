@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.38](https://github.com/visin-platform/visin-monorepo/compare/v0.0.37...v0.0.38) (2025-12-18)
+
+
+### Bug Fixes
+
+* configuration error ([b7ccbda](https://github.com/visin-platform/visin-monorepo/commit/b7ccbda8ade0b911bbc45cffff01f6019eeaccfb))
+
 ### [0.0.37](https://github.com/visin-platform/visin-monorepo/compare/v0.0.36...v0.0.37) (2025-12-18)
 
 
