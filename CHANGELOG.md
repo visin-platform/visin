@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.35](https://github.com/visin-platform/visin-monorepo/compare/v0.0.34...v0.0.35) (2025-12-15)
+
+
+### Features
+
+* remove overview from public trainings page ([f310a1f](https://github.com/visin-platform/visin-monorepo/commit/f310a1f97729f79e357c28c3584339fb827c2c15))
+
 ### [0.0.34](https://github.com/visin-platform/visin-monorepo/compare/v0.0.33...v0.0.34) (2025-12-15)
 
 
