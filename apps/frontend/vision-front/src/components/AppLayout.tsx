@@ -33,6 +33,7 @@ import {
 } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getGlobalConfig } from '../config/ConfigProvider';
 
 const DRAWER_WIDTH = 280;
 const COLLAPSED_DRAWER_WIDTH = 88;
@@ -77,6 +78,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const handleCloseUserMenu = () => {
     setAnchorElUser(null);
+  };
+
+  const getAccountUrl = () => {
+    try {
+      const conf = getGlobalConfig();
+      return conf.ACCOUNT_FRONT_URL || import.meta.env.VITE_ACCOUNT_FRONT_URL || 'http://localhost:3007';
+    } catch (err) {
+      return import.meta.env.VITE_ACCOUNT_FRONT_URL || 'http://localhost:3007';
+    }
   };
 
   const menuItems = [
@@ -250,6 +260,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               open={Boolean(anchorElUser)}
               onClose={handleCloseUserMenu}
             >
+              <MenuItem onClick={() => { handleCloseUserMenu(); window.location.href = getAccountUrl(); }}>Account</MenuItem>
               <Divider />
               <MenuItem onClick={() => { handleCloseUserMenu(); logout(); }}>Logout</MenuItem>
             </Menu>

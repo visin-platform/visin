@@ -1,15 +1,14 @@
 import { useEffect, useState, ReactNode } from 'react';
-import { CssBaseline } from '@mui/material';
-import { Loader } from '../components/Loader';
-import { ErrorPage } from '../components/ErrorPage';
+import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
+import { authService } from '../services/authService';
 import React from 'react';
+import { ErrorPage } from '../components/ErrorPage';
+import { Loader } from '../components/Loader';
 
 export interface AppConfig {
-  VISION_API_URL?: string;
   AUTH_SERVICE_URL?: string;
   AUTH_FRONT_URL?: string;
-  ACCOUNT_FRONT_URL?: string;
-  GROUP_SERVICE_URL?: string;
+  VISION_FRONT_URL?: string;
 }
 
 // Global configuration holder for non-React services
@@ -20,11 +19,9 @@ export const ConfigContext = React.createContext<AppConfig>({});
 // Helper function to create config from environment variables
 function createDevConfig(): AppConfig {
   return {
-    VISION_API_URL: import.meta.env.VITE_VISION_API_URL,
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL,
     AUTH_FRONT_URL: import.meta.env.VITE_AUTH_FRONT_URL,
-    ACCOUNT_FRONT_URL: import.meta.env.VITE_ACCOUNT_FRONT_URL,
-    GROUP_SERVICE_URL: import.meta.env.VITE_GROUP_SERVICE_URL
+    VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL
   };
 }
 
@@ -57,6 +54,7 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
       console.log('Using development configuration from environment variables:', devConfig);
       setConfig(devConfig);
       globalConfig = devConfig;
+      authService.init();
       return;
     }
 
@@ -71,6 +69,8 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
         setConfig(loadedConfig);
         // Set global config for non-React services
         globalConfig = loadedConfig;
+        // Initialize auth service
+        authService.init();
       })
       .catch((err) => {
         console.error('Configuration load error:', err);
@@ -88,8 +88,62 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
 
   return (
     <ConfigContext.Provider value={config}>
-      <CssBaseline />
-      {children}
+      <ThemeProvider theme={createTheme({
+        palette: {
+          primary: {
+            main: '#2563eb', // Modern blue
+            light: '#60a5fa',
+            dark: '#1d4ed8',
+          },
+          secondary: {
+            main: '#64748b', // Slate
+          },
+          background: {
+            default: '#f8fafc', // Very light slate
+            paper: '#ffffff',
+          },
+          text: {
+            primary: '#0f172a',
+            secondary: '#475569',
+          },
+          divider: '#e2e8f0',
+        },
+        typography: {
+          fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+          h1: { fontWeight: 700 },
+          h2: { fontWeight: 700 },
+          h3: { fontWeight: 700 },
+          h4: { fontWeight: 600 },
+          h5: { fontWeight: 600 },
+          h6: { fontWeight: 600 },
+          button: { textTransform: 'none', fontWeight: 500 },
+        },
+        shape: {
+          borderRadius: 12,
+        },
+        components: {
+          MuiButton: {
+            styleOverrides: {
+              root: {
+                boxShadow: 'none',
+                '&:hover': {
+                  boxShadow: 'none',
+                },
+              },
+            },
+          },
+          MuiPaper: {
+            styleOverrides: {
+              root: {
+                boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
+              },
+            },
+          },
+        },
+      })}>
+        <CssBaseline />
+        {children}
+      </ThemeProvider>
     </ConfigContext.Provider>
   );
 }
