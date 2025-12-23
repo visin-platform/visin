@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.39](https://github.com/visin-platform/visin-monorepo/compare/v0.0.38...v0.0.39) (2025-12-23)
+
+
+### Features
+
+* major refactoring codebase into smaller components ([c95ee1c](https://github.com/visin-platform/visin-monorepo/commit/c95ee1c989f42a7e6d3492af1af7ba7d1467a329))
+
 ### [0.0.38](https://github.com/visin-platform/visin-monorepo/compare/v0.0.37...v0.0.38) (2025-12-18)
 
 
