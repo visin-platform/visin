@@ -12,10 +12,6 @@ import {
   TableHead,
   TableRow,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   FormControl,
   Select,
   MenuItem,
@@ -28,10 +24,12 @@ import {
 import {
   CloudUpload as CloudUploadIcon,
   Code as CodeIcon,
-  Delete as DeleteIcon,
-  ContentCopy as ContentCopyIcon
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { TestResult } from '../types';
+import UploadResultsDialog from './training/UploadResultsDialog';
+import LatexExportDialog from './training/LatexExportDialog';
+import DeleteConfirmationDialog from './training/DeleteConfirmationDialog';
 
 interface TrainingTestResultsTabProps {
   testResults: TestResult[];
@@ -103,10 +101,6 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
       setDeleteDialogOpen(false);
       setDeleteTarget(null);
     }
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(latexCode);
   };
 
   const formatDate = (dateString: string) => new Date(dateString).toLocaleString();
@@ -396,151 +390,28 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
       )}
 
       {/* Delete Confirmation Dialog */}
-      <Dialog 
-        open={deleteDialogOpen} 
+      <DeleteConfirmationDialog
+        open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
-        PaperProps={{ sx: { borderRadius: 2 } }}
-      >
-        <DialogTitle>Delete Test Result</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete this test result? This action cannot be undone.
-          </Typography>
-          {deleteTarget && (
-            <Paper variant="outlined" sx={{ mt: 2, p: 1.5, bgcolor: 'grey.50' }}>
-              <Typography variant="caption" display="block" color="text.secondary" gutterBottom>
-                TEST UUID
-              </Typography>
-              <Typography variant="body2" fontFamily="monospace">
-                {deleteTarget.test_uuid}
-              </Typography>
-            </Paper>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 2.5 }}>
-          <Button onClick={() => setDeleteDialogOpen(false)} color="inherit">Cancel</Button>
-          <Button
-            onClick={handleConfirmDelete}
-            color="error"
-            variant="contained"
-            disabled={uploading}
-            startIcon={<DeleteIcon />}
-          >
-            Delete Result
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={handleConfirmDelete}
+        title="Delete Test Result"
+        message={`Are you sure you want to delete this test result? ${deleteTarget ? `(UUID: ${deleteTarget.test_uuid})` : ''} This action cannot be undone.`}
+        isDeleting={uploading}
+      />
 
       {/* Upload Results Modal */}
-      <Dialog 
-        open={uploadResultsOpen} 
-        onClose={() => onSetUploadResultsOpen(false)} 
-        maxWidth="md" 
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 2 } }}
-      >
-        <DialogTitle>Upload Results</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <Stack spacing={3}>
-            {/* Successful Files */}
-            {uploadResults.successful.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2" color="success.main" gutterBottom fontWeight={600}>
-                  Successfully Processed ({uploadResults.successful.length})
-                </Typography>
-                <Paper variant="outlined" sx={{ maxHeight: 200, overflowY: 'auto', bgcolor: alpha(theme.palette.success.main, 0.05), borderColor: alpha(theme.palette.success.main, 0.2) }}>
-                  <Box p={1}>
-                    {uploadResults.successful.map((file, index) => (
-                      <Box key={index} display="flex" justifyContent="space-between" py={0.5} px={1} borderBottom={index < uploadResults.successful.length - 1 ? `1px solid ${alpha(theme.palette.success.main, 0.1)}` : 'none'}>
-                        <Typography variant="body2">{file.name}</Typography>
-                        <Typography variant="caption" color="success.main" fontWeight="bold" sx={{ textTransform: 'uppercase' }}>
-                          {file.operation}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                </Paper>
-              </Box>
-            )}
-
-            {/* Failed Files */}
-            {uploadResults.failed.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2" color="error.main" gutterBottom fontWeight={600}>
-                  Failed to Process ({uploadResults.failed.length})
-                </Typography>
-                <Paper variant="outlined" sx={{ maxHeight: 200, overflowY: 'auto', bgcolor: alpha(theme.palette.error.main, 0.05), borderColor: alpha(theme.palette.error.main, 0.2) }}>
-                  <Box p={1}>
-                    {uploadResults.failed.map((file, index) => (
-                      <Box key={index} py={1} px={1} borderBottom={index < uploadResults.failed.length - 1 ? `1px solid ${alpha(theme.palette.error.main, 0.1)}` : 'none'}>
-                        <Typography variant="body2" fontWeight="bold" gutterBottom>
-                          {file.name}
-                        </Typography>
-                        <Typography variant="caption" color="error.main">
-                          {file.error}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                </Paper>
-              </Box>
-            )}
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ p: 2.5 }}>
-          <Button onClick={() => onSetUploadResultsOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <UploadResultsDialog
+        open={uploadResultsOpen}
+        onClose={() => onSetUploadResultsOpen(false)}
+        results={uploadResults}
+      />
 
       {/* LaTeX Export Dialog */}
-      <Dialog 
-        open={latexModalOpen} 
-        onClose={() => onSetLatexModalOpen(false)} 
-        maxWidth="md" 
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 2 } }}
-      >
-        <DialogTitle>Export Results as LaTeX</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <Typography variant="body2" color="text.secondary" paragraph>
-            You can copy the LaTeX code below and paste it into your LaTeX document to include the results table.
-          </Typography>
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 2,
-              bgcolor: 'grey.50',
-              borderRadius: 1,
-              maxHeight: '400px',
-              overflowY: 'auto',
-              position: 'relative'
-            }}
-          >
-            <Box
-              component="pre"
-              sx={{
-                fontFamily: 'monospace',
-                fontSize: '0.875rem',
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-                wordWrap: 'break-word',
-              }}
-            >
-              {latexCode}
-            </Box>
-          </Paper>
-        </DialogContent>
-        <DialogActions sx={{ p: 2.5 }}>
-          <Button onClick={() => onSetLatexModalOpen(false)} color="inherit">Close</Button>
-          <Button 
-            onClick={copyToClipboard} 
-            variant="contained" 
-            startIcon={<ContentCopyIcon />}
-          >
-            Copy to Clipboard
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <LatexExportDialog
+        open={latexModalOpen}
+        onClose={() => onSetLatexModalOpen(false)}
+        latexCode={latexCode}
+      />
     </Box>
   );
 };

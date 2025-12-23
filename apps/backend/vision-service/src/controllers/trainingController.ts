@@ -1,37 +1,14 @@
 import { Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import Training from '../models/Training';
-import Epoch from '../models/Epoch';
-import TestResult from '../models/TestResult';
-import Project from '../models/Project';
 import { AuthRequest } from '../middleware/authMiddleware';
-
-// Helper function to check if user has access to a project
-async function checkProjectAccess(userId: string | undefined, projectId: string | undefined): Promise<boolean> {
-  if (!projectId) return true; // If no project, allow (maybe public trainings)
-
-  // Try to find by slug first, then by ID
-  let project = await Project.findOne({ slug: projectId });
-  if (!project) {
-    project = await Project.findById(projectId);
-  }
-  if (!project) return false;
-
-  // Allow access if project is public
-  if (project.isPublic) return true;
-
-  // For private projects, require authentication and ownership
-  if (!userId) return false;
-  return project.ownerId === userId;
-}
+import { trainingService } from '../services/trainingService';
 
 // Get all trainings
 export const getTrainings = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
     const { 
-      page = 1, 
-      limit = 30, 
+      page, 
+      limit, 
       search, 
       status, 
       datasetId,
@@ -39,185 +16,40 @@ export const getTrainings = async (req: AuthRequest, res: Response): Promise<voi
       tags
     } = req.query;
 
-    let query: any = { deletedAt: null };
+    const filters = {
+      search: search as string,
+      status: status as string,
+      datasetId: datasetId as string,
+      projectId: projectId as string,
+      tags: tags as string | string[]
+    };
 
-    // Search functionality
-    if (search) {
-      query.$text = { $search: search as string };
-    }
+    const pagination = {
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined
+    };
 
-    // Filter by status
-    if (status) {
-      query.status = status;
-    }
+    const result = await trainingService.getTrainings(userId, filters, pagination);
 
-    // Filter by dataset
-    if (datasetId) {
-      query.datasetId = datasetId;
-    }
-
-    // Filter by project
-    if (projectId) {
-      // Resolve projectId (could be slug or ID) to actual project
-      let project = await Project.findOne({ slug: projectId as string });
-      if (!project) {
-        project = await Project.findById(projectId);
-      }
-      if (!project) {
-        res.status(404).json({
-          success: false,
-          message: 'Project not found'
-        });
-        return;
-      }
-
-      // Check access to the project
-      const hasAccess = await checkProjectAccess(userId, project._id.toString());
-      if (!hasAccess) {
-        res.status(403).json({
-          success: false,
-          message: 'Access denied to project'
-        });
-        return;
-      }
-
-      query.projectId = project._id.toString();
-    } else {
-      // If no specific project filter, show trainings from accessible projects
-      if (userId) {
-        // Authenticated user: show trainings from public projects or projects they own, or without project
-        const accessibleProjects = await Project.find({
-          $or: [
-            { isPublic: true },
-            { ownerId: userId }
-          ]
-        }).select('_id');
-        const projectIds = accessibleProjects.map(p => p._id.toString());
-        query.$or = [
-          { projectId: { $in: projectIds } },
-          { projectId: { $exists: false } }
-        ];
-      } else {
-        // Unauthenticated user: only show trainings in public projects or without project
-        const publicProjects = await Project.find({ isPublic: true }).select('_id');
-        const projectIds = publicProjects.map(p => p._id.toString());
-        query.$or = [
-          { projectId: { $in: projectIds } },
-          { projectId: { $exists: false } }
-        ];
-      }
-    }
-
-    // Filter by tags
-    if (tags) {
-      let tagArray: string[];
-      if (Array.isArray(tags)) {
-        tagArray = tags as string[];
-      } else {
-        // Split comma-separated string into array
-        tagArray = (tags as string).split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-      }
-      if (tagArray.length === 1) {
-        query.tags = { $in: tagArray };
-      } else {
-        query.tags = { $all: tagArray };
-      }
-    }
-
-    const skip = (Number(page) - 1) * Number(limit);
-
-    // Cost calculation rates
-    const CPU_RATE_PER_HOUR = 0.006;
-    const GPU_RATE_PER_HOUR = 0.20;
-
-    let trainings: any[] = [];
-    let total: number = 0;
-
-    // Always sort by updatedAt desc
-
-    [trainings, total] = await Promise.all([
-      Training.find(query)
-        .sort({ updatedAt: -1 })
-        .skip(skip)
-        .limit(Number(limit)),
-      Training.countDocuments(query)
-    ]);      // Get metrics using aggregation for better performance
-      if (trainings.length > 0) {
-        const trainingIds = trainings.map(t => t._id);
-        const metricsAggregation = await Training.aggregate([
-          { $match: { _id: { $in: trainingIds } } },
-          {
-            $lookup: {
-              from: 'training_epoches',
-              let: { trainingId: '$_id' },
-              pipeline: [
-                { $match: { $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] }, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] } }
-              ],
-              as: 'epochs'
-            }
-          },
-          {
-            $addFields: {
-              metrics: {
-                totalTime: { $ifNull: [{ $sum: '$epochs.epoch_time' }, 0] },
-                epochCount: { $size: '$epochs' },
-                maxEpoch: { $ifNull: [{ $max: '$epochs.epoch' }, 0] },
-                lastEpochTimestamp: { $ifNull: [{ $max: '$epochs.timestamp' }, null] }
-              }
-            }
-          },
-          {
-            $addFields: {
-              'metrics.cpuCost': { $multiply: [{ $divide: [{ $ifNull: ['$metrics.totalTime', 0] }, 3600] }, CPU_RATE_PER_HOUR] },
-              'metrics.gpuCost': { $multiply: [{ $divide: [{ $ifNull: ['$metrics.totalTime', 0] }, 3600] }, GPU_RATE_PER_HOUR] },
-              'metrics.totalCost': { $add: [{ $ifNull: ['$metrics.cpuCost', 0] }, { $ifNull: ['$metrics.gpuCost', 0] }] }
-            }
-          },
-          {
-            $project: {
-              _id: 1,
-              metrics: 1
-            }
-          }
-        ]);
-
-        console.log('metricsAggregation length:', metricsAggregation.length);
-        if (metricsAggregation.length > 0) {
-          console.log('sample metrics:', metricsAggregation[0]);
-        }
-
-        // Create a map of metrics by training ID
-        const metricsMap = new Map();
-        metricsAggregation.forEach(item => {
-          metricsMap.set(item._id.toString(), item.metrics);
-        });
-
-        // Add metrics to trainings
-        trainings = trainings.map(training => ({
-          ...training.toObject(),
-          metrics: metricsMap.get(training._id.toString()) || { totalTime: 0, epochCount: 0, maxEpoch: 0, lastEpochTimestamp: null, cpuCost: 0, gpuCost: 0, totalCost: 0 }
-        }));
-      }
     res.json({
       success: true,
-      data: {
-        trainings,
-        pagination: {
-          page: Number(page),
-          limit: Number(limit),
-          total,
-          pages: Math.ceil(total / Number(limit))
-        }
-      }
+      data: result
     });
   } catch (error) {
     console.error('Error fetching trainings:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to fetch trainings';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch trainings',
-      error: errorMessage
-    });
+    
+    if (errorMessage === 'Project not found') {
+      res.status(404).json({ success: false, message: errorMessage });
+    } else if (errorMessage === 'Access denied to project') {
+      res.status(403).json({ success: false, message: errorMessage });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch trainings',
+        error: errorMessage
+      });
+    }
   }
 };
 
@@ -227,25 +59,7 @@ export const getTrainingById = async (req: AuthRequest, res: Response): Promise<
     const { id } = req.params;
     const userId = req.user?.id;
 
-    const training = await Training.findOne({ _id: id, deletedAt: null });
-
-    if (!training) {
-      res.status(404).json({
-        success: false,
-        message: 'Training not found'
-      });
-      return;
-    }
-
-    // Check project access
-    const hasAccess = await checkProjectAccess(userId, training.projectId);
-    if (!hasAccess) {
-      res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-      return;
-    }
+    const training = await trainingService.getTrainingById(id, userId);
 
     res.json({
       success: true,
@@ -254,11 +68,18 @@ export const getTrainingById = async (req: AuthRequest, res: Response): Promise<
   } catch (error) {
     console.error('Error fetching training:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to fetch training';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch training',
-      error: errorMessage
-    });
+    
+    if (errorMessage === 'Training not found') {
+      res.status(404).json({ success: false, message: errorMessage });
+    } else if (errorMessage === 'Access denied') {
+      res.status(403).json({ success: false, message: errorMessage });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch training',
+        error: errorMessage
+      });
+    }
   }
 };
 
@@ -268,25 +89,7 @@ export const getTrainingByUuid = async (req: AuthRequest, res: Response): Promis
     const { uuid } = req.params;
     const userId = req.user?.id;
 
-    const training = await Training.findOne({ uuid, deletedAt: null });
-
-    if (!training) {
-      res.status(404).json({
-        success: false,
-        message: 'Training not found'
-      });
-      return;
-    }
-
-    // Check project access
-    const hasAccess = await checkProjectAccess(userId, training.projectId);
-    if (!hasAccess) {
-      res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-      return;
-    }
+    const training = await trainingService.getTrainingByUuid(uuid, userId);
 
     res.json({
       success: true,
@@ -295,11 +98,18 @@ export const getTrainingByUuid = async (req: AuthRequest, res: Response): Promis
   } catch (error) {
     console.error('Error fetching training:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to fetch training';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch training',
-      error: errorMessage
-    });
+    
+    if (errorMessage === 'Training not found') {
+      res.status(404).json({ success: false, message: errorMessage });
+    } else if (errorMessage === 'Access denied') {
+      res.status(403).json({ success: false, message: errorMessage });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch training',
+        error: errorMessage
+      });
+    }
   }
 };
 
@@ -308,49 +118,34 @@ export const getTrainingWithEpochs = async (req: AuthRequest, res: Response): Pr
   try {
     const { id } = req.params;
     const userId = req.user?.id;
-    const { sortBy = 'epoch', order = 'asc' } = req.query;
+    const { sortBy, order } = req.query;
 
-    const training = await Training.findOne({ _id: id, deletedAt: null });
-
-    if (!training) {
-      res.status(404).json({
-        success: false,
-        message: 'Training not found'
-      });
-      return;
-    }
-
-    // Check project access
-    const hasAccess = await checkProjectAccess(userId, training.projectId);
-    if (!hasAccess) {
-      res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-      return;
-    }
-
-    const sortOrder = order === 'desc' ? -1 : 1;
-    const sortField = sortBy as string;
-
-    const epochs = await Epoch.find({ trainingId: id, deletedAt: null })
-      .sort({ [sortField]: sortOrder });
+    const result = await trainingService.getTrainingWithEpochs(
+      id, 
+      userId, 
+      sortBy as string, 
+      order as 'asc' | 'desc'
+    );
 
     res.json({
       success: true,
-      data: {
-        training,
-        epochs
-      }
+      data: result
     });
   } catch (error) {
     console.error('Error fetching training with epochs:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to fetch training with epochs';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch training with epochs',
-      error: errorMessage
-    });
+    
+    if (errorMessage === 'Training not found') {
+      res.status(404).json({ success: false, message: errorMessage });
+    } else if (errorMessage === 'Access denied') {
+      res.status(403).json({ success: false, message: errorMessage });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch training with epochs',
+        error: errorMessage
+      });
+    }
   }
 };
 
@@ -366,72 +161,15 @@ export const createTraining = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    const { 
-      name, 
-      description, 
-      datasetId,
-      configId,
-      projectId,
-      status = 'pending',
-      tags,
-      startTime,
-      endTime,
-      metadata 
-    } = req.body;
-
     // Determine effective projectId: API tokens take precedence, otherwise use request body
-    const effectiveProjectId = (req as any).projectId || projectId;
+    const effectiveProjectId = (req as any).projectId || req.body.projectId;
 
-    if (!name || name.trim().length === 0) {
-      res.status(400).json({
-        success: false,
-        message: 'Training name is required'
-      });
-      return;
-    }
+    const trainingData = {
+      ...req.body,
+      projectId: effectiveProjectId
+    };
 
-    // Check project access if projectId is provided
-    let resolvedProjectId: string | undefined;
-    if (effectiveProjectId) {
-      const hasAccess = await checkProjectAccess(userId, effectiveProjectId);
-      if (!hasAccess) {
-        res.status(403).json({
-          success: false,
-          message: 'Access denied to project'
-        });
-        return;
-      }
-
-      // Resolve to actual project _id for storage
-      let project = await Project.findOne({ slug: effectiveProjectId });
-      if (!project) {
-        project = await Project.findById(effectiveProjectId);
-      }
-      if (project) {
-        resolvedProjectId = project._id.toString();
-      } else {
-        resolvedProjectId = effectiveProjectId; // Fallback, though should not happen
-      }
-    }
-
-    // Generate UUID if not provided
-    const uuid = req.body.uuid || uuidv4();
-
-    const training = new Training({
-      uuid,
-      name: name.trim(),
-      description: description?.trim(),
-      datasetId,
-      configId,
-      projectId: resolvedProjectId,
-      status,
-      tags: tags ? (Array.isArray(tags) ? tags : [tags]) : [],
-      startTime,
-      endTime,
-      metadata
-    });
-
-    const savedTraining = await training.save();
+    const savedTraining = await trainingService.createTraining(userId, trainingData);
 
     res.status(201).json({
       success: true,
@@ -441,11 +179,18 @@ export const createTraining = async (req: AuthRequest, res: Response): Promise<v
   } catch (error) {
     console.error('Error creating training:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to create training';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create training',
-      error: errorMessage
-    });
+    
+    if (errorMessage === 'Training name is required') {
+      res.status(400).json({ success: false, message: errorMessage });
+    } else if (errorMessage === 'Access denied to project') {
+      res.status(403).json({ success: false, message: errorMessage });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create training',
+        error: errorMessage
+      });
+    }
   }
 };
 
@@ -462,60 +207,7 @@ export const updateTraining = async (req: AuthRequest, res: Response): Promise<v
     }
 
     const { id } = req.params;
-    const {
-      name, 
-      description, 
-      datasetId,
-      configId,
-      status,
-      tags,
-      startTime,
-      endTime,
-      metadata 
-    } = req.body;
-
-    // Validate ID format
-    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-      res.status(400).json({
-        success: false,
-        message: 'Invalid training ID format'
-      });
-      return;
-    }
-
-    const training = await Training.findOne({ _id: id, deletedAt: null });
-
-    if (!training) {
-      res.status(404).json({
-        success: false,
-        message: 'Training not found'
-      });
-      return;
-    }
-
-    // Check project access
-    const hasAccess = await checkProjectAccess(userId, training.projectId);
-    if (!hasAccess) {
-      res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-      return;
-    }
-
-    // Note: projectId changes are not allowed via API - trainings are scoped to their creation project
-
-    if (name !== undefined) training.name = name.trim();
-    if (description !== undefined) training.description = description?.trim();
-    if (datasetId !== undefined) training.datasetId = datasetId;
-    if (configId !== undefined) training.configId = configId;
-    if (status !== undefined) training.status = status;
-    if (tags !== undefined) training.tags = tags ? (Array.isArray(tags) ? tags : [tags]) : [];
-    if (startTime !== undefined) training.startTime = startTime;
-    if (endTime !== undefined) training.endTime = endTime;
-    if (metadata !== undefined) training.metadata = metadata;
-
-    const updatedTraining = await training.save();
+    const updatedTraining = await trainingService.updateTraining(id, userId, req.body);
 
     res.json({
       success: true,
@@ -525,11 +217,20 @@ export const updateTraining = async (req: AuthRequest, res: Response): Promise<v
   } catch (error) {
     console.error('Error updating training:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to update training';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update training',
-      error: errorMessage
-    });
+    
+    if (errorMessage === 'Invalid training ID format') {
+      res.status(400).json({ success: false, message: errorMessage });
+    } else if (errorMessage === 'Training not found') {
+      res.status(404).json({ success: false, message: errorMessage });
+    } else if (errorMessage === 'Access denied') {
+      res.status(403).json({ success: false, message: errorMessage });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update training',
+        error: errorMessage
+      });
+    }
   }
 };
 
@@ -546,53 +247,7 @@ export const deleteTraining = async (req: AuthRequest, res: Response): Promise<v
     }
 
     const { id } = req.params;
-
-    // Validate ID format
-    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-      res.status(400).json({
-        success: false,
-        message: 'Invalid training ID format'
-      });
-      return;
-    }
-
-    const training = await Training.findOne({ _id: id, deletedAt: null });
-
-    if (!training) {
-      res.status(404).json({
-        success: false,
-        message: 'Training not found'
-      });
-      return;
-    }
-
-    // Check project access
-    const hasAccess = await checkProjectAccess(userId, training.projectId);
-    if (!hasAccess) {
-      res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-      return;
-    }
-
-    const now = new Date();
-    
-    // Mark training as deleted
-    training.deletedAt = now;
-    await training.save();
-
-    // Mark all epochs of this training as deleted
-    await Epoch.updateMany({ trainingId: id }, { deletedAt: now });
-
-    // Get all epoch UUIDs for this training to mark test results as deleted
-    const trainingEpochs = await Epoch.find({ trainingId: id }, 'epoch_uuid');
-    const epochUuids = trainingEpochs.map(e => e.epoch_uuid);
-
-    if (epochUuids.length > 0) {
-      // Mark all test results for these epochs as deleted
-      await TestResult.updateMany({ epoch_uuid: { $in: epochUuids } }, { deletedAt: now });
-    }
+    await trainingService.deleteTraining(id, userId);
 
     res.json({
       success: true,
@@ -601,11 +256,20 @@ export const deleteTraining = async (req: AuthRequest, res: Response): Promise<v
   } catch (error) {
     console.error('Error deleting training:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to delete training';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete training',
-      error: errorMessage
-    });
+    
+    if (errorMessage === 'Invalid training ID format') {
+      res.status(400).json({ success: false, message: errorMessage });
+    } else if (errorMessage === 'Training not found') {
+      res.status(404).json({ success: false, message: errorMessage });
+    } else if (errorMessage === 'Access denied') {
+      res.status(403).json({ success: false, message: errorMessage });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete training',
+        error: errorMessage
+      });
+    }
   }
 };
 
@@ -614,124 +278,18 @@ export const getTrainingStats = async (req: Request, res: Response): Promise<voi
   try {
     const { status, datasetId, tags, projectId } = req.query;
 
-    let matchQuery: any = { deletedAt: null };
-
-    // Filter by status if provided
-    if (status) {
-      matchQuery.status = status;
-    }
-
-    // Filter by dataset if provided
-    if (datasetId) {
-      matchQuery.datasetId = datasetId;
-    }
-
-    // Filter by project if provided
-    if (projectId) {
-      // Resolve projectId to _id
-      let project = await Project.findOne({ slug: projectId as string });
-      if (!project) {
-        project = await Project.findById(projectId);
-      }
-      if (project) {
-        matchQuery.projectId = project._id.toString();
-      } else {
-        matchQuery.projectId = projectId; // Fallback
-      }
-    }
-
-    // Filter by tags if provided
-    if (tags) {
-      let tagArray: string[];
-      if (Array.isArray(tags)) {
-        tagArray = tags as string[];
-      } else {
-        // Split comma-separated string into array
-        tagArray = (tags as string).split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-      }
-      if (tagArray.length === 1) {
-        matchQuery.tags = { $in: tagArray };
-      } else {
-        matchQuery.tags = { $all: tagArray };
-      }
-    }
-
-    const CPU_RATE_PER_HOUR = 0.006;
-    const GPU_RATE_PER_HOUR = 0.20;
-
-    // Use aggregation pipeline for better performance
-    const aggregationPipeline = [
-      // Match trainings based on filters
-      { $match: matchQuery },
-      // Lookup epochs for each training
-      {
-        $lookup: {
-          from: 'training_epoches',
-          let: { trainingId: '$_id' },
-          pipeline: [
-            { $match: { $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] }, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] } }
-          ],
-          as: 'epochs'
-        }
-      },
-      // Add computed fields
-      {
-        $addFields: {
-          trainingTime: { $ifNull: [{ $sum: '$epochs.epoch_time' }, 0] },
-          epochCount: { $size: '$epochs' }
-        }
-      },
-      // Group to calculate totals
-      {
-        $group: {
-          _id: null,
-          totalTrainings: { $sum: 1 },
-          totalTime: { $sum: '$trainingTime' },
-          totalEpochs: { $sum: '$epochCount' }
-        }
-      },
-      // Calculate costs
-      {
-        $addFields: {
-          totalHours: { $divide: ['$totalTime', 3600] },
-          totalCpuCost: { $multiply: [{ $divide: ['$totalTime', 3600] }, CPU_RATE_PER_HOUR] },
-          totalGpuCost: { $multiply: [{ $divide: ['$totalTime', 3600] }, GPU_RATE_PER_HOUR] },
-          totalCost: { $add: [
-            { $multiply: [{ $divide: ['$totalTime', 3600] }, CPU_RATE_PER_HOUR] },
-            { $multiply: [{ $divide: ['$totalTime', 3600] }, GPU_RATE_PER_HOUR] }
-          ]},
-          avgEpochTime: { $cond: { if: { $gt: ['$totalEpochs', 0] }, then: { $divide: ['$totalTime', '$totalEpochs'] }, else: 0 } }
-        }
-      }
-    ];
-
-    const result = await Training.aggregate(aggregationPipeline);
-    const stats = result[0] || {
-      totalTrainings: 0,
-      totalTime: 0,
-      totalEpochs: 0,
-      totalCpuCost: 0,
-      totalGpuCost: 0,
-      totalCost: 0,
-      avgEpochTime: 0
+    const filters = {
+      status: status as string,
+      datasetId: datasetId as string,
+      projectId: projectId as string,
+      tags: tags as string | string[]
     };
+
+    const result = await trainingService.getTrainingStats(filters);
 
     res.json({
       success: true,
-      data: {
-        totalTrainings: stats.totalTrainings,
-        totalTime: stats.totalTime,
-        totalEpochs: stats.totalEpochs,
-        avgEpochTime: stats.avgEpochTime,
-        totalCpuCost: stats.totalCpuCost,
-        totalGpuCost: stats.totalGpuCost,
-        totalCost: stats.totalCost,
-        filters: {
-          status: status || null,
-          datasetId: datasetId || null,
-          projectId: projectId || null
-        }
-      }
+      data: result
     });
   } catch (error) {
     console.error('Error fetching training stats:', error);
@@ -757,99 +315,24 @@ export const compareTrainings = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    if (trainingIds.length > 30) {
-      res.status(400).json({
-        success: false,
-        message: 'Maximum 30 trainings can be compared at once'
-      });
-      return;
-    }
-
-    // Fetch trainings and their epochs
-    const trainings = await Training.find({ _id: { $in: trainingIds }, deletedAt: null });
-    const epochs = await Epoch.find({ trainingId: { $in: trainingIds }, deletedAt: null })
-      .sort({ trainingId: 1, epoch: 1 });
-
-    // Group epochs by training ID
-    const epochsByTraining: Record<string, any[]> = epochs.reduce((acc, epoch) => {
-      const trainingId = epoch.trainingId.toString();
-      if (!acc[trainingId]) {
-        acc[trainingId] = [];
-      }
-      acc[trainingId].push(epoch);
-      return acc;
-    }, {} as Record<string, any[]>);
-
-    // Calculate comparison data for each training
-    const comparisonData = trainings.map(training => {
-      const trainingId = (training._id as any).toString();
-      const trainingEpochs = epochsByTraining[trainingId] || [];
-      const lastEpoch = trainingEpochs.length > 0 ? trainingEpochs[trainingEpochs.length - 1] : null;
-
-      // Calculate training metrics
-      const totalTime = trainingEpochs.reduce((sum: number, epoch: any) => sum + (epoch.epoch_time || 0), 0);
-      const avgEpochTime = trainingEpochs.length > 0 ? totalTime / trainingEpochs.length : 0;
-
-      // Calculate costs (using the same rates as frontend)
-      const CPU_RATE_PER_HOUR = 0.006;
-      const GPU_RATE_PER_HOUR = 0.20;
-      const totalHours = totalTime / 3600;
-      const cpuCost = totalHours * CPU_RATE_PER_HOUR;
-      const gpuCost = totalHours * GPU_RATE_PER_HOUR;
-      const totalCost = cpuCost + gpuCost;
-
-      return {
-        training: {
-          _id: training._id,
-          name: training.name,
-          description: training.description,
-          status: training.status,
-          createdAt: training.createdAt,
-          updatedAt: training.updatedAt
-        },
-        metrics: {
-          totalEpochs: trainingEpochs.length,
-          totalTime,
-          avgEpochTime,
-          maxEpochTime: trainingEpochs.length > 0 ? Math.max(...trainingEpochs.map((e: any) => e.epoch_time || 0)) : 0,
-          cost: {
-            totalHours,
-            cpuCost,
-            gpuCost,
-            totalCost
-          }
-        },
-        lastEpoch: lastEpoch ? {
-          epoch: lastEpoch.epoch,
-          results: lastEpoch.results,
-          timestamp: lastEpoch.timestamp
-        } : null,
-        epochs: trainingEpochs.map((epoch: any) => ({
-          epoch: epoch.epoch,
-          results: epoch.results,
-          epoch_time: epoch.epoch_time,
-          timestamp: epoch.timestamp
-        }))
-      };
-    });
+    const result = await trainingService.compareTrainings(trainingIds);
 
     res.json({
       success: true,
-      data: {
-        comparison: comparisonData,
-        summary: {
-          totalTrainings: trainings.length,
-          trainingsWithEpochs: comparisonData.filter(c => c.epochs.length > 0).length
-        }
-      }
+      data: result
     });
   } catch (error) {
     console.error('Error comparing trainings:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to compare trainings';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to compare trainings',
-      error: errorMessage
-    });
+    
+    if (errorMessage === 'Maximum 30 trainings can be compared at once') {
+      res.status(400).json({ success: false, message: errorMessage });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to compare trainings',
+        error: errorMessage
+      });
+    }
   }
 };

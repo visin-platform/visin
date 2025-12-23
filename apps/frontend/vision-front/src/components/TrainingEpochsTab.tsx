@@ -12,12 +12,7 @@ import {
   TableHead,
   TableRow,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Tooltip,
-  Stack,
   useTheme,
   alpha
 } from '@mui/material';
@@ -27,6 +22,8 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import { Epoch } from '../types';
+import DeleteConfirmationDialog from './training/DeleteConfirmationDialog';
+import UploadResultsDialog from './training/UploadResultsDialog';
 
 interface TrainingEpochsTabProps {
   epochs: Epoch[];
@@ -234,91 +231,21 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
       </Paper>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog 
-        open={deleteOpen} 
+      <DeleteConfirmationDialog
+        open={deleteOpen}
         onClose={() => onSetDeleteOpen(false)}
-        PaperProps={{ sx: { borderRadius: 2 } }}
-      >
-        <DialogTitle>Delete Epoch</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete <strong>Epoch {deleteTarget?.epoch}</strong>? This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ p: 2.5 }}>
-          <Button onClick={() => onSetDeleteOpen(false)} color="inherit">Cancel</Button>
-          <Button 
-            onClick={onConfirmDelete} 
-            color="error" 
-            variant="contained" 
-            disabled={uploading}
-            startIcon={<DeleteIcon />}
-          >
-            Delete Epoch
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={onConfirmDelete}
+        title="Delete Epoch"
+        message={`Are you sure you want to delete Epoch ${deleteTarget?.epoch}? This action cannot be undone.`}
+        isDeleting={uploading}
+      />
 
       {/* Upload Results Modal */}
-      <Dialog 
-        open={uploadResultsOpen} 
-        onClose={() => onSetUploadResultsOpen(false)} 
-        maxWidth="md" 
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 2 } }}
-      >
-        <DialogTitle>Upload Results</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <Stack spacing={3}>
-            {/* Successful Files */}
-            {uploadResults.successful.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2" color="success.main" gutterBottom fontWeight={600}>
-                  Successfully Processed ({uploadResults.successful.length})
-                </Typography>
-                <Paper variant="outlined" sx={{ maxHeight: 200, overflowY: 'auto', bgcolor: alpha(theme.palette.success.main, 0.05), borderColor: alpha(theme.palette.success.main, 0.2) }}>
-                  <Box p={1}>
-                    {uploadResults.successful.map((file, index) => (
-                      <Box key={index} display="flex" justifyContent="space-between" py={0.5} px={1} borderBottom={index < uploadResults.successful.length - 1 ? `1px solid ${alpha(theme.palette.success.main, 0.1)}` : 'none'}>
-                        <Typography variant="body2">{file.name}</Typography>
-                        <Typography variant="caption" color="success.main" fontWeight="bold" sx={{ textTransform: 'uppercase' }}>
-                          {file.operation}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                </Paper>
-              </Box>
-            )}
-
-            {/* Failed Files */}
-            {uploadResults.failed.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2" color="error.main" gutterBottom fontWeight={600}>
-                  Failed to Process ({uploadResults.failed.length})
-                </Typography>
-                <Paper variant="outlined" sx={{ maxHeight: 200, overflowY: 'auto', bgcolor: alpha(theme.palette.error.main, 0.05), borderColor: alpha(theme.palette.error.main, 0.2) }}>
-                  <Box p={1}>
-                    {uploadResults.failed.map((file, index) => (
-                      <Box key={index} py={1} px={1} borderBottom={index < uploadResults.failed.length - 1 ? `1px solid ${alpha(theme.palette.error.main, 0.1)}` : 'none'}>
-                        <Typography variant="body2" fontWeight="bold" gutterBottom>
-                          {file.name}
-                        </Typography>
-                        <Typography variant="caption" color="error.main">
-                          {file.error}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                </Paper>
-              </Box>
-            )}
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ p: 2.5 }}>
-          <Button onClick={() => onSetUploadResultsOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <UploadResultsDialog
+        open={uploadResultsOpen}
+        onClose={() => onSetUploadResultsOpen(false)}
+        results={uploadResults}
+      />
     </Box>
   );
 };

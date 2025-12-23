@@ -603,3 +603,44 @@ export interface ComparisonsPaginatedResponse extends PaginatedResponse<Comparis
     };
   };
 }
+
+// Training Comparison Types
+export interface ComparisonEpoch {
+  epoch: number;
+  results: any;
+  epoch_time?: number;
+  timestamp: string;
+}
+
+export interface TrainingComparison {
+  training: {
+    _id: string;
+    name: string;
+    description?: string;
+    status: Training['status'];
+    createdAt: string;
+    updatedAt: string;
+  };
+  metrics: {
+    totalEpochs: number;
+    totalTime: number;
+    avgEpochTime: number;
+    maxEpochTime: number;
+    cost: {
+      totalHours: number;
+      cpuCost: number;
+      gpuCost: number;
+      totalCost: number;
+    };
+  };
+  lastEpoch: ComparisonEpoch | null;
+  epochs: ComparisonEpoch[];
+}
+
+export interface TrainingComparisonResponse {
+  comparison: TrainingComparison[];
+  summary: {
+    totalTrainings: number;
+    trainingsWithEpochs: number;
+  };
+}
