@@ -5,7 +5,6 @@ import ContactForm from './ContactForm';
 
 function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [deploymentMode, setDeploymentMode] = useState('cloud');
   const config = useConfig();
   const appUrl = config.VISION_FRONT_URL || '#';
 
@@ -20,7 +19,7 @@ function LandingPage() {
           <ul className={menuOpen ? 'open' : ''}>
             <li><a href="#home" onClick={() => setMenuOpen(false)}>Home</a></li>
             <li><a href="#features" onClick={() => setMenuOpen(false)}>Features</a></li>
-            <li><a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a></li>
+            <li><a href="#pricing" onClick={() => setMenuOpen(false)}>Open Source</a></li>
             <li><a href="#contact" onClick={(e) => { 
               e.preventDefault();
               setMenuOpen(false);
@@ -43,14 +42,14 @@ function LandingPage() {
       </header>
       <section id="home" className="hero">
         <div className="hero-content">
-          <h1>Accelerate Your Computer Vision Projects</h1>
+          <h1>Visualize and Share Your Computer Vision Projects</h1>
           <p>
-            Transform your vision AI development with VisIn's comprehensive platform. From intelligent dataset management and automated model training to advanced benchmarking, project coordination, and cost optimization – streamline your entire computer vision workflow.
+            Visin is a simple, open-source platform for ML data visualization. Easily manage datasets, visualize training experiments, compare benchmarks, and share your results for research papers and collaboration.
           </p>
           <div className="hero-badges">
             <span className="badge">Open Source</span>
             <span className="badge">Self-Hosted</span>
-            <span className="badge">Cloud Ready</span>
+            <span className="badge">Free</span>
           </div>
           <div className="hero-actions">
             <button className="cta-button" onClick={() => window.location.href = appUrl}>Start Building</button>
@@ -71,8 +70,8 @@ function LandingPage() {
           <div className="feature-card">
             <div className="feature-image" style={{backgroundImage: "url('https://images.unsplash.com/photo-1555949963-ff9fe0c870eb?q=80&w=800&auto=format&fit=crop')"}}></div>
             <div className="feature-content">
-              <h3>Model Training</h3>
-              <p>Configure and monitor training sessions. Track epochs, manage configurations, and visualize training progress in real-time.</p>
+              <h3>Experiment Tracking</h3>
+              <p>Visualize and track your training experiments. Monitor epochs, compare configurations, and analyze training progress with interactive charts.</p>
             </div>
           </div>
           <div className="feature-card">
@@ -106,99 +105,41 @@ function LandingPage() {
           <div className="feature-card">
             <div className="feature-image" style={{backgroundImage: "url('https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=800&auto=format&fit=crop')"}}></div>
             <div className="feature-content">
-              <h3>Project Management & Cost Tracking</h3>
-              <p>Organize your vision projects with integrated task management, team collaboration tools, and comprehensive cost tracking. Monitor resource usage, budget allocation, and project timelines to optimize your AI development workflow.</p>
+              <h3>Project Management</h3>
+              <p>Organize your vision projects with integrated task management and team collaboration tools. Keep your research organized and accessible.</p>
             </div>
           </div>
         </div>
       </section>
       <section id="pricing" className="pricing">
-        <h2>Flexible Deployment Options</h2>
-        <p className="pricing-subtitle">Start free and scale as you grow</p>
+        <h2>Free & Open Source</h2>
+        <p className="pricing-subtitle">Visin is completely free and self-hosted.</p>
         
-        <div className="deployment-toggle">
-          <div className="deployment-options">
-            <div className={`deployment-option ${deploymentMode === 'cloud' ? 'active' : ''}`} onClick={() => setDeploymentMode('cloud')}>
-              <h3>Cloud Hosting</h3>
-              <p>Managed infrastructure with automatic scaling</p>
+        <div className="self-hosted-section">
+          <div className="self-hosted-content">
+            <div className="self-hosted-features">
+              <h4>Why Choose Visin?</h4>
+              <ul>
+                <li>✓ <strong>Completely Free</strong> - No licensing fees</li>
+                <li>✓ <strong>Self-Hosted</strong> - Full data sovereignty and security</li>
+                <li>✓ <strong>Open Source</strong> - MIT License</li>
+                <li>✓ <strong>Privacy Focused</strong> - No external data transfer</li>
+                <li>✓ <strong>Research Ready</strong> - Easy data sharing for papers</li>
+              </ul>
             </div>
-            <div className={`deployment-option ${deploymentMode === 'self-hosted' ? 'active' : ''}`} onClick={() => setDeploymentMode('self-hosted')}>
-              <h3>Self-Hosted</h3>
-              <p>Full control with on-premise deployment</p>
+            <div className="self-hosted-opensource">
+              <div className="open-source-note">
+                <p><strong>100% Open Source:</strong> Visin is fully open source on <a href="https://github.com/visin-platform" target="_blank" rel="noopener noreferrer">GitHub</a>. 
+                Deploy anywhere, contribute to development, or run locally at no cost.</p>
+              </div>
             </div>
           </div>
         </div>
-
-        {deploymentMode === 'cloud' && (
-          <div className="pricing-grid">
-            <div className="pricing-card featured">
-              <div className="pricing-header">
-                <h3>Free</h3>
-                <div className="price">€0<span>/month</span></div>
-                <p>Perfect for getting started with computer vision</p>
-              </div>
-              <ul className="pricing-features">
-                <li>✓ Unlimited Public Projects</li>
-                <li>✓ 1GB Cloud Storage</li>
-                <li>✓ Basic Analytics</li>
-                <li>✓ Open Source Access</li>
-              </ul>
-              <button className="cta-button full-width" onClick={() => window.location.href = appUrl}>Get Started Free</button>
-            </div>
-            
-            <div className="pricing-card">
-              <div className="pricing-header">
-                <h3>Enterprise</h3>
-                <div className="price">Custom</div>
-                <p>For organizations requiring advanced capabilities</p>
-              </div>
-              <ul className="pricing-features">
-                <li>✓ Unlimited Private Projects</li>
-                <li>✓ Priority Support</li>
-                <li>✓ Dedicated GPU Access</li>
-                <li>✓ Custom Integrations</li>
-                <li>✓ Self-hosted Option</li>
-              </ul>
-              <button className="cta-button pricing-outline full-width" onClick={() => {
-                const contactSection = document.getElementById('contact');
-                if (contactSection) {
-                  contactSection.scrollIntoView({ behavior: 'smooth' });
-                }
-              }}>Contact</button>
-            </div>
-          </div>
-        )}
-
-        {deploymentMode === 'self-hosted' && (
-          <div className="self-hosted-section">
-            <h3>Self-Hosted: Free & Open Source</h3>
-            <div className="self-hosted-content">
-              <div className="self-hosted-features">
-                <h4>Why Choose Self-Hosted?</h4>
-                <ul>
-                  <li>✓ <strong>Completely Free</strong> - No licensing fees</li>
-                  <li>✓ Full data sovereignty and security</li>
-                  <li>✓ Custom infrastructure optimization</li>
-                  <li>✓ Compliance with enterprise policies</li>
-                  <li>✓ No external data transfer</li>
-                  <li>✓ White-label deployment options</li>
-                  <li>✓ Open source codebase for full transparency</li>
-                </ul>
-              </div>
-              <div className="self-hosted-opensource">
-                <div className="open-source-note">
-                  <p><strong>100% Open Source:</strong> Visin is fully open source on <a href="https://github.com/visin-platform" target="_blank" rel="noopener noreferrer">GitHub</a>. 
-                  Deploy anywhere, contribute to development, or run locally at no cost.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </section>
       <section id="get-started" className="cta-section">
         <div className="cta-content">
           <h2>Transform Your Vision AI Development</h2>
-          <p>Join leading researchers and developers who trust VisIn to streamline their computer vision projects and accelerate innovation.</p>
+          <p>Join leading researchers and developers who trust Visin to streamline their computer vision projects and accelerate innovation.</p>
           <button className="cta-button secondary" onClick={() => window.location.href = appUrl}>Start Your Project</button>
         </div>
       </section>
@@ -215,7 +156,7 @@ function LandingPage() {
           </div>
           <div className="footer-links">
             <a href="https://github.com/visin-platform" target="_blank" rel="noopener noreferrer">GitHub</a>
-            <a href="#pricing">Pricing</a>
+            <a href="#pricing">Open Source</a>
             <a href="#features">Features</a>
             <a href="#contact" onClick={(e) => {
               e.preventDefault();
