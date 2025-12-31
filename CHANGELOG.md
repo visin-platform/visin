@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.40](https://github.com/visin-platform/visin-monorepo/compare/v0.0.39...v0.0.40) (2025-12-23)
+
+
+### Features
+
+* update landing page ([887ed69](https://github.com/visin-platform/visin-monorepo/commit/887ed6942aeff21eaa6d26f0719a0268bfd19ece))
+
 ### [0.0.39](https://github.com/visin-platform/visin-monorepo/compare/v0.0.38...v0.0.39) (2025-12-23)
 
 
