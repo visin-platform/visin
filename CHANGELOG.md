@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.42](https://github.com/visin-platform/visin-monorepo/compare/v0.0.41...v0.0.42) (2025-12-31)
+
+
+### Features
+
+* increase image view size ([47b7f47](https://github.com/visin-platform/visin-monorepo/commit/47b7f47e4ce1c2d1598673d6e3c8c2794c6a7882))
+
 ### [0.0.41](https://github.com/visin-platform/visin-monorepo/compare/v0.0.40...v0.0.41) (2025-12-31)
 
 
