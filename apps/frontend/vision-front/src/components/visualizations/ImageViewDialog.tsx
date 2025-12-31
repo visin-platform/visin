@@ -28,7 +28,7 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({
     <Dialog 
       open={open} 
       onClose={onClose} 
-      maxWidth="lg" 
+      maxWidth="xl" 
       fullWidth
       PaperProps={{ sx: { borderRadius: 2, bgcolor: 'black' } }}
     >
@@ -45,8 +45,8 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({
             src={selectedImage.signedUrl || ''}
             alt={selectedImage.filename}
             sx={{
-              maxWidth: '100%',
-              maxHeight: '85vh',
+              width: '100%',
+              height: '85vh',
               objectFit: 'contain'
             }}
           />
