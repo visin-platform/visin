@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.41](https://github.com/visin-platform/visin-monorepo/compare/v0.0.40...v0.0.41) (2025-12-31)
+
+
+### Bug Fixes
+
+*  set correct max epoch ([7d20872](https://github.com/visin-platform/visin-monorepo/commit/7d208724e21e35803ff836fcc442f590d43f49a5))
+
 ### [0.0.40](https://github.com/visin-platform/visin-monorepo/compare/v0.0.39...v0.0.40) (2025-12-23)
 
 
