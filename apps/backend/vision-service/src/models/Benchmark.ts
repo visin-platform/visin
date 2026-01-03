@@ -60,7 +60,7 @@ const BenchmarkSchema: Schema = new Schema(
     },
     training_id: {
       type: Schema.Types.ObjectId,
-      ref: 'Training',
+      ref: 'training',
       index: true
     },
     epoch_uuid: {

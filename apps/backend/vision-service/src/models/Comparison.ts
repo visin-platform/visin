@@ -6,6 +6,7 @@ export interface IComparison extends Document {
   description?: string;
   type: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
   itemIds: string[]; // Array of IDs to compare (training IDs, test IDs, etc.)
+  projectId?: string; // Project this comparison belongs to (optional for global comparisons)
   metadata?: any;
   createdAt: Date;
   updatedAt: Date;
@@ -41,6 +42,10 @@ const ComparisonSchema: Schema = new Schema(
       type: String,
       required: true
     }],
+    projectId: {
+      type: String,
+      index: true
+    },
     metadata: {
       type: Schema.Types.Mixed
     },

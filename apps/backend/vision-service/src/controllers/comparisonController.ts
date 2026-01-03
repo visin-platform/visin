@@ -10,6 +10,7 @@ export const getComparisons = async (req: Request, res: Response): Promise<void>
       limit = 30,
       search,
       type,
+      projectId,
       sortBy = 'updatedAt',
       order = 'desc'
     } = req.query;
@@ -24,6 +25,11 @@ export const getComparisons = async (req: Request, res: Response): Promise<void>
     // Filter by type
     if (type) {
       query.type = type;
+    }
+
+    // Filter by project
+    if (projectId) {
+      query.projectId = projectId;
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -129,6 +135,7 @@ export const createComparison = async (req: Request, res: Response): Promise<voi
       description,
       type,
       itemIds,
+      projectId,
       metadata
     } = req.body;
 
@@ -156,6 +163,10 @@ export const createComparison = async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    if (!projectId || projectId.trim().length === 0) {
+      // projectId is optional for global comparisons
+    }
+
     if (itemIds.length > 50) {
       res.status(400).json({
         success: false,
@@ -173,6 +184,7 @@ export const createComparison = async (req: Request, res: Response): Promise<voi
       description: description?.trim(),
       type,
       itemIds,
+      projectId: projectId?.trim(),
       metadata
     });
 
@@ -322,13 +334,18 @@ export const deleteComparison = async (req: Request, res: Response): Promise<voi
 // Get comparison statistics
 export const getComparisonStats = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { type } = req.query;
+    const { type, projectId } = req.query;
 
     let query: any = { deletedAt: null };
 
     // Filter by type if provided
     if (type) {
       query.type = type;
+    }
+
+    // Filter by project if provided
+    if (projectId) {
+      query.projectId = projectId;
     }
 
     const stats = await Comparison.aggregate([

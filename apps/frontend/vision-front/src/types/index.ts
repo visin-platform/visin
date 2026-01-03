@@ -569,6 +569,7 @@ export interface Comparison {
   description?: string;
   type: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
   itemIds: string[];
+  projectId?: string;
   metadata?: any;
   createdAt: string;
   updatedAt: string;
@@ -581,6 +582,7 @@ export interface CreateComparisonData {
   description?: string;
   type: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
   itemIds: string[];
+  projectId?: string;
   metadata?: any;
 }
 

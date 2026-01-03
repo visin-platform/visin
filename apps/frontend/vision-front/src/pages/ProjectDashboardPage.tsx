@@ -42,6 +42,7 @@ import ProjectTrainingsTab from '../components/project/ProjectTrainingsTab';
 import ProjectTestsTab from '../components/project/ProjectTestsTab';
 import ProjectVisualizationsTab from '../components/project/ProjectVisualizationsTab';
 import ProjectBenchmarksTab from '../components/project/ProjectBenchmarksTab';
+import ProjectComparisonsTab from '../components/project/ProjectComparisonsTab';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -83,7 +84,8 @@ const ProjectDashboardPage: React.FC = () => {
     tests: 2,
     visualizations: 3,
     benchmarks: 4,
-    settings: 5
+    comparisons: 5,
+    settings: 6
   };
 
   React.useEffect(() => {
@@ -380,6 +382,7 @@ const ProjectDashboardPage: React.FC = () => {
             <Tab label="Tests" />
             <Tab label="Visualizations" />
             <Tab label="Benchmarks" />
+            <Tab label="Comparisons" />
             {isOwner && <Tab label="Settings" />}
           </Tabs>
         </Box>
@@ -444,9 +447,14 @@ const ProjectDashboardPage: React.FC = () => {
           />
         </TabPanel>
 
+        {/* Comparisons Tab */}
+        <TabPanel value={tabValue} index={5}>
+          <ProjectComparisonsTab projectId={id!} />
+        </TabPanel>
+
         {/* Settings Tab */}
         {isOwner && (
-          <TabPanel value={tabValue} index={5}>
+          <TabPanel value={tabValue} index={6}>
             <Box sx={{ px: 3 }}>
               <ProjectSettings project={project} />
             </Box>

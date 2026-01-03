@@ -28,6 +28,7 @@ export const comparisonService = {
     limit?: number;
     search?: string;
     type?: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
+    projectId?: string;
     sortBy?: string;
     order?: 'asc' | 'desc';
   }): Promise<PaginatedResponse<Comparison>> {
@@ -50,6 +51,7 @@ export const comparisonService = {
   // Get comparison statistics
   async getComparisonStats(params?: {
     type?: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
+    projectId?: string;
   }): Promise<ApiResponse<ComparisonStats>> {
     const response = await visionApi.get('/comparisons/stats', { params });
     return response.data;

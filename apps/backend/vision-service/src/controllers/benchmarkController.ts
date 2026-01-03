@@ -116,7 +116,8 @@ export const getBenchmarkById = async (req: Request, res: Response): Promise<voi
   try {
     const { id } = req.params;
 
-    const benchmark = await Benchmark.findOne({ _id: id, deletedAt: null });
+    const benchmark = await Benchmark.findOne({ _id: id, deletedAt: null })
+      .populate('training_id', 'name uuid projectId');
 
     if (!benchmark) {
       res.status(404).json({
