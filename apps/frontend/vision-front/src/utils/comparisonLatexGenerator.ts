@@ -73,10 +73,50 @@ export const generateLatexTable = (
   });
   latex += '\\\\ \\hline\n';
 
-  // Total Cost
-  latex += 'Total Cost (€) ';
+  // Maximum Epoch Time
+  latex += 'Max Epoch Time ';
   comparisonData.forEach(comp => {
-    latex += `& ${comp.metrics.cost.totalCost.toFixed(2)} `;
+    latex += `& ${formatTime(comp.metrics.maxEpochTime)} `;
+  });
+  latex += '\\\\ \\hline\n';
+
+  // Best Epoch
+  latex += 'Best Epoch ';
+  comparisonData.forEach(comp => {
+    const bestEpoch = comp.epochs.reduce((best, epoch) => {
+      const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
+      const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
+      return currentVmIoU > bestVmIoU ? epoch : best;
+    }, comp.epochs[0]);
+    latex += `& ${bestEpoch ? bestEpoch.epoch : 'N/A'} `;
+  });
+  latex += '\\\\ \\hline\n';
+
+  // Best Validation mIoU
+  latex += 'Best Val mIoU ';
+  comparisonData.forEach(comp => {
+    const bestVmIoU = Math.max(...comp.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
+    latex += `& ${bestVmIoU !== -Infinity ? formatNumber(bestVmIoU) : 'N/A'} `;
+  });
+  latex += '\\\\ \\hline\n';
+
+  // Top 5 Validation mIoU Average
+  latex += 'Top 5 Val mIoU Avg ';
+  comparisonData.forEach(comp => {
+    const vmIoUs = comp.epochs
+      .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
+      .filter((vmIoU: number | undefined) => vmIoU !== undefined)
+      .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
+      .slice(0, 10);
+    
+    if (vmIoUs.length === 0) {
+      latex += '& N/A ';
+    } else {
+      const mean = vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
+      const variance = vmIoUs.reduce((sum: number, vmIoU: number) => sum + Math.pow((vmIoU ?? 0) - mean, 2), 0) / vmIoUs.length;
+      const std = Math.sqrt(variance);
+      latex += `& ${formatNumber(mean)} ± ${formatNumber(std)} `;
+    }
   });
   latex += '\\\\ \\hline\n';
 
