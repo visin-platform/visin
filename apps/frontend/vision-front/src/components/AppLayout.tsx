@@ -401,7 +401,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <Toolbar sx={{ display: { sm: 'none' } }} />
         
         {/* Content Area */}
-        <Box sx={{ p: { xs: 2, sm: 4 }, flexGrow: 1 }}>
+        <Box sx={{ p: 1, flexGrow: 1 }}>
           {children}
         </Box>
       </Box>

@@ -42,7 +42,7 @@ const VisualizationsComparisonPage: React.FC = () => {
 
   if (visualizationIds.length === 0) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ pb: 4 }}>
         <Alert severity="warning">
           No visualization IDs provided. Please select visualizations to compare from the visualizations list.
         </Alert>
@@ -57,7 +57,7 @@ const VisualizationsComparisonPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center' }}>
+      <Container maxWidth="lg" sx={{ pb: 4, textAlign: 'center' }}>
         <CircularProgress />
         <Typography variant="h6" sx={{ mt: 2 }}>
           Loading visualizations comparison...
@@ -68,7 +68,7 @@ const VisualizationsComparisonPage: React.FC = () => {
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ pb: 4 }}>
         <Alert severity="error">
           Failed to load visualizations comparison: {error instanceof Error ? error.message : 'Unknown error'}
         </Alert>
@@ -91,7 +91,7 @@ const VisualizationsComparisonPage: React.FC = () => {
   }, {} as Record<string, Visualization[]>);
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ pb: 4 }}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Box>

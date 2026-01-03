@@ -79,7 +79,7 @@ const TrainingsPage: React.FC = () => {
   } = useTrainingsPage();
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ pb: 4 }}>
       <TrainingFilters
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}

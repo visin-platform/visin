@@ -6,3 +6,4 @@ dist
 certs
 
 apps/infra/minio/data
+paper

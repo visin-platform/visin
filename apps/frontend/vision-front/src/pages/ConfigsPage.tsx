@@ -55,7 +55,7 @@ const ConfigsPage: React.FC = () => {
   } = useConfigsPage();
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ pb: 4 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Typography variant="h4" component="h1">
           Configs Library

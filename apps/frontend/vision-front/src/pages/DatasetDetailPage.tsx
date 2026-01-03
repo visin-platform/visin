@@ -331,7 +331,7 @@ const DatasetDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4, textAlign: 'center' }}>
+      <Container maxWidth="xl" sx={{ pb: 4, textAlign: 'center' }}>
         <CircularProgress />
         <Typography variant="h6" sx={{ mt: 2 }}>Loading dataset analysis...</Typography>
       </Container>
@@ -340,7 +340,7 @@ const DatasetDetailPage: React.FC = () => {
 
   if (error || !analysis) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth="xl" sx={{ pb: 4 }}>
         <Alert severity="error">
           Failed to load dataset analysis: {error instanceof Error ? error.message : 'Analysis not found'}
         </Alert>
@@ -352,7 +352,7 @@ const DatasetDetailPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ pb: 4 }}>
       <DatasetHeader
         analysis={analysis}
         imagesCount={imagesData?.data?.pagination?.total || 0}

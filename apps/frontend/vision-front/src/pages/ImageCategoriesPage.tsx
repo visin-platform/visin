@@ -170,7 +170,7 @@ const ImageCategoriesPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl">
-      <Box sx={{ py: 4 }}>
+      <Box sx={{ pb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
           Image Categories
         </Typography>
@@ -216,7 +216,7 @@ const ImageCategoriesPage: React.FC = () => {
                   <TableBody>
                     {categories.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <TableCell colSpan={6} align="center" sx={{ pb: 4 }}>
                           <Typography variant="body2" color="text.secondary">
                             No categories found. Create your first category to get started.
                           </Typography>

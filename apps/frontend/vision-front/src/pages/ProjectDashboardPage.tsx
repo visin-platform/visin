@@ -301,7 +301,7 @@ const ProjectDashboardPage: React.FC = () => {
 
   if (projectError || !projectResponse?.data) {
     return (
-      <Container maxWidth="xl" sx={{ mt: 4 }}>
+      <Container maxWidth="xl" sx={{ mt: 0 }}>
         <Alert severity="error">
           Failed to load project. It may not exist or you don't have permission to view it.
         </Alert>
@@ -316,7 +316,7 @@ const ProjectDashboardPage: React.FC = () => {
   const isOwner = user?.id === project.ownerId;
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 8 }}>
+    <Container maxWidth="xl" sx={{ mt: 0, mb: 8 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Button 

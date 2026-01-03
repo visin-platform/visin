@@ -58,7 +58,7 @@ const ImageLabelingPage: React.FC = () => {
   // Setup Mode
   if (setupMode) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth="xl" sx={{ pb: 4 }}>
         {/* Header */}
         <Box sx={{ mb: 4, textAlign: 'center' }}>
           <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
@@ -94,7 +94,7 @@ const ImageLabelingPage: React.FC = () => {
   // Loading state
   if (loading) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth="xl" sx={{ pb: 4 }}>
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <CircularProgress size={48} sx={{ mb: 3 }} />
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
@@ -111,7 +111,7 @@ const ImageLabelingPage: React.FC = () => {
   // No images state
   if (images.length === 0) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth="xl" sx={{ pb: 4 }}>
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <Typography variant="h5" color="text.secondary" sx={{ mb: 2, fontWeight: 600 }}>
             No images available for labeling

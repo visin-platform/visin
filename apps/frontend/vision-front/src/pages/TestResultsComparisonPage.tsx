@@ -102,7 +102,7 @@ const TestResultsComparisonPage: React.FC = () => {
 
   if (testResultIds.length === 0) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ pb: 4 }}>
         <Alert severity="warning">
           No test result IDs provided. Please select test results to compare from the test results list.
         </Alert>
@@ -117,7 +117,7 @@ const TestResultsComparisonPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center' }}>
+      <Container maxWidth="lg" sx={{ pb: 4, textAlign: 'center' }}>
         <CircularProgress />
         <Typography variant="h6" sx={{ mt: 2 }}>
           Loading test results comparison...
@@ -128,7 +128,7 @@ const TestResultsComparisonPage: React.FC = () => {
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ pb: 4 }}>
         <Alert severity="error">
           Failed to load test results comparison: {error instanceof Error ? error.message : 'Unknown error'}
         </Alert>
@@ -142,7 +142,7 @@ const TestResultsComparisonPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ pb: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Button

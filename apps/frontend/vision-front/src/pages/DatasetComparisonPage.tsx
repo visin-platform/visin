@@ -37,7 +37,7 @@ export const DatasetComparisonPage: React.FC = () => {
 
   if (analysisIds.length === 0) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ pb: 4 }}>
         <Alert severity="warning">
           No analysis IDs provided. Please select analyses to compare from the analyses list.
         </Alert>
@@ -52,7 +52,7 @@ export const DatasetComparisonPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center' }}>
+      <Container maxWidth="lg" sx={{ pb: 4, textAlign: 'center' }}>
         <CircularProgress />
         <Typography variant="h6" sx={{ mt: 2 }}>
           Loading analysis comparison...
@@ -63,7 +63,7 @@ export const DatasetComparisonPage: React.FC = () => {
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ pb: 4 }}>
         <Alert severity="error">
           Failed to load analysis comparison: {error instanceof Error ? error.message : 'Unknown error'}
         </Alert>
@@ -77,7 +77,7 @@ export const DatasetComparisonPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ pb: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>

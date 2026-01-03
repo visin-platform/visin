@@ -237,7 +237,7 @@ const TrainingDetailPage: React.FC = () => {
 
   if (error || !training) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth="xl" sx={{ pb: 4 }}>
         <Alert severity="error">
           {error instanceof Error ? error.message : 'Failed to load training details'}
         </Alert>
@@ -246,7 +246,7 @@ const TrainingDetailPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ pb: 4 }}>
       {/* Header */}
       <Box mb={4}>
         <Button

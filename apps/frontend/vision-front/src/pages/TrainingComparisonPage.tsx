@@ -145,7 +145,7 @@ const TrainingComparisonPage: React.FC = () => {
 
   if (trainingIds.length === 0) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ pb: 4 }}>
         <Alert severity="warning">
           No training IDs provided. Please select trainings to compare from the trainings list.
         </Alert>
@@ -160,7 +160,7 @@ const TrainingComparisonPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center' }}>
+      <Container maxWidth="lg" sx={{ pb: 4, textAlign: 'center' }}>
         <CircularProgress />
         <Typography variant="h6" sx={{ mt: 2 }}>
           Loading training comparison...
@@ -171,7 +171,7 @@ const TrainingComparisonPage: React.FC = () => {
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ pb: 4 }}>
         <Alert severity="error">
           Failed to load training comparison: {error instanceof Error ? error.message : 'Unknown error'}
         </Alert>
@@ -185,7 +185,7 @@ const TrainingComparisonPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ pb: 4 }}>
       {/* Header */}
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>

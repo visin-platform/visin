@@ -179,7 +179,7 @@ export const EpochsPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ pb: 4 }}>
       <Typography variant="h4" sx={{ mb: 4 }}>
         Training Epochs
       </Typography>

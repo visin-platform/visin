@@ -150,7 +150,7 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
 
   if (loading) {
     return (
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth="xl" sx={{ pb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress />
         </Box>
@@ -159,7 +159,7 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ pb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4">
           Training Visualizations Comparison
@@ -178,7 +178,7 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
       {trainings.length === 0 ? (
         <Card>
           <CardContent>
-            <Typography color="textSecondary" align="center" sx={{ py: 4 }}>
+            <Typography color="textSecondary" align="center" sx={{ pb: 4 }}>
               No visualizations found for the selected trainings
             </Typography>
           </CardContent>

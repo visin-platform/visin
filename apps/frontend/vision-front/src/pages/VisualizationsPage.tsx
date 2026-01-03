@@ -181,7 +181,7 @@ export const VisualizationsPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ pb: 4 }}>
       <Typography variant="h4" sx={{ mb: 4 }}>
         Training Visualizations Comparison
       </Typography>
@@ -236,7 +236,7 @@ export const VisualizationsPage: React.FC = () => {
       ) : trainings.length === 0 ? (
         <Card>
           <CardContent>
-            <Typography color="textSecondary" align="center" sx={{ py: 4 }}>
+            <Typography color="textSecondary" align="center" sx={{ pb: 4 }}>
               No trainings with visualizations found
             </Typography>
           </CardContent>
