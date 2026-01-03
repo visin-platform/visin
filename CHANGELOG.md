@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.44](https://github.com/visin-platform/visin-monorepo/compare/v0.0.43...v0.0.44) (2026-01-03)
+
+
+### Features
+
+* add benchmark comparison pages ([a150dfc](https://github.com/visin-platform/visin-monorepo/commit/a150dfc06c43cb2274113f357455e73205156420))
+
 ### [0.0.43](https://github.com/visin-platform/visin-monorepo/compare/v0.0.42...v0.0.43) (2026-01-03)
 
 
