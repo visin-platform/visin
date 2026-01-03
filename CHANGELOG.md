@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.43](https://github.com/visin-platform/visin-monorepo/compare/v0.0.42...v0.0.43) (2026-01-03)
+
+
+### Features
+
+* reduce top padding ([9fc896a](https://github.com/visin-platform/visin-monorepo/commit/9fc896a3b88677475be4867f992966830687f80f))
+
 ### [0.0.42](https://github.com/visin-platform/visin-monorepo/compare/v0.0.41...v0.0.42) (2025-12-31)
 
 
