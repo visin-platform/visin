@@ -5,7 +5,9 @@ import {
   Box,
   Button,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Code as CodeIcon,
@@ -22,6 +24,9 @@ import ComparisonTable from '@/components/comparison/ComparisonTable';
 import SelectedEpochPerformance from '@/components/comparison/SelectedEpochPerformance';
 import SaveComparisonDialog from '@/components/comparison/SaveComparisonDialog';
 import LatexCodeDialog from '@/components/comparison/LatexCodeDialog';
+import PerformanceMetricsTable from '../components/test-results/PerformanceMetricsTable';
+import PerClassMetricsTable from '../components/test-results/PerClassMetricsTable';
+import BenchmarksComparisonTable from '../components/comparison/BenchmarksComparisonTable';
 
 const TrainingComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -43,6 +48,21 @@ const TrainingComparisonPage: React.FC = () => {
   // State for selected epochs (defaults to last epoch)
   const [selectedEpochs, setSelectedEpochs] = useState<Record<string, number>>({});
 
+  // State for active tab
+  const [activeTab, setActiveTab] = useState(0);
+
+  // Set initial tab based on URL parameter
+  React.useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'tests') {
+      setActiveTab(1);
+    } else if (tab === 'benchmarks') {
+      setActiveTab(2);
+    } else {
+      setActiveTab(0);
+    }
+  }, [searchParams]);
+
   // Get training IDs from URL params
   const trainingIds = React.useMemo(() => 
     searchParams.get('ids')?.split(',') || [], 
@@ -61,6 +81,33 @@ const TrainingComparisonPage: React.FC = () => {
   });
 
   const comparisonData = data?.data?.comparison || [];
+
+  // Process test results data - use the already aggregated data from backend
+  const testResultsData = React.useMemo(() => {
+    if (!comparisonData.length) return [];
+    
+    return comparisonData
+      .filter(comp => comp.aggregatedTestResults !== null)
+      .map(comp => ({
+        aggregatedResults: comp.aggregatedTestResults,
+        training: comp.training,
+        testResultsCount: comp.testResultsCount || 0
+      }));
+  }, [comparisonData]);
+
+  // Process benchmarks data
+  const benchmarksData = React.useMemo(() => {
+    if (!comparisonData.length) return [];
+    
+    const allBenchmarks = comparisonData.flatMap(comp => 
+      comp.benchmarks.map((benchmark: any) => ({
+        ...benchmark,
+        training_name: comp.training.name
+      }))
+    );
+    
+    return allBenchmarks;
+  }, [comparisonData]);
 
   // Initialize selected epochs to the epoch with best validation mIoU when data loads
   React.useEffect(() => {
@@ -103,7 +150,56 @@ const TrainingComparisonPage: React.FC = () => {
   };
 
   const handleGenerateLatex = () => {
-    const latex = generateLatexTable(comparisonData, getSelectedEpochData);
+    let latex = '';
+
+    if (activeTab === 0) {
+      // Training comparison LaTeX
+      latex = generateLatexTable(comparisonData, getSelectedEpochData);
+    } else if (activeTab === 1) {
+      // Test results LaTeX - use aggregated data with mean and std
+      latex = `\\begin{table*}[ht]\n\\centering\n\\caption{Test Results Comparison}\n\\label{tab:test_results_comparison}\n\\begin{tabular}{|l|c|c|c|c|}\n\\hline\nTraining & Mean IoU & Mean Precision & Mean Recall & Mean F1 \\\\\n\\hline\n`;
+      
+      testResultsData.forEach(item => {
+        const trainingName = item.training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
+        const results = item.aggregatedResults;
+        if (results && results.val) {
+          const meanIou = results.val.mean_iou?.mean !== undefined 
+            ? `${results.val.mean_iou.mean.toFixed(3)} ± ${results.val.mean_iou.std?.toFixed(3) || '0.000'}`
+            : 'N/A';
+          const meanPrecision = results.val.mean_precision?.mean !== undefined
+            ? `${results.val.mean_precision.mean.toFixed(3)} ± ${results.val.mean_precision.std?.toFixed(3) || '0.000'}`
+            : 'N/A';
+          const meanRecall = results.val.mean_recall?.mean !== undefined
+            ? `${results.val.mean_recall.mean.toFixed(3)} ± ${results.val.mean_recall.std?.toFixed(3) || '0.000'}`
+            : 'N/A';
+          const meanF1 = results.val.mean_f1_score?.mean !== undefined
+            ? `${results.val.mean_f1_score.mean.toFixed(3)} ± ${results.val.mean_f1_score.std?.toFixed(3) || '0.000'}`
+            : 'N/A';
+          latex += `${trainingName} & ${meanIou} & ${meanPrecision} & ${meanRecall} & ${meanF1} \\\\\n`;
+        }
+      });
+      
+      latex += `\\hline\n\\end{tabular}\n\\end{table*}\n`;
+    } else if (activeTab === 2) {
+      // Benchmarks LaTeX
+      latex = `\\begin{table*}[ht]\n\\centering\n\\caption{Benchmark Performance Comparison}\n\\label{tab:benchmark_comparison}\n\\begin{tabular}{|l|c|c|c|c|}\n\\hline\nTraining & Mean Time (ms) & FPS & GPU Memory (MB) & RAM Memory (MB) \\\\\n\\hline\n`;
+      
+      benchmarksData.forEach(benchmark => {
+        if (benchmark.results && benchmark.results.length > 0) {
+          benchmark.results.forEach((result: any) => {
+            const trainingName = benchmark.training_name?.replace(/[&%$#_{}~^\\]/g, '\\$&') || 'Unknown';
+            const meanTime = result.mean_time_ms ? result.mean_time_ms.toFixed(1) : 'N/A';
+            const fps = result.fps ? result.fps.toFixed(2) : 'N/A';
+            const gpuMemory = result.gpu_memory_mean_mb ? result.gpu_memory_mean_mb.toFixed(0) : 'N/A';
+            const ramMemory = result.ram_memory_mean_mb ? result.ram_memory_mean_mb.toFixed(0) : 'N/A';
+            latex += `${trainingName} & ${meanTime} & ${fps} & ${gpuMemory} & ${ramMemory} \\\\\n`;
+          });
+        }
+      });
+      
+      latex += `\\hline\n\\end{tabular}\n\\end{table*}\n`;
+    }
+
     setLatexCode(latex);
     setLatexModalOpen(true);
   };
@@ -231,19 +327,64 @@ const TrainingComparisonPage: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Detailed Comparison Table */}
-      {comparisonData.length > 0 && (
-        <ComparisonTable comparisonData={comparisonData} />
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
+          <Tab label={`Training Runs (${comparisonData.length})`} />
+          <Tab label={`Test Results (${testResultsData.length})`} />
+          <Tab label={`Benchmarks (${benchmarksData.length})`} />
+        </Tabs>
+      </Box>
+
+      {/* Tab Content */}
+      {activeTab === 0 && (
+        <>
+          {/* Detailed Comparison Table */}
+          {comparisonData.length > 0 && (
+            <ComparisonTable comparisonData={comparisonData} />
+          )}
+
+          {/* Selected Epoch Results */}
+          {comparisonData.some(comp => getSelectedEpochData(comp.training._id)) && (
+            <SelectedEpochPerformance
+              comparisonData={comparisonData}
+              selectedEpochs={selectedEpochs}
+              handleEpochChange={handleEpochChange}
+              getSelectedEpochData={getSelectedEpochData}
+            />
+          )}
+        </>
       )}
 
-      {/* Selected Epoch Results */}
-      {comparisonData.some(comp => getSelectedEpochData(comp.training._id)) && (
-        <SelectedEpochPerformance
-          comparisonData={comparisonData}
-          selectedEpochs={selectedEpochs}
-          handleEpochChange={handleEpochChange}
-          getSelectedEpochData={getSelectedEpochData}
-        />
+      {activeTab === 1 && (
+        <>
+          {/* Test Results Comparison */}
+          {testResultsData.length > 0 ? (
+            <>
+              <PerformanceMetricsTable 
+                comparisonData={testResultsData} 
+                onGenerateLatex={() => {}} // TODO: Implement LaTeX generation for test results
+              />
+              <PerClassMetricsTable 
+                comparisonData={testResultsData} 
+                onGenerateLatex={() => {}} // TODO: Implement LaTeX generation for per-class metrics
+              />
+            </>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body1" color="text.secondary">
+                No test results available for comparison
+              </Typography>
+            </Box>
+          )}
+        </>
+      )}
+
+      {activeTab === 2 && (
+        <>
+          {/* Benchmarks Comparison */}
+          <BenchmarksComparisonTable benchmarks={benchmarksData} />
+        </>
       )}
 
       {/* LaTeX Modal */}

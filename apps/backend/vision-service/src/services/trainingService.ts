@@ -2,7 +2,9 @@ import { v4 as uuidv4 } from 'uuid';
 import Training from '../models/Training';
 import Epoch from '../models/Epoch';
 import TestResult from '../models/TestResult';
+import Benchmark from '../models/Benchmark';
 import Project from '../models/Project';
+import { testResultService } from './testResultService';
 
 interface PaginationOptions {
   page?: number;
@@ -549,6 +551,21 @@ export const trainingService = {
     const epochs = await Epoch.find({ trainingId: { $in: trainingIds }, deletedAt: null })
       .sort({ trainingId: 1, epoch: 1 });
 
+    // Get all epoch UUIDs for fetching benchmarks
+    const epochUuids = epochs.map(e => e.epoch_uuid);
+
+    // Get aggregated test results for these trainings
+    const aggregatedTestResults = await testResultService.getAggregatedTestResultsByTraining(trainingIds);
+
+    // Get all benchmarks for these trainings
+    const benchmarks = await Benchmark.find({ 
+      $or: [
+        { training_id: { $in: trainingIds } },
+        { epoch_uuid: { $in: epochUuids } }
+      ], 
+      deletedAt: null 
+    }).populate('training_id', 'name uuid');
+
     // Group epochs by training ID
     const epochsByTraining: Record<string, any[]> = epochs.reduce((acc, epoch) => {
       const trainingId = epoch.trainingId.toString();
@@ -559,10 +576,38 @@ export const trainingService = {
       return acc;
     }, {} as Record<string, any[]>);
 
+    // Group benchmarks by training ID
+    const benchmarksByTraining: Record<string, any[]> = benchmarks.reduce((acc, benchmark) => {
+      let trainingId = null;
+      if (benchmark.training_id && typeof benchmark.training_id === 'object' && benchmark.training_id._id) {
+        trainingId = (benchmark.training_id as any)._id.toString();
+      } else if (benchmark.training_id && typeof benchmark.training_id === 'string') {
+        trainingId = benchmark.training_id;
+      } else {
+        // Try to find via epoch_uuid
+        const epoch = epochs.find(e => e.epoch_uuid === benchmark.epoch_uuid);
+        if (epoch) {
+          trainingId = epoch.trainingId.toString();
+        }
+      }
+      
+      if (trainingId) {
+        if (!acc[trainingId]) {
+          acc[trainingId] = [];
+        }
+        acc[trainingId].push(benchmark);
+      }
+      return acc;
+    }, {} as Record<string, any[]>);
+
     // Calculate comparison data for each training
     const comparisonData = trainings.map(training => {
       const trainingId = (training._id as any).toString();
       const trainingEpochs = epochsByTraining[trainingId] || [];
+      const trainingAggregatedResults = aggregatedTestResults.comparison.find((item: any) => 
+        item.training._id.toString() === trainingId
+      );
+      const trainingBenchmarks = benchmarksByTraining[trainingId] || [];
       const lastEpoch = trainingEpochs.length > 0 ? trainingEpochs[trainingEpochs.length - 1] : null;
 
       // Calculate training metrics
@@ -608,7 +653,10 @@ export const trainingService = {
           results: epoch.results,
           epoch_time: epoch.epoch_time,
           timestamp: epoch.timestamp
-        }))
+        })),
+        aggregatedTestResults: trainingAggregatedResults?.aggregatedResults || null,
+        testResultsCount: trainingAggregatedResults?.testResultsCount || 0,
+        benchmarks: trainingBenchmarks
       };
     });
 
@@ -616,7 +664,9 @@ export const trainingService = {
       comparison: comparisonData,
       summary: {
         totalTrainings: trainings.length,
-        trainingsWithEpochs: comparisonData.filter(c => c.epochs.length > 0).length
+        trainingsWithEpochs: comparisonData.filter(c => c.epochs.length > 0).length,
+        trainingsWithTestResults: comparisonData.filter(c => c.aggregatedTestResults !== null).length,
+        trainingsWithBenchmarks: comparisonData.filter(c => c.benchmarks.length > 0).length
       }
     };
   }

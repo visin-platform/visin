@@ -30,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import { Link, useNavigate } from 'react-router-dom';
 import { Training } from '../types';
+import { formatDateTime, formatDuration } from '../utils';
 
 interface TrainingsTableProps {
   trainings: Training[];
@@ -102,29 +103,6 @@ const StatusChip: React.FC<{ status: Training['status'] }> = ({ status }) => {
       {label}
     </Box>
   );
-};
-
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date);
-};
-
-const formatDuration = (seconds: number) => {
-  if (seconds === 0) return '0s';
-  
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${secs}s`;
-  return `${secs}s`;
 };
 
 interface SortableTableCellProps {
@@ -364,12 +342,12 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" color="text.secondary">
-                      {formatDate(training.createdAt)}
+                      {formatDateTime(training.createdAt)}
                     </Typography>
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" color="text.secondary">
-                      {formatDate(training.updatedAt)}
+                      {formatDateTime(training.updatedAt)}
                     </Typography>
                   </TableCell>
                   <TableCell align="center">

@@ -9,12 +9,10 @@ import DatasetComparisonPage from '../pages/DatasetComparisonPage';
 import DatasetDetailPage from '../pages/DatasetDetailPage';
 import ImageLabelingPage from '../pages/ImageLabelingPage';
 import TestResultsPage from '../pages/TestResultsPage';
-import TestResultsComparisonPage from '../pages/TestResultsComparisonPage';
 import VisualizationsPage from '../pages/VisualizationsPage';
 import VisualizationsComparisonPage from '../pages/VisualizationsComparisonPage';
 import TrainingVisualizationsComparisonPage from '../pages/TrainingVisualizationsComparisonPage';
 import BenchmarksPage from '../pages/BenchmarksPage';
-import BenchmarksComparisonPage from '../pages/BenchmarksComparisonPage';
 import ComparisonsPage from '../pages/ComparisonsPage';
 import ProjectsPage from '../pages/ProjectsPage';
 import ProjectDashboardPage from '../pages/ProjectDashboardPage';
@@ -36,12 +34,10 @@ function AppRoutes() {
       <Route path="/image-labeling" element={<ImageLabelingPage />} />
       <Route path="/image-labeling/:imageId" element={<ImageLabelingPage />} />
       <Route path="/test-results" element={<TestResultsPage />} />
-      <Route path="/test-results/compare" element={<TestResultsComparisonPage />} />
       <Route path="/visualizations" element={<VisualizationsPage />} />
       <Route path="/visualizations/compare" element={<VisualizationsComparisonPage />} />
       <Route path="/visualizations/compare-trainings" element={<TrainingVisualizationsComparisonPage />} />
       <Route path="/benchmarks" element={<BenchmarksPage />} />
-      <Route path="/benchmarks/compare" element={<BenchmarksComparisonPage />} />
       <Route path="/comparisons" element={<ComparisonsPage />} />
     </Routes>
   );

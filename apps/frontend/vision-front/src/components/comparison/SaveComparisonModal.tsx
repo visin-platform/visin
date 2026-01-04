@@ -48,7 +48,7 @@ const SaveComparisonModal: React.FC<SaveComparisonModalProps> = ({
       await comparisonService.createComparison({
         name: name.trim(),
         description: description.trim(),
-        type: 'tests',
+        type: 'trainings',
         itemIds: selectedIds,
       });
       onClose();

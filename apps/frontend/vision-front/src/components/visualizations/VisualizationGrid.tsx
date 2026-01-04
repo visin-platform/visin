@@ -20,6 +20,7 @@ import {
   ZoomIn as ZoomInIcon
 } from '@mui/icons-material';
 import { Visualization } from '../../types';
+import { formatDateTime } from '../../utils';
 
 interface VisualizationGridProps {
   visualizations: Visualization[];
@@ -136,7 +137,7 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
                       {viz.filename}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block">
-                      {new Date(viz.uploadedAt).toLocaleDateString()}
+                      {formatDateTime(viz.uploadedAt)}
                     </Typography>
                   </CardContent>
                   

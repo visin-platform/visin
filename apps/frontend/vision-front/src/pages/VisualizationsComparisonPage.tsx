@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { visualizationService } from '../services/visualizationService';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { formatDateTime } from '../utils';
 import { Visualization } from '../types';
 
 const VisualizationsComparisonPage: React.FC = () => {
@@ -143,7 +144,7 @@ const VisualizationsComparisonPage: React.FC = () => {
                     {viz.filename}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Epoch {viz.epoch} • {new Date(viz.uploadedAt).toLocaleDateString()}
+                    Epoch {viz.epoch} • {formatDateTime(viz.uploadedAt)}
                   </Typography>
                   <Box
                     component="img"

@@ -158,8 +158,17 @@ export const TestResultsPage: React.FC = () => {
       setError('Maximum 10 test results can be compared at once');
       return;
     }
-    const ids = Array.from(selectedTestResults);
-    navigate(`/test-results/compare?ids=${ids.join(',')}`);
+    // Get unique training IDs from selected test results
+    const trainingIds = Array.from(new Set(
+      testResults
+        .filter(tr => selectedTestResults.has(tr._id))
+        .map(tr => tr.training?._id)
+        .filter(id => id)
+    ));
+    
+    if (trainingIds.length > 0) {
+      navigate(`/trainings/compare?ids=${trainingIds.join(',')}&tab=tests`);
+    }
   };
 
   return (

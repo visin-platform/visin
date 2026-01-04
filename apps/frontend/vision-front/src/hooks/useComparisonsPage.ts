@@ -188,26 +188,14 @@ export const useComparisonsPage = () => {
   };
 
   const handleViewComparison = (comparison: Comparison) => {
-    // Navigate based on comparison type
-    switch (comparison.type) {
-      case 'trainings':
-        navigate(`/trainings/compare?ids=${comparison.itemIds.join(',')}`);
-        break;
-      case 'tests':
-        navigate(`/test-results/compare?ids=${comparison.itemIds.join(',')}`);
-        break;
-      case 'benchmarks':
-        // For now, navigate to benchmarks page - could be enhanced later
-        navigate('/benchmarks');
-        break;
-      case 'epochs':
-        // For now, navigate to epochs page - could be enhanced later
-        navigate('/epochs');
-        break;
-      default:
-        // Default to trainings comparison
-        navigate(`/trainings/compare?ids=${comparison.itemIds.join(',')}`);
+    // All comparisons now go to training comparison page
+    let tab = '';
+    if ((comparison.type as any) === 'tests') {
+      tab = '&tab=tests';
+    } else if ((comparison.type as any) === 'benchmarks') {
+      tab = '&tab=benchmarks';
     }
+    navigate(`/trainings/compare?ids=${comparison.itemIds.join(',')}${tab}`);
   };
 
   const formatTimestamp = (timestamp: string) => {

@@ -20,6 +20,7 @@ import { visualizationService } from '../services/visualizationService';
 import { trainingService } from '../services/trainingService';
 import { Visualization, Training } from '../types';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { formatDateTime } from '../utils';
 
 interface TrainingWithVisualizations {
   training: Training;
@@ -127,10 +128,6 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
   };
 
   const copyShareUrl = () => {
@@ -286,7 +283,7 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
                                       onClick={() => handleImageClick(viz)}
                                     />
                                     <Typography variant="caption" display="block" sx={{ mt: 0.5 }} color="text.secondary">
-                                      {formatDate(viz.uploadedAt)}
+                                      {formatDateTime(viz.uploadedAt)}
                                     </Typography>
                                   </CardContent>
                                 </Card>

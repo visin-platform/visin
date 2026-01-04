@@ -13,6 +13,7 @@ import {
   TablePagination
 } from '@mui/material';
 import { Link } from 'react-router-dom';
+import { formatDateTime } from '../../utils';
 
 interface ProjectBenchmarksTabProps {
   benchmarksResponse: any;
@@ -86,7 +87,7 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
                       </TableCell>
                       <TableCell>{firstResult?.fps !== undefined && firstResult?.fps !== null ? firstResult.fps.toFixed(2) : '-'}</TableCell>
                       <TableCell>{formatParameters(firstResult)}</TableCell>
-                      <TableCell>{new Date(benchmark.timestamp).toLocaleString()}</TableCell>
+                      <TableCell>{formatDateTime(benchmark.timestamp)}</TableCell>
                     </TableRow>
                   );
                 })}

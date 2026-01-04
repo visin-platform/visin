@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 
 import { projectService } from '../services/projectService';
+import { formatDateTime } from '../utils';
 import { trainingService } from '../services/trainingService';
 import { testResultService } from '../services/testResultService';
 import { visualizationService } from '../services/visualizationService';
@@ -345,7 +346,7 @@ const ProjectDashboardPage: React.FC = () => {
                 size="small" 
               />
               <Chip 
-                label={`Created ${new Date(project.createdAt).toLocaleDateString('et-EE')}`} 
+                label={`Created ${formatDateTime(project.createdAt)}`} 
                 variant="outlined" 
                 size="small" 
               />

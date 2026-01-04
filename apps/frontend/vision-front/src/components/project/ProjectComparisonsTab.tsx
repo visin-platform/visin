@@ -15,18 +15,8 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  FormControl,
-  FormLabel,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  Checkbox,
-  List,
-  ListItem,
-  ListItemText,
   CircularProgress,
   Alert,
-  Chip,
   IconButton,
   Tooltip,
   useTheme
@@ -36,24 +26,22 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { comparisonService } from '../../services/comparisonService';
 import { trainingService } from '../../services/trainingService';
-import { benchmarkService } from '../../services/benchmarkService';
-import { Comparison } from '../../types';
+import { Comparison, Training } from '../../types';
+import TrainingSelector from '../../components/comparison/TrainingSelector';
+import { formatDateTime } from '../../utils';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ProjectComparisonsTabProps {
   projectId: string;
 }
 
-type ComparisonType = 'trainings' | 'tests' | 'benchmarks';
-
-interface Item {
-  _id: string;
-  name?: string;
-}
+type ComparisonType = 'trainings';
 
 const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const theme = useTheme();
+  const { isAuthenticated } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<ComparisonType>('trainings');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -74,18 +62,11 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
     queryFn: () => comparisonService.getComparisons({ projectId }),
   });
 
-  // Fetch trainings for the project (used for both trainings and tests comparisons)
+  // Fetch trainings for the project
   const { data: trainingsResponse, isLoading: isTrainingsLoading } = useQuery({
     queryKey: ['project-trainings-list', projectId],
-    queryFn: () => trainingService.getTrainings({ projectId, limit: 100 }),
-    enabled: (selectedType === 'trainings' || selectedType === 'tests') && modalOpen
-  });
-
-  // Fetch benchmarks for the project
-  const { data: benchmarksResponse, isLoading: isBenchmarksLoading } = useQuery({
-    queryKey: ['project-benchmarks-list', projectId],
-    queryFn: () => benchmarkService.getBenchmarks({ projectId, limit: 100 }),
-    enabled: selectedType === 'benchmarks' && modalOpen
+    queryFn: () => trainingService.getTrainings({ projectId, limit: 1000 }),
+    enabled: modalOpen
   });
 
   // Create/update comparison mutation
@@ -158,14 +139,9 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
     setComparisonDescription('');
   };
 
-  const handleTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedType(event.target.value as ComparisonType);
-    setSelectedItems([]);
-  };
-
   const handleItemToggle = (itemId: string) => {
-    setSelectedItems(prev => 
-      prev.includes(itemId) 
+    setSelectedItems(prev =>
+      prev.includes(itemId)
         ? prev.filter(id => id !== itemId)
         : prev.length < 20 ? [...prev, itemId] : prev
     );
@@ -185,6 +161,7 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
   };
 
   const handleEditComparison = (comparison: Comparison) => {
+    if (!isAuthenticated) return;
     handleOpenModal(comparison);
   };
 
@@ -201,49 +178,27 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
   };
 
   const handleNewComparison = () => {
+    if (!isAuthenticated) return;
     handleOpenModal();
   };
 
   const handleComparisonClick = (comparison: Comparison) => {
-    // Navigate to appropriate comparison page
+    // Navigate to training comparison page with appropriate tab
     const ids = comparison.itemIds.join(',');
-    switch (comparison.type) {
-      case 'trainings':
-        navigate(`/trainings/compare?ids=${ids}`);
-        break;
-      case 'tests':
-        navigate(`/test-results/compare?ids=${ids}`);
-        break;
-      case 'benchmarks':
-        navigate(`/benchmarks/compare?ids=${ids}`);
-        break;
-      default:
-        break;
+    let tab = '';
+    if ((comparison.type as any) === 'tests') {
+      tab = '&tab=tests';
+    } else if ((comparison.type as any) === 'benchmarks') {
+      tab = '&tab=benchmarks';
     }
+    navigate(`/trainings/compare?ids=${ids}${tab}`);
   };
 
-  const getItemsForType = (): Item[] => {
-    switch (selectedType) {
-      case 'trainings':
-        return trainingsResponse?.data?.trainings || [];
-      case 'tests':
-        // For test result comparisons, show trainings to compare their aggregated results
-        return trainingsResponse?.data?.trainings || [];
-      case 'benchmarks':
-        return (benchmarksResponse?.data?.benchmarks || []).map(benchmark => ({
-          _id: benchmark._id,
-          name: (benchmark.training_id && typeof benchmark.training_id === 'object' && 'name' in benchmark.training_id) 
-            ? benchmark.training_id.name 
-            : (benchmark.training_uuid ? 'Unknown Training' : 'Standalone')
-        }));
-      default:
-        return [];
-    }
+  const getItemsForType = (): Training[] => {
+    return trainingsResponse?.data?.trainings || [];
   };
 
-  const isLoadingItems = 
-    ((selectedType === 'trainings' || selectedType === 'tests') && isTrainingsLoading) ||
-    (selectedType === 'benchmarks' && isBenchmarksLoading);
+  const isLoadingItems = isTrainingsLoading;
 
   const comparisons: Comparison[] = comparisonsResponse?.data?.comparisons || [];
 
@@ -251,13 +206,15 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
     <Box sx={{ px: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h6" gutterBottom>Comparisons</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleNewComparison}
-        >
-          New Comparison
-        </Button>
+        {isAuthenticated && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleNewComparison}
+          >
+            New Comparison
+          </Button>
+        )}
       </Box>
 
       {isComparisonsLoading ? (
@@ -272,7 +229,6 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
-                <TableCell>Type</TableCell>
                 <TableCell>Items</TableCell>
                 <TableCell>Created</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
@@ -287,44 +243,40 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
                   onClick={() => handleComparisonClick(comparison)}
                 >
                   <TableCell>{comparison.name}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={comparison.type} 
-                      size="small" 
-                      color="primary" 
-                      variant="outlined" 
-                    />
-                  </TableCell>
                   <TableCell>{comparison.itemIds.length} items</TableCell>
-                  <TableCell>{new Date(comparison.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell>{formatDateTime(comparison.createdAt)}</TableCell>
                   <TableCell align="center">
                     <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                      <Tooltip title="Edit comparison">
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleEditComparison(comparison);
-                          }}
-                          sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.primary.main } }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete comparison">
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDeleteComparison(comparison);
-                          }}
-                          sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.error.main } }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      {isAuthenticated && (
+                        <>
+                          <Tooltip title="Edit comparison">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleEditComparison(comparison);
+                              }}
+                              sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.primary.main } }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete comparison">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeleteComparison(comparison);
+                              }}
+                              sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.error.main } }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      )}
                     </Box>
                   </TableCell>
                 </TableRow>
@@ -356,41 +308,17 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
               sx={{ mb: 3 }}
             />
 
-            <FormControl component="fieldset" sx={{ mb: 3 }}>
-              <FormLabel component="legend">Comparison Type</FormLabel>
-              <RadioGroup
-                row
-                value={selectedType}
-                onChange={handleTypeChange}
-              >
-                <FormControlLabel value="trainings" control={<Radio />} label="Training Comparison" />
-                <FormControlLabel value="tests" control={<Radio />} label="Test Results Comparison" />
-                <FormControlLabel value="benchmarks" control={<Radio />} label="Benchmarks" />
-              </RadioGroup>
-            </FormControl>
-
             <Typography variant="h6" sx={{ mb: 2 }}>
-              Select {selectedType === 'trainings' ? 'Trainings' : selectedType === 'tests' ? 'Trainings' : 'Benchmarks'} ({selectedItems.length}/20)
+              Select Trainings
             </Typography>
 
-            {isLoadingItems ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-                <CircularProgress size={24} />
-              </Box>
-            ) : (
-              <List sx={{ maxHeight: 300, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                {getItemsForType().map((item) => (
-                  <ListItem key={item._id} dense>
-                    <Checkbox
-                      checked={selectedItems.includes(item._id)}
-                      onChange={() => handleItemToggle(item._id)}
-                      disabled={!selectedItems.includes(item._id) && selectedItems.length >= 20}
-                    />
-                    <ListItemText primary={item.name} />
-                  </ListItem>
-                ))}
-              </List>
-            )}
+            <TrainingSelector
+              trainings={getItemsForType()}
+              selectedTrainingIds={selectedItems}
+              onTrainingToggle={handleItemToggle}
+              maxSelections={20}
+              isLoading={isLoadingItems}
+            />
           </Box>
         </DialogContent>
         <DialogActions>

@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { Compare as CompareIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { formatDateTime } from '../../utils';
 
 interface ProjectTestsTabProps {
   testResultsResponse: any;
@@ -59,7 +60,17 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
   const handleCompareSelectedTestResults = () => {
     const selectedIds = Array.from(selectedTestResultIds);
     if (selectedIds.length > 1) {
-      navigate(`/test-results/compare?ids=${selectedIds.join(',')}`);
+      // Get unique training IDs from selected test results
+      const trainingIds = Array.from(new Set(
+        testResultsResponse.data.testResults
+          .filter((tr: any) => selectedTestResultIds.has(tr._id))
+          .map((tr: any) => tr.training?._id)
+          .filter((id: any) => id)
+      ));
+      
+      if (trainingIds.length > 0) {
+        navigate(`/trainings/compare?ids=${trainingIds.join(',')}&tab=tests`);
+      }
     }
   };
 
@@ -111,7 +122,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
                     </TableCell>
                     <TableCell>{testResult.training?.name || 'Unknown'}</TableCell>
                     <TableCell>{testResult.epoch}</TableCell>
-                    <TableCell>{new Date(testResult.timestamp).toLocaleString()}</TableCell>
+                    <TableCell>{formatDateTime(testResult.timestamp)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

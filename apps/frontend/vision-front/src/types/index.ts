@@ -567,7 +567,7 @@ export interface Comparison {
   uuid: string;
   name: string;
   description?: string;
-  type: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
+  type: 'trainings';
   itemIds: string[];
   projectId?: string;
   metadata?: any;
@@ -580,7 +580,7 @@ export interface CreateComparisonData {
   uuid?: string;
   name: string;
   description?: string;
-  type: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
+  type: 'trainings';
   itemIds: string[];
   projectId?: string;
   metadata?: any;
@@ -637,6 +637,9 @@ export interface TrainingComparison {
   };
   lastEpoch: ComparisonEpoch | null;
   epochs: ComparisonEpoch[];
+  aggregatedTestResults: any | null;
+  testResultsCount: number;
+  benchmarks: any[];
 }
 
 export interface TrainingComparisonResponse {

@@ -35,6 +35,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiTokenService, ApiToken } from '../services/apiTokenService';
 import { projectService } from '../services/projectService';
 import { Project, UpdateProjectData } from '../types/Project';
+import { formatDateTime } from '../utils';
 
 interface ProjectSettingsProps {
   project: Project;
@@ -251,12 +252,12 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
                 <TableCell>
                   <Chip label={token.prefix + '...'} size="small" variant="outlined" sx={{ fontFamily: 'monospace' }} />
                 </TableCell>
-                <TableCell>{new Date(token.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell>{formatDateTime(token.createdAt)}</TableCell>
                 <TableCell>
-                  {token.expiresAt ? new Date(token.expiresAt).toLocaleDateString() : 'Never'}
+                  {token.expiresAt ? formatDateTime(token.expiresAt) : 'Never'}
                 </TableCell>
                 <TableCell>
-                  {token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleDateString() : 'Never'}
+                  {token.lastUsedAt ? formatDateTime(token.lastUsedAt) : 'Never'}
                 </TableCell>
                 <TableCell>
                   <Chip 
