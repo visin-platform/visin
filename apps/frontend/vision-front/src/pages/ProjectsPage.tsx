@@ -37,6 +37,7 @@ import { Project } from '../types/Project';
 import ProjectFormDialog from '../components/ProjectFormDialog';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
+import { formatDateTime } from '../utils';
 
 const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -249,7 +250,7 @@ const ProjectsPage: React.FC = () => {
                     />
                   </TableCell>
                   <TableCell>
-                    {new Date(project.createdAt).toLocaleDateString()}
+                    {formatDateTime(project.createdAt)}
                   </TableCell>
                   <TableCell align="right">
                     {user && project.ownerId === user.id && (

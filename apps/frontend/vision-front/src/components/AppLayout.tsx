@@ -22,7 +22,6 @@ import {
 import {
   ModelTraining,
   Storage,
-  CompareArrows,
   Image as ImageIcon,
   ExpandMore,
   Menu as MenuIcon,
@@ -93,7 +92,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     { text: 'Projects', icon: <Folder />, path: '/projects' },
     { text: 'Trainings', icon: <ModelTraining />, path: '/trainings' },
     { text: 'Datasets', icon: <Storage />, path: '/datasets' },
-    { text: 'Comparisons', icon: <CompareArrows />, path: '/comparisons' },
     { text: 'Image Labeling', icon: <ImageIcon />, path: '/image-labeling' },
   ];
 
