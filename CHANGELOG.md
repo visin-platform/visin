@@ -1,4 +1,12 @@
 # Visin Changelog
+### [0.0.46](https://github.com/visin-platform/visin-monorepo/compare/v0.0.45...v0.0.46) (2026-01-04)
+
+
+### Features
+
+* add mean and std to test results ([3030da2](https://github.com/visin-platform/visin-monorepo/commit/3030da24273a2effe5287fc0235205830337adb5))
+* make best test result bold in latex ([2d8a917](https://github.com/visin-platform/visin-monorepo/commit/2d8a917719accfd0ad156564bb9f822142bd868a))
+
 ### [0.0.45](https://github.com/visin-platform/visin-monorepo/compare/v0.0.44...v0.0.45) (2026-01-03)
 
 
