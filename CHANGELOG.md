@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.48](https://github.com/visin-platform/visin-monorepo/compare/v0.0.47...v0.0.48) (2026-01-04)
+
+
+### Features
+
+* refactor components to be smaller ([6439342](https://github.com/visin-platform/visin-monorepo/commit/643934230af4a8846fb14bafca9706aa41910c7d))
+
 ### [0.0.47](https://github.com/visin-platform/visin-monorepo/compare/v0.0.46...v0.0.47) (2026-01-04)
 
 
