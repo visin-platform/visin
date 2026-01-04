@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.47](https://github.com/visin-platform/visin-monorepo/compare/v0.0.46...v0.0.47) (2026-01-04)
+
+
+### Features
+
+* make one training comparison ([c05734e](https://github.com/visin-platform/visin-monorepo/commit/c05734e3aa82c449800ccff02b4cb25b164434b8))
+
 ### [0.0.46](https://github.com/visin-platform/visin-monorepo/compare/v0.0.45...v0.0.46) (2026-01-04)
 
 
