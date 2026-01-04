@@ -55,6 +55,39 @@ export const generateAggregatedLatexCode = (aggregatedStats: any, hasCyclistPede
   if (hasCyclistPedestrianData) classes.push('cyclist + pedestrian');
   classes.push('human');
 
+  // Helper function to find the best (maximum) value for each metric across all trainings
+  const getBestValues = (conditionKey: string) => {
+    const bestValues: { [key: string]: { [className: string]: number } } = {
+      iou: {},
+      precision: {},
+      recall: {},
+      ap: {}
+    };
+    
+    const conditionData = aggregatedStats[conditionKey];
+    if (!conditionData) return bestValues;
+    
+    classes.forEach((className) => {
+      ['iou', 'precision', 'recall', 'ap'].forEach((metric) => {
+        const metricData = conditionData[className]?.[metric];
+        if (metricData?.mean !== undefined) {
+          if (bestValues[metric][className] === undefined || metricData.mean > bestValues[metric][className]) {
+            bestValues[metric][className] = metricData.mean;
+          }
+        }
+      });
+    });
+    
+    return bestValues;
+  };
+
+  // Helper function to format value with bold if it's the best
+  const formatValue = (metricData: any, isBest: boolean): string => {
+    if (!metricData || typeof metricData.mean !== 'number') return '-';
+    const value = `${metricData.mean.toFixed(2)} ± ${metricData.std.toFixed(2)}`;
+    return isBest ? `\\textbf{${value}}` : value;
+  };
+
   let latex = `\\begin{table*}[ht]
 \\centering
 \\caption{Aggregated performance metrics across ${testResultsCount} test result${testResultsCount !== 1 ? 's' : ''} (mean ± standard deviation).}
@@ -68,41 +101,39 @@ export const generateAggregatedLatexCode = (aggregatedStats: any, hasCyclistPede
     const conditionData = aggregatedStats[condition.key];
     if (!conditionData) return;
 
+    const bestValues = getBestValues(condition.key);
+
     latex += `${condition.label}`;
 
     // IoU values
     classes.forEach((className) => {
       const metricData = conditionData[className]?.iou;
-      const value = metricData && typeof metricData.mean === 'number'
-        ? `${metricData.mean.toFixed(2)} ± ${metricData.std.toFixed(2)}`
-        : '-';
+      const isBest = metricData?.mean === bestValues.iou[className];
+      const value = formatValue(metricData, isBest);
       latex += ` & ${value}`;
     });
 
     // Precision values
     classes.forEach((className) => {
       const metricData = conditionData[className]?.precision;
-      const value = metricData && typeof metricData.mean === 'number'
-        ? `${metricData.mean.toFixed(2)} ± ${metricData.std.toFixed(2)}`
-        : '-';
+      const isBest = metricData?.mean === bestValues.precision[className];
+      const value = formatValue(metricData, isBest);
       latex += ` & ${value}`;
     });
 
     // Recall values
     classes.forEach((className) => {
       const metricData = conditionData[className]?.recall;
-      const value = metricData && typeof metricData.mean === 'number'
-        ? `${metricData.mean.toFixed(2)} ± ${metricData.std.toFixed(2)}`
-        : '-';
+      const isBest = metricData?.mean === bestValues.recall[className];
+      const value = formatValue(metricData, isBest);
       latex += ` & ${value}`;
     });
 
     // AP values
     classes.forEach((className) => {
       const metricData = conditionData[className]?.ap;
-      const value = metricData && typeof metricData.mean === 'number'
-        ? `${metricData.mean.toFixed(2)} ± ${metricData.std.toFixed(2)}`
-        : '-';
+      const isBest = metricData?.mean === bestValues.ap[className];
+      const value = formatValue(metricData, isBest);
       latex += ` & ${value}`;
     });
 
