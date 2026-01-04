@@ -12,6 +12,7 @@ export const useTrainingDetail = (id: string | undefined) => {
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [testResultsLoading, setTestResultsLoading] = useState(false);
   const [selectedTestEpoch, setSelectedTestEpoch] = useState<number | null>(null);
+  const [allTestResults, setAllTestResults] = useState<TestResult[]>([]);
   const [testResultsMap, setTestResultsMap] = useState<{ [epoch: number]: TestResult[] }>({});
   const [availableTestEpochs, setAvailableTestEpochs] = useState<number[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -73,6 +74,7 @@ export const useTrainingDetail = (id: string | undefined) => {
 
         setAvailableTestEpochs(epochsWithTestResults.sort((a, b) => a - b));
         setTestResultsMap(testResultsByEpoch);
+        setAllTestResults(trainingTestResults);
 
         // Auto-select epoch logic
         let epochToSelect = selectedTestEpoch;
@@ -140,6 +142,7 @@ export const useTrainingDetail = (id: string | undefined) => {
     config,
     configLoading,
     testResults,
+    allTestResults,
     testResultsLoading,
     selectedTestEpoch,
     setSelectedTestEpoch,

@@ -12,7 +12,7 @@ export interface ITestResult extends Document {
         precision: number;
         recall: number;
         f1_score: number;
-        average_precision: number;
+        ap: number;
       };
     };
   };

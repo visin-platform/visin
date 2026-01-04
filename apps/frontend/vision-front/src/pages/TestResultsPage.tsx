@@ -125,14 +125,6 @@ export const TestResultsPage: React.FC = () => {
     return sum / validClasses.length;
   };
 
-  const getOverallAverageInferenceTime = (testResults: TestResultData): number => {
-    const conditions = Object.values(testResults);
-    const inferenceTimes = conditions.map(condition => condition.inference_time?.avg_per_sample_ms).filter(time => time !== undefined);
-    if (inferenceTimes.length === 0) return 0;
-    const sum = inferenceTimes.reduce((acc, time) => acc + time, 0);
-    return sum / inferenceTimes.length;
-  };
-
   const getOverallAverage = (testResults: TestResultData, metric: keyof TestResultMetrics): number => {
     const conditions = Object.values(testResults);
     const sum = conditions.reduce((acc, condition) => acc + getAverageMetric(condition, metric), 0);
@@ -256,9 +248,6 @@ export const TestResultsPage: React.FC = () => {
                     <TableCell align="right" sx={{ fontWeight: 600 }}>
                       Avg F1
                     </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Avg Inference Time (ms)
-                    </TableCell>
                     <TableCell align="center" sx={{ fontWeight: 600 }}>
                       Timestamp
                     </TableCell>
@@ -272,7 +261,6 @@ export const TestResultsPage: React.FC = () => {
                     const avgIou = getOverallAverage(testResult.test_results, 'iou');
                     const avgRecall = getOverallAverage(testResult.test_results, 'recall');
                     const avgF1 = getOverallAverage(testResult.test_results, 'f1_score');
-                    const avgInferenceTime = getOverallAverageInferenceTime(testResult.test_results);
 
                     return (
                       <TableRow 
@@ -304,7 +292,6 @@ export const TestResultsPage: React.FC = () => {
                         <TableCell align="right">{formatNumber(avgIou)}</TableCell>
                         <TableCell align="right">{formatNumber(avgRecall)}</TableCell>
                         <TableCell align="right">{formatNumber(avgF1)}</TableCell>
-                        <TableCell align="right">{formatNumber(avgInferenceTime, 2)}</TableCell>
                         <TableCell align="center" sx={{ fontSize: '0.875rem' }}>
                           {formatDate(testResult.timestamp)}
                         </TableCell>

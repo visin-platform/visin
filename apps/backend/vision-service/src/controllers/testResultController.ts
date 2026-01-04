@@ -234,3 +234,30 @@ export const compareTestResults = async (req: Request, res: Response): Promise<v
     });
   }
 };
+
+// Compare aggregated test results by training
+export const compareAggregatedTestResultsByTraining = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { trainingIds } = req.body;
+    if (!trainingIds || !Array.isArray(trainingIds) || trainingIds.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Training IDs array is required'
+      });
+      return;
+    }
+
+    const result = await testResultService.getAggregatedTestResultsByTraining(trainingIds);
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Error comparing aggregated test results by training:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to compare aggregated test results by training',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};

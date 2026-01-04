@@ -40,6 +40,22 @@ export interface TestResultComparisonResponse {
   };
 }
 
+// Aggregated test result comparison types
+export interface AggregatedTestResultComparison {
+  training: {
+    _id: string;
+    name: string;
+    uuid: string;
+    status: string;
+  };
+  aggregatedResults: any;
+  testResultsCount: number;
+}
+
+export interface AggregatedTestResultComparisonResponse {
+  comparison: AggregatedTestResultComparison[];
+}
+
 export const testResultService = {
   // Get all test results
   async getTestResults(params?: {
@@ -112,6 +128,12 @@ export const testResultService = {
   // Compare multiple test results
   async compareTestResults(testResultIds: string[]): Promise<ApiResponse<TestResultComparisonResponse>> {
     const response = await visionApi.post('/test-results/compare', { testResultIds });
+    return response.data;
+  },
+
+  // Compare aggregated test results by training
+  async compareAggregatedTestResultsByTraining(trainingIds: string[]): Promise<ApiResponse<AggregatedTestResultComparisonResponse>> {
+    const response = await visionApi.post('/test-results/compare/aggregated', { trainingIds });
     return response.data;
   }
 };

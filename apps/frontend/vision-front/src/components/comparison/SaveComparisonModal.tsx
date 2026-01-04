@@ -17,14 +17,14 @@ import { comparisonService } from '../../services/comparisonService';
 interface SaveComparisonModalProps {
   open: boolean;
   onClose: () => void;
-  testResultIds: string[];
+  trainingIds: string[];
   initialSelectedIds?: string[];
 }
 
 const SaveComparisonModal: React.FC<SaveComparisonModalProps> = ({
   open,
   onClose,
-  testResultIds,
+  trainingIds,
   initialSelectedIds = []
 }) => {
   const [name, setName] = useState('');
@@ -34,11 +34,11 @@ const SaveComparisonModal: React.FC<SaveComparisonModalProps> = ({
 
   useEffect(() => {
     if (open) {
-      setSelectedIds(initialSelectedIds.length > 0 ? initialSelectedIds : testResultIds);
+      setSelectedIds(initialSelectedIds.length > 0 ? initialSelectedIds : trainingIds);
       setName('');
       setDescription('');
     }
-  }, [open, testResultIds, initialSelectedIds]);
+  }, [open, trainingIds, initialSelectedIds]);
 
   const handleSave = async () => {
     if (!name.trim()) return;
@@ -95,7 +95,7 @@ const SaveComparisonModal: React.FC<SaveComparisonModalProps> = ({
             Include Test Results:
           </Typography>
           <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
-            {testResultIds.map(id => (
+            {trainingIds.map((id: string) => (
               <FormControlLabel
                 key={id}
                 control={
@@ -104,7 +104,7 @@ const SaveComparisonModal: React.FC<SaveComparisonModalProps> = ({
                     onChange={() => handleToggleId(id)}
                   />
                 }
-                label={`Test Result ${id.slice(-8)}`}
+                label={`Training ${id.slice(-8)}`}
               />
             ))}
           </Box>

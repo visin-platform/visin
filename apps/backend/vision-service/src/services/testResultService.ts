@@ -437,5 +437,134 @@ export const testResultService = {
     };
 
     return { comparison: comparisonData, summary };
+  },
+
+  async getAggregatedTestResultsByTraining(trainingIds: string[]) {
+    if (trainingIds.length > 20) throw new Error('Maximum 20 trainings can be compared at once');
+
+    // Get all epochs for the trainings
+    const epochs = await Epoch.find({ trainingId: { $in: trainingIds }, deletedAt: null });
+    const epochUuids = epochs.map(e => e.epoch_uuid);
+
+    // Get all test results for these epochs
+    const testResults = await TestResult.find({ epoch_uuid: { $in: epochUuids }, deletedAt: null });
+
+    // Get training details
+    const trainings = await Training.find({ _id: { $in: trainingIds }, deletedAt: null });
+    const trainingMap = trainings.reduce((acc, training) => {
+      acc[(training._id as any).toString()] = training;
+      return acc;
+    }, {} as Record<string, any>);
+
+    // Group test results by training
+    const trainingTestResults = trainingIds.map(trainingId => {
+      const training = trainingMap[trainingId];
+      const trainingEpochs = epochs.filter(e => e.trainingId.toString() === trainingId);
+      const trainingEpochUuids = trainingEpochs.map(e => e.epoch_uuid);
+      const trainingTestResults = testResults.filter(tr => trainingEpochUuids.includes(tr.epoch_uuid));
+
+      if (trainingTestResults.length === 0) {
+        return {
+          training: {
+            _id: training._id,
+            name: training.name,
+            uuid: training.uuid,
+            status: training.status
+          },
+          aggregatedResults: null,
+          testResultsCount: 0
+        };
+      }
+
+      // Aggregate metrics across all test results for this training
+      const aggregatedResults = this.aggregateTestResults(trainingTestResults);
+
+      return {
+        training: {
+          _id: training._id,
+          name: training.name,
+          uuid: training.uuid,
+          status: training.status
+        },
+        aggregatedResults,
+        testResultsCount: trainingTestResults.length
+      };
+    });
+
+    return { comparison: trainingTestResults };
+  },
+
+  aggregateTestResults(testResults: any[]) {
+    if (testResults.length === 0) return null;
+
+    const conditions = Object.keys(testResults[0].test_results).filter(condition => condition !== 'inference_time');
+    const classes = new Set<string>();
+
+    // Collect all classes across all test results
+    testResults.forEach(tr => {
+      Object.values(tr.test_results).forEach((conditionData: any) => {
+        if (conditionData && typeof conditionData === 'object') {
+          Object.keys(conditionData).forEach(className => {
+            if (className !== 'inference_time' && !className.startsWith('mean_')) {
+              classes.add(className);
+            }
+          });
+        }
+      });
+    });
+
+    const classArray = Array.from(classes).sort();
+    const aggregatedResults: any = {};
+
+    conditions.forEach(condition => {
+      aggregatedResults[condition] = {};
+
+      classArray.forEach(className => {
+        const metrics = ['iou', 'recall', 'precision', 'f1_score', 'ap'];
+        const classMetrics: any = {};
+
+        metrics.forEach(metric => {
+          const values: number[] = [];
+
+          testResults.forEach(tr => {
+            const conditionData = tr.test_results[condition];
+            if (conditionData && conditionData[className] && typeof conditionData[className] === 'object') {
+              const value = conditionData[className][metric];
+              if (typeof value === 'number' && !isNaN(value)) {
+                values.push(value);
+              }
+            }
+          });
+
+          if (values.length > 0) {
+            const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+            const std = Math.sqrt(values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length);
+            classMetrics[metric] = { mean, std };
+          }
+        });
+
+        if (Object.keys(classMetrics).length > 0) {
+          aggregatedResults[condition][className] = classMetrics;
+        }
+      });
+    });
+
+    // Aggregate inference time
+    const inferenceTimes: number[] = [];
+    testResults.forEach(tr => {
+      Object.values(tr.test_results).forEach((conditionData: any) => {
+        if (conditionData && conditionData.inference_time && conditionData.inference_time.avg_per_sample_ms) {
+          inferenceTimes.push(conditionData.inference_time.avg_per_sample_ms);
+        }
+      });
+    });
+
+    if (inferenceTimes.length > 0) {
+      const mean = inferenceTimes.reduce((sum, val) => sum + val, 0) / inferenceTimes.length;
+      const std = Math.sqrt(inferenceTimes.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / inferenceTimes.length);
+      aggregatedResults.inference_time = { avg_per_sample_ms: { mean, std } };
+    }
+
+    return aggregatedResults;
   }
 };

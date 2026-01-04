@@ -17,9 +17,9 @@ import { Code as CodeIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 
 interface ComparisonData {
-  test_results: any;
-  training?: { _id: string; name: string };
-  testResult: { _id: string; test_uuid: string; epoch: number };
+  aggregatedResults: any;
+  training: { _id: string; name: string };
+  testResultsCount: number;
 }
 
 interface PerClassMetricsTableProps {
@@ -40,32 +40,33 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
     return 'N/A';
   };
 
-  if (comparisonData.length === 0) return null;
-
-  // Extract all unique class names
-  const allClasses = new Set<string>();
-  comparisonData.forEach(comp => {
-    Object.values(comp.test_results).forEach((conditionData: any) => {
-      if (conditionData && typeof conditionData === 'object') {
-        Object.keys(conditionData).forEach(className => {
-          if (className !== 'inference_time') {
-            allClasses.add(className);
+  // Helper function to find the best (maximum) value for each metric across all trainings
+  const getBestValues = (condition: string, className: string) => {
+    const bestValues: { [key: string]: number } = {};
+    
+    comparisonData.forEach((comp) => {
+      const conditionData = comp.aggregatedResults?.[condition];
+      const classMetrics = conditionData?.[className];
+      
+      if (classMetrics) {
+        ['iou', 'precision', 'recall', 'f1_score', 'ap'].forEach((metric) => {
+          const metricData = classMetrics[metric];
+          if (metricData?.mean !== undefined) {
+            if (bestValues[metric] === undefined || metricData.mean > bestValues[metric]) {
+              bestValues[metric] = metricData.mean;
+            }
           }
         });
       }
     });
-  });
-  const classNames = Array.from(allClasses).sort();
+    
+    return bestValues;
+  };
 
-  if (classNames.length === 0) {
-    return (
-      <Box sx={{ p: 3, textAlign: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
-          No per-class metrics available
-        </Typography>
-      </Box>
-    );
-  }
+  if (comparisonData.length === 0) return null;
+
+  // Class names are consistent across all trainings based on API structure
+  const classNames = ['human', 'sign', 'vehicle'];
 
   return (
     <Paper 
@@ -98,7 +99,7 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
           <Typography variant="h6" sx={{ mb: 2, textTransform: 'capitalize', ml: 2 }}>
             {condition.replace('_', ' ')} - Per-Class Metrics
           </Typography>
-          <TableContainer component={Paper} sx={{ mb: 3 }}>
+          <TableContainer component={Paper} sx={{ mb: 3, overflowX: 'auto' }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -107,23 +108,20 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
                   </TableCell>
                   {comparisonData.map((comp) => (
                     <TableCell
-                      key={comp.testResult._id}
+                      key={comp.training._id}
                       colSpan={5}
                       align="center"
                       sx={{ borderBottom: '2px solid rgba(224, 224, 224, 1)' }}
                     >
                       <Box>
                         <Link 
-                          to={`/trainings/${comp.training?._id}`}
+                          to={`/trainings/${comp.training._id}`}
                           style={{ textDecoration: 'none', color: 'inherit' }}
                         >
                           <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                            {comp.training?.name || 'Unknown Training'}
+                            {comp.training.name}
                           </Typography>
                         </Link>
-                        <Typography variant="caption" color="text.secondary">
-                          Test {comp.testResult.test_uuid.slice(-8)} (Epoch {comp.testResult.epoch})
-                        </Typography>
                       </Box>
                     </TableCell>
                   ))}
@@ -133,142 +131,119 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
                     Class
                   </TableCell>
                   {comparisonData.map((comp) => (
-                    <React.Fragment key={comp.testResult._id}>
+                    <React.Fragment key={comp.training._id}>
                       <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>IoU</TableCell>
                       <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>Precision</TableCell>
                       <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>Recall</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>AP</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem', borderRight: '2px solid rgba(224, 224, 224, 1)' }}>F1</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>F1</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem', borderRight: '2px solid rgba(224, 224, 224, 1)' }}>AP</TableCell>
                     </React.Fragment>
                   ))}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {classNames.map((className) => {
-                  // Calculate max values
-                  const maxValues = {
-                    iou: Math.max(...comparisonData.map(comp => {
-                      const conditionData = comp.test_results[condition];
-                      const classMetrics = conditionData?.[className];
-                      return classMetrics?.iou ?? -Infinity;
-                    })),
-                    precision: Math.max(...comparisonData.map(comp => {
-                      const conditionData = comp.test_results[condition];
-                      const classMetrics = conditionData?.[className];
-                      return classMetrics?.precision ?? -Infinity;
-                    })),
-                    recall: Math.max(...comparisonData.map(comp => {
-                      const conditionData = comp.test_results[condition];
-                      const classMetrics = conditionData?.[className];
-                      return classMetrics?.recall ?? -Infinity;
-                    })),
-                    ap: Math.max(...comparisonData.map(comp => {
-                      const conditionData = comp.test_results[condition];
-                      const classMetrics = conditionData?.[className];
-                      return classMetrics?.ap ?? -Infinity;
-                    })),
-                    f1: Math.max(...comparisonData.map(comp => {
-                      const conditionData = comp.test_results[condition];
-                      const classMetrics = conditionData?.[className];
-                      const f1Value = classMetrics?.f1_score ?? classMetrics?.f1 ?? classMetrics?.mean_f1;
-                      return (f1Value !== undefined && f1Value !== null && !isNaN(f1Value)) ? f1Value : -Infinity;
-                    }))
-                  };
-
                   return (
                     <TableRow key={className}>
                       <TableCell sx={{ fontWeight: 600 }}>
                         {className.charAt(0).toUpperCase() + className.slice(1)}
                       </TableCell>
                       {comparisonData.map((comp) => {
-                        const conditionData = comp.test_results[condition];
+                        const conditionData = comp.aggregatedResults?.[condition];
                         const classMetrics = conditionData?.[className];
+                        const bestValues = getBestValues(condition, className);
 
                         return (
-                          <React.Fragment key={comp.testResult._id}>
+                          <React.Fragment key={comp.training._id}>
                             <TableCell align="center">
-                              {classMetrics?.iou !== undefined ? (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    fontWeight: classMetrics.iou === maxValues.iou ? 700 : 'normal',
-                                    opacity: classMetrics.iou === maxValues.iou ? 1 : 0.8
+                              {classMetrics?.iou?.mean !== undefined ? (
+                                <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    fontSize: '0.75rem', 
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: classMetrics.iou.mean === bestValues.iou ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.iou)}
+                                  {formatNumber(classMetrics.iou.mean, 2)} ± {formatNumber(classMetrics.iou.std, 2)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                                   N/A
                                 </Typography>
                               )}
                             </TableCell>
                             <TableCell align="center">
-                              {classMetrics?.precision !== undefined ? (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    fontWeight: classMetrics.precision === maxValues.precision ? 700 : 'normal'
+                              {classMetrics?.precision?.mean !== undefined ? (
+                                <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    fontSize: '0.75rem', 
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: classMetrics.precision.mean === bestValues.precision ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.precision)}
+                                  {formatNumber(classMetrics.precision.mean, 2)} ± {formatNumber(classMetrics.precision.std, 2)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                                   N/A
                                 </Typography>
                               )}
                             </TableCell>
                             <TableCell align="center">
-                              {classMetrics?.recall !== undefined ? (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    fontWeight: classMetrics.recall === maxValues.recall ? 700 : 'normal'
+                              {classMetrics?.recall?.mean !== undefined ? (
+                                <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    fontSize: '0.75rem', 
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: classMetrics.recall.mean === bestValues.recall ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.recall)}
+                                  {formatNumber(classMetrics.recall.mean, 2)} ± {formatNumber(classMetrics.recall.std, 2)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                                   N/A
                                 </Typography>
                               )}
                             </TableCell>
                             <TableCell align="center">
-                              {classMetrics?.ap !== undefined ? (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    fontWeight: classMetrics.ap === maxValues.ap ? 700 : 'normal'
+                              {classMetrics?.f1_score?.mean !== undefined ? (
+                                <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    fontSize: '0.75rem', 
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: classMetrics.f1_score.mean === bestValues.f1_score ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.ap)}
+                                  {formatNumber(classMetrics.f1_score.mean, 2)} ± {formatNumber(classMetrics.f1_score.std, 2)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                                   N/A
                                 </Typography>
                               )}
                             </TableCell>
                             <TableCell align="center" sx={{ borderRight: '2px solid rgba(224, 224, 224, 1)' }}>
-                              {(() => {
-                                const f1Value = classMetrics?.f1_score ?? classMetrics?.f1 ?? classMetrics?.mean_f1;
-                                return f1Value !== undefined && f1Value !== null && !isNaN(f1Value) ? (
-                                  <Typography
-                                    variant="body2"
-                                    sx={{
-                                      fontWeight: f1Value === maxValues.f1 ? 700 : 'normal'
-                                    }}
-                                  >
-                                    {formatNumber(f1Value)}
-                                  </Typography>
-                                ) : (
-                                  <Typography variant="body2" color="text.secondary">
-                                    N/A
-                                  </Typography>
-                                );
-                              })()}
+                              {classMetrics?.ap?.mean !== undefined ? (
+                                <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    fontSize: '0.75rem', 
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: classMetrics.ap.mean === bestValues.ap ? 'bold' : 'normal'
+                                  }}
+                                >
+                                  {formatNumber(classMetrics.ap.mean, 2)} ± {formatNumber(classMetrics.ap.std, 2)}
+                                </Typography>
+                              ) : (
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                  N/A
+                                </Typography>
+                              )}
                             </TableCell>
                           </React.Fragment>
                         );

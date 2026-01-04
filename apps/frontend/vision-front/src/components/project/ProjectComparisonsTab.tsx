@@ -36,9 +36,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { comparisonService } from '../../services/comparisonService';
 import { trainingService } from '../../services/trainingService';
-import { testResultService } from '../../services/testResultService';
 import { benchmarkService } from '../../services/benchmarkService';
-import { Comparison, TestResult } from '../../types';
+import { Comparison } from '../../types';
 
 interface ProjectComparisonsTabProps {
   projectId: string;
@@ -75,18 +74,11 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
     queryFn: () => comparisonService.getComparisons({ projectId }),
   });
 
-  // Fetch trainings for the project
+  // Fetch trainings for the project (used for both trainings and tests comparisons)
   const { data: trainingsResponse, isLoading: isTrainingsLoading } = useQuery({
     queryKey: ['project-trainings-list', projectId],
     queryFn: () => trainingService.getTrainings({ projectId, limit: 100 }),
-    enabled: selectedType === 'trainings' && modalOpen
-  });
-
-  // Fetch test results for the project
-  const { data: testsResponse, isLoading: isTestsLoading } = useQuery({
-    queryKey: ['project-tests-list', projectId],
-    queryFn: () => testResultService.getTestResults({ projectId, limit: 100 }),
-    enabled: selectedType === 'tests' && modalOpen
+    enabled: (selectedType === 'trainings' || selectedType === 'tests') && modalOpen
   });
 
   // Fetch benchmarks for the project
@@ -235,12 +227,8 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
       case 'trainings':
         return trainingsResponse?.data?.trainings || [];
       case 'tests':
-        return (testsResponse?.data?.testResults || []).map((testResult: TestResult) => ({
-          _id: testResult._id,
-          name: testResult.training 
-            ? `${testResult.training.name} - Epoch ${testResult.epoch}`
-            : `Test ${testResult.test_uuid} - Epoch ${testResult.epoch}`
-        }));
+        // For test result comparisons, show trainings to compare their aggregated results
+        return trainingsResponse?.data?.trainings || [];
       case 'benchmarks':
         return (benchmarksResponse?.data?.benchmarks || []).map(benchmark => ({
           _id: benchmark._id,
@@ -254,8 +242,7 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
   };
 
   const isLoadingItems = 
-    (selectedType === 'trainings' && isTrainingsLoading) ||
-    (selectedType === 'tests' && isTestsLoading) ||
+    ((selectedType === 'trainings' || selectedType === 'tests') && isTrainingsLoading) ||
     (selectedType === 'benchmarks' && isBenchmarksLoading);
 
   const comparisons: Comparison[] = comparisonsResponse?.data?.comparisons || [];
@@ -370,20 +357,20 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
             />
 
             <FormControl component="fieldset" sx={{ mb: 3 }}>
-              <FormLabel component="legend">Category</FormLabel>
+              <FormLabel component="legend">Comparison Type</FormLabel>
               <RadioGroup
                 row
                 value={selectedType}
                 onChange={handleTypeChange}
               >
-                <FormControlLabel value="trainings" control={<Radio />} label="Trainings" />
-                <FormControlLabel value="tests" control={<Radio />} label="Tests" />
+                <FormControlLabel value="trainings" control={<Radio />} label="Training Comparison" />
+                <FormControlLabel value="tests" control={<Radio />} label="Test Results Comparison" />
                 <FormControlLabel value="benchmarks" control={<Radio />} label="Benchmarks" />
               </RadioGroup>
             </FormControl>
 
             <Typography variant="h6" sx={{ mb: 2 }}>
-              Select Items ({selectedItems.length}/20)
+              Select {selectedType === 'trainings' ? 'Trainings' : selectedType === 'tests' ? 'Trainings' : 'Benchmarks'} ({selectedItems.length}/20)
             </Typography>
 
             {isLoadingItems ? (

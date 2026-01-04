@@ -38,15 +38,15 @@ const TestResultsComparisonPage: React.FC = () => {
 
   // State for save comparison modal
   const [saveModalOpen, setSaveModalOpen] = useState(false);
-  const [selectedTestResultIds, setSelectedTestResultIds] = useState<string[]>([]);
+  const [selectedTrainingIds, setSelectedTrainingIds] = useState<string[]>([]);
 
-  // Get test result IDs from URL params
-  const testResultIds = useMemo(() => searchParams.get('ids')?.split(',') || [], [searchParams]);
+  // Get training IDs from URL params (ids parameter contains training IDs for aggregated comparison)
+  const trainingIds = useMemo(() => searchParams.get('ids')?.split(',') || [], [searchParams]);
 
-  // Update selected test result IDs when testResultIds changes
+  // Update selected training IDs when trainingIds changes
   useEffect(() => {
-    setSelectedTestResultIds(testResultIds);
-  }, [testResultIds]);
+    setSelectedTrainingIds(trainingIds);
+  }, [trainingIds]);
 
   // Permission check function
   const canSaveComparisons = () => {
@@ -54,15 +54,18 @@ const TestResultsComparisonPage: React.FC = () => {
   };
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['testResultsComparison', testResultIds],
-    queryFn: () => testResultService.compareTestResults(testResultIds),
-    enabled: testResultIds.length > 0
+    queryKey: ['aggregatedTestResultsComparison', trainingIds],
+    queryFn: () => testResultService.compareAggregatedTestResultsByTraining(trainingIds),
+    enabled: trainingIds.length > 0
   });
 
   const comparisonData = useMemo(() => {
-    return (data?.data?.comparison || []).map((item: any) => ({
-      ...item,
-      training: item.training || undefined
+    if (!data?.data?.comparison) return [];
+    
+    return data.data.comparison.map((item: any) => ({
+      aggregatedResults: item.aggregatedResults,
+      training: item.training,
+      testResultsCount: item.testResultsCount || 0
     }));
   }, [data]);
 
@@ -100,15 +103,15 @@ const TestResultsComparisonPage: React.FC = () => {
   const handleGeneratePerformanceLatex = () => handleGenerateLatex('performance');
   const handleGeneratePerClassLatex = () => handleGenerateLatex('perClass');
 
-  if (testResultIds.length === 0) {
+  if (trainingIds.length === 0) {
     return (
       <Container maxWidth="lg" sx={{ pb: 4 }}>
         <Alert severity="warning">
-          No test result IDs provided. Please select test results to compare from the test results list.
+          No training IDs provided. Please select trainings to compare their test results.
         </Alert>
         <Box sx={{ mt: 2 }}>
-          <Button variant="contained" onClick={() => navigate('/test-results')}>
-            Back to Test Results
+          <Button variant="contained" onClick={() => navigate('/trainings')}>
+            Back to Trainings
           </Button>
         </Box>
       </Container>
@@ -178,7 +181,7 @@ const TestResultsComparisonPage: React.FC = () => {
                 startIcon={<SaveIcon />}
                 onClick={() => {
                   setSaveModalOpen(true);
-                  setSelectedTestResultIds(testResultIds);
+                  setSelectedTrainingIds(trainingIds);
                 }}
                 disabled={comparisonData.length === 0}
                 color="secondary"
@@ -214,8 +217,8 @@ const TestResultsComparisonPage: React.FC = () => {
       <SaveComparisonModal
         open={saveModalOpen}
         onClose={() => setSaveModalOpen(false)}
-        testResultIds={testResultIds}
-        initialSelectedIds={selectedTestResultIds}
+        trainingIds={trainingIds}
+        initialSelectedIds={selectedTrainingIds}
       />
     </Container>
   );

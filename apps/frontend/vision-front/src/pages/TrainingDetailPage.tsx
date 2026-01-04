@@ -44,7 +44,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTrainingDetail } from '../hooks/useTrainingDetail';
 import { useTrainingEdit } from '../hooks/useTrainingEdit';
 import { processEpochFiles, processTestResultFiles, UploadResult } from '../utils/fileUploadHelpers';
-import { generateLatexCode } from '../utils/latexGenerator';
+import { generateLatexCode, generateAggregatedLatexCode } from '../utils/latexGenerator';
 
 const TrainingDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -82,10 +82,8 @@ const TrainingDetailPage: React.FC = () => {
     refetch,
     config,
     configLoading,
-    testResults,
+    allTestResults,
     testResultsLoading,
-    selectedTestEpoch,
-    setSelectedTestEpoch,
     availableTestEpochs,
     comments,
     commentsLoading,
@@ -223,6 +221,13 @@ const TrainingDetailPage: React.FC = () => {
   // LaTeX export handler
   const handleLatexExport = (testResult: TestResult) => {
     const latex = generateLatexCode(testResult);
+    setLatexCode(latex);
+    setLatexModalOpen(true);
+  };
+
+  // Aggregated LaTeX export handler
+  const handleAggregatedLatexExport = (aggregatedStats: any, hasCyclistPedestrianData: boolean, testResultsCount: number) => {
+    const latex = generateAggregatedLatexCode(aggregatedStats, hasCyclistPedestrianData, testResultsCount);
     setLatexCode(latex);
     setLatexModalOpen(true);
   };
@@ -397,10 +402,9 @@ const TrainingDetailPage: React.FC = () => {
       {/* Test Results Tab */}
       {detailTab === 2 && (
         <TrainingTestResultsTab
-          testResults={testResults}
+          allTestResults={allTestResults}
           testResultsLoading={testResultsLoading}
           availableTestEpochs={availableTestEpochs}
-          selectedTestEpoch={selectedTestEpoch}
           uploading={uploading}
           uploadError={uploadError}
           uploadSuccess={uploadSuccess}
@@ -409,8 +413,8 @@ const TrainingDetailPage: React.FC = () => {
           latexModalOpen={latexModalOpen}
           latexCode={latexCode}
           onTestResultFileUpload={(files) => handleFileUpload(files, 'testResult')}
-          onTestEpochChange={setSelectedTestEpoch}
           onLatexExport={handleLatexExport}
+          onAggregatedLatexExport={handleAggregatedLatexExport}
           onSetUploadResultsOpen={setUploadResultsOpen}
           onSetLatexModalOpen={setLatexModalOpen}
           onDeleteTestResult={handleDeleteTestResult}
