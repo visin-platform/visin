@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.45](https://github.com/visin-platform/visin-monorepo/compare/v0.0.44...v0.0.45) (2026-01-03)
+
+
+### Features
+
+* update latex export formats ([3b3360a](https://github.com/visin-platform/visin-monorepo/commit/3b3360adb6e37984229631637e033a4106d63776))
+
 ### [0.0.44](https://github.com/visin-platform/visin-monorepo/compare/v0.0.43...v0.0.44) (2026-01-03)
 
 
