@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Paper,
   Box,
@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
+import LatexModal from '../common/LatexModal';
 
 interface ComparisonData {
   aggregatedResults: any;
@@ -24,14 +25,112 @@ interface ComparisonData {
 
 interface PerformanceMetricsTableProps {
   comparisonData: ComparisonData[];
-  onGenerateLatex: () => void;
+  onGenerateLatex?: () => void;
 }
 
 const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
-  comparisonData,
-  onGenerateLatex
+  comparisonData
 }) => {
   const theme = useTheme();
+  const [latexModalOpen, setLatexModalOpen] = useState(false);
+  const [latexCode, setLatexCode] = useState('');
+  const [latexTitle, setLatexTitle] = useState('');
+
+  // Generate LaTeX for a specific performance metrics condition
+  const generateConditionLatex = (condition: string) => {
+    const classNames = ['human', 'sign', 'vehicle'];
+    const conditionTitle = condition.replace('_', ' ').toUpperCase();
+
+    let latex = `\\begin{table*}[t]\n\\centering\n\\caption{Test Results Performance Metrics - ${conditionTitle}}\n\\label{tab:performance_metrics_${condition}}\n`;
+    latex += `\\begin{tabular}{|l|${'c|c|c|c|c|'.repeat(classNames.length)}}\n\\hline\n`;
+
+    // Header row with class names
+    latex += 'Training & ';
+    classNames.forEach((className, index) => {
+      const classTitle = className.charAt(0).toUpperCase() + className.slice(1);
+      latex += `${classTitle} IoU & ${classTitle} Prec. & ${classTitle} Rec. & ${classTitle} F1 & ${classTitle} AP`;
+      if (index < classNames.length - 1) {
+        latex += ' & ';
+      }
+    });
+    latex += ' \\\\\n\\hline\n';
+
+    // Data rows for each training
+    comparisonData.forEach(comp => {
+      const trainingName = comp.training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
+      latex += `${trainingName} `;
+
+      classNames.forEach((className) => {
+        const conditionData = comp.aggregatedResults?.[condition];
+        const classMetrics = conditionData?.[className];
+        const bestValues = getBestValues(condition, className);
+
+        // IoU
+        if (classMetrics?.iou?.mean !== undefined) {
+          const isBest = classMetrics.iou.mean === bestValues.iou;
+          const boldStart = isBest ? '\\textbf{' : '';
+          const boldEnd = isBest ? '}' : '';
+          latex += `& ${boldStart}${formatNumber(classMetrics.iou.mean, 2)} ± ${formatNumber(classMetrics.iou.std, 2)}${boldEnd} `;
+        } else {
+          latex += '& N/A ';
+        }
+
+        // Precision
+        if (classMetrics?.precision?.mean !== undefined) {
+          const isBest = classMetrics.precision.mean === bestValues.precision;
+          const boldStart = isBest ? '\\textbf{' : '';
+          const boldEnd = isBest ? '}' : '';
+          latex += `& ${boldStart}${formatNumber(classMetrics.precision.mean, 2)} ± ${formatNumber(classMetrics.precision.std, 2)}${boldEnd} `;
+        } else {
+          latex += '& N/A ';
+        }
+
+        // Recall
+        if (classMetrics?.recall?.mean !== undefined) {
+          const isBest = classMetrics.recall.mean === bestValues.recall;
+          const boldStart = isBest ? '\\textbf{' : '';
+          const boldEnd = isBest ? '}' : '';
+          latex += `& ${boldStart}${formatNumber(classMetrics.recall.mean, 2)} ± ${formatNumber(classMetrics.recall.std, 2)}${boldEnd} `;
+        } else {
+          latex += '& N/A ';
+        }
+
+        // F1
+        if (classMetrics?.f1_score?.mean !== undefined) {
+          const isBest = classMetrics.f1_score.mean === bestValues.f1_score;
+          const boldStart = isBest ? '\\textbf{' : '';
+          const boldEnd = isBest ? '}' : '';
+          latex += `& ${boldStart}${formatNumber(classMetrics.f1_score.mean, 2)} ± ${formatNumber(classMetrics.f1_score.std, 2)}${boldEnd} `;
+        } else {
+          latex += '& N/A ';
+        }
+
+        // AP
+        if (classMetrics?.ap?.mean !== undefined) {
+          const isBest = classMetrics.ap.mean === bestValues.ap;
+          const boldStart = isBest ? '\\textbf{' : '';
+          const boldEnd = isBest ? '}' : '';
+          latex += `& ${boldStart}${formatNumber(classMetrics.ap.mean, 2)} ± ${formatNumber(classMetrics.ap.std, 2)}${boldEnd} `;
+        } else {
+          latex += '& N/A ';
+        }
+      });
+
+      latex += '\\\\ \\hline\n';
+    });
+
+    latex += '\\end{tabular}\n\\end{table*}';
+
+    return latex;
+  };
+
+  const handleGenerateLatex = (condition: string) => {
+    const latex = generateConditionLatex(condition);
+    const conditionTitle = condition.replace('_', ' ').toUpperCase();
+    setLatexCode(latex);
+    setLatexTitle(`Performance Metrics LaTeX Code - ${conditionTitle}`);
+    setLatexModalOpen(true);
+  };
 
   const formatNumber = (value: any, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {
@@ -78,34 +177,39 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
       }}
     >
       <Box sx={{ p: 3, pb: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            Performance Metrics Comparison
-          </Typography>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<CodeIcon />}
-            onClick={onGenerateLatex}
-            disabled={comparisonData.length === 0}
-          >
-            LaTeX
-          </Button>
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Comparing test results across different conditions and classes
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          Performance Metrics Comparison
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          Test results aggregated across all test images, showing performance metrics (IoU, Precision, Recall, F1) for different weather conditions and object classes
         </Typography>
       </Box>
 
       {['day_fair', 'night_fair', 'day_rain', 'night_rain', 'snow'].map(condition => {
+        const conditionTitle = condition.replace('_', ' ').toUpperCase();
         return (
-          <TableContainer key={condition} component={Paper} sx={{ mb: 3, overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: 'grey.50' }}>
-                  <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 120 }}>
-                    Test Result
-                  </TableCell>
+          <Paper key={condition} sx={{ mb: 3 }}>
+            <Box sx={{ p: 2, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'grey.50' }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                {conditionTitle}
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<CodeIcon />}
+                onClick={() => handleGenerateLatex(condition)}
+                disabled={comparisonData.length === 0}
+              >
+                LaTeX
+              </Button>
+            </Box>
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'grey.100' }}>
+                    <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 120 }}>
+                      Test Result
+                    </TableCell>
                   {classNames.map((className) => (
                     <TableCell
                       key={className}
@@ -268,9 +372,17 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                 })}
               </TableBody>
             </Table>
-          </TableContainer>
+            </TableContainer>
+          </Paper>
         );
       })}
+      
+      <LatexModal
+        open={latexModalOpen}
+        onClose={() => setLatexModalOpen(false)}
+        title={latexTitle}
+        code={latexCode}
+      />
     </Paper>
   );
 };

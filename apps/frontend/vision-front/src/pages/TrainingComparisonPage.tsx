@@ -19,7 +19,9 @@ import { useAuth } from '../contexts/AuthContext';
 import ComparisonTable from '@/components/comparison/ComparisonTable';
 import PerformanceMetricsTable from '../components/test-results/PerformanceMetricsTable';
 import PerClassMetricsTable from '../components/test-results/PerClassMetricsTable';
+import IoUMetricsTable from '../components/test-results/IoUMetricsTable';
 import BenchmarksComparisonTable from '../components/comparison/BenchmarksComparisonTable';
+import TrainingValidationMetricsTable from '../components/comparison/TrainingValidationMetricsTable';
 
 const TrainingComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -143,6 +145,9 @@ const TrainingComparisonPage: React.FC = () => {
           {comparisonData.length > 0 && (
             <ComparisonTable comparisonData={comparisonData} />
           )}
+
+          {/* Training Validation Metrics Table */}
+          <TrainingValidationMetricsTable comparisonData={comparisonData} />
         </>
       )}
 
@@ -151,12 +156,14 @@ const TrainingComparisonPage: React.FC = () => {
           {/* Test Results Comparison */}
           {testResultsData.length > 0 ? (
             <>
-              <PerformanceMetricsTable 
-                comparisonData={testResultsData} 
-                onGenerateLatex={() => {}} // TODO: Implement LaTeX generation for test results
+              <IoUMetricsTable
+                comparisonData={testResultsData}
               />
-              <PerClassMetricsTable 
-                comparisonData={testResultsData} 
+              <PerformanceMetricsTable
+                comparisonData={testResultsData}
+              />
+              <PerClassMetricsTable
+                comparisonData={testResultsData}
                 onGenerateLatex={() => {}} // TODO: Implement LaTeX generation for per-class metrics
               />
             </>

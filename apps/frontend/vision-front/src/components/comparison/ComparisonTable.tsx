@@ -9,13 +9,12 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  Chip,
   Button
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { TrainingComparison, ComparisonEpoch } from '@/types';
-import { formatTime, formatNumber, getStatusColor } from '@/utils/comparisonLatexGenerator';
+import { formatTime, formatNumber } from '@/utils/comparisonLatexGenerator';
 import LatexModal from '../common/LatexModal';
 
 interface ComparisonTableProps {
@@ -26,6 +25,25 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
+  // Sort trainings by top 10 validation mIoU average (descending) for display
+  const sortedComparisonData = React.useMemo(() => {
+    return [...comparisonData].sort((a, b) => {
+      const getTop10Avg = (comp: TrainingComparison) => {
+        const vmIoUs = comp.epochs
+          .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
+          .filter((vmIoU: number | undefined) => vmIoU !== undefined)
+          .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
+          .slice(0, 10);
+        
+        if (vmIoUs.length === 0) return -Infinity;
+        return vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
+      };
+      
+      const aAvg = getTop10Avg(a);
+      const bAvg = getTop10Avg(b);
+      return bAvg - aAvg; // Descending order
+    });
+  }, [comparisonData]);
 
   // Generate LaTeX for detailed comparison table
   const generateDetailedComparisonLatex = () => {
@@ -128,118 +146,71 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell><strong>Metric</strong></TableCell>
-              {comparisonData.map((comp) => (
-                <TableCell key={comp.training._id} align="center">
-                  <Link 
-                    to={`/trainings/${comp.training._id}`}
-                    style={{ textDecoration: 'none', color: 'inherit' }}
-                  >
-                    <strong>{comp.training.name}</strong>
-                  </Link>
-                </TableCell>
-              ))}
+              <TableCell><strong>Training</strong></TableCell>
+              <TableCell align="center"><strong>Total Time</strong></TableCell>
+              <TableCell align="center"><strong>Avg Epoch Time</strong></TableCell>
+              <TableCell align="center"><strong>Best Epoch</strong></TableCell>
+              <TableCell align="center"><strong>Best Val mIoU</strong></TableCell>
+              <TableCell align="center"><strong>Top 10 Val mIoU Avg</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            <TableRow>
-              <TableCell>Status</TableCell>
-              {comparisonData.map((comp) => (
-                <TableCell key={comp.training._id} align="center">
-                  <Chip
-                    label={comp.training.status}
-                    color={getStatusColor(comp.training.status)}
-                    size="small"
-                  />
-                </TableCell>
-              ))}
-            </TableRow>
-            <TableRow>
-              <TableCell>Total Epochs</TableCell>
-              {comparisonData.map((comp) => (
-                <TableCell key={comp.training._id} align="center">
-                  {comp.metrics.totalEpochs}
-                </TableCell>
-              ))}
-            </TableRow>
-            <TableRow>
-              <TableCell>Total Training Time</TableCell>
-              {comparisonData.map((comp) => (
-                <TableCell key={comp.training._id} align="center">
-                  {formatTime(comp.metrics.totalTime)}
-                </TableCell>
-              ))}
-            </TableRow>
-            <TableRow>
-              <TableCell>Average Epoch Time</TableCell>
-              {comparisonData.map((comp) => (
-                <TableCell key={comp.training._id} align="center">
-                  {formatTime(comp.metrics.avgEpochTime)}
-                </TableCell>
-              ))}
-            </TableRow>
-            <TableRow>
-              <TableCell>Maximum Epoch Time</TableCell>
-              {comparisonData.map((comp) => (
-                <TableCell key={comp.training._id} align="center">
-                  {formatTime(comp.metrics.maxEpochTime)}
-                </TableCell>
-              ))}
-            </TableRow>
-            <TableRow>
-              <TableCell>Best Epoch</TableCell>
-              {comparisonData.map((comp) => {
-                const bestEpoch = comp.epochs.reduce((best, epoch) => {
-                  const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
-                  const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
-                  return currentVmIoU > bestVmIoU ? epoch : best;
-                }, comp.epochs[0]);
-                return (
-                  <TableCell key={comp.training._id} align="center">
-                    {bestEpoch ? bestEpoch.epoch : 'N/A'}
-                  </TableCell>
-                );
-              })}
-            </TableRow>
-            <TableRow>
-              <TableCell>Best Validation mIoU</TableCell>
-              {comparisonData.map((comp) => {
-                const bestVmIoU = Math.max(...comp.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
-                return (
-                  <TableCell key={comp.training._id} align="center">
-                    {bestVmIoU !== -Infinity ? formatNumber(bestVmIoU) : 'N/A'}
-                  </TableCell>
-                );
-              })}
-            </TableRow>
-            <TableRow>
-              <TableCell>Top 10 Validation mIoU Average</TableCell>
-              {comparisonData.map((comp) => {
-                const vmIoUs = comp.epochs
-                  .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
-                  .filter((vmIoU: number | undefined) => vmIoU !== undefined)
-                  .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
-                  .slice(0, 10);
-                
-                if (vmIoUs.length === 0) {
-                  return (
-                    <TableCell key={comp.training._id} align="center">
-                      N/A
-                    </TableCell>
-                  );
-                }
-                
+            {sortedComparisonData.map((comp) => {
+              // Calculate best epoch
+              const bestEpoch = comp.epochs.reduce((best, epoch) => {
+                const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
+                const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
+                return currentVmIoU > bestVmIoU ? epoch : best;
+              }, comp.epochs[0]);
+
+              // Calculate best validation mIoU
+              const bestVmIoU = Math.max(...comp.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
+
+              // Calculate top 10 validation mIoU average
+              const vmIoUs = comp.epochs
+                .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
+                .filter((vmIoU: number | undefined) => vmIoU !== undefined)
+                .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
+                .slice(0, 10);
+              
+              let top10Avg = 'N/A';
+              if (vmIoUs.length > 0) {
                 const mean = vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
                 const variance = vmIoUs.reduce((sum: number, vmIoU: number) => sum + Math.pow((vmIoU ?? 0) - mean, 2), 0) / vmIoUs.length;
                 const std = Math.sqrt(variance);
-                
-                return (
-                  <TableCell key={comp.training._id} align="center">
-                    {formatNumber(mean)} ± {formatNumber(std)}
+                top10Avg = `${formatNumber(mean)} ± ${formatNumber(std)}`;
+              }
+
+              return (
+                <TableRow key={comp.training._id}>
+                  <TableCell>
+                    <Link 
+                      to={`/trainings/${comp.training._id}`}
+                      style={{ textDecoration: 'none', color: 'inherit' }}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {comp.training.name}
+                      </Typography>
+                    </Link>
                   </TableCell>
-                );
-              })}
-            </TableRow>
+                  <TableCell align="center">
+                    {formatTime(comp.metrics.totalTime)}
+                  </TableCell>
+                  <TableCell align="center">
+                    {formatTime(comp.metrics.avgEpochTime)}
+                  </TableCell>
+                  <TableCell align="center">
+                    {bestEpoch ? bestEpoch.epoch : 'N/A'}
+                  </TableCell>
+                  <TableCell align="center">
+                    {bestVmIoU !== -Infinity ? formatNumber(bestVmIoU) : 'N/A'}
+                  </TableCell>
+                  <TableCell align="center">
+                    {top10Avg}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>
