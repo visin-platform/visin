@@ -23,11 +23,11 @@ interface ComparisonData {
   testResultsCount: number;
 }
 
-interface IoUMetricsTableProps {
+interface APMetricsTableProps {
   comparisonData: ComparisonData[];
 }
 
-const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
+const APMetricsTable: React.FC<APMetricsTableProps> = ({
   comparisonData
 }) => {
   const theme = useTheme();
@@ -42,36 +42,36 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
     return 'N/A';
   };
 
-  // Helper function to find the best (maximum) IoU value for each class across all trainings per condition
-  const getBestIoUValues = (condition: string, className: string) => {
-    let bestIoU = -Infinity;
+  // Helper function to find the best (maximum) AP value for each class across all trainings per condition
+  const getBestAPValues = (condition: string, className: string) => {
+    let bestAP = -Infinity;
 
     comparisonData.forEach((comp) => {
       const conditionData = comp.aggregatedResults?.[condition];
       const classMetrics = conditionData?.[className];
-      const iouValue = classMetrics?.iou?.mean;
+      const apValue = classMetrics?.ap?.mean;
 
-      if (iouValue !== undefined && iouValue > bestIoU) {
-        bestIoU = iouValue;
+      if (apValue !== undefined && apValue > bestAP) {
+        bestAP = apValue;
       }
     });
 
-    return bestIoU;
+    return bestAP;
   };
 
-  // Generate LaTeX for IoU metrics for a specific condition
+  // Generate LaTeX for AP metrics for a specific condition
   const generateConditionLatex = (condition: string) => {
     const classNames = ['human', 'sign', 'vehicle'];
     const conditionTitle = condition.replace('_', ' ').toUpperCase();
 
-    let latex = `\\begin{table*}[t]\n\\centering\n\\caption{IoU Metrics - ${conditionTitle}}\n\\label{tab:iou_metrics_${condition}}\n`;
+    let latex = `\\begin{table*}[t]\n\\centering\n\\caption{AP Metrics - ${conditionTitle}}\n\\label{tab:ap_metrics_${condition}}\n`;
     latex += `\\begin{tabular}{|l|${'c|'.repeat(classNames.length)}}\n\\hline\n`;
 
     // Header row with class names
     latex += 'Training & ';
     classNames.forEach((className, index) => {
       const classTitle = className.charAt(0).toUpperCase() + className.slice(1);
-      latex += `${classTitle} IoU`;
+      latex += `${classTitle} AP`;
       if (index < classNames.length - 1) {
         latex += ' & ';
       }
@@ -86,13 +86,13 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
       classNames.forEach((className) => {
         const conditionData = comp.aggregatedResults?.[condition];
         const classMetrics = conditionData?.[className];
-        const bestIoU = getBestIoUValues(condition, className);
+        const bestAP = getBestAPValues(condition, className);
 
-        if (classMetrics?.iou?.mean !== undefined) {
-          const isBest = classMetrics.iou.mean === bestIoU;
+        if (classMetrics?.ap?.mean !== undefined) {
+          const isBest = classMetrics.ap.mean === bestAP;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${formatNumber(classMetrics.iou.mean, 2)} ± ${formatNumber(classMetrics.iou.std, 2)}${boldEnd} `;
+          latex += `& ${boldStart}${formatNumber(classMetrics.ap.mean, 2)} ± ${formatNumber(classMetrics.ap.std, 2)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
@@ -110,7 +110,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
     const latex = generateConditionLatex(condition);
     const conditionTitle = condition.replace('_', ' ').toUpperCase();
     setLatexCode(latex);
-    setLatexTitle(`IoU Metrics LaTeX Code - ${conditionTitle}`);
+    setLatexTitle(`AP Metrics LaTeX Code - ${conditionTitle}`);
     setLatexModalOpen(true);
   };
 
@@ -129,10 +129,10 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
     >
       <Box sx={{ p: 3, pb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          IoU Metrics Comparison
+          AP Metrics Comparison
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Test results showing IoU (Intersection over Union) metrics for different weather conditions and object classes
+          Test results showing AP (Average Precision) metrics for different weather conditions and object classes
         </Typography>
       </Box>
 
@@ -171,7 +171,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
                           borderRight: classNames.indexOf(className) < classNames.length - 1 ? '1px solid rgba(224, 224, 224, 1)' : 'none'
                         }}
                       >
-                        {className.charAt(0).toUpperCase() + className.slice(1)} IoU
+                        {className.charAt(0).toUpperCase() + className.slice(1)} AP
                       </TableCell>
                     ))}
                   </TableRow>
@@ -193,7 +193,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
                         {classNames.map((className) => {
                           const conditionData = comp.aggregatedResults?.[condition];
                           const classMetrics = conditionData?.[className];
-                          const bestIoU = getBestIoUValues(condition, className);
+                          const bestAP = getBestAPValues(condition, className);
 
                           return (
                             <TableCell
@@ -203,16 +203,16 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
                                 borderRight: classNames.indexOf(className) < classNames.length - 1 ? '1px solid rgba(224, 224, 224, 1)' : 'none'
                               }}
                             >
-                              {classMetrics?.iou?.mean !== undefined ? (
+                              {classMetrics?.ap?.mean !== undefined ? (
                                 <Typography
                                   variant="body2"
                                   sx={{
                                     fontSize: '0.75rem',
                                     whiteSpace: 'nowrap',
-                                    fontWeight: classMetrics.iou.mean === bestIoU ? 'bold' : 'normal'
+                                    fontWeight: classMetrics.ap.mean === bestAP ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.iou.mean, 4)} ± {formatNumber(classMetrics.iou.std, 4)}
+                                  {formatNumber(classMetrics.ap.mean, 4)} ± {formatNumber(classMetrics.ap.std, 4)}
                                 </Typography>
                               ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
@@ -242,4 +242,4 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
   );
 };
 
-export default IoUMetricsTable;
+export default APMetricsTable;

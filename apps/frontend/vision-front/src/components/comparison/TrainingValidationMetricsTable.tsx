@@ -339,16 +339,16 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
                   </Link>
                 </TableCell>
                 <TableCell align="center">
-                  {renderMetricCell(trainingData.metrics?.meanIoU, bestValues.meanIoU, 2)}
+                  {renderMetricCell(trainingData.metrics?.meanIoU, bestValues.meanIoU, 4)}
                 </TableCell>
                 <TableCell align="center">
-                  {renderMetricCell(trainingData.metrics?.meanPrecision, bestValues.meanPrecision, 2)}
+                  {renderMetricCell(trainingData.metrics?.meanPrecision, bestValues.meanPrecision, 4)}
                 </TableCell>
                 <TableCell align="center">
-                  {renderMetricCell(trainingData.metrics?.meanRecall, bestValues.meanRecall, 2)}
+                  {renderMetricCell(trainingData.metrics?.meanRecall, bestValues.meanRecall, 4)}
                 </TableCell>
                 <TableCell align="center">
-                  {renderMetricCell(trainingData.metrics?.meanF1, bestValues.meanF1, 2)}
+                  {renderMetricCell(trainingData.metrics?.meanF1, bestValues.meanF1, 4)}
                 </TableCell>
               </TableRow>
             ))}
