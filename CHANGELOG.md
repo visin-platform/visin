@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.51](https://github.com/visin-platform/visin-monorepo/compare/v0.0.50...v0.0.51) (2026-01-05)
+
+
+### Features
+
+* add more comparisons ([8c6b28e](https://github.com/visin-platform/visin-monorepo/commit/8c6b28e56a5801ed713b22cbe220f5dab6f3b9b0))
+
 ### [0.0.50](https://github.com/visin-platform/visin-monorepo/compare/v0.0.49...v0.0.50) (2026-01-05)
 
 
