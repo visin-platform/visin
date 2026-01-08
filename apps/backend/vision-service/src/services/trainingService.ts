@@ -4,6 +4,7 @@ import Epoch from '../models/Epoch';
 import TestResult from '../models/TestResult';
 import Benchmark from '../models/Benchmark';
 import Project from '../models/Project';
+import Comparison from '../models/Comparison';
 import { testResultService } from './testResultService';
 
 interface PaginationOptions {
@@ -423,6 +424,12 @@ export const trainingService = {
       await TestResult.updateMany({ epoch_uuid: { $in: epochUuids } }, { deletedAt: now });
     }
 
+    // Remove this training from all comparisons
+    await Comparison.updateMany(
+      { itemIds: id },
+      { $pull: { itemIds: id }, updatedAt: now }
+    );
+
     return true;
   },
 
@@ -548,19 +555,20 @@ export const trainingService = {
 
     // Fetch trainings and their epochs
     const trainings = await Training.find({ _id: { $in: trainingIds }, deletedAt: null });
-    const epochs = await Epoch.find({ trainingId: { $in: trainingIds }, deletedAt: null })
+    const foundTrainingIds = trainings.map(t => (t._id as any).toString());
+    const epochs = await Epoch.find({ trainingId: { $in: foundTrainingIds }, deletedAt: null })
       .sort({ trainingId: 1, epoch: 1 });
 
     // Get all epoch UUIDs for fetching benchmarks
     const epochUuids = epochs.map(e => e.epoch_uuid);
 
     // Get aggregated test results for these trainings
-    const aggregatedTestResults = await testResultService.getAggregatedTestResultsByTraining(trainingIds);
+    const aggregatedTestResults = await testResultService.getAggregatedTestResultsByTraining(foundTrainingIds);
 
     // Get all benchmarks for these trainings
     const benchmarks = await Benchmark.find({ 
       $or: [
-        { training_id: { $in: trainingIds } },
+        { training_id: { $in: foundTrainingIds } },
         { epoch_uuid: { $in: epochUuids } }
       ], 
       deletedAt: null 

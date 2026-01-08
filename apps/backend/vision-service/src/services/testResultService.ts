@@ -457,13 +457,30 @@ export const testResultService = {
     }, {} as Record<string, any>);
 
     // Group test results by training
-    const trainingTestResults = trainingIds.map(trainingId => {
-      const training = trainingMap[trainingId];
-      const trainingEpochs = epochs.filter(e => e.trainingId.toString() === trainingId);
-      const trainingEpochUuids = trainingEpochs.map(e => e.epoch_uuid);
-      const trainingTestResults = testResults.filter(tr => trainingEpochUuids.includes(tr.epoch_uuid));
+    const trainingTestResults = trainingIds
+      .filter(trainingId => trainingMap[trainingId]) // Only process existing trainings
+      .map(trainingId => {
+        const training = trainingMap[trainingId];
+        const trainingEpochs = epochs.filter(e => e.trainingId.toString() === trainingId);
+        const trainingEpochUuids = trainingEpochs.map(e => e.epoch_uuid);
+        const trainingTestResults = testResults.filter(tr => trainingEpochUuids.includes(tr.epoch_uuid));
 
-      if (trainingTestResults.length === 0) {
+        if (trainingTestResults.length === 0) {
+          return {
+            training: {
+              _id: training._id,
+              name: training.name,
+              uuid: training.uuid,
+              status: training.status
+            },
+            aggregatedResults: null,
+            testResultsCount: 0
+          };
+        }
+
+        // Aggregate metrics across all test results for this training
+        const aggregatedResults = this.aggregateTestResults(trainingTestResults);
+
         return {
           training: {
             _id: training._id,
@@ -471,25 +488,10 @@ export const testResultService = {
             uuid: training.uuid,
             status: training.status
           },
-          aggregatedResults: null,
-          testResultsCount: 0
+          aggregatedResults,
+          testResultsCount: trainingTestResults.length
         };
-      }
-
-      // Aggregate metrics across all test results for this training
-      const aggregatedResults = this.aggregateTestResults(trainingTestResults);
-
-      return {
-        training: {
-          _id: training._id,
-          name: training.name,
-          uuid: training.uuid,
-          status: training.status
-        },
-        aggregatedResults,
-        testResultsCount: trainingTestResults.length
-      };
-    });
+      });
 
     return { comparison: trainingTestResults };
   },
