@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.52](https://github.com/visin-platform/visin-monorepo/compare/v0.0.51...v0.0.52) (2026-01-08)
+
+
+### Features
+
+* delete comparison when training is deleted ([b85cf22](https://github.com/visin-platform/visin-monorepo/commit/b85cf22b41302fb6d561f773c92559807a323a4b))
+
 ### [0.0.51](https://github.com/visin-platform/visin-monorepo/compare/v0.0.50...v0.0.51) (2026-01-05)
 
 
