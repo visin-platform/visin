@@ -13,6 +13,10 @@ import {
   alpha,
   useTheme
 } from '@mui/material';
+import {
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon
+} from '@mui/icons-material';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import LatexModal from '../common/LatexModal';
@@ -35,6 +39,110 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
+  const [sortStates, setSortStates] = useState<{[condition: string]: {column: string, direction: 'asc' | 'desc'}}>({
+    'day_fair': {column: 'training', direction: 'asc'},
+    'night_fair': {column: 'training', direction: 'asc'},
+    'day_rain': {column: 'training', direction: 'asc'},
+    'night_rain': {column: 'training', direction: 'asc'},
+    'snow': {column: 'training', direction: 'asc'}
+  });
+
+  // Handle column sorting for a specific condition
+  const handleSort = (condition: string, column: string) => {
+    setSortStates(prev => {
+      const current = prev[condition];
+      if (current.column === column) {
+        return {
+          ...prev,
+          [condition]: {
+            column,
+            direction: current.direction === 'asc' ? 'desc' : 'asc'
+          }
+        };
+      } else {
+        return {
+          ...prev,
+          [condition]: {
+            column,
+            direction: 'desc'
+          }
+        };
+      }
+    });
+  };
+
+  // Get sorted data for a specific condition
+  const getSortedData = (condition: string) => {
+    const { column, direction } = sortStates[condition];
+    return [...comparisonData].sort((a, b) => {
+      let aValue: number = -Infinity;
+      let bValue: number = -Infinity;
+      let aString: string = '';
+      let bString: string = '';
+
+      if (column === 'training') {
+        aString = a.training.name.toLowerCase();
+        bString = b.training.name.toLowerCase();
+      } else {
+        // Parse column format: "class_metric" (e.g., "human_iou", "sign_precision")
+        const [className, metric] = column.split('_');
+        const conditionDataA = a.aggregatedResults?.[condition];
+        const conditionDataB = b.aggregatedResults?.[condition];
+        const classMetricsA = conditionDataA?.[className];
+        const classMetricsB = conditionDataB?.[className];
+        aValue = classMetricsA?.[metric]?.mean ?? -Infinity;
+        bValue = classMetricsB?.[metric]?.mean ?? -Infinity;
+      }
+
+      // Handle string comparison for training names
+      if (column === 'training') {
+        const comparison = aString.localeCompare(bString);
+        return direction === 'asc' ? comparison : -comparison;
+      }
+
+      // Handle numeric comparison
+      const comparison = aValue - bValue;
+      return direction === 'asc' ? comparison : -comparison;
+    });
+  };
+
+  // Helper component for sortable table headers
+  const SortableTableCell = ({ 
+    condition,
+    column, 
+    children, 
+    align = 'center' 
+  }: { 
+    condition: string;
+    column: string; 
+    children: React.ReactNode; 
+    align?: 'left' | 'center' | 'right' 
+  }) => {
+    const { column: sortColumn, direction: sortDirection } = sortStates[condition];
+    return (
+      <TableCell align={align}>
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
+            cursor: 'pointer',
+            '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' }
+          }}
+          onClick={() => handleSort(condition, column)}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 600, mr: 0.5 }}>
+            {children}
+          </Typography>
+          {sortColumn === column && (
+            sortDirection === 'asc' ? 
+              <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : 
+              <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+          )}
+        </Box>
+      </TableCell>
+    );
+  };
 
   // Generate LaTeX for a specific performance metrics condition
   const generateConditionLatex = (condition: string) => {
@@ -225,31 +333,22 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                   ))}
                 </TableRow>
                 <TableRow sx={{ bgcolor: 'grey.100' }}>
-                  <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)' }}>
+                  <SortableTableCell condition={condition} column="training" align="left">
                     {condition.replace('_', ' ').toUpperCase()}
-                  </TableCell>
+                  </SortableTableCell>
                   {classNames.map((className) => (
                     <React.Fragment key={className}>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>IoU</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>Precision</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>Recall</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>F1</TableCell>
-                      <TableCell
-                        align="center"
-                        sx={{
-                          fontWeight: 600,
-                          fontSize: '0.875rem',
-                          borderRight: classNames.indexOf(className) < classNames.length - 1 ? '1px solid rgba(224, 224, 224, 1)' : 'none'
-                        }}
-                      >
-                        AP
-                      </TableCell>
+                      <SortableTableCell condition={condition} column={`${className}_iou`}>IoU</SortableTableCell>
+                      <SortableTableCell condition={condition} column={`${className}_precision`}>Precision</SortableTableCell>
+                      <SortableTableCell condition={condition} column={`${className}_recall`}>Recall</SortableTableCell>
+                      <SortableTableCell condition={condition} column={`${className}_f1_score`}>F1</SortableTableCell>
+                      <SortableTableCell condition={condition} column={`${className}_ap`}>AP</SortableTableCell>
                     </React.Fragment>
                   ))}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {comparisonData.map((comp) => {
+                {getSortedData(condition).map((comp) => {
                   return (
                     <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'grey.25' } }}>
                       <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 150 }}>

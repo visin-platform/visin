@@ -13,6 +13,10 @@ import {
   alpha,
   useTheme
 } from '@mui/material';
+import {
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon
+} from '@mui/icons-material';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import LatexModal from '../common/LatexModal';
@@ -34,12 +38,115 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
+  const [sortStates, setSortStates] = useState<{[condition: string]: {column: string, direction: 'asc' | 'desc'}}>({
+    'day_fair': {column: 'training', direction: 'asc'},
+    'night_fair': {column: 'training', direction: 'asc'},
+    'day_rain': {column: 'training', direction: 'asc'},
+    'night_rain': {column: 'training', direction: 'asc'},
+    'snow': {column: 'training', direction: 'asc'}
+  });
 
   const formatNumber = (value: any, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {
       return value.toFixed(decimals);
     }
     return 'N/A';
+  };
+
+  // Handle column sorting for a specific condition
+  const handleSort = (condition: string, column: string) => {
+    setSortStates(prev => {
+      const current = prev[condition];
+      if (current.column === column) {
+        return {
+          ...prev,
+          [condition]: {
+            column,
+            direction: current.direction === 'asc' ? 'desc' : 'asc'
+          }
+        };
+      } else {
+        return {
+          ...prev,
+          [condition]: {
+            column,
+            direction: 'desc'
+          }
+        };
+      }
+    });
+  };
+
+  // Get sorted data for a specific condition
+  const getSortedData = (condition: string) => {
+    const { column, direction } = sortStates[condition];
+    return [...comparisonData].sort((a, b) => {
+      let aValue: number = -Infinity;
+      let bValue: number = -Infinity;
+      let aString: string = '';
+      let bString: string = '';
+
+      if (column === 'training') {
+        aString = a.training.name.toLowerCase();
+        bString = b.training.name.toLowerCase();
+      } else {
+        // For class columns, extract IoU mean value
+        const conditionDataA = a.aggregatedResults?.[condition];
+        const conditionDataB = b.aggregatedResults?.[condition];
+        const classMetricsA = conditionDataA?.[column];
+        const classMetricsB = conditionDataB?.[column];
+        aValue = classMetricsA?.iou?.mean ?? -Infinity;
+        bValue = classMetricsB?.iou?.mean ?? -Infinity;
+      }
+
+      // Handle string comparison for training names
+      if (column === 'training') {
+        const comparison = aString.localeCompare(bString);
+        return direction === 'asc' ? comparison : -comparison;
+      }
+
+      // Handle numeric comparison
+      const comparison = aValue - bValue;
+      return direction === 'asc' ? comparison : -comparison;
+    });
+  };
+
+  // Helper component for sortable table headers
+  const SortableTableCell = ({ 
+    condition,
+    column, 
+    children, 
+    align = 'center' 
+  }: { 
+    condition: string;
+    column: string; 
+    children: React.ReactNode; 
+    align?: 'left' | 'center' | 'right' 
+  }) => {
+    const { column: sortColumn, direction: sortDirection } = sortStates[condition];
+    return (
+      <TableCell align={align}>
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
+            cursor: 'pointer',
+            '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' }
+          }}
+          onClick={() => handleSort(condition, column)}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 600, mr: 0.5 }}>
+            {children}
+          </Typography>
+          {sortColumn === column && (
+            sortDirection === 'asc' ? 
+              <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : 
+              <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+          )}
+        </Box>
+      </TableCell>
+    );
   };
 
   // Helper function to find the best (maximum) IoU value for each class across all trainings per condition
@@ -158,26 +265,22 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'grey.100' }}>
-                    <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 120 }}>
+                    <SortableTableCell condition={condition} column="training" align="left">
                       Test Result
-                    </TableCell>
+                    </SortableTableCell>
                     {classNames.map((className) => (
-                      <TableCell
+                      <SortableTableCell
                         key={className}
-                        align="center"
-                        sx={{
-                          fontWeight: 600,
-                          fontSize: '0.875rem',
-                          borderRight: classNames.indexOf(className) < classNames.length - 1 ? '1px solid rgba(224, 224, 224, 1)' : 'none'
-                        }}
+                        condition={condition}
+                        column={className}
                       >
                         {className.charAt(0).toUpperCase() + className.slice(1)} IoU
-                      </TableCell>
+                      </SortableTableCell>
                     ))}
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {comparisonData.map((comp) => {
+                  {getSortedData(condition).map((comp) => {
                     return (
                       <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'grey.25' } }}>
                         <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 150 }}>

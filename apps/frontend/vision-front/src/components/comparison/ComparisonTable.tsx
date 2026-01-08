@@ -11,6 +11,10 @@ import {
   TableBody,
   Button
 } from '@mui/material';
+import {
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon
+} from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { TrainingComparison, ComparisonEpoch } from '@/types';
@@ -25,27 +29,120 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
-  // Sort trainings by top 10 validation mIoU average (descending) for display
+  const [sortColumn, setSortColumn] = useState<string>('top10Avg');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  // Handle column sorting
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  // Helper component for sortable table headers
+  const SortableTableCell = ({ 
+    column, 
+    children, 
+    align = 'center' 
+  }: { 
+    column: string; 
+    children: React.ReactNode; 
+    align?: 'left' | 'center' | 'right' 
+  }) => (
+    <TableCell align={align}>
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
+          cursor: 'pointer',
+          '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' }
+        }}
+        onClick={() => handleSort(column)}
+      >
+        <Typography variant="body2" sx={{ fontWeight: 600, mr: 0.5 }}>
+          {children}
+        </Typography>
+        {sortColumn === column && (
+          sortDirection === 'asc' ? 
+            <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : 
+            <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+        )}
+      </Box>
+    </TableCell>
+  );
+  // Sort trainings based on selected column and direction
   const sortedComparisonData = React.useMemo(() => {
     return [...comparisonData].sort((a, b) => {
-      const getTop10Avg = (comp: TrainingComparison) => {
-        const vmIoUs = comp.epochs
-          .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
-          .filter((vmIoU: number | undefined) => vmIoU !== undefined)
-          .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
-          .slice(0, 10);
-        
-        if (vmIoUs.length === 0) return -Infinity;
-        return vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
-      };
-      
-      const aAvg = getTop10Avg(a);
-      const bAvg = getTop10Avg(b);
-      return bAvg - aAvg; // Descending order
-    });
-  }, [comparisonData]);
+      let aValue: number = -Infinity;
+      let bValue: number = -Infinity;
+      let aString: string = '';
+      let bString: string = '';
 
-  // Generate LaTeX for detailed comparison table
+      switch (sortColumn) {
+        case 'training':
+          aString = a.training.name.toLowerCase();
+          bString = b.training.name.toLowerCase();
+          break;
+        case 'totalTime':
+          aValue = a.metrics.totalTime;
+          bValue = b.metrics.totalTime;
+          break;
+        case 'avgEpochTime':
+          aValue = a.metrics.avgEpochTime;
+          bValue = b.metrics.avgEpochTime;
+          break;
+        case 'bestEpoch':
+          const aBestEpoch = a.epochs.reduce((best, epoch) => {
+            const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
+            const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
+            return currentVmIoU > bestVmIoU ? epoch : best;
+          }, a.epochs[0]);
+          const bBestEpoch = b.epochs.reduce((best, epoch) => {
+            const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
+            const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
+            return currentVmIoU > bestVmIoU ? epoch : best;
+          }, b.epochs[0]);
+          aValue = aBestEpoch ? aBestEpoch.epoch : -Infinity;
+          bValue = bBestEpoch ? bBestEpoch.epoch : -Infinity;
+          break;
+        case 'bestVmIoU':
+          const aBestVmIoU = Math.max(...a.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
+          const bBestVmIoU = Math.max(...b.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
+          aValue = aBestVmIoU;
+          bValue = bBestVmIoU;
+          break;
+        case 'top10Avg':
+        default:
+          const getTop10Avg = (comp: TrainingComparison) => {
+            const vmIoUs = comp.epochs
+              .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
+              .filter((vmIoU: number | undefined) => vmIoU !== undefined)
+              .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
+              .slice(0, 10);
+
+            if (vmIoUs.length === 0) return -Infinity;
+            return vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
+          };
+          aValue = getTop10Avg(a);
+          bValue = getTop10Avg(b);
+          break;
+      }
+
+      // Handle string comparison for training names
+      if (sortColumn === 'training') {
+        const comparison = aString.localeCompare(bString);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+
+      // Handle numeric comparison
+      const comparison = aValue - bValue;
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [comparisonData, sortColumn, sortDirection]);
   const generateDetailedComparisonLatex = () => {
     // Sort trainings by top 10 validation mIoU average (descending)
     const sortedData = [...comparisonData].sort((a, b) => {
@@ -146,12 +243,12 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell><strong>Training</strong></TableCell>
-              <TableCell align="center"><strong>Total Time</strong></TableCell>
-              <TableCell align="center"><strong>Avg Epoch Time</strong></TableCell>
-              <TableCell align="center"><strong>Best Epoch</strong></TableCell>
-              <TableCell align="center"><strong>Best Val mIoU</strong></TableCell>
-              <TableCell align="center"><strong>Top 10 Val mIoU Avg</strong></TableCell>
+              <SortableTableCell column="training" align="left">Training</SortableTableCell>
+              <SortableTableCell column="totalTime">Total Time</SortableTableCell>
+              <SortableTableCell column="avgEpochTime">Avg Epoch Time</SortableTableCell>
+              <SortableTableCell column="bestEpoch">Best Epoch</SortableTableCell>
+              <SortableTableCell column="bestVmIoU">Best Val mIoU</SortableTableCell>
+              <SortableTableCell column="top10Avg">Top 10 Val mIoU Avg</SortableTableCell>
             </TableRow>
           </TableHead>
           <TableBody>

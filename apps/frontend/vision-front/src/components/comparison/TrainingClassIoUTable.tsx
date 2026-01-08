@@ -13,6 +13,10 @@ import {
   useTheme,
   Button
 } from '@mui/material';
+import {
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon
+} from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { TrainingComparison } from '../../types';
@@ -32,6 +36,8 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ compariso
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
+  const [sortColumn, setSortColumn] = useState<string>('training');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const formatNumber = (value: number | undefined, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {
@@ -39,6 +45,54 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ compariso
     }
     return 'N/A';
   };
+
+  // Helper function to extract mean value from metric object
+  const extractMeanValue = (metric: { mean: number; std: number } | null): number => {
+    return metric ? metric.mean : -Infinity;
+  };
+
+  // Handle column sorting
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  // Helper component for sortable table headers
+  const SortableTableCell = ({ 
+    column, 
+    children, 
+    align = 'center' 
+  }: { 
+    column: string; 
+    children: React.ReactNode; 
+    align?: 'left' | 'center' | 'right' 
+  }) => (
+    <TableCell align={align}>
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
+          cursor: 'pointer',
+          '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' }
+        }}
+        onClick={() => handleSort(column)}
+      >
+        <Typography variant="body2" sx={{ fontWeight: 600, mr: 0.5 }}>
+          {children}
+        </Typography>
+        {sortColumn === column && (
+          sortDirection === 'asc' ? 
+            <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : 
+            <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+        )}
+      </Box>
+    </TableCell>
+  );
 
   // Process class IoU data from validation results
   const classIoUData: ClassIoUData[] = React.useMemo(() => {
@@ -103,6 +157,38 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ compariso
       };
     }).sort((a, b) => a.className.localeCompare(b.className));
   }, [comparisonData]);
+
+  // Sort comparison data based on selected column and direction
+  const sortedComparisonData = React.useMemo(() => {
+    return [...comparisonData].sort((a, b) => {
+      let aValue: number = -Infinity;
+      let bValue: number = -Infinity;
+      let aString: string = '';
+      let bString: string = '';
+
+      if (sortColumn === 'training') {
+        aString = a.training.name.toLowerCase();
+        bString = b.training.name.toLowerCase();
+      } else {
+        // For class columns, find the IoU value for that class
+        const classData = classIoUData.find(c => c.className === sortColumn);
+        if (classData) {
+          aValue = extractMeanValue(classData.trainingIoUs[a.training._id]);
+          bValue = extractMeanValue(classData.trainingIoUs[b.training._id]);
+        }
+      }
+
+      // Handle string comparison for training names
+      if (sortColumn === 'training') {
+        const comparison = aString.localeCompare(bString);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+
+      // Handle numeric comparison
+      const comparison = aValue - bValue;
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [comparisonData, sortColumn, sortDirection, classIoUData]);
 
   // Find best (highest) IoU values for each class
   const bestValues: { [className: string]: number } = React.useMemo(() => {
@@ -252,18 +338,16 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ compariso
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: 'grey.50' }}>
-              <TableCell><strong>Training</strong></TableCell>
+              <SortableTableCell column="training" align="left">Training</SortableTableCell>
               {classIoUData.map(classData => (
-                <TableCell key={classData.className} align="center">
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {classData.className}
-                  </Typography>
-                </TableCell>
+                <SortableTableCell key={classData.className} column={classData.className}>
+                  {classData.className}
+                </SortableTableCell>
               ))}
             </TableRow>
           </TableHead>
           <TableBody>
-            {comparisonData.map((comp) => (
+            {sortedComparisonData.map((comp) => (
               <TableRow key={comp.training._id}>
                 <TableCell>
                   <Link

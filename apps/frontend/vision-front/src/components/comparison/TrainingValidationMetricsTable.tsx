@@ -13,6 +13,10 @@ import {
   useTheme,
   Button
 } from '@mui/material';
+import {
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon
+} from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { TrainingComparison } from '../../types';
@@ -39,6 +43,8 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
+  const [sortColumn, setSortColumn] = useState<string>('meanIoU');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const formatNumber = (value: number | undefined, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {
@@ -46,6 +52,54 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
     }
     return 'N/A';
   };
+
+  // Helper function to extract mean value from metric object
+  const extractMeanValue = (metric: { mean: number; std: number } | undefined): number => {
+    return metric ? metric.mean : -Infinity;
+  };
+
+  // Handle column sorting
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  // Helper component for sortable table headers
+  const SortableTableCell = ({ 
+    column, 
+    children, 
+    align = 'center' 
+  }: { 
+    column: string; 
+    children: React.ReactNode; 
+    align?: 'left' | 'center' | 'right' 
+  }) => (
+    <TableCell align={align}>
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
+          cursor: 'pointer',
+          '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' }
+        }}
+        onClick={() => handleSort(column)}
+      >
+        <Typography variant="body2" sx={{ fontWeight: 600, mr: 0.5 }}>
+          {children}
+        </Typography>
+        {sortColumn === column && (
+          sortDirection === 'asc' ? 
+            <ArrowUpwardIcon sx={{ fontSize: 16 }} /> : 
+            <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+        )}
+      </Box>
+    </TableCell>
+  );
 
   // Calculate validation metrics for each training
   const trainingMetrics: TrainingMetricsData[] = React.useMemo(() => {
@@ -136,8 +190,50 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
     });
   }, [comparisonData]);
 
-  // Filter trainings that have validation metrics
-  const trainingsWithMetrics: TrainingMetricsData[] = trainingMetrics.filter(t => t.metrics !== null);
+  // Filter trainings that have validation metrics and sort them
+  const trainingsWithMetrics: TrainingMetricsData[] = React.useMemo(() => {
+    return trainingMetrics
+      .filter(t => t.metrics !== null)
+      .sort((a, b) => {
+        let aValue: number = -Infinity;
+        let bValue: number = -Infinity;
+        let aString: string = '';
+        let bString: string = '';
+
+        switch (sortColumn) {
+          case 'training':
+            aString = a.training.name.toLowerCase();
+            bString = b.training.name.toLowerCase();
+            break;
+          case 'meanIoU':
+            aValue = extractMeanValue(a.metrics?.meanIoU);
+            bValue = extractMeanValue(b.metrics?.meanIoU);
+            break;
+          case 'meanPrecision':
+            aValue = extractMeanValue(a.metrics?.meanPrecision);
+            bValue = extractMeanValue(b.metrics?.meanPrecision);
+            break;
+          case 'meanRecall':
+            aValue = extractMeanValue(a.metrics?.meanRecall);
+            bValue = extractMeanValue(b.metrics?.meanRecall);
+            break;
+          case 'meanF1':
+            aValue = extractMeanValue(a.metrics?.meanF1);
+            bValue = extractMeanValue(b.metrics?.meanF1);
+            break;
+        }
+
+        // Handle string comparison for training names
+        if (sortColumn === 'training') {
+          const comparison = aString.localeCompare(bString);
+          return sortDirection === 'asc' ? comparison : -comparison;
+        }
+
+        // Handle numeric comparison
+        const comparison = aValue - bValue;
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+  }, [trainingMetrics, sortColumn, sortDirection]);
 
   // Find best (highest) values for each metric
   const bestValues = React.useMemo(() => {
@@ -318,11 +414,11 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: 'grey.50' }}>
-              <TableCell><strong>Training</strong></TableCell>
-              <TableCell align="center"><strong>Val mIoU</strong></TableCell>
-              <TableCell align="center"><strong>Precision</strong></TableCell>
-              <TableCell align="center"><strong>Recall</strong></TableCell>
-              <TableCell align="center"><strong>F1</strong></TableCell>
+              <SortableTableCell column="training" align="left">Training</SortableTableCell>
+              <SortableTableCell column="meanIoU">Val mIoU</SortableTableCell>
+              <SortableTableCell column="meanPrecision">Precision</SortableTableCell>
+              <SortableTableCell column="meanRecall">Recall</SortableTableCell>
+              <SortableTableCell column="meanF1">F1</SortableTableCell>
             </TableRow>
           </TableHead>
           <TableBody>
