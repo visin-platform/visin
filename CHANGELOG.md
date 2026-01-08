@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.53](https://github.com/visin-platform/visin-monorepo/compare/v0.0.52...v0.0.53) (2026-01-08)
+
+
+### Features
+
+* add sorting to comparison tables ([2318e9a](https://github.com/visin-platform/visin-monorepo/commit/2318e9ae81765573a0525c12337eca03a726bc81))
+
 ### [0.0.52](https://github.com/visin-platform/visin-monorepo/compare/v0.0.51...v0.0.52) (2026-01-08)
 
 
