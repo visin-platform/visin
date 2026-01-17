@@ -152,7 +152,11 @@ const ProjectsPage: React.FC = () => {
           <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
             Projects
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography 
+            variant="body1" 
+            color="text.secondary"
+            sx={{ display: { xs: 'none', sm: 'block' } }}
+          >
             Manage your research projects
           </Typography>
         </Box>
@@ -171,13 +175,15 @@ const ProjectsPage: React.FC = () => {
                 setCreateModalOpen(true);
               }}
               sx={{ 
-                px: 3,
-                py: 1,
+                px: { xs: 2, sm: 3 },
+                py: { xs: 0.75, sm: 1 },
+                fontSize: { xs: '0.875rem', sm: '0.9375rem' },
                 borderRadius: 2,
                 boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
               }}
             >
-              New Project
+              <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>New Project</Box>
+              <Box sx={{ display: { xs: 'inline', sm: 'none' } }}>New</Box>
             </Button>
           )}
           <IconButton 

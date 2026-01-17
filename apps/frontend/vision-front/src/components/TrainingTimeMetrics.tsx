@@ -3,6 +3,7 @@ import { Paper, Typography, Box } from '@mui/material';
 import { BarChart, LineChart } from '@mui/x-charts';
 import { Epoch, Comment } from '../types';
 import ChartComments from './ChartComments';
+import { useMobileChartTooltip } from '../hooks/useMobileChartTooltip';
 
 interface TrainingTimeMetricsProps {
   epochs: Epoch[];
@@ -19,6 +20,7 @@ const TrainingTimeMetrics: React.FC<TrainingTimeMetricsProps> = ({
   commentsLoading, 
   onCommentsRefetch 
 }) => {
+  const { isMobile } = useMobileChartTooltip();
   if (epochs.length === 0) {
     return null;
   }
@@ -48,9 +50,23 @@ const TrainingTimeMetrics: React.FC<TrainingTimeMetricsProps> = ({
     <Box display="flex" flexDirection="column" gap={3}>
       {/* Epoch Time Charts */}
       {hasTimeData && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+        <Box sx={{ 
+          display: 'grid', 
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, 
+          gap: 3 
+        }}>
           {/* Per-Epoch Time Chart */}
-          <Paper sx={{ p: 3, position: 'relative' }}>
+          <Paper sx={{ 
+            p: 3, 
+            position: 'relative',
+            ...(isMobile && {
+              '& .MuiTooltip-root': {
+                '& .MuiTooltip-tooltip': {
+                  marginTop: '-40px !important'
+                }
+              }
+            })
+          }}>
             <Typography variant="h6" gutterBottom>
               Time Spent Per Epoch
             </Typography>
@@ -78,7 +94,17 @@ const TrainingTimeMetrics: React.FC<TrainingTimeMetricsProps> = ({
           </Paper>
 
           {/* Cumulative Time Chart */}
-          <Paper sx={{ p: 3, position: 'relative' }}>
+          <Paper sx={{ 
+            p: 3, 
+            position: 'relative',
+            ...(isMobile && {
+              '& .MuiTooltip-root': {
+                '& .MuiTooltip-tooltip': {
+                  marginTop: '-40px !important'
+                }
+              }
+            })
+          }}>
             <Typography variant="h6" gutterBottom>
               Cumulative Training Time
             </Typography>

@@ -33,8 +33,6 @@ import TrainingVisualizationsTab from '../components/TrainingVisualizationsTab';
 import TrainingSystemInfoTab from '../components/TrainingSystemInfoTab';
 import TrainingBenchmarksTab from '../components/TrainingBenchmarksTab';
 import TrainingFormDialog from '../components/TrainingFormDialog';
-
-import StatusChip from '../components/training/StatusChip';
 import UploadResultsDialog from '../components/training/UploadResultsDialog';
 import LatexExportDialog from '../components/training/LatexExportDialog';
 import DeleteConfirmationDialog from '../components/training/DeleteConfirmationDialog';
@@ -253,7 +251,7 @@ const TrainingDetailPage: React.FC = () => {
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
       {/* Header */}
-      <Box mb={4}>
+      <Box mb={3}>
         <Button
           startIcon={<ArrowBackIcon />}
           onClick={() => {
@@ -263,20 +261,32 @@ const TrainingDetailPage: React.FC = () => {
               navigate('/trainings');
             }
           }}
-          sx={{ mb: 2, color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
+          sx={{ mb: 1.5, color: 'text.secondary', fontSize: '0.875rem', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
         >
           Back to Trainings
         </Button>
 
-        <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'flex-start' }} gap={3}>
-          <Box>
+        <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'flex-start' }} gap={2}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
             <Box display="flex" alignItems="center" gap={2} mb={1} flexWrap="wrap">
-              <Typography variant="h4" component="h1" fontWeight="bold">
+              <Typography 
+                variant="h5" 
+                component="h1" 
+                fontWeight="bold"
+                sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}
+              >
                 {training.name}
               </Typography>
-              <StatusChip status={training.status} />
             </Box>
-            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 800, mb: 2 }}>
+            <Typography 
+              variant="body2" 
+              color="text.secondary" 
+              sx={{ 
+                maxWidth: 600, 
+                mb: 1.5,
+                display: { xs: 'none', sm: 'block' }
+              }}
+            >
               {training.description || 'No description provided'}
             </Typography>
             
@@ -295,13 +305,14 @@ const TrainingDetailPage: React.FC = () => {
             )}
           </Box>
 
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={0.5}>
             <Button 
               startIcon={<RefreshIcon />} 
               onClick={() => refetch()} 
               variant="outlined" 
               color="inherit"
               disabled={isLoading}
+              size="small"
             >
               Refresh
             </Button>
@@ -312,6 +323,7 @@ const TrainingDetailPage: React.FC = () => {
                   onClick={handleEditTraining} 
                   variant="outlined"
                   disabled={isLoading}
+                  size="small"
                 >
                   Edit
                 </Button>
@@ -321,6 +333,7 @@ const TrainingDetailPage: React.FC = () => {
                   color="error" 
                   variant="outlined" 
                   disabled={isLoading}
+                  size="small"
                 >
                   Delete
                 </Button>

@@ -3,15 +3,13 @@ import {
   Box,
   Typography,
   Button,
-  IconButton,
-  Chip
+  IconButton
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   Edit as EditIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { formatDateTime } from '../../utils';
 
 interface Project {
   _id: string;
@@ -38,53 +36,54 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   onDelete
 }) => {
   return (
-    <Box sx={{ mb: 4 }}>
+    <Box sx={{ mb: 3 }}>
       <Button
         startIcon={<ArrowBackIcon />}
         onClick={onBack}
-        sx={{ mb: 2, color: 'text.secondary' }}
+        sx={{ mb: 1.5, color: 'text.secondary', fontSize: '0.875rem' }}
       >
         Back to Projects
       </Button>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box>
-          <Typography variant="h3" component="h1" gutterBottom fontWeight="bold">
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography 
+            variant="h4" 
+            component="h1" 
+            gutterBottom 
+            fontWeight="bold"
+            sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}
+          >
             {project.name}
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 800, mb: 2 }}>
+          <Typography 
+            variant="body2" 
+            color="text.secondary" 
+            sx={{ 
+              maxWidth: 600, 
+              mb: 1.5,
+              display: { xs: 'none', sm: 'block' }
+            }}
+          >
             {project.description || 'No description provided.'}
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Chip
-              label={project.isPublic ? 'Public' : 'Private'}
-              color={project.isPublic ? 'success' : 'default'}
-              variant="outlined"
-              size="small"
-            />
-            <Chip
-              label={`Created ${formatDateTime(project.createdAt)}`}
-              variant="outlined"
-              size="small"
-            />
-          </Box>
         </Box>
 
         {isOwner && (
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 0.5, ml: 2 }}>
             <IconButton
               color="primary"
               onClick={onEdit}
               size="small"
             >
-              <EditIcon />
+              <EditIcon fontSize="small" />
             </IconButton>
             <IconButton
               color="error"
               onClick={onDelete}
               size="small"
             >
-              <DeleteIcon />
+              <DeleteIcon fontSize="small" />
             </IconButton>
           </Box>
         )}

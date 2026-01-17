@@ -50,13 +50,13 @@ const VisualizationFilters: React.FC<VisualizationFiltersProps> = ({
         bgcolor: 'background.paper'
       }}
     >
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
-        <Box display="flex" alignItems="center" color="text.secondary">
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
+        <Box display="flex" alignItems="center" color="text.secondary" sx={{ minWidth: { xs: 'auto', sm: 'fit-content' } }}>
           <FilterListIcon sx={{ mr: 1 }} />
           <Typography variant="subtitle2" fontWeight={600}>Filters:</Typography>
         </Box>
         
-        <FormControl size="small" sx={{ minWidth: 180 }}>
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 180 } }}>
           <InputLabel>Type</InputLabel>
           <Select
             value={selectedType}
@@ -70,7 +70,7 @@ const VisualizationFilters: React.FC<VisualizationFiltersProps> = ({
           </Select>
         </FormControl>
 
-        <FormControl size="small" sx={{ minWidth: 150 }}>
+        <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
           <InputLabel>Epoch</InputLabel>
           <Select
             value={selectedEpochFilter}
@@ -92,7 +92,10 @@ const VisualizationFilters: React.FC<VisualizationFiltersProps> = ({
           value={selectedImageName}
           onChange={(e) => setSelectedImageName(e.target.value)}
           placeholder="e.g. image_001"
-          sx={{ flexGrow: 1 }}
+          sx={{ 
+            flexGrow: { xs: 0, sm: 1 },
+            minWidth: { xs: '100%', sm: 'auto' }
+          }}
         />
         
         {selectedForCompare.length > 0 && (
