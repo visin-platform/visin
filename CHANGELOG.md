@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.54](https://github.com/visin-platform/visin-monorepo/compare/v0.0.53...v0.0.54) (2026-01-17)
+
+
+### Features
+
+* add scrollable tabs for mobile ([df4800b](https://github.com/visin-platform/visin-monorepo/commit/df4800b36ded2e62963e949a755d3bc922f452a6))
+
 ### [0.0.53](https://github.com/visin-platform/visin-monorepo/compare/v0.0.52...v0.0.53) (2026-01-08)
 
 
