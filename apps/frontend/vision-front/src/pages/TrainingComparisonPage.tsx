@@ -132,7 +132,33 @@ const TrainingComparisonPage: React.FC = () => {
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
+        <Tabs 
+          value={activeTab} 
+          onChange={(_, newValue) => setActiveTab(newValue)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{
+            '& .MuiTab-root': { 
+              textTransform: 'none',
+              fontWeight: 500,
+              minHeight: 48,
+              px: { xs: 2, sm: 3 },
+              minWidth: { xs: 'auto', sm: 90 },
+              flexShrink: 0
+            },
+            '& .MuiTabs-scrollButtons': {
+              display: { xs: 'flex', sm: 'auto' }
+            },
+            '& .MuiTabs-scroller': {
+              overflow: 'auto !important',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': {
+                display: 'none'
+              }
+            }
+          }}
+        >
           <Tab label={`Training Runs (${comparisonData.length})`} />
           <Tab label={`Test Results (${testResultsData.length})`} />
           <Tab label={`Benchmarks (${benchmarksData.length})`} />

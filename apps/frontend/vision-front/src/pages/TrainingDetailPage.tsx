@@ -346,6 +346,7 @@ const TrainingDetailPage: React.FC = () => {
           onChange={handleTabChange}
           variant="scrollable"
           scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{ 
             borderBottom: 1, 
             borderColor: 'divider',
@@ -353,7 +354,19 @@ const TrainingDetailPage: React.FC = () => {
               textTransform: 'none',
               fontWeight: 600,
               minHeight: 48,
-              px: 3
+              px: { xs: 2, sm: 3 },
+              minWidth: { xs: 'auto', sm: 90 },
+              flexShrink: 0
+            },
+            '& .MuiTabs-scrollButtons': {
+              display: { xs: 'flex', sm: 'auto' }
+            },
+            '& .MuiTabs-scroller': {
+              overflow: 'auto !important',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': {
+                display: 'none'
+              }
             }
           }}
         >

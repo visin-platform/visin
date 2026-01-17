@@ -120,7 +120,34 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
   return (
     <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
-        <Tabs value={tabValue} onChange={onTabChange} aria-label="project tabs">
+        <Tabs 
+          value={tabValue} 
+          onChange={onTabChange} 
+          aria-label="project tabs"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{
+            '& .MuiTab-root': { 
+              textTransform: 'none',
+              fontWeight: 500,
+              minHeight: 48,
+              px: { xs: 2, sm: 3 },
+              minWidth: { xs: 'auto', sm: 90 },
+              flexShrink: 0
+            },
+            '& .MuiTabs-scrollButtons': {
+              display: { xs: 'flex', sm: 'auto' }
+            },
+            '& .MuiTabs-scroller': {
+              overflow: 'auto !important',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': {
+                display: 'none'
+              }
+            }
+          }}
+        >
           <Tab label="Overview" />
           <Tab label="Trainings" />
           <Tab label="Tests" />
