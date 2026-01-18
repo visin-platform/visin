@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.63](https://github.com/visin-platform/visin-monorepo/compare/v0.0.62...v0.0.63) (2026-01-18)
+
+
+### Features
+
+* ignore type errors ([075f0e0](https://github.com/visin-platform/visin-monorepo/commit/075f0e00e6104f6246a8cb80119c5dca00af069d))
+
 ### [0.0.62](https://github.com/visin-platform/visin-monorepo/compare/v0.0.61...v0.0.62) (2026-01-18)
 
 
