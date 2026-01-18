@@ -19,12 +19,18 @@ export const getAllImages = async (req: Request, res: Response): Promise<void> =
   try {
     const { page = 1, limit = 50, search, tags, random, weatherCondition } = req.query;
 
+    const searchParam = typeof search === 'string' ? search : undefined;
+    const tagsParam = typeof tags === 'string' ? tags : undefined;
+    const weatherConditionParam = typeof weatherCondition === 'string' ? weatherCondition : undefined;
+    const pageParam = typeof page === 'string' ? Number(page) : 1;
+    const limitParam = typeof limit === 'string' ? Number(limit) : 50;
+
     const result = await getImages({
-      page: Number(page),
-      limit: Number(limit),
-      search: search as string,
-      tags: tags ? (tags as string).split(' ').map(tag => tag.trim()).filter(tag => tag.length > 0) : undefined,
-      weatherCondition: weatherCondition as string,
+      page: pageParam,
+      limit: limitParam,
+      search: searchParam,
+      tags: tagsParam ? tagsParam.split(' ').map(tag => tag.trim()).filter(tag => tag.length > 0) : undefined,
+      weatherCondition: weatherConditionParam,
       random: random === 'true'
     });
 
@@ -277,7 +283,9 @@ export const exportImagesByLabels = async (req: Request, res: Response): Promise
       return;
     }
 
-    const { images, labelsArray } = await exportImagesByLabelsService(datasetId, labels as string);
+    const labelsParam = typeof labels === 'string' ? labels : Array.isArray(labels) ? labels.join(',') : '';
+
+    const { images, labelsArray } = await exportImagesByLabelsService(datasetId, labelsParam);
 
     // Set CSV headers
     res.setHeader('Content-Type', 'text/csv');
@@ -456,7 +464,9 @@ export const exportImageNames = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const images = await exportImageNamesService(datasetId, tag as string);
+    const tagParam = typeof tag === 'string' ? tag : undefined;
+
+    const images = await exportImageNamesService(datasetId, tagParam);
 
     // Set CSV headers
     res.setHeader('Content-Type', 'text/csv');
