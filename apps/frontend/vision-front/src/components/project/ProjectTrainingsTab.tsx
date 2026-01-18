@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import { Compare as CompareIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 
 import TrainingsTable from '../TrainingsTable';
 import TrainingFormDialog from '../TrainingFormDialog';
@@ -18,6 +18,7 @@ import { trainingService } from '../../services/trainingService';
 import { configService } from '../../services/configService';
 import { projectService } from '../../services/projectService';
 import { getAllAnalyses, type DatasetAnalysis } from '../../services/analysisService';
+import { comparisonService } from '../../services/comparisonService';
 import { Training } from '../../types';
 
 interface ProjectTrainingsTabProps {
@@ -99,10 +100,31 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
     }
   };
 
+  // Create comparison mutation
+  const createComparisonMutation = useMutation({
+    mutationFn: (data: { name: string; itemIds: string[]; projectId: string }) =>
+      comparisonService.createComparison({
+        name: data.name,
+        type: 'trainings',
+        itemIds: data.itemIds,
+        projectId: data.projectId
+      }),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['project-comparisons', projectId] });
+      navigate(`/comparisons/${response.data.uuid}`);
+    }
+  });
+
   const handleCompareSelected = () => {
     const selectedIds = Array.from(selectedTrainingIds);
     if (selectedIds.length > 1) {
-      navigate(`/trainings/compare?ids=${selectedIds.join(',')}`);
+      // Create a comparison with selected trainings
+      const comparisonName = `Comparison of ${selectedIds.length} trainings`;
+      createComparisonMutation.mutate({
+        name: comparisonName,
+        itemIds: selectedIds,
+        projectId: projectId
+      });
     }
   };
 

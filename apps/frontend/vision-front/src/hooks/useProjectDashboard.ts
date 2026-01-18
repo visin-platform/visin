@@ -39,9 +39,9 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     data: statsResponse,
     isLoading: isStatsLoading
   } = useQuery({
-    queryKey: ['project-stats', projectId],
-    queryFn: () => trainingService.getTrainingStats({ projectId }),
-    enabled: !!projectId
+    queryKey: ['project-stats', projectResponse?.data?._id],
+    queryFn: () => trainingService.getTrainingStats({ projectId: projectResponse?.data?._id }),
+    enabled: !!projectResponse?.data
   });
 
   // Dashboard stats query
@@ -49,9 +49,9 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     data: dashboardStatsResponse,
     isLoading: isDashboardStatsLoading
   } = useQuery({
-    queryKey: ['project-dashboard-stats', projectId],
-    queryFn: () => projectService.getProjectDashboardStats(projectId!),
-    enabled: !!projectId
+    queryKey: ['project-dashboard-stats', projectResponse?.data?._id],
+    queryFn: () => projectService.getProjectDashboardStats(projectResponse?.data?._id!),
+    enabled: !!projectResponse?.data
   });
 
   // Full trainings query
@@ -59,15 +59,15 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     data: fullTrainingsResponse,
     isLoading: isFullTrainingsLoading
   } = useQuery({
-    queryKey: ['project-trainings-full', projectId, page, rowsPerPage, sortBy, sortOrder],
+    queryKey: ['project-trainings-full', projectResponse?.data?._id, page, rowsPerPage, sortBy, sortOrder],
     queryFn: () => trainingService.getTrainings({
-      projectId,
+      projectId: projectResponse?.data?._id,
       page: page + 1,
       limit: rowsPerPage,
       sortBy,
       order: sortOrder
     }),
-    enabled: !!projectId && tabValue === 1
+    enabled: !!projectResponse?.data && tabValue === 1
   });
 
   // Test results query

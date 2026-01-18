@@ -183,15 +183,8 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
   };
 
   const handleComparisonClick = (comparison: Comparison) => {
-    // Navigate to training comparison page with appropriate tab
-    const ids = comparison.itemIds.join(',');
-    let tab = '';
-    if ((comparison.type as any) === 'tests') {
-      tab = '&tab=tests';
-    } else if ((comparison.type as any) === 'benchmarks') {
-      tab = '&tab=benchmarks';
-    }
-    navigate(`/trainings/compare?ids=${ids}${tab}`);
+    // Navigate to comparison detail page using comparison UUID
+    navigate(`/comparisons/${comparison.uuid}`);
   };
 
   const getItemsForType = (): Training[] => {

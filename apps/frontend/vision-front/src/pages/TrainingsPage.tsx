@@ -11,6 +11,7 @@ import { useTrainingsPage } from '../hooks/useTrainingsPage';
 import BulkActionsBar from '../components/trainings/BulkActionsBar';
 import DeleteTrainingDialog from '../components/trainings/DeleteTrainingDialog';
 import DeleteMultipleTrainingsDialog from '../components/trainings/DeleteMultipleTrainingsDialog';
+import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
 const TrainingsPage: React.FC = () => {
   // Set page title
@@ -80,6 +81,11 @@ const TrainingsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
+      <PageBreadcrumbs
+        items={[
+          { label: 'Trainings', current: true }
+        ]}
+      />
       <TrainingFilters
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}

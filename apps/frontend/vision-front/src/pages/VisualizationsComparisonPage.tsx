@@ -4,22 +4,19 @@ import {
   Typography,
   Box,
   Paper,
-  Button,
   Alert,
-  CircularProgress,
-  useTheme
+  CircularProgress
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { visualizationService } from '../services/visualizationService';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { formatDateTime } from '../utils';
 import { Visualization } from '../types';
+import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
 const VisualizationsComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const theme = useTheme();
 
   usePageTitle('Visualizations Comparison - Vision');
 
@@ -47,11 +44,6 @@ const VisualizationsComparisonPage: React.FC = () => {
         <Alert severity="warning">
           No visualization IDs provided. Please select visualizations to compare from the visualizations list.
         </Alert>
-        <Box sx={{ mt: 2 }}>
-          <Button variant="contained" onClick={() => navigate('/visualizations')}>
-            Back to Visualizations
-          </Button>
-        </Box>
       </Container>
     );
   }
@@ -73,11 +65,6 @@ const VisualizationsComparisonPage: React.FC = () => {
         <Alert severity="error">
           Failed to load visualizations comparison: {error instanceof Error ? error.message : 'Unknown error'}
         </Alert>
-        <Box sx={{ mt: 2 }}>
-          <Button variant="contained" onClick={() => navigate('/visualizations')}>
-            Back to Visualizations
-          </Button>
-        </Box>
       </Container>
     );
   }
@@ -93,6 +80,12 @@ const VisualizationsComparisonPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
+      <PageBreadcrumbs
+        items={[
+          { label: 'Visualizations', href: '/visualizations' },
+          { label: 'Comparison', current: true }
+        ]}
+      />
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Box>
@@ -104,19 +97,6 @@ const VisualizationsComparisonPage: React.FC = () => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            onClick={() => navigate('/visualizations')}
-            sx={{ 
-              px: 3,
-              py: 1,
-              borderRadius: 2,
-              border: `1px solid ${theme.palette.divider}`,
-              '&:hover': { bgcolor: theme.palette.action.hover }
-            }}
-          >
-            Back to Visualizations
-          </Button>
         </Box>
       </Box>
 

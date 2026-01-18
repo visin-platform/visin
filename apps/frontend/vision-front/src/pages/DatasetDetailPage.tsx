@@ -50,6 +50,7 @@ import DatasetImagesTab from '../components/dataset/DatasetImagesTab';
 import DatasetExportTab from '../components/dataset/DatasetExportTab';
 import CategoryModal from '../components/dataset/CategoryModal';
 import EditImageModal from '../components/dataset/EditImageModal';
+import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
 const DatasetDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -353,6 +354,14 @@ const DatasetDetailPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
+      {/* Breadcrumbs */}
+      <PageBreadcrumbs
+        items={[
+          { label: 'Datasets', href: '/datasets' },
+          { label: analysis.dataset, current: true }
+        ]}
+      />
+
       <DatasetHeader
         analysis={analysis}
         imagesCount={imagesData?.data?.pagination?.total || 0}
@@ -360,7 +369,6 @@ const DatasetDetailPage: React.FC = () => {
         onRefresh={() => refetch()}
         onDelete={() => setDeleteDialogOpen(true)}
         canDelete={!!canDeleteDatasets()}
-        onBack={() => navigate('/datasets')}
       />
 
       <Paper sx={{ mb: 4, borderRadius: 2, border: `1px solid ${theme.palette.divider}` }}>

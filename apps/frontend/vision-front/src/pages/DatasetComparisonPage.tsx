@@ -4,7 +4,6 @@ import {
   Typography,
   Box,
   Paper,
-  Button,
   Alert,
   CircularProgress,
   Accordion,
@@ -13,13 +12,13 @@ import {
 } from '@mui/material';
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { compareAnalyses } from '../services/analysisService';
 import { usePageTitle } from '../hooks/usePageTitle';
+import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
 export const DatasetComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   // Get analysis IDs from URL params
   const analysisIds = searchParams.get('ids')?.split(',') || [];
@@ -41,11 +40,6 @@ export const DatasetComparisonPage: React.FC = () => {
         <Alert severity="warning">
           No analysis IDs provided. Please select analyses to compare from the analyses list.
         </Alert>
-        <Box sx={{ mt: 2 }}>
-          <Button variant="contained" onClick={() => navigate('/datasets')}>
-            Back to Datasets
-          </Button>
-        </Box>
       </Container>
     );
   }
@@ -67,17 +61,18 @@ export const DatasetComparisonPage: React.FC = () => {
         <Alert severity="error">
           Failed to load analysis comparison: {error instanceof Error ? error.message : 'Unknown error'}
         </Alert>
-        <Box sx={{ mt: 2 }}>
-          <Button variant="contained" onClick={() => navigate('/datasets')}>
-            Back to Datasets
-          </Button>
-        </Box>
       </Container>
     );
   }
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
+      <PageBreadcrumbs
+        items={[
+          { label: 'Datasets', href: '/datasets' },
+          { label: 'Comparison', current: true }
+        ]}
+      />
       {/* Header */}
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
@@ -89,12 +84,6 @@ export const DatasetComparisonPage: React.FC = () => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="contained"
-            onClick={() => navigate('/datasets')}
-          >
-            Back to Datasets
-          </Button>
         </Box>
       </Box>
 

@@ -38,6 +38,7 @@ import ProjectFormDialog from '../components/ProjectFormDialog';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDateTime } from '../utils';
+import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
 const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -147,6 +148,13 @@ const ProjectsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
+      {/* Breadcrumbs */}
+      <PageBreadcrumbs
+        items={[
+          { label: 'Projects', current: true }
+        ]}
+      />
+
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Box>
           <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>

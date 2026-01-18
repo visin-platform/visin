@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import TrainingsPage from '../pages/TrainingsPage';
 import TrainingDetailPage from '../pages/TrainingDetailPage';
 import TrainingComparisonPage from '../pages/TrainingComparisonPage';
+import ComparisonDetailPage from '../pages/ComparisonDetailPage';
 import EpochsPage from '../pages/EpochsPage';
 import ConfigsPage from '../pages/ConfigsPage';
 import DatasetsPage from '../pages/DatasetsPage';
@@ -22,6 +23,7 @@ function AppRoutes() {
       <Route path="/" element={<Navigate to="/projects" replace />} />
       <Route path="/projects" element={<ProjectsPage />} />
       <Route path="/projects/:id" element={<ProjectDashboardPage />} />
+      <Route path="/comparisons/:uuid" element={<ComparisonDetailPage />} />
       <Route path="/trainings" element={<TrainingsPage />} />
       <Route path="/trainings/:id" element={<TrainingDetailPage />} />
       <Route path="/trainings/compare" element={<TrainingComparisonPage />} />

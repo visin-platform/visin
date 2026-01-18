@@ -2,11 +2,9 @@ import React from 'react';
 import {
   Box,
   Typography,
-  Button,
   IconButton
 } from '@mui/material';
 import {
-  ArrowBack as ArrowBackIcon,
   Edit as EditIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
@@ -23,7 +21,6 @@ interface Project {
 interface ProjectHeaderProps {
   project: Project;
   isOwner: boolean;
-  onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -31,20 +28,11 @@ interface ProjectHeaderProps {
 const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   project,
   isOwner,
-  onBack,
   onEdit,
   onDelete
 }) => {
   return (
     <Box sx={{ mb: 3 }}>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={onBack}
-        sx={{ mb: 1.5, color: 'text.secondary', fontSize: '0.875rem' }}
-      >
-        Back to Projects
-      </Button>
-
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography 

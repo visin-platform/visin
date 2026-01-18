@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Container,
@@ -14,7 +15,6 @@ import {
   Stack
 } from '@mui/material';
 import {
-  ArrowBack as ArrowBackIcon,
   Refresh as RefreshIcon,
   Edit as EditIcon,
   Delete as DeleteIcon
@@ -43,6 +43,8 @@ import { useTrainingDetail } from '../hooks/useTrainingDetail';
 import { useTrainingEdit } from '../hooks/useTrainingEdit';
 import { processEpochFiles, processTestResultFiles, UploadResult } from '../utils/fileUploadHelpers';
 import { generateLatexCode, generateAggregatedLatexCode } from '../utils/latexGenerator';
+import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import { projectService } from '../services/projectService';
 
 const TrainingDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -87,6 +89,15 @@ const TrainingDetailPage: React.FC = () => {
     commentsLoading,
     refetchComments
   } = useTrainingDetail(id);
+
+  // Fetch project information if training has a projectId
+  const { data: projectResponse } = useQuery({
+    queryKey: ['project', training?.projectId],
+    queryFn: () => projectService.getProjectById(training!.projectId!),
+    enabled: !!training?.projectId
+  });
+
+  const project = projectResponse?.data;
 
   const {
     editDialogOpen,
@@ -250,22 +261,22 @@ const TrainingDetailPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
+      {/* Breadcrumbs */}
+      <PageBreadcrumbs
+        items={[
+          { label: 'Projects', href: '/projects' },
+          ...(project ? [
+            { label: project.name, href: `/projects/${project.slug || project._id}` },
+            { label: 'Trainings', href: `/projects/${project.slug || project._id}?tab=trainings` }
+          ] : [
+            { label: 'Trainings', href: '/trainings' }
+          ]),
+          { label: training.name, current: true }
+        ]}
+      />
+
       {/* Header */}
       <Box mb={3}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => {
-            if (training?.projectId) {
-              navigate(`/projects/${training.projectId}?tab=trainings`);
-            } else {
-              navigate('/trainings');
-            }
-          }}
-          sx={{ mb: 1.5, color: 'text.secondary', fontSize: '0.875rem', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
-        >
-          Back to Trainings
-        </Button>
-
         <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'flex-start' }} gap={2}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Box display="flex" alignItems="center" gap={2} mb={1} flexWrap="wrap">

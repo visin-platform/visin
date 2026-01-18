@@ -3,7 +3,6 @@ import {
   Container,
   Typography,
   Box,
-  Button,
   Alert,
   CircularProgress,
   Tabs,
@@ -12,7 +11,7 @@ import {
 import {
 } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { trainingService } from '../services/trainingService';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,10 +22,10 @@ import APMetricsTable from '../components/test-results/APMetricsTable';
 import BenchmarksComparisonTable from '../components/comparison/BenchmarksComparisonTable';
 import TrainingValidationMetricsTable from '../components/comparison/TrainingValidationMetricsTable';
 import TrainingClassIoUTable from '../components/comparison/TrainingClassIoUTable';
+import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
 const TrainingComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   useAuth();
 
   // Set page title
@@ -105,17 +104,18 @@ const TrainingComparisonPage: React.FC = () => {
         <Alert severity="error">
           Failed to load training comparison: {error instanceof Error ? error.message : 'Unknown error'}
         </Alert>
-        <Box sx={{ mt: 2 }}>
-          <Button variant="contained" onClick={() => navigate('/trainings')}>
-            Back to Trainings
-          </Button>
-        </Box>
       </Container>
     );
   }
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
+      <PageBreadcrumbs
+        items={[
+          { label: 'Trainings', href: '/trainings' },
+          { label: 'Comparison', current: true }
+        ]}
+      />
       {/* Header */}
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>

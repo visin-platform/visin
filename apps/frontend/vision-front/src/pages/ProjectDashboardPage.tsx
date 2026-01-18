@@ -21,6 +21,7 @@ import DeleteProjectDialog from '../components/project/DeleteProjectDialog';
 
 // Custom hook
 import { useProjectDashboard } from '../hooks/useProjectDashboard';
+import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
 
 
@@ -29,7 +30,7 @@ const ProjectDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const [tabValue, setTabValue] = useState(0);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const tabNameToIndex: Record<string, number> = {
     overview: 0,
@@ -39,6 +40,16 @@ const ProjectDashboardPage: React.FC = () => {
     benchmarks: 4,
     comparisons: 5,
     settings: 6
+  };
+
+  const indexToTabName: Record<number, string> = {
+    0: 'overview',
+    1: 'trainings',
+    2: 'tests',
+    3: 'visualizations',
+    4: 'benchmarks',
+    5: 'comparisons',
+    6: 'settings'
   };
 
   React.useEffect(() => {
@@ -96,6 +107,10 @@ const ProjectDashboardPage: React.FC = () => {
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+    const tabName = indexToTabName[newValue];
+    if (tabName) {
+      setSearchParams({ tab: tabName });
+    }
   };
 
   // Project edit/delete handlers
@@ -165,10 +180,17 @@ const ProjectDashboardPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ mt: 0, mb: 8 }}>
+      {/* Breadcrumbs */}
+      <PageBreadcrumbs
+        items={[
+          { label: 'Projects', href: '/projects' },
+          { label: project.name, current: true }
+        ]}
+      />
+
       <ProjectHeader
         project={project}
         isOwner={isOwner}
-        onBack={() => navigate('/projects')}
         onEdit={handleEditProject}
         onDelete={() => setDeleteDialogOpen(true)}
       />

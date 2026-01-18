@@ -16,6 +16,7 @@ import DatasetsTable from '../components/DatasetsTable';
 import CreateAnalysisModal from '../components/CreateAnalysisModal';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
+import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
 export const DatasetsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -79,6 +80,11 @@ export const DatasetsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
+      <PageBreadcrumbs
+        items={[
+          { label: 'Datasets', current: true }
+        ]}
+      />
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Box>
           <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>

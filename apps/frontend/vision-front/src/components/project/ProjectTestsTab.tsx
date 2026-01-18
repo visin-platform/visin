@@ -16,9 +16,12 @@ import {
 } from '@mui/material';
 import { Compare as CompareIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { comparisonService } from '../../services/comparisonService';
 import { formatDateTime } from '../../utils';
 
 interface ProjectTestsTabProps {
+  projectId: string;
   testResultsResponse: any;
   isLoading: boolean;
   page: number;
@@ -28,6 +31,7 @@ interface ProjectTestsTabProps {
 }
 
 const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
+  projectId,
   testResultsResponse,
   isLoading,
   page,
@@ -36,6 +40,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
   onRowsPerPageChange
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selectedTestResultIds, setSelectedTestResultIds] = useState<Set<string>>(new Set());
 
   const handleSelectTestResult = (testResultId: string) => {
@@ -57,6 +62,21 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
     }
   };
 
+  // Create comparison mutation
+  const createComparisonMutation = useMutation({
+    mutationFn: (data: { name: string; itemIds: string[]; projectId: string }) =>
+      comparisonService.createComparison({
+        name: data.name,
+        type: 'trainings',
+        itemIds: data.itemIds,
+        projectId: data.projectId
+      }),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['project-comparisons', projectId] });
+      navigate(`/comparisons/${response.data.uuid}?tab=tests`);
+    }
+  });
+
   const handleCompareSelectedTestResults = () => {
     const selectedIds = Array.from(selectedTestResultIds);
     if (selectedIds.length > 1) {
@@ -66,10 +86,16 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
           .filter((tr: any) => selectedTestResultIds.has(tr._id))
           .map((tr: any) => tr.training?._id)
           .filter((id: any) => id)
-      ));
+      )) as string[];
       
       if (trainingIds.length > 0) {
-        navigate(`/trainings/compare?ids=${trainingIds.join(',')}&tab=tests`);
+        // Create a comparison with the trainings
+        const comparisonName = `Comparison of ${trainingIds.length} trainings (from test results)`;
+        createComparisonMutation.mutate({
+          name: comparisonName,
+          itemIds: trainingIds,
+          projectId: projectId
+        });
       }
     }
   };

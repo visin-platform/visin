@@ -11,18 +11,38 @@ import {
 } from '@mui/material';
 import { Compare as CompareIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { comparisonService } from '../../services/comparisonService';
 
 interface ProjectVisualizationsTabProps {
+  projectId: string;
   visualizationsResponse: any;
   isLoading: boolean;
 }
 
 const ProjectVisualizationsTab: React.FC<ProjectVisualizationsTabProps> = ({
+  projectId,
   visualizationsResponse,
   isLoading
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selectedVisualizationTrainingIds, setSelectedVisualizationTrainingIds] = useState<Set<string>>(new Set());
+
+  // Create comparison mutation
+  const createComparisonMutation = useMutation({
+    mutationFn: (data: { name: string; itemIds: string[]; projectId: string }) =>
+      comparisonService.createComparison({
+        name: data.name,
+        type: 'trainings',
+        itemIds: data.itemIds,
+        projectId: data.projectId
+      }),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['project-comparisons', projectId] });
+      navigate(`/comparisons/${response.data.uuid}`);
+    }
+  });
 
   return (
     <Box sx={{ px: 3 }}>
@@ -34,7 +54,12 @@ const ProjectVisualizationsTab: React.FC<ProjectVisualizationsTabProps> = ({
             startIcon={<CompareIcon />}
             onClick={() => {
               const selectedIds = Array.from(selectedVisualizationTrainingIds);
-              navigate(`/visualizations/compare-trainings?ids=${selectedIds.join(',')}`);
+              const comparisonName = `Comparison of ${selectedIds.length} trainings (from visualizations)`;
+              createComparisonMutation.mutate({
+                name: comparisonName,
+                itemIds: selectedIds,
+                projectId: projectId
+              });
             }}
           >
             Compare Selected ({selectedVisualizationTrainingIds.size})

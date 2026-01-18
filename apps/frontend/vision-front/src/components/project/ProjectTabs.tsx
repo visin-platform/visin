@@ -189,6 +189,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       {/* Tests Tab */}
       <TabPanel value={tabValue} index={2}>
         <ProjectTestsTab
+          projectId={projectId}
           testResultsResponse={testResultsResponse}
           isLoading={isTestResultsLoading}
           page={testsPage}
@@ -201,6 +202,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       {/* Visualizations Tab */}
       <TabPanel value={tabValue} index={3}>
         <ProjectVisualizationsTab
+          projectId={projectId}
           visualizationsResponse={visualizationsResponse}
           isLoading={isVisualizationsLoading}
         />
@@ -220,7 +222,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
 
       {/* Comparisons Tab */}
       <TabPanel value={tabValue} index={5}>
-        <ProjectComparisonsTab projectId={projectId} />
+        <ProjectComparisonsTab projectId={project._id} />
       </TabPanel>
 
       {/* Settings Tab */}
