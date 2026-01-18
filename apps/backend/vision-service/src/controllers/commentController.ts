@@ -145,7 +145,7 @@ export const createComment = async (req: Request, res: Response): Promise<void> 
 // Update a comment
 export const updateComment = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const { name, comment } = req.body;
 
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
@@ -222,7 +222,7 @@ export const updateComment = async (req: Request, res: Response): Promise<void> 
 // Delete a comment and its replies
 export const deleteComment = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
 
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
       res.status(400).json({

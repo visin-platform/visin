@@ -117,7 +117,7 @@ export const getCategoryById = async (req: Request, res: Response): Promise<void
 
 export const updateCategory = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const { name, description, color } = req.body;
 
     const updateData: any = {};

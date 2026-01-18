@@ -209,7 +209,7 @@ export const createComparison = async (req: Request, res: Response): Promise<voi
 // Update comparison
 export const updateComparison = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const {
       name,
       description,
@@ -291,7 +291,7 @@ export const updateComparison = async (req: Request, res: Response): Promise<voi
 // Delete comparison
 export const deleteComparison = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
 
     // Validate ID format
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {

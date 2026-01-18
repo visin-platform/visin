@@ -84,7 +84,7 @@ export const getProjectBySlug = async (req: AuthRequest, res: Response): Promise
 // Get project by ID
 export const getProjectById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const userId = req.user?.id;
 
     const project = await Project.findById(id);
@@ -213,7 +213,7 @@ export const createProject = async (req: AuthRequest, res: Response): Promise<vo
 // Update project
 export const updateProject = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const userId = req.user?.id;
 
     if (!userId) {
@@ -284,7 +284,7 @@ export const updateProject = async (req: AuthRequest, res: Response): Promise<vo
 // Delete project
 export const deleteProject = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const userId = req.user?.id;
 
     if (!userId) {
@@ -331,7 +331,7 @@ export const deleteProject = async (req: AuthRequest, res: Response): Promise<vo
 // Get project dashboard stats (aggregated stats for overview)
 export const getProjectDashboardStats = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const userId = req.user?.id;
 
     // Find project by slug or ID

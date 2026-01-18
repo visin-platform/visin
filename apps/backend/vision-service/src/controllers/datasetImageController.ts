@@ -120,18 +120,36 @@ export const createDatasetImage = async (req: Request, res: Response): Promise<v
 export const getImagesByDataset = async (req: Request, res: Response): Promise<void> => {
   try {
     const { datasetId } = req.params;
-    const { page = 1, limit, search, categoryId, tags, weatherCondition, sortBy = 'updatedAt', sortOrder = 'desc' } = req.query;
+    const { page = 1, limit, search, categoryId, tags, weatherCondition, sortBy = 'updatedAt', sortOrder = 'desc' } = req.query as {
+      page?: string | string[];
+      limit?: string | string[];
+      search?: string | string[];
+      categoryId?: string | string[];
+      tags?: string | string[];
+      weatherCondition?: string | string[];
+      sortBy?: string | string[];
+      sortOrder?: string | string[];
+    };
+
+    const searchParam = typeof search === 'string' ? search : Array.isArray(search) ? search[0] : undefined;
+    const categoryIdParam = typeof categoryId === 'string' ? categoryId : Array.isArray(categoryId) ? categoryId[0] : undefined;
+    const tagsParam = typeof tags === 'string' ? tags : Array.isArray(tags) ? tags.join(' ') : undefined;
+    const weatherConditionParam = typeof weatherCondition === 'string' ? weatherCondition : Array.isArray(weatherCondition) ? weatherCondition[0] : undefined;
+    const sortByParam = typeof sortBy === 'string' ? sortBy : Array.isArray(sortBy) ? sortBy[0] : 'updatedAt';
+    const sortOrderParam = typeof sortOrder === 'string' && (sortOrder === 'asc' || sortOrder === 'desc') ? sortOrder : Array.isArray(sortOrder) && (sortOrder[0] === 'asc' || sortOrder[0] === 'desc') ? sortOrder[0] : 'desc';
+    const pageParam = typeof page === 'string' ? Number(page) : Array.isArray(page) ? Number(page[0]) : 1;
+    const limitParam = limit ? (typeof limit === 'string' ? Number(limit) : Array.isArray(limit) ? Number(limit[0]) : undefined) : undefined;
 
     const result = await getImages({
       datasetId,
-      page: Number(page),
-      limit: limit ? Number(limit) : undefined,
-      search: search as string,
-      categoryId: categoryId as string,
-      tags: tags ? (tags as string).split(' ').map(tag => tag.trim()).filter(tag => tag.length > 0) : undefined,
-      weatherCondition: weatherCondition as string,
-      sortBy: sortBy as string,
-      sortOrder: sortOrder as 'asc' | 'desc'
+      page: pageParam,
+      limit: limitParam,
+      search: searchParam,
+      categoryId: categoryIdParam,
+      tags: tagsParam ? tagsParam.split(' ').map(tag => tag.trim()).filter(tag => tag.length > 0) : undefined,
+      weatherCondition: weatherConditionParam,
+      sortBy: sortByParam,
+      sortOrder: sortOrderParam
     });
 
     res.json({
@@ -151,13 +169,23 @@ export const getImagesByDataset = async (req: Request, res: Response): Promise<v
 export const getImagesByCategory = async (req: Request, res: Response): Promise<void> => {
   try {
     const { datasetId, categoryId } = req.params;
-    const { page = 1, limit, search, labels } = req.query;
+    const { page = 1, limit, search, labels } = req.query as {
+      page?: string | string[];
+      limit?: string | string[];
+      search?: string | string[];
+      labels?: string | string[];
+    };
+
+    const searchParam = typeof search === 'string' ? search : Array.isArray(search) ? search[0] : undefined;
+    const labelsParam = typeof labels === 'string' ? labels : Array.isArray(labels) ? labels[0] : undefined;
+    const pageParam = typeof page === 'string' ? Number(page) : Array.isArray(page) ? Number(page[0]) : 1;
+    const limitParam = limit ? (typeof limit === 'string' ? Number(limit) : Array.isArray(limit) ? Number(limit[0]) : undefined) : undefined;
 
     const result = await getImagesByCategoryService(datasetId, categoryId, {
-      page: Number(page),
-      limit: limit ? Number(limit) : undefined,
-      search: search as string,
-      labels: labels as string
+      page: pageParam,
+      limit: limitParam,
+      search: searchParam,
+      labels: labelsParam
     });
 
     res.json({
