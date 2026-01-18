@@ -38,7 +38,7 @@ export const getTestResults = async (req: Request, res: Response): Promise<void>
 // Get test result by ID
 export const getTestResultById = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const testResult = await testResultService.getTestResultById(id);
     res.json({
       success: true,
@@ -57,7 +57,7 @@ export const getTestResultById = async (req: Request, res: Response): Promise<vo
 // Get test result by test UUID
 export const getTestResultByTestUuid = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { testUuid } = req.params;
+    const testUuid = req.params.testUuid as string;
     const testResult = await testResultService.getTestResultByTestUuid(testUuid);
     res.json({
       success: true,
@@ -76,7 +76,7 @@ export const getTestResultByTestUuid = async (req: Request, res: Response): Prom
 // Get test results by epoch UUID
 export const getTestResultsByEpochUuid = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { epochUuid } = req.params;
+    const epochUuid = req.params.epochUuid as string;
     const { page, limit, sortBy, order } = req.query;
 
     const pagination = {
@@ -155,7 +155,7 @@ export const createTestResultFromJson = async (req: Request, res: Response): Pro
 // Update test result
 export const updateTestResult = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const result = await testResultService.updateTestResult(id, req.body);
     res.json({
       success: true,
@@ -175,7 +175,7 @@ export const updateTestResult = async (req: Request, res: Response): Promise<voi
 // Delete test result
 export const deleteTestResult = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await testResultService.deleteTestResult(id);
     res.json({
       success: true,
