@@ -29,10 +29,14 @@ interface ComparisonData {
 
 interface IoUMetricsTableProps {
   comparisonData: ComparisonData[];
+  decimals?: number;
+  multiplier?: number;
 }
 
 const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
-  comparisonData
+  comparisonData,
+  decimals = 4,
+  multiplier = 1
 }) => {
   const theme = useTheme();
   const [latexModalOpen, setLatexModalOpen] = useState(false);
@@ -46,9 +50,9 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
     'snow': {column: 'training', direction: 'asc'}
   });
 
-  const formatNumber = (value: any, decimals: number = 4): string => {
+  const formatNumber = (value: any): string => {
     if (typeof value === 'number' && !isNaN(value)) {
-      return value.toFixed(decimals);
+      return (value * multiplier).toFixed(decimals);
     }
     return 'N/A';
   };
@@ -199,7 +203,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
           const isBest = classMetrics.iou.mean === bestIoU;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${formatNumber(classMetrics.iou.mean, 2)} ± ${formatNumber(classMetrics.iou.std, 2)}${boldEnd} `;
+          latex += `& ${boldStart}${(classMetrics.iou.mean * multiplier).toFixed(decimals)} ± ${(classMetrics.iou.std * multiplier).toFixed(decimals)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
@@ -315,7 +319,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
                                     fontWeight: classMetrics.iou.mean === bestIoU ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.iou.mean, 4)} ± {formatNumber(classMetrics.iou.std, 4)}
+                                  {formatNumber(classMetrics.iou.mean)} ± {formatNumber(classMetrics.iou.std)}
                                 </Typography>
                               ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>

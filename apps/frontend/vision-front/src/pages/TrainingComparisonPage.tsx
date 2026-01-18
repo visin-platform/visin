@@ -23,6 +23,7 @@ import BenchmarksComparisonTable from '../components/comparison/BenchmarksCompar
 import TrainingValidationMetricsTable from '../components/comparison/TrainingValidationMetricsTable';
 import TrainingClassIoUTable from '../components/comparison/TrainingClassIoUTable';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import NumberFormattingControls from '../components/common/NumberFormattingControls';
 
 const TrainingComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -33,6 +34,10 @@ const TrainingComparisonPage: React.FC = () => {
 
   // State for active tab
   const [activeTab, setActiveTab] = useState(0);
+
+  // State for number formatting
+  const [decimals, setDecimals] = useState(2);
+  const [multiplier, setMultiplier] = useState(100);
 
   // Set initial tab based on URL parameter
   React.useEffect(() => {
@@ -168,32 +173,66 @@ const TrainingComparisonPage: React.FC = () => {
       {/* Tab Content */}
       {activeTab === 0 && (
         <>
+          {/* Number Formatting Controls */}
+          <NumberFormattingControls
+            decimals={decimals}
+            multiplier={multiplier}
+            onDecimalsChange={setDecimals}
+            onMultiplierChange={setMultiplier}
+          />
+
           {/* Detailed Comparison Table */}
           {comparisonData.length > 0 && (
-            <ComparisonTable comparisonData={comparisonData} />
+            <ComparisonTable 
+              comparisonData={comparisonData}
+              decimals={decimals}
+              multiplier={multiplier}
+            />
           )}
 
           {/* Training Validation Metrics Table */}
-          <TrainingValidationMetricsTable comparisonData={comparisonData} />
+          <TrainingValidationMetricsTable 
+            comparisonData={comparisonData}
+            decimals={decimals}
+            multiplier={multiplier}
+          />
 
           {/* Training Class IoU Table */}
-          <TrainingClassIoUTable comparisonData={comparisonData} />
+          <TrainingClassIoUTable 
+            comparisonData={comparisonData}
+            decimals={decimals}
+            multiplier={multiplier}
+          />
         </>
       )}
 
       {activeTab === 1 && (
         <>
+          {/* Number Formatting Controls */}
+          <NumberFormattingControls
+            decimals={decimals}
+            multiplier={multiplier}
+            onDecimalsChange={setDecimals}
+            onMultiplierChange={setMultiplier}
+          />
+
           {/* Test Results Comparison */}
           {testResultsData.length > 0 ? (
             <>
               <IoUMetricsTable
                 comparisonData={testResultsData}
+                decimals={decimals}
+                multiplier={multiplier}
               />
               <APMetricsTable
                 comparisonData={testResultsData}
+                decimals={decimals}
+                multiplier={multiplier}
               />
               <PerformanceMetricsTable
                 comparisonData={testResultsData}
+                decimals={decimals}
+                multiplier={multiplier}
               />
             </>
           ) : (

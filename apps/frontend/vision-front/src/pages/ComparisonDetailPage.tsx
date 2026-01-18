@@ -31,6 +31,7 @@ import BenchmarksComparisonTable from '../components/comparison/BenchmarksCompar
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DeleteComparisonDialog from '../components/comparisons/DeleteComparisonDialog';
 import TrainingSelector from '../components/comparison/TrainingSelector';
+import NumberFormattingControls from '../components/common/NumberFormattingControls';
 
 const ComparisonDetailPage: React.FC = () => {
   const { uuid } = useParams<{ uuid: string }>();
@@ -42,6 +43,10 @@ const ComparisonDetailPage: React.FC = () => {
 
   // State for active tab
   const [activeTab, setActiveTab] = useState(0);
+
+  // State for number formatting
+  const [decimals, setDecimals] = useState(4);
+  const [multiplier, setMultiplier] = useState(1);
 
   // State for edit dialog
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -315,8 +320,21 @@ const ComparisonDetailPage: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             Training Metrics Comparison
           </Typography>
+          
+          {/* Number Formatting Controls */}
+          <NumberFormattingControls
+            decimals={decimals}
+            multiplier={multiplier}
+            onDecimalsChange={setDecimals}
+            onMultiplierChange={setMultiplier}
+          />
+          
           {comparisonData.length > 0 ? (
-            <ComparisonTable comparisonData={comparisonData} />
+            <ComparisonTable 
+              comparisonData={comparisonData}
+              decimals={decimals}
+              multiplier={multiplier}
+            />
           ) : (
             <Alert severity="info">No training data available for comparison.</Alert>
           )}
@@ -328,14 +346,35 @@ const ComparisonDetailPage: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             Test Results Comparison
           </Typography>
+          
+          {/* Number Formatting Controls */}
+          <NumberFormattingControls
+            decimals={decimals}
+            multiplier={multiplier}
+            onDecimalsChange={setDecimals}
+            onMultiplierChange={setMultiplier}
+          />
+          
           {testResultsData.length > 0 ? (
             <>
-              <PerformanceMetricsTable comparisonData={testResultsData} />
+              <PerformanceMetricsTable 
+                comparisonData={testResultsData}
+                decimals={decimals}
+                multiplier={multiplier}
+              />
               <Box sx={{ mt: 4 }}>
-                <IoUMetricsTable comparisonData={testResultsData} />
+                <IoUMetricsTable 
+                  comparisonData={testResultsData}
+                  decimals={decimals}
+                  multiplier={multiplier}
+                />
               </Box>
               <Box sx={{ mt: 4 }}>
-                <APMetricsTable comparisonData={testResultsData} />
+                <APMetricsTable 
+                  comparisonData={testResultsData}
+                  decimals={decimals}
+                  multiplier={multiplier}
+                />
               </Box>
             </>
           ) : (

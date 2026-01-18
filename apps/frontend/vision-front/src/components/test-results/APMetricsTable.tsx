@@ -29,10 +29,14 @@ interface ComparisonData {
 
 interface APMetricsTableProps {
   comparisonData: ComparisonData[];
+  decimals?: number;
+  multiplier?: number;
 }
 
 const APMetricsTable: React.FC<APMetricsTableProps> = ({
-  comparisonData
+  comparisonData,
+  decimals = 4,
+  multiplier = 1
 }) => {
   const theme = useTheme();
   const [latexModalOpen, setLatexModalOpen] = useState(false);
@@ -46,9 +50,9 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
     'snow': {column: 'training', direction: 'asc'}
   });
 
-  const formatNumber = (value: any, decimals: number = 4): string => {
+  const formatNumber = (value: any): string => {
     if (typeof value === 'number' && !isNaN(value)) {
-      return value.toFixed(decimals);
+      return (value * multiplier).toFixed(decimals);
     }
     return 'N/A';
   };
@@ -199,7 +203,7 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
           const isBest = classMetrics.ap.mean === bestAP;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${formatNumber(classMetrics.ap.mean, 2)} ± ${formatNumber(classMetrics.ap.std, 2)}${boldEnd} `;
+          latex += `& ${boldStart}${(classMetrics.ap.mean * multiplier).toFixed(decimals)} ± ${(classMetrics.ap.std * multiplier).toFixed(decimals)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
@@ -315,7 +319,7 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
                                     fontWeight: classMetrics.ap.mean === bestAP ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.ap.mean, 4)} ± {formatNumber(classMetrics.ap.std, 4)}
+                                  {formatNumber(classMetrics.ap.mean)} ± {formatNumber(classMetrics.ap.std)}
                                 </Typography>
                               ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>

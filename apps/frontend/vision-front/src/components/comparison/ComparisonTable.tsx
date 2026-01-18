@@ -23,16 +23,20 @@ import LatexModal from '../common/LatexModal';
 
 interface ComparisonTableProps {
   comparisonData: TrainingComparison[];
+  decimals?: number;
+  multiplier?: number;
 }
 
-const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => {
+const ComparisonTable: React.FC<ComparisonTableProps> = ({ 
+  comparisonData,
+  decimals = 2,
+  multiplier = 100
+}) => {
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
   const [sortColumn, setSortColumn] = useState<string>('top10Avg');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [decimals, setDecimals] = useState(2);
-  const [multiplier, setMultiplier] = useState(100);
 
   // Handle column sorting
   const handleSort = (column: string) => {
@@ -218,24 +222,8 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
     return latex;
   };
 
-  const handleDecimalsChange = (newDecimals: number) => {
-    setDecimals(newDecimals);
-    if (latexModalOpen) {
-      const latex = generateDetailedComparisonLatex(newDecimals, multiplier);
-      setLatexCode(latex);
-    }
-  };
-
-  const handleMultiplierChange = (newMultiplier: number) => {
-    setMultiplier(newMultiplier);
-    if (latexModalOpen) {
-      const latex = generateDetailedComparisonLatex(decimals, newMultiplier);
-      setLatexCode(latex);
-    }
-  };
-
   const handleGenerateLatex = () => {
-    const latex = generateDetailedComparisonLatex(decimals, multiplier);
+    const latex = generateDetailedComparisonLatex(2, 100);
     setLatexCode(latex);
     setLatexTitle('Detailed Comparison LaTeX Code');
     setLatexModalOpen(true);
@@ -336,10 +324,6 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
         onClose={() => setLatexModalOpen(false)}
         title={latexTitle}
         code={latexCode}
-        decimals={decimals}
-        multiplier={multiplier}
-        onDecimalsChange={handleDecimalsChange}
-        onMultiplierChange={handleMultiplierChange}
       />
     </Paper>
   );

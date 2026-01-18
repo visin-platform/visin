@@ -24,6 +24,8 @@ import LatexModal from '../common/LatexModal';
 
 interface TrainingValidationMetricsTableProps {
   comparisonData: TrainingComparison[];
+  decimals?: number;
+  multiplier?: number;
 }
 
 interface ValidationMetrics {
@@ -38,7 +40,11 @@ interface TrainingMetricsData {
   metrics: ValidationMetrics | null;
 }
 
-const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTableProps> = ({ comparisonData }) => {
+const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTableProps> = ({ 
+  comparisonData,
+  decimals = 2,
+  multiplier = 100
+}) => {
   const theme = useTheme();
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
@@ -309,7 +315,7 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
         const isBestIoU = trainingData.metrics.meanIoU.mean === bestValues.meanIoU;
         const boldStart = isBestIoU ? '\\textbf{' : '';
         const boldEnd = isBestIoU ? '}' : '';
-        latex += `& ${boldStart}${formatNumber(trainingData.metrics.meanIoU.mean, 2)} ± ${formatNumber(trainingData.metrics.meanIoU.std, 2)}${boldEnd} `;
+        latex += `& ${boldStart}${(trainingData.metrics.meanIoU.mean * multiplier).toFixed(decimals)} ± ${(trainingData.metrics.meanIoU.std * multiplier).toFixed(decimals)}${boldEnd} `;
       } else {
         latex += '& N/A ';
       }
@@ -319,7 +325,7 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
         const isBestPrecision = trainingData.metrics.meanPrecision.mean === bestValues.meanPrecision;
         const boldStart = isBestPrecision ? '\\textbf{' : '';
         const boldEnd = isBestPrecision ? '}' : '';
-        latex += `& ${boldStart}${formatNumber(trainingData.metrics.meanPrecision.mean, 2)} ± ${formatNumber(trainingData.metrics.meanPrecision.std, 2)}${boldEnd} `;
+        latex += `& ${boldStart}${(trainingData.metrics.meanPrecision.mean * multiplier).toFixed(decimals)} ± ${(trainingData.metrics.meanPrecision.std * multiplier).toFixed(decimals)}${boldEnd} `;
       } else {
         latex += '& N/A ';
       }
@@ -329,7 +335,7 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
         const isBestRecall = trainingData.metrics.meanRecall.mean === bestValues.meanRecall;
         const boldStart = isBestRecall ? '\\textbf{' : '';
         const boldEnd = isBestRecall ? '}' : '';
-        latex += `& ${boldStart}${formatNumber(trainingData.metrics.meanRecall.mean, 2)} ± ${formatNumber(trainingData.metrics.meanRecall.std, 2)}${boldEnd} `;
+        latex += `& ${boldStart}${(trainingData.metrics.meanRecall.mean * multiplier).toFixed(decimals)} ± ${(trainingData.metrics.meanRecall.std * multiplier).toFixed(decimals)}${boldEnd} `;
       } else {
         latex += '& N/A ';
       }
@@ -339,7 +345,7 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
         const isBestF1 = trainingData.metrics.meanF1.mean === bestValues.meanF1;
         const boldStart = isBestF1 ? '\\textbf{' : '';
         const boldEnd = isBestF1 ? '}' : '';
-        latex += `& ${boldStart}${formatNumber(trainingData.metrics.meanF1.mean, 2)} ± ${formatNumber(trainingData.metrics.meanF1.std, 2)}${boldEnd} `;
+        latex += `& ${boldStart}${(trainingData.metrics.meanF1.mean * multiplier).toFixed(decimals)} ± ${(trainingData.metrics.meanF1.std * multiplier).toFixed(decimals)}${boldEnd} `;
       } else {
         latex += '& N/A ';
       }

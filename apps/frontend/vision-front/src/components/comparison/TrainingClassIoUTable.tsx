@@ -24,6 +24,8 @@ import LatexModal from '../common/LatexModal';
 
 interface TrainingClassIoUTableProps {
   comparisonData: TrainingComparison[];
+  decimals?: number;
+  multiplier?: number;
 }
 
 interface ClassIoUData {
@@ -31,15 +33,17 @@ interface ClassIoUData {
   trainingIoUs: { [trainingId: string]: { mean: number; std: number } | null };
 }
 
-const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ comparisonData }) => {
+const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ 
+  comparisonData,
+  decimals = 2,
+  multiplier = 100
+}) => {
   const theme = useTheme();
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [latexTitle, setLatexTitle] = useState('');
   const [sortColumn, setSortColumn] = useState<string>('training');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [decimals, setDecimals] = useState(2);
-  const [multiplier, setMultiplier] = useState(100);
 
   const formatNumber = (value: number | undefined, decimals: number = 2, multiplier: number = 100): string => {
     if (typeof value === 'number' && !isNaN(value)) {
@@ -220,8 +224,7 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ compariso
   // Helper function to render cell with conditional bold styling
   const renderIoUCell = (
     iouData: { mean: number; std: number } | null,
-    bestValue: number,
-    decimals: number = 3
+    bestValue: number
   ) => {
     const isBest = iouData && iouData.mean === bestValue;
     return (
@@ -232,13 +235,13 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ compariso
           color: isBest ? 'black' : 'inherit'
         }}
       >
-        {formatMeanStd(iouData, decimals, multiplier)}
+        {formatMeanStd(iouData, 2, 100)}
       </Typography>
     );
   };
 
   // Generate LaTeX for class IoU table
-  const generateClassIoULatex = (decimals: number = 2, multiplier: number = 100) => {
+  const generateClassIoULatex = () => {
     if (classIoUData.length === 0) return '';
 
     let latex = `\\begin{table*}[t]\n\\centering\n\\caption{Training Validation IoU per Class (Top 10 Epochs by mIoU)}\n\\label{tab:class_iou}\n\\begin{tabular}{|l|${'c|'.repeat(classIoUData.length)}}\n\\hline\n`;
@@ -264,7 +267,7 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ compariso
           const isBest = iouData.mean === bestValue;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${formatNumber(iouData.mean, decimals, multiplier)} ± ${formatNumber(iouData.std, decimals, multiplier)}${boldEnd} `;
+          latex += `& ${boldStart}${(iouData.mean * multiplier).toFixed(decimals)} ± ${(iouData.std * multiplier).toFixed(decimals)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
@@ -278,24 +281,8 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ compariso
     return latex;
   };
 
-  const handleDecimalsChange = (newDecimals: number) => {
-    setDecimals(newDecimals);
-    if (latexModalOpen) {
-      const latex = generateClassIoULatex(newDecimals, multiplier);
-      setLatexCode(latex);
-    }
-  };
-
-  const handleMultiplierChange = (newMultiplier: number) => {
-    setMultiplier(newMultiplier);
-    if (latexModalOpen) {
-      const latex = generateClassIoULatex(decimals, newMultiplier);
-      setLatexCode(latex);
-    }
-  };
-
   const handleGenerateLatex = () => {
-    const latex = generateClassIoULatex(decimals, multiplier);
+    const latex = generateClassIoULatex();
     setLatexCode(latex);
     setLatexTitle('Training Class IoU LaTeX Code');
     setLatexModalOpen(true);
@@ -383,7 +370,7 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ compariso
 
                   return (
                     <TableCell key={classData.className} align="center">
-                      {renderIoUCell(iouData, bestValue, decimals)}
+                      {renderIoUCell(iouData, bestValue)}
                     </TableCell>
                   );
                 })}
@@ -398,10 +385,6 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({ compariso
         onClose={() => setLatexModalOpen(false)}
         title={latexTitle}
         code={latexCode}
-        decimals={decimals}
-        multiplier={multiplier}
-        onDecimalsChange={handleDecimalsChange}
-        onMultiplierChange={handleMultiplierChange}
       />
     </Paper>
   );
