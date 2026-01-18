@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.55](https://github.com/visin-platform/visin-monorepo/compare/v0.0.54...v0.0.55) (2026-01-17)
+
+
+### Features
+
+* mobile improvements ([a35672e](https://github.com/visin-platform/visin-monorepo/commit/a35672eb2c93a86d1898d112a0b79f2fc6af345a))
+
 ### [0.0.54](https://github.com/visin-platform/visin-monorepo/compare/v0.0.53...v0.0.54) (2026-01-17)
 
 
