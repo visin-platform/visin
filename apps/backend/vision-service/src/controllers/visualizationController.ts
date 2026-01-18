@@ -148,7 +148,7 @@ export const createVisualization = async (req: Request, res: Response) => {
  */
 export const getVisualizationsByEpoch = async (req: Request, res: Response) => {
   try {
-    const { epoch_uuid } = req.params;
+    const epoch_uuid = req.params.epoch_uuid as string;
     const { type } = req.query;
 
     const query: any = { epoch_uuid };
@@ -193,7 +193,7 @@ export const getVisualizationsByEpoch = async (req: Request, res: Response) => {
  */
 export const getVisualizationsByTraining = async (req: Request, res: Response) => {
   try {
-    const { training_uuid } = req.params;
+    const training_uuid = req.params.training_uuid as string;
     const { type, limit = 50, page = 1, projectId, includeUrls = 'true' } = req.query;
 
     // If specific training_uuid is provided, return flat list for that training
@@ -410,7 +410,7 @@ export const getVisualizationsByTraining = async (req: Request, res: Response) =
  */
 export const getVisualizationByUuid = async (req: Request, res: Response) => {
   try {
-    const { visualization_uuid } = req.params;
+    const visualization_uuid = req.params.visualization_uuid as string;
 
     const visualization = await EpochVisualization.findOne({ visualization_uuid });
 
@@ -447,7 +447,7 @@ export const getVisualizationByUuid = async (req: Request, res: Response) => {
  */
 export const deleteVisualization = async (req: Request, res: Response) => {
   try {
-    const { visualization_uuid } = req.params;
+    const visualization_uuid = req.params.visualization_uuid as string;
 
     const visualization = await EpochVisualization.findOne({ visualization_uuid });
 
@@ -483,7 +483,8 @@ export const deleteVisualization = async (req: Request, res: Response) => {
  */
 export const getVisualizationTypes = async (req: Request, res: Response) => {
   try {
-    const { training_uuid, epoch_uuid } = req.query;
+    const training_uuid = req.query.training_uuid as string;
+    const epoch_uuid = req.query.epoch_uuid as string;
 
     let query: any = {};
     

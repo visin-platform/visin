@@ -56,7 +56,7 @@ export const getTrainings = async (req: AuthRequest, res: Response): Promise<voi
 // Get training by ID
 export const getTrainingById = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const userId = req.user?.id;
 
     const training = await trainingService.getTrainingById(id, userId);
@@ -86,7 +86,7 @@ export const getTrainingById = async (req: AuthRequest, res: Response): Promise<
 // Get training by UUID
 export const getTrainingByUuid = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { uuid } = req.params;
+    const uuid = req.params.uuid as string;
     const userId = req.user?.id;
 
     const training = await trainingService.getTrainingByUuid(uuid, userId);
@@ -120,11 +120,14 @@ export const getTrainingWithEpochs = async (req: AuthRequest, res: Response): Pr
     const userId = req.user?.id;
     const { sortBy, order } = req.query;
 
+    const sortByStr = typeof sortBy === 'string' ? sortBy : 'epoch';
+    const orderStr = (typeof order === 'string' && (order === 'asc' || order === 'desc')) ? order as 'asc' | 'desc' : 'asc';
+
     const result = await trainingService.getTrainingWithEpochs(
-      id, 
+      id as string, 
       userId, 
-      sortBy as string, 
-      order as 'asc' | 'desc'
+      sortByStr, 
+      orderStr
     );
 
     res.json({
@@ -207,7 +210,7 @@ export const updateTraining = async (req: AuthRequest, res: Response): Promise<v
     }
 
     const { id } = req.params;
-    const updatedTraining = await trainingService.updateTraining(id, userId, req.body);
+    const updatedTraining = await trainingService.updateTraining(id as string, userId, req.body);
 
     res.json({
       success: true,
@@ -247,7 +250,7 @@ export const deleteTraining = async (req: AuthRequest, res: Response): Promise<v
     }
 
     const { id } = req.params;
-    await trainingService.deleteTraining(id, userId);
+    await trainingService.deleteTraining(id as string, userId);
 
     res.json({
       success: true,
