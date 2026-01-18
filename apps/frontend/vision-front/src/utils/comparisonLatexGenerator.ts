@@ -7,9 +7,9 @@ export const formatTime = (seconds: number) => {
   return `${(seconds / 86400).toFixed(1)}d`;
 };
 
-export const formatNumber = (value: any, decimals: number = 4): string => {
+export const formatNumber = (value: any, decimals: number = 2, multiplier: number = 100): string => {
   if (typeof value === 'number' && !isNaN(value)) {
-    return value.toFixed(decimals);
+    return (value * multiplier).toFixed(decimals);
   }
   return 'N/A';
 };

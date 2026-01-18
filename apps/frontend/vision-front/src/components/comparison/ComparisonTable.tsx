@@ -31,6 +31,8 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
   const [latexTitle, setLatexTitle] = useState('');
   const [sortColumn, setSortColumn] = useState<string>('top10Avg');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [decimals, setDecimals] = useState(2);
+  const [multiplier, setMultiplier] = useState(100);
 
   // Handle column sorting
   const handleSort = (column: string) => {
@@ -143,7 +145,7 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
       return sortDirection === 'asc' ? comparison : -comparison;
     });
   }, [comparisonData, sortColumn, sortDirection]);
-  const generateDetailedComparisonLatex = () => {
+  const generateDetailedComparisonLatex = (decimals: number = 2, multiplier: number = 100) => {
     // Sort trainings by top 10 validation mIoU average (descending)
     const sortedData = [...comparisonData].sort((a, b) => {
       const getTop10Avg = (comp: any) => {
@@ -190,7 +192,7 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
       
       // Best Validation mIoU
       const bestVmIoU = Math.max(...comp.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
-      latex += `& ${bestVmIoU !== -Infinity ? formatNumber(bestVmIoU) : 'N/A'} `;
+      latex += `& ${bestVmIoU !== -Infinity ? formatNumber(bestVmIoU, decimals, multiplier) : 'N/A'} `;
       
       // Top 10 Validation mIoU Average
       const vmIoUs = comp.epochs
@@ -205,7 +207,7 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
         const mean = vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
         const variance = vmIoUs.reduce((sum: number, vmIoU: number) => sum + Math.pow((vmIoU ?? 0) - mean, 2), 0) / vmIoUs.length;
         const std = Math.sqrt(variance);
-        latex += `& ${formatNumber(mean)} ± ${formatNumber(std)} `;
+        latex += `& ${formatNumber(mean, decimals, multiplier)} ± ${formatNumber(std, decimals, multiplier)} `;
       }
       
       latex += '\\\\ \\hline\n';
@@ -216,8 +218,24 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
     return latex;
   };
 
+  const handleDecimalsChange = (newDecimals: number) => {
+    setDecimals(newDecimals);
+    if (latexModalOpen) {
+      const latex = generateDetailedComparisonLatex(newDecimals, multiplier);
+      setLatexCode(latex);
+    }
+  };
+
+  const handleMultiplierChange = (newMultiplier: number) => {
+    setMultiplier(newMultiplier);
+    if (latexModalOpen) {
+      const latex = generateDetailedComparisonLatex(decimals, newMultiplier);
+      setLatexCode(latex);
+    }
+  };
+
   const handleGenerateLatex = () => {
-    const latex = generateDetailedComparisonLatex();
+    const latex = generateDetailedComparisonLatex(decimals, multiplier);
     setLatexCode(latex);
     setLatexTitle('Detailed Comparison LaTeX Code');
     setLatexModalOpen(true);
@@ -275,7 +293,7 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
                 const mean = vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
                 const variance = vmIoUs.reduce((sum: number, vmIoU: number) => sum + Math.pow((vmIoU ?? 0) - mean, 2), 0) / vmIoUs.length;
                 const std = Math.sqrt(variance);
-                top10Avg = `${formatNumber(mean)} ± ${formatNumber(std)}`;
+                top10Avg = `${formatNumber(mean, decimals, multiplier)} ± ${formatNumber(std, decimals, multiplier)}`;
               }
 
               return (
@@ -300,7 +318,7 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
                     {bestEpoch ? bestEpoch.epoch : 'N/A'}
                   </TableCell>
                   <TableCell align="center">
-                    {bestVmIoU !== -Infinity ? formatNumber(bestVmIoU) : 'N/A'}
+                    {bestVmIoU !== -Infinity ? formatNumber(bestVmIoU, decimals, multiplier) : 'N/A'}
                   </TableCell>
                   <TableCell align="center">
                     {top10Avg}
@@ -318,6 +336,10 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ comparisonData }) => 
         onClose={() => setLatexModalOpen(false)}
         title={latexTitle}
         code={latexCode}
+        decimals={decimals}
+        multiplier={multiplier}
+        onDecimalsChange={handleDecimalsChange}
+        onMultiplierChange={handleMultiplierChange}
       />
     </Paper>
   );

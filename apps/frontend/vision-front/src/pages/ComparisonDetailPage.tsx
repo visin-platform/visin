@@ -6,10 +6,19 @@ import {
   Alert,
   CircularProgress,
   Tabs,
-  Tab
+  Tab,
+  Button,
+  IconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate } from 'react-router-dom';
 import { comparisonService } from '../services/comparisonService';
 import { trainingService } from '../services/trainingService';
 import { projectService } from '../services/projectService';
@@ -20,15 +29,29 @@ import IoUMetricsTable from '../components/test-results/IoUMetricsTable';
 import APMetricsTable from '../components/test-results/APMetricsTable';
 import BenchmarksComparisonTable from '../components/comparison/BenchmarksComparisonTable';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import DeleteComparisonDialog from '../components/comparisons/DeleteComparisonDialog';
+import TrainingSelector from '../components/comparison/TrainingSelector';
 
 const ComparisonDetailPage: React.FC = () => {
   const { uuid } = useParams<{ uuid: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Set page title
   usePageTitle('Comparison - Vision');
 
   // State for active tab
   const [activeTab, setActiveTab] = useState(0);
+
+  // State for edit dialog
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editSelectedIds, setEditSelectedIds] = useState<string[]>([]);
+  const [updating, setUpdating] = useState(false);
+
+  // State for delete dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Fetch comparison by UUID
   const {
@@ -42,6 +65,15 @@ const ComparisonDetailPage: React.FC = () => {
   });
 
   const comparison = comparisonResponse?.data;
+
+  // Fetch trainings for the edit modal
+  const { data: trainingsResponse, isLoading: isTrainingsLoading } = useQuery({
+    queryKey: ['trainings-for-edit', comparison?.projectId],
+    queryFn: () => trainingService.getTrainings({ projectId: comparison!.projectId!, limit: 1000 }),
+    enabled: !!comparison?.projectId && editDialogOpen
+  });
+
+  const trainings = trainingsResponse?.data?.trainings || [];
 
   // Fetch project data if we have comparison
   const {
@@ -67,6 +99,80 @@ const ComparisonDetailPage: React.FC = () => {
   });
 
   const comparisonData = trainingComparisonResponse?.data?.comparison || [];
+
+  // Handler functions
+  const handleEditComparison = async () => {
+    if (!comparison) return;
+
+    setEditName(comparison.name);
+    setEditDescription(comparison.description || '');
+    setEditSelectedIds(comparison.itemIds);
+    setEditDialogOpen(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditDialogOpen(false);
+    setEditName('');
+    setEditDescription('');
+    setEditSelectedIds([]);
+  };
+
+  const handleUpdateComparison = async () => {
+    if (!comparison || !editName.trim()) return;
+
+    try {
+      setUpdating(true);
+      await comparisonService.updateComparison(comparison._id, {
+        name: editName.trim(),
+        description: editDescription.trim(),
+        itemIds: editSelectedIds,
+      });
+
+      // Invalidate and refetch the comparison data
+      queryClient.invalidateQueries({ queryKey: ['comparison', uuid] });
+      
+      setEditDialogOpen(false);
+      setEditName('');
+      setEditDescription('');
+      setEditSelectedIds([]);
+    } catch (error) {
+      console.error('Error updating comparison:', error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleEditTrainingIdToggle = (trainingId: string) => {
+    setEditSelectedIds(prev =>
+      prev.includes(trainingId)
+        ? prev.filter(id => id !== trainingId)
+        : [...prev, trainingId]
+    );
+  };
+
+  const handleDeleteComparison = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!comparison) return;
+
+    try {
+      await comparisonService.deleteComparison(comparison._id);
+      // Navigate back to project or comparisons page
+      if (project) {
+        navigate(`/projects/${project.slug || project._id}`);
+      } else {
+        navigate('/comparisons');
+      }
+    } catch (error) {
+      console.error('Error deleting comparison:', error);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteDialogOpen(false);
+  };
 
   // Helper function to format dates as DD.MM.YYYY
   const formatDate = (date: string | Date) => {
@@ -141,16 +247,50 @@ const ComparisonDetailPage: React.FC = () => {
 
       {/* Header */}
       <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="h4" component="h1" gutterBottom>
+              {comparison.name}
+            </Typography>
 
-        <Typography variant="h4" component="h1" gutterBottom>
-          {comparison.name}
-        </Typography>
+            {comparison.description && (
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                {comparison.description}
+              </Typography>
+            )}
+          </Box>
 
-        {comparison.description && (
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-            {comparison.description}
-          </Typography>
-        )}
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Tooltip title="Edit Comparison">
+              <IconButton
+                onClick={handleEditComparison}
+                color="primary"
+                sx={{ 
+                  bgcolor: 'background.paper',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': { bgcolor: 'action.hover' }
+                }}
+              >
+                <EditIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete Comparison">
+              <IconButton
+                onClick={handleDeleteComparison}
+                color="error"
+                sx={{ 
+                  bgcolor: 'background.paper',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': { bgcolor: 'action.hover' }
+                }}
+              >
+                <DeleteIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
 
         <Typography variant="body2" color="text.secondary">
           Created: {formatDate(comparison.createdAt)}
@@ -216,6 +356,60 @@ const ComparisonDetailPage: React.FC = () => {
           )}
         </Box>
       )}
+      
+      {/* Edit Comparison Dialog */}
+      <Dialog open={editDialogOpen} onClose={handleCancelEdit} maxWidth="md" fullWidth>
+        <DialogTitle>Edit Comparison</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <TextField
+              fullWidth
+              label="Comparison Title"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth
+              label="Description (optional)"
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              multiline
+              rows={2}
+              sx={{ mb: 3 }}
+            />
+
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Select Trainings
+            </Typography>
+
+            <TrainingSelector
+              trainings={trainings}
+              selectedTrainingIds={editSelectedIds}
+              onTrainingToggle={handleEditTrainingIdToggle}
+              maxSelections={20}
+              isLoading={isTrainingsLoading}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelEdit}>Cancel</Button>
+          <Button 
+            onClick={handleUpdateComparison} 
+            variant="contained"
+            disabled={!editName.trim() || editSelectedIds.length === 0 || updating}
+          >
+            {updating ? <CircularProgress size={20} /> : 'Update'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteComparisonDialog
+        open={deleteDialogOpen}
+        onClose={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
+      />
     </Container>
   );
 };
