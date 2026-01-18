@@ -6,7 +6,7 @@ RUN npm run build
 FROM node:24-alpine AS production
 WORKDIR /app
 COPY package*.json ./
-RUN npm i --only=production
+RUN npm i
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/docs ./docs
 EXPOSE 4010
