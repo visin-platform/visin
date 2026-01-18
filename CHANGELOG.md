@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.59](https://github.com/visin-platform/visin-monorepo/compare/v0.0.58...v0.0.59) (2026-01-18)
+
+
+### Features
+
+* add number formating ([871c009](https://github.com/visin-platform/visin-monorepo/commit/871c009958395b5425ace8e33973e8543a6b69c1))
+
 ### [0.0.58](https://github.com/visin-platform/visin-monorepo/compare/v0.0.57...v0.0.58) (2026-01-18)
 
 
