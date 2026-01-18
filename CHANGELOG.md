@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.57](https://github.com/visin-platform/visin-monorepo/compare/v0.0.56...v0.0.57) (2026-01-18)
+
+
+### Features
+
+* add edit and delete to comparison page ([9ad07e9](https://github.com/visin-platform/visin-monorepo/commit/9ad07e93fc33f1a07524735347f282e1e4686fd5))
+
 ### [0.0.56](https://github.com/visin-platform/visin-monorepo/compare/v0.0.55...v0.0.56) (2026-01-18)
 
 
