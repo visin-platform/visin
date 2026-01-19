@@ -31,12 +31,14 @@ interface IoUMetricsTableProps {
   comparisonData: ComparisonData[];
   decimals?: number;
   multiplier?: number;
+  classFilter?: string[];
 }
 
 const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
   comparisonData,
   decimals = 4,
-  multiplier = 1
+  multiplier = 1,
+  classFilter
 }) => {
   const theme = useTheme();
   const [latexModalOpen, setLatexModalOpen] = useState(false);
@@ -172,10 +174,9 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
 
   // Generate LaTeX for IoU metrics for a specific condition
   const generateConditionLatex = (condition: string) => {
-    const classNames = ['human', 'sign', 'vehicle'];
     const conditionTitle = condition.replace('_', ' ').toUpperCase();
 
-    let latex = `\\begin{table*}[t]\n\\centering\n\\caption{IoU Metrics - ${conditionTitle}}\n\\label{tab:iou_metrics_${condition}}\n`;
+    let latex = `\\begin{table*}[t]\n\\centering\n\\caption{IoU Metrics - ${conditionTitle}${classFilter ? ` - ${classFilter.join(', ')}` : ''}}\n\\label{tab:iou_metrics_${condition}}\n`;
     latex += `\\begin{tabular}{|l|${'c|'.repeat(classNames.length)}}\n\\hline\n`;
 
     // Header row with class names
@@ -220,14 +221,16 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
   const handleGenerateLatex = (condition: string) => {
     const latex = generateConditionLatex(condition);
     const conditionTitle = condition.replace('_', ' ').toUpperCase();
+    const filterTitle = classFilter ? ` - ${classFilter.join(', ')}` : '';
     setLatexCode(latex);
-    setLatexTitle(`IoU Metrics LaTeX Code - ${conditionTitle}`);
+    setLatexTitle(`IoU Metrics LaTeX Code - ${conditionTitle}${filterTitle}`);
     setLatexModalOpen(true);
   };
 
   if (comparisonData.length === 0) return null;
 
-  const classNames = ['human', 'sign', 'vehicle'];
+  const allClassNames = ['human', 'sign', 'vehicle'];
+  const classNames = classFilter ? allClassNames.filter(name => classFilter.includes(name)) : allClassNames;
 
   return (
     <Paper
@@ -240,10 +243,10 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
     >
       <Box sx={{ p: 3, pb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          IoU Metrics Comparison
+          IoU Metrics Comparison{classFilter ? ` - ${classFilter.join(', ')}` : ''}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Test results showing IoU (Intersection over Union) metrics for different weather conditions and object classes
+          Test results showing IoU (Intersection over Union) metrics for different weather conditions{classFilter ? ` and ${classFilter.join(', ')} classes` : ' and object classes'}
         </Typography>
       </Box>
 

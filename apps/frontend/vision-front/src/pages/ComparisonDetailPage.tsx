@@ -32,6 +32,8 @@ import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DeleteComparisonDialog from '../components/comparisons/DeleteComparisonDialog';
 import TrainingSelector from '../components/comparison/TrainingSelector';
 import NumberFormattingControls from '../components/common/NumberFormattingControls';
+import TrainingClassIoUTable from '../components/comparison/TrainingClassIoUTable';
+import TrainingValidationMetricsTable from '../components/comparison/TrainingValidationMetricsTable';
 
 const ComparisonDetailPage: React.FC = () => {
   const { uuid } = useParams<{ uuid: string }>();
@@ -330,11 +332,29 @@ const ComparisonDetailPage: React.FC = () => {
           />
           
           {comparisonData.length > 0 ? (
-            <ComparisonTable 
-              comparisonData={comparisonData}
-              decimals={decimals}
-              multiplier={multiplier}
-            />
+            <>
+              <ComparisonTable 
+                comparisonData={comparisonData}
+                decimals={decimals}
+                multiplier={multiplier}
+              />
+              
+              <Box sx={{ mt: 4 }}>
+                <TrainingClassIoUTable 
+                  comparisonData={comparisonData}
+                  decimals={decimals}
+                  multiplier={multiplier}
+                />
+              </Box>
+
+              <Box sx={{ mt: 4 }}>
+                <TrainingValidationMetricsTable 
+                  comparisonData={comparisonData}
+                  decimals={decimals}
+                  multiplier={multiplier}
+                />
+              </Box>
+            </>
           ) : (
             <Alert severity="info">No training data available for comparison.</Alert>
           )}
