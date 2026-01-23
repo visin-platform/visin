@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.65](https://github.com/visin-platform/visin-monorepo/compare/v0.0.64...v0.0.65) (2026-01-23)
+
+
+### Features
+
+* disable registration ([7149afd](https://github.com/visin-platform/visin-monorepo/commit/7149afd6405fec5a4fadd39b622cbfcac3a7a17f))
+
 ### [0.0.64](https://github.com/visin-platform/visin-monorepo/compare/v0.0.63...v0.0.64) (2026-01-19)
 
 
