@@ -33,12 +33,17 @@ function handleCredentialResponse(response: { credential: string }, redirectUri:
         window.location.href = redirectUri; // Redirect back without JWT
       } else {
         console.error('Validation failed:', data.message);
-        alert('Authentication failed: ' + (data.message || 'Unknown error'));
+        // Redirect back to auth-front with error
+        const authFrontUrl = window.location.origin;
+        const errorParam = encodeURIComponent(data.message || 'Authentication failed');
+        window.location.href = `${authFrontUrl}?error=${errorParam}&redirect_uri=${encodeURIComponent(redirectUri)}`;
       }
     })
     .catch((err) => {
       console.error('Error:', err);
-      alert('Authentication error: ' + err.message);
+      const authFrontUrl = window.location.origin;
+      const errorParam = encodeURIComponent('Authentication error: ' + err.message);
+      window.location.href = `${authFrontUrl}?error=${errorParam}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     });
 }
 

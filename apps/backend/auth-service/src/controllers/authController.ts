@@ -23,24 +23,16 @@ export const validateToken = async (req: Request, res: Response, next: NextFunct
       return;
     }
 
-    // Upsert DB user (automatic approval for new users)
-    const dbUser = await User.findOneAndUpdate(
-      { email: userEmail.toLowerCase() },
-      {
-        $setOnInsert: {
-          email: userEmail.toLowerCase(),
-          signupMethod: 'google',
-          isApproved: true
-        },
-        $set: { lastLoginAt: new Date() }
-      },
-      { new: true, upsert: true }
-    );
+    // Find existing user only
+    const dbUser = await User.findOne({ email: userEmail.toLowerCase() });
 
     if (!dbUser) {
-      res.status(500).json({ success: false, message: 'Failed to create or find user' });
+      res.status(404).json({ success: false, message: 'User not found' });
       return;
     }
+
+    // Update last login
+    await User.updateOne({ _id: dbUser._id }, { $set: { lastLoginAt: new Date() } });
 
     // Update userPayload to use database user ID instead of Google sub
     const userPayload: UserPayload = {

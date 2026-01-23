@@ -28,7 +28,18 @@ const LoginPage: React.FC = () => {
         console.log('No existing auth found:', err);
       }
 
-      const redirectUri = new URLSearchParams(window.location.search).get('redirect_uri') || '/';
+      // Check for error in URL params
+      const urlParams = new URLSearchParams(window.location.search);
+      const errorParam = urlParams.get('error');
+      if (errorParam) {
+        setError(decodeURIComponent(errorParam));
+        // Clean up the URL
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('error');
+        window.history.replaceState({}, '', newUrl.toString());
+      }
+
+      const redirectUri = urlParams.get('redirect_uri') || '/';
 
       if (!config.GOOGLE_CLIENT_ID) {
         setError('Google Client ID is not configured. Please check your environment variables.');
