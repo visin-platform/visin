@@ -1,5 +1,5 @@
 import React from 'react';
-import { Paper, Typography, Box } from '@mui/material';
+import { Paper, Box, Typography } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
 import { Epoch, Comment } from '../types';
 import ChartComments from './ChartComments';
@@ -31,7 +31,7 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
     // Try validation results first
     const valResults = epoch.results?.val as Record<string, any> || {};
     Object.keys(valResults).forEach(key => {
-      if (!EXCLUDED_KEYS.has(key) && valResults[key]?.ap !== undefined) {
+      if (!EXCLUDED_KEYS.has(key) && (valResults[key]?.ap !== undefined || valResults[key]?.ap?.mean !== undefined)) {
         allClasses.add(key);
       }
     });
@@ -40,7 +40,7 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
     if (allClasses.size === 0) {
       const trainResults = epoch.results?.train as Record<string, any> || {};
       Object.keys(trainResults).forEach(key => {
-        if (!EXCLUDED_KEYS.has(key) && trainResults[key]?.ap !== undefined) {
+        if (!EXCLUDED_KEYS.has(key) && (trainResults[key]?.ap !== undefined || trainResults[key]?.ap?.mean !== undefined)) {
           allClasses.add(key);
         }
       });
@@ -56,7 +56,7 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
         perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
       }
       Object.keys(perClass).forEach(key => {
-        if (perClass[key]?.ap !== undefined) {
+        if (perClass[key]?.ap !== undefined || perClass[key]?.ap?.mean !== undefined) {
           allClasses.add(key);
         }
       });
@@ -64,8 +64,17 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
   });
 
   if (allClasses.size === 0) {
-    return null;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+        <Typography variant="body2" color="text.secondary">
+          Average Precision (AP) is not calculated during training epochs.
+          AP metrics are available in test results.
+        </Typography>
+      </Box>
+    );
   }
+
+  console.log('ClassAPChart - Found classes:', Array.from(allClasses));
 
   // Separate classes into regular and _2d groups
   const classesArray = Array.from(allClasses).sort();
@@ -95,27 +104,32 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
         // Try validation results first
         let valResults = epoch.results?.val as Record<string, any> || {};
         let apValue = valResults[className]?.ap;
+        if (apValue?.mean !== undefined) apValue = apValue.mean;
 
         // Try training results if val doesn't have it
         if (apValue === undefined) {
           const trainResults = epoch.results?.train as Record<string, any> || {};
           apValue = trainResults[className]?.ap;
+          if (apValue?.mean !== undefined) apValue = apValue.mean;
         }
 
         // Try per_class structures as fallback
         if (apValue === undefined) {
           let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
           apValue = perClass[className]?.ap;
+          if (apValue?.mean !== undefined) apValue = apValue.mean;
         }
 
         if (apValue === undefined) {
           let perClass = epoch.results?.train?.per_class as Record<string, any> || {};
           apValue = perClass[className]?.ap;
+          if (apValue?.mean !== undefined) apValue = apValue.mean;
         }
 
         if (apValue === undefined) {
           let perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
           apValue = perClass[className]?.ap;
+          if (apValue?.mean !== undefined) apValue = apValue.mean;
         }
 
         return apValue ?? null;
@@ -148,13 +162,6 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
       {/* Regular Classes Chart */}
       {hasRegularData && (
         <Paper sx={{ p: 3, position: 'relative' }}>
-          <Typography variant="h6" gutterBottom>
-            Class Average Precision (AP) Over Epochs (Validation Data)
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Average Precision (AP) values for each class over training epochs.
-            AP measures the area under the precision-recall curve and is a standard metric for object detection performance.
-          </Typography>
           <Box sx={{ width: '100%', height: 400 }}>
             <LineChart
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
@@ -184,13 +191,6 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
       {/* 2D Classes Chart */}
       {hasTwoDData && (
         <Paper sx={{ p: 3, position: 'relative' }}>
-          <Typography variant="h6" gutterBottom>
-            Class Average Precision (AP) Over Epochs (2D Validation Data)
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Average Precision (AP) values for 2D classes over training epochs.
-            AP measures the area under the precision-recall curve for 2D object detection tasks.
-          </Typography>
           <Box sx={{ width: '100%', height: 400 }}>
             <LineChart
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}

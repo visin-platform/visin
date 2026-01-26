@@ -35,10 +35,12 @@ const invalidateUserTokens = async (userEmails: string[]): Promise<void> => {
       console.error(`Failed to invalidate tokens for ${email}:`, error);
     }
   }
-};const userEmail = (req: InternalServiceRequest) => {
+};const userEmail = (req: InternalServiceRequest): string => {
   // For internal service requests, extract email from request body or params
   if (req.isInternalService) {
-    return req.body?.userEmail || req.query?.userEmail || req.params?.userEmail;
+    const email = req.body?.userEmail || req.query?.userEmail || req.params?.userEmail;
+    // Ensure we return a string, not an array
+    return Array.isArray(email) ? email[0] : email || '';
   }
   // For user requests, extract from authenticated user
   return ((req as any).user?.email || '').toLowerCase();
@@ -119,7 +121,7 @@ export const getUserGroupIds = async (req: InternalServiceRequest, res: Response
 
 export const getOne = async (req: Request, res: Response) => {
   try {
-    const group = await svc.getGroupIfMember(req.params.id, userEmail(req));
+    const group = await svc.getGroupIfMember(req.params.id as string, userEmail(req));
     res.json({ success: true, data: group });
   } catch (e: any) {
     if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
@@ -132,7 +134,7 @@ export const updateGroup = async (req: Request, res: Response) => {
   try {
     const { name } = req.body as { name: string };
     if (!name) return res.status(400).json({ success: false, message: 'name required' });
-    const group = await svc.updateGroup(req.params.id, userEmail(req), { name });
+    const group = await svc.updateGroup(req.params.id as string, userEmail(req), { name });
     res.json({ success: true, data: group });
   } catch (e: any) {
     if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
@@ -143,7 +145,7 @@ export const updateGroup = async (req: Request, res: Response) => {
 
 export const deleteGroup = async (req: Request, res: Response) => {
   try {
-    await svc.deleteGroup(req.params.id, userEmail(req));
+    await svc.deleteGroup(req.params.id as string, userEmail(req));
     res.status(204).send();
   } catch (e: any) {
     if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
@@ -154,7 +156,7 @@ export const deleteGroup = async (req: Request, res: Response) => {
 
 export const restoreGroup = async (req: Request, res: Response) => {
   try {
-    const group = await svc.restoreGroup(req.params.id, userEmail(req));
+    const group = await svc.restoreGroup(req.params.id as string, userEmail(req));
     res.json({ success: true, data: group });
   } catch (e: any) {
     if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
@@ -165,7 +167,7 @@ export const restoreGroup = async (req: Request, res: Response) => {
 
 export const permanentlyDeleteGroup = async (req: Request, res: Response) => {
   try {
-    await svc.permanentlyDeleteGroup(req.params.id, userEmail(req));
+    await svc.permanentlyDeleteGroup(req.params.id as string, userEmail(req));
     res.status(204).send();
   } catch (e: any) {
     if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
@@ -178,7 +180,7 @@ export const addMember = async (req: Request, res: Response) => {
   try {
     const { email, role } = req.body as { email: string; role?: GroupRole };
     if (!email) return res.status(400).json({ success: false, message: 'email required' });
-    const group = await svc.addMember(req.params.id, userEmail(req), email, role);
+    const group = await svc.addMember(req.params.id as string, userEmail(req), email, role);
     
     // Invalidate tokens for the added user
     await invalidateUserTokens([email]);
@@ -195,14 +197,14 @@ export const addMember = async (req: Request, res: Response) => {
 export const updateRole = async (req: Request, res: Response) => {
   try {
     const group = await svc.updateMemberRole(
-      req.params.id,
+      req.params.id as string,
       userEmail(req),
-      req.params.memberEmail,
+      req.params.memberEmail as string,
       (req.body as any).role
     );
     
     // Invalidate tokens for the user whose role changed
-    await invalidateUserTokens([req.params.memberEmail]);
+    await invalidateUserTokens([req.params.memberEmail as string]);
     
     res.json({ success: true, data: group });
   } catch (e: any) {
@@ -215,10 +217,10 @@ export const updateRole = async (req: Request, res: Response) => {
 
 export const removeMember = async (req: Request, res: Response) => {
   try {
-    const group = await svc.removeMember(req.params.id, userEmail(req), req.params.memberEmail);
+    const group = await svc.removeMember(req.params.id as string, userEmail(req), req.params.memberEmail as string);
     
     // Invalidate tokens for the removed user
-    await invalidateUserTokens([req.params.memberEmail]);
+    await invalidateUserTokens([req.params.memberEmail as string]);
     
     res.json({ success: true, data: group });
   } catch (e: any) {
@@ -231,7 +233,7 @@ export const removeMember = async (req: Request, res: Response) => {
 export const membership = async (req: Request, res: Response) => {
   try {
     const email = userEmail(req);
-    const result = await svc.checkMembership(req.params.id, email);
+    const result = await svc.checkMembership(req.params.id as string, email);
     res.json({ success: true, ...result });
   } catch (e: any) {
     if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });

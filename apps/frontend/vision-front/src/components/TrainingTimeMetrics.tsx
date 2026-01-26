@@ -1,24 +1,15 @@
 import React from 'react';
 import { Paper, Typography, Box } from '@mui/material';
-import { BarChart, LineChart } from '@mui/x-charts';
-import { Epoch, Comment } from '../types';
-import ChartComments from './ChartComments';
+import { BarChart } from '@mui/x-charts';
+import { Epoch } from '../types';
 import { useMobileChartTooltip } from '../hooks/useMobileChartTooltip';
 
 interface TrainingTimeMetricsProps {
   epochs: Epoch[];
-  trainingId?: string;
-  comments?: Comment[];
-  commentsLoading?: boolean;
-  onCommentsRefetch?: () => void;
 }
 
 const TrainingTimeMetrics: React.FC<TrainingTimeMetricsProps> = ({ 
-  epochs, 
-  trainingId, 
-  comments, 
-  commentsLoading, 
-  onCommentsRefetch 
+  epochs
 }) => {
   const { isMobile } = useMobileChartTooltip();
   if (epochs.length === 0) {
@@ -36,13 +27,6 @@ const TrainingTimeMetrics: React.FC<TrainingTimeMetricsProps> = ({
   // Get per-epoch times and cumulative times
   const epochNumbers = epochs.map(e => e.epoch);
   const epochTimes = epochs.map(e => e.epoch_time || 0);
-  
-  // Calculate cumulative times
-  const cumulativeTimes = epochTimes.reduce((acc: number[], time, index) => {
-    const cumulative = (acc[index - 1] || 0) + time;
-    acc.push(cumulative);
-    return acc;
-  }, []);
 
   const hasTimeData = epochTimes.some(t => t > 0);
 
@@ -82,54 +66,6 @@ const TrainingTimeMetrics: React.FC<TrainingTimeMetricsProps> = ({
                 margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               />
             </Box>
-            {trainingId && (
-              <ChartComments 
-                trainingId={trainingId} 
-                section="time_per_epoch_chart" 
-                comments={comments}
-                commentsLoading={commentsLoading}
-                onCommentsRefetch={onCommentsRefetch}
-              />
-            )}
-          </Paper>
-
-          {/* Cumulative Time Chart */}
-          <Paper sx={{ 
-            p: 3, 
-            position: 'relative',
-            ...(isMobile && {
-              '& .MuiTooltip-root': {
-                '& .MuiTooltip-tooltip': {
-                  marginTop: '-40px !important'
-                }
-              }
-            })
-          }}>
-            <Typography variant="h6" gutterBottom>
-              Cumulative Training Time
-            </Typography>
-            <Box sx={{ width: '100%', height: 300 }}>
-              <LineChart
-                xAxis={[{ data: epochNumbers, label: 'Epoch', scaleType: 'linear' }]}
-                series={[{
-                  data: cumulativeTimes,
-                  label: 'Cumulative Time',
-                  color: '#ff9800',
-                  showMark: false,
-                  valueFormatter: (value) => formatTime(value as number)
-                }]}
-                margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
-              />
-            </Box>
-            {trainingId && (
-              <ChartComments 
-                trainingId={trainingId} 
-                section="cumulative_time_chart" 
-                comments={comments}
-                commentsLoading={commentsLoading}
-                onCommentsRefetch={onCommentsRefetch}
-              />
-            )}
           </Paper>
         </Box>
       )}

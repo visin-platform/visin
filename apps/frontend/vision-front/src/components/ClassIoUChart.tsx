@@ -1,5 +1,5 @@
 import React from 'react';
-import { Paper, Typography, Box } from '@mui/material';
+import { Paper, Box } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
 import { Epoch, Comment } from '../types';
 import ChartComments from './ChartComments';
@@ -145,12 +145,6 @@ const ClassIoUChart: React.FC<ClassIoUChartProps> = ({
       {/* Regular Classes Chart */}
       {hasRegularData && (
         <Paper sx={{ p: 3, position: 'relative' }}>
-          <Typography variant="h6" gutterBottom>
-            IoU Over Epochs (Validation Data)
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Per-class Intersection over Union (IoU) metrics tracked across training epochs. Background class is ignored and excluded from calculations.
-          </Typography>
           <Box sx={{ width: '100%', height: 400 }}>
             <LineChart
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
@@ -180,12 +174,6 @@ const ClassIoUChart: React.FC<ClassIoUChartProps> = ({
       {/* 2D Classes Chart */}
       {hasTwoDData && (
         <Paper sx={{ p: 3, position: 'relative' }}>
-          <Typography variant="h6" gutterBottom>
-            Class IoU Over Epochs (2D Validation Data)
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Per-class Intersection over Union (IoU) metrics for 2D projections tracked across training epochs. Background class is ignored and excluded from calculations.
-          </Typography>
           <Box sx={{ width: '100%', height: 400 }}>
             <LineChart
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}

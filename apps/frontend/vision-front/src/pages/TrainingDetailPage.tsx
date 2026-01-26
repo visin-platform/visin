@@ -84,10 +84,7 @@ const TrainingDetailPage: React.FC = () => {
     configLoading,
     allTestResults,
     testResultsLoading,
-    availableTestEpochs,
-    comments,
-    commentsLoading,
-    refetchComments
+    availableTestEpochs
   } = useTrainingDetail(id);
 
   // Fetch project information if training has a projectId
@@ -409,10 +406,6 @@ const TrainingDetailPage: React.FC = () => {
         <TrainingOverviewTab
           training={training}
           epochs={epochs}
-          trainingId={id!}
-          comments={comments}
-          commentsLoading={commentsLoading}
-          onCommentsRefetch={refetchComments}
         />
       )}
 

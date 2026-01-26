@@ -1,23 +1,14 @@
 import React from 'react';
-import { Paper, Typography, Box } from '@mui/material';
+import { Paper, Box } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
-import { Epoch, Comment } from '../types';
-import ChartComments from './ChartComments';
+import { Epoch } from '../types';
 
 interface ClassF1ChartProps {
   epochs: Epoch[];
-  trainingId?: string;
-  comments?: Comment[];
-  commentsLoading?: boolean;
-  onCommentsRefetch?: () => void;
 }
 
 const ClassF1Chart: React.FC<ClassF1ChartProps> = ({ 
-  epochs, 
-  trainingId, 
-  comments, 
-  commentsLoading, 
-  onCommentsRefetch 
+  epochs
 }) => {
   if (epochs.length === 0) {
     return null;
@@ -148,9 +139,6 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
       {/* Regular Classes Chart */}
       {hasRegularData && (
         <Paper sx={{ p: 3, position: 'relative' }}>
-          <Typography variant="h6" gutterBottom>
-            Class F1 Score Over Epochs (Validation Data)
-          </Typography>
           <Box sx={{ width: '100%', height: 400 }}>
             <LineChart
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
@@ -165,24 +153,12 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
               }}
             />
           </Box>
-          {trainingId && (
-            <ChartComments 
-              trainingId={trainingId} 
-              section="class_f1_chart" 
-              comments={comments}
-              commentsLoading={commentsLoading}
-              onCommentsRefetch={onCommentsRefetch}
-            />
-          )}
         </Paper>
       )}
 
       {/* 2D Classes Chart */}
       {hasTwoDData && (
         <Paper sx={{ p: 3, position: 'relative' }}>
-          <Typography variant="h6" gutterBottom>
-            Class F1 Score Over Epochs (2D Validation Data)
-          </Typography>
           <Box sx={{ width: '100%', height: 400 }}>
             <LineChart
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
@@ -197,15 +173,6 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
               }}
             />
           </Box>
-          {trainingId && (
-            <ChartComments 
-              trainingId={trainingId} 
-              section="class_f1_2d_chart" 
-              comments={comments}
-              commentsLoading={commentsLoading}
-              onCommentsRefetch={onCommentsRefetch}
-            />
-          )}
         </Paper>
       )}
     </Box>

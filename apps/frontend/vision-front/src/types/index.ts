@@ -32,6 +32,7 @@ export interface EpochMetrics {
   precision?: number;
   recall?: number;
   f1?: number;
+  ap?: number;
   [key: string]: any;
 }
 
@@ -39,11 +40,17 @@ export interface EpochResults {
   train?: {
     loss?: number;
     mean_iou?: number;
+    pixel_accuracy?: number;
+    mean_accuracy?: number;
+    dice_score?: number;
     [className: string]: EpochMetrics | number | undefined;
   };
   val?: {
     loss?: number;
     mean_iou?: number;
+    pixel_accuracy?: number;
+    mean_accuracy?: number;
+    dice_score?: number;
     [className: string]: EpochMetrics | number | undefined;
   };
   system_info?: SystemInfo;

@@ -19,27 +19,6 @@ export const TrainingChartsSection: React.FC<TrainingChartsSectionProps> = ({ ep
   const trainMeanIoU = epochs.map(e => e.results?.train?.mean_iou ?? null);
   const valMeanIoU = epochs.map(e => e.results?.val?.mean_iou ?? null);
   const learningRates = epochs.map(e => e.learning_rate ?? null);
-  const epochTimes = epochs.map(e => e.epoch_time ?? null);
-
-  // Calculate cumulative training time
-  const cumulativeTime = epochTimes.reduce((acc, time, index) => {
-    const prevTime = acc[index - 1] || 0;
-    if (time === null || time === undefined || time < 0 || time > 86400) { // Sanity check: max 24h per epoch
-      acc.push(prevTime);
-    } else {
-      acc.push(prevTime + time);
-    }
-    return acc;
-  }, [] as number[]);
-
-  // Format time for display
-  const formatTime = (seconds: number) => {
-    if (seconds < 60) return `${seconds.toFixed(0)}s`;
-    if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`;
-    if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
-    if (seconds < 604800) return `${(seconds / 86400).toFixed(1)}d`; // days
-    return `${(seconds / 604800).toFixed(1)}w`; // weeks
-  };
 
   return (
     <Box display="flex" flexDirection="column" gap={3}>
@@ -126,47 +105,6 @@ export const TrainingChartsSection: React.FC<TrainingChartsSectionProps> = ({ ep
                 }
               ]}
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
-              slotProps={{
-                legend: {
-                  direction: 'row',
-                  position: { vertical: 'top', horizontal: 'middle' },
-                  padding: 0,
-                  itemMarkWidth: 10,
-                  itemMarkHeight: 2,
-                  markGap: 5,
-                  itemGap: 15,
-                  labelStyle: {
-                    fontSize: 12
-                  }
-                }
-              }}
-            />
-          </Box>
-        </Paper>
-      )}
-
-      {/* Training Time Chart */}
-      {epochs.length > 0 && epochTimes.some(v => v !== null) && (
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Cumulative Training Time
-          </Typography>
-          <Box sx={{ width: '100%', height: { xs: 250, sm: 300, md: 350 } }}>
-            <LineChart
-              xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
-              yAxis={[{
-                label: 'Cumulative Time',
-                valueFormatter: (value) => formatTime(value as number)
-              }]}
-              series={[
-                {
-                  data: cumulativeTime,
-                  label: 'Total Training Time',
-                  color: '#616161',
-                  valueFormatter: (value) => value ? formatTime(value as number) : '0s'
-                }
-              ]}
-              margin={{ top: 10, bottom: 60, left: 100, right: 10 }}
               slotProps={{
                 legend: {
                   direction: 'row',
