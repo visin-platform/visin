@@ -42,7 +42,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTrainingDetail } from '../hooks/useTrainingDetail';
 import { useTrainingEdit } from '../hooks/useTrainingEdit';
 import { processEpochFiles, processTestResultFiles, UploadResult } from '../utils/fileUploadHelpers';
-import { generateLatexCode, generateAggregatedLatexCode } from '../utils/latexGenerator';
+import { generateLatexCode } from '../utils/latexGenerator';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import { projectService } from '../services/projectService';
 
@@ -227,13 +227,6 @@ const TrainingDetailPage: React.FC = () => {
   // LaTeX export handler
   const handleLatexExport = (testResult: TestResult) => {
     const latex = generateLatexCode(testResult);
-    setLatexCode(latex);
-    setLatexModalOpen(true);
-  };
-
-  // Aggregated LaTeX export handler
-  const handleAggregatedLatexExport = (aggregatedStats: any, hasCyclistPedestrianData: boolean, testResultsCount: number) => {
-    const latex = generateAggregatedLatexCode(aggregatedStats, hasCyclistPedestrianData, testResultsCount);
     setLatexCode(latex);
     setLatexModalOpen(true);
   };
@@ -444,7 +437,6 @@ const TrainingDetailPage: React.FC = () => {
           latexCode={latexCode}
           onTestResultFileUpload={(files) => handleFileUpload(files, 'testResult')}
           onLatexExport={handleLatexExport}
-          onAggregatedLatexExport={handleAggregatedLatexExport}
           onSetUploadResultsOpen={setUploadResultsOpen}
           onSetLatexModalOpen={setLatexModalOpen}
           onDeleteTestResult={handleDeleteTestResult}

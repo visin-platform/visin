@@ -12,11 +12,13 @@ import {
   Stack,
   IconButton,
   Tooltip,
+  Typography,
   useTheme,
   alpha
 } from '@mui/material';
 import { Code as CodeIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { TestResult } from '../../types';
+import ConfusionMatrix from './ConfusionMatrix';
 
 interface TestResultTableProps {
   testResult: TestResult;
@@ -96,7 +98,8 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
               <TableCell colSpan={hasCyclistPedestrianData ? 4 : 3} align="center" sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontWeight: 600 }}>IoU</TableCell>
               <TableCell colSpan={hasCyclistPedestrianData ? 4 : 3} align="center" sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontWeight: 600 }}>Precision</TableCell>
               <TableCell colSpan={hasCyclistPedestrianData ? 4 : 3} align="center" sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontWeight: 600 }}>Recall</TableCell>
-              <TableCell colSpan={hasCyclistPedestrianData ? 4 : 3} align="center" sx={{ fontWeight: 600 }}>AP</TableCell>
+              <TableCell colSpan={hasCyclistPedestrianData ? 4 : 3} align="center" sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontWeight: 600 }}>AP</TableCell>
+              <TableCell colSpan={4} align="center" sx={{ fontWeight: 600 }}>Overall Metrics</TableCell>
             </TableRow>
             <TableRow sx={{ bgcolor: alpha(theme.palette.action.hover, 0.5) }}>
               <TableCell align="center" sx={{ fontSize: '0.75rem' }}>Vehicle</TableCell>
@@ -117,7 +120,12 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
               <TableCell align="center" sx={{ fontSize: '0.75rem' }}>Vehicle</TableCell>
               <TableCell align="center" sx={{ fontSize: '0.75rem' }}>Sign</TableCell>
               {hasCyclistPedestrianData && <TableCell align="center" sx={{ fontSize: '0.75rem' }}>Cyc+Ped</TableCell>}
-              <TableCell align="center" sx={{ fontSize: '0.75rem' }}>Human</TableCell>
+              <TableCell align="center" sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontSize: '0.75rem' }}>Human</TableCell>
+
+              <TableCell align="center" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>mIoU Foreground</TableCell>
+              <TableCell align="center" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>Mean Accuracy</TableCell>
+              <TableCell align="center" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>FW IoU</TableCell>
+              <TableCell align="center" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>Pixel Accuracy</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -135,6 +143,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
               const sign = conditionData.sign;
               const cyclistPedestrian = conditionData['cyclist + pedestrian'];
               const human = conditionData.human;
+              const overall = conditionData.overall;
 
               return (
                 <TableRow key={condition.key} hover>
@@ -159,13 +168,115 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
                   <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{vehicle ? formatNumber(vehicle.ap) : '-'}</TableCell>
                   <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{sign ? formatNumber(sign.ap) : '-'}</TableCell>
                   {hasCyclistPedestrianData && <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{cyclistPedestrian ? formatNumber(cyclistPedestrian.ap) : '-'}</TableCell>}
-                  <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{human ? formatNumber(human.ap) : '-'}</TableCell>
+                  <TableCell align="center" sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontFamily: 'monospace' }}>{human ? formatNumber(human.ap) : '-'}</TableCell>
+
+                  <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{overall ? formatNumber(overall.mIoU_foreground) : '-'}</TableCell>
+                  <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{overall ? formatNumber(overall.mean_accuracy) : '-'}</TableCell>
+                  <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{overall ? formatNumber(overall.fw_iou) : '-'}</TableCell>
+                  <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{overall ? formatNumber(overall.pixel_accuracy) : '-'}</TableCell>
                 </TableRow>
               );
             })}
+            {/* Overall row for all conditions combined */}
+            {testResult.test_results.overall && (
+              <TableRow hover sx={{ bgcolor: alpha(theme.palette.secondary.main, 0.04) }}>
+                <TableCell sx={{ fontWeight: 600, borderRight: `1px solid ${theme.palette.divider}` }}>
+                  All
+                </TableCell>
+                <TableCell colSpan={hasCyclistPedestrianData ? 4 : 3} align="center" sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontStyle: 'italic' }}>
+                  -
+                </TableCell>
+                <TableCell colSpan={hasCyclistPedestrianData ? 4 : 3} align="center" sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontStyle: 'italic' }}>
+                  -
+                </TableCell>
+                <TableCell colSpan={hasCyclistPedestrianData ? 4 : 3} align="center" sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontStyle: 'italic' }}>
+                  -
+                </TableCell>
+                <TableCell colSpan={hasCyclistPedestrianData ? 4 : 3} align="center" sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontStyle: 'italic' }}>
+                  -
+                </TableCell>
+                <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{formatNumber(testResult.test_results.overall.mIoU_foreground)}</TableCell>
+                <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{formatNumber(testResult.test_results.overall.mean_accuracy)}</TableCell>
+                <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{formatNumber(testResult.test_results.overall.fw_iou)}</TableCell>
+                <TableCell align="center" sx={{ fontFamily: 'monospace' }}>{formatNumber(testResult.test_results.overall.pixel_accuracy)}</TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Confusion Matrices */}
+      <Box sx={{ p: 2, pt: 0 }}>
+        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, mt: 2 }}>
+          Confusion Matrices
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {/* Overall confusion matrix across all conditions */}
+          {(() => {
+            const conditions = [
+              { key: 'day_fair', label: 'Dry Day' },
+              { key: 'day_rain', label: 'Rainy Day' },
+              { key: 'snow', label: 'Snow' },
+              { key: 'night_fair', label: 'Dry Night' },
+              { key: 'night_rain', label: 'Rainy Night' }
+            ];
+
+            const matrices = conditions
+              .map(condition => {
+                const conditionData = (testResult.test_results as any)[condition.key];
+                return conditionData?.overall?.confusion_matrix;
+              })
+              .filter(matrix => matrix && Array.isArray(matrix) && matrix.length > 0);
+
+            if (matrices.length > 0) {
+              // Sum all confusion matrices
+              const matrixSize = matrices[0].length;
+              const overallMatrix = Array(matrixSize).fill(0).map(() => Array(matrixSize).fill(0));
+
+              matrices.forEach(matrix => {
+                for (let i = 0; i < matrixSize; i++) {
+                  for (let j = 0; j < matrixSize; j++) {
+                    overallMatrix[i][j] += matrix[i][j] || 0;
+                  }
+                }
+              });
+
+              return (
+                <ConfusionMatrix
+                  key="overall"
+                  confusionMatrix={overallMatrix}
+                  title="Overall Confusion Matrix (All Conditions)"
+                  classNames={['Background', 'Vehicle', 'Sign', 'Human']}
+                />
+              );
+            }
+            return null;
+          })()}
+
+          {/* Individual condition confusion matrices */}
+          {[
+            { key: 'day_fair', label: 'Dry Day' },
+            { key: 'day_rain', label: 'Rainy Day' },
+            { key: 'snow', label: 'Snow' },
+            { key: 'night_fair', label: 'Dry Night' },
+            { key: 'night_rain', label: 'Rainy Night' }
+          ].map((condition) => {
+            const conditionData = (testResult.test_results as any)[condition.key];
+            const confusionMatrix = conditionData?.overall?.confusion_matrix;
+
+            if (!confusionMatrix) return null;
+
+            return (
+              <ConfusionMatrix
+                key={condition.key}
+                confusionMatrix={confusionMatrix}
+                title={`${condition.label} Confusion Matrix`}
+                classNames={['Background', 'Vehicle', 'Sign', 'Human']}
+              />
+            );
+          })}
+        </Box>
+      </Box>
     </Paper>
   );
 };

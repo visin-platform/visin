@@ -384,6 +384,14 @@ export interface InferenceTimeMetrics {
   throughput_fps: number;
 }
 
+export interface TestResultOverallMetrics {
+  mIoU_foreground: number;
+  mean_accuracy: number;
+  fw_iou: number;
+  pixel_accuracy: number;
+  confusion_matrix?: number[][];
+}
+
 export interface TestResultCondition {
   pedestrian: TestResultMetrics;
   sign: TestResultMetrics;
@@ -391,7 +399,8 @@ export interface TestResultCondition {
   vehicle: TestResultMetrics;
   human: TestResultMetrics;
   inference_time: InferenceTimeMetrics;
-  [className: string]: TestResultMetrics | InferenceTimeMetrics;
+  overall: TestResultOverallMetrics;
+  [className: string]: TestResultMetrics | InferenceTimeMetrics | TestResultOverallMetrics;
 }
 
 export interface TestResultData {
@@ -400,7 +409,8 @@ export interface TestResultData {
   day_rain: TestResultCondition;
   night_rain: TestResultCondition;
   snow: TestResultCondition;
-  [condition: string]: TestResultCondition;
+  overall: TestResultOverallMetrics;
+  [condition: string]: TestResultCondition | TestResultOverallMetrics;
 }
 
 export interface TestResult {

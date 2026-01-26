@@ -293,7 +293,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
           Performance Metrics Comparison
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Test results aggregated across all test images, showing performance metrics (IoU, Precision, Recall, F1) for different weather conditions and object classes
+          Performance metrics (IoU, Precision, Recall, F1) for different weather conditions and object classes
         </Typography>
       </Box>
 

@@ -8,9 +8,7 @@ import { TestResult } from '../types';
 import UploadResultsDialog from './training/UploadResultsDialog';
 import LatexExportDialog from './training/LatexExportDialog';
 import TestResultsHeader from './training/TestResultsHeader';
-import AggregatedTestResultsTable from './training/AggregatedTestResultsTable';
 import TestResultsList from './training/TestResultsList';
-import { useAggregatedStats } from '../hooks/useAggregatedStats';
 
 interface TrainingTestResultsTabProps {
   allTestResults: TestResult[];
@@ -28,7 +26,6 @@ interface TrainingTestResultsTabProps {
   latexCode: string;
   onTestResultFileUpload: (files: FileList) => Promise<void>;
   onLatexExport: (testResult: TestResult) => void;
-  onAggregatedLatexExport: (aggregatedStats: any, hasCyclistPedestrianData: boolean, testResultsCount: number) => void;
   onSetUploadResultsOpen: (open: boolean) => void;
   onSetLatexModalOpen: (open: boolean) => void;
   onDeleteTestResult?: (testResultId: string) => void;
@@ -48,13 +45,11 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
   latexCode,
   onTestResultFileUpload,
   onLatexExport,
-  onAggregatedLatexExport,
   onSetUploadResultsOpen,
   onSetLatexModalOpen,
   onDeleteTestResult,
   isAuthenticated
 }) => {
-  const { aggregatedStats, hasCyclistPedestrianData } = useAggregatedStats(allTestResults);
 
   return (
     <Box>
@@ -92,21 +87,11 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
         </Alert>
       )}
 
-      {/* Aggregated Test Results Section */}
-      {aggregatedStats && (
-        <AggregatedTestResultsTable
-          aggregatedStats={aggregatedStats}
-          hasCyclistPedestrianData={hasCyclistPedestrianData}
-          testResultsCount={allTestResults.length}
-          onAggregatedLatexExport={onAggregatedLatexExport}
-        />
-      )}
-
       <TestResultsList
         allTestResults={allTestResults}
         testResultsLoading={testResultsLoading}
         availableTestEpochs={availableTestEpochs}
-        hasCyclistPedestrianData={hasCyclistPedestrianData}
+        hasCyclistPedestrianData={false}
         uploading={uploading}
         onLatexExport={onLatexExport}
         onDeleteTestResult={onDeleteTestResult}

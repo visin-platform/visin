@@ -29,7 +29,7 @@ import {
   Compare as CompareIcon
 } from '@mui/icons-material';
 import { testResultService } from '../services/testResultService';
-import { TestResult, TestResultData, TestResultMetrics } from '../types';
+import { TestResult, TestResultData, TestResultMetrics, TestResultOverallMetrics } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 export const TestResultsPage: React.FC = () => {
@@ -102,7 +102,7 @@ export const TestResultsPage: React.FC = () => {
   };
 
   const getAverageMetric = (conditionData: TestResultData[string], metric: keyof TestResultMetrics): number => {
-    const classNames: string[] = ['vehicle', 'sign', 'human', 'cyclist + pedestrian'];
+    const classNames: string[] = ['vehicle', 'sign', 'human'];
     const validClasses = classNames.filter(className => {
       const classData = (conditionData as any)[className];
       return classData && typeof classData === 'object' && (
@@ -125,10 +125,33 @@ export const TestResultsPage: React.FC = () => {
     return sum / validClasses.length;
   };
 
-  const getOverallAverage = (testResults: TestResultData, metric: keyof TestResultMetrics): number => {
-    const conditions = Object.values(testResults);
-    const sum = conditions.reduce((acc, condition) => acc + getAverageMetric(condition, metric), 0);
-    return sum / conditions.length;
+  const getOverallMetrics = (testResults: TestResultData): { mIoU_foreground: number; mean_accuracy: number; fw_iou: number; pixel_accuracy: number } => {
+    const conditions = ['day_fair', 'day_rain', 'night_fair', 'night_rain', 'snow'];
+    const metrics = conditions.map(condition => {
+      const conditionData = testResults[condition];
+      return (conditionData && typeof conditionData === 'object' && 'overall' in conditionData) ? conditionData.overall : null;
+    }).filter(Boolean) as TestResultOverallMetrics[];
+    
+    if (metrics.length === 0) {
+      // Fallback to overall section if available
+      const overall = testResults.overall;
+      if (overall && typeof overall === 'object' && 'mIoU_foreground' in overall) {
+        return {
+          mIoU_foreground: overall.mIoU_foreground || 0,
+          mean_accuracy: overall.mean_accuracy || 0,
+          fw_iou: overall.fw_iou || 0,
+          pixel_accuracy: overall.pixel_accuracy || 0
+        };
+      }
+      return { mIoU_foreground: 0, mean_accuracy: 0, fw_iou: 0, pixel_accuracy: 0 };
+    }
+
+    return {
+      mIoU_foreground: metrics.reduce((sum, m) => sum + m.mIoU_foreground, 0) / metrics.length,
+      mean_accuracy: metrics.reduce((sum, m) => sum + m.mean_accuracy, 0) / metrics.length,
+      fw_iou: metrics.reduce((sum, m) => sum + m.fw_iou, 0) / metrics.length,
+      pixel_accuracy: metrics.reduce((sum, m) => sum + m.pixel_accuracy, 0) / metrics.length
+    };
   };
 
   const handleSelectTestResult = (testResultId: string, checked: boolean) => {
@@ -252,10 +275,25 @@ export const TestResultsPage: React.FC = () => {
                       Avg IoU
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      Avg Precision
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>
                       Avg Recall
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 600 }}>
                       Avg F1
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      mIoU Foreground
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      Mean Accuracy
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      FW IoU
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      Pixel Accuracy
                     </TableCell>
                     <TableCell align="center" sx={{ fontWeight: 600 }}>
                       Timestamp
@@ -267,9 +305,19 @@ export const TestResultsPage: React.FC = () => {
                 </TableHead>
                 <TableBody>
                   {testResults.map((testResult) => {
-                    const avgIou = getOverallAverage(testResult.test_results, 'iou');
-                    const avgRecall = getOverallAverage(testResult.test_results, 'recall');
-                    const avgF1 = getOverallAverage(testResult.test_results, 'f1_score');
+                    const avgIou = getAverageMetric(testResult.test_results.day_fair, 'iou') || 
+                                   getAverageMetric(testResult.test_results.day_rain, 'iou') || 
+                                   getAverageMetric(testResult.test_results.night_fair, 'iou') || 0;
+                    const avgPrecision = getAverageMetric(testResult.test_results.day_fair, 'precision') || 
+                                        getAverageMetric(testResult.test_results.day_rain, 'precision') || 
+                                        getAverageMetric(testResult.test_results.night_fair, 'precision') || 0;
+                    const avgRecall = getAverageMetric(testResult.test_results.day_fair, 'recall') || 
+                                     getAverageMetric(testResult.test_results.day_rain, 'recall') || 
+                                     getAverageMetric(testResult.test_results.night_fair, 'recall') || 0;
+                    const avgF1 = getAverageMetric(testResult.test_results.day_fair, 'f1_score') || 
+                                 getAverageMetric(testResult.test_results.day_rain, 'f1_score') || 
+                                 getAverageMetric(testResult.test_results.night_fair, 'f1_score') || 0;
+                    const overallMetrics = getOverallMetrics(testResult.test_results);
 
                     return (
                       <TableRow 
@@ -299,8 +347,13 @@ export const TestResultsPage: React.FC = () => {
                           Epoch {testResult.epoch}
                         </TableCell>
                         <TableCell align="right">{formatNumber(avgIou)}</TableCell>
+                        <TableCell align="right">{formatNumber(avgPrecision)}</TableCell>
                         <TableCell align="right">{formatNumber(avgRecall)}</TableCell>
                         <TableCell align="right">{formatNumber(avgF1)}</TableCell>
+                        <TableCell align="right">{formatNumber(overallMetrics.mIoU_foreground)}</TableCell>
+                        <TableCell align="right">{formatNumber(overallMetrics.mean_accuracy)}</TableCell>
+                        <TableCell align="right">{formatNumber(overallMetrics.fw_iou)}</TableCell>
+                        <TableCell align="right">{formatNumber(overallMetrics.pixel_accuracy)}</TableCell>
                         <TableCell align="center" sx={{ fontSize: '0.875rem' }}>
                           {formatDate(testResult.timestamp)}
                         </TableCell>
