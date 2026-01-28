@@ -4,10 +4,10 @@ import { TestResult } from '../types';
 export interface AggregatedStats {
   [condition: string]: {
     [className: string]: {
-      iou: { values: number[]; mean: number; std: number };
-      precision: { values: number[]; mean: number; std: number };
-      recall: { values: number[]; mean: number; std: number };
-      ap: { values: number[]; mean: number; std: number };
+      iou: { values: number[]; mean: number };
+      precision: { values: number[]; mean: number };
+      recall: { values: number[]; mean: number };
+      ap: { values: number[]; mean: number };
     };
   };
 }
@@ -35,10 +35,10 @@ export const useAggregatedStats = (allTestResults: TestResult[]) => {
       aggregated[condition] = {};
       classes.forEach(className => {
         aggregated[condition][className] = {
-          iou: { values: [], mean: 0, std: 0 },
-          precision: { values: [], mean: 0, std: 0 },
-          recall: { values: [], mean: 0, std: 0 },
-          ap: { values: [], mean: 0, std: 0 }
+          iou: { values: [], mean: 0 },
+          precision: { values: [], mean: 0 },
+          recall: { values: [], mean: 0 },
+          ap: { values: [], mean: 0 }
         };
       });
     });
@@ -61,18 +61,15 @@ export const useAggregatedStats = (allTestResults: TestResult[]) => {
       });
     });
 
-    // Calculate mean and std for each metric
+    // Calculate mean for each metric
     conditions.forEach(condition => {
       classes.forEach(className => {
         (['iou', 'precision', 'recall', 'ap'] as const).forEach(metric => {
           const values = aggregated[condition][className][metric].values;
           if (values.length > 0) {
             const mean = values.reduce((sum: number, val: number) => sum + val, 0) / values.length;
-            const variance = values.reduce((sum: number, val: number) => sum + Math.pow(val - mean, 2), 0) / values.length;
-            const std = Math.sqrt(variance);
 
             aggregated[condition][className][metric].mean = mean;
-            aggregated[condition][className][metric].std = std;
           }
         });
       });

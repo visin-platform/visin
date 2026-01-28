@@ -142,49 +142,67 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
         avgMetrics.meanIoU = { mean, std };
       }
 
-      // Calculate precision, recall, F1 from class metrics (averaged across classes and top epochs)
-      const classMetrics: { precision: number[], recall: number[], f1: number[] } = {
+      // Calculate precision, recall, F1 from class metrics (averaged across classes per epoch, then across epochs)
+      const epochMetrics: { precision: number[], recall: number[], f1: number[] } = {
         precision: [], recall: [], f1: []
       };
 
       sortedEpochs.forEach(epoch => {
         const valResults = epoch.results?.val;
         if (valResults) {
+          const epochPrecision: number[] = [];
+          const epochRecall: number[] = [];
+          const epochF1: number[] = [];
+
           Object.keys(valResults).forEach(key => {
             if (key !== 'loss' && key !== 'mean_iou' && key !== 'val_loss') {
               const classData = valResults[key];
               if (classData && typeof classData === 'object') {
-                if (typeof classData.precision === 'number') classMetrics.precision.push(classData.precision);
-                if (typeof classData.recall === 'number') classMetrics.recall.push(classData.recall);
+                if (typeof classData.precision === 'number') epochPrecision.push(classData.precision);
+                if (typeof classData.recall === 'number') epochRecall.push(classData.recall);
                 if (typeof (classData.f1_score || classData.f1) === 'number') {
-                  classMetrics.f1.push(classData.f1_score || classData.f1);
+                  epochF1.push(classData.f1_score || classData.f1);
                 }
               }
             }
           });
+
+          // Calculate average metrics for this epoch across all classes
+          if (epochPrecision.length > 0) {
+            const avgPrecision = epochPrecision.reduce((sum, val) => sum + val, 0) / epochPrecision.length;
+            epochMetrics.precision.push(avgPrecision);
+          }
+          if (epochRecall.length > 0) {
+            const avgRecall = epochRecall.reduce((sum, val) => sum + val, 0) / epochRecall.length;
+            epochMetrics.recall.push(avgRecall);
+          }
+          if (epochF1.length > 0) {
+            const avgF1 = epochF1.reduce((sum, val) => sum + val, 0) / epochF1.length;
+            epochMetrics.f1.push(avgF1);
+          }
         }
       });
 
-      // Calculate mean and std for precision
-      if (classMetrics.precision.length > 0) {
-        const mean = classMetrics.precision.reduce((sum, val) => sum + val, 0) / classMetrics.precision.length;
-        const variance = classMetrics.precision.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / classMetrics.precision.length;
+      // Calculate mean and std for precision across epochs
+      if (epochMetrics.precision.length > 0) {
+        const mean = epochMetrics.precision.reduce((sum, val) => sum + val, 0) / epochMetrics.precision.length;
+        const variance = epochMetrics.precision.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / epochMetrics.precision.length;
         const std = Math.sqrt(variance);
         avgMetrics.meanPrecision = { mean, std };
       }
 
-      // Calculate mean and std for recall
-      if (classMetrics.recall.length > 0) {
-        const mean = classMetrics.recall.reduce((sum, val) => sum + val, 0) / classMetrics.recall.length;
-        const variance = classMetrics.recall.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / classMetrics.recall.length;
+      // Calculate mean and std for recall across epochs
+      if (epochMetrics.recall.length > 0) {
+        const mean = epochMetrics.recall.reduce((sum, val) => sum + val, 0) / epochMetrics.recall.length;
+        const variance = epochMetrics.recall.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / epochMetrics.recall.length;
         const std = Math.sqrt(variance);
         avgMetrics.meanRecall = { mean, std };
       }
 
-      // Calculate mean and std for F1
-      if (classMetrics.f1.length > 0) {
-        const mean = classMetrics.f1.reduce((sum, val) => sum + val, 0) / classMetrics.f1.length;
-        const variance = classMetrics.f1.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / classMetrics.f1.length;
+      // Calculate mean and std for F1 across epochs
+      if (epochMetrics.f1.length > 0) {
+        const mean = epochMetrics.f1.reduce((sum, val) => sum + val, 0) / epochMetrics.f1.length;
+        const variance = epochMetrics.f1.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / epochMetrics.f1.length;
         const std = Math.sqrt(variance);
         avgMetrics.meanF1 = { mean, std };
       }
@@ -402,7 +420,7 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
             Training Validation Metrics
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Mean ± standard deviation from the top 10 epochs sorted by validation IoU
+            Mean ± standard deviation from the top 10 epochs sorted by validation IoU. Precision, recall, and F1 are averaged across classes per epoch before calculating statistics.
           </Typography>
         </Box>
         <Button

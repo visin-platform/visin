@@ -87,6 +87,12 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
       if (column === 'training') {
         aString = a.training.name.toLowerCase();
         bString = b.training.name.toLowerCase();
+      } else if (column === 'overall_fw_iou') {
+        // Handle overall FW IoU sorting
+        const conditionDataA = a.aggregatedResults?.[condition];
+        const conditionDataB = b.aggregatedResults?.[condition];
+        aValue = conditionDataA?.overall?.fw_iou?.mean ?? -Infinity;
+        bValue = conditionDataB?.overall?.fw_iou?.mean ?? -Infinity;
       } else {
         // Parse column format: "class_metric" (e.g., "human_iou", "sign_precision")
         const [className, metric] = column.split('_');
@@ -154,7 +160,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
     const conditionTitle = condition.replace('_', ' ').toUpperCase();
 
     let latex = `\\begin{table*}[t]\n\\centering\n\\caption{Test Results Performance Metrics - ${conditionTitle}}\n\\label{tab:performance_metrics_${condition}}\n`;
-    latex += `\\begin{tabular}{|l|${'c|c|c|c|c|'.repeat(classNames.length)}}\n\\hline\n`;
+    latex += `\\begin{tabular}{|l|${'c|c|c|c|c|'.repeat(classNames.length)}c|}\n\\hline\n`;
 
     // Header row with class names
     latex += 'Training & ';
@@ -165,15 +171,15 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
         latex += ' & ';
       }
     });
-    latex += ' \\\\\n\\hline\n';
+    latex += ' & FW IoU \\\\\n\\hline\n';
 
     // Data rows for each training
     comparisonData.forEach(comp => {
       const trainingName = comp.training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
+      const conditionData = comp.aggregatedResults?.[condition];
       latex += `${trainingName} `;
 
       classNames.forEach((className) => {
-        const conditionData = comp.aggregatedResults?.[condition];
         const classMetrics = conditionData?.[className];
         const bestValues = getBestValues(condition, className);
 
@@ -182,7 +188,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
           const isBest = classMetrics.iou.mean === bestValues.iou;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.iou.mean * multiplier).toFixed(decimals)} ± ${(classMetrics.iou.std * multiplier).toFixed(decimals)}${boldEnd} `;
+          latex += `& ${boldStart}${(classMetrics.iou.mean * multiplier).toFixed(decimals)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
@@ -192,7 +198,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
           const isBest = classMetrics.precision.mean === bestValues.precision;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.precision.mean * multiplier).toFixed(decimals)} ± ${(classMetrics.precision.std * multiplier).toFixed(decimals)}${boldEnd} `;
+          latex += `& ${boldStart}${(classMetrics.precision.mean * multiplier).toFixed(decimals)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
@@ -202,7 +208,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
           const isBest = classMetrics.recall.mean === bestValues.recall;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.recall.mean * multiplier).toFixed(decimals)} ± ${(classMetrics.recall.std * multiplier).toFixed(decimals)}${boldEnd} `;
+          latex += `& ${boldStart}${(classMetrics.recall.mean * multiplier).toFixed(decimals)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
@@ -212,7 +218,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
           const isBest = classMetrics.f1_score.mean === bestValues.f1_score;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.f1_score.mean * multiplier).toFixed(decimals)} ± ${(classMetrics.f1_score.std * multiplier).toFixed(decimals)}${boldEnd} `;
+          latex += `& ${boldStart}${(classMetrics.f1_score.mean * multiplier).toFixed(decimals)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
@@ -222,11 +228,18 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
           const isBest = classMetrics.ap.mean === bestValues.ap;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.ap.mean * multiplier).toFixed(decimals)} ± ${(classMetrics.ap.std * multiplier).toFixed(decimals)}${boldEnd} `;
+          latex += `& ${boldStart}${(classMetrics.ap.mean * multiplier).toFixed(decimals)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
       });
+
+      // FW IoU
+      if (conditionData?.overall?.fw_iou?.mean !== undefined) {
+        latex += `& ${(conditionData.overall.fw_iou.mean * multiplier).toFixed(decimals)} `;
+      } else {
+        latex += '& N/A ';
+      }
 
       latex += '\\\\ \\hline\n';
     });
@@ -329,13 +342,23 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                       align="center"
                       sx={{
                         fontWeight: 600,
-                        borderRight: classNames.indexOf(className) < classNames.length - 1 ? '1px solid rgba(224, 224, 224, 1)' : 'none'
+                        borderRight: '1px solid rgba(224, 224, 224, 1)'
                       }}
                     >
                       {className.charAt(0).toUpperCase() + className.slice(1)}
                     </TableCell>
                   ))}
-                </TableRow>
+                    <TableCell
+                      colSpan={1}
+                      align="center"
+                      sx={{
+                        fontWeight: 600,
+                        borderRight: 'none'
+                      }}
+                    >
+                      Overall
+                    </TableCell>
+                  </TableRow>
                 <TableRow sx={{ bgcolor: 'grey.100' }}>
                   <SortableTableCell condition={condition} column="training" align="left">
                     {condition.replace('_', ' ').toUpperCase()}
@@ -349,10 +372,12 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                       <SortableTableCell condition={condition} column={`${className}_ap`}>AP</SortableTableCell>
                     </React.Fragment>
                   ))}
+                  <SortableTableCell condition={condition} column="overall_fw_iou">FW IoU</SortableTableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {getSortedData(condition).map((comp) => {
+                  const conditionData = comp.aggregatedResults?.[condition];
                   return (
                     <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'grey.25' } }}>
                       <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 150 }}>
@@ -382,7 +407,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                     fontWeight: classMetrics.iou.mean === bestValues.iou ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.iou.mean)} ± {formatNumber(classMetrics.iou.std)}
+                                  {formatNumber(classMetrics.iou.mean)}
                                 </Typography>
                               ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
@@ -400,7 +425,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                     fontWeight: classMetrics.precision.mean === bestValues.precision ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.precision.mean)} ± {formatNumber(classMetrics.precision.std)}
+                                  {formatNumber(classMetrics.precision.mean)}
                                 </Typography>
                               ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
@@ -418,7 +443,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                     fontWeight: classMetrics.recall.mean === bestValues.recall ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.recall.mean)} ± {formatNumber(classMetrics.recall.std)}
+                                  {formatNumber(classMetrics.recall.mean)}
                                 </Typography>
                               ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
@@ -436,7 +461,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                     fontWeight: classMetrics.f1_score.mean === bestValues.f1_score ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.f1_score.mean)} ± {formatNumber(classMetrics.f1_score.std)}
+                                  {formatNumber(classMetrics.f1_score.mean)}
                                 </Typography>
                               ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
@@ -459,7 +484,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                     fontWeight: classMetrics.ap.mean === bestValues.ap ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.ap.mean)} ± {formatNumber(classMetrics.ap.std)}
+                                  {formatNumber(classMetrics.ap.mean)}
                                 </Typography>
                               ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
@@ -470,6 +495,23 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                           </React.Fragment>
                         );
                       })}
+                      <TableCell align="center">
+                        {conditionData?.overall?.fw_iou?.mean !== undefined ? (
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontSize: '0.75rem', 
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {formatNumber(conditionData.overall.fw_iou.mean)}
+                          </Typography>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                            N/A
+                          </Typography>
+                        )}
+                      </TableCell>
                     </TableRow>
                   );
                 })}

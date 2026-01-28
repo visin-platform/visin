@@ -204,7 +204,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
           const isBest = classMetrics.iou.mean === bestIoU;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.iou.mean * multiplier).toFixed(decimals)} ± ${(classMetrics.iou.std * multiplier).toFixed(decimals)}${boldEnd} `;
+          latex += `& ${boldStart}${(classMetrics.iou.mean * multiplier).toFixed(decimals)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
@@ -322,7 +322,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
                                     fontWeight: classMetrics.iou.mean === bestIoU ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.iou.mean)} ± {formatNumber(classMetrics.iou.std)}
+                                  {formatNumber(classMetrics.iou.mean)}
                                 </Typography>
                               ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>

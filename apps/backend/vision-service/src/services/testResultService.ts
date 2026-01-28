@@ -549,6 +549,34 @@ export const testResultService = {
           aggregatedResults[condition][className] = classMetrics;
         }
       });
+
+      // Aggregate overall metrics
+      const overallMetrics = ['mIoU_foreground', 'mean_accuracy', 'fw_iou', 'pixel_accuracy'];
+      const overallData: any = {};
+
+      overallMetrics.forEach(metric => {
+        const values: number[] = [];
+
+        testResults.forEach(tr => {
+          const conditionData = tr.test_results[condition];
+          if (conditionData && conditionData.overall && typeof conditionData.overall === 'object') {
+            const value = conditionData.overall[metric];
+            if (typeof value === 'number' && !isNaN(value)) {
+              values.push(value);
+            }
+          }
+        });
+
+        if (values.length > 0) {
+          const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+          const std = Math.sqrt(values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length);
+          overallData[metric] = { mean, std };
+        }
+      });
+
+      if (Object.keys(overallData).length > 0) {
+        aggregatedResults[condition].overall = overallData;
+      }
     });
 
     // Aggregate inference time

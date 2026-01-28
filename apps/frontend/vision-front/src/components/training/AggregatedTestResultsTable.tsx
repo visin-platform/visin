@@ -60,7 +60,7 @@ const AggregatedTestResultsTable: React.FC<AggregatedTestResultsTableProps> = ({
               Test Results Aggregated ({testResultsCount} test{testResultsCount !== 1 ? 's' : ''})
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Mean ± Standard Deviation across all test results
+              Mean across all test results
             </Typography>
           </Box>
           <Button
@@ -138,7 +138,7 @@ const AggregatedTestResultsTable: React.FC<AggregatedTestResultsTableProps> = ({
                         }}
                       >
                         {metricData && metricData.values.length > 0
-                          ? `${formatNumber(metricData.mean, 2)} ± ${formatNumber(metricData.std, 2)}`
+                          ? `${formatNumber(metricData.mean, 2)}`
                           : '-'
                         }
                       </TableCell>
@@ -160,7 +160,7 @@ const AggregatedTestResultsTable: React.FC<AggregatedTestResultsTableProps> = ({
                         }}
                       >
                         {metricData && metricData.values.length > 0
-                          ? `${formatNumber(metricData.mean, 2)} ± ${formatNumber(metricData.std, 2)}`
+                          ? `${formatNumber(metricData.mean, 2)}`
                           : '-'
                         }
                       </TableCell>
@@ -182,7 +182,7 @@ const AggregatedTestResultsTable: React.FC<AggregatedTestResultsTableProps> = ({
                         }}
                       >
                         {metricData && metricData.values.length > 0
-                          ? `${formatNumber(metricData.mean, 2)} ± ${formatNumber(metricData.std, 2)}`
+                          ? `${formatNumber(metricData.mean, 2)}`
                           : '-'
                         }
                       </TableCell>
@@ -202,7 +202,7 @@ const AggregatedTestResultsTable: React.FC<AggregatedTestResultsTableProps> = ({
                         }}
                       >
                         {metricData && metricData.values.length > 0
-                          ? `${formatNumber(metricData.mean, 2)} ± ${formatNumber(metricData.std, 2)}`
+                          ? `${formatNumber(metricData.mean, 2)}`
                           : '-'
                         }
                       </TableCell>

@@ -85,13 +85,13 @@ export const generateAggregatedLatexCode = (aggregatedStats: any, hasCyclistPede
   // Helper function to format value with bold if it's the best
   const formatValue = (metricData: any, isBest: boolean): string => {
     if (!metricData || typeof metricData.mean !== 'number') return '-';
-    const value = `${metricData.mean.toFixed(2)} ± ${metricData.std.toFixed(2)}`;
+    const value = `${metricData.mean.toFixed(2)}`;
     return isBest ? `\\textbf{${value}}` : value;
   };
 
   let latex = `\\begin{table*}[ht]
 \\centering
-\\caption{Aggregated performance metrics across ${testResultsCount} test result${testResultsCount !== 1 ? 's' : ''} (mean ± standard deviation).}
+\\caption{Aggregated performance metrics across ${testResultsCount} test result${testResultsCount !== 1 ? 's' : ''}.}
 \\begin{tabular}{|c|${'c|'.repeat(classes.length * 4)}}
 \\hline & \\multicolumn{${classes.length}}{|c|}{IoU} & \\multicolumn{${classes.length}}{|c|}{Precision} & \\multicolumn{${classes.length}}{|c|}{Recall} & \\multicolumn{${classes.length}}{|c|}{AP} \\\\
 \\hline & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} \\\\

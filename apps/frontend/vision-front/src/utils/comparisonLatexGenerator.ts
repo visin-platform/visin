@@ -113,9 +113,7 @@ export const generateLatexTable = (
       latex += '& N/A ';
     } else {
       const mean = vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
-      const variance = vmIoUs.reduce((sum: number, vmIoU: number) => sum + Math.pow((vmIoU ?? 0) - mean, 2), 0) / vmIoUs.length;
-      const std = Math.sqrt(variance);
-      latex += `& ${formatNumber(mean)} ± ${formatNumber(std)} `;
+      latex += `& ${formatNumber(mean)} `;
     }
   });
   latex += '\\\\ \\hline\n';

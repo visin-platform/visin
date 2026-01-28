@@ -203,7 +203,7 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
           const isBest = classMetrics.ap.mean === bestAP;
           const boldStart = isBest ? '\\textbf{' : '';
           const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.ap.mean * multiplier).toFixed(decimals)} ± ${(classMetrics.ap.std * multiplier).toFixed(decimals)}${boldEnd} `;
+          latex += `& ${boldStart}${(classMetrics.ap.mean * multiplier).toFixed(decimals)}${boldEnd} `;
         } else {
           latex += '& N/A ';
         }
@@ -319,7 +319,7 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
                                     fontWeight: classMetrics.ap.mean === bestAP ? 'bold' : 'normal'
                                   }}
                                 >
-                                  {formatNumber(classMetrics.ap.mean)} ± {formatNumber(classMetrics.ap.std)}
+                                  {formatNumber(classMetrics.ap.mean)}
                                 </Typography>
                               ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
