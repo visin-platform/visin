@@ -1,4 +1,12 @@
 # Visin Changelog
+### [0.0.66](https://github.com/visin-platform/visin-monorepo/compare/v0.0.65...v0.0.66) (2026-01-26)
+
+
+### Features
+
+* add more fields to testing ([f5e6d42](https://github.com/visin-platform/visin-monorepo/commit/f5e6d42b710b4adbadbb35c87941c499031d248b))
+* update trainings plots ([f80b52e](https://github.com/visin-platform/visin-monorepo/commit/f80b52e718ed9d9ebb618b8ae012e8d49cf648f4))
+
 ### [0.0.65](https://github.com/visin-platform/visin-monorepo/compare/v0.0.64...v0.0.65) (2026-01-23)
 
 
