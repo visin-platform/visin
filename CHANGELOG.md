@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.67](https://github.com/visin-platform/visin-monorepo/compare/v0.0.66...v0.0.67) (2026-01-28)
+
+
+### Features
+
+* add fw iou to test results ([db79aa7](https://github.com/visin-platform/visin-monorepo/commit/db79aa79cdbde87889d07d7f7dd740d0482bf43b))
+
 ### [0.0.66](https://github.com/visin-platform/visin-monorepo/compare/v0.0.65...v0.0.66) (2026-01-26)
 
 
