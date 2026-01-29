@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.68](https://github.com/visin-platform/visin-monorepo/compare/v0.0.67...v0.0.68) (2026-01-29)
+
+
+### Features
+
+* various bug fixes ([ad9d581](https://github.com/visin-platform/visin-monorepo/commit/ad9d58116822e57ff91d5651f3893814ce3cb4d3))
+
 ### [0.0.67](https://github.com/visin-platform/visin-monorepo/compare/v0.0.66...v0.0.67) (2026-01-28)
 
 
