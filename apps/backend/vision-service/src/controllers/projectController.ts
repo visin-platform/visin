@@ -10,7 +10,7 @@ import { AuthRequest } from '../middleware/authMiddleware';
 export const getProjects = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;
-    const { search } = req.query;
+    const { search, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
 
     let query: any = {
       $or: [
@@ -28,7 +28,19 @@ export const getProjects = async (req: AuthRequest, res: Response): Promise<void
       query.$text = { $search: search as string };
     }
 
-    const projects = await Project.find(query).sort({ updatedAt: -1 });
+    // Sorting
+    const sortOptions: any = {};
+    const validSortFields = ['name', 'createdAt', 'updatedAt'];
+    const validSortOrders = ['asc', 'desc'];
+
+    if (validSortFields.includes(sortBy as string) && validSortOrders.includes(sortOrder as string)) {
+      sortOptions[sortBy as string] = sortOrder === 'desc' ? -1 : 1;
+    } else {
+      // Default sort
+      sortOptions.createdAt = -1;
+    }
+
+    const projects = await Project.find(query).sort(sortOptions);
 
     res.json({
       success: true,

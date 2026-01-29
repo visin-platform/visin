@@ -21,6 +21,8 @@ export const projectService = {
   // Get all projects
   async getProjects(params?: {
     search?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }): Promise<ApiResponse<Project[]>> {
     const response = await visionApi.get('/projects', { params });
     return response.data;

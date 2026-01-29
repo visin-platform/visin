@@ -4,17 +4,17 @@
 
 /**
  * Formats a date string to a consistent format used across the application
- * Format: DD MMM YYYY, HH:mm (e.g., "04 Jan 2026, 14:30")
+ * Format: DD.MM.YYYY HH:mm (e.g., "04.01.2026 14:30")
  */
 export const formatDateTime = (dateString: string): string => {
   const date = new Date(dateString);
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  
+  return `${day}.${month}.${year} ${hours}:${minutes}`;
 };
 
 /**

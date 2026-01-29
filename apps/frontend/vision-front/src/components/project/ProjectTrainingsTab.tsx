@@ -178,8 +178,10 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
       setTrainingSuccess('Training updated successfully');
       setTrainingModalOpen(false);
       setEditingTrainingId(null);
-      // Refresh trainings list
+      // Refresh trainings list and related stats
       queryClient.invalidateQueries({ queryKey: ['project-trainings-full', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-stats', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-dashboard-stats', projectId] });
     } catch (err) {
       console.error('Failed to update training:', err);
       setTrainingError(err instanceof Error ? err.message : 'Failed to update training');
@@ -201,6 +203,8 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
       setDeleteTrainingDialogOpen(false);
       setDeleteTrainingId(null);
       queryClient.invalidateQueries({ queryKey: ['project-trainings-full', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-stats', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-dashboard-stats', projectId] });
     } catch (err) {
       console.error('Failed to delete training:', err);
     } finally {

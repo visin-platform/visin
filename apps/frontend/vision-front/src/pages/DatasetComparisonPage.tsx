@@ -16,6 +16,7 @@ import { useSearchParams } from 'react-router-dom';
 import { compareAnalyses } from '../services/analysisService';
 import { usePageTitle } from '../hooks/usePageTitle';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import { formatDateTime } from '../utils';
 
 export const DatasetComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -97,7 +98,7 @@ export const DatasetComparisonPage: React.FC = () => {
                   {comparison.analysis.dataset}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {new Date(comparison.analysis.createdAt).toLocaleString()}
+                  {formatDateTime(comparison.analysis.createdAt)}
                 </Typography>
               </Box>
 
@@ -131,7 +132,7 @@ export const DatasetComparisonPage: React.FC = () => {
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">{comp.analysis.dataset}</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-                    Created: {new Date(comp.analysis.createdAt).toLocaleString()}
+                    Created: {formatDateTime(comp.analysis.createdAt)}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>

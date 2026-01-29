@@ -33,6 +33,7 @@ import {
 import { Link } from 'react-router-dom';
 import { getAllAnalyses, DatasetAnalysis, deleteAnalysis, updateAnalysis } from '../services/analysisService';
 import { useAuth } from '../contexts/AuthContext';
+import { formatDateTime } from '../utils';
 
 interface AnalysisTableProps {
   selectedAnalysisIds?: Set<string>;
@@ -79,6 +80,10 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   };
 
   // Permission check function
+  const canEditDatasets = () => {
+    return isAuthenticated;
+  };
+
   const canDeleteDatasets = () => {
     return isAuthenticated && user?.groups && (user.groups.includes('owner') || user.groups.includes('admin'));
   };
@@ -345,17 +350,17 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     <TableCell>{analysis.dataset}</TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {new Date(analysis.createdAt).toLocaleString()}
+                        {formatDateTime(analysis.createdAt)}
                       </Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {new Date(analysis.updatedAt).toLocaleString()}
+                        {formatDateTime(analysis.updatedAt)}
                       </Typography>
                     </TableCell>
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                        {canDeleteDatasets() && (
+                        {canEditDatasets() && (
                           <Tooltip title="Edit dataset name">
                             <IconButton
                               size="small"
@@ -364,7 +369,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                                 e.stopPropagation();
                                 handleEditClick(analysis);
                               }}
-                              disabled={deleteLoading}
+                              disabled={editLoading}
                               sx={{ 
                                 color: 'text.secondary',
                                 '&:hover': { color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.1) }

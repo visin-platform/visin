@@ -8,11 +8,12 @@ import {
   deleteAnalysis,
   compareAnalyses
 } from '../controllers/analysisController';
+import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = express.Router();
 
 // POST /analysis/upload - Upload analysis JSON
-router.post('/upload', uploadAnalysis);
+router.post('/upload', authMiddleware, uploadAnalysis);
 
 // GET /analysis - Get all analyses with optional filtering
 router.get('/', getAllAnalyses);
@@ -24,10 +25,10 @@ router.get('/dataset/:name', getAnalysisByDataset);
 router.get('/:id', getAnalysisById);
 
 // PUT /analysis/:id - Update analysis
-router.put('/:id', updateAnalysis);
+router.put('/:id', authMiddleware, updateAnalysis);
 
 // DELETE /analysis/:id - Delete analysis
-router.delete('/:id', deleteAnalysis);
+router.delete('/:id', authMiddleware, deleteAnalysis);
 
 // POST /analysis/compare - Compare multiple analyses
 router.post('/compare', compareAnalyses);

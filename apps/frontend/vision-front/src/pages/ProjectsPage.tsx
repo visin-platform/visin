@@ -19,6 +19,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   Paper,
   Chip,
   Tooltip
@@ -57,12 +58,22 @@ const ProjectsPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
 
+  // Sorting state
+  const [sortBy, setSortBy] = useState<'name' | 'createdAt'>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => projectService.getProjects()
+    queryKey: ['projects', user?.id, sortBy, sortOrder],
+    queryFn: () => projectService.getProjects({ sortBy, sortOrder })
   });
 
   const projects = data?.data || [];
+
+  const handleSort = (property: 'name' | 'createdAt') => {
+    const isAsc = sortBy === property && sortOrder === 'asc';
+    setSortOrder(isAsc ? 'desc' : 'asc');
+    setSortBy(property);
+  };
 
   const handleCreateProject = async () => {
     if (!projectName.trim()) {
@@ -219,10 +230,26 @@ const ProjectsPage: React.FC = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Name</TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortBy === 'name'}
+                  direction={sortBy === 'name' ? sortOrder : 'asc'}
+                  onClick={() => handleSort('name')}
+                >
+                  Name
+                </TableSortLabel>
+              </TableCell>
               <TableCell>Description</TableCell>
               <TableCell>Visibility</TableCell>
-              <TableCell>Created At</TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortBy === 'createdAt'}
+                  direction={sortBy === 'createdAt' ? sortOrder : 'asc'}
+                  onClick={() => handleSort('createdAt')}
+                >
+                  Created At
+                </TableSortLabel>
+              </TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
