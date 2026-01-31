@@ -390,6 +390,7 @@ export interface TestResultOverallMetrics {
   fw_iou: number;
   pixel_accuracy: number;
   confusion_matrix?: number[][];
+  confusion_matrix_labels?: string[];
 }
 
 export interface TestResultCondition {

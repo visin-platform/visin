@@ -228,6 +228,16 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
               })
               .filter(matrix => matrix && Array.isArray(matrix) && matrix.length > 0);
 
+            // Get labels from the first available condition's overall test results
+            const firstConditionWithLabels = conditions.find(condition => {
+              const conditionData = (testResult.test_results as any)[condition.key];
+              return conditionData?.overall?.confusion_matrix_labels;
+            });
+            
+            const labels = firstConditionWithLabels 
+              ? (testResult.test_results as any)[firstConditionWithLabels.key].overall.confusion_matrix_labels
+              : ['Background', 'Vehicle', 'Sign', 'Human'];
+
             if (matrices.length > 0) {
               // Sum all confusion matrices
               const matrixSize = matrices[0].length;
@@ -246,7 +256,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
                   key="overall"
                   confusionMatrix={overallMatrix}
                   title="Overall Confusion Matrix (All Conditions)"
-                  classNames={['Background', 'Vehicle', 'Sign', 'Human']}
+                  classNames={labels.map((label: string) => label.charAt(0).toUpperCase() + label.slice(1))}
                 />
               );
             }
@@ -266,12 +276,15 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
 
             if (!confusionMatrix) return null;
 
+            // Get labels from this condition's overall test results
+            const labels = conditionData.overall?.confusion_matrix_labels || ['Background', 'Vehicle', 'Sign', 'Human'];
+
             return (
               <ConfusionMatrix
                 key={condition.key}
                 confusionMatrix={confusionMatrix}
                 title={`${condition.label} Confusion Matrix`}
-                classNames={['Background', 'Vehicle', 'Sign', 'Human']}
+                classNames={labels.map((label: string) => label.charAt(0).toUpperCase() + label.slice(1))}
               />
             );
           })}
