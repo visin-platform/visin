@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.71](https://github.com/visin-platform/visin-monorepo/compare/v0.0.70...v0.0.71) (2026-02-17)
+
+
+### Features
+
+* add download dataset urls ([02dbc5c](https://github.com/visin-platform/visin-monorepo/commit/02dbc5c0ea9f53fac1bb0c611bc78524869055d0))
+
 ### [0.0.70](https://github.com/visin-platform/visin-monorepo/compare/v0.0.69...v0.0.70) (2026-02-17)
 
 
