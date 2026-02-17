@@ -290,6 +290,7 @@ export interface CreateDatasetData {
   camera?: Record<string, any>;
   lidar?: Record<string, any>;
   metadata?: Record<string, any>;
+  downloadUrl?: string;
 }
 
 export interface CreateTrainingData {

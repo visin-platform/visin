@@ -13,6 +13,7 @@ export interface DatasetAnalysis {
   _id: string;
   dataset: string;
   data: any; // Dynamic JSON structure
+  downloadUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,16 +64,21 @@ export const uploadAnalysis = async (analysisData: any): Promise<DatasetAnalysis
 /**
  * Create new dataset analysis (without data initially)
  */
-export const createAnalysis = async (datasetName: string): Promise<DatasetAnalysis> => {
+export const createAnalysis = async (datasetName: string, downloadUrl?: string): Promise<DatasetAnalysis> => {
   const config = getGlobalConfig();
   const apiUrl = config.VISION_API_URL;
+  
+  const body: any = { dataset: datasetName };
+  if (downloadUrl) {
+    body.downloadUrl = downloadUrl;
+  }
   
   const response = await fetch(`${apiUrl}/api/analysis/upload`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ dataset: datasetName })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {

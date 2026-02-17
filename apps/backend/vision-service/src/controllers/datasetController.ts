@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import Dataset from '../models/Dataset';
 import { getLabelingStats as getLabelingStatsService } from '../services/datasetImageService';
+import { getSignedUrl as getMinioSignedUrl } from '../services/minioService';
 
 // Get all datasets
 export const getDatasets = async (req: Request, res: Response): Promise<void> => {
@@ -107,7 +108,7 @@ export const getDatasetByUuid = async (req: Request, res: Response): Promise<voi
 // Create dataset
 export const createDataset = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, description, timestamp, dataset_info, annotations, camera, lidar, metadata } = req.body;
+    const { name, description, timestamp, dataset_info, annotations, camera, lidar, metadata, downloadUrl } = req.body;
 
     if (!name || name.trim().length === 0) {
       res.status(400).json({
@@ -129,7 +130,8 @@ export const createDataset = async (req: Request, res: Response): Promise<void> 
       annotations,
       camera,
       lidar,
-      metadata
+      metadata,
+      downloadUrl
     });
 
     const savedDataset = await dataset.save();
@@ -162,6 +164,125 @@ export const getLabelingStats = async (req: Request, res: Response): Promise<voi
     res.status(500).json({
       success: false,
       message: 'Failed to fetch labeling statistics'
+    });
+  }
+};
+
+// Download dataset zip file
+export const downloadDataset = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { uuid } = req.params;
+
+    if (!uuid) {
+      res.status(400).json({
+        success: false,
+        message: 'Dataset UUID is required'
+      });
+      return;
+    }
+
+    // Find the dataset by UUID
+    const dataset = await Dataset.findOne({ uuid, deletedAt: null });
+
+    if (!dataset) {
+      res.status(404).json({
+        success: false,
+        message: 'Dataset not found'
+      });
+      return;
+    }
+
+    let downloadUrl: string;
+
+    // Use the downloadUrl field if it exists, otherwise generate default path
+    if (dataset.downloadUrl) {
+      // If it's a MinIO path, generate signed URL
+      if (dataset.downloadUrl.startsWith('datasets/') || dataset.downloadUrl.startsWith('vision/')) {
+        const signedUrlData = await getMinioSignedUrl(dataset.downloadUrl, 60);
+        if (signedUrlData) {
+          downloadUrl = signedUrlData.signedUrl;
+        } else {
+          res.status(404).json({
+            success: false,
+            message: 'Could not generate signed URL for the dataset'
+          });
+          return;
+        }
+      } else {
+        // If it's already a full URL, use it directly
+        downloadUrl = dataset.downloadUrl;
+      }
+    } else {
+      // Fallback to default path
+      const minioKey = `datasets/${dataset.name}.zip`;
+      const signedUrlData = await getMinioSignedUrl(minioKey, 60);
+      if (signedUrlData) {
+        downloadUrl = signedUrlData.signedUrl;
+      } else {
+        res.status(404).json({
+          success: false,
+          message: 'Could not generate signed URL for the dataset'
+        });
+        return;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        downloadUrl,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
+      }
+    });
+  } catch (error) {
+    console.error('Error generating dataset download URL:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate download URL'
+    });
+  }
+};
+
+// Get signed URL for arbitrary MinIO path
+export const getSignedUrlForPath = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { path } = req.query;
+
+    console.log('getSignedUrlForPath called with path:', path);
+
+    if (!path || typeof path !== 'string') {
+      res.status(400).json({
+        success: false,
+        message: 'MinIO path is required'
+      });
+      return;
+    }
+
+    // Generate signed URL with 1 hour expiration
+    const signedUrlData = await getMinioSignedUrl(path, 60);
+
+    console.log('signedUrlData result:', signedUrlData);
+
+    if (!signedUrlData) {
+      res.status(404).json({
+        success: false,
+        message: 'Could not generate signed URL for the specified path'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        signedUrl: signedUrlData.signedUrl,
+        expiresAt: signedUrlData.expiresAt
+      }
+    });
+  } catch (error) {
+    console.error('Error generating signed URL:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate signed URL'
     });
   }
 };

@@ -61,12 +61,12 @@ export const DatasetsPage: React.FC = () => {
   };
 
   // Handle create new analysis
-  const handleCreateAnalysis = async (datasetName: string) => {
+  const handleCreateAnalysis = async (datasetName: string, downloadUrl?: string) => {
     try {
       setCreating(true);
       setError(null);
 
-      const newAnalysis = await createAnalysis(datasetName);
+      const newAnalysis = await createAnalysis(datasetName, downloadUrl);
       
       // Navigate to the detail page
       navigate(`/datasets/${newAnalysis._id}`);

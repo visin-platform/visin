@@ -4,7 +4,9 @@ import {
   getDatasetById,
   getDatasetByUuid,
   createDataset,
-  getLabelingStats
+  getLabelingStats,
+  downloadDataset,
+  getSignedUrlForPath
 } from '../controllers/datasetController';
 
 const router = express.Router();
@@ -12,8 +14,10 @@ const router = express.Router();
 // Dataset routes
 router.get('/', getDatasets);
 router.get('/labeling-stats', getLabelingStats);
+router.get('/signed-url', getSignedUrlForPath);
 router.get('/:id', getDatasetById);
 router.get('/uuid/:uuid', getDatasetByUuid);
 router.post('/', createDataset);
+router.get('/download/:uuid', downloadDataset);
 
 export default router;

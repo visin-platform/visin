@@ -6,13 +6,14 @@ import {
   DialogActions,
   TextField,
   Button,
-  Typography
+  Typography,
+  Box
 } from '@mui/material';
 
 interface CreateAnalysisModalProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (datasetName: string) => void;
+  onCreate: (datasetName: string, downloadUrl?: string) => void;
   loading?: boolean;
 }
 
@@ -23,7 +24,15 @@ const CreateAnalysisModal: React.FC<CreateAnalysisModalProps> = ({
   loading = false
 }) => {
   const [datasetName, setDatasetName] = useState('');
+  const [downloadUrl, setDownloadUrl] = useState('');
   const [error, setError] = useState('');
+
+  const handleSetMinioUrl = () => {
+    if (datasetName.trim()) {
+      // Set a MinIO path that the backend will recognize and generate signed URL for
+      setDownloadUrl(`datasets/${datasetName.trim()}_dataset.zip`);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,12 +48,13 @@ const CreateAnalysisModal: React.FC<CreateAnalysisModalProps> = ({
     }
 
     setError('');
-    onCreate(datasetName.trim());
+    onCreate(datasetName.trim(), downloadUrl.trim() || undefined);
   };
 
   const handleClose = () => {
     if (!loading) {
       setDatasetName('');
+      setDownloadUrl('');
       setError('');
       onClose();
     }
@@ -69,7 +79,29 @@ const CreateAnalysisModal: React.FC<CreateAnalysisModalProps> = ({
             helperText={error}
             disabled={loading}
             placeholder="e.g., waymo, zod, custom-dataset"
+            sx={{ mb: 2 }}
           />
+          <TextField
+            fullWidth
+            label="Download URL (optional)"
+            value={downloadUrl}
+            onChange={(e) => setDownloadUrl(e.target.value)}
+            disabled={loading}
+            placeholder="https://example.com/dataset.zip or datasets/xod_dataset.zip"
+            helperText="Direct download link or MinIO bucket path (e.g., datasets/xod_dataset.zip)"
+            sx={{ mb: 1 }}
+          />
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={handleSetMinioUrl}
+              disabled={loading || !datasetName.trim()}
+              sx={{ textTransform: 'none' }}
+            >
+              Use MinIO Path
+            </Button>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose} disabled={loading}>

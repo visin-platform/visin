@@ -10,6 +10,7 @@ export interface IDataset extends Document {
   camera?: any;
   lidar?: any;
   metadata?: any;
+  downloadUrl?: string;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date;
@@ -52,6 +53,10 @@ const DatasetSchema: Schema = new Schema(
     },
     metadata: {
       type: Schema.Types.Mixed
+    },
+    downloadUrl: {
+      type: String,
+      trim: true
     },
     deletedAt: {
       type: Date

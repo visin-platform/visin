@@ -20,7 +20,10 @@ export const uploadAnalysis = async (req: Request, res: Response): Promise<void>
     // Create new analysis record
     const analysis = new DatasetAnalysis({
       dataset: analysisData.dataset,
-      data: analysisData.data || {} // Allow empty data initially
+      data: {
+        ...analysisData.data,
+        downloadUrl: analysisData.downloadUrl
+      }
     });
 
     await analysis.save();
@@ -61,8 +64,14 @@ export const getAllAnalyses = async (req: Request, res: Response): Promise<void>
       .limit(Number(limit))
       .skip(Number(skip));
 
+    // Add downloadUrl to top level for easier access
+    const analysesWithDownloadUrl = analyses.map(analysis => ({
+      ...analysis.toObject(),
+      downloadUrl: analysis.data?.downloadUrl
+    }));
+
     res.json({
-      data: analyses,
+      data: analysesWithDownloadUrl,
       pagination: {
         total,
         limit: Number(limit),
@@ -94,7 +103,10 @@ export const getAnalysisById = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    res.json({ data: analysis });
+    res.json({ data: {
+      ...analysis.toObject(),
+      downloadUrl: analysis.data?.downloadUrl
+    } });
   } catch (error) {
     console.error('Failed to fetch analysis:', error);
     res.status(500).json({
@@ -143,7 +155,10 @@ export const updateAnalysis = async (req: Request, res: Response): Promise<void>
 
     res.json({
       message: 'Analysis updated successfully',
-      data: analysis
+      data: {
+        ...analysis.toObject(),
+        downloadUrl: analysis.data?.downloadUrl
+      }
     });
   } catch (error) {
     console.error('Failed to update analysis:', error);
