@@ -4,8 +4,6 @@ import {
   getComparisonById,
   getComparisonByUuid,
   createComparison,
-  updateComparison,
-  deleteComparison,
   getComparisonStats
 } from '../controllers/comparisonController';
 
@@ -17,7 +15,5 @@ router.get('/stats', getComparisonStats);
 router.get('/', getComparisons);
 router.get('/:id', getComparisonById);
 router.post('/', createComparison);
-router.put('/:id', updateComparison);
-router.delete('/:id', deleteComparison);
 
 export default router;

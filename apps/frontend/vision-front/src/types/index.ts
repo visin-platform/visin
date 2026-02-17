@@ -201,18 +201,6 @@ export interface BenchmarksPaginatedResponse extends PaginatedResponse<Benchmark
   };
 }
 
-export interface CommentsPaginatedResponse extends PaginatedResponse<Comment> {
-  data: {
-    comments: Comment[];
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      pages: number;
-    };
-  };
-}
-
 export interface EpochsPaginatedResponse extends PaginatedResponse<Epoch> {
   data: {
     epochs: Epoch[];
@@ -336,32 +324,6 @@ export interface CreateConfigData {
   config_data: Record<string, any>;
   config_name?: string;
   metadata?: Record<string, any>;
-}
-
-// Comment Types
-export interface Comment {
-  _id: string;
-  name: string;
-  comment: string;
-  trainingId: string;
-  section?: string; // e.g., 'iou_chart', 'loss_chart', 'precision_chart', etc.
-  parentId?: string;
-  replies?: Comment[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateCommentData {
-  name: string;
-  comment: string;
-  trainingId: string;
-  section?: string;
-  parentId?: string;
-}
-
-export interface UpdateCommentData {
-  name?: string;
-  comment?: string;
 }
 
 // Test Result Types

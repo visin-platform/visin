@@ -339,7 +339,7 @@ export const getLabelingStats = async (): Promise<{
   const config = getGlobalConfig();
   const apiUrl = config.VISION_API_URL;
 
-  const response = await fetch(`${apiUrl}/api/dataset-images/labeling-stats`, {
+  const response = await fetch(`${apiUrl}/api/datasets/labeling-stats`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json'

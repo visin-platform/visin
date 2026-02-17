@@ -4,18 +4,16 @@ import {
   getDatasetById,
   getDatasetByUuid,
   createDataset,
-  updateDataset,
-  deleteDataset
+  getLabelingStats
 } from '../controllers/datasetController';
 
 const router = express.Router();
 
 // Dataset routes
 router.get('/', getDatasets);
+router.get('/labeling-stats', getLabelingStats);
 router.get('/:id', getDatasetById);
 router.get('/uuid/:uuid', getDatasetByUuid);
 router.post('/', createDataset);
-router.put('/:id', updateDataset);
-router.delete('/:id', deleteDataset);
 
 export default router;

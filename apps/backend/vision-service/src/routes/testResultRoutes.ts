@@ -20,7 +20,6 @@ router.get('/', getTestResults);
 router.get('/epochs', getTestResultEpochs);
 router.get('/:id', getTestResultById);
 router.get('/test/:testUuid', getTestResultByTestUuid);
-router.get('/epoch/:epochUuid', getTestResultsByEpochUuid);
 router.post('/', createTestResult);
 router.post('/upload', createTestResultFromJson);
 router.post('/compare', compareTestResults);

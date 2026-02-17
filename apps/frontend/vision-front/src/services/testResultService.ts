@@ -91,7 +91,7 @@ export const testResultService = {
     sortBy?: string;
     order?: 'asc' | 'desc';
   }): Promise<PaginatedResponse<TestResult>> {
-    const response = await visionApi.get(`/test-results/epoch/${epochUuid}`, { params });
+    const response = await visionApi.get(`/epochs/uuid/${epochUuid}/test-results`, { params });
     return response.data;
   },
 

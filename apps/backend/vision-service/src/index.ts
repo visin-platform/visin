@@ -8,16 +8,14 @@ import trainingRoutes from './routes/trainingRoutes';
 import epochRoutes from './routes/epochRoutes';
 import configRoutes from './routes/configRoutes';
 import analysisRoutes from './routes/analysisRoutes';
-import commentRoutes from './routes/commentRoutes';
 import datasetImageRoutes from './routes/datasetImageRoutes';
-import imageCategoryRoutes from './routes/imageCategoryRoutes';
 import testResultRoutes from './routes/testResultRoutes';
 import visualizationRoutes from './routes/visualizationRoutes';
 import benchmarkRoutes from './routes/benchmarkRoutes';
 import comparisonRoutes from './routes/comparisonRoutes';
 import projectRoutes from './routes/projectRoutes';
 import apiTokenRoutes from './routes/apiTokenRoutes';
-import contactRoutes from './routes/contactRoutes';
+import imageCategoryRoutes from './routes/imageCategoryRoutes';
 import { healthCheck } from './controllers/healthController';
 import { apiTokenMiddleware } from './middleware/apiTokenMiddleware';
 
@@ -48,16 +46,14 @@ app.use('/api/trainings', trainingRoutes);
 app.use('/api/epochs', epochRoutes);
 app.use('/api/configs', configRoutes);
 app.use('/api/analysis', analysisRoutes);
-app.use('/api/comments', commentRoutes);
 app.use('/api/dataset-images', datasetImageRoutes);
-app.use('/api/image-categories', imageCategoryRoutes);
 app.use('/api/test-results', testResultRoutes);
 app.use('/api/visualizations', visualizationRoutes);
 app.use('/api/benchmarks', benchmarkRoutes);
 app.use('/api/comparisons', comparisonRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/api-tokens', apiTokenRoutes);
-app.use('/api/contacts', contactRoutes);
+app.use('/api/image-categories', imageCategoryRoutes);
 
 // Serve OpenAPI docs as static files
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));

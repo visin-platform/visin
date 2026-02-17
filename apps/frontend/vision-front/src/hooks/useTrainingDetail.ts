@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trainingService } from '../services/trainingService';
 import { configService } from '../services/configService';
 import { testResultService } from '../services/testResultService';
-import { commentService } from '../services/commentService';
-import { TestResult, Comment } from '../types';
+import { TestResult } from '../types';
 
 export const useTrainingDetail = (id: string | undefined) => {
   const [config, setConfig] = useState<any>(null);
@@ -15,8 +14,6 @@ export const useTrainingDetail = (id: string | undefined) => {
   const [allTestResults, setAllTestResults] = useState<TestResult[]>([]);
   const [testResultsMap, setTestResultsMap] = useState<{ [epoch: number]: TestResult[] }>({});
   const [availableTestEpochs, setAvailableTestEpochs] = useState<number[]>([]);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [commentsLoading, setCommentsLoading] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['training', id],
@@ -113,26 +110,6 @@ export const useTrainingDetail = (id: string | undefined) => {
     }
   }, [selectedTestEpoch, testResultsMap]);
 
-  // Fetch comments
-  const fetchComments = useCallback(async () => {
-    if (!training) return;
-
-    try {
-      setCommentsLoading(true);
-      const commentsResponse = await commentService.getCommentsByTraining(training._id, undefined, { limit: 1000 });
-      setComments(commentsResponse.data.comments || []);
-    } catch (err) {
-      console.error('Failed to fetch comments:', err);
-      setComments([]);
-    } finally {
-      setCommentsLoading(false);
-    }
-  }, [training]);
-
-  useEffect(() => {
-    fetchComments();
-  }, [fetchComments]);
-
   return {
     training,
     epochs,
@@ -146,9 +123,6 @@ export const useTrainingDetail = (id: string | undefined) => {
     testResultsLoading,
     selectedTestEpoch,
     setSelectedTestEpoch,
-    availableTestEpochs,
-    comments,
-    commentsLoading,
-    refetchComments: fetchComments
+    availableTestEpochs
   };
 };

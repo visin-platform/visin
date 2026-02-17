@@ -260,36 +260,6 @@ export const updateEpoch = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// Delete epoch
-export const deleteEpoch = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-
-    const epoch = await Epoch.findById(id);
-
-    if (!epoch) {
-      res.status(404).json({
-        success: false,
-        message: 'Epoch not found'
-      });
-      return;
-    }
-
-    await Epoch.findByIdAndDelete(id);
-
-    res.json({
-      success: true,
-      message: 'Epoch deleted successfully'
-    });
-  } catch (error) {
-    console.error('Error deleting epoch:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete epoch'
-    });
-  }
-};
-
 // Create epoch from JSON file (accepts training_uuid and looks up trainingId, or accepts trainingId directly)
 export const createEpochFromJson = async (req: Request, res: Response): Promise<void> => {
   try {

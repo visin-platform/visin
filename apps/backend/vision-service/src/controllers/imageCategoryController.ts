@@ -57,7 +57,6 @@ export const getCategoriesByDataset = async (req: Request, res: Response): Promi
     const { datasetId } = req.params;
 
     const categories = await ImageCategory.find({ datasetId }).sort({ createdAt: -1 });
-
     res.json({
       success: true,
       data: categories
@@ -145,7 +144,6 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
     }
 
     const category = await ImageCategory.findByIdAndUpdate(id, updateData, { new: true });
-
     if (!category) {
       res.status(404).json({
         success: false,

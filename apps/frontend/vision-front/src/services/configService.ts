@@ -25,7 +25,7 @@ export const configService = {
     sortBy?: string;
     order?: 'asc' | 'desc';
   }): Promise<PaginatedResponse<Config>> {
-    const response = await visionApi.get(`/configs/training/${trainingId}`, { params });
+    const response = await visionApi.get(`/trainings/${trainingId}/configs`, { params });
     return response.data;
   },
 

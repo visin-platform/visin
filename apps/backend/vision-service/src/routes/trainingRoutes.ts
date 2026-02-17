@@ -10,6 +10,7 @@ import {
   getTrainingStats,
   compareTrainings
 } from '../controllers/trainingController';
+import { getConfigsByTraining } from '../controllers/configController';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = express.Router();
@@ -19,6 +20,7 @@ router.use(authMiddleware);
 
 router.get('/uuid/:uuid', getTrainingByUuid);
 router.get('/:id/epochs', getTrainingWithEpochs);
+router.get('/:id/configs', getConfigsByTraining);
 router.get('/stats', getTrainingStats);
 router.get('/', getTrainings);
 router.get('/:id', getTrainingById);

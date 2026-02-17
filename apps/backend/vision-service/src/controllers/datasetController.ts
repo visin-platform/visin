@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import Dataset from '../models/Dataset';
+import { getLabelingStats as getLabelingStatsService } from '../services/datasetImageService';
 
 // Get all datasets
 export const getDatasets = async (req: Request, res: Response): Promise<void> => {
@@ -147,75 +148,20 @@ export const createDataset = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-// Update dataset
-export const updateDataset = async (req: Request, res: Response): Promise<void> => {
+// Get labeling statistics for all images
+export const getLabelingStats = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-    const { name, description, timestamp, dataset_info, annotations, camera, lidar, metadata } = req.body;
-
-    const dataset = await Dataset.findOne({ _id: id, deletedAt: null });
-
-    if (!dataset) {
-      res.status(404).json({
-        success: false,
-        message: 'Dataset not found'
-      });
-      return;
-    }
-
-    // Update fields
-    if (name !== undefined) dataset.name = name.trim();
-    if (description !== undefined) dataset.description = description?.trim();
-    if (timestamp !== undefined) dataset.timestamp = timestamp;
-    if (dataset_info !== undefined) dataset.dataset_info = dataset_info;
-    if (annotations !== undefined) dataset.annotations = annotations;
-    if (camera !== undefined) dataset.camera = camera;
-    if (lidar !== undefined) dataset.lidar = lidar;
-    if (metadata !== undefined) dataset.metadata = metadata;
-
-    const updatedDataset = await dataset.save();
+    const result = await getLabelingStatsService();
 
     res.json({
       success: true,
-      message: 'Dataset updated successfully',
-      data: updatedDataset
+      data: result
     });
   } catch (error) {
-    console.error('Error updating dataset:', error);
+    console.error('Error fetching labeling stats:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to update dataset'
-    });
-  }
-};
-
-// Delete dataset
-export const deleteDataset = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-
-    const dataset = await Dataset.findOne({ _id: id, deletedAt: null });
-
-    if (!dataset) {
-      res.status(404).json({
-        success: false,
-        message: 'Dataset not found'
-      });
-      return;
-    }
-
-    dataset.deletedAt = new Date();
-    await dataset.save();
-
-    res.json({
-      success: true,
-      message: 'Dataset deleted successfully'
-    });
-  } catch (error) {
-    console.error('Error deleting dataset:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete dataset'
+      message: 'Failed to fetch labeling statistics'
     });
   }
 };

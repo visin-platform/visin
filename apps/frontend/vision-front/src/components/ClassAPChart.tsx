@@ -1,23 +1,14 @@
 import React from 'react';
 import { Paper, Box, Typography } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
-import { Epoch, Comment } from '../types';
-import ChartComments from './ChartComments';
+import { Epoch } from '../types';
 
 interface ClassAPChartProps {
   epochs: Epoch[];
-  trainingId?: string;
-  comments?: Comment[];
-  commentsLoading?: boolean;
-  onCommentsRefetch?: () => void;
 }
 
 const ClassAPChart: React.FC<ClassAPChartProps> = ({
-  epochs,
-  trainingId,
-  comments,
-  commentsLoading,
-  onCommentsRefetch
+  epochs
 }) => {
   if (epochs.length === 0) {
     return null;
@@ -176,15 +167,6 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
               }}
             />
           </Box>
-          {trainingId && (
-            <ChartComments
-              trainingId={trainingId}
-              section="class_ap_chart"
-              comments={comments}
-              commentsLoading={commentsLoading}
-              onCommentsRefetch={onCommentsRefetch}
-            />
-          )}
         </Paper>
       )}
 
@@ -205,15 +187,6 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
               }}
             />
           </Box>
-          {trainingId && (
-            <ChartComments
-              trainingId={trainingId}
-              section="class_ap_2d_chart"
-              comments={comments}
-              commentsLoading={commentsLoading}
-              onCommentsRefetch={onCommentsRefetch}
-            />
-          )}
         </Paper>
       )}
     </Box>

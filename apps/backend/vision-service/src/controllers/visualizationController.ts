@@ -144,7 +144,80 @@ export const createVisualization = async (req: Request, res: Response) => {
 };
 
 /**
- * Get visualizations for a specific epoch
+ * Get visualization by UUID
+ */
+export const getVisualizationByUuid = async (req: Request, res: Response) => {
+  try {
+    const visualization_uuid = req.params.visualization_uuid as string;
+
+    const visualization = await EpochVisualization.findOne({ visualization_uuid });
+
+    if (!visualization) {
+      return res.status(404).json({
+        success: false,
+        message: 'Visualization not found'
+      });
+    }
+
+    // Generate signed URL
+    const signedUrlData = await getSignedUrl(visualization.minioFileId, 60);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...visualization.toObject(),
+        signedUrl: signedUrlData?.signedUrl,
+        urlExpiresAt: signedUrlData?.expiresAt
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching visualization:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch visualization',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Delete visualization
+ */
+export const deleteVisualization = async (req: Request, res: Response) => {
+  try {
+    const visualization_uuid = req.params.visualization_uuid as string;
+
+    const visualization = await EpochVisualization.findOne({ visualization_uuid });
+
+    if (!visualization) {
+      return res.status(404).json({
+        success: false,
+        message: 'Visualization not found'
+      });
+    }
+
+    // Note: We don't delete from MinIO to preserve the file
+    // Only delete the database record
+    await EpochVisualization.deleteOne({ visualization_uuid });
+
+    console.info('Visualization deleted', { visualization_uuid });
+
+    res.status(200).json({
+      success: true,
+      message: 'Visualization deleted successfully'
+    });
+  } catch (error: any) {
+    console.error('Error deleting visualization:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete visualization',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get visualizations by epoch UUID
  */
 export const getVisualizationsByEpoch = async (req: Request, res: Response) => {
   try {
@@ -157,7 +230,6 @@ export const getVisualizationsByEpoch = async (req: Request, res: Response) => {
     }
 
     const visualizations = await EpochVisualization.find(query).sort({ uploadedAt: -1 });
-
     // Generate signed URLs for each visualization
     const visualizationsWithUrls = await Promise.all(
       visualizations.map(async (viz) => {
@@ -188,14 +260,12 @@ export const getVisualizationsByEpoch = async (req: Request, res: Response) => {
 };
 
 /**
- * Get visualizations by training ID (across all epochs)
- * If training_uuid is empty, get all visualizations grouped by training
+ * Get visualizations by training UUID
  */
 export const getVisualizationsByTraining = async (req: Request, res: Response) => {
   try {
     const training_uuid = req.params.training_uuid as string;
     const { type, limit = 50, page = 1, projectId, includeUrls = 'true' } = req.query;
-
     // If specific training_uuid is provided, return flat list for that training
     if (training_uuid && training_uuid.trim() !== '') {
       // Find all epochs for this training
@@ -400,79 +470,6 @@ export const getVisualizationsByTraining = async (req: Request, res: Response) =
     res.status(500).json({
       success: false,
       message: 'Failed to fetch visualizations',
-      error: error.message
-    });
-  }
-};
-
-/**
- * Get visualization by UUID
- */
-export const getVisualizationByUuid = async (req: Request, res: Response) => {
-  try {
-    const visualization_uuid = req.params.visualization_uuid as string;
-
-    const visualization = await EpochVisualization.findOne({ visualization_uuid });
-
-    if (!visualization) {
-      return res.status(404).json({
-        success: false,
-        message: 'Visualization not found'
-      });
-    }
-
-    // Generate signed URL
-    const signedUrlData = await getSignedUrl(visualization.minioFileId, 60);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        ...visualization.toObject(),
-        signedUrl: signedUrlData?.signedUrl,
-        urlExpiresAt: signedUrlData?.expiresAt
-      }
-    });
-  } catch (error: any) {
-    console.error('Error fetching visualization:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch visualization',
-      error: error.message
-    });
-  }
-};
-
-/**
- * Delete visualization
- */
-export const deleteVisualization = async (req: Request, res: Response) => {
-  try {
-    const visualization_uuid = req.params.visualization_uuid as string;
-
-    const visualization = await EpochVisualization.findOne({ visualization_uuid });
-
-    if (!visualization) {
-      return res.status(404).json({
-        success: false,
-        message: 'Visualization not found'
-      });
-    }
-
-    // Note: We don't delete from MinIO to preserve the file
-    // Only delete the database record
-    await EpochVisualization.deleteOne({ visualization_uuid });
-
-    console.info('Visualization deleted', { visualization_uuid });
-
-    res.status(200).json({
-      success: true,
-      message: 'Visualization deleted successfully'
-    });
-  } catch (error: any) {
-    console.error('Error deleting visualization:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete visualization',
       error: error.message
     });
   }

@@ -4,8 +4,6 @@ import {
   getBenchmarkById,
   createBenchmark,
   uploadBenchmark,
-  updateBenchmark,
-  deleteBenchmark,
   getBenchmarkStats
 } from '../controllers/benchmarkController';
 
@@ -17,7 +15,5 @@ router.get('/stats', getBenchmarkStats);
 router.get('/:id', getBenchmarkById);
 router.post('/', createBenchmark);
 router.post('/upload', uploadBenchmark);
-router.put('/:id', updateBenchmark);
-router.delete('/:id', deleteBenchmark);
 
 export default router;
