@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.70](https://github.com/visin-platform/visin-monorepo/compare/v0.0.69...v0.0.70) (2026-02-17)
+
+
+### Features
+
+* remove unused code ([775b98f](https://github.com/visin-platform/visin-monorepo/commit/775b98f16e9f696901bcbcbb63b05ff5b545a404))
+
 ### [0.0.69](https://github.com/visin-platform/visin-monorepo/compare/v0.0.68...v0.0.69) (2026-01-31)
 
 
