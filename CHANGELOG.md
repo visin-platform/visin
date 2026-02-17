@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.69](https://github.com/visin-platform/visin-monorepo/compare/v0.0.68...v0.0.69) (2026-01-31)
+
+
+### Features
+
+* set confusion matrix labels dynamically ([2807894](https://github.com/visin-platform/visin-monorepo/commit/2807894652b119d3312a7797d1fc0c357640c067))
+
 ### [0.0.68](https://github.com/visin-platform/visin-monorepo/compare/v0.0.67...v0.0.68) (2026-01-29)
 
 
