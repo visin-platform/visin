@@ -13,7 +13,7 @@ import {
 interface CreateAnalysisModalProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (datasetName: string, downloadUrl?: string) => void;
+  onCreate: (datasetName: string, downloadUrl?: string, size?: string) => void;
   loading?: boolean;
 }
 
@@ -25,6 +25,7 @@ const CreateAnalysisModal: React.FC<CreateAnalysisModalProps> = ({
 }) => {
   const [datasetName, setDatasetName] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
+  const [datasetSize, setDatasetSize] = useState('');
   const [error, setError] = useState('');
 
   const handleSetMinioUrl = () => {
@@ -48,13 +49,14 @@ const CreateAnalysisModal: React.FC<CreateAnalysisModalProps> = ({
     }
 
     setError('');
-    onCreate(datasetName.trim(), downloadUrl.trim() || undefined);
+    onCreate(datasetName.trim(), downloadUrl.trim() || undefined, datasetSize.trim() || undefined);
   };
 
   const handleClose = () => {
     if (!loading) {
       setDatasetName('');
       setDownloadUrl('');
+      setDatasetSize('');
       setError('');
       onClose();
     }
@@ -79,6 +81,16 @@ const CreateAnalysisModal: React.FC<CreateAnalysisModalProps> = ({
             helperText={error}
             disabled={loading}
             placeholder="e.g., waymo, zod, custom-dataset"
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth
+            label="Size (optional)"
+            value={datasetSize}
+            onChange={(e) => setDatasetSize(e.target.value)}
+            disabled={loading}
+            placeholder="e.g., 1.2 GB, 500 MB, 2.5 TB"
+            helperText="Human-readable size description"
             sx={{ mb: 2 }}
           />
           <TextField

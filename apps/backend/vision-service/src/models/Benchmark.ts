@@ -2,7 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IBenchmark extends Document {
   training_uuid?: string;
-  training_id?: mongoose.Types.ObjectId;
+  training_id?: mongoose.Types.ObjectId | null;
   epoch_uuid?: string;
   epoch?: number;
   timestamp: Date;
@@ -124,13 +124,13 @@ const BenchmarkSchema: Schema = new Schema(
 );
 
 // Add soft delete functionality
-BenchmarkSchema.methods.softDelete = function() {
+BenchmarkSchema.methods.softDelete = function () {
   this.deletedAt = new Date();
   return this.save();
 };
 
 // Add static method to find non-deleted benchmarks
-BenchmarkSchema.statics.findActive = function(query: any = {}) {
+BenchmarkSchema.statics.findActive = function (query: any = {}) {
   return this.find({ ...query, deletedAt: null });
 };
 

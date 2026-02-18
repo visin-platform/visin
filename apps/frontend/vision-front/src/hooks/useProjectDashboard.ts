@@ -39,7 +39,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     data: statsResponse,
     isLoading: isStatsLoading
   } = useQuery({
-    queryKey: ['project-stats', projectResponse?.data?._id],
+    queryKey: ['project-stats', projectId],
     queryFn: () => trainingService.getTrainingStats({ projectId: projectResponse?.data?._id }),
     enabled: !!projectResponse?.data
   });
@@ -49,7 +49,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     data: dashboardStatsResponse,
     isLoading: isDashboardStatsLoading
   } = useQuery({
-    queryKey: ['project-dashboard-stats', projectResponse?.data?._id],
+    queryKey: ['project-dashboard-stats', projectId],
     queryFn: () => projectService.getProjectDashboardStats(projectResponse?.data?._id!),
     enabled: !!projectResponse?.data
   });
@@ -59,7 +59,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     data: fullTrainingsResponse,
     isLoading: isFullTrainingsLoading
   } = useQuery({
-    queryKey: ['project-trainings-full', projectResponse?.data?._id, page, rowsPerPage, sortBy, sortOrder],
+    queryKey: ['project-trainings-full', projectId, page, rowsPerPage, sortBy, sortOrder],
     queryFn: () => trainingService.getTrainings({
       projectId: projectResponse?.data?._id,
       page: page + 1,
@@ -75,7 +75,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     data: testResultsResponse,
     isLoading: isTestResultsLoading
   } = useQuery({
-    queryKey: ['project-test-results', projectResponse?.data?._id, testsPage, testsRowsPerPage],
+    queryKey: ['project-test-results', projectId, testsPage, testsRowsPerPage],
     queryFn: () => testResultService.getTestResults({
       projectId: projectResponse?.data?._id,
       page: testsPage + 1,
@@ -89,7 +89,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     data: visualizationsResponse,
     isLoading: isVisualizationsLoading
   } = useQuery({
-    queryKey: ['project-visualizations', projectResponse?.data?._id],
+    queryKey: ['project-visualizations', projectId],
     queryFn: () => visualizationService.getVisualizationsByTraining('', {
       projectId: projectResponse?.data?._id,
       includeUrls: false
@@ -102,7 +102,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     data: benchmarksResponse,
     isLoading: isBenchmarksLoading
   } = useQuery({
-    queryKey: ['project-benchmarks', projectResponse?.data?._id, benchmarksPage, benchmarksRowsPerPage],
+    queryKey: ['project-benchmarks', projectId, benchmarksPage, benchmarksRowsPerPage],
     queryFn: () => benchmarkService.getBenchmarks({
       projectId: projectResponse?.data?._id,
       page: benchmarksPage + 1,

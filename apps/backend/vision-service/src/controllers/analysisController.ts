@@ -20,6 +20,7 @@ export const uploadAnalysis = async (req: Request, res: Response): Promise<void>
     // Create new analysis record
     const analysis = new DatasetAnalysis({
       dataset: analysisData.dataset,
+      size: analysisData.size,
       data: {
         ...analysisData.data,
         downloadUrl: analysisData.downloadUrl
@@ -103,10 +104,12 @@ export const getAnalysisById = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    res.json({ data: {
-      ...analysis.toObject(),
-      downloadUrl: analysis.data?.downloadUrl
-    } });
+    res.json({
+      data: {
+        ...analysis.toObject(),
+        downloadUrl: analysis.data?.downloadUrl
+      }
+    });
   } catch (error) {
     console.error('Failed to fetch analysis:', error);
     res.status(500).json({
@@ -137,6 +140,7 @@ export const updateAnalysis = async (req: Request, res: Response): Promise<void>
       id,
       {
         dataset: updateData.dataset,
+        size: updateData.size,
         data: updateData.data || {}
       },
       { new: true }

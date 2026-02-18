@@ -46,9 +46,9 @@ interface AnalysisTableProps {
 
 export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   selectedAnalysisIds = new Set(),
-  onSelectAnalysis = () => {},
-  onSelectAll = () => {},
-  onCompareSelected = () => {}
+  onSelectAnalysis = () => { },
+  onSelectAll = () => { },
+  onCompareSelected = () => { }
 }) => {
   const theme = useTheme();
   const { isAuthenticated, user } = useAuth();
@@ -63,6 +63,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   const [downloadLoading, setDownloadLoading] = useState<string | null>(null);
   const [newDatasetName, setNewDatasetName] = useState('');
   const [newDownloadUrl, setNewDownloadUrl] = useState('');
+  const [newDatasetSize, setNewDatasetSize] = useState('');
   const [sortField, setSortField] = useState<'dataset' | 'createdAt' | 'updatedAt'>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
@@ -121,6 +122,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
     setSelectedAnalysis(analysis);
     setNewDatasetName(analysis.dataset);
     setNewDownloadUrl(analysis.downloadUrl || '');
+    setNewDatasetSize(analysis.size || '');
     setEditDialogOpen(true);
   };
 
@@ -131,26 +133,30 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
       setEditLoading(true);
       await updateAnalysis(selectedAnalysis._id, {
         dataset: newDatasetName.trim(),
+        size: newDatasetSize.trim() || undefined,
         data: {
           ...selectedAnalysis.data,
           downloadUrl: newDownloadUrl.trim() || undefined
         }
       });
-      
+
       // Update the local state
-      setAnalyses(analyses.map(a => 
-        a._id === selectedAnalysis._id 
-          ? { 
-              ...a, 
-              dataset: newDatasetName.trim(),
-              downloadUrl: newDownloadUrl.trim() || undefined
-            }
+      setAnalyses(analyses.map(a =>
+        a._id === selectedAnalysis._id
+          ? {
+            ...a,
+            dataset: newDatasetName.trim(),
+            size: newDatasetSize.trim() || undefined,
+            downloadUrl: newDownloadUrl.trim() || undefined
+          }
           : a
       ));
-      
+
       setEditDialogOpen(false);
       setSelectedAnalysis(null);
       setNewDatasetName('');
+      setNewDownloadUrl('');
+      setNewDatasetSize('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update analysis');
     } finally {
@@ -163,12 +169,13 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
     setSelectedAnalysis(null);
     setNewDatasetName('');
     setNewDownloadUrl('');
+    setNewDatasetSize('');
   };
 
   const handleDownload = async (analysis: DatasetAnalysis) => {
     try {
       setDownloadLoading(analysis._id);
-      
+
       // If analysis has a direct download URL, use it
       if (analysis.downloadUrl) {
         // Check if it's a MinIO path that needs signing
@@ -214,18 +221,18 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           return;
         }
       }
-      
+
       // Otherwise, fall back to dataset lookup
       const datasets = await datasetService.getDatasets({ search: analysis.dataset, limit: 1 });
       const dataset = datasets.data.datasets.find((d: Dataset) => d.name === analysis.dataset);
-      
+
       if (!dataset?.uuid) {
         setError('Dataset not found or missing UUID');
         return;
       }
-      
+
       const downloadData = await datasetService.downloadDataset(dataset.uuid);
-      
+
       // Use the download URL
       if (downloadData.downloadUrl) {
         const link = document.createElement('a');
@@ -311,12 +318,12 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
 
       {/* Bulk Selection UI */}
       {selectedAnalysisIds.size > 0 && (
-        <Box 
-          sx={{ 
-            mb: 2, 
-            p: 2, 
-            display: 'flex', 
-            alignItems: 'center', 
+        <Box
+          sx={{
+            mb: 2,
+            p: 2,
+            display: 'flex',
+            alignItems: 'center',
             gap: 2,
             bgcolor: alpha(theme.palette.primary.main, 0.05),
             border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
@@ -343,10 +350,10 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
 
       {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
 
-      <Paper 
-        elevation={0} 
-        sx={{ 
-          borderRadius: 2, 
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: 2,
           border: `1px solid ${theme.palette.divider}`,
           overflow: 'hidden'
         }}
@@ -381,6 +388,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     )}
                   </Box>
                 </TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Size</TableCell>
                 <TableCell sx={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600 }} onClick={() => handleSort('createdAt')}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     Created
@@ -400,128 +408,129 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                 <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
-          <TableBody>
-            {sortedAnalyses.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} align="center">
-                  No analyses found
-                </TableCell>
-              </TableRow>
-            ) : (
-              sortedAnalyses.map((analysis) => {
-                const isSelected = selectedAnalysisIds.has(analysis._id);
-                return (
-                  <TableRow
-                    key={analysis._id}
-                    hover
-                    selected={isSelected}
-                    component={Link}
-                    to={`/datasets/${analysis._id}`}
-                    sx={{
-                      cursor: 'pointer',
-                      transition: 'background-color 0.2s',
-                      '&.Mui-selected': {
-                        backgroundColor: alpha(theme.palette.primary.main, 0.08),
-                        '&:hover': {
-                          backgroundColor: alpha(theme.palette.primary.main, 0.12),
-                        }
-                      },
-                      textDecoration: 'none',
-                      color: 'inherit'
-                    }}
-                  >
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={isSelected}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          onSelectAnalysis(analysis._id);
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>{analysis.dataset}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {formatDateTime(analysis.createdAt)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {formatDateTime(analysis.updatedAt)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                        {analysis.downloadUrl && (
-                          <Tooltip title="Download dataset">
-                            <IconButton
-                              size="small"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleDownload(analysis);
-                              }}
-                              disabled={downloadLoading === analysis._id}
-                              sx={{ 
-                                color: 'text.secondary',
-                                '&:hover': { color: 'success.main', bgcolor: alpha(theme.palette.success.main, 0.1) }
-                              }}
-                            >
-                              {downloadLoading === analysis._id ? (
-                                <CircularProgress size={16} />
-                              ) : (
-                                <DownloadIcon fontSize="small" />
-                              )}
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        {canEditDatasets() && (
-                          <Tooltip title="Edit dataset name">
-                            <IconButton
-                              size="small"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleEditClick(analysis);
-                              }}
-                              disabled={editLoading}
-                              sx={{ 
-                                color: 'text.secondary',
-                                '&:hover': { color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.1) }
-                              }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        {canDeleteDatasets() && (
-                          <Tooltip title="Delete analysis">
-                            <IconButton
-                              size="small"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleDeleteClick(analysis);
-                              }}
-                              disabled={deleteLoading}
-                              sx={{ 
-                                color: 'text.secondary',
-                                '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) }
-                              }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            <TableBody>
+              {sortedAnalyses.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center">
+                    No analyses found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                sortedAnalyses.map((analysis) => {
+                  const isSelected = selectedAnalysisIds.has(analysis._id);
+                  return (
+                    <TableRow
+                      key={analysis._id}
+                      hover
+                      selected={isSelected}
+                      component={Link}
+                      to={`/datasets/${analysis._id}`}
+                      sx={{
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s',
+                        '&.Mui-selected': {
+                          backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                          '&:hover': {
+                            backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                          }
+                        },
+                        textDecoration: 'none',
+                        color: 'inherit'
+                      }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={isSelected}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            onSelectAnalysis(analysis._id);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>{analysis.dataset}</TableCell>
+                      <TableCell>{analysis.size || '-'}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatDateTime(analysis.createdAt)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatDateTime(analysis.updatedAt)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                          {analysis.downloadUrl && (
+                            <Tooltip title="Download dataset">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDownload(analysis);
+                                }}
+                                disabled={downloadLoading === analysis._id}
+                                sx={{
+                                  color: 'text.secondary',
+                                  '&:hover': { color: 'success.main', bgcolor: alpha(theme.palette.success.main, 0.1) }
+                                }}
+                              >
+                                {downloadLoading === analysis._id ? (
+                                  <CircularProgress size={16} />
+                                ) : (
+                                  <DownloadIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {canEditDatasets() && (
+                            <Tooltip title="Edit dataset name">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleEditClick(analysis);
+                                }}
+                                disabled={editLoading}
+                                sx={{
+                                  color: 'text.secondary',
+                                  '&:hover': { color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.1) }
+                                }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {canDeleteDatasets() && (
+                            <Tooltip title="Delete analysis">
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDeleteClick(analysis);
+                                }}
+                                disabled={deleteLoading}
+                                sx={{
+                                  color: 'text.secondary',
+                                  '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) }
+                                }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Paper>
 
       {/* Delete Confirmation Dialog */}
@@ -560,6 +569,18 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           />
           <TextField
             margin="dense"
+            label="Size (optional)"
+            fullWidth
+            variant="outlined"
+            value={newDatasetSize}
+            onChange={(e) => setNewDatasetSize(e.target.value)}
+            disabled={editLoading}
+            placeholder="e.g., 1.2 GB, 500 MB, 2.5 TB"
+            helperText="Human-readable size description"
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
             label="Download URL (optional)"
             fullWidth
             variant="outlined"
@@ -568,35 +589,10 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
             disabled={editLoading}
             placeholder="https://example.com/dataset.zip or datasets/xod_dataset.zip"
             helperText="Direct download link or MinIO bucket path (e.g., datasets/xod_dataset.zip)"
-            sx={{ mb: 1 }}
+            sx={{ mb: 2 }}
           />
-          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={() => {
-                if (newDatasetName.trim()) {
-                  setNewDownloadUrl(`datasets/${newDatasetName.trim()}_dataset.zip`);
-                }
-              }}
-              disabled={editLoading || !newDatasetName.trim()}
-              sx={{ textTransform: 'none' }}
-            >
-              Use MinIO Path
-            </Button>
-          </Box>
         </DialogContent>
         <DialogActions>
-          {(selectedAnalysis?.downloadUrl || newDownloadUrl) && (
-            <Button 
-              onClick={() => selectedAnalysis && handleDownload(selectedAnalysis)} 
-              disabled={editLoading || downloadLoading === selectedAnalysis?._id}
-              startIcon={downloadLoading === selectedAnalysis?._id ? <CircularProgress size={16} /> : <DownloadIcon />}
-              sx={{ mr: 'auto' }}
-            >
-              Download Dataset
-            </Button>
-          )}
           <Button onClick={handleEditCancel} disabled={editLoading}>
             Cancel
           </Button>

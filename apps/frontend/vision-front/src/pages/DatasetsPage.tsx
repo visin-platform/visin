@@ -61,13 +61,13 @@ export const DatasetsPage: React.FC = () => {
   };
 
   // Handle create new analysis
-  const handleCreateAnalysis = async (datasetName: string, downloadUrl?: string) => {
+  const handleCreateAnalysis = async (datasetName: string, downloadUrl?: string, size?: string) => {
     try {
       setCreating(true);
       setError(null);
 
-      const newAnalysis = await createAnalysis(datasetName, downloadUrl);
-      
+      const newAnalysis = await createAnalysis(datasetName, downloadUrl, size);
+
       // Navigate to the detail page
       navigate(`/datasets/${newAnalysis._id}`);
     } catch (err) {
@@ -101,7 +101,7 @@ export const DatasetsPage: React.FC = () => {
               startIcon={<AddIcon />}
               onClick={() => setShowCreateModal(true)}
               disabled={creating}
-              sx={{ 
+              sx={{
                 px: 3,
                 py: 1,
                 borderRadius: 2,
@@ -111,10 +111,10 @@ export const DatasetsPage: React.FC = () => {
               Create Dataset
             </Button>
           )}
-          <IconButton 
-            onClick={handleRefresh} 
+          <IconButton
+            onClick={handleRefresh}
             disabled={creating}
-            sx={{ 
+            sx={{
               bgcolor: 'background.paper',
               border: `1px solid ${theme.palette.divider}`,
               borderRadius: 2,

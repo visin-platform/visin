@@ -120,15 +120,15 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
   return (
     <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
-        <Tabs 
-          value={tabValue} 
-          onChange={onTabChange} 
+        <Tabs
+          value={tabValue}
+          onChange={onTabChange}
           aria-label="project tabs"
           variant="scrollable"
           scrollButtons="auto"
           allowScrollButtonsMobile
           sx={{
-            '& .MuiTab-root': { 
+            '& .MuiTab-root': {
               textTransform: 'none',
               fontWeight: 500,
               minHeight: 48,
@@ -217,6 +217,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
           rowsPerPage={benchmarksRowsPerPage}
           onPageChange={onBenchmarksPageChange}
           onRowsPerPageChange={onBenchmarksRowsPerPageChange}
+          isOwner={isOwner}
         />
       </TabPanel>
 

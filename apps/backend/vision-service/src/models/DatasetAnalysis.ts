@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IDatasetAnalysis extends Document {
   dataset: string; // 'waymo', 'zod', etc.
+  size?: string; // Human-readable size (e.g., "1.2 GB", "500 MB")
   data: any; // Dynamic JSON structure
   createdAt: Date;
   updatedAt: Date;
@@ -14,6 +15,10 @@ const DatasetAnalysisSchema: Schema = new Schema(
       required: true,
       trim: true,
       index: true
+    },
+    size: {
+      type: String,
+      trim: true
     },
     data: {
       type: Schema.Types.Mixed,

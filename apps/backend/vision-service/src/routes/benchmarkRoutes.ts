@@ -4,7 +4,9 @@ import {
   getBenchmarkById,
   createBenchmark,
   uploadBenchmark,
-  getBenchmarkStats
+  getBenchmarkStats,
+  updateBenchmark,
+  deleteBenchmark
 } from '../controllers/benchmarkController';
 
 const router = express.Router();
@@ -15,5 +17,7 @@ router.get('/stats', getBenchmarkStats);
 router.get('/:id', getBenchmarkById);
 router.post('/', createBenchmark);
 router.post('/upload', uploadBenchmark);
+router.put('/:id', updateBenchmark);
+router.delete('/:id', deleteBenchmark);
 
 export default router;

@@ -258,3 +258,81 @@ export const getComparisonStats = async (req: Request, res: Response): Promise<v
     });
   }
 };
+
+// Update comparison
+export const updateComparison = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
+
+    if (!comparison) {
+      res.status(404).json({
+        success: false,
+        message: 'Comparison not found'
+      });
+      return;
+    }
+
+    // Update allowed fields
+    if (updateData.name !== undefined) {
+      comparison.name = updateData.name.trim();
+    }
+    if (updateData.description !== undefined) {
+      comparison.description = updateData.description?.trim();
+    }
+    if (updateData.itemIds !== undefined) {
+      comparison.itemIds = updateData.itemIds;
+    }
+    if (updateData.metadata !== undefined) {
+      comparison.metadata = updateData.metadata;
+    }
+
+    const updatedComparison = await comparison.save();
+
+    res.json({
+      success: true,
+      message: 'Comparison updated successfully',
+      data: updatedComparison
+    });
+  } catch (error) {
+    console.error('Error updating comparison:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update comparison'
+    });
+  }
+};
+
+// Delete comparison (soft delete)
+export const deleteComparison = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
+
+    if (!comparison) {
+      res.status(404).json({
+        success: false,
+        message: 'Comparison not found'
+      });
+      return;
+    }
+
+    // Soft delete the comparison
+    comparison.deletedAt = new Date();
+    await comparison.save();
+
+    res.json({
+      success: true,
+      message: 'Comparison deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting comparison:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete comparison'
+    });
+  }
+};

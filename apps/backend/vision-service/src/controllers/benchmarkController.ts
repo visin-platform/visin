@@ -74,7 +74,7 @@ export const getBenchmarks = async (req: Request, res: Response): Promise<void> 
           _id: { $in: trainingIds },
           deletedAt: null
         }).select('name uuid');
-        
+
         trainingMap = new Map(
           trainings.map(training => [(training._id as any).toString(), training])
         );
@@ -173,8 +173,8 @@ export const createBenchmark = async (req: Request, res: Response): Promise<void
     // Validate system_info structure
     const { system_info } = benchmarkData;
     if (typeof system_info.cpu_count !== 'number' ||
-        typeof system_info.cpu_count_logical !== 'number' ||
-        typeof system_info.memory_total_gb !== 'number') {
+      typeof system_info.cpu_count_logical !== 'number' ||
+      typeof system_info.memory_total_gb !== 'number') {
       res.status(400).json({
         success: false,
         message: 'system_info must contain cpu_count, cpu_count_logical, and memory_total_gb as numbers'
@@ -378,6 +378,102 @@ export const getBenchmarkStats = async (req: Request, res: Response): Promise<vo
     res.status(500).json({
       success: false,
       message: 'Failed to fetch benchmark stats'
+    });
+  }
+};
+
+// Update benchmark
+export const updateBenchmark = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const benchmark = await Benchmark.findOne({ _id: id, deletedAt: null });
+
+    if (!benchmark) {
+      res.status(404).json({
+        success: false,
+        message: 'Benchmark not found'
+      });
+      return;
+    }
+
+    // Update allowed fields
+    if (updateData.timestamp) {
+      benchmark.timestamp = new Date(updateData.timestamp);
+    }
+    if (updateData.system_info) {
+      benchmark.system_info = { ...benchmark.system_info, ...updateData.system_info };
+    }
+    if (updateData.results) {
+      benchmark.results = updateData.results;
+    }
+    if (updateData.training_uuid !== undefined) {
+      benchmark.training_uuid = updateData.training_uuid;
+
+      // Look up training_id if training_uuid is provided
+      if (updateData.training_uuid) {
+        try {
+          const training = await Training.findOne({ uuid: updateData.training_uuid, deletedAt: null });
+          benchmark.training_id = training ? training._id : null;
+        } catch (error) {
+          console.warn('Failed to find training for uuid:', updateData.training_uuid, error);
+        }
+      } else {
+        benchmark.training_id = null;
+      }
+    }
+    if (updateData.epoch_uuid !== undefined) {
+      benchmark.epoch_uuid = updateData.epoch_uuid;
+    }
+    if (updateData.epoch !== undefined) {
+      benchmark.epoch = updateData.epoch;
+    }
+
+    const updatedBenchmark = await benchmark.save();
+
+    res.json({
+      success: true,
+      message: 'Benchmark updated successfully',
+      data: updatedBenchmark
+    });
+  } catch (error) {
+    console.error('Error updating benchmark:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update benchmark'
+    });
+  }
+};
+
+// Delete benchmark (soft delete)
+export const deleteBenchmark = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const benchmark = await Benchmark.findOne({ _id: id, deletedAt: null });
+
+    if (!benchmark) {
+      res.status(404).json({
+        success: false,
+        message: 'Benchmark not found'
+      });
+      return;
+    }
+
+    // Soft delete the benchmark
+    benchmark.deletedAt = new Date();
+    await benchmark.save();
+
+    res.json({
+      success: true,
+      message: 'Benchmark deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting benchmark:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete benchmark'
     });
   }
 };

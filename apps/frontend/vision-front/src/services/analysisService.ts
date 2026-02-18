@@ -12,6 +12,7 @@ export interface AnalysisResponse {
 export interface DatasetAnalysis {
   _id: string;
   dataset: string;
+  size?: string;
   data: any; // Dynamic JSON structure
   downloadUrl?: string;
   createdAt: string;
@@ -43,7 +44,7 @@ export interface AnalysisComparisonResponse {
 export const uploadAnalysis = async (analysisData: any): Promise<DatasetAnalysis> => {
   const config = getGlobalConfig();
   const apiUrl = config.VISION_API_URL;
-  
+
   const response = await fetch(`${apiUrl}/api/analysis/upload`, {
     method: 'POST',
     headers: {
@@ -64,15 +65,18 @@ export const uploadAnalysis = async (analysisData: any): Promise<DatasetAnalysis
 /**
  * Create new dataset analysis (without data initially)
  */
-export const createAnalysis = async (datasetName: string, downloadUrl?: string): Promise<DatasetAnalysis> => {
+export const createAnalysis = async (datasetName: string, downloadUrl?: string, size?: string): Promise<DatasetAnalysis> => {
   const config = getGlobalConfig();
   const apiUrl = config.VISION_API_URL;
-  
+
   const body: any = { dataset: datasetName };
   if (downloadUrl) {
     body.downloadUrl = downloadUrl;
   }
-  
+  if (size) {
+    body.size = size;
+  }
+
   const response = await fetch(`${apiUrl}/api/analysis/upload`, {
     method: 'POST',
     headers: {
@@ -100,7 +104,7 @@ export const getAllAnalyses = async (
 ): Promise<AnalysisResponse> => {
   const config = getGlobalConfig();
   const apiUrl = config.VISION_API_URL;
-  
+
   const params = new URLSearchParams({ limit: String(limit), skip: String(skip) });
   if (dataset) {
     params.append('dataset', dataset);
@@ -131,7 +135,7 @@ export const getAnalysesByDataset = async (
 ): Promise<AnalysisResponse> => {
   const config = getGlobalConfig();
   const apiUrl = config.VISION_API_URL;
-  
+
   const params = new URLSearchParams({ limit: String(limit), skip: String(skip) });
 
   const response = await fetch(`${apiUrl}/api/analysis/dataset/${datasetName}?${params.toString()}`, {
@@ -155,7 +159,7 @@ export const getAnalysesByDataset = async (
 export const getAnalysisById = async (id: string): Promise<DatasetAnalysis> => {
   const config = getGlobalConfig();
   const apiUrl = config.VISION_API_URL;
-  
+
   const response = await fetch(`${apiUrl}/api/analysis/${id}`, {
     method: 'GET',
     headers: {
@@ -178,7 +182,7 @@ export const getAnalysisById = async (id: string): Promise<DatasetAnalysis> => {
 export const updateAnalysis = async (id: string, analysisData: any): Promise<DatasetAnalysis> => {
   const config = getGlobalConfig();
   const apiUrl = config.VISION_API_URL;
-  
+
   const response = await fetch(`${apiUrl}/api/analysis/${id}`, {
     method: 'PUT',
     headers: {
@@ -202,7 +206,7 @@ export const updateAnalysis = async (id: string, analysisData: any): Promise<Dat
 export const deleteAnalysis = async (id: string): Promise<void> => {
   const config = getGlobalConfig();
   const apiUrl = config.VISION_API_URL;
-  
+
   const response = await fetch(`${apiUrl}/api/analysis/${id}`, {
     method: 'DELETE',
     headers: {
@@ -222,7 +226,7 @@ export const deleteAnalysis = async (id: string): Promise<void> => {
 export const compareAnalyses = async (analysisIds: string[]): Promise<AnalysisComparisonResponse> => {
   const config = getGlobalConfig();
   const apiUrl = config.VISION_API_URL;
-  
+
   const response = await fetch(`${apiUrl}/api/analysis/compare`, {
     method: 'POST',
     headers: {

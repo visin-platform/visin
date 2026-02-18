@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -10,10 +10,20 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  TablePagination
+  TablePagination,
+  IconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Alert
 } from '@mui/material';
 import { Link } from 'react-router-dom';
+import { Delete as DeleteIcon } from '@mui/icons-material';
 import { formatDateTime } from '../../utils';
+import { benchmarkService } from '../../services/benchmarkService';
 
 interface ProjectBenchmarksTabProps {
   benchmarksResponse: any;
@@ -22,6 +32,7 @@ interface ProjectBenchmarksTabProps {
   rowsPerPage: number;
   onPageChange: (event: unknown, newPage: number) => void;
   onRowsPerPageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  isOwner: boolean;
 }
 
 const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
@@ -30,8 +41,43 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
   page,
   rowsPerPage,
   onPageChange,
-  onRowsPerPageChange
+  onRowsPerPageChange,
+  isOwner
 }) => {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [benchmarkToDelete, setBenchmarkToDelete] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteBenchmark = (id: string) => {
+    setBenchmarkToDelete(id);
+    setDeleteDialogOpen(true);
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!benchmarkToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await benchmarkService.deleteBenchmark(benchmarkToDelete);
+      // Refresh the page to update the benchmarks list
+      window.location.reload();
+      setDeleteDialogOpen(false);
+      setBenchmarkToDelete(null);
+    } catch (err) {
+      setDeleteError('Failed to delete benchmark');
+      console.error('Error deleting benchmark:', err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteDialogOpen(false);
+    setBenchmarkToDelete(null);
+    setDeleteError(null);
+  };
   return (
     <Box sx={{ px: 3 }}>
       <Typography variant="h6" gutterBottom>Benchmarks</Typography>
@@ -47,6 +93,7 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
                   <TableCell>FPS</TableCell>
                   <TableCell>Parameters</TableCell>
                   <TableCell>Timestamp</TableCell>
+                  {isOwner && <TableCell>Actions</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -88,6 +135,22 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
                       <TableCell>{firstResult?.fps !== undefined && firstResult?.fps !== null ? firstResult.fps.toFixed(2) : '-'}</TableCell>
                       <TableCell>{formatParameters(firstResult)}</TableCell>
                       <TableCell>{formatDateTime(benchmark.timestamp)}</TableCell>
+                      {isOwner && (
+                        <TableCell>
+                          <Tooltip title="Delete">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteBenchmark(benchmark._id);
+                              }}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
@@ -111,6 +174,34 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
           No benchmarks found for this project.
         </Typography>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={handleCancelDelete}>
+        <DialogTitle>Delete Benchmark</DialogTitle>
+        <DialogContent>
+          {deleteError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {deleteError}
+            </Alert>
+          )}
+          <Typography>
+            Are you sure you want to delete this benchmark? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelDelete} disabled={isDeleting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
