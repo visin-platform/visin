@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.72](https://github.com/visin-platform/visin-monorepo/compare/v0.0.71...v0.0.72) (2026-02-18)
+
+
+### Bug Fixes
+
+* various fixes for front and api communication ([162f467](https://github.com/visin-platform/visin-monorepo/commit/162f467b911352951839f7115dc600b0c9db0cf5))
+
 ### [0.0.71](https://github.com/visin-platform/visin-monorepo/compare/v0.0.70...v0.0.71) (2026-02-17)
 
 
