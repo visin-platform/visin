@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.73](https://github.com/visin-platform/visin-monorepo/compare/v0.0.72...v0.0.73) (2026-03-02)
+
+
+### Features
+
+* add export all for comparison page ([84d9579](https://github.com/visin-platform/visin-monorepo/commit/84d95790254881f749d1c73d23b4781811c839c6))
+
 ### [0.0.72](https://github.com/visin-platform/visin-monorepo/compare/v0.0.71...v0.0.72) (2026-02-18)
 
 
