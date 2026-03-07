@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.74](https://github.com/visin-platform/visin-monorepo/compare/v0.0.73...v0.0.74) (2026-03-07)
+
+
+### Bug Fixes
+
+* use latest test and benchmark results in comparison ([a565ab0](https://github.com/visin-platform/visin-monorepo/commit/a565ab06a6c462406ceb4cef05dcebb7a8e7bcae))
+
 ### [0.0.73](https://github.com/visin-platform/visin-monorepo/compare/v0.0.72...v0.0.73) (2026-03-02)
 
 
