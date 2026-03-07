@@ -615,7 +615,13 @@ export const trainingService = {
       const trainingAggregatedResults = aggregatedTestResults.comparison.find((item: any) => 
         item.training._id.toString() === trainingId
       );
-      const trainingBenchmarks = benchmarksByTraining[trainingId] || [];
+      let trainingBenchmarks = benchmarksByTraining[trainingId] || [];
+      // if there are multiple benchmarks keep only the most recent one (by timestamp)
+      if (trainingBenchmarks.length > 1) {
+        trainingBenchmarks = trainingBenchmarks.slice();
+        trainingBenchmarks.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        trainingBenchmarks = [trainingBenchmarks[trainingBenchmarks.length - 1]];
+      }
       const lastEpoch = trainingEpochs.length > 0 ? trainingEpochs[trainingEpochs.length - 1] : null;
 
       // Calculate training metrics

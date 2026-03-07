@@ -91,7 +91,7 @@ export const generateAggregatedLatexCode = (aggregatedStats: any, hasCyclistPede
 
   let latex = `\\begin{table*}[ht]
 \\centering
-\\caption{Aggregated performance metrics across ${testResultsCount} test result${testResultsCount !== 1 ? 's' : ''}.}
+\\caption{Performance metrics from the most recent test run${testResultsCount > 1 ? ` (of ${testResultsCount} total)` : ''}.}
 \\begin{tabular}{|c|${'c|'.repeat(classes.length * 4)}}
 \\hline & \\multicolumn{${classes.length}}{|c|}{IoU} & \\multicolumn{${classes.length}}{|c|}{Precision} & \\multicolumn{${classes.length}}{|c|}{Recall} & \\multicolumn{${classes.length}}{|c|}{AP} \\\\
 \\hline & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} \\\\

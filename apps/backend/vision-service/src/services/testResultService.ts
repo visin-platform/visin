@@ -479,7 +479,19 @@ export const testResultService = {
         }
 
         // Aggregate metrics across all test results for this training
-        const aggregatedResults = this.aggregateTestResults(trainingTestResults);
+        // If there are multiple results pick the most recent one based on timestamp
+        let aggregatedResults = null;
+        if (trainingTestResults.length > 0) {
+          // find latest test result
+          let latest = trainingTestResults[0];
+          for (const tr of trainingTestResults) {
+            if (new Date(tr.timestamp) > new Date(latest.timestamp)) {
+              latest = tr;
+            }
+          }
+          // aggregate only the latest entry to avoid averaging older runs
+          aggregatedResults = this.aggregateTestResults([latest]);
+        }
 
         return {
           training: {

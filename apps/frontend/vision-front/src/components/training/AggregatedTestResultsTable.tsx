@@ -57,10 +57,10 @@ const AggregatedTestResultsTable: React.FC<AggregatedTestResultsTableProps> = ({
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Box>
             <Typography variant="subtitle1" fontWeight="bold">
-              Test Results Aggregated ({testResultsCount} test{testResultsCount !== 1 ? 's' : ''})
+              Test Results (latest)
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Mean across all test results
+              Showing the most recent test run for each training
             </Typography>
           </Box>
           <Button
