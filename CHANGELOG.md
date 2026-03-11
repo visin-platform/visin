@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.75](https://github.com/visin-platform/visin-monorepo/compare/v0.0.74...v0.0.75) (2026-03-11)
+
+
+### Features
+
+* add cloudflare cron ([39b421b](https://github.com/visin-platform/visin-monorepo/commit/39b421b8341cc8d014959ae7d21f2a6b8d9c3dbb))
+
 ### [0.0.74](https://github.com/visin-platform/visin-monorepo/compare/v0.0.73...v0.0.74) (2026-03-07)
 
 
