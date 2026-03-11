@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.79](https://github.com/visin-platform/visin-monorepo/compare/v0.0.78...v0.0.79) (2026-03-11)
+
+
+### Bug Fixes
+
+* set cloudflare env vars ([42a1f83](https://github.com/visin-platform/visin-monorepo/commit/42a1f83d2c87179d08a380deb31d9db348a2fed2))
+
 ### [0.0.78](https://github.com/visin-platform/visin-monorepo/compare/v0.0.77...v0.0.78) (2026-03-11)
 
 
