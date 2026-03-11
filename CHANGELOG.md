@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.77](https://github.com/visin-platform/visin-monorepo/compare/v0.0.76...v0.0.77) (2026-03-11)
+
+
+### Bug Fixes
+
+* cron deployment ([8eaee4b](https://github.com/visin-platform/visin-monorepo/commit/8eaee4bf95af41abb2e56f3e2cfbf452d5a2ad7f))
+
 ### [0.0.76](https://github.com/visin-platform/visin-monorepo/compare/v0.0.75...v0.0.76) (2026-03-11)
 
 
