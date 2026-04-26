@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.80](https://github.com/visin-platform/visin-monorepo/compare/v0.0.79...v0.0.80) (2026-04-26)
+
+
+### Features
+
+* add file service ([89d3273](https://github.com/visin-platform/visin-monorepo/commit/89d327399c9b1717911180428ec90aec1b7de4c4))
+
 ### [0.0.79](https://github.com/visin-platform/visin-monorepo/compare/v0.0.78...v0.0.79) (2026-03-11)
 
 
