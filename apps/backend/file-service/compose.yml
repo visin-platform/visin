@@ -13,7 +13,7 @@ services:
       - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}
       - FILE_SERVICE_HMAC_SECRET=${FILE_SERVICE_HMAC_SECRET}
       - FILE_SERVICE_URL=${FILE_SERVICE_URL}
-      - FILE_SERVICE_DATA_DIR=./data
+      - FILE_SERVICE_DATA_DIR=/data
     volumes:
       - file_data:/data
     init: true
