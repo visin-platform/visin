@@ -11,13 +11,10 @@ services:
       - PORT=4010
       - MONGODB_URI=${MONGODB_URI}
       - NODE_ENV=production
-      # MinIO configuration
-      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
-      - MINIO_PORT=443
-      - MINIO_USE_SSL=true
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
-      - MINIO_BUCKET=vision
+      # File Service configuration
+      - FILE_SERVICE_URL=${FILE_SERVICE_URL}
+      - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}
+      - FILE_SERVICE_HMAC_SECRET=${FILE_SERVICE_HMAC_SECRET}
     init: true
     networks:
       - visinnet
