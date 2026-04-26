@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.82](https://github.com/visin-platform/visin-monorepo/compare/v0.0.81...v0.0.82) (2026-04-26)
+
+
+### Bug Fixes
+
+* expose port 5002 for file service ([9bf0e06](https://github.com/visin-platform/visin-monorepo/commit/9bf0e06d331477c5d05b890c3ab0e9554b8288fe))
+
 ### [0.0.81](https://github.com/visin-platform/visin-monorepo/compare/v0.0.80...v0.0.81) (2026-04-26)
 
 
