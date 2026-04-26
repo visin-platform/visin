@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.81](https://github.com/visin-platform/visin-monorepo/compare/v0.0.80...v0.0.81) (2026-04-26)
+
+
+### Bug Fixes
+
+* file folder path ([3a44f10](https://github.com/visin-platform/visin-monorepo/commit/3a44f10c7dac1c183f9effd5738573ba6a6c75f0))
+
 ### [0.0.80](https://github.com/visin-platform/visin-monorepo/compare/v0.0.79...v0.0.80) (2026-04-26)
 
 
