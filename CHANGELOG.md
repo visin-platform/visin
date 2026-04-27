@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.83](https://github.com/visin-platform/visin-monorepo/compare/v0.0.82...v0.0.83) (2026-04-27)
+
+
+### Bug Fixes
+
+* exclude data folder from watchers ([ca21b6d](https://github.com/visin-platform/visin-monorepo/commit/ca21b6d2c7e325988a006ca5a10ca0146827574b))
+
 ### [0.0.82](https://github.com/visin-platform/visin-monorepo/compare/v0.0.81...v0.0.82) (2026-04-26)
 
 
