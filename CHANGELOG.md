@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.84](https://github.com/visin-platform/visin-monorepo/compare/v0.0.83...v0.0.84) (2026-04-27)
+
+
+### Features
+
+* remove minio references ([ddcac8c](https://github.com/visin-platform/visin-monorepo/commit/ddcac8c21c999df30ba1e034aa7a836681423452))
+
 ### [0.0.83](https://github.com/visin-platform/visin-monorepo/compare/v0.0.82...v0.0.83) (2026-04-27)
 
 
