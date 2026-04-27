@@ -5,5 +5,4 @@ dist
 .env.local
 certs
 
-apps/infra/minio/data
 paper
