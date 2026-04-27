@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.85](https://github.com/visin-platform/visin-monorepo/compare/v0.0.84...v0.0.85) (2026-04-27)
+
+
+### Bug Fixes
+
+* large file download ([2141870](https://github.com/visin-platform/visin-monorepo/commit/2141870d6f7908d40348003d3ddb7a07c6b9316c))
+
 ### [0.0.84](https://github.com/visin-platform/visin-monorepo/compare/v0.0.83...v0.0.84) (2026-04-27)
 
 
