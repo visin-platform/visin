@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import {
-  writeFile,
-  readFile,
+  createWriteStream,
+  createReadStream,
   deleteFile,
   deleteByPrefix,
   fileExists,
@@ -16,23 +16,36 @@ import {
  */
 export const internalUpload = (req: Request, res: Response): void => {
   const fileId = [req.params.fileId].flat().join('/');
-  const chunks: Buffer[] = [];
+  const output = createWriteStream(fileId);
+  let uploadedBytes = 0;
+  let responded = false;
 
-  req.on('data', (chunk: Buffer) => chunks.push(chunk));
-  req.on('end', () => {
-    try {
-      const buffer = Buffer.concat(chunks);
-      writeFile(fileId, buffer);
-      res.status(200).json({ success: true, fileId, size: buffer.length });
-    } catch (err) {
-      console.error(`Internal upload failed for ${fileId}:`, err);
+  const fail = (message: string, err: unknown): void => {
+    if (responded) return;
+    responded = true;
+    console.error(`${message} for ${fileId}:`, err);
+    if (!res.headersSent) {
       res.status(500).json({ success: false, message: 'Upload failed' });
+    } else {
+      res.destroy();
     }
+  };
+
+  req.on('data', (chunk: Buffer) => {
+    uploadedBytes += chunk.length;
   });
-  req.on('error', (err) => {
-    console.error(`Internal upload stream error for ${fileId}:`, err);
-    res.status(500).json({ success: false, message: 'Upload stream error' });
+
+  req.on('error', (err) => fail('Internal upload request stream error', err));
+  req.on('aborted', () => fail('Internal upload aborted', new Error('Client aborted request')));
+
+  output.on('error', (err) => fail('Internal upload file write stream error', err));
+  output.on('finish', () => {
+    if (responded) return;
+    responded = true;
+    res.status(200).json({ success: true, fileId, size: uploadedBytes });
   });
+
+  req.pipe(output);
 };
 
 /**
@@ -48,10 +61,22 @@ export const internalDownload = (req: Request, res: Response): void => {
   }
 
   try {
-    const buffer = readFile(fileId);
-    res.setHeader('Content-Length', buffer.length);
+    const meta = getMetadata(fileId);
+    const stream = createReadStream(fileId);
+
+    res.setHeader('Content-Length', meta.size);
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.send(buffer);
+
+    stream.on('error', (err) => {
+      console.error(`Internal download stream failed for ${fileId}:`, err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Download failed' });
+      } else {
+        res.destroy(err);
+      }
+    });
+
+    stream.pipe(res);
   } catch (err) {
     console.error(`Internal download failed for ${fileId}:`, err);
     res.status(500).json({ success: false, message: 'Download failed' });

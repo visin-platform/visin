@@ -31,6 +31,15 @@ export const writeFile = (fileId: string, buffer: Buffer): void => {
 };
 
 /**
+ * Create a writable stream for a file.
+ */
+export const createWriteStream = (fileId: string): fs.WriteStream => {
+  const filePath = resolvePath(fileId);
+  ensureDir(filePath);
+  return fs.createWriteStream(filePath);
+};
+
+/**
  * Read a file from disk and return a Buffer.
  */
 export const readFile = (fileId: string): Buffer => {
@@ -39,12 +48,19 @@ export const readFile = (fileId: string): Buffer => {
 };
 
 /**
+ * Create a readable stream for a file.
+ */
+export const createReadStream = (fileId: string): fs.ReadStream => {
+  const filePath = resolvePath(fileId);
+  return fs.createReadStream(filePath);
+};
+
+/**
  * Check if a file exists.
  */
 export const fileExists = (fileId: string): boolean => {
   try {
-    fs.statSync(resolvePath(fileId));
-    return true;
+    return fs.statSync(resolvePath(fileId)).isFile();
   } catch {
     return false;
   }

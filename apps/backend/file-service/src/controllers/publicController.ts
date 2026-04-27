@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { writeFile, readFile, fileExists, getMetadata } from '../utils/storage';
+import { createWriteStream, createReadStream, fileExists, getMetadata } from '../utils/storage';
 
 /**
  * PUT /files/upload/:fileId?token=...&expires=...
@@ -8,23 +8,36 @@ import { writeFile, readFile, fileExists, getMetadata } from '../utils/storage';
  */
 export const uploadPublic = (req: Request, res: Response): void => {
   const fileId = [req.params.fileId].flat().join('/');
+  const output = createWriteStream(fileId);
+  let uploadedBytes = 0;
+  let responded = false;
 
-  const chunks: Buffer[] = [];
-  req.on('data', (chunk: Buffer) => chunks.push(chunk));
-  req.on('end', () => {
-    try {
-      const buffer = Buffer.concat(chunks);
-      writeFile(fileId, buffer);
-      res.status(200).json({ success: true, message: 'File uploaded', fileId });
-    } catch (err) {
-      console.error(`Public upload failed for ${fileId}:`, err);
+  const fail = (message: string, err: unknown): void => {
+    if (responded) return;
+    responded = true;
+    console.error(`${message} for ${fileId}:`, err);
+    if (!res.headersSent) {
       res.status(500).json({ success: false, message: 'Upload failed' });
+    } else {
+      res.destroy();
     }
+  };
+
+  req.on('data', (chunk: Buffer) => {
+    uploadedBytes += chunk.length;
   });
-  req.on('error', (err) => {
-    console.error(`Request stream error for ${fileId}:`, err);
-    res.status(500).json({ success: false, message: 'Upload stream error' });
+
+  req.on('error', (err) => fail('Public request stream error', err));
+  req.on('aborted', () => fail('Public upload aborted', new Error('Client aborted request')));
+
+  output.on('error', (err) => fail('Public file write stream error', err));
+  output.on('finish', () => {
+    if (responded) return;
+    responded = true;
+    res.status(200).json({ success: true, message: 'File uploaded', fileId, size: uploadedBytes });
   });
+
+  req.pipe(output);
 };
 
 /**
@@ -40,8 +53,8 @@ export const downloadPublic = (req: Request, res: Response): void => {
   }
 
   try {
-    const buffer = readFile(fileId);
     const meta = getMetadata(fileId);
+    const stream = createReadStream(fileId);
 
     // Attempt a basic content-type guess from extension
     const ext = fileId.split('.').pop()?.toLowerCase() ?? '';
@@ -62,7 +75,17 @@ export const downloadPublic = (req: Request, res: Response): void => {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', meta.size);
     res.setHeader('Cache-Control', 'private, max-age=3600');
-    res.send(buffer);
+
+    stream.on('error', (err) => {
+      console.error(`Public download stream failed for ${fileId}:`, err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Download failed' });
+      } else {
+        res.destroy(err);
+      }
+    });
+
+    stream.pipe(res);
   } catch (err) {
     console.error(`Public download failed for ${fileId}:`, err);
     res.status(500).json({ success: false, message: 'Download failed' });
