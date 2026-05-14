@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.86](https://github.com/visin-platform/visin-monorepo/compare/v0.0.85...v0.0.86) (2026-05-14)
+
+
+### Bug Fixes
+
+* dns records in cron ([8b4a42b](https://github.com/visin-platform/visin-monorepo/commit/8b4a42bf0ddd9e2a7b760cbe0be4ff7df3ca01a4))
+
 ### [0.0.85](https://github.com/visin-platform/visin-monorepo/compare/v0.0.84...v0.0.85) (2026-04-27)
 
 
