@@ -7,7 +7,8 @@ import {
   getSimpleLabelingStats as getSimpleLabelingStatsService,
   getImageById as getImageByIdService,
   updateImage as updateImageService,
-  deleteImage as deleteImageService
+  deleteImage as deleteImageService,
+  exportImageNames as exportImageNamesService
 } from '../services/datasetImageService';
 
 // Get all images
@@ -355,21 +356,10 @@ export const exportImageNames = async (req: Request, res: Response): Promise<voi
     const { datasetId } = req.params;
     const { tag } = req.query;
 
-    // Get images for the dataset
-    const result = await getImages({
-      datasetId: datasetId,
-      limit: 10000 // Export all images
-    });
-
-    let images = result.images;
-
-    // Filter by tag if specified
-    if (tag && tag !== 'all') {
-      images = images.filter(img => img.tags && img.tags.includes(tag as string));
-    }
+    const images = await exportImageNamesService(datasetId, tag as string | undefined);
 
     // Create CSV content
-    const csvRows = images.map(img => `camera/${img.filename}`).join('\n');
+    const csvRows = images.map((img: any) => `camera/${img.filename}`).join('\n');
     const csvContent = csvRows;
 
     // Set headers for CSV download
