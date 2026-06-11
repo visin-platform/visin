@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.88](https://github.com/visin-platform/visin-monorepo/compare/v0.0.87...v0.0.88) (2026-06-11)
+
+
+### Bug Fixes
+
+* frame exports too few images ([62020bc](https://github.com/visin-platform/visin-monorepo/commit/62020bc0afc377c92f5680ea42ac362c014fc59b))
+
 ### [0.0.87](https://github.com/visin-platform/visin-monorepo/compare/v0.0.86...v0.0.87) (2026-06-11)
 
 
