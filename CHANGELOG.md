@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.87](https://github.com/visin-platform/visin-monorepo/compare/v0.0.86...v0.0.87) (2026-06-11)
+
+
+### Bug Fixes
+
+* csv frame export ([4a63a0c](https://github.com/visin-platform/visin-monorepo/commit/4a63a0c23bb9db69a1765d9133badb62e96cdc67))
+
 ### [0.0.86](https://github.com/visin-platform/visin-monorepo/compare/v0.0.85...v0.0.86) (2026-05-14)
 
 
