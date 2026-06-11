@@ -365,13 +365,12 @@ export const exportImageNames = async (req: Request, res: Response): Promise<voi
 
     // Filter by tag if specified
     if (tag && tag !== 'all') {
-      images = images.filter(img => img.labels && img.labels.includes(tag as string));
+      images = images.filter(img => img.tags && img.tags.includes(tag as string));
     }
 
     // Create CSV content
-    const csvHeader = 'filename,original_name\n';
-    const csvRows = images.map(img => `"${img.filename}","${img.originalName}"`).join('\n');
-    const csvContent = csvHeader + csvRows;
+    const csvRows = images.map(img => `camera/${img.filename}`).join('\n');
+    const csvContent = csvRows;
 
     // Set headers for CSV download
     res.setHeader('Content-Type', 'text/csv');
