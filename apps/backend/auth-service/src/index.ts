@@ -10,6 +10,11 @@ import { healthCheck } from './controllers/healthController';
 // Load environment variables
 dotenv.config();
 
+if (!process.env.JWT_SECRET) {
+  console.error('Fatal: JWT_SECRET environment variable must be set');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 5001;
 

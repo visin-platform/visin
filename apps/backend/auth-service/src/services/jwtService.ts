@@ -14,14 +14,12 @@ export interface UserPayload {
 }
 
 export const generateJWT = (user: UserPayload): string => {
-  const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key';
-  return jwt.sign(user, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(user, process.env.JWT_SECRET!, { expiresIn: JWT_EXPIRES_IN });
 };
 
 export const verifyJWT = (token: string): UserPayload => {
-  const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key';
   try {
-    return jwt.verify(token, JWT_SECRET) as UserPayload;
+    return jwt.verify(token, process.env.JWT_SECRET!) as UserPayload;
   } catch (error) {
     throw new Error('Invalid or expired token');
   }
