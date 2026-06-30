@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import routes from './routes/routes';
 
@@ -15,6 +16,10 @@ for (const key of REQUIRED_ENV) {
 
 const app = express();
 const PORT = process.env.PORT || 5002;
+
+// Rate limiting
+const generalLimiter = rateLimit({ windowMs: 60_000, limit: 500, standardHeaders: true, legacyHeaders: false });
+app.use(generalLimiter);
 
 // Middleware
 const allowedOrigins = (process.env.CORS_ORIGIN ?? '').split(',').map(s => s.trim()).filter(Boolean);

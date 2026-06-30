@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 const cookieParser = require('cookie-parser');
 import authRoutes from './routes/authRoutes';
@@ -37,6 +38,13 @@ app.use(
     exposedHeaders: ['Content-Type', 'Content-Length', 'ETag', 'Cache-Control']
   })
 );
+
+// Rate limiting
+const generalLimiter = rateLimit({ windowMs: 60_000, limit: 500, standardHeaders: true, legacyHeaders: false });
+const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });
+
+app.use(generalLimiter);
+app.use('/auth/validate', loginLimiter);
 
 // Serve static documentation files
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));

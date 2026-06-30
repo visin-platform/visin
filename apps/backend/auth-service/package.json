@@ -16,6 +16,7 @@
     "data-uri-to-buffer": "^4.0.1",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.5.2",
     "fetch-blob": "^3.2.0",
     "formdata-polyfill": "^4.0.10",
     "google-auth-library": "^10.4.0",
