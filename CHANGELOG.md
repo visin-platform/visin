@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.89](https://github.com/visin-platform/visin-monorepo/compare/v0.0.88...v0.0.89) (2026-06-30)
+
+
+### Bug Fixes
+
+* auth cookie ([c8a45dc](https://github.com/visin-platform/visin-monorepo/commit/c8a45dcbd03a4cc7001292b26d1d1820736971db))
+
 ### [0.0.88](https://github.com/visin-platform/visin-monorepo/compare/v0.0.87...v0.0.88) (2026-06-11)
 
 
