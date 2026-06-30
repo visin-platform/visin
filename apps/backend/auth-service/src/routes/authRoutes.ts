@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { validateToken, logout, verifyAuth, refreshToken, invalidateUserTokens } from '../controllers/authController';
 import { getProfile, updateProfile } from '../controllers/profileController';
 import { authenticateToken, requireRole, requireApproved } from '../middleware/authMiddleware';
+import { requireInternalServiceToken } from '../middleware/internalServiceAuth';
 import { User } from '../models/User';
 
 const router = Router();
@@ -23,7 +24,7 @@ router.put('/profile', authenticateToken, requireApproved, updateProfile);
 router.get('/verify', authenticateToken, requireApproved, verifyAuth);
 
 // Internal service endpoints for token management
-router.post('/internal/invalidate-tokens', invalidateUserTokens);
+router.post('/internal/invalidate-tokens', requireInternalServiceToken, invalidateUserTokens);
 
 // Admin utilities (manual authorization): mark user approved
 router.post('/admin/approve', authenticateToken, requireApproved, requireRole('admin'), (req: Request, res: Response): void => {
