@@ -1,4 +1,17 @@
 # Visin Changelog
+### [0.0.92](https://github.com/visin-platform/visin-monorepo/compare/v0.0.91...v0.0.92) (2026-06-30)
+
+
+### Features
+
+* add contributing ([4ea7ce3](https://github.com/visin-platform/visin-monorepo/commit/4ea7ce3accbc23249b07a8c00ac9ce0ae231f887))
+* add rate limiting ([20c5eb2](https://github.com/visin-platform/visin-monorepo/commit/20c5eb24ad1018b8da4747c61f981e6b338febc5))
+
+
+### Bug Fixes
+
+* hardcoded values ([5714756](https://github.com/visin-platform/visin-monorepo/commit/5714756f20ee0571b0fd4e104638b8970c50e748))
+
 ### [0.0.91](https://github.com/visin-platform/visin-monorepo/compare/v0.0.90...v0.0.91) (2026-06-30)
 
 
