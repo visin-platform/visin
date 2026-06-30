@@ -56,7 +56,7 @@ export const validateToken = async (req: Request, res: Response, next: NextFunct
 
     // Set secure cookie for SSO across subdomains
     const cookieOptions = {
-      httpOnly: false,
+      httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax' as const,
       domain: process.env.COOKIE_DOMAIN || 'localhost',
@@ -178,7 +178,7 @@ export const verifyAuth = async (req: Request, res: Response): Promise<void> => 
 
     // Update cookie with fresh token
     const cookieOptions = {
-      httpOnly: false,
+      httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax' as const,
       domain: process.env.COOKIE_DOMAIN || 'localhost',
@@ -229,7 +229,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
 
     // Update cookie
     const cookieOptions = {
-      httpOnly: false,
+      httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax' as const,
       domain: process.env.COOKIE_DOMAIN || 'localhost',
