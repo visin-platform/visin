@@ -1,5 +1,10 @@
-// @ts-nocheck
 import { Request, Response } from 'express';
+
+function strParam(v: unknown): string | undefined {
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v) && typeof v[0] === 'string') return v[0];
+  return undefined;
+}
 import {
   getImages,
   createDatasetImage as createDatasetImageService,
@@ -122,92 +127,35 @@ export const createDatasetImage = async (req: Request, res: Response): Promise<v
 // Get images by dataset
 export const getImagesByDataset = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { datasetId } = req.params;
-    const { page = 1, limit, search, categoryId, tags, weatherCondition, sortBy = 'updatedAt', sortOrder = 'desc' } = req.query as any;
+    const datasetId = req.params.datasetId as string;
+    const { page, limit, search, categoryId, tags, weatherCondition, sortBy, sortOrder } = req.query;
 
-    let searchParam: any;
-    if (typeof search === 'string') {
-      searchParam = search;
-    } else if (Array.isArray(search)) {
-      searchParam = search[0];
-    } else {
-      searchParam = undefined;
-    }
+    const searchParam = strParam(search);
+    const categoryIdParam = strParam(categoryId);
+    const weatherConditionParam = strParam(weatherCondition);
+    const sortByParam = strParam(sortBy) ?? 'updatedAt';
+    const pageParam = Number(strParam(page) ?? '1') || 1;
 
-    let categoryIdParam: any;
-    if (typeof categoryId === 'string') {
-      categoryIdParam = categoryId;
-    } else if (Array.isArray(categoryId)) {
-      categoryIdParam = categoryId[0];
-    } else {
-      categoryIdParam = undefined;
-    }
+    const sortOrderRaw = strParam(sortOrder) ?? 'desc';
+    const sortOrderParam: 'asc' | 'desc' = sortOrderRaw === 'asc' ? 'asc' : 'desc';
 
-    let tagsParam: any;
+    const limitRaw = strParam(limit);
+    const limitParam: number | undefined = limitRaw ? Number(limitRaw) : undefined;
+
+    let tagsParam: string | undefined;
     if (typeof tags === 'string') {
       tagsParam = tags;
     } else if (Array.isArray(tags)) {
-      tagsParam = tags.join(' ');
-    } else {
-      tagsParam = undefined;
+      tagsParam = (tags as string[]).join(' ');
     }
 
-    let weatherConditionParam: any;
-    if (typeof weatherCondition === 'string') {
-      weatherConditionParam = weatherCondition;
-    } else if (Array.isArray(weatherCondition)) {
-      weatherConditionParam = weatherCondition[0];
-    } else {
-      weatherConditionParam = undefined;
-    }
-
-    let sortByParam: any;
-    if (typeof sortBy === 'string') {
-      sortByParam = sortBy;
-    } else if (Array.isArray(sortBy)) {
-      sortByParam = sortBy[0];
-    } else {
-      sortByParam = 'updatedAt';
-    }
-
-    let sortOrderParam: any;
-    if (typeof sortOrder === 'string' && (sortOrder === 'asc' || sortOrder === 'desc')) {
-      sortOrderParam = sortOrder;
-    } else if (Array.isArray(sortOrder) && (sortOrder[0] === 'asc' || sortOrder[0] === 'desc')) {
-      sortOrderParam = sortOrder[0];
-    } else {
-      sortOrderParam = 'desc';
-    }
-
-    let pageParam: any;
-    if (typeof page === 'string') {
-      pageParam = Number(page);
-    } else if (Array.isArray(page)) {
-      pageParam = Number(page[0]);
-    } else {
-      pageParam = 1;
-    }
-
-    let limitParam: number | undefined;
-    if (limit) {
-      if (typeof limit === 'string') {
-        limitParam = Number(limit);
-      } else if (Array.isArray(limit)) {
-        limitParam = Number(limit[0]);
-      } else {
-        limitParam = undefined;
-      }
-    } else {
-      limitParam = undefined;
-    }
-
-    const result = await (getImages as any)({
+    const result = await getImages({
       datasetId,
       page: pageParam,
       limit: limitParam,
       search: searchParam,
       categoryId: categoryIdParam,
-      tags: tagsParam ? tagsParam.split(' ').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0) : undefined,
+      tags: tagsParam ? tagsParam.split(' ').map(tag => tag.trim()).filter(tag => tag.length > 0) : undefined,
       weatherCondition: weatherConditionParam,
       sortBy: sortByParam,
       sortOrder: sortOrderParam
@@ -247,7 +195,7 @@ export const getAllImageStats = async (req: Request, res: Response): Promise<voi
 // Get simple labeling statistics for a specific dataset (total, good, bad counts only)
 export const getSimpleLabelingStats = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { datasetId } = req.params;
+    const datasetId = req.params.datasetId as string;
     const result = await getSimpleLabelingStatsService(datasetId);
 
     res.json({
@@ -265,7 +213,7 @@ export const getSimpleLabelingStats = async (req: Request, res: Response): Promi
 
 export const getImageById = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const result = await getImageByIdService(id);
 
     res.json({
@@ -290,7 +238,7 @@ export const getImageById = async (req: Request, res: Response): Promise<void> =
 // Update image
 export const updateImage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { title, description, tags, labels, categoryId, weatherCondition, metadata } = req.body;
 
     const image = await updateImageService(id, {
@@ -326,7 +274,7 @@ export const updateImage = async (req: Request, res: Response): Promise<void> =>
 // Delete image
 export const deleteImage = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const result = await deleteImageService(id);
 
     console.info(`Dataset image deleted: ${id}`, result);
@@ -353,13 +301,13 @@ export const deleteImage = async (req: Request, res: Response): Promise<void> =>
 // Export image names as CSV
 export const exportImageNames = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { datasetId } = req.params;
-    const { tag } = req.query;
+    const datasetId = req.params.datasetId as string;
+    const tag = strParam(req.query.tag);
 
-    const images = await exportImageNamesService(datasetId, tag as string | undefined);
+    const images = await exportImageNamesService(datasetId, tag);
 
     // Create CSV content
-    const csvRows = images.map((img: any) => `camera/${img.filename}`).join('\n');
+    const csvRows = images.map(img => `camera/${img.filename}`).join('\n');
     const csvContent = csvRows;
 
     // Set headers for CSV download

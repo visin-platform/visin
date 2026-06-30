@@ -27,8 +27,8 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
       return;
     }
 
-    // If token version doesn't match, token is invalid
-    if (decoded.tokenVersion && decoded.tokenVersion !== dbUser.tokenVersion) {
+    // If token version is missing or doesn't match, token is invalid
+    if (decoded.tokenVersion == null || decoded.tokenVersion !== dbUser.tokenVersion) {
       res.status(401).json({ success: false, message: 'Token has been invalidated' });
       return;
     }

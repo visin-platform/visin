@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 
 export interface InternalServiceRequest extends Request {
@@ -30,7 +31,8 @@ export const validateInternalServiceToken = (
       });
     }
 
-    if (internalToken !== expectedToken) {
+    if (internalToken.length !== expectedToken.length ||
+        !crypto.timingSafeEqual(Buffer.from(internalToken), Buffer.from(expectedToken))) {
       console.error(`Invalid internal service token from ${serviceId || 'unknown service'}`);
       return res.status(401).json({
         success: false,
