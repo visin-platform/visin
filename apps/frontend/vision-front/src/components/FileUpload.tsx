@@ -129,9 +129,6 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
             datasetId: datasetId,
             mimetype: file.type,
             size: file.size
-            // TODO: Extract image dimensions
-            // width: undefined,
-            // height: undefined,
           };
 
           if (selectedCategory) {
