@@ -1,4 +1,13 @@
 # Visin Changelog
+### [0.0.93](https://github.com/visin-platform/visin-monorepo/compare/v0.0.92...v0.0.93) (2026-06-30)
+
+
+### Features
+
+* add middleware to invalidate token endpoint ([e0e5681](https://github.com/visin-platform/visin-monorepo/commit/e0e56814b9297ad9664cad4f5a99850053a62ec1))
+* update package lock ([706a8fa](https://github.com/visin-platform/visin-monorepo/commit/706a8fa2d23c5ad495b34854b72f8820223165b6))
+* upgrade depdencies ([f4c5695](https://github.com/visin-platform/visin-monorepo/commit/f4c5695d653fe84945bcf310688c5367e5a99a26))
+
 ### [0.0.92](https://github.com/visin-platform/visin-monorepo/compare/v0.0.91...v0.0.92) (2026-06-30)
 
 
