@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.90](https://github.com/visin-platform/visin-monorepo/compare/v0.0.89...v0.0.90) (2026-06-30)
+
+
+### Bug Fixes
+
+* remove fallback secret key ([7231420](https://github.com/visin-platform/visin-monorepo/commit/72314205d3e3c56e05f546faa52864418c57c21f))
+
 ### [0.0.89](https://github.com/visin-platform/visin-monorepo/compare/v0.0.88...v0.0.89) (2026-06-30)
 
 
