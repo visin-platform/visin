@@ -60,10 +60,10 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
       })
       .catch((err) => {
         console.error('Configuration load error:', err);
-        // Fallback to defaults if fetch fails
+        // Fallback to build-time env vars if config.json fetch fails
         const fallback: AppConfig = {
-          VISION_FRONT_URL: 'https://app.visin.eu',
-          VISION_API_URL: 'https://api.visin.eu',
+          VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL || '',
+          VISION_API_URL: import.meta.env.VITE_VISION_API_URL || '',
         };
         setConfig(fallback);
         globalConfig = fallback;
