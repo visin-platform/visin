@@ -14,6 +14,7 @@ services:
       - FILE_SERVICE_HMAC_SECRET=${FILE_SERVICE_HMAC_SECRET}
       - FILE_SERVICE_URL=${FILE_SERVICE_URL}
       - FILE_SERVICE_DATA_DIR=/data
+      - CORS_ORIGIN=${CORS_ORIGIN}
     volumes:
       - file_data:/data
     init: true
