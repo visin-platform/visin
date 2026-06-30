@@ -13,6 +13,11 @@ export default defineConfig(({ mode }) => ({
       '@': resolve(__dirname, './src')
     }
   },
+  optimizeDeps: {
+    esbuildOptions: {
+      loader: { '.js': 'jsx' }
+    }
+  },
   build: {
     modulePreload: false,
     target: 'esnext',

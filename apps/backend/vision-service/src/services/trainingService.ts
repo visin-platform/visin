@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID as uuidv4 } from 'crypto';
 import Training from '../models/Training';
 import Epoch from '../models/Epoch';
 import TestResult from '../models/TestResult';
