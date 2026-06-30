@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.91](https://github.com/visin-platform/visin-monorepo/compare/v0.0.90...v0.0.91) (2026-06-30)
+
+
+### Features
+
+* update cors rules ([9ba425c](https://github.com/visin-platform/visin-monorepo/commit/9ba425c1670249fd9ba01eb683b8514908ee69d3))
+
 ### [0.0.90](https://github.com/visin-platform/visin-monorepo/compare/v0.0.89...v0.0.90) (2026-06-30)
 
 
