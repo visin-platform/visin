@@ -17,7 +17,17 @@ const app = express();
 const PORT = process.env.PORT || 5002;
 
 // Middleware
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGIN ?? '').split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS: ' + origin));
+    }
+  },
+  credentials: true,
+}));
 
 // Raw body parser for file uploads – do NOT use express.json() before file routes.
 // We handle raw streams manually in controllers, so only parse JSON where needed.

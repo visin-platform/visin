@@ -14,6 +14,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN}
     init: true
     networks:
       - visinnet
