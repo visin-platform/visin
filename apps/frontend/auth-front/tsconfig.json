@@ -14,9 +14,6 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Path mapping for shared components */
-    "baseUrl": ".",
-
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
