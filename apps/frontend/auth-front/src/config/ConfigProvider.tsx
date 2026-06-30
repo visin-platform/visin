@@ -20,7 +20,7 @@ function createDevConfig(): AppConfig {
   return {
     GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID,
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL,
-    VISION_API_URL: import.meta.env.VISION_API_URL
+    VISION_API_URL: import.meta.env.VITE_VISION_API_URL
   };
 }
 
