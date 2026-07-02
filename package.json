@@ -1,6 +1,13 @@
 {
   "name": "visin",
   "version": "0.0.97",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/visin-platform/visin-monorepo.git"
+  },
+  "engines": {
+    "node": ">=26"
+  },
   "author": "Toomas Tahves",
   "license": "MIT",
   "workspaces": [

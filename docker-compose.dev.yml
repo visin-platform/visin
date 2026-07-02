@@ -1,0 +1,39 @@
+# Local development infrastructure.
+# The app services themselves run on the host via `npm run dev` (hot reload);
+# this compose file only provides their backing services.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# MongoDB runs without authentication, matching the default
+# MONGODB_URI=mongodb://localhost:27017/visin in the .env.example files.
+# Add `--profile tools` to also get a mongo-express UI on http://localhost:8081.
+
+services:
+  mongodb:
+    image: mongo:8
+    container_name: visin_dev_mongodb
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ['CMD-SHELL', 'mongosh --quiet --eval ''db.runCommand("ping").ok''']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: visin_dev_mongo_express
+    profiles: ['tools']
+    ports:
+      - '8081:8081'
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
+      ME_CONFIG_BASICAUTH: 'false'
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongodb_data:
