@@ -20,7 +20,6 @@
     "@mui/material": "^7.3.11",
     "@mui/x-charts": "^7.29.1",
     "@tanstack/react-query": "^5.101.2",
-    "d3-delaunay": "^6.0.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1"
