@@ -84,7 +84,7 @@ const ClassIoUOverEpochsChart: React.FC<ClassIoUOverEpochsChartProps> = ({
     return classList.map((className, index) => {
       const classIoUData = epochs.map(epoch => {
         // Try validation results first
-        let valResults = epoch.results?.val as Record<string, any> || {};
+        const valResults = epoch.results?.val as Record<string, any> || {};
         let iouValue = valResults[className]?.iou;
 
         // Try training results if val doesn't have it

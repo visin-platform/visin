@@ -6,7 +6,6 @@ import {
   getImageById,
   updateImage,
   deleteImage,
-  getAllImageStats,
   exportImageNames
 } from '../controllers/datasetImageController';
 

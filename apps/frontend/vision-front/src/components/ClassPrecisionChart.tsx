@@ -84,7 +84,7 @@ const ClassPrecisionChart: React.FC<ClassPrecisionChartProps> = ({
     return classList.map((className, index) => {
       const classPrecisionData = epochs.map(epoch => {
         // Try validation results first
-        let valResults = epoch.results?.val as Record<string, any> || {};
+        const valResults = epoch.results?.val as Record<string, any> || {};
         let precisionValue = valResults[className]?.precision;
 
         // Try training results if val doesn't have it
@@ -95,17 +95,17 @@ const ClassPrecisionChart: React.FC<ClassPrecisionChartProps> = ({
 
         // Try per_class structures as fallback
         if (precisionValue === undefined) {
-          let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.val?.per_class as Record<string, any> || {};
           precisionValue = perClass[className]?.precision;
         }
 
         if (precisionValue === undefined) {
-          let perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.train?.per_class as Record<string, any> || {};
           precisionValue = perClass[className]?.precision;
         }
 
         if (precisionValue === undefined) {
-          let perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
           precisionValue = perClass[className]?.precision;
         }
 

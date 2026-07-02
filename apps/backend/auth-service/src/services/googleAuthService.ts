@@ -12,6 +12,6 @@ export const verifyGoogleToken = async (idToken: string) => {
     return payload; // Contains user info like email, name, etc.
   } catch (error) {
     console.error('Error verifying Google token:', error);
-    throw new Error('Invalid token');
+    throw new Error('Invalid token', { cause: error });
   }
 };

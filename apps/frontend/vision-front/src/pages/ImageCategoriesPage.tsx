@@ -65,7 +65,7 @@ const ImageCategoriesPage: React.FC = () => {
     try {
       const cats = await getAllCategories();
       setCategories(cats);
-    } catch (error) {
+    } catch {
       showAlert('error', 'Failed to load categories');
     } finally {
       setLoading(false);
@@ -77,7 +77,7 @@ const ImageCategoriesPage: React.FC = () => {
     try {
       const response = await datasetService.getDatasets({ limit: 1000 }); // Get all datasets
       setDatasets(response.data.datasets);
-    } catch (error) {
+    } catch {
       showAlert('error', 'Failed to load datasets');
     } finally {
       setDatasetsLoading(false);
@@ -106,7 +106,7 @@ const ImageCategoriesPage: React.FC = () => {
       setCreateModalOpen(false);
       setCategoryForm({ name: '', description: '', datasetId: '', color: '#1976d2' });
       loadCategories();
-    } catch (error) {
+    } catch {
       showAlert('error', 'Failed to create category');
     }
   };
@@ -128,7 +128,7 @@ const ImageCategoriesPage: React.FC = () => {
       setEditingCategory(null);
       setCategoryForm({ name: '', description: '', datasetId: '', color: '#1976d2' });
       loadCategories();
-    } catch (error) {
+    } catch {
       showAlert('error', 'Failed to update category');
     }
   };
@@ -140,7 +140,7 @@ const ImageCategoriesPage: React.FC = () => {
       await deleteImageCategory(categoryId);
       showAlert('success', 'Category deleted successfully');
       loadCategories();
-    } catch (error) {
+    } catch {
       showAlert('error', 'Failed to delete category');
     }
   };

@@ -70,7 +70,7 @@ export const trainingService = {
     const { page = 1, limit = 30 } = pagination;
     const { search, status, datasetId, projectId, tags } = filters;
 
-    let query: any = { deletedAt: null };
+    const query: any = { deletedAt: null };
 
     // Search functionality
     if (search) {
@@ -153,16 +153,15 @@ export const trainingService = {
     const CPU_RATE_PER_HOUR = 0.006;
     const GPU_RATE_PER_HOUR = 0.20;
 
-    let trainings: any[] = [];
-    let total: number = 0;
-
-    [trainings, total] = await Promise.all([
+    const [fetchedTrainings, total] = await Promise.all([
       Training.find(query)
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(Number(limit)),
       Training.countDocuments(query)
     ]);
+
+    let trainings: any[] = fetchedTrainings;
 
     // Get metrics using aggregation for better performance
     if (trainings.length > 0) {
@@ -436,7 +435,7 @@ export const trainingService = {
   async getTrainingStats(filters: TrainingFilters) {
     const { status, datasetId, tags, projectId } = filters;
 
-    let matchQuery: any = { deletedAt: null };
+    const matchQuery: any = { deletedAt: null };
 
     // Filter by status if provided
     if (status) {

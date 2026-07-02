@@ -70,7 +70,7 @@ export const epochService = {
       // Try to update first
       try {
         return await this.updateEpoch(epochId, payload);
-      } catch (updateErr) {
+      } catch {
         // If update fails (epoch not found), create new
         return await this.uploadEpoch(payload, trainingId);
       }

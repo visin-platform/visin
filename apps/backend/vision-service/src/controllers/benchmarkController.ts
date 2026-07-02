@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
-import { randomUUID as uuidv4 } from 'crypto';
-import Benchmark, { IBenchmark } from '../models/Benchmark';
+import Benchmark from '../models/Benchmark';
 import Training from '../models/Training';
 
 // Get all benchmarks
@@ -18,7 +17,7 @@ export const getBenchmarks = async (req: Request, res: Response): Promise<void> 
     const sortOrder = order === 'desc' ? -1 : 1;
     const sortField = sortBy as string;
 
-    let query: any = { deletedAt: null };
+    const query: any = { deletedAt: null };
 
     // Filter by projectId if provided
     if (projectId) {
@@ -323,7 +322,7 @@ export const getBenchmarkStats = async (req: Request, res: Response): Promise<vo
   try {
     const { training_uuid } = req.query;
 
-    let query: any = { deletedAt: null };
+    const query: any = { deletedAt: null };
 
     if (training_uuid) {
       query.training_uuid = training_uuid;

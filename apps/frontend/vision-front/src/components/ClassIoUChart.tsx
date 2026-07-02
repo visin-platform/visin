@@ -81,7 +81,7 @@ const ClassIoUChart: React.FC<ClassIoUChartProps> = ({
     return classList.map((className, index) => {
       const classIoUData = epochs.map(epoch => {
         // Try validation results first
-        let valResults = epoch.results?.val as Record<string, any> || {};
+        const valResults = epoch.results?.val as Record<string, any> || {};
         let iouValue = valResults[className]?.iou;
 
         // Try training results if val doesn't have it
@@ -92,17 +92,17 @@ const ClassIoUChart: React.FC<ClassIoUChartProps> = ({
 
         // Try per_class structures
         if (iouValue === undefined) {
-          let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.val?.per_class as Record<string, any> || {};
           iouValue = perClass[className]?.iou;
         }
 
         if (iouValue === undefined) {
-          let perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.train?.per_class as Record<string, any> || {};
           iouValue = perClass[className]?.iou;
         }
 
         if (iouValue === undefined) {
-          let perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
           iouValue = perClass[className]?.iou;
         }
 

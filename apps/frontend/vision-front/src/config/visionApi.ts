@@ -4,7 +4,7 @@ function getVisionApiUrl(): string {
   try {
     const config = getGlobalConfig();
     return config.VISION_API_URL || 'http://localhost:4010';
-  } catch (error) {
+  } catch {
     // Fallback during initialization or HMR
     return import.meta.env.VITE_VISION_API_URL || 'http://localhost:4010';
   }

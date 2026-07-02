@@ -15,7 +15,6 @@ export const validateInternalServiceToken = (
   res: Response,
   next: NextFunction
 ) => {
-  const authHeader = req.headers.authorization;
   const internalToken = req.headers['x-internal-token'] as string;
   const serviceId = req.headers['x-service-id'] as string;
 

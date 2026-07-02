@@ -1,5 +1,4 @@
 import { Router, RequestHandler } from 'express';
-import { GroupRole } from '../models/Group';
 import { validateInternalServiceToken, allowUserOrInternalService } from '../middleware/internalServiceAuth';
 import * as ctrl from '../controllers/groupController';
 

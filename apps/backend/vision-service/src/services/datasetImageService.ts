@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import DatasetImage, { IDatasetImage } from '../models/DatasetImage';
+import DatasetImage from '../models/DatasetImage';
 import Dataset from '../models/Dataset';
 import ImageCategory from '../models/ImageCategory';
 import { 
@@ -142,7 +142,7 @@ export const getImages = async (options: ImageFilterOptions) => {
   const limitNum = Math.min(Number(limit), 1000000);
   const pageNum = Number(page);
   
-  let images: any[] = [];
+  let images: any[];
 
   if (random && limitNum > 0) {
       const pipeline = [

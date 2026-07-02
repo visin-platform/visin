@@ -50,7 +50,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     isLoading: isDashboardStatsLoading
   } = useQuery({
     queryKey: ['project-dashboard-stats', projectId],
-    queryFn: () => projectService.getProjectDashboardStats(projectResponse?.data?._id!),
+    queryFn: () => projectService.getProjectDashboardStats(projectResponse!.data!._id),
     enabled: !!projectResponse?.data
   });
 

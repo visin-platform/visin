@@ -75,13 +75,13 @@ export const testResultService = {
     query = query.sort({ [sortField]: sortOrder });
 
     let testResults;
-    let total = 0;
+    let total: number;
 
     if (page && limit) {
       const skip = (page - 1) * limit;
       
       // Build count query based on filters
-      let countQuery: any = { deletedAt: null };
+      const countQuery: any = { deletedAt: null };
       if (projectId) {
         const trainings = await Training.find({ projectId, deletedAt: null });
         if (trainings.length > 0) {
@@ -202,22 +202,15 @@ export const testResultService = {
     const sortOrder = order === 'desc' ? -1 : 1;
     const sortField = sortBy;
 
-    let query = TestResult.find({ epoch_uuid: epochUuid, deletedAt: null }).sort({ [sortField]: sortOrder });
+    const query = TestResult.find({ epoch_uuid: epochUuid, deletedAt: null }).sort({ [sortField]: sortOrder });
 
     let testResults;
-    let total = 0;
 
     if (page && limit) {
       const skip = (page - 1) * limit;
-      const [results, count] = await Promise.all([
-        query.skip(skip).limit(limit),
-        TestResult.countDocuments({ epoch_uuid: epochUuid, deletedAt: null })
-      ]);
-      testResults = results;
-      total = count;
+      testResults = await query.skip(skip).limit(limit);
     } else {
       testResults = await query;
-      total = testResults.length;
     }
 
     // Enrich

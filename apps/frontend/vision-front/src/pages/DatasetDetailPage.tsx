@@ -237,7 +237,7 @@ const DatasetDetailPage: React.FC = () => {
       setEditingCategory(null);
       setCategoryForm({ name: '', description: '', color: '#1976d2' });
       queryClient.invalidateQueries({ queryKey: ['datasetCategories', id] });
-    } catch (error) {
+    } catch {
       showCategoryAlert('error', `Failed to ${editingCategory ? 'update' : 'create'} category`);
     }
   };
@@ -248,7 +248,7 @@ const DatasetDetailPage: React.FC = () => {
       await deleteImageCategory(categoryId);
       showCategoryAlert('success', 'Category deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['datasetCategories', id] });
-    } catch (error) {
+    } catch {
       showCategoryAlert('error', 'Failed to delete category');
     }
   };
@@ -288,7 +288,7 @@ const DatasetDetailPage: React.FC = () => {
       setEditImageModalOpen(false);
       setEditingImage(null);
       queryClient.invalidateQueries({ queryKey: ['datasetImages', id] });
-    } catch (error) {
+    } catch {
       showCategoryAlert('error', 'Failed to update image');
     }
   };

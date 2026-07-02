@@ -483,7 +483,7 @@ export const getVisualizationTypes = async (req: Request, res: Response) => {
     const training_uuid = req.query.training_uuid as string;
     const epoch_uuid = req.query.epoch_uuid as string;
 
-    let query: any = {};
+    const query: any = {};
     
     if (epoch_uuid) {
       query.epoch_uuid = epoch_uuid;

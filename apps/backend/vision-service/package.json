@@ -9,8 +9,9 @@
     "build": "tsc",
     "test": "jest --passWithNoTests",
     "test:coverage": "jest --coverage --passWithNoTests",
-    "lint": "eslint . --ext ts --report-unused-disable-directives --max-warnings 0",
-    "upload-folder": "node upload-folder.js"
+    "lint": "eslint . --max-warnings 0",
+    "upload-folder": "node upload-folder.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "cors": "^2.8.6",
@@ -24,6 +25,7 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",

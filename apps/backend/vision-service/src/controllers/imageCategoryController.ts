@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import ImageCategory from '../models/ImageCategory';
+import DatasetImage from '../models/DatasetImage';
 
 export const createImageCategory = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -180,7 +181,6 @@ export const deleteCategory = async (req: Request, res: Response): Promise<void>
     }
 
     // Check if category is being used by any images
-    const DatasetImage = require('../models/DatasetImage').default;
     const imagesCount = await DatasetImage.countDocuments({ categoryId: id });
 
     if (imagesCount > 0) {

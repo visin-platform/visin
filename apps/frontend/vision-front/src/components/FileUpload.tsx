@@ -141,7 +141,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
           setUploadProgress((completed / files.length) * 100);
         } catch (err) {
           console.error(`Failed to upload ${file.name}:`, err);
-          throw new Error(`Failed to upload ${file.name}`);
+          throw new Error(`Failed to upload ${file.name}`, { cause: err });
         }
       }
 

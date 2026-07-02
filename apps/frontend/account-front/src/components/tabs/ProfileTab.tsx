@@ -89,7 +89,7 @@ const ProfileTab: React.FC = () => {
       } else {
         setMessage({ type: 'error', text: response.message || 'Failed to update profile' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: 'Failed to update profile' });
     } finally {
       setSaving(false);
