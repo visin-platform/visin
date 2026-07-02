@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.98](https://github.com/visin-platform/visin-monorepo/compare/v0.0.97...v0.0.98) (2026-07-02)
+
+
+### Features
+
+* cleanup dependencies ([eef64ee](https://github.com/visin-platform/visin-monorepo/commit/eef64eead5c14f7839059ef7f65547a9ff76d711))
+
 ### [0.0.97](https://github.com/visin-platform/visin-monorepo/compare/v0.0.96...v0.0.97) (2026-07-02)
 
 
