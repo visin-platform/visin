@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.94](https://github.com/visin-platform/visin-monorepo/compare/v0.0.93...v0.0.94) (2026-06-30)
+
+
+### Bug Fixes
+
+* validations and types ([94660a4](https://github.com/visin-platform/visin-monorepo/commit/94660a4efd4275a6a058d5b01c6af16e1c980485))
+
 ### [0.0.93](https://github.com/visin-platform/visin-monorepo/compare/v0.0.92...v0.0.93) (2026-06-30)
 
 
