@@ -61,7 +61,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
       );
     }
     next();
-  } catch (error) {
+  } catch {
     next();
   }
 };

@@ -110,7 +110,7 @@ export const useImageLabeling = () => {
         setCurrentImageIndex(newIndex);
         navigate(`/image-labeling/${images[newIndex]._id}`, { replace: true });
       }
-    } catch (error) {
+    } catch {
       showAlert('error', 'Failed to save label');
     } finally {
       setLabeling(false);

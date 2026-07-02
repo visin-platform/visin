@@ -101,7 +101,7 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
           aValue = a.metrics.avgEpochTime;
           bValue = b.metrics.avgEpochTime;
           break;
-        case 'bestEpoch':
+        case 'bestEpoch': {
           const aBestEpoch = a.epochs.reduce((best, epoch) => {
             const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
             const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
@@ -115,14 +115,16 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
           aValue = aBestEpoch ? aBestEpoch.epoch : -Infinity;
           bValue = bBestEpoch ? bBestEpoch.epoch : -Infinity;
           break;
-        case 'bestVmIoU':
+        }
+        case 'bestVmIoU': {
           const aBestVmIoU = Math.max(...a.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
           const bBestVmIoU = Math.max(...b.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
           aValue = aBestVmIoU;
           bValue = bBestVmIoU;
           break;
+        }
         case 'top10Avg':
-        default:
+        default: {
           const getTop10Avg = (comp: TrainingComparison) => {
             const vmIoUs = comp.epochs
               .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
@@ -136,6 +138,7 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
           aValue = getTop10Avg(a);
           bValue = getTop10Avg(b);
           break;
+        }
       }
 
       // Handle string comparison for training names

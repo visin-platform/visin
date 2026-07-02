@@ -88,16 +88,6 @@ const BenchmarksComparisonTable: React.FC<BenchmarksComparisonTableProps> = ({ b
       </Box>
     </TableCell>
   );
-  if (benchmarks.length === 0) {
-    return (
-      <Box sx={{ textAlign: 'center', py: 4 }}>
-        <Typography variant="body1" color="text.secondary">
-          No benchmarks available for comparison
-        </Typography>
-      </Box>
-    );
-  }
-
   // Separate CPU and GPU results
   const cpuResults = benchmarks.filter(b => 
     b.results && b.results.some((r: any) => r.device_type === 'cpu' || r.device?.toLowerCase().includes('cpu'))
@@ -222,6 +212,16 @@ const BenchmarksComparisonTable: React.FC<BenchmarksComparisonTableProps> = ({ b
       return cpuSortDirection === 'asc' ? comparison : -comparison;
     });
   }, [cpuResults, cpuSortColumn, cpuSortDirection]);
+
+  if (benchmarks.length === 0) {
+    return (
+      <Box sx={{ textAlign: 'center', py: 4 }}>
+        <Typography variant="body1" color="text.secondary">
+          No benchmarks available for comparison
+        </Typography>
+      </Box>
+    );
+  }
 
   // LaTeX generation functions
   const generateGpuLatex = () => {

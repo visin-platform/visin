@@ -84,7 +84,7 @@ const ClassRecallChart: React.FC<ClassRecallChartProps> = ({
     return classList.map((className, index) => {
       const classRecallData = epochs.map(epoch => {
         // Try validation results first
-        let valResults = epoch.results?.val as Record<string, any> || {};
+        const valResults = epoch.results?.val as Record<string, any> || {};
         let recallValue = valResults[className]?.recall;
 
         // Try training results if val doesn't have it
@@ -95,17 +95,17 @@ const ClassRecallChart: React.FC<ClassRecallChartProps> = ({
 
         // Try per_class structures as fallback
         if (recallValue === undefined) {
-          let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.val?.per_class as Record<string, any> || {};
           recallValue = perClass[className]?.recall;
         }
 
         if (recallValue === undefined) {
-          let perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.train?.per_class as Record<string, any> || {};
           recallValue = perClass[className]?.recall;
         }
 
         if (recallValue === undefined) {
-          let perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
           recallValue = perClass[className]?.recall;
         }
 

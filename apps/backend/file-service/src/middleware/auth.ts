@@ -34,7 +34,7 @@ export const requireSignedToken = (operation: TokenOperation) =>
       return;
     }
 
-    let valid = false;
+    let valid: boolean;
     try {
       valid = verifyToken(operation, fileId, expiresMs, token);
     } catch {

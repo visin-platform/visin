@@ -15,7 +15,7 @@ export const getComparisons = async (req: Request, res: Response): Promise<void>
       order = 'desc'
     } = req.query;
 
-    let query: any = { deletedAt: null };
+    const query: any = { deletedAt: null };
 
     // Search functionality
     if (search) {
@@ -211,7 +211,7 @@ export const getComparisonStats = async (req: Request, res: Response): Promise<v
   try {
     const { type, projectId } = req.query;
 
-    let query: any = { deletedAt: null };
+    const query: any = { deletedAt: null };
 
     // Filter by type if provided
     if (type) {

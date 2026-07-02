@@ -121,7 +121,7 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
           // Upload to API with current training ID
           await epochService.uploadEpoch(epochData, selectedTrainingId);
           successfulFiles.push(file.name);
-        } catch (err) {
+        } catch {
           failedFiles.push(file.name);
         }
       }

@@ -132,7 +132,7 @@ export const uploadFile = async (
     };
   } catch (error) {
     console.error('Failed to upload file to file-service:', error);
-    throw new Error('File upload failed');
+    throw new Error('File upload failed', { cause: error });
   }
 };
 
@@ -262,7 +262,7 @@ export const getUploadSignedUrl = async (
     return data.data.uploadUrl;
   } catch (error) {
     console.error(`Failed to generate upload URL for ${fileId}:`, error);
-    throw new Error('Failed to generate upload URL');
+    throw new Error('Failed to generate upload URL', { cause: error });
   }
 };
 
@@ -334,7 +334,7 @@ export const fileExists = async (fileId: string): Promise<boolean> => {
     });
 
     return response.ok;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -366,7 +366,7 @@ export const getFileMetadata = async (fileId: string): Promise<any> => {
     };
   } catch (error) {
     console.error(`Failed to get metadata for ${fileId}:`, error);
-    throw new Error('File not found');
+    throw new Error('File not found', { cause: error });
   }
 };
 
@@ -398,7 +398,7 @@ export const listFiles = async (prefix?: string, maxKeys: number = 1000) => {
     return data.data || [];
   } catch (error) {
     console.error('Failed to list files:', error);
-    throw new Error('Failed to list files');
+    throw new Error('Failed to list files', { cause: error });
   }
 };
 

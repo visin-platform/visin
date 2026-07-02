@@ -1,8 +1,6 @@
 import { Response } from 'express';
 import Project from '../models/Project';
 import Training from '../models/Training';
-import TestResult from '../models/TestResult';
-import EpochVisualization from '../models/EpochVisualization';
 import Benchmark from '../models/Benchmark';
 import { AuthRequest } from '../middleware/authMiddleware';
 
@@ -12,7 +10,7 @@ export const getProjects = async (req: AuthRequest, res: Response): Promise<void
     const userId = req.user?.id;
     const { search, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
 
-    let query: any = {
+    const query: any = {
       $or: [
         { isPublic: true }
       ]

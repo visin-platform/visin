@@ -59,6 +59,32 @@ jobs:
         id: set-matrix
         run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c 'map(select(. != "shared"))')" >> "$GITHUB_OUTPUT"
 
+  lint:
+    needs: changes
+    if: needs.changes.outputs.workspaces != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: ${{ fromJSON(needs.changes.outputs.workspaces) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 26
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --workspace=${{ matrix.workspace }}
+
+      - name: Typecheck
+        run: npm run typecheck --workspace=${{ matrix.workspace }}
+
   test:
     needs: changes
     if: needs.changes.outputs.workspaces != '[]'

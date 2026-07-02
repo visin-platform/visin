@@ -83,7 +83,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     try {
       const conf = getGlobalConfig();
       return conf.ACCOUNT_FRONT_URL || import.meta.env.VITE_ACCOUNT_FRONT_URL || 'http://localhost:3007';
-    } catch (err) {
+    } catch {
       return import.meta.env.VITE_ACCOUNT_FRONT_URL || 'http://localhost:3007';
     }
   };

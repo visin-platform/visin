@@ -21,14 +21,14 @@ export const verifyJWT = (token: string): UserPayload => {
   try {
     return jwt.verify(token, process.env.JWT_SECRET!) as UserPayload;
   } catch (error) {
-    throw new Error('Invalid or expired token');
+    throw new Error('Invalid or expired token', { cause: error });
   }
 };
 
 export const decodeJWT = (token: string): UserPayload | null => {
   try {
     return jwt.decode(token) as UserPayload;
-  } catch (error) {
+  } catch {
     return null;
   }
 };

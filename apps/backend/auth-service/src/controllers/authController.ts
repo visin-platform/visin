@@ -3,7 +3,7 @@ import { verifyGoogleToken } from '../services/googleAuthService';
 import { generateJWT, UserPayload } from '../services/jwtService';
 import { User } from '../models/User';
 
-export const validateToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const validateToken = async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
   try {
   const { idToken } = req.body;
     if (!idToken) {

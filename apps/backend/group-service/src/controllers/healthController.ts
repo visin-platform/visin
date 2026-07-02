@@ -24,7 +24,7 @@ export const healthCheck = async (req: Request, res: Response) => {
     };
 
     res.status(isMongoHealthy ? 200 : 503).json(healthResponse);
-  } catch (error) {
+  } catch {
     res.status(503).json({
       status: 'error',
       service: 'group-service',

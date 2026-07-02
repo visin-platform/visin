@@ -191,7 +191,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
             link.click();
             document.body.removeChild(link);
             return;
-          } catch (err) {
+          } catch {
             setError('Failed to generate download URL for MinIO path');
             return;
           }
@@ -206,7 +206,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
             link.click();
             document.body.removeChild(link);
             return;
-          } catch (err) {
+          } catch {
             setError('Failed to generate download URL for MinIO path');
             return;
           }

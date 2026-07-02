@@ -18,7 +18,7 @@ const StatusChip: React.FC<StatusChipProps> = ({ status }) => {
   let color = theme.palette.text.secondary;
   let bgcolor = theme.palette.action.hover;
   let icon = <PendingIcon style={{ fontSize: 16 }} />;
-  let label = status;
+  const label = status;
 
   switch (status) {
     case 'completed':

@@ -8,11 +8,7 @@ interface ContactFormData {
   message: string;
 }
 
-interface ContactFormProps {
-  // No props needed for inline form
-}
-
-const ContactForm: React.FC<ContactFormProps> = () => {
+const ContactForm: React.FC = () => {
   const [formData, setFormData] = useState<ContactFormData>({
     name: '',
     email: '',
@@ -62,7 +58,7 @@ const ContactForm: React.FC<ContactFormProps> = () => {
         setSubmitStatus('error');
         setErrorMessage(data.message || 'Failed to submit form');
       }
-    } catch (error) {
+    } catch {
       setSubmitStatus('error');
       setErrorMessage('Network error. Please try again.');
     } finally {

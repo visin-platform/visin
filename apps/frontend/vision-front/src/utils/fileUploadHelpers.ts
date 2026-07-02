@@ -10,8 +10,6 @@ export const processEpochFiles = async (
   files: FileList,
   trainingId: string
 ): Promise<UploadResult> => {
-  let successCount = 0;
-  let failureCount = 0;
   const successfulFiles: Array<{ name: string; operation: string }> = [];
   const failedFiles: Array<{ name: string; error: string }> = [];
 
@@ -21,7 +19,6 @@ export const processEpochFiles = async (
     if (!file.name.endsWith('.json')) {
       const error = 'Invalid file type (must be .json)';
       failedFiles.push({ name: file.name, error });
-      failureCount++;
       continue;
     }
 
@@ -41,7 +38,7 @@ export const processEpochFiles = async (
             trainingId
           });
           operation = 'updated';
-        } catch (updateErr) {
+        } catch {
           // If update fails, try to create new epoch
           await epochService.uploadEpoch(
             { ...epochData, trainingId },
@@ -59,11 +56,9 @@ export const processEpochFiles = async (
       }
 
       successfulFiles.push({ name: file.name, operation });
-      successCount++;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       failedFiles.push({ name: file.name, error: message });
-      failureCount++;
     }
   }
 
@@ -73,8 +68,6 @@ export const processEpochFiles = async (
 export const processTestResultFiles = async (
   files: FileList
 ): Promise<UploadResult> => {
-  let successCount = 0;
-  let failureCount = 0;
   const successfulFiles: Array<{ name: string; operation: string }> = [];
   const failedFiles: Array<{ name: string; error: string }> = [];
 
@@ -84,7 +77,6 @@ export const processTestResultFiles = async (
     if (!file.name.endsWith('.json')) {
       const error = 'Invalid file type (must be .json)';
       failedFiles.push({ name: file.name, error });
-      failureCount++;
       continue;
     }
 
@@ -96,11 +88,9 @@ export const processTestResultFiles = async (
       await testResultService.uploadTestResult(testResultData);
 
       successfulFiles.push({ name: file.name, operation: 'uploaded' });
-      successCount++;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       failedFiles.push({ name: file.name, error: message });
-      failureCount++;
     }
   }
 

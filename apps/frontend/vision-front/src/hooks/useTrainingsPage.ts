@@ -186,7 +186,7 @@ export const useTrainingsPage = () => {
 
   // Filter out trainings that have excluded tags
   const filteredTrainings = useMemo(() => {
-    let trainingsToFilter = allTrainings;
+    const trainingsToFilter = allTrainings;
     
     if (excludedTags.length === 0) {
       return shouldFetchAll ? allTrainings : trainingsToFilter;

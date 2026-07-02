@@ -93,7 +93,7 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
     return classList.map((className, index) => {
       const classAPData = epochs.map(epoch => {
         // Try validation results first
-        let valResults = epoch.results?.val as Record<string, any> || {};
+        const valResults = epoch.results?.val as Record<string, any> || {};
         let apValue = valResults[className]?.ap;
         if (apValue?.mean !== undefined) apValue = apValue.mean;
 
@@ -106,19 +106,19 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
 
         // Try per_class structures as fallback
         if (apValue === undefined) {
-          let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.val?.per_class as Record<string, any> || {};
           apValue = perClass[className]?.ap;
           if (apValue?.mean !== undefined) apValue = apValue.mean;
         }
 
         if (apValue === undefined) {
-          let perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.train?.per_class as Record<string, any> || {};
           apValue = perClass[className]?.ap;
           if (apValue?.mean !== undefined) apValue = apValue.mean;
         }
 
         if (apValue === undefined) {
-          let perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
           apValue = perClass[className]?.ap;
           if (apValue?.mean !== undefined) apValue = apValue.mean;
         }

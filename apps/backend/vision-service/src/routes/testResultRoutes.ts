@@ -3,7 +3,6 @@ import {
   getTestResults,
   getTestResultById,
   getTestResultByTestUuid,
-  getTestResultsByEpochUuid,
   createTestResult,
   createTestResultFromJson,
   updateTestResult,

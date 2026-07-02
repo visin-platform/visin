@@ -9,7 +9,7 @@ export const getDatasets = async (req: Request, res: Response): Promise<void> =>
   try {
     const { page = 1, limit = 10, search, sortBy = 'updatedAt', order = 'desc' } = req.query;
 
-    let query: any = { deletedAt: null };
+    const query: any = { deletedAt: null };
 
     // Search functionality
     if (search) {

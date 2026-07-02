@@ -1,7 +1,6 @@
 import express from 'express';
 import {
   getProjects,
-  getProjectById,
   getProjectByIdOrSlug,
   createProject,
   updateProject,

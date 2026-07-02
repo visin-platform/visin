@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';

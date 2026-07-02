@@ -84,7 +84,7 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
     return classList.map((className, index) => {
       const classF1Data = epochs.map(epoch => {
         // Try validation results first
-        let valResults = epoch.results?.val as Record<string, any> || {};
+        const valResults = epoch.results?.val as Record<string, any> || {};
         let f1Value = valResults[className]?.f1;
 
         // Try training results if val doesn't have it
@@ -95,17 +95,17 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
 
         // Try per_class structures as fallback
         if (f1Value === undefined) {
-          let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.val?.per_class as Record<string, any> || {};
           f1Value = perClass[className]?.f1;
         }
 
         if (f1Value === undefined) {
-          let perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.train?.per_class as Record<string, any> || {};
           f1Value = perClass[className]?.f1;
         }
 
         if (f1Value === undefined) {
-          let perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
           f1Value = perClass[className]?.f1;
         }
 
