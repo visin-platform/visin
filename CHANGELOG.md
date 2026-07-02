@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.95](https://github.com/visin-platform/visin-monorepo/compare/v0.0.94...v0.0.95) (2026-07-02)
+
+
+### Features
+
+* upgrade to node v26, setup unit tests ([f218e92](https://github.com/visin-platform/visin-monorepo/commit/f218e92c82379358f5a104a2bc93cf4ee65f3c0c))
+
 ### [0.0.94](https://github.com/visin-platform/visin-monorepo/compare/v0.0.93...v0.0.94) (2026-06-30)
 
 
