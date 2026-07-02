@@ -1,0 +1,90 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      workspaces: ${{ steps.set-matrix.outputs.workspaces }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect changed workspaces
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared: &shared
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/test.yml'
+            auth-service:
+              - *shared
+              - 'apps/backend/auth-service/**'
+            file-service:
+              - *shared
+              - 'apps/backend/file-service/**'
+            group-service:
+              - *shared
+              - 'apps/backend/group-service/**'
+            vision-service:
+              - *shared
+              - 'apps/backend/vision-service/**'
+            account-front:
+              - *shared
+              - 'apps/frontend/account-front/**'
+            auth-front:
+              - *shared
+              - 'apps/frontend/auth-front/**'
+            landing-front:
+              - *shared
+              - 'apps/frontend/landing-front/**'
+            vision-front:
+              - *shared
+              - 'apps/frontend/vision-front/**'
+
+      - name: Build workspace matrix
+        id: set-matrix
+        run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c 'map(select(. != "shared"))')" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.workspaces != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: ${{ fromJSON(needs.changes.outputs.workspaces) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 26
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage --workspace=${{ matrix.workspace }}
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.workspace }}
+          path: apps/*/${{ matrix.workspace }}/coverage/lcov.info
+          if-no-files-found: ignore

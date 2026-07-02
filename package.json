@@ -12,7 +12,8 @@
     "dev:back": "concurrently \"npm run dev --workspace=file-service\" \"npm run dev --workspace=auth-service\" \"npm run dev --workspace=group-service\" \"npm run dev --workspace=vision-service\"",
     "dev:front": "concurrently \"npm run dev --workspace=auth-front\" \"npm run dev --workspace=vision-front\" \"npm run dev --workspace=landing-front\" \"npm run dev --workspace=account-front\"",
     "lint": "npm run lint --workspaces",
-    "test": "npm run test --workspaces",
+    "test": "npm run test --workspaces --if-present",
+    "test:coverage": "npm run test:coverage --workspaces --if-present",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -51,6 +52,7 @@
     "@types/node": "^26.0.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/supertest": "^6.0.3",
     "@vitejs/plugin-react": "~5.1.1",
     "concurrently": "^10.0.3",
     "eslint": "^10.6.0",
@@ -58,6 +60,8 @@
     "jest": "^30.4.2",
     "nodemon": "^3.1.14",
     "prettier": "^3.9.4",
+    "supertest": "^7.1.0",
+    "ts-jest": "^29.4.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
   }
