@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.97](https://github.com/visin-platform/visin-monorepo/compare/v0.0.96...v0.0.97) (2026-07-02)
+
+
+### Features
+
+* setup linter and fix issues ([308846f](https://github.com/visin-platform/visin-monorepo/commit/308846fa42f9139bb867e2647cd245ccdcaac680))
+
 ### [0.0.96](https://github.com/visin-platform/visin-monorepo/compare/v0.0.95...v0.0.96) (2026-07-02)
 
 
