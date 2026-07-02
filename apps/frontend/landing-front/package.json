@@ -1,6 +1,11 @@
 {
   "name": "landing-front",
   "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/visin-platform/visin-monorepo.git",
+    "directory": "apps/frontend/landing-front"
+  },
   "type": "module",
   "author": "Toomas Tahves",
   "license": "MIT",

@@ -1,0 +1,49 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ['bug']
+body:
+  - type: dropdown
+    id: workspace
+    attributes:
+      label: Affected service or frontend
+      multiple: true
+      options:
+        - auth-service
+        - file-service
+        - group-service
+        - vision-service
+        - auth-front
+        - account-front
+        - landing-front
+        - vision-front
+        - infra / deployment
+        - other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect to happen, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the stack with `npm run dev`
+        2. Go to ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      render: shell
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: 'OS, Node version, browser (if frontend)'
