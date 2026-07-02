@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.96](https://github.com/visin-platform/visin-monorepo/compare/v0.0.95...v0.0.96) (2026-07-02)
+
+
+### Bug Fixes
+
+* test pipeline ([4a8601c](https://github.com/visin-platform/visin-monorepo/commit/4a8601c84c21edcf126e6830d81b0e4889b5cb99))
+
 ### [0.0.95](https://github.com/visin-platform/visin-monorepo/compare/v0.0.94...v0.0.95) (2026-07-02)
 
 
