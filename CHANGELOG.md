@@ -1,4 +1,42 @@
 # Visin Changelog
+### [0.0.100](https://github.com/visin-platform/visin-monorepo/compare/v0.0.89...v0.0.100) (2026-07-03)
+
+
+### Features
+
+* add contributing ([c704963](https://github.com/visin-platform/visin-monorepo/commit/c7049635b882c89fbb77e74ae1ac01749266c6db))
+* add documentations ([c7cf0d1](https://github.com/visin-platform/visin-monorepo/commit/c7cf0d164c47fb4841c3a09bb45353340372f44a))
+* add middleware to invalidate token endpoint ([e251da0](https://github.com/visin-platform/visin-monorepo/commit/e251da0d5fcf80f64cf37843bc63274fa293d612))
+* add rate limiting ([59b1fee](https://github.com/visin-platform/visin-monorepo/commit/59b1fee781650a1e4a94f055779275a845d086a6))
+* cleanup dependencies ([dac16d3](https://github.com/visin-platform/visin-monorepo/commit/dac16d390e6ccf41afbe9dcc87edcbb0f2d62d14))
+* setup linter and fix issues ([8070539](https://github.com/visin-platform/visin-monorepo/commit/807053912fdf25fd5703bbdb2c4b767798e15b5e))
+* update cors rules ([65a8922](https://github.com/visin-platform/visin-monorepo/commit/65a892242bc62122b76ca03162412d20a2a3f8ed))
+* update package lock ([67a87ee](https://github.com/visin-platform/visin-monorepo/commit/67a87eec669ca45a38ff59341a6129190087ac47))
+* upgrade depdencies ([1dde710](https://github.com/visin-platform/visin-monorepo/commit/1dde710ea3f15b8b08ebc39601f4d630e8da2c2e))
+* upgrade to node v26, setup unit tests ([b3fa369](https://github.com/visin-platform/visin-monorepo/commit/b3fa369fd2552d3b7c94aed7bc22dee1da00089a))
+
+
+### Bug Fixes
+
+* hardcoded values ([d90f4c2](https://github.com/visin-platform/visin-monorepo/commit/d90f4c2c64a3223b3ba92af85ff2644bed7d8710))
+* remove fallback secret key ([7231420](https://github.com/visin-platform/visin-monorepo/commit/72314205d3e3c56e05f546faa52864418c57c21f))
+* test pipeline ([d34ce09](https://github.com/visin-platform/visin-monorepo/commit/d34ce09e2894ac256fe39a4c821d6385f7bdbdd1))
+* validations and types ([1dde3eb](https://github.com/visin-platform/visin-monorepo/commit/1dde3ebfbf0f4be5a522e211193aaa7e0dac6c2a))
+
+
+### Chores
+
+* **release:** 0.0.90 ([f422f68](https://github.com/visin-platform/visin-monorepo/commit/f422f686e058b9f1ffa38351681f04d41fa73360))
+* **release:** 0.0.91 ([76428c1](https://github.com/visin-platform/visin-monorepo/commit/76428c1d26e0744866e7ac7d4fe6d8b4d7d5e90a))
+* **release:** 0.0.92 ([776a77d](https://github.com/visin-platform/visin-monorepo/commit/776a77dfa82253818ad034dcd7fe89c237282bc9))
+* **release:** 0.0.93 ([1e1147d](https://github.com/visin-platform/visin-monorepo/commit/1e1147d944eb25486403c69790db8a38c880b7fc))
+* **release:** 0.0.94 ([7be2a8b](https://github.com/visin-platform/visin-monorepo/commit/7be2a8bc35d2c2ad799e3ae646f1267edf3050c6))
+* **release:** 0.0.95 ([5d7c442](https://github.com/visin-platform/visin-monorepo/commit/5d7c442cb933cb8f37eb4c27a1406e3ea8dbe779))
+* **release:** 0.0.96 ([0980ba4](https://github.com/visin-platform/visin-monorepo/commit/0980ba447224b368bd893d310fae05c01e925252))
+* **release:** 0.0.97 ([29ce2ea](https://github.com/visin-platform/visin-monorepo/commit/29ce2ea718c7c29a87b83513dadfb8b55b771a66))
+* **release:** 0.0.98 ([f508749](https://github.com/visin-platform/visin-monorepo/commit/f5087495d72308f13396d2a86086ec4037e5c18a))
+* **release:** 0.0.99 ([71b1da9](https://github.com/visin-platform/visin-monorepo/commit/71b1da9d7c8b24a1a5e01eab1bb83bd873185ffa))
+
 ### [0.0.99](https://github.com/visin-platform/visin-monorepo/compare/v0.0.98...v0.0.99) (2026-07-02)
 
 
