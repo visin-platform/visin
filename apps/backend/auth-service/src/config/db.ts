@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { logger } from '@visin/backend-core';
 
 let connected = false;
 
@@ -8,6 +9,6 @@ export async function connectDb(uri?: string) {
   if (!mongoUri) throw new Error('MONGODB_URI not set');
   await mongoose.connect(mongoUri);
   connected = true;
-   
-  console.log('[auth-service] Mongo connected');
+
+  logger.info('[auth-service] Mongo connected');
 }

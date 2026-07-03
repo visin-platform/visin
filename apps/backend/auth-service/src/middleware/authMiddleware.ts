@@ -1,15 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyJWT, UserPayload } from '../services/jwtService';
+import { verifyJWT } from '../services/jwtService';
 import { User } from '../models/User';
-
-// Extend Request interface to include user
-declare global {
-  namespace Express {
-    interface Request {
-      user?: UserPayload;
-    }
-  }
-}
+// req.user is typed globally via @visin/backend-core's Express.Request
+// augmentation, active program-wide once index.ts imports that package —
+// no local declare global needed; a second, non-identical declaration here
+// would conflict.
 
 export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
   try {

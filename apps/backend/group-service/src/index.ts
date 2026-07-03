@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
+import { securityHeaders, requestLogger, errorHandler, logger } from '@visin/backend-core';
 import { authenticateToken } from './middleware/authMiddleware';
 import groupRoutes from './routes/groupRoutes';
 import { healthCheck } from './controllers/healthController';
@@ -11,6 +12,9 @@ import { healthCheck } from './controllers/healthController';
 dotenv.config();
 
 const app = express();
+app.use(securityHeaders);
+app.use(requestLogger);
+
 // Rate limiting
 app.use(rateLimit({ windowMs: 60_000, limit: 500, standardHeaders: true, legacyHeaders: false }));
 
@@ -29,7 +33,7 @@ app.use(cors({
 app.use(express.json()); // Add body parser middleware
 
 const MONGODB_URI = process.env.MONGODB_URI || '';
-mongoose.connect(MONGODB_URI).then(() => console.log('MongoDB connected')).catch(err => console.error('MongoDB connection error', { error: err.message }));
+mongoose.connect(MONGODB_URI).then(() => logger.info('MongoDB connected')).catch(err => logger.error('MongoDB connection error', { error: err.message }));
 
 // Health check endpoint
 app.get('/health', healthCheck);
@@ -40,5 +44,8 @@ app.use('/api/docs', express.static(path.join(__dirname, '../docs')));
 app.use('/api', authenticateToken);
 app.use('/api/groups', groupRoutes);
 
+// Must be mounted last, after all routes
+app.use(errorHandler);
+
 const PORT = process.env.PORT || 5006;
-app.listen(PORT, () => console.log('Group service started successfully', { port: PORT }));
+app.listen(PORT, () => logger.info('Group service started successfully', { port: PORT }));

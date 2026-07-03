@@ -3,6 +3,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
+import { securityHeaders, requestLogger, errorHandler, logger } from '@visin/backend-core';
 import connectDB from './config/database';
 import datasetRoutes from './routes/datasetRoutes';
 import trainingRoutes from './routes/trainingRoutes';
@@ -30,6 +31,9 @@ const app = express();
 const PORT = process.env.PORT || 4010;
 
 // Middleware
+app.use(securityHeaders);
+app.use(requestLogger);
+
 // Rate limiting
 app.use(rateLimit({ windowMs: 60_000, limit: 500, standardHeaders: true, legacyHeaders: false }));
 
@@ -72,7 +76,10 @@ app.use('/api/docs', express.static(path.join(__dirname, '../docs')));
 // Health check endpoint
 app.get('/health', healthCheck);
 
+// Must be mounted last, after all routes
+app.use(errorHandler);
+
 // Start the server
-app.listen(PORT, () => console.log(`Vision service started successfully on port ${PORT}`));
+app.listen(PORT, () => logger.info(`Vision service started successfully on port ${PORT}`));
 
 export default app;

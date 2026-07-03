@@ -11,22 +11,20 @@ import {
   compareTrainings
 } from '../controllers/trainingController';
 import { getConfigsByTraining } from '../controllers/configController';
-import { authMiddleware } from '../middleware/authMiddleware';
+import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
 
 const router = express.Router();
 
-// Apply auth middleware to all routes
-router.use(authMiddleware);
-
-router.get('/uuid/:uuid', getTrainingByUuid);
-router.get('/:id/epochs', getTrainingWithEpochs);
+// Reads are public + private (optional auth); writes require a logged-in owner.
+router.get('/uuid/:uuid', optionalAuthMiddleware, getTrainingByUuid);
+router.get('/:id/epochs', optionalAuthMiddleware, getTrainingWithEpochs);
 router.get('/:id/configs', getConfigsByTraining);
 router.get('/stats', getTrainingStats);
-router.get('/', getTrainings);
-router.get('/:id', getTrainingById);
-router.post('/', createTraining);
-router.put('/:id', updateTraining);
-router.delete('/:id', deleteTraining);
+router.get('/', optionalAuthMiddleware, getTrainings);
+router.get('/:id', optionalAuthMiddleware, getTrainingById);
+router.post('/', authMiddleware, createTraining);
+router.put('/:id', authMiddleware, updateTraining);
+router.delete('/:id', authMiddleware, deleteTraining);
 router.post('/compare', compareTrainings);
 
 export default router;

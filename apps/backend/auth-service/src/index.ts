@@ -3,6 +3,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+import { securityHeaders, requestLogger, errorHandler, logger } from '@visin/backend-core';
 import authRoutes from './routes/authRoutes';
 import { connectDb } from './config/db';
 import path from 'path';
@@ -12,7 +13,7 @@ import { healthCheck } from './controllers/healthController';
 dotenv.config();
 
 if (!process.env.JWT_SECRET) {
-  console.error('Fatal: JWT_SECRET environment variable must be set');
+  logger.error('Fatal: JWT_SECRET environment variable must be set');
   process.exit(1);
 }
 
@@ -20,6 +21,8 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 
 // Middleware
+app.use(securityHeaders);
+app.use(requestLogger);
 app.use(express.json());
 app.use(cookieParser());
 app.use(
@@ -60,13 +63,16 @@ app.get('/docs', (req: Request, res: Response) => {
 // Health check endpoint
 app.get('/health', healthCheck);
 
+// Must be mounted last, after all routes
+app.use(errorHandler);
+
 // Connect DB then start server
 connectDb()
   .then(() => {
-    app.listen(PORT, () => console.log('Auth service started successfully', { port: PORT }));
+    app.listen(PORT, () => logger.info('Auth service started successfully', { port: PORT }));
   })
   .catch((err) => {
-    console.error('Failed to start auth-service', { error: err.message, stack: err.stack });
+    logger.error('Failed to start auth-service', { error: err.message, stack: err.stack });
     process.exit(1);
   });
 

@@ -7,18 +7,16 @@ import {
   deleteProject,
   getProjectDashboardStats
 } from '../controllers/projectController';
-import { authMiddleware } from '../middleware/authMiddleware';
+import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
 
 const router = express.Router();
 
-// Apply auth middleware to all routes
-router.use(authMiddleware);
-
-router.get('/', getProjects);
-router.get('/:identifier', getProjectByIdOrSlug);
-router.get('/:id/dashboard-stats', getProjectDashboardStats);
-router.post('/', createProject);
-router.put('/:id', updateProject);
-router.delete('/:id', deleteProject);
+// Reads are public + private (optional auth); writes require a logged-in owner.
+router.get('/', optionalAuthMiddleware, getProjects);
+router.get('/:identifier', optionalAuthMiddleware, getProjectByIdOrSlug);
+router.get('/:id/dashboard-stats', optionalAuthMiddleware, getProjectDashboardStats);
+router.post('/', authMiddleware, createProject);
+router.put('/:id', authMiddleware, updateProject);
+router.delete('/:id', authMiddleware, deleteProject);
 
 export default router;

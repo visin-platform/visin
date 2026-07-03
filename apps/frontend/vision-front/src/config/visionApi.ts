@@ -1,3 +1,4 @@
+import { createApiClient, ApiError } from '@visin/frontend-core';
 import { getGlobalConfig } from './ConfigProvider';
 
 function getVisionApiUrl(): string {
@@ -10,77 +11,72 @@ function getVisionApiUrl(): string {
   }
 }
 
-// Base fetch wrapper
-export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
-  const token = localStorage.getItem('authToken');
-  const VISION_API_URL = getVisionApiUrl();
+const client = createApiClient({
+  baseUrl: () => `${getVisionApiUrl()}/api`,
+  getToken: () => localStorage.getItem('authToken')
+});
 
-  const requestConfig: RequestInit = {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-      ...(token && { Authorization: `Bearer ${token}` })
+function buildQueryString(params?: Record<string, any>): string {
+  if (!params) return '';
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      searchParams.append(key, String(value));
     }
-  };
-
-  const response = await fetch(`${VISION_API_URL}/api${endpoint}`, requestConfig);
-
-  if (!response.ok) {
-    console.error('API Error:', response.status, response.statusText);
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `API Error: ${response.status}`);
-  }
-
-  return response;
+  });
+  const queryString = searchParams.toString();
+  return queryString ? `?${queryString}` : '';
 }
 
-// Helper methods for common HTTP verbs
+/**
+ * Preserves the pre-existing `{ data }`-wrapping, plain-Error-throwing
+ * interface every caller in this app already expects (11 call sites across
+ * services/*.ts), while delegating the actual fetch/auth/error-parsing logic
+ * to the shared @visin/frontend-core client.
+ */
+function toLegacyError(error: unknown): Error {
+  if (error instanceof ApiError) {
+    console.error('API Error:', error.status, error.message);
+    return new Error(error.message);
+  }
+  return error instanceof Error ? error : new Error('API Error');
+}
+
 export const visionApi = {
   async get(endpoint: string, options?: { params?: Record<string, any> }): Promise<{ data: any }> {
-    let url = endpoint;
-    if (options?.params) {
-      const searchParams = new URLSearchParams();
-      Object.entries(options.params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          searchParams.append(key, String(value));
-        }
-      });
-      const paramString = searchParams.toString();
-      if (paramString) {
-        url += `?${paramString}`;
-      }
+    try {
+      const data = await client.get(endpoint + buildQueryString(options?.params));
+      return { data };
+    } catch (error) {
+      throw toLegacyError(error);
     }
-
-    const response = await apiFetch(url);
-    const data = await response.json();
-    return { data };
   },
 
   async post(endpoint: string, body?: any): Promise<{ data: any }> {
-    const response = await apiFetch(endpoint, {
-      method: 'POST',
-      body: body ? JSON.stringify(body) : undefined
-    });
-    const data = await response.json();
-    return { data };
+    try {
+      const data = await client.post(endpoint, body);
+      return { data };
+    } catch (error) {
+      throw toLegacyError(error);
+    }
   },
 
   async put(endpoint: string, body?: any): Promise<{ data: any }> {
-    const response = await apiFetch(endpoint, {
-      method: 'PUT',
-      body: body ? JSON.stringify(body) : undefined
-    });
-    const data = await response.json();
-    return { data };
+    try {
+      const data = await client.put(endpoint, body);
+      return { data };
+    } catch (error) {
+      throw toLegacyError(error);
+    }
   },
 
   async delete(endpoint: string): Promise<{ data: any }> {
-    const response = await apiFetch(endpoint, {
-      method: 'DELETE'
-    });
-    const data = await response.json();
-    return { data };
+    try {
+      const data = await client.delete(endpoint);
+      return { data };
+    } catch (error) {
+      throw toLegacyError(error);
+    }
   }
 };
 

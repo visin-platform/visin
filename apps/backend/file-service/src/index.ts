@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { securityHeaders, requestLogger, errorHandler, logger } from '@visin/backend-core';
 import routes from './routes/routes';
 
 dotenv.config();
@@ -10,12 +11,16 @@ dotenv.config();
 const REQUIRED_ENV = ['FILE_SERVICE_API_KEY', 'FILE_SERVICE_HMAC_SECRET'];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
+    logger.error(`Fatal: missing required environment variable: ${key}`);
     process.exit(1);
   }
 }
 
 const app = express();
 const PORT = process.env.PORT || 5002;
+
+app.use(securityHeaders);
+app.use(requestLogger);
 
 // Rate limiting
 const generalLimiter = rateLimit({ windowMs: 60_000, limit: 500, standardHeaders: true, legacyHeaders: false });
@@ -52,6 +57,9 @@ app.get('/health', (_req: Request, res: Response) => {
 // All file routes
 app.use('/', routes);
 
-app.listen(PORT, () => console.log(`File service started on port ${PORT}`));
+// Must be mounted last, after all routes
+app.use(errorHandler);
+
+app.listen(PORT, () => logger.info(`File service started on port ${PORT}`));
 
 export default app;

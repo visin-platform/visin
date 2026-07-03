@@ -12,6 +12,7 @@ services:
       - MONGODB_URI=${MONGODB_URI}
       - NODE_ENV=production
       - CORS_ORIGIN=${CORS_ORIGIN}
+      - JWT_SECRET=${JWT_SECRET}
       # File Service configuration
       - FILE_SERVICE_URL=${FILE_SERVICE_URL}
       - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}

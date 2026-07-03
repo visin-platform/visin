@@ -5,6 +5,14 @@
 
 import { AuthResponse, User } from '../types';
 import { getGlobalConfig } from '../config/ConfigProvider';
+import { authApiClient } from './authApiClient';
+
+interface VerifyResponse {
+  success: boolean;
+  authenticated: boolean;
+  user?: User | null;
+  token?: string;
+}
 
 export const authService = {
   // Initialize auth service
@@ -20,26 +28,8 @@ export const authService = {
   // Check authentication status
   async checkAuth(): Promise<AuthResponse> {
     try {
-      const config = getGlobalConfig();
-      const token = localStorage.getItem('authToken');
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      };
+      const data = await authApiClient.get<VerifyResponse>('/auth/verify', { credentials: 'include' });
 
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const response = await fetch(`${config.AUTH_SERVICE_URL}/auth/verify`, {
-        credentials: 'include',
-        headers
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
       if (data.success) {
         if (data.token) {
           localStorage.setItem('authToken', data.token);
@@ -70,27 +60,7 @@ export const authService = {
   // Logout user
   async logout(): Promise<boolean> {
     try {
-      const config = getGlobalConfig();
-      const token = localStorage.getItem('authToken');
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      };
-
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const response = await fetch(`${config.AUTH_SERVICE_URL}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-        headers
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await authApiClient.post<{ success: boolean }>('/auth/logout', undefined, { credentials: 'include' });
       if (data.success) {
         // Clear local storage auth token
         localStorage.removeItem('authToken');
@@ -112,29 +82,8 @@ export const authService = {
   // Get full profile info including firstName and lastName
   async getProfile(): Promise<User | null> {
     try {
-      const config = getGlobalConfig();
-      const token = localStorage.getItem('authToken');
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      };
-
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(`${config.AUTH_SERVICE_URL}/auth/profile`, {
-        credentials: 'include',
-        headers
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Profile fetch error:', response.status, errorText);
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.success ? data.user : null;
+      const data = await authApiClient.get<{ success: boolean; user?: User }>('/auth/profile', { credentials: 'include' });
+      return data.success ? (data.user ?? null) : null;
     } catch (error) {
       console.error('Get profile failed:', error);
       return null;

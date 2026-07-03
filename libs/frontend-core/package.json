@@ -1,0 +1,47 @@
+{
+  "name": "@visin/frontend-core",
+  "version": "0.1.2",
+  "description": "Shared frontend auth/API-client logic for Visin frontends",
+  "author": "Toomas Tahves",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/visin-platform/visin-monorepo.git",
+    "directory": "libs/frontend-core"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "release": "standard-version && npm run build && npm publish --access public",
+    "release:beta": "standard-version --prerelease beta && npm run build && npm publish --access public --tag beta",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "visin",
+    "frontend",
+    "shared",
+    "auth",
+    "api-client"
+  ],
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.0.1",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^10.6.0",
+    "jsdom": "^26.1.0",
+    "standard-version": "^9.5.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.1",
+    "vitest": "^3.2.4"
+  }
+}

@@ -12,7 +12,8 @@
   "license": "MIT",
   "workspaces": [
     "apps/frontend/*",
-    "apps/backend/*"
+    "apps/backend/*",
+    "libs/*"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev:back\" \"npm run dev:front\"",
