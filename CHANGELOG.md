@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.106](https://github.com/visin-platform/visin-monorepo/compare/v0.0.105...v0.0.106) (2026-07-04)
+
+
+### Bug Fixes
+
+* put back performance metrics ([fec6a2f](https://github.com/visin-platform/visin-monorepo/commit/fec6a2f62f346190f6bf8d621334a6e6544f2311))
+
 ### [0.0.105](https://github.com/visin-platform/visin-monorepo/compare/v0.0.104...v0.0.105) (2026-07-04)
 
 
