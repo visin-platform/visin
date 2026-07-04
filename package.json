@@ -1,6 +1,6 @@
 {
   "name": "visin",
-  "version": "0.0.100",
+  "version": "0.0.101",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/visin-platform/visin-monorepo.git"

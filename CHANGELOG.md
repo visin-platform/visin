@@ -1,4 +1,14 @@
 # Visin Changelog
+### [0.0.101](https://github.com/visin-platform/visin-monorepo/compare/v0.0.100...v0.0.101) (2026-07-04)
+
+
+### Features
+
+* create libraries with reusable functionality ([23b2e60](https://github.com/visin-platform/visin-monorepo/commit/23b2e60ff12e15b404ef759cebfc612e94374d2c))
+* create reusable code ([765c774](https://github.com/visin-platform/visin-monorepo/commit/765c774707fdeae77881307eca15ed67d32576c4))
+* setup e2e smoke tests ([6b0ef12](https://github.com/visin-platform/visin-monorepo/commit/6b0ef125520bfc276ebc800e576bb2a2b6f48b68))
+* upgrade material design dependencies ([83e9146](https://github.com/visin-platform/visin-monorepo/commit/83e914604a42fa8253a85dd20bacab9f4090958d))
+
 ### [0.0.100](https://github.com/visin-platform/visin-monorepo/compare/v0.0.89...v0.0.100) (2026-07-03)
 
 
