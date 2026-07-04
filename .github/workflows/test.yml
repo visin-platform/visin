@@ -93,6 +93,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build shared libraries
+        run: |
+          npm run build --workspace=@visin/backend-core
+          npm run build --workspace=@visin/frontend-core
+
       - name: Lint
         run: npm run lint --workspace=${{ matrix.workspace }}
 
@@ -118,6 +123,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Build shared libraries
+        run: |
+          npm run build --workspace=@visin/backend-core
+          npm run build --workspace=@visin/frontend-core
 
       - name: Run tests with coverage
         run: npm run test:coverage --workspace=${{ matrix.workspace }}
