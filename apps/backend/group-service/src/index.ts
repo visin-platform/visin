@@ -2,14 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 import path from 'path';
 import { securityHeaders, requestLogger, errorHandler, logger } from '@visin/backend-core';
 import { authenticateToken } from './middleware/authMiddleware';
 import groupRoutes from './routes/groupRoutes';
 import { healthCheck } from './controllers/healthController';
-
-dotenv.config();
 
 const app = express();
 

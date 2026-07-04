@@ -1,16 +1,12 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import { securityHeaders, requestLogger, errorHandler, logger } from '@visin/backend-core';
 import authRoutes from './routes/authRoutes';
 import { connectDb } from './config/db';
 import path from 'path';
 import { healthCheck } from './controllers/healthController';
-
-// Load environment variables
-dotenv.config();
 
 if (!process.env.JWT_SECRET) {
   logger.error('Fatal: JWT_SECRET environment variable must be set');

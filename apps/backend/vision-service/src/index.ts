@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 import path from 'path';
 import { securityHeaders, requestLogger, errorHandler, logger } from '@visin/backend-core';
 import connectDB from './config/database';
@@ -20,9 +19,6 @@ import apiTokenRoutes from './routes/apiTokenRoutes';
 import imageCategoryRoutes from './routes/imageCategoryRoutes';
 import { healthCheck } from './controllers/healthController';
 import { apiTokenMiddleware } from './middleware/apiTokenMiddleware';
-
-// Load environment variables
-dotenv.config();
 
 // Connect to MongoDB
 connectDB();

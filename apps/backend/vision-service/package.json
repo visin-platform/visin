@@ -9,8 +9,8 @@
   "author": "Toomas Tahves",
   "license": "MIT",
   "scripts": {
-    "start": "node dist/index.js",
-    "dev": "nodemon --exec ts-node src/index.ts",
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "dev": "nodemon --exec \"node --env-file-if-exists=.env -r ts-node/register\" src/index.ts",
     "build": "tsc",
     "test": "jest --passWithNoTests",
     "test:coverage": "jest --coverage --passWithNoTests",
@@ -20,7 +20,6 @@
   "dependencies": {
     "@visin/backend-core": "*",
     "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "mongoose": "^9.7.3"

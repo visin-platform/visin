@@ -1,11 +1,8 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 import { securityHeaders, requestLogger, errorHandler, logger } from '@visin/backend-core';
 import routes from './routes/routes';
-
-dotenv.config();
 
 // Validate required env vars at startup
 const REQUIRED_ENV = ['FILE_SERVICE_API_KEY', 'FILE_SERVICE_HMAC_SECRET'];
