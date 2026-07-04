@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.102](https://github.com/visin-platform/visin-monorepo/compare/v0.0.101...v0.0.102) (2026-07-04)
+
+
+### Features
+
+* remove dotenv ([7a3d9d6](https://github.com/visin-platform/visin-monorepo/commit/7a3d9d6ff1ac3971482045462ae980754823beaa))
+
 ### [0.0.101](https://github.com/visin-platform/visin-monorepo/compare/v0.0.100...v0.0.101) (2026-07-04)
 
 
