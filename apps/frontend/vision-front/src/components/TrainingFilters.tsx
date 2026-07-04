@@ -95,6 +95,7 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
                 placeholder={selectedTags.length === 0 ? "Filter by tags" : undefined}
                 size="small"
                 slotProps={{
+                  ...params.slotProps,
                   input: {
                     ...params.slotProps.input,
                     startAdornment: (
@@ -135,6 +136,7 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
                 placeholder={excludedTags.length === 0 ? "Exclude tags" : undefined}
                 size="small"
                 slotProps={{
+                  ...params.slotProps,
                   input: {
                     ...params.slotProps.input,
                     sx: { borderRadius: 2 }

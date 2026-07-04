@@ -53,6 +53,27 @@ graph LR
 
 Infrastructure in `apps/infra/`: Nginx reverse proxy, MongoDB, Cloudflare DDNS cron.
 
+### Auth
+
+User sessions ride an httpOnly `access_token` cookie issued by `auth-service` on Google sign-in (its domain is a
+shared parent across every Visin subdomain in production, so one cookie authenticates all four services).
+Backend services accept that cookie, falling back to an `Authorization: Bearer` header for non-browser callers —
+vision-service's project API tokens use that header path, never the cookie.
+
+Separately, **services calling each other** (not a user's browser) authenticate with an `X-Internal-Token` header,
+checked in one of two ways depending on who else may call the route:
+
+- **Service-only route** (e.g. an endpoint another backend calls but no frontend ever should): gate the whole
+  router with `requireInternalServiceToken` — missing/invalid token is rejected outright.
+- **Route shared by users and services** (e.g. group-service's group endpoints, which vision-service also calls
+  internally): mount `validateInternalServiceToken` globally so it *attaches* `req.isInternalService` when the
+  header is valid but never blocks, then gate each route with `allowUserOrInternalService` *after* the user auth
+  middleware — it passes if either the caller is a validated internal service or a logged-in user.
+
+Both live in `@visin/backend-core`'s `middleware/internalServiceAuth.ts`. Adding a new inter-service route means
+picking the right one of these two; skipping the gate on a route meant to be internal-only silently opens it to
+any authenticated user.
+
 ## Prerequisites
 
 - **Node.js 26+** (matches CI and the Docker images)

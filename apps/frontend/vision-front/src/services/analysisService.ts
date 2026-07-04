@@ -1,4 +1,4 @@
-import { getGlobalConfig } from '../config/ConfigProvider';
+import { visionApi } from '../config/visionApi';
 
 export interface AnalysisResponse {
   data: DatasetAnalysis[];
@@ -42,33 +42,14 @@ export interface AnalysisComparisonResponse {
  * Upload analysis JSON data
  */
 export const uploadAnalysis = async (analysisData: any): Promise<DatasetAnalysis> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/analysis/upload`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(analysisData)
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to upload analysis');
-  }
-
-  const data = await response.json();
-  return data.data;
+  const response = await visionApi.post('/analysis/upload', analysisData);
+  return response.data.data;
 };
 
 /**
  * Create new dataset analysis (without data initially)
  */
 export const createAnalysis = async (datasetName: string, downloadUrl?: string, size?: string): Promise<DatasetAnalysis> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
   const body: any = { dataset: datasetName };
   if (downloadUrl) {
     body.downloadUrl = downloadUrl;
@@ -77,21 +58,8 @@ export const createAnalysis = async (datasetName: string, downloadUrl?: string, 
     body.size = size;
   }
 
-  const response = await fetch(`${apiUrl}/api/analysis/upload`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to create analysis');
-  }
-
-  const data = await response.json();
-  return data.data;
+  const response = await visionApi.post('/analysis/upload', body);
+  return response.data.data;
 };
 
 /**
@@ -102,27 +70,13 @@ export const getAllAnalyses = async (
   skip: number = 0,
   dataset?: string
 ): Promise<AnalysisResponse> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const params = new URLSearchParams({ limit: String(limit), skip: String(skip) });
+  const params: Record<string, any> = { limit, skip };
   if (dataset) {
-    params.append('dataset', dataset);
+    params.dataset = dataset;
   }
 
-  const response = await fetch(`${apiUrl}/api/analysis?${params.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch analyses');
-  }
-
-  return response.json();
+  const response = await visionApi.get('/analysis', { params });
+  return response.data;
 };
 
 /**
@@ -133,112 +87,37 @@ export const getAnalysesByDataset = async (
   limit: number = 50,
   skip: number = 0
 ): Promise<AnalysisResponse> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const params = new URLSearchParams({ limit: String(limit), skip: String(skip) });
-
-  const response = await fetch(`${apiUrl}/api/analysis/dataset/${datasetName}?${params.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch analyses');
-  }
-
-  return response.json();
+  const response = await visionApi.get(`/analysis/dataset/${datasetName}`, { params: { limit, skip } });
+  return response.data;
 };
 
 /**
  * Get analysis by ID
  */
 export const getAnalysisById = async (id: string): Promise<DatasetAnalysis> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/analysis/${id}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch analysis');
-  }
-
-  const data = await response.json();
-  return data.data;
+  const response = await visionApi.get(`/analysis/${id}`);
+  return response.data.data;
 };
 
 /**
  * Update analysis by ID
  */
 export const updateAnalysis = async (id: string, analysisData: any): Promise<DatasetAnalysis> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/analysis/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(analysisData)
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to update analysis');
-  }
-
-  const data = await response.json();
-  return data.data;
+  const response = await visionApi.put(`/analysis/${id}`, analysisData);
+  return response.data.data;
 };
 
 /**
  * Delete analysis by ID
  */
 export const deleteAnalysis = async (id: string): Promise<void> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/analysis/${id}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to delete analysis');
-  }
+  await visionApi.delete(`/analysis/${id}`);
 };
 
 /**
  * Compare multiple analyses
  */
 export const compareAnalyses = async (analysisIds: string[]): Promise<AnalysisComparisonResponse> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/analysis/compare`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ analysisIds })
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to compare analyses');
-  }
-
-  return response.json();
+  const response = await visionApi.post('/analysis/compare', { analysisIds });
+  return response.data;
 };

@@ -7,6 +7,17 @@ import { User } from '../models/User';
 // no local declare global needed; a second, non-identical declaration here
 // would conflict.
 
+/**
+ * Deliberately not folded into @visin/backend-core's authenticateToken, even
+ * though both now extract the token the same way (cookie, then Authorization
+ * header): this one layers a tokenVersion check against the User collection
+ * on every request, so a password/security-relevant change can invalidate
+ * every outstanding JWT immediately instead of waiting for expiry. That
+ * requires a DB round-trip and this service's User model — a cost/dependency
+ * the other three services (group/file/vision) don't need for their own
+ * routes, so the shared middleware stays a pure, stateless JWT verify and
+ * this one stays local.
+ */
 export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.cookies?.access_token || req.headers.authorization?.replace('Bearer ', '');

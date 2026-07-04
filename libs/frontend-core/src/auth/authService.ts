@@ -1,4 +1,4 @@
-import { createApiClient } from '../apiClient';
+import { createApiClient, ApiError } from '../apiClient';
 
 /**
  * Fields observed across the auth-service endpoints frontends call:
@@ -31,44 +31,54 @@ export interface AuthServiceOptions {
 }
 
 /**
- * Session-management logic shared by every Visin frontend: token storage,
- * `/auth/verify` + `/auth/profile` checks, logout, and the redirect to
- * auth-front's login page. Each app previously hand-rolled this
+ * Session-management logic shared by every Visin frontend: `/auth/verify` +
+ * `/auth/profile` checks, logout, and the redirect to auth-front's login
+ * page. Auth rides the shared `access_token` httpOnly cookie (see
+ * `createApiClient`) rather than a token this service has to store itself.
+ * Each app previously hand-rolled this
  * (`account-front/services/authService.ts`, `vision-front/contexts/AuthContext.tsx`)
  * with near-identical but subtly diverging logic; wrap the result in
  * `createAuthContext` for a React Context/hook, or use it directly for a
  * plain-object service.
  */
 export function createAuthService({ authServiceUrl, authFrontUrl }: AuthServiceOptions) {
-  const client = createApiClient({
-    baseUrl: authServiceUrl,
-    getToken: () => localStorage.getItem('authToken')
-  });
+  const client = createApiClient({ baseUrl: authServiceUrl });
 
-  function getToken(): string | null {
-    return localStorage.getItem('authToken');
-  }
+  // Shared by concurrent callers (e.g. React StrictMode's double effect-invoke
+  // in development, or multiple components independently checking auth on
+  // first mount) so they trigger one /auth/verify request, not one each.
+  // Cleared once it settles, so the next distinct check gets a fresh request.
+  let inFlightCheck: Promise<AuthCheckResult> | null = null;
 
-  async function checkAuth(): Promise<AuthCheckResult> {
-    try {
-      const data = await client.get<{ success: boolean; authenticated: boolean; user?: AuthUser; token?: string }>(
-        '/auth/verify',
-        { credentials: 'include', skipAuthRedirect: true }
-      );
-
-      if (data.success) {
-        if (data.token) {
-          localStorage.setItem('authToken', data.token);
-        }
-        return { authenticated: data.authenticated, user: data.user ?? null };
-      }
-      localStorage.removeItem('authToken');
-      return { authenticated: false, user: null };
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      localStorage.removeItem('authToken');
-      return { authenticated: false, user: null };
+  function checkAuth(): Promise<AuthCheckResult> {
+    if (inFlightCheck) {
+      return inFlightCheck;
     }
+
+    inFlightCheck = (async () => {
+      try {
+        const data = await client.get<{ success: boolean; authenticated: boolean; user?: AuthUser }>(
+          '/auth/verify',
+          { skipAuthRedirect: true }
+        );
+
+        if (data.success) {
+          return { authenticated: data.authenticated, user: data.user ?? null };
+        }
+        return { authenticated: false, user: null };
+      } catch (error) {
+        // A 401 here just means "not logged in" — the normal state for an
+        // anonymous visitor, not a bug worth an error-level log.
+        if (!(error instanceof ApiError && error.status === 401)) {
+          console.error('Auth check failed:', error);
+        }
+        return { authenticated: false, user: null };
+      } finally {
+        inFlightCheck = null;
+      }
+    })();
+
+    return inFlightCheck;
   }
 
   async function getCurrentUser(): Promise<AuthUser | null> {
@@ -78,7 +88,7 @@ export function createAuthService({ authServiceUrl, authFrontUrl }: AuthServiceO
 
   async function getProfile(): Promise<AuthUser | null> {
     try {
-      const data = await client.get<{ success: boolean; user?: AuthUser }>('/auth/profile', { credentials: 'include' });
+      const data = await client.get<{ success: boolean; user?: AuthUser }>('/auth/profile');
       return data.success ? (data.user ?? null) : null;
     } catch (error) {
       console.error('Get profile failed:', error);
@@ -93,10 +103,7 @@ export function createAuthService({ authServiceUrl, authFrontUrl }: AuthServiceO
 
   async function logout(): Promise<boolean> {
     try {
-      const data = await client.post<{ success: boolean }>('/auth/logout', undefined, { credentials: 'include' });
-      if (data.success) {
-        localStorage.removeItem('authToken');
-      }
+      const data = await client.post<{ success: boolean }>('/auth/logout');
       return data.success;
     } catch (error) {
       console.error('Logout failed:', error);
@@ -109,7 +116,7 @@ export function createAuthService({ authServiceUrl, authFrontUrl }: AuthServiceO
     window.location.href = `${authFrontUrl()}?redirect_uri=${encodeURIComponent(currentUrl)}`;
   }
 
-  return { getToken, checkAuth, getCurrentUser, getProfile, isAuthenticated, logout, redirectToLogin };
+  return { checkAuth, getCurrentUser, getProfile, isAuthenticated, logout, redirectToLogin };
 }
 
 export type AuthService = ReturnType<typeof createAuthService>;

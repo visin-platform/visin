@@ -20,12 +20,13 @@ import {
 import { Code as CodeIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import LatexModal from '../common/LatexModal';
-
-interface ComparisonData {
-  aggregatedResults: any;
-  training: { _id: string; name: string };
-  testResultsCount: number;
-}
+import {
+  type ComparisonData,
+  getBestValues,
+  sortComparisonData,
+  formatMetricNumber,
+  generateConditionLatex
+} from './performanceMetricsUtils';
 
 interface PerformanceMetricsTableProps {
   comparisonData: ComparisonData[];
@@ -78,42 +79,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
   // Get sorted data for a specific condition
   const getSortedData = (condition: string) => {
     const { column, direction } = sortStates[condition];
-    return [...comparisonData].sort((a, b) => {
-      let aValue: number = -Infinity;
-      let bValue: number = -Infinity;
-      let aString: string = '';
-      let bString: string = '';
-
-      if (column === 'training') {
-        aString = a.training.name.toLowerCase();
-        bString = b.training.name.toLowerCase();
-      } else if (column === 'overall_fw_iou') {
-        // Handle overall FW IoU sorting
-        const conditionDataA = a.aggregatedResults?.[condition];
-        const conditionDataB = b.aggregatedResults?.[condition];
-        aValue = conditionDataA?.overall?.fw_iou?.mean ?? -Infinity;
-        bValue = conditionDataB?.overall?.fw_iou?.mean ?? -Infinity;
-      } else {
-        // Parse column format: "class_metric" (e.g., "human_iou", "sign_precision")
-        const [className, metric] = column.split('_');
-        const conditionDataA = a.aggregatedResults?.[condition];
-        const conditionDataB = b.aggregatedResults?.[condition];
-        const classMetricsA = conditionDataA?.[className];
-        const classMetricsB = conditionDataB?.[className];
-        aValue = classMetricsA?.[metric]?.mean ?? -Infinity;
-        bValue = classMetricsB?.[metric]?.mean ?? -Infinity;
-      }
-
-      // Handle string comparison for training names
-      if (column === 'training') {
-        const comparison = aString.localeCompare(bString);
-        return direction === 'asc' ? comparison : -comparison;
-      }
-
-      // Handle numeric comparison
-      const comparison = aValue - bValue;
-      return direction === 'asc' ? comparison : -comparison;
-    });
+    return sortComparisonData(comparisonData, condition, column, direction);
   };
 
   // Helper component for sortable table headers
@@ -154,138 +120,15 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
     );
   };
 
-  // Generate LaTeX for a specific performance metrics condition
-  const generateConditionLatex = (condition: string) => {
-    const classNames = ['human', 'sign', 'vehicle'];
-    const conditionTitle = condition.replace('_', ' ').toUpperCase();
-
-    let latex = `\\begin{table*}[t]\n\\centering\n\\caption{Test Results Performance Metrics - ${conditionTitle}}\n\\label{tab:performance_metrics_${condition}}\n`;
-    latex += `\\begin{tabular}{|l|${'c|c|c|c|c|'.repeat(classNames.length)}c|}\n\\hline\n`;
-
-    // Header row with class names
-    latex += 'Training & ';
-    classNames.forEach((className, index) => {
-      const classTitle = className.charAt(0).toUpperCase() + className.slice(1);
-      latex += `${classTitle} IoU & ${classTitle} Prec. & ${classTitle} Rec. & ${classTitle} F1 & ${classTitle} AP`;
-      if (index < classNames.length - 1) {
-        latex += ' & ';
-      }
-    });
-    latex += ' & FW IoU \\\\\n\\hline\n';
-
-    // Data rows for each training
-    comparisonData.forEach(comp => {
-      const trainingName = comp.training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
-      const conditionData = comp.aggregatedResults?.[condition];
-      latex += `${trainingName} `;
-
-      classNames.forEach((className) => {
-        const classMetrics = conditionData?.[className];
-        const bestValues = getBestValues(condition, className);
-
-        // IoU
-        if (classMetrics?.iou?.mean !== undefined) {
-          const isBest = classMetrics.iou.mean === bestValues.iou;
-          const boldStart = isBest ? '\\textbf{' : '';
-          const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.iou.mean * multiplier).toFixed(decimals)}${boldEnd} `;
-        } else {
-          latex += '& N/A ';
-        }
-
-        // Precision
-        if (classMetrics?.precision?.mean !== undefined) {
-          const isBest = classMetrics.precision.mean === bestValues.precision;
-          const boldStart = isBest ? '\\textbf{' : '';
-          const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.precision.mean * multiplier).toFixed(decimals)}${boldEnd} `;
-        } else {
-          latex += '& N/A ';
-        }
-
-        // Recall
-        if (classMetrics?.recall?.mean !== undefined) {
-          const isBest = classMetrics.recall.mean === bestValues.recall;
-          const boldStart = isBest ? '\\textbf{' : '';
-          const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.recall.mean * multiplier).toFixed(decimals)}${boldEnd} `;
-        } else {
-          latex += '& N/A ';
-        }
-
-        // F1
-        if (classMetrics?.f1_score?.mean !== undefined) {
-          const isBest = classMetrics.f1_score.mean === bestValues.f1_score;
-          const boldStart = isBest ? '\\textbf{' : '';
-          const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.f1_score.mean * multiplier).toFixed(decimals)}${boldEnd} `;
-        } else {
-          latex += '& N/A ';
-        }
-
-        // AP
-        if (classMetrics?.ap?.mean !== undefined) {
-          const isBest = classMetrics.ap.mean === bestValues.ap;
-          const boldStart = isBest ? '\\textbf{' : '';
-          const boldEnd = isBest ? '}' : '';
-          latex += `& ${boldStart}${(classMetrics.ap.mean * multiplier).toFixed(decimals)}${boldEnd} `;
-        } else {
-          latex += '& N/A ';
-        }
-      });
-
-      // FW IoU
-      if (conditionData?.overall?.fw_iou?.mean !== undefined) {
-        latex += `& ${(conditionData.overall.fw_iou.mean * multiplier).toFixed(decimals)} `;
-      } else {
-        latex += '& N/A ';
-      }
-
-      latex += '\\\\ \\hline\n';
-    });
-
-    latex += '\\end{tabular}\n\\end{table*}';
-
-    return latex;
-  };
-
   const handleGenerateLatex = (condition: string) => {
-    const latex = generateConditionLatex(condition);
+    const latex = generateConditionLatex(comparisonData, condition, decimals, multiplier);
     const conditionTitle = condition.replace('_', ' ').toUpperCase();
     setLatexCode(latex);
     setLatexTitle(`Performance Metrics LaTeX Code - ${conditionTitle}`);
     setLatexModalOpen(true);
   };
 
-  const formatNumber = (value: any): string => {
-    if (typeof value === 'number' && !isNaN(value)) {
-      return (value * multiplier).toFixed(decimals);
-    }
-    return 'N/A';
-  };
-
-  // Helper function to find the best (maximum) value for each metric across all trainings
-  const getBestValues = (condition: string, className: string) => {
-    const bestValues: { [key: string]: number } = {};
-    
-    comparisonData.forEach((comp) => {
-      const conditionData = comp.aggregatedResults?.[condition];
-      const classMetrics = conditionData?.[className];
-      
-      if (classMetrics) {
-        ['iou', 'precision', 'recall', 'f1_score', 'ap'].forEach((metric) => {
-          const metricData = classMetrics[metric];
-          if (metricData?.mean !== undefined) {
-            if (bestValues[metric] === undefined || metricData.mean > bestValues[metric]) {
-              bestValues[metric] = metricData.mean;
-            }
-          }
-        });
-      }
-    });
-    
-    return bestValues;
-  };
+  const formatNumber = (value: unknown): string => formatMetricNumber(value, decimals, multiplier);
 
   if (comparisonData.length === 0) return null;
 
@@ -397,7 +240,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                       {classNames.map((className) => {
                         const conditionData = comp.aggregatedResults?.[condition];
                         const classMetrics = conditionData?.[className];
-                        const bestValues = getBestValues(condition, className);
+                        const bestValues = getBestValues(comparisonData, condition, className);
 
                         return (
                           <React.Fragment key={className}>

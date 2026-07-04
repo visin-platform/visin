@@ -18,7 +18,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { ImageCategory } from '../../services/datasetImageService';
+import { ImageCategory } from '../../services/imageCategoryService';
 
 interface DatasetCategoriesTabProps {
   categories: ImageCategory[];

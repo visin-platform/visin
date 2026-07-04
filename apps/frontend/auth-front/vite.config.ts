@@ -36,6 +36,14 @@ export default defineConfig(({ mode }) => {
         reporter: ['text', 'lcov'],
         include: ['src/**/*.{ts,tsx}'],
         exclude: ['src/test/**', 'src/main.tsx', 'src/**/*.d.ts'],
+        // Floor set just below current coverage so CI catches regressions;
+        // ratchet these up as more tests are added.
+        thresholds: {
+          statements: 22,
+          branches: 15,
+          functions: 35,
+          lines: 22,
+        },
       },
     },
   };

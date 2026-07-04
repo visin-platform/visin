@@ -12,8 +12,7 @@ function getVisionApiUrl(): string {
 }
 
 const client = createApiClient({
-  baseUrl: () => `${getVisionApiUrl()}/api`,
-  getToken: () => localStorage.getItem('authToken')
+  baseUrl: () => `${getVisionApiUrl()}/api`
 });
 
 function buildQueryString(params?: Record<string, any>): string {

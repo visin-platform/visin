@@ -25,7 +25,8 @@ import {
   Delete as DeleteIcon,
   PhotoLibrary as PhotoLibraryIcon
 } from '@mui/icons-material';
-import { getUploadSignedUrl, uploadFileToSignedUrl, createDatasetImage, getCategoriesByDataset } from '../services/datasetImageService';
+import { getUploadSignedUrl, uploadFileToSignedUrl, createDatasetImage } from '../services/datasetImageService';
+import { getCategoriesByDataset } from '../services/imageCategoryService';
 
 interface FileUploadProps {
   datasetId: string;

@@ -6,26 +6,26 @@ describe('createApiClient', () => {
     vi.restoreAllMocks();
   });
 
-  it('attaches a Bearer token from getToken()', async () => {
+  it('sends credentials: include by default, so the shared auth cookie rides along', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const client = createApiClient({ baseUrl: () => 'http://api.test', getToken: () => 'tok123' });
+    const client = createApiClient({ baseUrl: () => 'http://api.test' });
     await client.get('/things');
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers.Authorization).toBe('Bearer tok123');
+    expect(init.credentials).toBe('include');
   });
 
-  it('omits Authorization when there is no token', async () => {
+  it('lets a caller override credentials for a single request', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const client = createApiClient({ baseUrl: () => 'http://api.test', getToken: () => null });
-    await client.get('/things');
+    const client = createApiClient({ baseUrl: () => 'http://api.test' });
+    await client.get('/things', { credentials: 'omit' });
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers.Authorization).toBeUndefined();
+    expect(init.credentials).toBe('omit');
   });
 
   it('calls onUnauthorized on a 401 response', async () => {

@@ -1,6 +1,5 @@
 import express, { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
-import cookieParser from 'cookie-parser';
 import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler } from '@visin/backend-core';
 import authRoutes from './routes/authRoutes';
 import path from 'path';
@@ -12,13 +11,13 @@ if (!process.env.JWT_SECRET) {
 
 const PORT = process.env.PORT || 5001;
 
+// createBaseApp already mounts cookieParser() — req.cookies is populated
+// before this point.
 const app = createBaseApp({
   corsMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id'],
   corsExposedHeaders: ['Content-Type', 'Content-Length', 'ETag', 'Cache-Control']
 });
-
-app.use(cookieParser());
 
 // Extra rate limit on the login endpoint, on top of the general limiter
 const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });

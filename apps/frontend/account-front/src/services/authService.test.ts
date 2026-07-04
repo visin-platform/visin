@@ -6,65 +6,57 @@ vi.mock('../config/ConfigProvider', () => ({
 
 import { authService } from './authService';
 
-// Node's own experimental global `localStorage` shadows jsdom's polyfill in
-// this test environment (unrelated to app code, which always runs in a real
-// browser) — stub it explicitly rather than relying on jsdom to provide it.
-function makeLocalStorageStub() {
-  const store = new Map<string, string>();
-  return {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => { store.set(key, value); },
-    removeItem: (key: string) => { store.delete(key); },
-    clear: () => { store.clear(); }
-  };
-}
-
 describe('authService', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.stubGlobal('localStorage', makeLocalStorageStub());
   });
 
   describe('checkAuth', () => {
-    it('returns authenticated + user and stores a refreshed token', async () => {
+    it('returns authenticated + user, sending the shared auth cookie', async () => {
       const fetchMock = vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ success: true, authenticated: true, user: { id: 'u1' }, token: 'new-tok' }), { status: 200 })
+        new Response(JSON.stringify({ success: true, authenticated: true, user: { id: 'u1' } }), { status: 200 })
       );
       vi.stubGlobal('fetch', fetchMock);
 
       const result = await authService.checkAuth();
 
       expect(result).toEqual({ authenticated: true, user: { id: 'u1' } });
-      expect(localStorage.getItem('authToken')).toBe('new-tok');
       const [, init] = fetchMock.mock.calls[0];
       expect(init.credentials).toBe('include');
     });
 
-    it('clears the token and returns unauthenticated when success is false', async () => {
-      localStorage.setItem('authToken', 'stale');
+    it('returns unauthenticated when success is false', async () => {
       const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 200 }));
       vi.stubGlobal('fetch', fetchMock);
 
       const result = await authService.checkAuth();
 
       expect(result).toEqual({ authenticated: false, user: null });
-      expect(localStorage.getItem('authToken')).toBeNull();
     });
 
-    it('clears the token and returns unauthenticated on a request failure', async () => {
-      localStorage.setItem('authToken', 'stale');
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'nope' }), { status: 401 })));
+    it('returns unauthenticated on a 401 without logging an error (a logged-out visitor is normal, not a bug)', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'Access token required' }), { status: 401 })));
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const result = await authService.checkAuth();
 
       expect(result).toEqual({ authenticated: false, user: null });
-      expect(localStorage.getItem('authToken')).toBeNull();
+      expect(consoleError).not.toHaveBeenCalled();
+    });
+
+    it('logs an error and returns unauthenticated for a non-401 failure', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'boom' }), { status: 500 })));
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await authService.checkAuth();
+
+      expect(result).toEqual({ authenticated: false, user: null });
+      expect(consoleError).toHaveBeenCalledWith('Auth check failed:', expect.anything());
     });
   });
 
   describe('logout', () => {
-    it('clears the token and returns true on success', async () => {
-      localStorage.setItem('authToken', 'tok');
+    it('returns true on success', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 })));
       // reload isn't implemented in jsdom's default Location
       Object.defineProperty(window, 'location', { value: { ...window.location, reload: vi.fn() }, writable: true });
@@ -72,7 +64,6 @@ describe('authService', () => {
       const result = await authService.logout();
 
       expect(result).toBe(true);
-      expect(localStorage.getItem('authToken')).toBeNull();
     });
 
     it('returns false on a failed request without throwing', async () => {

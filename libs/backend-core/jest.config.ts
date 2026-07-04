@@ -13,6 +13,16 @@ const config: Config = {
   ],
   coverageReporters: ['text', 'lcov'],
   coverageDirectory: 'coverage',
+  // Floor set just below current coverage so CI catches regressions;
+  // ratchet these up as more tests are added.
+  coverageThreshold: {
+    global: {
+      statements: 78,
+      branches: 55,
+      functions: 78,
+      lines: 78,
+    },
+  },
 };
 
 export default config;

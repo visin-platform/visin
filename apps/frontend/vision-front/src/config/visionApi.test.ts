@@ -6,23 +6,9 @@ vi.mock('./ConfigProvider', () => ({
 
 import { visionApi } from './visionApi';
 
-// Node's own experimental global `localStorage` shadows jsdom's polyfill in
-// this test environment (unrelated to app code, which always runs in a real
-// browser) — stub it explicitly rather than relying on jsdom to provide it.
-function makeLocalStorageStub() {
-  const store = new Map<string, string>();
-  return {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => { store.set(key, value); },
-    removeItem: (key: string) => { store.delete(key); },
-    clear: () => { store.clear(); }
-  };
-}
-
 describe('visionApi', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.stubGlobal('localStorage', makeLocalStorageStub());
   });
 
   it('GET wraps the response in { data } and appends the /api prefix + query params', async () => {
@@ -36,15 +22,14 @@ describe('visionApi', () => {
     expect(url).toBe('http://vision-api.test/api/datasets?page=1&search=x');
   });
 
-  it('attaches the localStorage authToken as a Bearer header', async () => {
-    localStorage.setItem('authToken', 'tok123');
+  it('sends the shared auth cookie along with every request', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
     await visionApi.get('/projects');
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers.Authorization).toBe('Bearer tok123');
+    expect(init.credentials).toBe('include');
   });
 
   it('POST/PUT send a JSON body and return { data }', async () => {

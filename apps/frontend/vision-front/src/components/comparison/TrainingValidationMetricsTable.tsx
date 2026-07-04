@@ -21,6 +21,14 @@ import { Link } from 'react-router-dom';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { TrainingComparison } from '../../types';
 import LatexModal from '../common/LatexModal';
+import {
+  type TrainingMetricsData,
+  computeTrainingMetrics,
+  sortTrainingsWithMetrics,
+  computeBestValues,
+  formatMeanStd,
+  generateValidationMetricsLatex
+} from './trainingValidationMetricsUtils';
 
 interface TrainingValidationMetricsTableProps {
   comparisonData: TrainingComparison[];
@@ -28,19 +36,7 @@ interface TrainingValidationMetricsTableProps {
   multiplier?: number;
 }
 
-interface ValidationMetrics {
-  meanIoU?: { mean: number; std: number };
-  meanPrecision?: { mean: number; std: number };
-  meanRecall?: { mean: number; std: number };
-  meanF1?: { mean: number; std: number };
-}
-
-interface TrainingMetricsData {
-  training: TrainingComparison['training'];
-  metrics: ValidationMetrics | null;
-}
-
-const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTableProps> = ({ 
+const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTableProps> = ({
   comparisonData,
   decimals = 2,
   multiplier = 100
@@ -51,18 +47,6 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
   const [latexTitle, setLatexTitle] = useState('');
   const [sortColumn, setSortColumn] = useState<string>('meanIoU');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-
-  const formatNumber = (value: number | undefined, decimals: number = 4): string => {
-    if (typeof value === 'number' && !isNaN(value)) {
-      return value.toFixed(decimals);
-    }
-    return 'N/A';
-  };
-
-  // Helper function to extract mean value from metric object
-  const extractMeanValue = (metric: { mean: number; std: number } | undefined): number => {
-    return metric ? metric.mean : -Infinity;
-  };
 
   // Handle column sorting
   const handleSort = (column: string) => {
@@ -108,191 +92,20 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
   );
 
   // Calculate validation metrics for each training
-  const trainingMetrics: TrainingMetricsData[] = React.useMemo(() => {
-    return comparisonData.map(comp => {
-      const epochs = comp.epochs;
-      if (epochs.length === 0) {
-        return {
-          training: comp.training,
-          metrics: null
-        };
-      }
+  const trainingMetrics: TrainingMetricsData[] = React.useMemo(
+    () => computeTrainingMetrics(comparisonData),
+    [comparisonData]
+  );
 
-      // Sort epochs by validation IoU (descending) and take top 10
-      const sortedEpochs = epochs
-        .filter(epoch => epoch.results?.val?.mean_iou !== undefined)
-        .sort((a, b) => (b.results?.val?.mean_iou ?? 0) - (a.results?.val?.mean_iou ?? 0))
-        .slice(0, 10);
+  const trainingsWithMetrics: TrainingMetricsData[] = React.useMemo(
+    () => sortTrainingsWithMetrics(trainingMetrics, sortColumn, sortDirection),
+    [trainingMetrics, sortColumn, sortDirection]
+  );
 
-      if (sortedEpochs.length === 0) {
-        return {
-          training: comp.training,
-          metrics: null
-        };
-      }
-
-      const avgMetrics: ValidationMetrics = {};
-
-      // Calculate mean and std for IoU
-      const iouValues = sortedEpochs.map(epoch => epoch.results?.val?.mean_iou).filter(val => val !== undefined) as number[];
-      if (iouValues.length > 0) {
-        const mean = iouValues.reduce((sum, val) => sum + val, 0) / iouValues.length;
-        const variance = iouValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / iouValues.length;
-        const std = Math.sqrt(variance);
-        avgMetrics.meanIoU = { mean, std };
-      }
-
-      // Calculate precision, recall, F1 from class metrics (averaged across classes per epoch, then across epochs)
-      const epochMetrics: { precision: number[], recall: number[], f1: number[] } = {
-        precision: [], recall: [], f1: []
-      };
-
-      sortedEpochs.forEach(epoch => {
-        const valResults = epoch.results?.val;
-        if (valResults) {
-          const epochPrecision: number[] = [];
-          const epochRecall: number[] = [];
-          const epochF1: number[] = [];
-
-          Object.keys(valResults).forEach(key => {
-            if (key !== 'loss' && key !== 'mean_iou' && key !== 'val_loss') {
-              const classData = valResults[key];
-              if (classData && typeof classData === 'object') {
-                if (typeof classData.precision === 'number') epochPrecision.push(classData.precision);
-                if (typeof classData.recall === 'number') epochRecall.push(classData.recall);
-                if (typeof (classData.f1_score || classData.f1) === 'number') {
-                  epochF1.push(classData.f1_score || classData.f1);
-                }
-              }
-            }
-          });
-
-          // Calculate average metrics for this epoch across all classes
-          if (epochPrecision.length > 0) {
-            const avgPrecision = epochPrecision.reduce((sum, val) => sum + val, 0) / epochPrecision.length;
-            epochMetrics.precision.push(avgPrecision);
-          }
-          if (epochRecall.length > 0) {
-            const avgRecall = epochRecall.reduce((sum, val) => sum + val, 0) / epochRecall.length;
-            epochMetrics.recall.push(avgRecall);
-          }
-          if (epochF1.length > 0) {
-            const avgF1 = epochF1.reduce((sum, val) => sum + val, 0) / epochF1.length;
-            epochMetrics.f1.push(avgF1);
-          }
-        }
-      });
-
-      // Calculate mean and std for precision across epochs
-      if (epochMetrics.precision.length > 0) {
-        const mean = epochMetrics.precision.reduce((sum, val) => sum + val, 0) / epochMetrics.precision.length;
-        const variance = epochMetrics.precision.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / epochMetrics.precision.length;
-        const std = Math.sqrt(variance);
-        avgMetrics.meanPrecision = { mean, std };
-      }
-
-      // Calculate mean and std for recall across epochs
-      if (epochMetrics.recall.length > 0) {
-        const mean = epochMetrics.recall.reduce((sum, val) => sum + val, 0) / epochMetrics.recall.length;
-        const variance = epochMetrics.recall.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / epochMetrics.recall.length;
-        const std = Math.sqrt(variance);
-        avgMetrics.meanRecall = { mean, std };
-      }
-
-      // Calculate mean and std for F1 across epochs
-      if (epochMetrics.f1.length > 0) {
-        const mean = epochMetrics.f1.reduce((sum, val) => sum + val, 0) / epochMetrics.f1.length;
-        const variance = epochMetrics.f1.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / epochMetrics.f1.length;
-        const std = Math.sqrt(variance);
-        avgMetrics.meanF1 = { mean, std };
-      }
-
-      return {
-        training: comp.training,
-        metrics: avgMetrics
-      };
-    });
-  }, [comparisonData]);
-
-  // Filter trainings that have validation metrics and sort them
-  const trainingsWithMetrics: TrainingMetricsData[] = React.useMemo(() => {
-    return trainingMetrics
-      .filter(t => t.metrics !== null)
-      .sort((a, b) => {
-        let aValue: number = -Infinity;
-        let bValue: number = -Infinity;
-        let aString: string = '';
-        let bString: string = '';
-
-        switch (sortColumn) {
-          case 'training':
-            aString = a.training.name.toLowerCase();
-            bString = b.training.name.toLowerCase();
-            break;
-          case 'meanIoU':
-            aValue = extractMeanValue(a.metrics?.meanIoU);
-            bValue = extractMeanValue(b.metrics?.meanIoU);
-            break;
-          case 'meanPrecision':
-            aValue = extractMeanValue(a.metrics?.meanPrecision);
-            bValue = extractMeanValue(b.metrics?.meanPrecision);
-            break;
-          case 'meanRecall':
-            aValue = extractMeanValue(a.metrics?.meanRecall);
-            bValue = extractMeanValue(b.metrics?.meanRecall);
-            break;
-          case 'meanF1':
-            aValue = extractMeanValue(a.metrics?.meanF1);
-            bValue = extractMeanValue(b.metrics?.meanF1);
-            break;
-        }
-
-        // Handle string comparison for training names
-        if (sortColumn === 'training') {
-          const comparison = aString.localeCompare(bString);
-          return sortDirection === 'asc' ? comparison : -comparison;
-        }
-
-        // Handle numeric comparison
-        const comparison = aValue - bValue;
-        return sortDirection === 'asc' ? comparison : -comparison;
-      });
-  }, [trainingMetrics, sortColumn, sortDirection]);
-
-  // Find best (highest) values for each metric
-  const bestValues = React.useMemo(() => {
-    const best = {
-      meanIoU: -Infinity,
-      meanPrecision: -Infinity,
-      meanRecall: -Infinity,
-      meanF1: -Infinity
-    };
-
-    trainingsWithMetrics.forEach(trainingData => {
-      if (trainingData.metrics) {
-        if (trainingData.metrics.meanIoU && trainingData.metrics.meanIoU.mean > best.meanIoU) {
-          best.meanIoU = trainingData.metrics.meanIoU.mean;
-        }
-        if (trainingData.metrics.meanPrecision && trainingData.metrics.meanPrecision.mean > best.meanPrecision) {
-          best.meanPrecision = trainingData.metrics.meanPrecision.mean;
-        }
-        if (trainingData.metrics.meanRecall && trainingData.metrics.meanRecall.mean > best.meanRecall) {
-          best.meanRecall = trainingData.metrics.meanRecall.mean;
-        }
-        if (trainingData.metrics.meanF1 && trainingData.metrics.meanF1.mean > best.meanF1) {
-          best.meanF1 = trainingData.metrics.meanF1.mean;
-        }
-      }
-    });
-
-    return best;
-  }, [trainingsWithMetrics]);
-
-  // Helper function to format mean ± std
-  const formatMeanStd = (metric: { mean: number; std: number } | undefined, decimals: number = 2): string => {
-    if (!metric) return 'N/A';
-    return `${formatNumber(metric.mean, decimals)} ± ${formatNumber(metric.std, decimals)}`;
-  };
+  const bestValues = React.useMemo(
+    () => computeBestValues(trainingsWithMetrics),
+    [trainingsWithMetrics]
+  );
 
   // Helper function to render cell with conditional bold styling
   const renderMetricCell = (
@@ -314,70 +127,8 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
     );
   };
 
-  // Generate LaTeX for training validation metrics table
-  const generateValidationMetricsLatex = () => {
-    let latex = `\\begin{table*}[t]\n\\centering\n\\caption{Training Validation Metrics (Top 10 Epochs by IoU)}\n\\label{tab:validation_metrics}\n\\begin{tabular}{|l|c|c|c|c|}\n\\hline\n`;
-
-    // Header row
-    latex += 'Training & Val mIoU & Precision & Recall & F1 \\\\\n\\hline\n';
-
-    // Data rows - one per training
-    trainingsWithMetrics.forEach(trainingData => {
-      const trainingName = trainingData.training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
-
-      // Training name
-      latex += `${trainingName} `;
-
-      // Val mIoU
-      if (trainingData.metrics?.meanIoU) {
-        const isBestIoU = trainingData.metrics.meanIoU.mean === bestValues.meanIoU;
-        const boldStart = isBestIoU ? '\\textbf{' : '';
-        const boldEnd = isBestIoU ? '}' : '';
-        latex += `& ${boldStart}${(trainingData.metrics.meanIoU.mean * multiplier).toFixed(decimals)} ± ${(trainingData.metrics.meanIoU.std * multiplier).toFixed(decimals)}${boldEnd} `;
-      } else {
-        latex += '& N/A ';
-      }
-
-      // Precision
-      if (trainingData.metrics?.meanPrecision) {
-        const isBestPrecision = trainingData.metrics.meanPrecision.mean === bestValues.meanPrecision;
-        const boldStart = isBestPrecision ? '\\textbf{' : '';
-        const boldEnd = isBestPrecision ? '}' : '';
-        latex += `& ${boldStart}${(trainingData.metrics.meanPrecision.mean * multiplier).toFixed(decimals)} ± ${(trainingData.metrics.meanPrecision.std * multiplier).toFixed(decimals)}${boldEnd} `;
-      } else {
-        latex += '& N/A ';
-      }
-
-      // Recall
-      if (trainingData.metrics?.meanRecall) {
-        const isBestRecall = trainingData.metrics.meanRecall.mean === bestValues.meanRecall;
-        const boldStart = isBestRecall ? '\\textbf{' : '';
-        const boldEnd = isBestRecall ? '}' : '';
-        latex += `& ${boldStart}${(trainingData.metrics.meanRecall.mean * multiplier).toFixed(decimals)} ± ${(trainingData.metrics.meanRecall.std * multiplier).toFixed(decimals)}${boldEnd} `;
-      } else {
-        latex += '& N/A ';
-      }
-
-      // F1
-      if (trainingData.metrics?.meanF1) {
-        const isBestF1 = trainingData.metrics.meanF1.mean === bestValues.meanF1;
-        const boldStart = isBestF1 ? '\\textbf{' : '';
-        const boldEnd = isBestF1 ? '}' : '';
-        latex += `& ${boldStart}${(trainingData.metrics.meanF1.mean * multiplier).toFixed(decimals)} ± ${(trainingData.metrics.meanF1.std * multiplier).toFixed(decimals)}${boldEnd} `;
-      } else {
-        latex += '& N/A ';
-      }
-
-      latex += '\\\\ \\hline\n';
-    });
-
-    latex += '\\end{tabular}\n\\end{table*}';
-
-    return latex;
-  };
-
   const handleGenerateLatex = () => {
-    const latex = generateValidationMetricsLatex();
+    const latex = generateValidationMetricsLatex(trainingsWithMetrics, bestValues, decimals, multiplier);
     setLatexCode(latex);
     setLatexTitle('Training Validation Metrics LaTeX Code');
     setLatexModalOpen(true);

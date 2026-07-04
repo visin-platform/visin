@@ -23,7 +23,8 @@ import {
   ArrowBack as ArrowBackIcon,
   ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
-import { DatasetImage, ImageCategory, WeatherCondition } from '../../services/datasetImageService';
+import { DatasetImage, WeatherCondition } from '../../services/datasetImageService';
+import { ImageCategory } from '../../services/imageCategoryService';
 
 // Weather condition options
 const WEATHER_CONDITIONS: { value: WeatherCondition; label: string }[] = [

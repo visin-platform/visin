@@ -1,4 +1,4 @@
-import { getGlobalConfig } from '../config/ConfigProvider';
+import { visionApi } from '../config/visionApi';
 
 export type WeatherCondition = 'day_fair' | 'night_fair' | 'day_rain' | 'night_rain' | 'snow';
 
@@ -54,29 +54,17 @@ export const getAllImages = async (
   random?: boolean,
   weatherCondition?: WeatherCondition
 ): Promise<DatasetImagesResponse> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL || 'http://localhost:4010';
-
-  const params = new URLSearchParams({ page: String(page) });
-  if (limit) params.append('limit', String(limit));
-  if (search) params.append('search', search);
-  if (tags) params.append('tags', tags);
-  if (random) params.append('random', 'true');
-  if (weatherCondition) params.append('weatherCondition', weatherCondition);
-
-  const response = await fetch(`${apiUrl}/api/dataset-images?${params.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
+  const response = await visionApi.get('/dataset-images', {
+    params: {
+      page,
+      limit,
+      search,
+      tags,
+      random: random ? 'true' : undefined,
+      weatherCondition
     }
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch images');
-  }
-
-  return response.json();
+  return response.data;
 };
 
 /**
@@ -93,31 +81,10 @@ export const getImagesByDataset = async (
   sortBy?: 'updatedAt' | 'createdAt' | 'filename',
   sortOrder?: 'asc' | 'desc'
 ): Promise<DatasetImagesResponse> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const params = new URLSearchParams({ page: String(page) });
-  if (limit) params.append('limit', String(limit));
-  if (search) params.append('search', search);
-  if (categoryId) params.append('categoryId', categoryId);
-  if (tags) params.append('tags', tags);
-  if (weatherCondition) params.append('weatherCondition', weatherCondition);
-  if (sortBy) params.append('sortBy', sortBy);
-  if (sortOrder) params.append('sortOrder', sortOrder);
-
-  const response = await fetch(`${apiUrl}/api/dataset-images/dataset/${datasetId}?${params.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
+  const response = await visionApi.get(`/dataset-images/dataset/${datasetId}`, {
+    params: { page, limit, search, categoryId, tags, weatherCondition, sortBy, sortOrder }
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch dataset images');
-  }
-
-  return response.json();
+  return response.data;
 };
 
 /**
@@ -131,50 +98,18 @@ export const getImagesByCategory = async (
   search?: string,
   labels?: string[]
 ): Promise<DatasetImagesResponse> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const params = new URLSearchParams({ page: String(page) });
-  if (limit) params.append('limit', String(limit));
-  if (search) params.append('search', search);
-  if (labels && labels.length > 0) params.append('labels', labels.join(','));
-
-  const response = await fetch(`${apiUrl}/api/dataset-images/dataset/${datasetId}/category/${categoryId}?${params.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
+  const response = await visionApi.get(`/dataset-images/dataset/${datasetId}/category/${categoryId}`, {
+    params: { page, limit, search, labels: labels && labels.length > 0 ? labels.join(',') : undefined }
   });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch dataset images by category');
-  }
-
-  return response.json();
+  return response.data;
 };
 
 /**
  * Get image by ID
  */
 export const getImageById = async (id: string): Promise<DatasetImage> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/dataset-images/${id}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch dataset image');
-  }
-
-  const data = await response.json();
-  return data.data;
+  const response = await visionApi.get(`/dataset-images/${id}`);
+  return response.data.data;
 };
 
 /**
@@ -197,24 +132,8 @@ export const createDatasetImage = async (imageData: {
   weatherCondition?: WeatherCondition;
   metadata?: any;
 }): Promise<DatasetImage> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/dataset-images`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(imageData)
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to create dataset image');
-  }
-
-  const data = await response.json();
-  return data.data;
+  const response = await visionApi.post('/dataset-images', imageData);
+  return response.data.data;
 };
 
 /**
@@ -232,44 +151,15 @@ export const updateDatasetImage = async (
     metadata?: any;
   }
 ): Promise<DatasetImage> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/dataset-images/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(updateData)
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to update dataset image');
-  }
-
-  const data = await response.json();
-  return data.data;
+  const response = await visionApi.put(`/dataset-images/${id}`, updateData);
+  return response.data.data;
 };
 
 /**
  * Delete dataset image
  */
 export const deleteDatasetImage = async (id: string): Promise<void> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/dataset-images/${id}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to delete dataset image');
-  }
+  await visionApi.delete(`/dataset-images/${id}`);
 };
 
 /**
@@ -287,28 +177,17 @@ export const getUploadSignedUrl = async (data: {
   categoryId?: string;
   expiresInMinutes: number;
 }> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/dataset-images/upload-url`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(data)
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to get upload signed URL');
-  }
-
-  const result = await response.json();
-  return result.data;
+  const response = await visionApi.post('/dataset-images/upload-url', data);
+  return response.data.data;
 };
 
 /**
- * Upload file to signed URL
+ * Upload file to signed URL.
+ *
+ * Deliberately raw `fetch`, not `visionApi`: the signed URL points at
+ * object storage (MinIO), not vision-service — it needs neither the
+ * `/api` base URL nor the shared auth cookie (the signature in the URL
+ * itself is the credential).
  */
 export const uploadFileToSignedUrl = async (signedUrl: string, file: File): Promise<void> => {
   const response = await fetch(signedUrl, {
@@ -336,181 +215,6 @@ export const getLabelingStats = async (): Promise<{
   badPercentage: number;
   unlabeledPercentage: number;
 }> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/datasets/labeling-stats`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch labeling statistics');
-  }
-
-  const data = await response.json();
-  return data.data;
-};
-
-// Image Category interfaces and functions
-export interface ImageCategory {
-  _id: string;
-  name: string;
-  description?: string;
-  datasetId: string;
-  color?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * Get categories by dataset ID
- */
-export const getCategoriesByDataset = async (datasetId: string): Promise<ImageCategory[]> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/image-categories/dataset/${datasetId}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch image categories');
-  }
-
-  const data = await response.json();
-  return data.data;
-};
-
-/**
- * Get all categories
- */
-export const getAllCategories = async (): Promise<ImageCategory[]> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/image-categories`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch image categories');
-  }
-
-  const data = await response.json();
-  return data.data;
-};
-
-/**
- * Get category by ID
- */
-export const getCategoryById = async (id: string): Promise<ImageCategory> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/image-categories/${id}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch image category');
-  }
-
-  const data = await response.json();
-  return data.data;
-};
-
-/**
- * Create image category
- */
-export const createImageCategory = async (categoryData: {
-  name: string;
-  description?: string;
-  datasetId: string;
-  color?: string;
-}): Promise<ImageCategory> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/image-categories`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(categoryData)
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to create image category');
-  }
-
-  const data = await response.json();
-  return data.data;
-};
-
-/**
- * Update image category
- */
-export const updateImageCategory = async (
-  id: string,
-  updateData: {
-    name?: string;
-    description?: string;
-    color?: string;
-  }
-): Promise<ImageCategory> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/image-categories/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(updateData)
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to update image category');
-  }
-
-  const data = await response.json();
-  return data.data;
-};
-
-/**
- * Delete image category
- */
-export const deleteImageCategory = async (id: string): Promise<void> => {
-  const config = getGlobalConfig();
-  const apiUrl = config.VISION_API_URL;
-
-  const response = await fetch(`${apiUrl}/api/image-categories/${id}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to delete image category');
-  }
+  const response = await visionApi.get('/datasets/labeling-stats');
+  return response.data.data;
 };

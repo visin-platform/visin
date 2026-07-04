@@ -3,10 +3,9 @@ import { getGlobalConfig } from '../config/ConfigProvider';
 
 /**
  * Shared by authService and profileService — both call auth-service, which
- * accepts either the Bearer token or the browser cookie, so requests send
- * both (credentials: 'include' passed per-call) rather than relying on one.
+ * authenticates via the shared `access_token` httpOnly cookie (sent
+ * automatically by createApiClient's default credentials: 'include').
  */
 export const authApiClient = createApiClient({
-  baseUrl: () => getGlobalConfig().AUTH_SERVICE_URL || '',
-  getToken: () => localStorage.getItem('authToken')
+  baseUrl: () => getGlobalConfig().AUTH_SERVICE_URL || ''
 });

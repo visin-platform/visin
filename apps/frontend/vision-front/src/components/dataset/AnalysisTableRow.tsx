@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Checkbox, CircularProgress, IconButton, TableCell, TableRow, Tooltip, Typography, alpha, useTheme } from '@mui/material';
 import { Delete as DeleteIcon, Edit as EditIcon, Download as DownloadIcon } from '@mui/icons-material';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { DatasetAnalysis } from '../../services/analysisService';
 import { formatDateTime } from '../../utils';
 
@@ -33,13 +33,13 @@ const AnalysisTableRow: React.FC<AnalysisTableRowProps> = ({
   onDelete
 }) => {
   const theme = useTheme();
+  const navigate = useNavigate();
 
   return (
     <TableRow
       hover
       selected={isSelected}
-      component={Link}
-      to={`/datasets/${analysis._id}`}
+      onClick={() => navigate(`/datasets/${analysis._id}`)}
       sx={{
         cursor: 'pointer',
         transition: 'background-color 0.2s',
@@ -48,9 +48,7 @@ const AnalysisTableRow: React.FC<AnalysisTableRowProps> = ({
           '&:hover': {
             backgroundColor: alpha(theme.palette.primary.main, 0.12),
           }
-        },
-        textDecoration: 'none',
-        color: 'inherit'
+        }
       }}
     >
       <TableCell padding="checkbox">

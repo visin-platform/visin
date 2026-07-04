@@ -21,9 +21,9 @@ import { getAnalysisById, updateAnalysis, deleteAnalysis } from '../services/ana
 import {
   DatasetImage,
   deleteDatasetImage,
-  getCategoriesByDataset,
   getImagesByDataset
 } from '../services/datasetImageService';
+import { getCategoriesByDataset } from '../services/imageCategoryService';
 import FileUpload from '../components/FileUpload';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';

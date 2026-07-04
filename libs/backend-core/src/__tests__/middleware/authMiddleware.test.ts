@@ -6,8 +6,11 @@ import type { UserPayload } from '../../types/auth';
 const SECRET = 'test-secret';
 const PAYLOAD: UserPayload = { id: 'u1', email: 'a@b.com', name: 'A' };
 
-const makeReq = (authHeader?: string): Request =>
-  ({ headers: authHeader ? { authorization: authHeader } : {} } as unknown as Request);
+const makeReq = (authHeader?: string, cookies?: Record<string, string>): Request =>
+  ({
+    headers: authHeader ? { authorization: authHeader } : {},
+    cookies: cookies ?? {}
+  } as unknown as Request);
 
 const makeRes = () => {
   const res = { status: jest.fn(), json: jest.fn() };
@@ -74,6 +77,40 @@ describe('authenticateToken', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('accepts the shared access_token cookie when there is no Authorization header', () => {
+    const token = jwt.sign(PAYLOAD, SECRET);
+    const req = makeReq(undefined, { access_token: token });
+    const res = makeRes();
+
+    authenticateToken(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(req.user).toMatchObject(PAYLOAD);
+  });
+
+  it('prefers the access_token cookie over the Authorization header when both are present', () => {
+    const cookieToken = jwt.sign({ ...PAYLOAD, id: 'from-cookie' }, SECRET);
+    const headerToken = jwt.sign({ ...PAYLOAD, id: 'from-header' }, SECRET);
+    const req = makeReq(`Bearer ${headerToken}`, { access_token: cookieToken });
+    const res = makeRes();
+
+    authenticateToken(req, res, next);
+
+    expect((req.user as UserPayload).id).toBe('from-cookie');
+  });
+
+  it('falls back to the Authorization header (e.g. a vision-service API token) when no cookie is present', () => {
+    const token = jwt.sign(PAYLOAD, SECRET);
+    const req = makeReq(`Bearer ${token}`);
+    const res = makeRes();
+
+    authenticateToken(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req.user).toMatchObject(PAYLOAD);
   });
 });
 

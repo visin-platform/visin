@@ -8,7 +8,8 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { ImageCategory, WeatherCondition } from '../../services/datasetImageService';
+import { WeatherCondition } from '../../services/datasetImageService';
+import { ImageCategory } from '../../services/imageCategoryService';
 
 // Weather condition options
 const WEATHER_CONDITIONS: { value: WeatherCondition; label: string }[] = [

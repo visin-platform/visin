@@ -3,8 +3,16 @@ import jwt from 'jsonwebtoken';
 import { requireEnv } from '../config/env';
 import { UserPayload } from '../types/auth';
 
+/**
+ * Cookie first: browser requests carry the shared `access_token` SSO cookie
+ * (set by auth-service, readable here since COOKIE_DOMAIN is a shared parent
+ * domain across every Visin subdomain — see createBaseApp's cookieParser).
+ * Falls back to the Authorization header for non-browser callers, notably
+ * vision-service's project-scoped API tokens (apiTokenMiddleware), which
+ * were never cookie-based.
+ */
 function extractToken(req: Request): string | undefined {
-  return req.headers.authorization?.replace('Bearer ', '');
+  return req.cookies?.access_token || req.headers.authorization?.replace('Bearer ', '');
 }
 
 /**
@@ -12,10 +20,9 @@ function extractToken(req: Request): string | undefined {
  * decoded payload to `req.user`. Rejects with 401 if the token is missing
  * or fails signature verification.
  *
- * Header-only (no cookie support): only auth-service issues a browser
- * cookie today, and it layers its own tokenVersion invalidation check on
- * top of a JWT verify like this one — see
- * auth-service/src/middleware/authMiddleware.ts.
+ * Unlike auth-service's own authMiddleware, this doesn't layer a
+ * tokenVersion invalidation check on top — see
+ * auth-service/src/middleware/authMiddleware.ts for that.
  */
 export function authenticateToken(req: Request, res: Response, next: NextFunction): void {
   if (req.user) {

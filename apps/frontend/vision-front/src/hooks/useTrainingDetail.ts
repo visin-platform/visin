@@ -6,8 +6,6 @@ import { testResultService } from '../services/testResultService';
 import { TestResult } from '../types';
 
 export const useTrainingDetail = (id: string | undefined) => {
-  const [config, setConfig] = useState<any>(null);
-  const [configLoading, setConfigLoading] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [testResultsLoading, setTestResultsLoading] = useState(false);
   const [selectedTestEpoch, setSelectedTestEpoch] = useState<number | null>(null);
@@ -24,25 +22,12 @@ export const useTrainingDetail = (id: string | undefined) => {
   const training = data?.data?.training;
   const epochs = data?.data?.epochs || [];
 
-  // Fetch config
-  useEffect(() => {
-    const fetchConfig = async () => {
-      if (training?.configId) {
-        try {
-          setConfigLoading(true);
-          const response = await configService.getConfigById(training.configId);
-          setConfig(response.data);
-        } catch (err) {
-          console.error('Failed to fetch config:', err);
-          setConfig(null);
-        } finally {
-          setConfigLoading(false);
-        }
-      }
-    };
-
-    fetchConfig();
-  }, [training?.configId]);
+  const { data: configData, isLoading: configLoading } = useQuery({
+    queryKey: ['config', training?.configId],
+    queryFn: () => configService.getConfigById(training!.configId!),
+    enabled: !!training?.configId
+  });
+  const config = configData?.data ?? null;
 
   // Fetch test results
   useEffect(() => {

@@ -4,9 +4,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { trainingService } from '../services/trainingService';
 import { configService } from '../services/configService';
 import { projectService } from '../services/projectService';
-import { getAllAnalyses, type DatasetAnalysis } from '../services/analysisService';
-import { Training, Config } from '../types';
-import { Project } from '../types/Project';
+import { getAllAnalyses } from '../services/analysisService';
+import { Training } from '../types';
 import { exportTrainingsToCSV } from '../utils/csvExport';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -29,12 +28,6 @@ export const useTrainingsPage = () => {
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<Training['status']>('pending');
   const [trainingTags, setTrainingTags] = useState<string[]>([]);
-  const [datasets, setDatasets] = useState<DatasetAnalysis[]>([]);
-  const [configs, setConfigs] = useState<Config[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loadingDatasets, setLoadingDatasets] = useState(false);
-  const [loadingConfigs, setLoadingConfigs] = useState(false);
-  const [loadingProjects, setLoadingProjects] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
@@ -46,6 +39,28 @@ export const useTrainingsPage = () => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [excludedTags, setExcludedTags] = useState<string[]>([]);
+
+  // Configs/datasets/projects for the create/edit modal — only fetched while
+  // the modal is open, and shared between the "create" and "edit" entry
+  // points (previously each hand-rolled its own duplicate Promise.all).
+  const { data: configsData, isLoading: loadingConfigs } = useQuery({
+    queryKey: ['configs', 'all'],
+    queryFn: () => configService.getAllConfigs(),
+    enabled: createModalOpen
+  });
+  const { data: analysisData, isLoading: loadingDatasets } = useQuery({
+    queryKey: ['dataset-analyses', 100, 0],
+    queryFn: () => getAllAnalyses(100, 0),
+    enabled: createModalOpen
+  });
+  const { data: projectsData, isLoading: loadingProjects } = useQuery({
+    queryKey: ['projects', 'all'],
+    queryFn: () => projectService.getProjects(),
+    enabled: createModalOpen
+  });
+  const configs = configsData?.data.configs || [];
+  const datasets = analysisData?.data || [];
+  const projects = projectsData?.data || [];
 
   // Initialize selectedTags and excludedTags from URL parameters
   useEffect(() => {
@@ -91,39 +106,6 @@ export const useTrainingsPage = () => {
     }, 500);
     return () => clearTimeout(timer);
   }, [searchTerm]);
-
-  // Load configs and datasets when modal opens
-  useEffect(() => {
-    if (createModalOpen) {
-      const loadData = async () => {
-        try {
-          setLoadingConfigs(true);
-          setLoadingDatasets(true);
-          setLoadingProjects(true);
-          
-          const [configsRes, analysisRes, projectsRes] = await Promise.all([
-            configService.getAllConfigs(),
-            getAllAnalyses(100, 0),
-            projectService.getProjects()
-          ]);
-          
-          setConfigs(configsRes.data.configs || []);
-          setDatasets(analysisRes.data || []);
-          setProjects(projectsRes.data || []);
-        } catch (err) {
-          console.error('Failed to load configs/datasets/projects:', err);
-          setConfigs([]);
-          setDatasets([]);
-          setProjects([]);
-        } finally {
-          setLoadingConfigs(false);
-          setLoadingDatasets(false);
-          setLoadingProjects(false);
-        }
-      };
-      loadData();
-    }
-  }, [createModalOpen]);
 
   // Determine if we need to fetch all data for frontend filtering
   const shouldFetchAll = excludedTags.length > 0;
@@ -308,38 +290,19 @@ export const useTrainingsPage = () => {
     }
   };
 
-  const handleEditTraining = async (training: Training) => {
-    try {
-      setLoadingConfigs(true);
-      setLoadingDatasets(true);
-      setLoadingProjects(true);
-
-      const [configsRes, analysisRes, projectsRes] = await Promise.all([
-        configService.getAllConfigs(),
-        getAllAnalyses(100, 0),
-        projectService.getProjects()
-      ]);
-
-      setConfigs(configsRes.data.configs || []);
-      setDatasets(analysisRes.data || []);
-      setProjects(projectsRes.data || []);
-
-      setEditingTrainingId(training._id);
-      setTrainingName(training.name);
-      setTrainingDescription(training.description || '');
-      setSelectedDatasetId(training.datasetId || '');
-      setSelectedConfigId(training.configId || '');
-      setSelectedProjectId(training.projectId || '');
-      setSelectedStatus(training.status);
-      setTrainingTags(training.tags || []);
-      setCreateModalOpen(true);
-    } catch (err) {
-      console.error('Failed to load data for editing:', err);
-    } finally {
-      setLoadingConfigs(false);
-      setLoadingDatasets(false);
-      setLoadingProjects(false);
-    }
+  const handleEditTraining = (training: Training) => {
+    // Opening the modal flips `enabled` on the configs/datasets/projects
+    // queries above, which fetch in the background — the modal already
+    // renders a loading state for them via isLoadingData.
+    setEditingTrainingId(training._id);
+    setTrainingName(training.name);
+    setTrainingDescription(training.description || '');
+    setSelectedDatasetId(training.datasetId || '');
+    setSelectedConfigId(training.configId || '');
+    setSelectedProjectId(training.projectId || '');
+    setSelectedStatus(training.status);
+    setTrainingTags(training.tags || []);
+    setCreateModalOpen(true);
   };
 
   const handleDeleteClick = (trainingId: string) => {

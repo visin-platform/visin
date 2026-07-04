@@ -5,7 +5,7 @@ import {
   createImageCategory,
   updateImageCategory,
   deleteImageCategory
-} from '../services/datasetImageService';
+} from '../services/imageCategoryService';
 
 interface CategoryForm {
   name: string;

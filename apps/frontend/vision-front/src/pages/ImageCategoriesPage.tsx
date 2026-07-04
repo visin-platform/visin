@@ -37,7 +37,7 @@ import {
   createImageCategory,
   updateImageCategory,
   deleteImageCategory
-} from '../services/datasetImageService';
+} from '../services/imageCategoryService';
 import { datasetService, Dataset } from '../services/datasetService';
 
 const ImageCategoriesPage: React.FC = () => {
