@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '@visin/backend-core';
 import { verifyJWT } from '../services/jwtService';
 import { User } from '../models/User';
 // req.user is typed globally via @visin/backend-core's Express.Request
@@ -34,7 +35,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     (req as any).dbUser = dbUser;
     next();
   } catch (error) {
-    console.error('Token verification failed:', (error as Error)?.message);
+    logger.error('Token verification failed', { error: (error as Error)?.message });
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
 };

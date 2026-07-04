@@ -1,8 +1,7 @@
 import { useEffect, useState, ReactNode } from 'react';
 import { CssBaseline } from '@mui/material';
 import React from 'react';
-import { ErrorPage } from '../components/ErrorPage/ErrorPage';
-import { Loader } from '../components/Loader/Loader';
+import { ErrorPage, Loader } from '@visin/frontend-core';
 
 export interface AppConfig {
   GOOGLE_CLIENT_ID?: string;

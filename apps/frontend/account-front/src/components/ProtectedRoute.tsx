@@ -1,6 +1,6 @@
 import { useState, useEffect, ReactNode } from 'react';
 import { authService } from '../services/authService';
-import { Loader } from './Loader';
+import { Loader } from '@visin/frontend-core';
 
 interface ProtectedRouteProps {
   children: ReactNode;

@@ -1,7 +1,6 @@
 import { useEffect, useState, ReactNode } from 'react';
 import { CssBaseline } from '@mui/material';
-import { Loader } from '../components/Loader';
-import { ErrorPage } from '../components/ErrorPage';
+import { Loader, ErrorPage } from '@visin/frontend-core';
 import React from 'react';
 
 export interface AppConfig {

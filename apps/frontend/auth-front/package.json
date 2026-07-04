@@ -22,6 +22,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.11",
     "@mui/material": "^7.3.11",
+    "@visin/frontend-core": "*",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1"

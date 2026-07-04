@@ -20,6 +20,10 @@ if (!process.env.JWT_SECRET) {
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+// Every service runs behind the nginx reverse proxy — trust its X-Forwarded-*
+// headers so express-rate-limit and req.ip key on the real client, not the proxy.
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(securityHeaders);
 app.use(requestLogger);

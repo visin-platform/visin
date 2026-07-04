@@ -8,16 +8,25 @@ import {
   updateBenchmark,
   deleteBenchmark
 } from '../controllers/benchmarkController';
+import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
+import { validateRequest } from '@visin/backend-core';
+import {
+  getBenchmarksQuerySchema,
+  getBenchmarkStatsQuerySchema,
+  createBenchmarkBodySchema,
+  updateBenchmarkBodySchema
+} from '../validation/benchmarkSchemas';
 
 const router = express.Router();
 
-// Benchmark routes
-router.get('/', getBenchmarks);
-router.get('/stats', getBenchmarkStats);
-router.get('/:id', getBenchmarkById);
-router.post('/', createBenchmark);
-router.post('/upload', uploadBenchmark);
-router.put('/:id', updateBenchmark);
-router.delete('/:id', deleteBenchmark);
+// Reads are public + private (optional auth, scoped to the parent training's
+// project); writes require a logged-in user.
+router.get('/', optionalAuthMiddleware, validateRequest({ query: getBenchmarksQuerySchema }), getBenchmarks);
+router.get('/stats', optionalAuthMiddleware, validateRequest({ query: getBenchmarkStatsQuerySchema }), getBenchmarkStats);
+router.get('/:id', optionalAuthMiddleware, getBenchmarkById);
+router.post('/', authMiddleware, validateRequest({ body: createBenchmarkBodySchema }), createBenchmark);
+router.post('/upload', authMiddleware, validateRequest({ body: createBenchmarkBodySchema }), uploadBenchmark);
+router.put('/:id', authMiddleware, validateRequest({ body: updateBenchmarkBodySchema }), updateBenchmark);
+router.delete('/:id', authMiddleware, deleteBenchmark);
 
 export default router;

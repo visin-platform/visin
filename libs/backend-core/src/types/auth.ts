@@ -16,11 +16,17 @@ export interface UserPayload {
  * request-scoped fields locally (e.g. auth-service's `dbUser`, file-service's
  * signed-URL params) — those stay local since they aren't meaningful outside
  * that service.
+ *
+ * `projectId` is set by an API-token auth middleware (e.g. vision-service's
+ * `apiTokenMiddleware`) when the request authenticated via a project-scoped
+ * token rather than a user JWT — write handlers must treat it as the
+ * authoritative project, not a client-supplied `req.body.projectId`.
  */
 declare global {
   namespace Express {
     interface Request {
       user?: UserPayload;
+      projectId?: string;
     }
   }
 }

@@ -1,5 +1,6 @@
-import mongoose from 'mongoose';
-import DatasetImage from '../models/DatasetImage';
+import mongoose, { QueryFilter, UpdateQuery } from 'mongoose';
+import { BadRequestError, ConflictError, NotFoundError, logger } from '@visin/backend-core';
+import DatasetImage, { IDatasetImage } from '../models/DatasetImage';
 import Dataset from '../models/Dataset';
 import ImageCategory from '../models/ImageCategory';
 import { 
@@ -58,7 +59,7 @@ async function enrichImagesWithUrls(images: any[]) {
   try {
     signedUrlMap = await getPhotoSignedUrlsBatch(images, false, 60);
   } catch (error) {
-    console.error('Failed to fetch batch signed URLs for dataset images:', error);
+    logger.error('Failed to fetch batch signed URLs for dataset images', { error: (error as Error).message });
   }
 
   const imagesWithThumbnails = images.filter((image) => image.minioThumbnailFileId);
@@ -68,7 +69,7 @@ async function enrichImagesWithUrls(images: any[]) {
     try {
       thumbnailSignedUrlMap = await getPhotoSignedUrlsBatch(imagesWithThumbnails, true, 60);
     } catch (error) {
-      console.error('Failed to fetch batch signed URLs for thumbnails:', error);
+      logger.error('Failed to fetch batch signed URLs for thumbnails', { error: (error as Error).message });
     }
   }
 
@@ -117,7 +118,7 @@ export const getImages = async (options: ImageFilterOptions) => {
     random
   } = options;
 
-  const query: any = {};
+  const query: QueryFilter<IDatasetImage> = {};
   
   if (datasetId) {
       query.datasetId = datasetId;
@@ -136,7 +137,7 @@ export const getImages = async (options: ImageFilterOptions) => {
   }
   
   if (weatherCondition) {
-    query.weatherCondition = weatherCondition;
+    query.weatherCondition = weatherCondition as IDatasetImage['weatherCondition'];
   }
 
   const limitNum = Math.min(Number(limit), 1000000);
@@ -225,13 +226,13 @@ export const createDatasetImage = async (data: CreateDatasetImageData) => {
   // Validate category exists
   const category = await ImageCategory.findById(categoryId);
   if (!category) {
-    throw new Error('Invalid categoryId. Category does not exist.');
+    throw new BadRequestError('Invalid categoryId. Category does not exist.');
   }
 
   // Check if image with this minioFileId already exists
   const existingImage = await DatasetImage.findOne({ minioFileId });
   if (existingImage) {
-    throw new Error('Image with this MinIO file ID already exists');
+    throw new ConflictError('Image with this MinIO file ID already exists');
   }
 
   const image = new DatasetImage({
@@ -269,10 +270,10 @@ export const getImagesByCategory = async (datasetId: string, categoryId: string,
   });
 
   if (!dataset) {
-    throw new Error(`Dataset '${datasetId}' not found`);
+    throw new NotFoundError(`Dataset '${datasetId}' not found`);
   }
 
-  const query: any = { datasetId: dataset._id, categoryId };
+  const query: QueryFilter<IDatasetImage> = { datasetId: dataset._id, categoryId };
   if (search) {
     query.$text = { $search: search };
   }
@@ -498,7 +499,7 @@ export const exportImagesByLabels = async (datasetId: string, labels: string) =>
   });
 
   if (!dataset) {
-    throw new Error(`Dataset '${datasetId}' not found`);
+    throw new NotFoundError(`Dataset '${datasetId}' not found`);
   }
 
   const labelsArray = labels.split(',').map(label => label.trim());
@@ -512,7 +513,7 @@ export const getImageById = async (id: string) => {
   const image = await DatasetImage.findById(id).populate('datasetId');
 
   if (!image) {
-    throw new Error('Dataset image not found');
+    throw new NotFoundError('Dataset image not found');
   }
 
   try {
@@ -537,13 +538,13 @@ export const getImageById = async (id: string) => {
           result.thumbnailSignedUrlExpiresInMinutes = thumbnailSignedUrlData.expiresInMinutes;
         }
       } catch (error) {
-        console.error('Failed to get thumbnail signed URL:', error);
+        logger.error('Failed to get thumbnail signed URL', { error: (error as Error).message });
       }
     }
 
     return result;
   } catch (error) {
-    console.error('Failed to get signed URL:', error);
+    logger.error('Failed to get signed URL', { error: (error as Error).message });
     return image.toObject();
   }
 };
@@ -551,19 +552,19 @@ export const getImageById = async (id: string) => {
 export const updateImage = async (id: string, data: UpdateDatasetImageData) => {
   const { title, description, tags, labels, categoryId, weatherCondition, metadata } = data;
 
-  const updateData: any = {};
+  const updateData: UpdateQuery<IDatasetImage> = {};
   if (title !== undefined) updateData.title = title?.trim();
   if (description !== undefined) updateData.description = description?.trim();
   if (tags) updateData.tags = tags.map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
   if (labels) updateData.labels = labels.map((label: string) => label.trim()).filter((label: string) => label.length > 0);
   if (categoryId !== undefined) updateData.categoryId = categoryId || null; // Allow null to remove category
-  if (weatherCondition !== undefined) updateData.weatherCondition = weatherCondition;
+  if (weatherCondition !== undefined) updateData.weatherCondition = weatherCondition as IDatasetImage['weatherCondition'];
   if (metadata) updateData.metadata = metadata;
 
   const image = await DatasetImage.findByIdAndUpdate(id, updateData, { new: true });
 
   if (!image) {
-    throw new Error('Dataset image not found');
+    throw new NotFoundError('Dataset image not found');
   }
 
   return image;
@@ -572,22 +573,22 @@ export const updateImage = async (id: string, data: UpdateDatasetImageData) => {
 export const deleteImage = async (id: string) => {
   const image = await DatasetImage.findById(id);
   if (!image) {
-    throw new Error('Dataset image not found');
+    throw new NotFoundError('Dataset image not found');
   }
 
   // Delete files from MinIO (both original and thumbnail if exists)
   try {
     // Delete original file
     await deleteFile(image.minioFileId);
-    console.info(`Deleted original file from MinIO: ${image.minioFileId}`);
+    logger.info('Deleted original file from MinIO', { minioFileId: image.minioFileId });
 
     // Delete thumbnail file if it exists
     if (image.minioThumbnailFileId) {
       await deleteFile(image.minioThumbnailFileId);
-      console.info(`Deleted thumbnail file from MinIO: ${image.minioThumbnailFileId}`);
+      logger.info('Deleted thumbnail file from MinIO', { minioThumbnailFileId: image.minioThumbnailFileId });
     }
   } catch (error) {
-    console.error(`Failed to delete files for dataset image ${image.minioFileId}:`, error);
+    logger.error('Failed to delete files for dataset image', { minioFileId: image.minioFileId, error: (error as Error).message });
     // Continue with database deletion even if MinIO deletion fails
   }
 
@@ -608,7 +609,7 @@ export const getUploadSignedUrlRequest = async (data: { filename: string, mimety
   if (categoryId) {
     const category = await ImageCategory.findById(categoryId);
     if (!category) {
-      throw new Error('Invalid categoryId. Category does not exist.');
+      throw new BadRequestError('Invalid categoryId. Category does not exist.');
     }
   }
 
@@ -629,7 +630,7 @@ export const getUploadSignedUrlRequest = async (data: { filename: string, mimety
 
 export const exportImageNames = async (datasetId: string, tag?: string) => {
   // Build query
-  const query: any = { datasetId };
+  const query: QueryFilter<IDatasetImage> = { datasetId };
 
   // Filter by tag if specified
   if (tag && tag !== 'all') {

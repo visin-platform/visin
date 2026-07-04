@@ -1,13 +1,16 @@
 import { randomUUID as uuidv4 } from 'crypto';
-import TestResult from '../models/TestResult';
+import { QueryFilter } from 'mongoose';
+import { ConflictError, ForbiddenError, NotFoundError, logger } from '@visin/backend-core';
+import TestResult, { ITestResult } from '../models/TestResult';
 import Epoch from '../models/Epoch';
 import Training from '../models/Training';
+import { checkProjectAccess, getVisibleTrainingIds, isWithinTokenScope } from './projectAccessService';
 
 interface PaginationOptions {
   page?: number;
   limit?: number;
-  sortBy?: string;
-  order?: 'asc' | 'desc';
+  sortBy: string;
+  order: 1 | -1;
 }
 
 interface TestResultFilters {
@@ -18,17 +21,17 @@ interface TestResultFilters {
 }
 
 export const testResultService = {
-  async getTestResults(filters: TestResultFilters, pagination: PaginationOptions) {
-    const { page, limit, sortBy = 'timestamp', order = 'desc' } = pagination;
+  async getTestResults(userId: string | undefined, filters: TestResultFilters, pagination: PaginationOptions) {
+    const { page, limit, sortBy, order } = pagination;
     const { epoch, epoch_uuids, training_uuid, projectId } = filters;
-
-    const sortOrder = order === 'desc' ? -1 : 1;
-    const sortField = sortBy;
 
     let query = TestResult.find({ deletedAt: null });
 
     // Filter by projectId if provided
     if (projectId) {
+      if (!(await checkProjectAccess(userId, projectId))) {
+        throw new ForbiddenError('Access denied to project');
+      }
       const trainings = await Training.find({ projectId, deletedAt: null });
       if (trainings.length === 0) {
         return { testResults: [], total: 0, pagination: { page: page || 1, limit: limit || 10, total: 0, totalPages: 0 } };
@@ -49,7 +52,10 @@ export const testResultService = {
     if (training_uuid) {
       const training = await Training.findOne({ uuid: training_uuid });
       if (!training) {
-        throw new Error('Training not found');
+        throw new NotFoundError('Training not found');
+      }
+      if (!(await checkProjectAccess(userId, training.projectId))) {
+        throw new ForbiddenError('Access denied to project');
       }
 
       const trainingEpochs = await Epoch.find({ trainingId: training._id.toString() }, 'epoch_uuid');
@@ -72,7 +78,17 @@ export const testResultService = {
       query = query.where('epoch_uuid').in(epoch_uuids);
     }
 
-    query = query.sort({ [sortField]: sortOrder });
+    // No project/training/epoch filter given at all: scope to epochs whose
+    // training is visible to the caller — otherwise this returns every
+    // project's test results regardless of privacy.
+    const noFilterGiven = !projectId && !training_uuid && epoch === undefined && !(epoch_uuids && epoch_uuids.length > 0);
+    if (noFilterGiven) {
+      const visibleTrainingIds = await getVisibleTrainingIds(userId);
+      const visibleEpochs = await Epoch.find({ trainingId: { $in: visibleTrainingIds } }, 'epoch_uuid');
+      query = query.where('epoch_uuid').in(visibleEpochs.map(e => e.epoch_uuid));
+    }
+
+    query = query.sort({ [sortBy]: order });
 
     let testResults;
     let total: number;
@@ -81,7 +97,7 @@ export const testResultService = {
       const skip = (page - 1) * limit;
       
       // Build count query based on filters
-      const countQuery: any = { deletedAt: null };
+      const countQuery: QueryFilter<ITestResult> = { deletedAt: null };
       if (projectId) {
         const trainings = await Training.find({ projectId, deletedAt: null });
         if (trainings.length > 0) {
@@ -103,6 +119,10 @@ export const testResultService = {
         countQuery.epoch = epoch;
       } else if (epoch_uuids && epoch_uuids.length > 0) {
         countQuery.epoch_uuid = { $in: epoch_uuids };
+      } else {
+        const visibleTrainingIds = await getVisibleTrainingIds(userId);
+        const visibleEpochs = await Epoch.find({ trainingId: { $in: visibleTrainingIds } }, 'epoch_uuid');
+        countQuery.epoch_uuid = { $in: visibleEpochs.map(e => e.epoch_uuid) };
       }
 
       const [results, count] = await Promise.all([
@@ -181,28 +201,49 @@ export const testResultService = {
     };
   },
 
-  async getTestResultById(id: string) {
+  async getTestResultById(id: string, userId: string | undefined) {
     const testResult = await TestResult.findOne({ _id: id, deletedAt: null });
     if (!testResult) {
-      throw new Error('Test result not found');
+      throw new NotFoundError('Test result not found');
+    }
+    if (!(await this.checkTestResultAccess(testResult.epoch_uuid, userId))) {
+      throw new ForbiddenError();
     }
     return testResult;
   },
 
-  async getTestResultByTestUuid(testUuid: string) {
+  async getTestResultByTestUuid(testUuid: string, userId: string | undefined) {
     const testResult = await TestResult.findOne({ test_uuid: testUuid, deletedAt: null });
     if (!testResult) {
-      throw new Error('Test result not found');
+      throw new NotFoundError('Test result not found');
+    }
+    if (!(await this.checkTestResultAccess(testResult.epoch_uuid, userId))) {
+      throw new ForbiddenError();
     }
     return testResult;
   },
 
-  async getTestResultsByEpochUuid(epochUuid: string, pagination: PaginationOptions) {
-    const { page, limit, sortBy = 'timestamp', order = 'desc' } = pagination;
-    const sortOrder = order === 'desc' ? -1 : 1;
-    const sortField = sortBy;
+  /**
+   * Resolves a test result's parent training (via its epoch) and checks
+   * project access. `reqProjectId`, when passed, additionally enforces that
+   * the training belongs to that project — used on writes to keep a
+   * project-scoped API token inside its own project.
+   */
+  async checkTestResultAccess(epochUuid: string, userId: string | undefined, reqProjectId?: string): Promise<boolean> {
+    const epoch = await Epoch.findOne({ epoch_uuid: epochUuid });
+    if (!epoch) return true; // Orphaned test result, not tied to a private training
+    const training = await Training.findById(epoch.trainingId);
+    if (!(await checkProjectAccess(userId, training?.projectId))) return false;
+    return isWithinTokenScope(reqProjectId, training?.projectId);
+  },
 
-    const query = TestResult.find({ epoch_uuid: epochUuid, deletedAt: null }).sort({ [sortField]: sortOrder });
+  async getTestResultsByEpochUuid(epochUuid: string, userId: string | undefined, pagination: PaginationOptions) {
+    if (!(await this.checkTestResultAccess(epochUuid, userId))) {
+      throw new ForbiddenError();
+    }
+    const { page, limit, sortBy, order } = pagination;
+
+    const query = TestResult.find({ epoch_uuid: epochUuid, deletedAt: null }).sort({ [sortBy]: order });
 
     let testResults;
 
@@ -272,16 +313,20 @@ export const testResultService = {
     };
   },
 
-  async createTestResult(data: any) {
+  async createTestResult(userId: string | undefined, reqProjectId: string | undefined, data: any) {
     const { timestamp, epoch, epoch_uuid, test_uuid, test_results } = data;
-
-    if (epoch === undefined || epoch === null) throw new Error('Epoch number is required');
-    if (!epoch_uuid) throw new Error('Epoch UUID is required');
-    if (!test_results) throw new Error('Test results are required');
 
     if (test_uuid) {
       const existing = await TestResult.findOne({ test_uuid });
-      if (existing) throw new Error(`Test result with test_uuid ${test_uuid} already exists`);
+      if (existing) throw new ConflictError(`Test result with test_uuid ${test_uuid} already exists`);
+    }
+
+    const epochDoc = await Epoch.findOne({ epoch_uuid });
+    if (epochDoc) {
+      const training = await Training.findById(epochDoc.trainingId);
+      if (!(await checkProjectAccess(userId, training?.projectId)) || !isWithinTokenScope(reqProjectId, training?.projectId)) {
+        throw new ForbiddenError();
+      }
     }
 
     const testResultData = new TestResult({
@@ -296,21 +341,23 @@ export const testResultService = {
 
     // Update timestamps
     try {
-      const epochDoc = await Epoch.findOne({ epoch_uuid });
       if (epochDoc) {
         await Epoch.findByIdAndUpdate(epochDoc._id, { updatedAt: new Date() });
         await Training.findByIdAndUpdate(epochDoc.trainingId, { updatedAt: new Date() });
       }
     } catch (e) {
-      console.warn('Failed to update epoch/training timestamps:', e);
+      logger.warn('Failed to update epoch/training timestamps', { error: (e as Error).message });
     }
 
     return savedTestResult;
   },
 
-  async updateTestResult(id: string, data: any) {
+  async updateTestResult(id: string, userId: string | undefined, reqProjectId: string | undefined, data: any) {
     const testResult = await TestResult.findOne({ _id: id, deletedAt: null });
-    if (!testResult) throw new Error('Test result not found');
+    if (!testResult) throw new NotFoundError('Test result not found');
+    if (!(await this.checkTestResultAccess(testResult.epoch_uuid, userId, reqProjectId))) {
+      throw new ForbiddenError();
+    }
 
     const { timestamp, epoch, epoch_uuid, test_results } = data;
 
@@ -329,15 +376,18 @@ export const testResultService = {
         await Training.findByIdAndUpdate(epochDoc.trainingId, { updatedAt: new Date() });
       }
     } catch (e) {
-      console.warn('Failed to update epoch/training timestamps:', e);
+      logger.warn('Failed to update epoch/training timestamps', { error: (e as Error).message });
     }
 
     return updatedTestResult;
   },
 
-  async deleteTestResult(id: string) {
+  async deleteTestResult(id: string, userId: string | undefined, reqProjectId: string | undefined) {
     const testResult = await TestResult.findOne({ _id: id, deletedAt: null });
-    if (!testResult) throw new Error('Test result not found');
+    if (!testResult) throw new NotFoundError('Test result not found');
+    if (!(await this.checkTestResultAccess(testResult.epoch_uuid, userId, reqProjectId))) {
+      throw new ForbiddenError();
+    }
 
     testResult.deletedAt = new Date();
     await testResult.save();
@@ -348,12 +398,10 @@ export const testResultService = {
     return await TestResult.distinct('epoch').sort();
   },
 
-  async compareTestResults(testResultIds: string[]) {
-    if (testResultIds.length > 20) throw new Error('Maximum 20 test results can be compared at once');
+  async compareTestResults(userId: string | undefined, testResultIds: string[]) {
+    const foundTestResults = await TestResult.find({ _id: { $in: testResultIds }, deletedAt: null });
 
-    const testResults = await TestResult.find({ _id: { $in: testResultIds }, deletedAt: null });
-
-    const epochUuids = testResults.map(tr => tr.epoch_uuid);
+    const epochUuids = foundTestResults.map(tr => tr.epoch_uuid);
     const epochs = await Epoch.find({ epoch_uuid: { $in: epochUuids }, deletedAt: null });
     const trainingIds = epochs.map(e => e.trainingId);
     const trainings = await Training.find({ _id: { $in: trainingIds }, deletedAt: null });
@@ -367,6 +415,17 @@ export const testResultService = {
       acc[(training._id as any).toString()] = training;
       return acc;
     }, {} as Record<string, any>);
+
+    // Silently drop test results whose training's project isn't visible to
+    // the caller — comparing arbitrary ids shouldn't leak private-project data.
+    const testResults = [];
+    for (const testResult of foundTestResults) {
+      const epoch = epochMap[testResult.epoch_uuid];
+      const training = epoch ? trainingMap[epoch.trainingId.toString()] : null;
+      if (await checkProjectAccess(userId, training?.projectId)) {
+        testResults.push(testResult);
+      }
+    }
 
     const comparisonData = testResults.map(testResult => {
       const epoch = epochMap[testResult.epoch_uuid];
@@ -432,9 +491,7 @@ export const testResultService = {
     return { comparison: comparisonData, summary };
   },
 
-  async getAggregatedTestResultsByTraining(trainingIds: string[]) {
-    if (trainingIds.length > 20) throw new Error('Maximum 20 trainings can be compared at once');
-
+  async getAggregatedTestResultsByTraining(userId: string | undefined, trainingIds: string[]) {
     // Get all epochs for the trainings
     const epochs = await Epoch.find({ trainingId: { $in: trainingIds }, deletedAt: null });
     const epochUuids = epochs.map(e => e.epoch_uuid);
@@ -449,9 +506,19 @@ export const testResultService = {
       return acc;
     }, {} as Record<string, any>);
 
+    // Silently drop trainings whose project isn't visible to the caller —
+    // comparing arbitrary ids shouldn't leak private-project data.
+    const visibleTrainingIds = new Set<string>();
+    for (const trainingId of trainingIds) {
+      const training = trainingMap[trainingId];
+      if (training && (await checkProjectAccess(userId, training.projectId))) {
+        visibleTrainingIds.add(trainingId);
+      }
+    }
+
     // Group test results by training
     const trainingTestResults = trainingIds
-      .filter(trainingId => trainingMap[trainingId]) // Only process existing trainings
+      .filter(trainingId => visibleTrainingIds.has(trainingId)) // Only process existing, visible trainings
       .map(trainingId => {
         const training = trainingMap[trainingId];
         const trainingEpochs = epochs.filter(e => e.trainingId.toString() === trainingId);

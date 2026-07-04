@@ -1,11 +1,14 @@
 import { randomUUID as uuidv4 } from 'crypto';
-import Training from '../models/Training';
+import { QueryFilter } from 'mongoose';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
+import Training, { ITraining } from '../models/Training';
 import Epoch from '../models/Epoch';
 import TestResult from '../models/TestResult';
 import Benchmark from '../models/Benchmark';
 import Project from '../models/Project';
 import Comparison from '../models/Comparison';
 import { testResultService } from './testResultService';
+import { checkProjectAccess, getVisibleProjectIds } from './projectAccessService';
 
 interface PaginationOptions {
   page?: number;
@@ -17,7 +20,7 @@ interface TrainingFilters {
   status?: string;
   datasetId?: string;
   projectId?: string;
-  tags?: string | string[];
+  tags?: string[];
 }
 
 interface CreateTrainingData {
@@ -27,7 +30,7 @@ interface CreateTrainingData {
   configId?: string;
   projectId?: string;
   status?: string;
-  tags?: string[];
+  tags?: string | string[];
   startTime?: Date;
   endTime?: Date;
   metadata?: any;
@@ -40,37 +43,20 @@ interface UpdateTrainingData {
   datasetId?: string;
   configId?: string;
   status?: string;
-  tags?: string[];
+  tags?: string | string[];
   startTime?: Date;
   endTime?: Date;
   metadata?: any;
 }
 
 export const trainingService = {
-  // Helper function to check if user has access to a project
-  async checkProjectAccess(userId: string | undefined, projectId: string | undefined): Promise<boolean> {
-    if (!projectId) return true; // If no project, allow (maybe public trainings)
-
-    // Try to find by slug first, then by ID
-    let project = await Project.findOne({ slug: projectId });
-    if (!project) {
-      project = await Project.findById(projectId);
-    }
-    if (!project) return false;
-
-    // Allow access if project is public
-    if (project.isPublic) return true;
-
-    // For private projects, require authentication and ownership
-    if (!userId) return false;
-    return project.ownerId === userId;
-  },
+  checkProjectAccess,
 
   async getTrainings(userId: string | undefined, filters: TrainingFilters, pagination: PaginationOptions) {
     const { page = 1, limit = 30 } = pagination;
     const { search, status, datasetId, projectId, tags } = filters;
 
-    const query: any = { deletedAt: null };
+    const query: QueryFilter<ITraining> = { deletedAt: null };
 
     // Search functionality
     if (search) {
@@ -79,7 +65,7 @@ export const trainingService = {
 
     // Filter by status
     if (status) {
-      query.status = status;
+      query.status = status as ITraining['status'];
     }
 
     // Filter by dataset
@@ -95,13 +81,13 @@ export const trainingService = {
         project = await Project.findById(projectId);
       }
       if (!project) {
-        throw new Error('Project not found');
+        throw new NotFoundError('Project not found');
       }
 
       // Check access to the project
       const hasAccess = await this.checkProjectAccess(userId, project._id.toString());
       if (!hasAccess) {
-        throw new Error('Access denied to project');
+        throw new ForbiddenError('Access denied to project');
       }
 
       query.projectId = project._id.toString();
@@ -132,19 +118,8 @@ export const trainingService = {
     }
 
     // Filter by tags
-    if (tags) {
-      let tagArray: string[];
-      if (Array.isArray(tags)) {
-        tagArray = tags;
-      } else {
-        // Split comma-separated string into array
-        tagArray = (tags as string).split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-      }
-      if (tagArray.length === 1) {
-        query.tags = { $in: tagArray };
-      } else {
-        query.tags = { $all: tagArray };
-      }
+    if (tags && tags.length > 0) {
+      query.tags = tags.length === 1 ? { $in: tags } : { $all: tags };
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -231,13 +206,13 @@ export const trainingService = {
     const training = await Training.findOne({ _id: id, deletedAt: null });
 
     if (!training) {
-      throw new Error('Training not found');
+      throw new NotFoundError('Training not found');
     }
 
     // Check project access
     const hasAccess = await this.checkProjectAccess(userId, training.projectId);
     if (!hasAccess) {
-      throw new Error('Access denied');
+      throw new ForbiddenError();
     }
 
     return training;
@@ -247,36 +222,33 @@ export const trainingService = {
     const training = await Training.findOne({ uuid, deletedAt: null });
 
     if (!training) {
-      throw new Error('Training not found');
+      throw new NotFoundError('Training not found');
     }
 
     // Check project access
     const hasAccess = await this.checkProjectAccess(userId, training.projectId);
     if (!hasAccess) {
-      throw new Error('Access denied');
+      throw new ForbiddenError();
     }
 
     return training;
   },
 
-  async getTrainingWithEpochs(id: string, userId: string | undefined, sortBy: string = 'epoch', order: 'asc' | 'desc' = 'asc') {
+  async getTrainingWithEpochs(id: string, userId: string | undefined, sortBy: string, order: 1 | -1) {
     const training = await Training.findOne({ _id: id, deletedAt: null });
 
     if (!training) {
-      throw new Error('Training not found');
+      throw new NotFoundError('Training not found');
     }
 
     // Check project access
     const hasAccess = await this.checkProjectAccess(userId, training.projectId);
     if (!hasAccess) {
-      throw new Error('Access denied');
+      throw new ForbiddenError();
     }
 
-    const sortOrder = order === 'desc' ? -1 : 1;
-    const sortField = sortBy;
-
     const epochs = await Epoch.find({ trainingId: id, deletedAt: null })
-      .sort({ [sortField]: sortOrder });
+      .sort({ [sortBy]: order });
 
     return {
       training,
@@ -299,7 +271,7 @@ export const trainingService = {
     } = data;
 
     if (!name || name.trim().length === 0) {
-      throw new Error('Training name is required');
+      throw new BadRequestError('Training name is required');
     }
 
     // Check project access if projectId is provided
@@ -307,7 +279,7 @@ export const trainingService = {
     if (projectId) {
       const hasAccess = await this.checkProjectAccess(userId, projectId);
       if (!hasAccess) {
-        throw new Error('Access denied to project');
+        throw new ForbiddenError('Access denied to project');
       }
 
       // Resolve to actual project _id for storage
@@ -346,19 +318,19 @@ export const trainingService = {
   async updateTraining(id: string, userId: string, data: UpdateTrainingData) {
     // Validate ID format
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-      throw new Error('Invalid training ID format');
+      throw new BadRequestError('Invalid training ID format');
     }
 
     const training = await Training.findOne({ _id: id, deletedAt: null });
 
     if (!training) {
-      throw new Error('Training not found');
+      throw new NotFoundError('Training not found');
     }
 
     // Check project access
     const hasAccess = await this.checkProjectAccess(userId, training.projectId);
     if (!hasAccess) {
-      throw new Error('Access denied');
+      throw new ForbiddenError();
     }
 
     const {
@@ -390,19 +362,19 @@ export const trainingService = {
   async deleteTraining(id: string, userId: string) {
     // Validate ID format
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-      throw new Error('Invalid training ID format');
+      throw new BadRequestError('Invalid training ID format');
     }
 
     const training = await Training.findOne({ _id: id, deletedAt: null });
 
     if (!training) {
-      throw new Error('Training not found');
+      throw new NotFoundError('Training not found');
     }
 
     // Check project access
     const hasAccess = await this.checkProjectAccess(userId, training.projectId);
     if (!hasAccess) {
-      throw new Error('Access denied');
+      throw new ForbiddenError();
     }
 
     const now = new Date();
@@ -432,14 +404,14 @@ export const trainingService = {
     return true;
   },
 
-  async getTrainingStats(filters: TrainingFilters) {
+  async getTrainingStats(userId: string | undefined, filters: TrainingFilters) {
     const { status, datasetId, tags, projectId } = filters;
 
-    const matchQuery: any = { deletedAt: null };
+    const matchQuery: QueryFilter<ITraining> = { deletedAt: null };
 
     // Filter by status if provided
     if (status) {
-      matchQuery.status = status;
+      matchQuery.status = status as ITraining['status'];
     }
 
     // Filter by dataset if provided
@@ -449,6 +421,9 @@ export const trainingService = {
 
     // Filter by project if provided
     if (projectId) {
+      if (!(await this.checkProjectAccess(userId, projectId))) {
+        throw new ForbiddenError('Access denied to project');
+      }
       // Resolve projectId to _id
       let project = await Project.findOne({ slug: projectId });
       if (!project) {
@@ -459,22 +434,20 @@ export const trainingService = {
       } else {
         matchQuery.projectId = projectId; // Fallback
       }
+    } else {
+      // No project filter given: scope to trainings the caller can actually
+      // see — otherwise these aggregate stats are computed across every
+      // project regardless of privacy.
+      const visibleProjectIds = await getVisibleProjectIds(userId);
+      matchQuery.$or = [
+        { projectId: { $in: visibleProjectIds } },
+        { projectId: { $exists: false } }
+      ];
     }
 
     // Filter by tags if provided
-    if (tags) {
-      let tagArray: string[];
-      if (Array.isArray(tags)) {
-        tagArray = tags;
-      } else {
-        // Split comma-separated string into array
-        tagArray = (tags as string).split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-      }
-      if (tagArray.length === 1) {
-        matchQuery.tags = { $in: tagArray };
-      } else {
-        matchQuery.tags = { $all: tagArray };
-      }
+    if (tags && tags.length > 0) {
+      matchQuery.tags = tags.length === 1 ? { $in: tags } : { $all: tags };
     }
 
     const CPU_RATE_PER_HOUR = 0.006;
@@ -547,13 +520,20 @@ export const trainingService = {
     };
   },
 
-  async compareTrainings(trainingIds: string[]) {
+  async compareTrainings(userId: string | undefined, trainingIds: string[]) {
     if (trainingIds.length > 30) {
-      throw new Error('Maximum 30 trainings can be compared at once');
+      throw new BadRequestError('Maximum 30 trainings can be compared at once');
     }
 
-    // Fetch trainings and their epochs
-    const trainings = await Training.find({ _id: { $in: trainingIds }, deletedAt: null });
+    // Fetch trainings, dropping any whose project isn't visible to the
+    // caller — comparing arbitrary ids shouldn't leak private-project data.
+    const foundTrainings = await Training.find({ _id: { $in: trainingIds }, deletedAt: null });
+    const trainings = [];
+    for (const training of foundTrainings) {
+      if (await this.checkProjectAccess(userId, training.projectId)) {
+        trainings.push(training);
+      }
+    }
     const foundTrainingIds = trainings.map(t => (t._id as any).toString());
     const epochs = await Epoch.find({ trainingId: { $in: foundTrainingIds }, deletedAt: null })
       .sort({ trainingId: 1, epoch: 1 });
@@ -562,7 +542,7 @@ export const trainingService = {
     const epochUuids = epochs.map(e => e.epoch_uuid);
 
     // Get aggregated test results for these trainings
-    const aggregatedTestResults = await testResultService.getAggregatedTestResultsByTraining(foundTrainingIds);
+    const aggregatedTestResults = await testResultService.getAggregatedTestResultsByTraining(userId, foundTrainingIds);
 
     // Get all benchmarks for these trainings
     const benchmarks = await Benchmark.find({ 

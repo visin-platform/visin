@@ -548,7 +548,7 @@ export interface Comparison {
   uuid: string;
   name: string;
   description?: string;
-  type: 'trainings';
+  type: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
   itemIds: string[];
   projectId?: string;
   metadata?: any;

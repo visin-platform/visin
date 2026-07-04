@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { NotFoundError, logger } from '@visin/backend-core';
 import {
   createWriteStream,
   createReadStream,
@@ -13,6 +14,10 @@ import {
  * PUT /internal/files/:fileId
  * Server-to-server raw buffer upload.
  * Accepts raw binary body.
+ *
+ * Stream errors surface via event callbacks, not thrown exceptions/rejected
+ * promises, so Express's automatic error forwarding doesn't reach them —
+ * these still need to respond manually.
  */
 export const internalUpload = (req: Request, res: Response): void => {
   const fileId = [req.params.fileId].flat().join('/');
@@ -23,7 +28,7 @@ export const internalUpload = (req: Request, res: Response): void => {
   const fail = (message: string, err: unknown): void => {
     if (responded) return;
     responded = true;
-    console.error(`${message} for ${fileId}:`, err);
+    logger.error(message, { fileId, error: err instanceof Error ? err.message : String(err) });
     if (!res.headersSent) {
       res.status(500).json({ success: false, message: 'Upload failed' });
     } else {
@@ -56,31 +61,26 @@ export const internalDownload = (req: Request, res: Response): void => {
   const fileId = [req.params.fileId].flat().join('/');
 
   if (!fileExists(fileId)) {
-    res.status(404).json({ success: false, message: 'File not found' });
-    return;
+    throw new NotFoundError('File not found');
   }
 
-  try {
-    const meta = getMetadata(fileId);
-    const stream = createReadStream(fileId);
+  const meta = getMetadata(fileId);
+  const stream = createReadStream(fileId);
 
-    res.setHeader('Content-Length', meta.size);
-    res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Length', meta.size);
+  res.setHeader('Content-Type', 'application/octet-stream');
 
-    stream.on('error', (err) => {
-      console.error(`Internal download stream failed for ${fileId}:`, err);
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, message: 'Download failed' });
-      } else {
-        res.destroy(err);
-      }
-    });
+  // Stream errors are event-driven, not thrown — Express can't forward these automatically.
+  stream.on('error', (err) => {
+    logger.error('Internal download stream failed', { fileId, error: err.message });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Download failed' });
+    } else {
+      res.destroy(err);
+    }
+  });
 
-    stream.pipe(res);
-  } catch (err) {
-    console.error(`Internal download failed for ${fileId}:`, err);
-    res.status(500).json({ success: false, message: 'Download failed' });
-  }
+  stream.pipe(res);
 };
 
 /**
@@ -104,17 +104,11 @@ export const internalMetadata = (req: Request, res: Response): void => {
   const fileId = [req.params.fileId].flat().join('/');
 
   if (!fileExists(fileId)) {
-    res.status(404).json({ success: false, message: 'File not found' });
-    return;
+    throw new NotFoundError('File not found');
   }
 
-  try {
-    const meta = getMetadata(fileId);
-    res.json({ success: true, data: meta });
-  } catch (err) {
-    console.error(`Metadata failed for ${fileId}:`, err);
-    res.status(500).json({ success: false, message: 'Failed to get metadata' });
-  }
+  const meta = getMetadata(fileId);
+  res.json({ success: true, data: meta });
 };
 
 /**
@@ -123,13 +117,8 @@ export const internalMetadata = (req: Request, res: Response): void => {
  */
 export const internalDelete = (req: Request, res: Response): void => {
   const fileId = [req.params.fileId].flat().join('/');
-  try {
-    deleteFile(fileId);
-    res.json({ success: true, message: 'File deleted' });
-  } catch (err) {
-    console.error(`Delete failed for ${fileId}:`, err);
-    res.status(500).json({ success: false, message: 'Delete failed' });
-  }
+  deleteFile(fileId);
+  res.json({ success: true, message: 'File deleted' });
 };
 
 /**
@@ -138,20 +127,9 @@ export const internalDelete = (req: Request, res: Response): void => {
  * Delete all files matching a path prefix (folder delete).
  */
 export const internalDeleteFolder = (req: Request, res: Response): void => {
-  const { prefix } = req.body as { prefix?: string };
-
-  if (!prefix) {
-    res.status(400).json({ success: false, message: 'prefix is required' });
-    return;
-  }
-
-  try {
-    const count = deleteByPrefix(prefix);
-    res.json({ success: true, message: `Deleted ${count} file(s)`, count });
-  } catch (err) {
-    console.error(`Folder delete failed for prefix ${prefix}:`, err);
-    res.status(500).json({ success: false, message: 'Folder delete failed' });
-  }
+  const { prefix } = req.body as { prefix: string };
+  const count = deleteByPrefix(prefix);
+  res.json({ success: true, message: `Deleted ${count} file(s)`, count });
 };
 
 /**
@@ -159,12 +137,7 @@ export const internalDeleteFolder = (req: Request, res: Response): void => {
  * List files.
  */
 export const internalList = (req: Request, res: Response): void => {
-  const { prefix, maxKeys } = req.query as { prefix?: string; maxKeys?: string };
-  try {
-    const files = listFiles(prefix, maxKeys ? parseInt(maxKeys, 10) : 1000);
-    res.json({ success: true, data: files });
-  } catch (err) {
-    console.error('List files failed:', err);
-    res.status(500).json({ success: false, message: 'List files failed' });
-  }
+  const { prefix, maxKeys } = req.query as unknown as { prefix?: string; maxKeys: number };
+  const files = listFiles(prefix, maxKeys);
+  res.json({ success: true, data: files });
 };

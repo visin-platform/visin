@@ -31,3 +31,9 @@ export type { InternalServiceRequest } from './middleware/internalServiceAuth';
 export { errorHandler, asyncHandler } from './middleware/errorHandler';
 export { securityHeaders, createRateLimiter, standardRateLimiter, strictRateLimiter } from './middleware/security';
 export { requestLogger } from './middleware/requestLogger';
+export { validateRequest } from './middleware/validate';
+export type { RequestSchemas } from './middleware/validate';
+
+// Re-exported so services can author zod schemas without their own direct
+// dependency on zod — one version, declared once, in this package.
+export { z } from 'zod';

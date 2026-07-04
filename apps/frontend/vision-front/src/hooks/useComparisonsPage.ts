@@ -190,9 +190,9 @@ export const useComparisonsPage = () => {
   const handleViewComparison = (comparison: Comparison) => {
     // All comparisons now go to training comparison page
     let tab = '';
-    if ((comparison.type as any) === 'tests') {
+    if (comparison.type === 'tests') {
       tab = '&tab=tests';
-    } else if ((comparison.type as any) === 'benchmarks') {
+    } else if (comparison.type === 'benchmarks') {
       tab = '&tab=benchmarks';
     }
     navigate(`/trainings/compare?ids=${comparison.itemIds.join(',')}${tab}`);

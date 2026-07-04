@@ -1,3 +1,4 @@
+import { ConflictError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import { Group, IGroup, GroupRole } from '../models/Group';
 
 export async function updateMemberActivity(groupId: string, memberEmail: string): Promise<void> {
@@ -42,8 +43,8 @@ export async function getGroupIfMember(groupId: string, email: string): Promise<
       { deletedAt: { $exists: false } }
     ]
   });
-  if (!group) throw new Error('NOT_FOUND');
-  if (!group.members.some((m) => m.email === email.toLowerCase())) throw new Error('FORBIDDEN');
+  if (!group) throw new NotFoundError();
+  if (!group.members.some((m) => m.email === email.toLowerCase())) throw new ForbiddenError();
   return group;
 }
 
@@ -59,9 +60,9 @@ export async function updateGroup(
       { deletedAt: { $exists: false } }
     ]
   });
-  if (!group) throw new Error('NOT_FOUND');
+  if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingEmail);
-  if (!myRole || (myRole !== 'owner' && myRole !== 'admin')) throw new Error('FORBIDDEN');
+  if (!myRole || (myRole !== 'owner' && myRole !== 'admin')) throw new ForbiddenError();
   
   if (updates.name !== undefined) {
     group.name = String(updates.name).trim();
@@ -79,9 +80,9 @@ export async function deleteGroup(groupId: string, actingEmail: string): Promise
       { deletedAt: { $exists: false } }
     ]
   });
-  if (!group) throw new Error('NOT_FOUND');
+  if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingEmail);
-  if (myRole !== 'owner') throw new Error('FORBIDDEN');
+  if (myRole !== 'owner') throw new ForbiddenError();
   
   // Soft delete by setting deletedAt timestamp
   group.deletedAt = new Date();
@@ -93,9 +94,9 @@ export async function restoreGroup(groupId: string, actingEmail: string): Promis
     _id: groupId,
     deletedAt: { $exists: true }
   });
-  if (!group) throw new Error('NOT_FOUND');
+  if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingEmail);
-  if (myRole !== 'owner') throw new Error('FORBIDDEN');
+  if (myRole !== 'owner') throw new ForbiddenError();
   
   // Restore by removing deletedAt timestamp
   group.deletedAt = undefined;
@@ -108,9 +109,9 @@ export async function permanentlyDeleteGroup(groupId: string, actingEmail: strin
     _id: groupId,
     deletedAt: { $exists: true }
   });
-  if (!group) throw new Error('NOT_FOUND');
+  if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingEmail);
-  if (myRole !== 'owner') throw new Error('FORBIDDEN');
+  if (myRole !== 'owner') throw new ForbiddenError();
   
   // Permanently delete the group
   await Group.findByIdAndDelete(groupId);
@@ -129,13 +130,13 @@ export async function addMember(
       { deletedAt: { $exists: false } }
     ]
   });
-  if (!group) throw new Error('NOT_FOUND');
+  if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingEmail);
-  if (!myRole || (myRole !== 'owner' && myRole !== 'admin')) throw new Error('FORBIDDEN');
+  if (!myRole || (myRole !== 'owner' && myRole !== 'admin')) throw new ForbiddenError();
   
   // Check if user is already a member
   if (group.members.some((m) => m.email === memberEmail.toLowerCase())) {
-    throw new Error('ALREADY_MEMBER');
+    throw new ConflictError('User is already a member');
   }
   
   group.members.push({ 
@@ -165,11 +166,11 @@ export async function updateMemberRole(
       { deletedAt: { $exists: false } }
     ]
   });
-  if (!group) throw new Error('NOT_FOUND');
+  if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingEmail);
-  if (!myRole || (myRole !== 'owner' && myRole !== 'admin')) throw new Error('FORBIDDEN');
+  if (!myRole || (myRole !== 'owner' && myRole !== 'admin')) throw new ForbiddenError();
   const m = group.members.find((x) => x.email === memberEmail.toLowerCase());
-  if (!m) throw new Error('MEMBER_NOT_FOUND');
+  if (!m) throw new NotFoundError('Member not found');
   m.role = role;
   await group.save();
   return group;
@@ -183,10 +184,10 @@ export async function removeMember(groupId: string, actingEmail: string, targetE
       { deletedAt: { $exists: false } }
     ]
   });
-  if (!group) throw new Error('NOT_FOUND');
+  if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingEmail);
-  if (!myRole) throw new Error('FORBIDDEN');
-  if (actingEmail.toLowerCase() !== targetEmail.toLowerCase() && myRole === 'member') throw new Error('FORBIDDEN');
+  if (!myRole) throw new ForbiddenError();
+  if (actingEmail.toLowerCase() !== targetEmail.toLowerCase() && myRole === 'member') throw new ForbiddenError();
   group.members = group.members.filter((m) => m.email !== targetEmail.toLowerCase());
   await group.save();
   return group;
@@ -203,7 +204,7 @@ export async function checkMembership(
       { deletedAt: { $exists: false } }
     ]
   });
-  if (!group) throw new Error('NOT_FOUND');
+  if (!group) throw new NotFoundError();
   const m = group.members.find((x) => x.email === email.toLowerCase());
   return { member: !!m, role: (m?.role as GroupRole) || null };
 }

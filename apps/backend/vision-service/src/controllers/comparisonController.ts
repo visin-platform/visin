@@ -1,338 +1,271 @@
 import { Request, Response } from 'express';
 import { randomUUID as uuidv4 } from 'crypto';
-import Comparison from '../models/Comparison';
+import { QueryFilter } from 'mongoose';
+import { ForbiddenError, NotFoundError } from '@visin/backend-core';
+import Comparison, { IComparison } from '../models/Comparison';
+import { checkProjectAccess, getVisibleProjectIds } from '../services/projectAccessService';
+import type { GetComparisonsQuery, GetComparisonStatsQuery } from '../validation/comparisonSchemas';
 
 // Get all comparisons
 export const getComparisons = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const {
-      page = 1,
-      limit = 30,
-      search,
-      type,
-      projectId,
-      sortBy = 'updatedAt',
-      order = 'desc'
-    } = req.query;
+  const {
+    page = 1,
+    limit = 30,
+    search,
+    type,
+    projectId,
+    sortBy,
+    order
+  } = req.query as unknown as GetComparisonsQuery;
 
-    const query: any = { deletedAt: null };
+  const query: QueryFilter<IComparison> = { deletedAt: null };
 
-    // Search functionality
-    if (search) {
-      query.$text = { $search: search as string };
-    }
-
-    // Filter by type
-    if (type) {
-      query.type = type;
-    }
-
-    // Filter by project
-    if (projectId) {
-      query.projectId = projectId;
-    }
-
-    const skip = (Number(page) - 1) * Number(limit);
-    const sortOrder = order === 'desc' ? -1 : 1;
-    const sortField = sortBy as string;
-
-    const [comparisons, total] = await Promise.all([
-      Comparison.find(query)
-        .sort({ [sortField]: sortOrder })
-        .skip(skip)
-        .limit(Number(limit)),
-      Comparison.countDocuments(query)
-    ]);
-
-    res.json({
-      success: true,
-      data: {
-        comparisons,
-        pagination: {
-          page: Number(page),
-          limit: Number(limit),
-          total,
-          pages: Math.ceil(total / Number(limit))
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching comparisons:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch comparisons';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch comparisons',
-      error: errorMessage
-    });
+  // Search functionality
+  if (search) {
+    query.$text = { $search: search as string };
   }
+
+  // Filter by type
+  if (type) {
+    query.type = type;
+  }
+
+  // Filter by project
+  if (projectId) {
+    if (!(await checkProjectAccess(req.user?.id, projectId as string))) {
+      throw new ForbiddenError();
+    }
+    query.projectId = projectId;
+  } else {
+    // No filter given: scope to projects the caller can actually see, plus
+    // comparisons with no project at all — otherwise this returns every
+    // project's comparisons regardless of privacy.
+    const visibleProjectIds = await getVisibleProjectIds(req.user?.id);
+    query.$or = [
+      { projectId: { $in: visibleProjectIds } },
+      { projectId: { $exists: false } },
+      { projectId: null }
+    ];
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const [comparisons, total] = await Promise.all([
+    Comparison.find(query)
+      .sort({ [sortBy]: order })
+      .skip(skip)
+      .limit(Number(limit)),
+    Comparison.countDocuments(query)
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      comparisons,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        pages: Math.ceil(total / Number(limit))
+      }
+    }
+  });
 };
 
 // Get comparison by ID
 export const getComparisonById = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
+  const { id } = req.params;
 
-    const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
+  const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
 
-    if (!comparison) {
-      res.status(404).json({
-        success: false,
-        message: 'Comparison not found'
-      });
-      return;
-    }
-
-    res.json({
-      success: true,
-      data: comparison
-    });
-  } catch (error) {
-    console.error('Error fetching comparison:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch comparison';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch comparison',
-      error: errorMessage
-    });
+  if (!comparison) {
+    throw new NotFoundError('Comparison not found');
   }
+
+  if (!(await checkProjectAccess(req.user?.id, comparison.projectId))) {
+    throw new ForbiddenError();
+  }
+
+  res.json({
+    success: true,
+    data: comparison
+  });
 };
 
 // Get comparison by UUID
 export const getComparisonByUuid = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { uuid } = req.params;
+  const { uuid } = req.params;
 
-    const comparison = await Comparison.findOne({ uuid, deletedAt: null });
+  const comparison = await Comparison.findOne({ uuid, deletedAt: null });
 
-    if (!comparison) {
-      res.status(404).json({
-        success: false,
-        message: 'Comparison not found'
-      });
-      return;
-    }
-
-    res.json({
-      success: true,
-      data: comparison
-    });
-  } catch (error) {
-    console.error('Error fetching comparison:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch comparison';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch comparison',
-      error: errorMessage
-    });
+  if (!comparison) {
+    throw new NotFoundError('Comparison not found');
   }
+
+  if (!(await checkProjectAccess(req.user?.id, comparison.projectId))) {
+    throw new ForbiddenError();
+  }
+
+  res.json({
+    success: true,
+    data: comparison
+  });
 };
 
 // Create comparison
 export const createComparison = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const {
-      name,
-      description,
-      type,
-      itemIds,
-      projectId,
-      metadata
-    } = req.body;
+  const {
+    name,
+    description,
+    type,
+    itemIds,
+    projectId,
+    metadata
+  } = req.body;
 
-    if (!name || name.trim().length === 0) {
-      res.status(400).json({
-        success: false,
-        message: 'Comparison name is required'
-      });
-      return;
-    }
+  // Determine effective projectId: API tokens take precedence over the request body
+  const effectiveProjectId: string | undefined = req.projectId || projectId || undefined;
 
-    if (!type || !['trainings', 'tests', 'benchmarks', 'epochs'].includes(type)) {
-      res.status(400).json({
-        success: false,
-        message: 'Valid comparison type is required (trainings, tests, benchmarks, epochs)'
-      });
-      return;
-    }
-
-    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
-      res.status(400).json({
-        success: false,
-        message: 'Item IDs array is required and must not be empty'
-      });
-      return;
-    }
-
-    if (!projectId || projectId.trim().length === 0) {
-      // projectId is optional for global comparisons
-    }
-
-    if (itemIds.length > 50) {
-      res.status(400).json({
-        success: false,
-        message: 'Maximum 50 items can be compared at once'
-      });
-      return;
-    }
-
-    // Generate UUID if not provided
-    const uuid = req.body.uuid || uuidv4();
-
-    const comparison = new Comparison({
-      uuid,
-      name: name.trim(),
-      description: description?.trim(),
-      type,
-      itemIds,
-      projectId: projectId?.trim(),
-      metadata
-    });
-
-    const savedComparison = await comparison.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Comparison created successfully',
-      data: savedComparison
-    });
-  } catch (error) {
-    console.error('Error creating comparison:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to create comparison';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create comparison',
-      error: errorMessage
-    });
+  if (effectiveProjectId && !(await checkProjectAccess(req.user?.id, effectiveProjectId))) {
+    throw new ForbiddenError('Access denied to project');
   }
+
+  // Generate UUID if not provided
+  const uuid = req.body.uuid || uuidv4();
+
+  const comparison = new Comparison({
+    uuid,
+    name,
+    description,
+    type,
+    itemIds,
+    projectId: effectiveProjectId,
+    metadata
+  });
+
+  const savedComparison = await comparison.save();
+
+  res.status(201).json({
+    success: true,
+    message: 'Comparison created successfully',
+    data: savedComparison
+  });
 };
 
 // Get comparison statistics
 export const getComparisonStats = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { type, projectId } = req.query;
+  const { type, projectId } = req.query as unknown as GetComparisonStatsQuery;
 
-    const query: any = { deletedAt: null };
+  const query: QueryFilter<IComparison> = { deletedAt: null };
 
-    // Filter by type if provided
-    if (type) {
-      query.type = type;
-    }
-
-    // Filter by project if provided
-    if (projectId) {
-      query.projectId = projectId;
-    }
-
-    const stats = await Comparison.aggregate([
-      { $match: query },
-      {
-        $group: {
-          _id: '$type',
-          count: { $sum: 1 },
-          avgItemCount: { $avg: { $size: '$itemIds' } },
-          maxItemCount: { $max: { $size: '$itemIds' } },
-          minItemCount: { $min: { $size: '$itemIds' } }
-        }
-      }
-    ]);
-
-    const totalComparisons = await Comparison.countDocuments(query);
-
-    res.json({
-      success: true,
-      data: {
-        totalComparisons,
-        byType: stats,
-        filters: {
-          type: type || null
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching comparison stats:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch comparison stats';
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch comparison stats',
-      error: errorMessage
-    });
+  // Filter by type if provided
+  if (type) {
+    query.type = type;
   }
+
+  // Filter by project if provided
+  if (projectId) {
+    if (!(await checkProjectAccess(req.user?.id, projectId as string))) {
+      throw new ForbiddenError();
+    }
+    query.projectId = projectId;
+  } else {
+    // No filter given: scope to projects the caller can actually see, plus
+    // comparisons with no project at all — otherwise these stats are
+    // computed across every project's comparisons regardless of privacy.
+    const visibleProjectIds = await getVisibleProjectIds(req.user?.id);
+    query.$or = [
+      { projectId: { $in: visibleProjectIds } },
+      { projectId: { $exists: false } },
+      { projectId: null }
+    ];
+  }
+
+  const stats = await Comparison.aggregate([
+    { $match: query },
+    {
+      $group: {
+        _id: '$type',
+        count: { $sum: 1 },
+        avgItemCount: { $avg: { $size: '$itemIds' } },
+        maxItemCount: { $max: { $size: '$itemIds' } },
+        minItemCount: { $min: { $size: '$itemIds' } }
+      }
+    }
+  ]);
+
+  const totalComparisons = await Comparison.countDocuments(query);
+
+  res.json({
+    success: true,
+    data: {
+      totalComparisons,
+      byType: stats,
+      filters: {
+        type: type || null
+      }
+    }
+  });
 };
 
 // Update comparison
 export const updateComparison = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
+  const { id } = req.params;
+  const updateData = req.body;
 
-    const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
+  const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
 
-    if (!comparison) {
-      res.status(404).json({
-        success: false,
-        message: 'Comparison not found'
-      });
-      return;
-    }
-
-    // Update allowed fields
-    if (updateData.name !== undefined) {
-      comparison.name = updateData.name.trim();
-    }
-    if (updateData.description !== undefined) {
-      comparison.description = updateData.description?.trim();
-    }
-    if (updateData.itemIds !== undefined) {
-      comparison.itemIds = updateData.itemIds;
-    }
-    if (updateData.metadata !== undefined) {
-      comparison.metadata = updateData.metadata;
-    }
-
-    const updatedComparison = await comparison.save();
-
-    res.json({
-      success: true,
-      message: 'Comparison updated successfully',
-      data: updatedComparison
-    });
-  } catch (error) {
-    console.error('Error updating comparison:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update comparison'
-    });
+  if (!comparison) {
+    throw new NotFoundError('Comparison not found');
   }
+
+  if (!(await checkProjectAccess(req.user?.id, comparison.projectId))) {
+    throw new ForbiddenError();
+  }
+
+  // Update allowed fields
+  if (updateData.name !== undefined) {
+    comparison.name = updateData.name.trim();
+  }
+  if (updateData.description !== undefined) {
+    comparison.description = updateData.description?.trim();
+  }
+  if (updateData.itemIds !== undefined) {
+    comparison.itemIds = updateData.itemIds;
+  }
+  if (updateData.metadata !== undefined) {
+    comparison.metadata = updateData.metadata;
+  }
+
+  const updatedComparison = await comparison.save();
+
+  res.json({
+    success: true,
+    message: 'Comparison updated successfully',
+    data: updatedComparison
+  });
 };
 
 // Delete comparison (soft delete)
 export const deleteComparison = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
+  const { id } = req.params;
 
-    const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
+  const comparison = await Comparison.findOne({ _id: id, deletedAt: null });
 
-    if (!comparison) {
-      res.status(404).json({
-        success: false,
-        message: 'Comparison not found'
-      });
-      return;
-    }
-
-    // Soft delete the comparison
-    comparison.deletedAt = new Date();
-    await comparison.save();
-
-    res.json({
-      success: true,
-      message: 'Comparison deleted successfully'
-    });
-  } catch (error) {
-    console.error('Error deleting comparison:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete comparison'
-    });
+  if (!comparison) {
+    throw new NotFoundError('Comparison not found');
   }
+
+  if (!(await checkProjectAccess(req.user?.id, comparison.projectId))) {
+    throw new ForbiddenError();
+  }
+
+  // Soft delete the comparison
+  comparison.deletedAt = new Date();
+  await comparison.save();
+
+  res.json({
+    success: true,
+    message: 'Comparison deleted successfully'
+  });
 };

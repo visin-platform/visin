@@ -30,34 +30,48 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - '.github/workflows/test.yml'
+            backend-shared: &backend-shared
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/test.yml'
+              - 'libs/backend-core/**'
+            frontend-shared: &frontend-shared
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/test.yml'
+              - 'libs/frontend-core/**'
+            "@visin/backend-core":
+              - *backend-shared
+            "@visin/frontend-core":
+              - *frontend-shared
             auth-service:
-              - *shared
+              - *backend-shared
               - 'apps/backend/auth-service/**'
             file-service:
-              - *shared
+              - *backend-shared
               - 'apps/backend/file-service/**'
             group-service:
-              - *shared
+              - *backend-shared
               - 'apps/backend/group-service/**'
             vision-service:
-              - *shared
+              - *backend-shared
               - 'apps/backend/vision-service/**'
             account-front:
-              - *shared
+              - *frontend-shared
               - 'apps/frontend/account-front/**'
             auth-front:
-              - *shared
+              - *frontend-shared
               - 'apps/frontend/auth-front/**'
             landing-front:
               - *shared
               - 'apps/frontend/landing-front/**'
             vision-front:
-              - *shared
+              - *frontend-shared
               - 'apps/frontend/vision-front/**'
 
       - name: Build workspace matrix
         id: set-matrix
-        run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c 'map(select(. != "shared"))')" >> "$GITHUB_OUTPUT"
+        run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c 'map(select(. != "shared" and . != "backend-shared" and . != "frontend-shared"))')" >> "$GITHUB_OUTPUT"
 
   lint:
     needs: changes
@@ -108,10 +122,15 @@ jobs:
       - name: Run tests with coverage
         run: npm run test:coverage --workspace=${{ matrix.workspace }}
 
+      - name: Sanitize workspace name for artifact
+        id: safe-name
+        if: always()
+        run: echo "name=$(printf '%s' '${{ matrix.workspace }}' | tr -c '[:alnum:]-' '-')" >> "$GITHUB_OUTPUT"
+
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ matrix.workspace }}
-          path: apps/*/${{ matrix.workspace }}/coverage/lcov.info
+          name: coverage-${{ steps.safe-name.outputs.name }}
+          path: '**/coverage/lcov.info'
           if-no-files-found: ignore

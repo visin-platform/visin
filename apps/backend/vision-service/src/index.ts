@@ -30,6 +30,10 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 4010;
 
+// Every service runs behind the nginx reverse proxy — trust its X-Forwarded-*
+// headers so express-rate-limit and req.ip key on the real client, not the proxy.
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(securityHeaders);
 app.use(requestLogger);
@@ -50,7 +54,13 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id']
 }));
-app.use(express.json({ limit: '50mb' })); // Increased limit for large training data
+// Training/epoch/benchmark/test-result ingestion can carry large result payloads;
+// everything else (projects, comparisons, configs, ...) gets the smaller default.
+const LARGE_PAYLOAD_PREFIXES = ['/api/epochs', '/api/benchmarks', '/api/test-results', '/api/trainings'];
+app.use((req, res, next) => {
+  const limit = LARGE_PAYLOAD_PREFIXES.some(prefix => req.path.startsWith(prefix)) ? '50mb' : '1mb';
+  express.json({ limit })(req, res, next);
+});
 
 // Global Middleware
 app.use(apiTokenMiddleware);

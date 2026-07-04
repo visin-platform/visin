@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { BadRequestError, logger } from '@visin/backend-core';
 import { InternalServiceRequest } from '../middleware/internalServiceAuth';
 import * as svc from '../services/groupService';
 import { GroupRole } from '../models/Group';
@@ -9,7 +10,7 @@ const invalidateUserTokens = async (userEmails: string[]): Promise<void> => {
   const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
 
   if (!authServiceUrl || !internalToken) {
-    console.warn('Auth service not configured for token invalidation');
+    logger.warn('Auth service not configured for token invalidation');
     return;
   }
 
@@ -27,15 +28,17 @@ const invalidateUserTokens = async (userEmails: string[]): Promise<void> => {
       });
 
       if (invalidateResponse.ok) {
-        console.log(`Successfully invalidated tokens for user: ${email}`);
+        logger.info('Successfully invalidated tokens for user', { email });
       } else {
-        console.error(`Failed to invalidate tokens for ${email}: ${invalidateResponse.status}`);
+        logger.error('Failed to invalidate tokens', { email, status: invalidateResponse.status });
       }
     } catch (error) {
-      console.error(`Failed to invalidate tokens for ${email}:`, error);
+      logger.error('Failed to invalidate tokens', { email, error: (error as Error).message });
     }
   }
-};const userEmail = (req: InternalServiceRequest): string => {
+};
+
+const userEmail = (req: InternalServiceRequest): string => {
   // For internal service requests, extract email from request body or params
   if (req.isInternalService) {
     const email = req.body?.userEmail || req.query?.userEmail || req.params?.userEmail;
@@ -46,197 +49,111 @@ const invalidateUserTokens = async (userEmails: string[]): Promise<void> => {
   return ((req as any).user?.email || '').toLowerCase();
 };
 
-export const createGroup = async (req: InternalServiceRequest, res: Response) => {
-  try {
-    const email = userEmail(req);
-    if (!email) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User email required' 
-      });
-    }
-    const { name } = req.body as { name: string };
-    if (!name) return res.status(400).json({ success: false, message: 'name required' });
-    const group = await svc.createGroup(email, name);
-    res.status(201).json({ success: true, data: group });
-  } catch (e: any) {
-    res.status(500).json({ success: false, message: e.message });
+export const createGroup = async (req: InternalServiceRequest, res: Response): Promise<void> => {
+  const email = userEmail(req);
+  if (!email) {
+    throw new BadRequestError('User email required');
   }
+  const { name } = req.body as { name: string };
+  const group = await svc.createGroup(email, name);
+  res.status(201).json({ success: true, data: group });
 };
 
-export const listMine = async (req: InternalServiceRequest, res: Response) => {
-  try {
-    const email = userEmail(req);
-    if (!email) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User email required' 
-      });
-    }
-    const groups = await svc.listMyGroups(email);
-    
-    // Update last activity for this user in each group
-    for (const group of groups) {
-      await svc.updateMemberActivity((group as any)._id.toString(), email);
-    }
-    
-    res.json({ success: true, data: groups });
-  } catch (e: any) {
-    res.status(500).json({ success: false, message: e.message });
+export const listMine = async (req: InternalServiceRequest, res: Response): Promise<void> => {
+  const email = userEmail(req);
+  if (!email) {
+    throw new BadRequestError('User email required');
   }
+  const groups = await svc.listMyGroups(email);
+
+  // Update last activity for this user in each group
+  for (const group of groups) {
+    await svc.updateMemberActivity((group as any)._id.toString(), email);
+  }
+
+  res.json({ success: true, data: groups });
 };
 
-export const listMyDeleted = async (req: InternalServiceRequest, res: Response) => {
-  try {
-    const email = userEmail(req);
-    if (!email) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User email required' 
-      });
-    }
-    const groups = await svc.listMyDeletedGroups(email);
-    res.json({ success: true, data: groups });
-  } catch (e: any) {
-    res.status(500).json({ success: false, message: e.message });
+export const listMyDeleted = async (req: InternalServiceRequest, res: Response): Promise<void> => {
+  const email = userEmail(req);
+  if (!email) {
+    throw new BadRequestError('User email required');
   }
+  const groups = await svc.listMyDeletedGroups(email);
+  res.json({ success: true, data: groups });
 };
 
-export const getUserGroupIds = async (req: InternalServiceRequest, res: Response) => {
-  try {
-    const email = userEmail(req);
-    if (!email) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User email required' 
-      });
-    }
-    const groups = await svc.listMyGroups(email);
-    const groupIds = groups.map(group => (group as any)._id.toString());
-    res.json({ success: true, data: groupIds });
-  } catch (e: any) {
-    res.status(500).json({ success: false, message: e.message });
+export const getUserGroupIds = async (req: InternalServiceRequest, res: Response): Promise<void> => {
+  const email = userEmail(req);
+  if (!email) {
+    throw new BadRequestError('User email required');
   }
+  const groups = await svc.listMyGroups(email);
+  const groupIds = groups.map(group => (group as any)._id.toString());
+  res.json({ success: true, data: groupIds });
 };
 
-export const getOne = async (req: Request, res: Response) => {
-  try {
-    const group = await svc.getGroupIfMember(req.params.id as string, userEmail(req));
-    res.json({ success: true, data: group });
-  } catch (e: any) {
-    if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
-    if (e.message === 'FORBIDDEN') return res.status(403).json({ success: false, message: 'forbidden' });
-    res.status(500).json({ success: false, message: e.message });
-  }
+export const getOne = async (req: Request, res: Response): Promise<void> => {
+  const group = await svc.getGroupIfMember(req.params.id as string, userEmail(req));
+  res.json({ success: true, data: group });
 };
 
-export const updateGroup = async (req: Request, res: Response) => {
-  try {
-    const { name } = req.body as { name: string };
-    if (!name) return res.status(400).json({ success: false, message: 'name required' });
-    const group = await svc.updateGroup(req.params.id as string, userEmail(req), { name });
-    res.json({ success: true, data: group });
-  } catch (e: any) {
-    if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
-    if (e.message === 'FORBIDDEN') return res.status(403).json({ success: false, message: 'forbidden' });
-    res.status(500).json({ success: false, message: e.message });
-  }
+export const updateGroup = async (req: Request, res: Response): Promise<void> => {
+  const { name } = req.body as { name: string };
+  const group = await svc.updateGroup(req.params.id as string, userEmail(req), { name });
+  res.json({ success: true, data: group });
 };
 
-export const deleteGroup = async (req: Request, res: Response) => {
-  try {
-    await svc.deleteGroup(req.params.id as string, userEmail(req));
-    res.status(204).send();
-  } catch (e: any) {
-    if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
-    if (e.message === 'FORBIDDEN') return res.status(403).json({ success: false, message: 'forbidden' });
-    res.status(500).json({ success: false, message: e.message });
-  }
+export const deleteGroup = async (req: Request, res: Response): Promise<void> => {
+  await svc.deleteGroup(req.params.id as string, userEmail(req));
+  res.status(204).send();
 };
 
-export const restoreGroup = async (req: Request, res: Response) => {
-  try {
-    const group = await svc.restoreGroup(req.params.id as string, userEmail(req));
-    res.json({ success: true, data: group });
-  } catch (e: any) {
-    if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
-    if (e.message === 'FORBIDDEN') return res.status(403).json({ success: false, message: 'forbidden' });
-    res.status(500).json({ success: false, message: e.message });
-  }
+export const restoreGroup = async (req: Request, res: Response): Promise<void> => {
+  const group = await svc.restoreGroup(req.params.id as string, userEmail(req));
+  res.json({ success: true, data: group });
 };
 
-export const permanentlyDeleteGroup = async (req: Request, res: Response) => {
-  try {
-    await svc.permanentlyDeleteGroup(req.params.id as string, userEmail(req));
-    res.status(204).send();
-  } catch (e: any) {
-    if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
-    if (e.message === 'FORBIDDEN') return res.status(403).json({ success: false, message: 'forbidden' });
-    res.status(500).json({ success: false, message: e.message });
-  }
+export const permanentlyDeleteGroup = async (req: Request, res: Response): Promise<void> => {
+  await svc.permanentlyDeleteGroup(req.params.id as string, userEmail(req));
+  res.status(204).send();
 };
 
-export const addMember = async (req: Request, res: Response) => {
-  try {
-    const { email, role } = req.body as { email: string; role?: GroupRole };
-    if (!email) return res.status(400).json({ success: false, message: 'email required' });
-    const group = await svc.addMember(req.params.id as string, userEmail(req), email, role);
-    
-    // Invalidate tokens for the added user
-    await invalidateUserTokens([email]);
-    
-    res.status(201).json({ success: true, data: group });
-  } catch (e: any) {
-    if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
-    if (e.message === 'FORBIDDEN') return res.status(403).json({ success: false, message: 'forbidden' });
-    if (e.message === 'ALREADY_MEMBER') return res.status(400).json({ success: false, message: 'user is already a member' });
-    res.status(500).json({ success: false, message: e.message });
-  }
+export const addMember = async (req: Request, res: Response): Promise<void> => {
+  const { email, role } = req.body as { email: string; role?: GroupRole };
+  const group = await svc.addMember(req.params.id as string, userEmail(req), email, role);
+
+  // Invalidate tokens for the added user
+  await invalidateUserTokens([email]);
+
+  res.status(201).json({ success: true, data: group });
 };
 
-export const updateRole = async (req: Request, res: Response) => {
-  try {
-    const group = await svc.updateMemberRole(
-      req.params.id as string,
-      userEmail(req),
-      req.params.memberEmail as string,
-      (req.body as any).role
-    );
-    
-    // Invalidate tokens for the user whose role changed
-    await invalidateUserTokens([req.params.memberEmail as string]);
-    
-    res.json({ success: true, data: group });
-  } catch (e: any) {
-    if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
-    if (e.message === 'FORBIDDEN') return res.status(403).json({ success: false, message: 'forbidden' });
-    if (e.message === 'MEMBER_NOT_FOUND') return res.status(404).json({ success: false, message: 'member not found' });
-    res.status(500).json({ success: false, message: e.message });
-  }
+export const updateRole = async (req: Request, res: Response): Promise<void> => {
+  const group = await svc.updateMemberRole(
+    req.params.id as string,
+    userEmail(req),
+    req.params.memberEmail as string,
+    (req.body as any).role
+  );
+
+  // Invalidate tokens for the user whose role changed
+  await invalidateUserTokens([req.params.memberEmail as string]);
+
+  res.json({ success: true, data: group });
 };
 
-export const removeMember = async (req: Request, res: Response) => {
-  try {
-    const group = await svc.removeMember(req.params.id as string, userEmail(req), req.params.memberEmail as string);
-    
-    // Invalidate tokens for the removed user
-    await invalidateUserTokens([req.params.memberEmail as string]);
-    
-    res.json({ success: true, data: group });
-  } catch (e: any) {
-    if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
-    if (e.message === 'FORBIDDEN') return res.status(403).json({ success: false, message: 'forbidden' });
-    res.status(500).json({ success: false, message: e.message });
-  }
+export const removeMember = async (req: Request, res: Response): Promise<void> => {
+  const group = await svc.removeMember(req.params.id as string, userEmail(req), req.params.memberEmail as string);
+
+  // Invalidate tokens for the removed user
+  await invalidateUserTokens([req.params.memberEmail as string]);
+
+  res.json({ success: true, data: group });
 };
 
-export const membership = async (req: Request, res: Response) => {
-  try {
-    const email = userEmail(req);
-    const result = await svc.checkMembership(req.params.id as string, email);
-    res.json({ success: true, ...result });
-  } catch (e: any) {
-    if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'not found' });
-    res.status(500).json({ success: false, message: e.message });
-  }
+export const membership = async (req: Request, res: Response): Promise<void> => {
+  const email = userEmail(req);
+  const result = await svc.checkMembership(req.params.id as string, email);
+  res.json({ success: true, ...result });
 };

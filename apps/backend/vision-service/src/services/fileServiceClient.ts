@@ -2,6 +2,7 @@
  * File Service Client
  * Replaces MinIO client by calling the local file-service API
  */
+import { logger } from '@visin/backend-core';
 
 const FILE_SERVICE_URL = (): string => {
   // Use internal service URL for server-to-server communication
@@ -118,10 +119,7 @@ export const uploadFile = async (
 
     const result = await response.json() as any;
 
-    console.info(`File uploaded successfully: ${fileId}`, {
-      bucket: 'vision',
-      size
-    });
+    logger.info('File uploaded successfully', { fileId, bucket: 'vision', size });
 
     return {
       fileId,
@@ -131,7 +129,7 @@ export const uploadFile = async (
       etag: result.fileId // Use fileId as etag
     };
   } catch (error) {
-    console.error('Failed to upload file to file-service:', error);
+    logger.error('Failed to upload file to file-service', { fileId, error: (error as Error).message });
     throw new Error('File upload failed', { cause: error });
   }
 };
@@ -157,8 +155,6 @@ export const getSignedUrl = async (
   fileId: string,
   expiresInMinutes: number = 60
 ): Promise<SignedUrlData | null> => {
-  console.info(`Generating signed URL for ${fileId}`);
-
   try {
     const response = await fetch(`${FILE_SERVICE_URL()}/internal/download-url`, {
       method: 'POST',
@@ -185,7 +181,7 @@ export const getSignedUrl = async (
       expiresInMinutes
     };
   } catch (error) {
-    console.error(`Failed to generate signed URL for ${fileId}:`, error);
+    logger.error('Failed to generate signed URL', { fileId, error: (error as Error).message });
     // Don't throw error, return null instead to prevent service crash
     return null;
   }
@@ -213,7 +209,7 @@ export const getPhotoSignedUrlsBatch = async (
           result[photo.minioFileId] = signedUrlData;
         }
       } catch (error) {
-        console.warn(`Failed to get signed URL for photo ${photo.minioFileId}:`, error);
+        logger.warn('Failed to get signed URL for photo', { minioFileId: photo.minioFileId, error: (error as Error).message });
         // Continue with other photos
       }
     });
@@ -232,8 +228,6 @@ export const getUploadSignedUrl = async (
   mimetype: string,
   expiresInMinutes: number = 15
 ): Promise<string> => {
-  console.info(`Generating upload URL for ${fileId}`);
-
   try {
     const response = await fetch(`${FILE_SERVICE_URL()}/internal/upload-url`, {
       method: 'POST',
@@ -254,14 +248,11 @@ export const getUploadSignedUrl = async (
       throw new Error('Invalid response from file-service');
     }
 
-    console.info(`Generated upload URL for ${fileId}`, {
-      expiresIn: expiresInMinutes,
-      mimetype
-    });
+    logger.info('Generated upload URL', { fileId, expiresIn: expiresInMinutes, mimetype });
 
     return data.data.uploadUrl;
   } catch (error) {
-    console.error(`Failed to generate upload URL for ${fileId}:`, error);
+    logger.error('Failed to generate upload URL', { fileId, error: (error as Error).message });
     throw new Error('Failed to generate upload URL', { cause: error });
   }
 };
@@ -282,10 +273,10 @@ export const deleteFile = async (fileId: string): Promise<boolean> => {
       throw new Error(`Delete failed with status ${response.status}`);
     }
 
-    console.info(`File deleted successfully: ${fileId}`);
+    logger.info('File deleted successfully', { fileId });
     return true;
   } catch (error) {
-    console.error(`Failed to delete file ${fileId}:`, error);
+    logger.error('Failed to delete file', { fileId, error: (error as Error).message });
     return false;
   }
 };
@@ -310,13 +301,11 @@ export const deleteFolder = async (folderPrefix: string): Promise<boolean> => {
 
     const data = await response.json() as any;
 
-    console.info(
-      `Folder deleted successfully: ${folderPrefix} (${data.count || 0} objects)`
-    );
+    logger.info('Folder deleted successfully', { folderPrefix, count: data.count || 0 });
 
     return true;
   } catch (error) {
-    console.error(`Failed to delete folder ${folderPrefix}:`, error);
+    logger.error('Failed to delete folder', { folderPrefix, error: (error as Error).message });
     return false;
   }
 };
@@ -365,7 +354,7 @@ export const getFileMetadata = async (fileId: string): Promise<any> => {
       metadata: {}
     };
   } catch (error) {
-    console.error(`Failed to get metadata for ${fileId}:`, error);
+    logger.error('Failed to get metadata', { fileId, error: (error as Error).message });
     throw new Error('File not found', { cause: error });
   }
 };
@@ -397,7 +386,7 @@ export const listFiles = async (prefix?: string, maxKeys: number = 1000) => {
 
     return data.data || [];
   } catch (error) {
-    console.error('Failed to list files:', error);
+    logger.error('Failed to list files', { error: (error as Error).message });
     throw new Error('Failed to list files', { cause: error });
   }
 };
@@ -409,6 +398,6 @@ export const copyFile = async (
   sourceKey: string,
   destinationKey: string
 ): Promise<void> => {
-  console.info(`File copy requested: ${sourceKey} -> ${destinationKey} (not implemented)`);
+  logger.info('File copy requested (not implemented)', { sourceKey, destinationKey });
   // Could implement if needed by downloading and re-uploading
 };

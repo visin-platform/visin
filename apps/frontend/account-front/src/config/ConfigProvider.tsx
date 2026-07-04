@@ -2,8 +2,7 @@ import { useEffect, useState, ReactNode } from 'react';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { authService } from '../services/authService';
 import React from 'react';
-import { ErrorPage } from '../components/ErrorPage';
-import { Loader } from '../components/Loader';
+import { ErrorPage, Loader } from '@visin/frontend-core';
 
 export interface AppConfig {
   AUTH_SERVICE_URL?: string;

@@ -1,17 +1,29 @@
 import fs from 'fs';
 import path from 'path';
+import { logger } from '@visin/backend-core';
 
 const DATA_DIR = (): string => process.env.FILE_SERVICE_DATA_DIR || '/data';
+
+/**
+ * Resolve a path under DATA_DIR, rejecting anything that escapes it.
+ * Checking the resolved path is a construction-proof guard against path
+ * traversal (../, absolute paths, ..%2f-style tricks after decoding, etc.),
+ * unlike stripping leading ".." segments with a regex.
+ */
+const resolveSafePath = (relativePath: string): string => {
+  const dataDir = path.resolve(DATA_DIR());
+  const resolved = path.resolve(dataDir, relativePath);
+  if (resolved !== dataDir && !resolved.startsWith(dataDir + path.sep)) {
+    throw new Error(`Invalid path: escapes data directory (${relativePath})`);
+  }
+  return resolved;
+};
 
 /**
  * Resolve the absolute path for a fileId.
  * fileId is already a path like "groupId/albumId/fileId/original.jpg"
  */
-export const resolvePath = (fileId: string): string => {
-  // Sanitise: prevent path traversal
-  const normalised = path.normalize(fileId).replace(/^(\.\.(\/|\\|$))+/, '');
-  return path.join(DATA_DIR(), normalised);
-};
+export const resolvePath = (fileId: string): string => resolveSafePath(fileId);
 
 /**
  * Ensure the directory for a file path exists.
@@ -27,7 +39,7 @@ export const writeFile = (fileId: string, buffer: Buffer): void => {
   const filePath = resolvePath(fileId);
   ensureDir(filePath);
   fs.writeFileSync(filePath, buffer);
-  console.info(`File written: ${fileId}`, { size: buffer.length });
+  logger.info('File written', { fileId, size: buffer.length });
 };
 
 /**
@@ -81,7 +93,7 @@ export const deleteFile = (fileId: string): void => {
   const filePath = resolvePath(fileId);
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
-    console.info(`File deleted: ${fileId}`);
+    logger.info('File deleted', { fileId });
   }
 };
 
@@ -89,7 +101,7 @@ export const deleteFile = (fileId: string): void => {
  * Delete all files whose relative path starts with prefix (folder delete).
  */
 export const deleteByPrefix = (prefix: string): number => {
-  const base = path.join(DATA_DIR(), path.normalize(prefix).replace(/^(\.\.(\/|\\|$))+/, ''));
+  const base = resolveSafePath(prefix);
   let count = 0;
 
   const removeDir = (dir: string): void => {
@@ -127,7 +139,7 @@ export const deleteByPrefix = (prefix: string): number => {
     }
   }
 
-  console.info(`Deleted ${count} file(s) under prefix: ${prefix}`);
+  logger.info('Deleted files under prefix', { count, prefix });
   return count;
 };
 
@@ -135,9 +147,7 @@ export const deleteByPrefix = (prefix: string): number => {
  * List all files under an optional prefix, up to maxKeys.
  */
 export const listFiles = (prefix?: string, maxKeys = 1000): Array<{ name: string; size: number }> => {
-  const baseDir = prefix
-    ? path.join(DATA_DIR(), path.normalize(prefix).replace(/^(\.\.(\/|\\|$))+/, ''))
-    : DATA_DIR();
+  const baseDir = prefix ? resolveSafePath(prefix) : path.resolve(DATA_DIR());
 
   const results: Array<{ name: string; size: number }> = [];
 

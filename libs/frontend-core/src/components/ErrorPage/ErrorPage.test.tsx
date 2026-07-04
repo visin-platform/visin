@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ErrorPage } from '../../components/ErrorPage/ErrorPage';
+import { ErrorPage } from './ErrorPage';
 
 describe('ErrorPage', () => {
   it('renders the default title', () => {

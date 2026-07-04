@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Button, Paper } from '@mui/material';
 import { ErrorOutline } from '@mui/icons-material';
 import { authService } from '../services/authService';
-import { Loader } from './Loader';
+import { Loader } from '@visin/frontend-core';
 
 const LoginRedirect = () => {
   const navigate = useNavigate();

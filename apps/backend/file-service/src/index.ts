@@ -19,6 +19,10 @@ for (const key of REQUIRED_ENV) {
 const app = express();
 const PORT = process.env.PORT || 5002;
 
+// Every service runs behind the nginx reverse proxy — trust its X-Forwarded-*
+// headers so express-rate-limit and req.ip key on the real client, not the proxy.
+app.set('trust proxy', 1);
+
 app.use(securityHeaders);
 app.use(requestLogger);
 
@@ -39,15 +43,12 @@ app.use(cors({
   credentials: true,
 }));
 
-// Raw body parser for file uploads – do NOT use express.json() before file routes.
-// We handle raw streams manually in controllers, so only parse JSON where needed.
-app.use((req, res, next) => {
-  // Skip JSON parsing for upload routes – they stream raw binary
-  if (req.path.includes('/files/upload/') || req.path.includes('/internal/files/')) {
-    if (req.method === 'PUT') return next();
-  }
-  express.json()(req, res, next);
-});
+// No blanket express.json() here: upload routes stream raw binary bodies
+// directly in their controllers, so JSON parsing is applied per-route (in
+// routes.ts) only on the handful of endpoints that actually expect a JSON
+// body — a global path-guessing middleware previously skipped JSON parsing
+// for any PUT under '/internal/files/', which also unintentionally matched
+// PUT /internal/files/folder and silently dropped its request body.
 
 // Health check
 app.get('/health', (_req: Request, res: Response) => {

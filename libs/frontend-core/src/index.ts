@@ -3,6 +3,11 @@
 export { createApiClient, ApiError } from './apiClient';
 export type { ApiClientOptions, ApiRequestOptions, ApiClient } from './apiClient';
 
+export { Loader } from './components/Loader';
+export type { LoaderProps } from './components/Loader';
+export { ErrorPage } from './components/ErrorPage';
+export type { ErrorPageProps } from './components/ErrorPage';
+
 // Not yet extracted: account-front's `authService.ts`, auth-front's
 // `authFlow.ts`, and vision-front's `AuthContext.tsx` implement auth
 // (token storage, login/logout, session checks) three different ways

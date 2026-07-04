@@ -4,7 +4,7 @@ export interface IComparison extends Document {
   uuid: string;
   name: string;
   description?: string;
-  type: 'trainings';
+  type: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
   itemIds: string[]; // Array of IDs to compare (training IDs, test IDs, etc.)
   projectId?: string; // Project this comparison belongs to (optional for global comparisons)
   metadata?: any;
@@ -34,7 +34,7 @@ const ComparisonSchema: Schema = new Schema(
     },
     type: {
       type: String,
-      enum: ['trainings'],
+      enum: ['trainings', 'tests', 'benchmarks', 'epochs'],
       required: true,
       index: true
     },
