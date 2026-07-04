@@ -48,8 +48,16 @@ export const EpochsUploadTab: React.FC<EpochsUploadTabProps> = ({
 
   return (
     <Paper>
-      <Box p={3}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+      <Box sx={{
+        p: 3
+      }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 2
+          }}>
           <Typography variant="h6">
             Epochs
           </Typography>
@@ -87,7 +95,9 @@ export const EpochsUploadTab: React.FC<EpochsUploadTabProps> = ({
             >
               {uploading ? 'Uploading...' : 'Select JSON Files'}
             </Button>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               Upload one or more epoch results JSON files
             </Typography>
           </Box>
@@ -95,7 +105,9 @@ export const EpochsUploadTab: React.FC<EpochsUploadTabProps> = ({
 
         {/* Epochs Table */}
         {epochs.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             No epochs uploaded yet. Upload an epoch JSON file to get started.
           </Typography>
         ) : (

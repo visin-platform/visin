@@ -31,10 +31,22 @@ const LabelingProgress: React.FC<LabelingProgressProps> = ({
       borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`
     }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            fontWeight: 500,
+            fontSize: '0.8rem'
+          }}>
           {currentImageIndex + 1} / {totalImages}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, fontSize: '0.8rem' }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            fontWeight: 500,
+            fontSize: '0.8rem'
+          }}>
           Labeled: {labeledCount}
         </Typography>
       </Box>

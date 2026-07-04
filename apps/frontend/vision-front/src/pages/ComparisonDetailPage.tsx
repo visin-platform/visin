@@ -610,7 +610,6 @@ const ComparisonDetailPage: React.FC = () => {
           { label: comparison.name, current: true }
         ]}
       />
-
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
@@ -620,7 +619,12 @@ const ComparisonDetailPage: React.FC = () => {
             </Typography>
 
             {comparison.description && (
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: "text.secondary",
+                  mb: 2
+                }}>
                 {comparison.description}
               </Typography>
             )}
@@ -669,14 +673,15 @@ const ComparisonDetailPage: React.FC = () => {
           </Box>
         </Box>
 
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           Created: {formatDate(comparison.createdAt)}
           {comparison.updatedAt !== comparison.createdAt && (
             <> • Updated: {formatDate(comparison.updatedAt)}</>
           )}
         </Typography>
       </Box>
-
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
@@ -685,7 +690,6 @@ const ComparisonDetailPage: React.FC = () => {
           <Tab label="Benchmarks" />
         </Tabs>
       </Box>
-
       {/* Tab Content */}
       {activeTab === 0 && (
         <Box>
@@ -730,7 +734,6 @@ const ComparisonDetailPage: React.FC = () => {
           )}
         </Box>
       )}
-
       {activeTab === 1 && (
         <Box>
           <Typography variant="h6" gutterBottom>
@@ -772,7 +775,6 @@ const ComparisonDetailPage: React.FC = () => {
           )}
         </Box>
       )}
-
       {activeTab === 2 && (
         <Box>
           <Typography variant="h6" gutterBottom>
@@ -785,7 +787,6 @@ const ComparisonDetailPage: React.FC = () => {
           )}
         </Box>
       )}
-      
       {/* Edit Comparison Dialog */}
       <Dialog open={editDialogOpen} onClose={handleCancelEdit} maxWidth="md" fullWidth>
         <DialogTitle>Edit Comparison</DialogTitle>
@@ -832,14 +833,12 @@ const ComparisonDetailPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
       {/* Delete Confirmation Dialog */}
       <DeleteComparisonDialog
         open={deleteDialogOpen}
         onClose={handleCancelDelete}
         onConfirm={handleConfirmDelete}
       />
-
       {/* Export All LaTeX Dialog */}
       <Dialog
         open={exportLatexOpen}

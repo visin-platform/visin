@@ -216,7 +216,9 @@ const BenchmarksComparisonTable: React.FC<BenchmarksComparisonTableProps> = ({ b
   if (benchmarks.length === 0) {
     return (
       <Box sx={{ textAlign: 'center', py: 4 }}>
-        <Typography variant="body1" color="text.secondary">
+        <Typography variant="body1" sx={{
+          color: "text.secondary"
+        }}>
           No benchmarks available for comparison
         </Typography>
       </Box>
@@ -288,7 +290,9 @@ const BenchmarksComparisonTable: React.FC<BenchmarksComparisonTableProps> = ({ b
       {gpuResults.length > 0 && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" component="h3" fontWeight="bold">
+            <Typography variant="h6" component="h3" sx={{
+              fontWeight: "bold"
+            }}>
               GPU Benchmarks Comparison
             </Typography>
             <Button
@@ -437,12 +441,13 @@ const BenchmarksComparisonTable: React.FC<BenchmarksComparisonTableProps> = ({ b
           </TableContainer>
         </Box>
       )}
-
       {/* CPU Results Table */}
       {cpuResults.length > 0 && (
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" component="h3" fontWeight="bold">
+            <Typography variant="h6" component="h3" sx={{
+              fontWeight: "bold"
+            }}>
               CPU Benchmarks Comparison
             </Typography>
             <Button
@@ -591,15 +596,15 @@ const BenchmarksComparisonTable: React.FC<BenchmarksComparisonTableProps> = ({ b
           </TableContainer>
         </Box>
       )}
-
       {cpuResults.length === 0 && gpuResults.length === 0 && (
         <Box sx={{ textAlign: 'center', py: 4 }}>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1" sx={{
+            color: "text.secondary"
+          }}>
             No benchmark results found for comparison
           </Typography>
         </Box>
       )}
-
       {/* LaTeX Modal */}
       <LatexCodeDialog
         open={latexModalOpen}

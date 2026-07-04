@@ -93,7 +93,6 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
           </Button>
         </Box>
       </Box>
-
       {['day_fair', 'night_fair', 'day_rain', 'night_rain', 'snow'].map(condition => (
         <Box key={condition} sx={{ mb: 4 }}>
           <Typography variant="h6" sx={{ mb: 2, textTransform: 'capitalize', ml: 2 }}>
@@ -168,7 +167,12 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
                                   {formatNumber(classMetrics.iou.mean, 2)} ± {formatNumber(classMetrics.iou.std, 2)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -186,7 +190,12 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
                                   {formatNumber(classMetrics.precision.mean, 2)} ± {formatNumber(classMetrics.precision.std, 2)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -204,7 +213,12 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
                                   {formatNumber(classMetrics.recall.mean, 2)} ± {formatNumber(classMetrics.recall.std, 2)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -222,7 +236,12 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
                                   {formatNumber(classMetrics.f1_score.mean, 2)} ± {formatNumber(classMetrics.f1_score.std, 2)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -240,7 +259,12 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
                                   {formatNumber(classMetrics.ap.mean, 2)} ± {formatNumber(classMetrics.ap.std, 2)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}

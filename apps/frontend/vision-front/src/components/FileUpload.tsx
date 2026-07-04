@@ -247,7 +247,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
           <Typography variant="h6" gutterBottom>
             Drop images here or click to select
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             Supports: JPG, PNG, GIF, WebP, and other image formats
           </Typography>
           <input
@@ -292,7 +294,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
                       </Typography>
                     }
                     secondary={
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>
                         {formatFileSize(fileItem.file.size)}
                       </Typography>
                     }
@@ -308,7 +312,6 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
           </Box>
         )}
       </DialogContent>
-
       <DialogActions>
         <Button onClick={handleClose} disabled={uploading}>
           Cancel

@@ -242,11 +242,15 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
           AP Metrics Comparison
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mt: 1
+          }}>
           Test results showing AP (Average Precision) metrics for different weather conditions and object classes
         </Typography>
       </Box>
-
       {['day_fair', 'night_fair', 'day_rain', 'night_rain', 'snow'].map(condition => {
         const conditionTitle = condition.replace('_', ' ').toUpperCase();
         return (
@@ -322,7 +326,12 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
                                   {formatNumber(classMetrics.ap.mean)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -338,7 +347,6 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
           </Paper>
         );
       })}
-
       <LatexModal
         open={latexModalOpen}
         onClose={() => setLatexModalOpen(false)}

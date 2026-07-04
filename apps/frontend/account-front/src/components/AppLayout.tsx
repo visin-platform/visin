@@ -84,7 +84,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           alt="Visin Logo"
           sx={{ width: 32, height: 32 }}
         />
-        <Typography variant="h6" fontWeight={700} color="inherit" sx={{ letterSpacing: '-0.5px' }}>
+        <Typography
+          variant="h6"
+          sx={{
+            fontWeight: 700,
+            color: "inherit",
+            letterSpacing: '-0.5px'
+          }}>
           Visin
         </Typography>
       </Box>
@@ -125,12 +131,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 <ListItemIcon sx={{ minWidth: 40, color: active ? 'inherit' : 'rgba(255,255,255,0.5)' }}>
                   {item.icon}
                 </ListItemIcon>
-                <ListItemText 
-                  primary={item.text} 
-                  primaryTypographyProps={{ 
-                    fontWeight: active ? 600 : 500,
-                    fontSize: '0.925rem'
-                  }} 
+                <ListItemText
+                  primary={item.text}
+                  slotProps={{
+                    primary: {
+                      sx: {
+                        fontWeight: active ? 600 : 500,
+                        fontSize: '0.925rem'
+                      }
+                    }
+                  }}
                 />
               </ListItemButton>
             </ListItem>
@@ -161,9 +171,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             <ListItemIcon sx={{ minWidth: 40, color: 'inherit' }}>
               <ArrowBack />
             </ListItemIcon>
-            <ListItemText 
-              primary="Back to Vision" 
-              primaryTypographyProps={{ fontWeight: 500, fontSize: '0.925rem' }} 
+            <ListItemText
+              primary="Back to Vision"
+              slotProps={{ primary: { sx: { fontWeight: 500, fontSize: '0.925rem' } } }}
             />
           </ListItemButton>
         </ListItem>
@@ -174,7 +184,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       <CssBaseline />
-      
       {/* AppBar for Mobile */}
       <AppBar
         position="fixed"
@@ -196,7 +205,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" fontWeight={700} sx={{ flexGrow: 1 }}>
+          <Typography
+            variant="h6"
+            noWrap
+            component="div"
+            sx={{
+              fontWeight: 700,
+              flexGrow: 1
+            }}>
             Account
           </Typography>
           <Avatar 
@@ -206,7 +222,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           />
         </Toolbar>
       </AppBar>
-
       {/* Sidebar for Desktop */}
       <Box
         component="nav"
@@ -248,7 +263,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           {drawer}
         </Drawer>
       </Box>
-
       {/* Main Content */}
       <Box
         component="main"
@@ -271,20 +285,32 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             mb: 8
           }}>
             <Box>
-              <Typography variant="h4" fontWeight={700} sx={{ letterSpacing: '-1px', mb: 1 }}>
+              <Typography
+                variant="h4"
+                sx={{
+                  fontWeight: 700,
+                  letterSpacing: '-1px',
+                  mb: 1
+                }}>
                 {menuItems.find(item => isActive(item.path))?.text || 'Account'}
               </Typography>
-              <Typography variant="body1" color="text.secondary">
+              <Typography variant="body1" sx={{
+                color: "text.secondary"
+              }}>
                 Manage your personal information and security settings.
               </Typography>
             </Box>
             
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ textAlign: 'right' }}>
-                <Typography variant="subtitle2" fontWeight={600}>
+                <Typography variant="subtitle2" sx={{
+                  fontWeight: 600
+                }}>
                   {user?.name || 'User'}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{
+                  color: "text.secondary"
+                }}>
                   {user?.email}
                 </Typography>
               </Box>
@@ -299,13 +325,17 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 onClose={handleCloseUserMenu}
                 transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-                PaperProps={{
-                  sx: { mt: 1.5, minWidth: 200, borderRadius: 2, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }
+                slotProps={{
+                  paper: {
+                    sx: { mt: 1.5, minWidth: 200, borderRadius: 2, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }
+                  }
                 }}
               >
                 <Box sx={{ px: 2, py: 1.5 }}>
                   <Typography variant="subtitle2" noWrap>{user?.name}</Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap>{user?.email}</Typography>
+                  <Typography variant="caption" noWrap sx={{
+                    color: "text.secondary"
+                  }}>{user?.email}</Typography>
                 </Box>
                 <Divider />
                 <MenuItem onClick={() => { handleCloseUserMenu(); authService.logout(); }} sx={{ py: 1.5 }}>

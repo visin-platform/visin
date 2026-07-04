@@ -70,16 +70,17 @@ const TrainingSelector: React.FC<TrainingSelectorProps> = ({
         placeholder="Search trainings by name or description..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }
         }}
         sx={{ mb: 2 }}
       />
-
       {/* Tags Filter */}
       <Box sx={{ mb: 2 }}>
         <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -97,11 +98,10 @@ const TrainingSelector: React.FC<TrainingSelectorProps> = ({
               size="small"
             />
           )}
-          renderTags={(value, getTagProps) =>
+          renderValue={(value, getItemProps) =>
             value.map((option, index) => (
               <Chip
-                {...getTagProps({ index })}
-                key={option}
+                {...getItemProps({ index })}
                 label={option}
                 size="small"
                 onDelete={() => handleTagRemove(option)}
@@ -113,7 +113,9 @@ const TrainingSelector: React.FC<TrainingSelectorProps> = ({
         />
         {selectedTags.length > 0 && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               Active filters:
             </Typography>
             {selectedTags.map(tag => (
@@ -129,13 +131,16 @@ const TrainingSelector: React.FC<TrainingSelectorProps> = ({
           </Box>
         )}
       </Box>
-
       {/* Results Summary */}
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mb: 1
+        }}>
         Showing {filteredTrainings.length} of {trainings.length} trainings
         {selectedTags.length > 0 && ` (filtered by ${selectedTags.length} tag${selectedTags.length > 1 ? 's' : ''})`}
       </Typography>
-
       {/* Training List */}
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
@@ -163,12 +168,19 @@ const TrainingSelector: React.FC<TrainingSelectorProps> = ({
                   secondary={
                     <Box>
                       {training.description && (
-                        <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: "block",
+                            mb: 0.5
+                          }}>
                           {training.description}
                         </Typography>
                       )}
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" sx={{
+                          color: "text.secondary"
+                        }}>
                           Status: {training.status}
                         </Typography>
                         {training.tags && training.tags.length > 0 && (
@@ -183,7 +195,9 @@ const TrainingSelector: React.FC<TrainingSelectorProps> = ({
                               />
                             ))}
                             {training.tags.length > 3 && (
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography variant="caption" sx={{
+                                color: "text.secondary"
+                              }}>
                                 +{training.tags.length - 3} more
                               </Typography>
                             )}
@@ -198,7 +212,6 @@ const TrainingSelector: React.FC<TrainingSelectorProps> = ({
           )}
         </List>
       )}
-
       {/* Selection Summary */}
       <Typography variant="body2" sx={{ mt: 1, fontWeight: 500 }}>
         Selected: {selectedTrainingIds.length}/{maxSelections} trainings

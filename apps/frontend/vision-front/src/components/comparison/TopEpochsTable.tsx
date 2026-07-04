@@ -137,10 +137,14 @@ const TopEpochsTable: React.FC<TopEpochsTableProps> = ({ comparisonData }) => {
           bgcolor: 'background.paper'
         }}
       >
-        <Typography variant="h6" color="text.secondary" gutterBottom>
+        <Typography variant="h6" gutterBottom sx={{
+          color: "text.secondary"
+        }}>
           No Epoch Data Available
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           No validation metrics found in the training epochs
         </Typography>
       </Paper>
@@ -160,11 +164,15 @@ const TopEpochsTable: React.FC<TopEpochsTableProps> = ({ comparisonData }) => {
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
           Top 10 Best Epochs
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: 2
+          }}>
           Ranked by validation mean IoU across all compared trainings
         </Typography>
       </Box>
-
       <TableContainer>
         <Table size="small">
           <TableHead>

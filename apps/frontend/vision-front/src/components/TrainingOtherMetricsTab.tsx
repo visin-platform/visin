@@ -11,7 +11,9 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
   if (epochs.length === 0) {
     return (
       <Paper sx={{ p: 3 }}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           No epochs available to display other metrics.
         </Typography>
       </Paper>
@@ -85,7 +87,9 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
   if (!hasMathMetrics) {
     return (
       <Paper sx={{ p: 3 }}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           No math metrics data available in the epochs.
         </Typography>
       </Paper>
@@ -100,7 +104,12 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
           <Typography variant="h6" gutterBottom>
             Expected Calibration Error (ECE) Over Epochs
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             Measures the difference between predicted confidence and actual accuracy across all predictions.
             Calculated by binning predictions by confidence, computing |accuracy - confidence| in each bin, weighted by bin size.
             Perfect calibration = 0. Lower values indicate better calibrated models. Values &gt; 0.1 suggest significant miscalibration.
@@ -118,23 +127,26 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'top', horizontal: 'middle' },
-                  padding: 0
+                  direction: 'horizontal',
+                  position: { vertical: 'top', horizontal: 'center' }
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* Standard IoU Over Epochs */}
       {standardIouData.some(v => v !== null) && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Standard IoU Over Epochs
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             <strong>Intersection over Union (IoU):</strong> Measures the overlap between predicted and ground truth segmentation masks.
             Calculated as the area of intersection divided by the area of union. Values range from 0 (no overlap) to 1 (perfect overlap).<br/><br/>
             <strong>Interpretation:</strong> Higher IoU values indicate better segmentation performance. 
@@ -154,23 +166,26 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'top', horizontal: 'middle' },
-                  padding: 0
+                  direction: 'horizontal',
+                  position: { vertical: 'top', horizontal: 'center' }
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* Overall Margin and Variance */}
       {(overallMarginData.some(v => v !== null) || overallVarianceData.some(v => v !== null)) && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Prediction Confidence Metrics Over Epochs
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             <strong>Overall Margin:</strong> Average difference between the logit of the correct class and the highest logit of incorrect classes. 
             Measures how decisively the model predicts the correct answer. Higher margins indicate more confident and separable predictions. 
             Values around 5-8 are generally very good, showing strong class separation. Negative margins suggest frequent prediction errors.<br/><br/>
@@ -199,23 +214,26 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'top', horizontal: 'middle' },
-                  padding: 0
+                  direction: 'horizontal',
+                  position: { vertical: 'top', horizontal: 'center' }
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* Bin Accuracies */}
       {binAccuraciesData.some(arr => arr.length > 0) && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Bin Accuracies Over Epochs
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             Shows the actual accuracy achieved within each confidence bin. Predictions are divided into multiple confidence ranges (bins).
             Each bin represents a different confidence level range, with Bin 1 being the lowest confidence and higher-numbered bins having higher confidence.<br/>
             <strong>Interpretation:</strong> For perfect calibration, accuracy should increase as confidence increases.
@@ -238,23 +256,26 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               margin={{ top: 10, bottom: 80, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'bottom', horizontal: 'middle' },
-                  padding: 0
+                  direction: 'horizontal',
+                  position: { vertical: 'bottom', horizontal: 'center' }
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* Bin Confidences */}
       {binConfidencesData.some(arr => arr.length > 0) && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Bin Confidences Over Epochs
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             Shows the average confidence scores within each confidence bin. Each bin shows the typical confidence level of predictions that fall into that range,
             with Bin 1 being the lowest confidence and higher-numbered bins having higher confidence.<br/>
             <strong>Interpretation:</strong> For well-calibrated bins, the average confidence should be close to the bin center.
@@ -277,23 +298,26 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               margin={{ top: 10, bottom: 80, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'bottom', horizontal: 'middle' },
-                  padding: 0
+                  direction: 'horizontal',
+                  position: { vertical: 'bottom', horizontal: 'center' }
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* Margins per Class */}
       {classesArray.length > 0 && marginsPerClassData.some(margins => Object.keys(margins).length > 0) && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Margins per Class Over Epochs
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             Shows logit margins for each class over training epochs. The number of classes shown depends on your dataset and training configuration.<br/>
             <strong>What it measures:</strong> For each class, the margin is the difference between that class's logit and the highest logit of any incorrect class.
             Higher positive values mean the model is very confident and decisive about that class.<br/><br/>
@@ -316,23 +340,26 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'top', horizontal: 'middle' },
-                  padding: 0
+                  direction: 'horizontal',
+                  position: { vertical: 'top', horizontal: 'center' }
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* Variances per Class */}
       {classesArray.length > 0 && variancesPerClassData.some(variances => Object.keys(variances).length > 0) && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Variances per Class Over Epochs
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             Shows logit variance for each class over training epochs. The number of classes shown depends on your dataset and training configuration.<br/>
             <strong>What it measures:</strong> For each class, the variance measures how spread out the logit predictions are for pixels of that class.
             Lower variance indicates more consistent predictions for that class.<br/><br/>
@@ -355,9 +382,8 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'top', horizontal: 'middle' },
-                  padding: 0
+                  direction: 'horizontal',
+                  position: { vertical: 'top', horizontal: 'center' }
                 }
               }}
             />

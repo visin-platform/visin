@@ -87,19 +87,28 @@ const VisualizationsComparisonPage: React.FC = () => {
         ]}
       />
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 4
+        }}>
         <Box>
-          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+          <Typography variant="h4" component="h1" gutterBottom sx={{
+            fontWeight: 700
+          }}>
             Visualizations Comparison
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1" sx={{
+            color: "text.secondary"
+          }}>
             Comparing {visualizations.length} visualization{visualizations.length !== 1 ? 's' : ''}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
         </Box>
       </Box>
-
       {/* Visualizations by Type */}
       {Object.entries(visualizationsByType).map(([type, typeVisualizations]) => (
         <Paper key={type} sx={{ mb: 4, p: 3 }}>
@@ -123,7 +132,12 @@ const VisualizationsComparisonPage: React.FC = () => {
                   <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
                     {viz.filename}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 2
+                    }}>
                     Epoch {viz.epoch} • {formatDateTime(viz.uploadedAt)}
                   </Typography>
                   <Box
@@ -147,7 +161,6 @@ const VisualizationsComparisonPage: React.FC = () => {
           </Box>
         </Paper>
       ))}
-
       {/* All Visualizations Side by Side */}
       {visualizations.length > 0 && (
         <Paper sx={{ p: 3 }}>
@@ -171,7 +184,12 @@ const VisualizationsComparisonPage: React.FC = () => {
                   <Typography variant="subtitle1" sx={{ mb: 0.5, fontWeight: 600 }}>
                     {viz.filename}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 1
+                    }}>
                     Type: {viz.type} • Epoch {viz.epoch}
                   </Typography>
                   <Box

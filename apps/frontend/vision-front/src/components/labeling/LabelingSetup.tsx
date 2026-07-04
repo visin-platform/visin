@@ -61,7 +61,7 @@ const LabelingSetup: React.FC<LabelingSetupProps> = ({
           label="Number of images to label"
           value={imageLimit}
           onChange={(e) => setImageLimit(Math.max(1, Number(e.target.value) || 1))}
-          inputProps={{ min: 1 }}
+          slotProps={{ htmlInput: { min: 1 } }}
           sx={{ mb: 4 }}
           helperText="Maximum number of unlabeled images to load for this session"
           variant="outlined"

@@ -43,7 +43,12 @@ const StatCard: React.FC<{
       }}
     >
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-        <Box display="flex" alignItems="center" gap={2}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 2
+          }}>
           <Box 
             sx={{ 
               p: 1.5, 
@@ -58,10 +63,20 @@ const StatCard: React.FC<{
             {icon}
           </Box>
           <Box>
-            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                fontWeight: 500
+              }}>
               {title}
             </Typography>
-            <Typography variant="h6" fontWeight={700} sx={{ color: theme.palette.text.primary }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: theme.palette.text.primary
+              }}>
               {value}
             </Typography>
           </Box>
@@ -77,12 +92,16 @@ export const TrainingStats: React.FC<TrainingStatsProps> = ({ stats, selectedTag
   return (
     <Box sx={{ mb: 4 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-        <Typography variant="h6" fontWeight={600}>
+        <Typography variant="h6" sx={{
+          fontWeight: 600
+        }}>
           Overview
         </Typography>
         {selectedTags.length > 0 && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               Filtered by:
             </Typography>
             <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
@@ -104,16 +123,18 @@ export const TrainingStats: React.FC<TrainingStatsProps> = ({ stats, selectedTag
           </Box>
         )}
       </Box>
-      
-      <Box 
-        display="grid" 
-        gridTemplateColumns={{ 
-          xs: '1fr', 
-          sm: 'repeat(2, 1fr)', 
-          md: 'repeat(5, 1fr)' 
-        }} 
-        gap={2}
-      >
+      <Box
+        sx={{
+          display: "grid",
+
+          gridTemplateColumns: { 
+            xs: '1fr', 
+            sm: 'repeat(2, 1fr)', 
+            md: 'repeat(5, 1fr)' 
+          },
+
+          gap: 2
+        }}>
         <StatCard
           title="Total Trainings"
           value={stats.totalTrainings.toString()}

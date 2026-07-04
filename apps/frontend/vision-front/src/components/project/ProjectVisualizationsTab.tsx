@@ -113,7 +113,9 @@ const ProjectVisualizationsTab: React.FC<ProjectVisualizationsTabProps> = ({
                     })()}
                   </Box>
                 ) : (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     No visualizations for this training.
                   </Typography>
                 )}
@@ -122,7 +124,9 @@ const ProjectVisualizationsTab: React.FC<ProjectVisualizationsTabProps> = ({
           ))}
         </>
       ) : (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           No visualizations found for this project.
         </Typography>
       )}

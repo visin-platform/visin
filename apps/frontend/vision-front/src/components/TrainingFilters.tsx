@@ -43,20 +43,28 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
         bgcolor: 'background.paper'
       }}
     >
-      <Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
+      <Box
+        sx={{
+          display: "flex",
+          gap: 2,
+          flexWrap: "wrap",
+          alignItems: "center"
+        }}>
         <TextField
           placeholder="Search trainings..."
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
           variant="outlined"
           size="small"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon color="action" />
-              </InputAdornment>
-            ),
-            sx: { borderRadius: 2 }
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+              sx: { borderRadius: 2 }
+            }
           }}
           sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 300 } }}
         />
@@ -67,14 +75,13 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
             options={availableTags}
             value={selectedTags}
             onChange={(_, newValue) => onTagsChange(newValue)}
-            renderTags={(value, getTagProps) =>
+            renderValue={(value, getItemProps) =>
               value.map((option, index) => (
-                <Chip 
-                  {...getTagProps({ index })} 
-                  key={option} 
-                  label={option} 
+                <Chip
+                  {...getItemProps({ index })}
+                  label={option}
                   size="small"
-                  sx={{ 
+                  sx={{
                     bgcolor: alpha(theme.palette.primary.main, 0.1),
                     color: theme.palette.primary.main,
                     fontWeight: 500
@@ -87,17 +94,19 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
                 {...params}
                 placeholder={selectedTags.length === 0 ? "Filter by tags" : undefined}
                 size="small"
-                InputProps={{
-                  ...params.InputProps,
-                  startAdornment: (
-                    <>
-                      <InputAdornment position="start">
-                        <FilterIcon fontSize="small" color="action" />
-                      </InputAdornment>
-                      {params.InputProps.startAdornment}
-                    </>
-                  ),
-                  sx: { borderRadius: 2 }
+                slotProps={{
+                  input: {
+                    ...params.slotProps.input,
+                    startAdornment: (
+                      <>
+                        <InputAdornment position="start">
+                          <FilterIcon fontSize="small" color="action" />
+                        </InputAdornment>
+                        {params.slotProps.input.startAdornment}
+                      </>
+                    ),
+                    sx: { borderRadius: 2 }
+                  }
                 }}
               />
             )}
@@ -109,13 +118,12 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
             options={availableTags}
             value={excludedTags}
             onChange={(_, newValue) => onExcludedTagsChange(newValue)}
-            renderTags={(value, getTagProps) =>
+            renderValue={(value, getItemProps) =>
               value.map((option, index) => (
-                <Chip 
-                  {...getTagProps({ index })} 
-                  key={option} 
-                  label={option} 
-                  size="small" 
+                <Chip
+                  {...getItemProps({ index })}
+                  label={option}
+                  size="small"
                   color="error"
                   variant="outlined"
                 />
@@ -126,9 +134,11 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
                 {...params}
                 placeholder={excludedTags.length === 0 ? "Exclude tags" : undefined}
                 size="small"
-                InputProps={{
-                  ...params.InputProps,
-                  sx: { borderRadius: 2 }
+                slotProps={{
+                  input: {
+                    ...params.slotProps.input,
+                    sx: { borderRadius: 2 }
+                  }
                 }}
               />
             )}

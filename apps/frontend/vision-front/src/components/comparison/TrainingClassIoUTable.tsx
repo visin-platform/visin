@@ -299,10 +299,14 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
         }}
       >
         <Box sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h6" color="text.secondary" gutterBottom>
+          <Typography variant="h6" gutterBottom sx={{
+            color: "text.secondary"
+          }}>
             No Class IoU Data Available
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             Per-class IoU metrics from training epochs will appear here once trainings have validation data with class-level metrics
           </Typography>
         </Box>
@@ -324,7 +328,12 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             Training Validation IoU per Class
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 1
+            }}>
             Mean ± standard deviation from the top 10 epochs sorted by validation mean IoU. Best results are shown in bold.
           </Typography>
         </Box>
@@ -338,7 +347,6 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
           LaTeX
         </Button>
       </Box>
-
       <TableContainer>
         <Table>
           <TableHead>
@@ -379,7 +387,6 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
           </TableBody>
         </Table>
       </TableContainer>
-
       <LatexModal
         open={latexModalOpen}
         onClose={() => setLatexModalOpen(false)}

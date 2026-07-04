@@ -43,7 +43,6 @@ export const DatasetInfoSection: React.FC<DatasetInfoSectionProps> = ({ training
       <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 3 }}>
         Dataset Information
       </Typography>
-
       {/* Dataset Overview Card */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -51,45 +50,71 @@ export const DatasetInfoSection: React.FC<DatasetInfoSectionProps> = ({ training
             Dataset Overview
           </Typography>
           <Divider sx={{ mb: 2 }} />
-          <Box display="grid" gridTemplateColumns="repeat(auto-fit, minmax(200px, 1fr))" gap={2}>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: 2
+            }}>
             <Box>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 Dataset Name
               </Typography>
-              <Typography variant="body2" fontWeight={500}>
+              <Typography variant="body2" sx={{
+                fontWeight: 500
+              }}>
                 {datasetInfo.dataset_overview?.name || '-'}
               </Typography>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 Version
               </Typography>
-              <Typography variant="body2" fontWeight={500}>
+              <Typography variant="body2" sx={{
+                fontWeight: 500
+              }}>
                 {datasetInfo.dataset_overview?.version || '-'}
               </Typography>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 Total Frames
               </Typography>
-              <Typography variant="body2" fontWeight={500}>
+              <Typography variant="body2" sx={{
+                fontWeight: 500
+              }}>
                 {datasetInfo.dataset_overview?.total_frames?.toLocaleString() || '-'}
               </Typography>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 Classes
               </Typography>
-              <Typography variant="body2" fontWeight={500}>
+              <Typography variant="body2" sx={{
+                fontWeight: 500
+              }}>
                 {Object.keys(datasetInfo.dataset_overview?.classes || {}).length}
               </Typography>
             </Box>
           </Box>
         </CardContent>
       </Card>
-
       {/* Dataset Charts Grid */}
-      <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr', lg: '1fr 1fr 1fr 1fr' }} gap={3} sx={{ mb: 3 }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', lg: '1fr 1fr 1fr 1fr' },
+          gap: 3,
+          mb: 3
+        }}>
         {/* Dataset Splits Chart */}
         {datasetInfo.dataset_splits && (
           <Paper sx={{ p: 3 }}>

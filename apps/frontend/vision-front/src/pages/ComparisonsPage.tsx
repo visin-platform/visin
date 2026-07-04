@@ -50,7 +50,13 @@ const ComparisonsPage: React.FC = () => {
 
   if (loading && comparisons.length === 0) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "400px"
+        }}>
         <CircularProgress />
       </Box>
     );
@@ -58,12 +64,22 @@ const ComparisonsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 4
+        }}>
         <Box>
-          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+          <Typography variant="h4" component="h1" gutterBottom sx={{
+            fontWeight: 700
+          }}>
             Comparisons
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1" sx={{
+            color: "text.secondary"
+          }}>
             Compare and analyze model performance across different test results
           </Typography>
         </Box>
@@ -85,13 +101,11 @@ const ComparisonsPage: React.FC = () => {
           </Tooltip>
         </Box>
       </Box>
-
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
-
       <ComparisonsTable
         comparisons={comparisons}
         sortBy={sortBy}
@@ -105,9 +119,12 @@ const ComparisonsPage: React.FC = () => {
         getTypeColor={getTypeColor}
         theme={theme}
       />
-
       {comparisons.length === 0 && !loading && (
-        <Box textAlign="center" py={6}>
+        <Box
+          sx={{
+            textAlign: "center",
+            py: 6
+          }}>
           <Typography variant="h6" color="textSecondary">
             No comparisons found
           </Typography>
@@ -116,14 +133,12 @@ const ComparisonsPage: React.FC = () => {
           </Typography>
         </Box>
       )}
-
       {/* Delete Confirmation Dialog */}
       <DeleteComparisonDialog
         open={deleteDialogOpen}
         onClose={handleCancelDelete}
         onConfirm={handleConfirmDelete}
       />
-
       {/* Edit Comparison Modal */}
       <EditComparisonDialog
         open={editDialogOpen}

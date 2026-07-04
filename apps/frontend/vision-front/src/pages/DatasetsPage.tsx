@@ -85,12 +85,22 @@ export const DatasetsPage: React.FC = () => {
           { label: 'Datasets', current: true }
         ]}
       />
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 4
+        }}>
         <Box>
-          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+          <Typography variant="h4" component="h1" gutterBottom sx={{
+            fontWeight: 700
+          }}>
             Datasets
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1" sx={{
+            color: "text.secondary"
+          }}>
             Manage and analyze your dataset collections
           </Typography>
         </Box>
@@ -125,14 +135,12 @@ export const DatasetsPage: React.FC = () => {
           </IconButton>
         </Box>
       </Box>
-
       {/* Messages */}
       {error && (
         <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
           {error}
         </Alert>
       )}
-
       {/* Analyses Table */}
       <Box key={refreshKey}>
         <DatasetsTable
@@ -142,7 +150,6 @@ export const DatasetsPage: React.FC = () => {
           onCompareSelected={handleCompareSelected}
         />
       </Box>
-
       {/* Create Analysis Modal */}
       <CreateAnalysisModal
         open={showCreateModal}

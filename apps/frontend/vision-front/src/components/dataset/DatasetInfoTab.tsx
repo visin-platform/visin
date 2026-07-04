@@ -44,7 +44,12 @@ const DatasetInfoTab: React.FC<DatasetInfoTabProps> = ({
           <Typography variant="h6">
             Dataset Analysis Data
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 0.5
+            }}>
             Upload JSON analysis data for this dataset.
           </Typography>
         </Box>
@@ -69,7 +74,6 @@ const DatasetInfoTab: React.FC<DatasetInfoTabProps> = ({
           )}
         </Box>
       </Box>
-
       {/* JSON File Input (hidden) */}
       <input
         ref={fileInputRef}
@@ -78,20 +82,17 @@ const DatasetInfoTab: React.FC<DatasetInfoTabProps> = ({
         onChange={onUploadJson}
         style={{ display: 'none' }}
       />
-
       {/* JSON Messages */}
       {jsonError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {jsonError}
         </Alert>
       )}
-
       {jsonSuccess && (
         <Alert severity="success" sx={{ mb: 2 }}>
           {jsonSuccess}
         </Alert>
       )}
-
       <Paper sx={{ 
         p: 2, 
         backgroundColor: '#f5f5f5', 

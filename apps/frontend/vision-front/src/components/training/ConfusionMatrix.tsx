@@ -48,7 +48,9 @@ const ConfusionMatrix: React.FC<ConfusionMatrixProps> = ({
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
           {title}
         </Typography>
-        <Typography color="text.secondary">
+        <Typography sx={{
+          color: "text.secondary"
+        }}>
           No confusion matrix data available
         </Typography>
       </Paper>
@@ -68,18 +70,20 @@ const ConfusionMatrix: React.FC<ConfusionMatrixProps> = ({
       }}
     >
       <Box
-        p={2}
-        bgcolor={alpha(theme.palette.primary.main, 0.04)}
-        borderBottom={`1px solid ${theme.palette.divider}`}
-      >
+        sx={{
+          p: 2,
+          bgcolor: alpha(theme.palette.primary.main, 0.04),
+          borderBottom: `1px solid ${theme.palette.divider}`
+        }}>
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
           {title}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           Predicted vs Actual classes (rows = actual, columns = predicted)
         </Typography>
       </Box>
-
       <TableContainer>
         <Table size="small">
           <TableHead>
@@ -134,9 +138,10 @@ const ConfusionMatrix: React.FC<ConfusionMatrixProps> = ({
           </TableBody>
         </Table>
       </TableContainer>
-
       <Box sx={{ p: 2, pt: 1 }}>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{
+          color: "text.secondary"
+        }}>
           Diagonal values (highlighted) represent correct predictions.
           Total samples: {formatNumber(confusionMatrix.flat().reduce((sum, val) => sum + val, 0))}
         </Typography>

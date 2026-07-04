@@ -67,7 +67,12 @@ const CreateAnalysisModal: React.FC<CreateAnalysisModalProps> = ({
       <form onSubmit={handleSubmit}>
         <DialogTitle>Create New Dataset Analysis</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             Enter a name for your dataset (e.g., "waymo", "zod", "custom-dataset").
             You can then upload JSON analysis data and example images.
           </Typography>

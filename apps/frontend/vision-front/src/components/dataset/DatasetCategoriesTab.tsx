@@ -46,37 +46,54 @@ const DatasetCategoriesTab: React.FC<DatasetCategoriesTabProps> = ({
           <Typography variant="h6">
             Categories ({categories.length})
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 0.5
+            }}>
             Manage image categories for this dataset.
           </Typography>
         </Box>
       </Box>
-
       {categoryAlert && (
         <Alert severity={categoryAlert.type} sx={{ mb: 2 }}>
           {categoryAlert.message}
         </Alert>
       )}
-
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
         </Box>
       ) : error ? (
         <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="h6" color="text.secondary">
+          <Typography variant="h6" sx={{
+            color: "text.secondary"
+          }}>
             Categories not available
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 1
+            }}>
             This analysis dataset doesn't have associated categories in the image management system.
           </Typography>
         </Box>
       ) : categories.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="h6" color="text.secondary">
+          <Typography variant="h6" sx={{
+            color: "text.secondary"
+          }}>
             No categories found
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 1
+            }}>
             Create your first category to organize images for this dataset.
           </Typography>
         </Box>
@@ -106,13 +123,17 @@ const DatasetCategoriesTab: React.FC<DatasetCategoriesTabProps> = ({
                           mr: 1
                         }}
                       />
-                      <Typography variant="body1" fontWeight="medium">
+                      <Typography variant="body1" sx={{
+                        fontWeight: "medium"
+                      }}>
                         {category.name}
                       </Typography>
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {category.description || 'No description'}
                     </Typography>
                   </TableCell>
@@ -127,7 +148,9 @@ const DatasetCategoriesTab: React.FC<DatasetCategoriesTabProps> = ({
                     />
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {new Date(category.createdAt).toLocaleDateString()}
                     </Typography>
                   </TableCell>

@@ -82,7 +82,13 @@ const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "400px"
+        }}>
         <CircularProgress />
       </Box>
     );
@@ -90,18 +96,22 @@ const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3
+        }}>
         <Typography variant="h6" component="h2">
           Training Benchmarks
         </Typography>
       </Box>
-
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
-
       {benchmarks.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
           <Typography variant="h6" color="textSecondary" gutterBottom>
@@ -129,7 +139,13 @@ const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_
               <Card key={benchmark._id} sx={{ mb: 3 }}>
                 <CardContent>
                   {/* Header with timestamp and delete button */}
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      mb: 2
+                    }}>
                     <Typography variant="h6" component="h3">
                       Benchmark - {formatTimestamp(benchmark.timestamp)}
                     </Typography>
@@ -147,7 +163,9 @@ const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_
                   </Box>
 
                   {/* System Information */}
-                  <Box mb={3}>
+                  <Box sx={{
+                    mb: 3
+                  }}>
                     <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
                       <SettingsIcon sx={{ mr: 1 }} />
                       System Information
@@ -305,7 +323,6 @@ const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_
           })}
         </Box>
       )}
-
     </Box>
   );
 };

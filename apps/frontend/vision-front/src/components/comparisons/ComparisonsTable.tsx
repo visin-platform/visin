@@ -127,7 +127,9 @@ const ComparisonsTable: React.FC<ComparisonsTableProps> = ({
                 </Typography>
               </TableCell>
               <TableCell>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>
                   {comparison.description || 'No description'}
                 </Typography>
               </TableCell>

@@ -92,7 +92,12 @@ const EditComparisonDialog: React.FC<EditComparisonDialogProps> = ({
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 200, overflow: 'auto' }}>
             {loadingTrainings ? (
-              <Box display="flex" justifyContent="center" py={2}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  py: 2
+                }}>
                 <CircularProgress size={20} />
                 <Typography variant="body2" sx={{ ml: 1 }}>
                   Loading training data...

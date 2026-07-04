@@ -146,9 +146,8 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'column' as const,
-                  position: { vertical: 'top' as const, horizontal: 'right' as const },
-                  padding: 10
+                  direction: 'vertical' as const,
+                  position: { vertical: 'top' as const, horizontal: 'end' as const },
                 }
               }}
             />
@@ -166,9 +165,8 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'column' as const,
-                  position: { vertical: 'top' as const, horizontal: 'right' as const },
-                  padding: 10
+                  direction: 'vertical' as const,
+                  position: { vertical: 'top' as const, horizontal: 'end' as const },
                 }
               }}
             />

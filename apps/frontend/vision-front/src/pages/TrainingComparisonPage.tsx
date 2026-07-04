@@ -127,14 +127,15 @@ const TrainingComparisonPage: React.FC = () => {
           <Typography variant="h4" component="h1" sx={{ mb: 1 }}>
             Training Comparison
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1" sx={{
+            color: "text.secondary"
+          }}>
             Comparing {comparisonData.length} training run{comparisonData.length !== 1 ? 's' : ''}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
         </Box>
       </Box>
-
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs 
@@ -169,7 +170,6 @@ const TrainingComparisonPage: React.FC = () => {
           <Tab label={`Benchmarks (${benchmarksData.length})`} />
         </Tabs>
       </Box>
-
       {/* Tab Content */}
       {activeTab === 0 && (
         <>
@@ -205,7 +205,6 @@ const TrainingComparisonPage: React.FC = () => {
           />
         </>
       )}
-
       {activeTab === 1 && (
         <>
           {/* Number Formatting Controls */}
@@ -237,21 +236,21 @@ const TrainingComparisonPage: React.FC = () => {
             </>
           ) : (
             <Box sx={{ textAlign: 'center', py: 4 }}>
-              <Typography variant="body1" color="text.secondary">
+              <Typography variant="body1" sx={{
+                color: "text.secondary"
+              }}>
                 No test results available for comparison
               </Typography>
             </Box>
           )}
         </>
       )}
-
       {activeTab === 2 && (
         <>
           {/* Benchmarks Comparison */}
           <BenchmarksComparisonTable benchmarks={benchmarksData} />
         </>
       )}
-
     </Container>
   );
 };

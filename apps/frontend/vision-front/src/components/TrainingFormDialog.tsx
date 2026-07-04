@@ -164,11 +164,15 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
             {configs.map((config: Config) => (
               <MenuItem key={config._id} value={config._id}>
                 <Box>
-                  <Typography variant="body2" fontWeight={500}>
+                  <Typography variant="body2" sx={{
+                    fontWeight: 500
+                  }}>
                     {config.config_name || 'Unnamed'}
                   </Typography>
                   {config.summary && (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" sx={{
+                      color: "text.secondary"
+                    }}>
                       {config.summary}
                     </Typography>
                   )}

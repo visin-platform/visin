@@ -57,7 +57,12 @@ const LabelingSettingsDialog: React.FC<LabelingSettingsDialogProps> = ({
         Labeling Settings
       </DialogTitle>
       <DialogContent sx={{ pt: 1 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: 3
+          }}>
           Adjust your labeling preferences and return to setup if needed.
         </Typography>
         
@@ -68,7 +73,7 @@ const LabelingSettingsDialog: React.FC<LabelingSettingsDialogProps> = ({
             label="Number of images to label"
             value={imageLimit}
             onChange={(e) => setImageLimit(Math.max(1, Number(e.target.value) || 1))}
-            inputProps={{ min: 1 }}
+            slotProps={{ htmlInput: { min: 1 } }}
             helperText="Maximum number of unlabeled images to load for this session"
             size="small"
           />

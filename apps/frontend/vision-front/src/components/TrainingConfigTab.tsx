@@ -53,18 +53,29 @@ const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h6" fontWeight="bold">
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3
+        }}>
+        <Typography variant="h6" sx={{
+          fontWeight: "bold"
+        }}>
           Training Configuration
         </Typography>
       </Box>
-
       {configLoading && (
-        <Box display="flex" justifyContent="center" py={8}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            py: 8
+          }}>
           <CircularProgress />
         </Box>
       )}
-
       {!configLoading && !training?.configId && (
         <Paper 
           elevation={0} 
@@ -77,21 +88,23 @@ const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
           }}
         >
           <SettingsIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom>
+          <Typography variant="h6" gutterBottom sx={{
+            color: "text.secondary"
+          }}>
             No configuration linked
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             This training run does not have an associated configuration file.
           </Typography>
         </Paper>
       )}
-
       {!configLoading && training?.configId && !config && (
         <Alert severity="error" sx={{ borderRadius: 2 }}>
           Failed to load configuration. The associated config (ID: {training.configId}) may have been deleted.
         </Alert>
       )}
-
       {!configLoading && config && (
         <Stack spacing={3}>
           {/* Config Header Card */}
@@ -106,24 +119,43 @@ const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
           >
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, md: 8 }}>
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1
+                  }}>
                   <SettingsIcon color="primary" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontWeight={600}>
+                  <Typography variant="h6" sx={{
+                    fontWeight: 600
+                  }}>
                     {config.config_name || 'Unnamed Configuration'}
                   </Typography>
                 </Box>
                 {config.summary && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 2
+                    }}>
                     {config.summary}
                   </Typography>
                 )}
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack direction="row" spacing={1} sx={{
+                  alignItems: "center"
+                }}>
                   <Chip 
                     label="Config ID" 
                     size="small" 
                     sx={{ borderRadius: 1, fontWeight: 600, fontSize: '0.7rem' }} 
                   />
-                  <Typography variant="caption" fontFamily="monospace" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontFamily: "monospace",
+                      color: "text.secondary"
+                    }}>
                     {config.config_uuid || config._id || '-'}
                   </Typography>
                 </Stack>
@@ -138,20 +170,42 @@ const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
                   }}
                 >
                   <Stack spacing={2}>
-                    <Box display="flex" alignItems="center">
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center"
+                      }}>
                       <AccessTimeIcon fontSize="small" color="action" sx={{ mr: 1 }} />
                       <Box>
-                        <Typography variant="caption" display="block" color="text.secondary">Created</Typography>
-                        <Typography variant="body2" fontWeight={500}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: "block",
+                            color: "text.secondary"
+                          }}>Created</Typography>
+                        <Typography variant="body2" sx={{
+                          fontWeight: 500
+                        }}>
                           {config.createdAt ? formatDate(config.createdAt) : '-'}
                         </Typography>
                       </Box>
                     </Box>
-                    <Box display="flex" alignItems="center">
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center"
+                      }}>
                       <InfoIcon fontSize="small" color="action" sx={{ mr: 1 }} />
                       <Box>
-                        <Typography variant="caption" display="block" color="text.secondary">Last Updated</Typography>
-                        <Typography variant="body2" fontWeight={500}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: "block",
+                            color: "text.secondary"
+                          }}>Last Updated</Typography>
+                        <Typography variant="body2" sx={{
+                          fontWeight: 500
+                        }}>
                           {config.updatedAt ? formatDate(config.updatedAt) : '-'}
                         </Typography>
                       </Box>
@@ -173,15 +227,18 @@ const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
                 bgcolor: 'background.paper'
               }}
             >
-              <Box 
-                p={2} 
-                display="flex" 
-                justifyContent="space-between" 
-                alignItems="center"
-                borderBottom={`1px solid ${theme.palette.divider}`}
-                bgcolor={alpha(theme.palette.action.hover, 0.5)}
-              >
-                <Typography variant="subtitle2" fontWeight={600}>
+              <Box
+                sx={{
+                  p: 2,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  borderBottom: `1px solid ${theme.palette.divider}`,
+                  bgcolor: alpha(theme.palette.action.hover, 0.5)
+                }}>
+                <Typography variant="subtitle2" sx={{
+                  fontWeight: 600
+                }}>
                   Configuration JSON
                 </Typography>
                 <Tooltip title="Copy JSON">

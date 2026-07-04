@@ -56,7 +56,16 @@ const ImageDisplay: React.FC<ImageDisplayProps> = ({ currentImage, sessionLabels
               {currentImage.title || currentImage.originalName}
             </Typography>
             {currentImage.description && (
-              <Typography variant="body2" color="text.secondary" align="center" sx={{ fontSize: '0.8rem', mb: 0.75, lineHeight: 1.3 }} noWrap>
+              <Typography
+                variant="body2"
+                align="center"
+                noWrap
+                sx={{
+                  color: "text.secondary",
+                  fontSize: '0.8rem',
+                  mb: 0.75,
+                  lineHeight: 1.3
+                }}>
                 {currentImage.description}
               </Typography>
             )}

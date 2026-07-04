@@ -64,7 +64,12 @@ const MeanAccuracyChart: React.FC<MeanAccuracyChartProps> = ({ epochs }) => {
           />
         </Box>
       ) : (
-        <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+        <Typography
+          sx={{
+            color: "text.secondary",
+            textAlign: 'center',
+            py: 4
+          }}>
           No mean accuracy data available for this training
         </Typography>
       )}

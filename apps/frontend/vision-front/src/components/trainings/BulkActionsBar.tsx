@@ -7,7 +7,7 @@ import {
   useTheme
 } from '@mui/material';
 import {
-  DeleteOutline as DeleteOutlineIcon,
+  DeleteOutlined as DeleteOutlineIcon,
   Compare as CompareIcon,
   Download as DownloadIcon
 } from '@mui/icons-material';
@@ -44,7 +44,9 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
         borderRadius: 2
       }}
     >
-      <Typography variant="body2" fontWeight={600} color="primary">
+      <Typography variant="body2" color="primary" sx={{
+        fontWeight: 600
+      }}>
         {selectedCount} selected
       </Typography>
       <Box sx={{ flexGrow: 1 }} />

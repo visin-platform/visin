@@ -114,7 +114,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               }}
             />
             {!collapsed && (
-              <Typography variant="h6" fontWeight={700} color="inherit">
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 700,
+                  color: "inherit"
+                }}>
                 Visin
               </Typography>
             )}
@@ -195,13 +200,17 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 >
                   {item.icon}
                 </ListItemIcon>
-                <ListItemText 
-                  primary={item.text} 
+                <ListItemText
+                  primary={item.text}
                   sx={{ opacity: collapsed ? 0 : 1, display: collapsed ? 'none' : 'block' }}
-                  primaryTypographyProps={{ 
-                    fontSize: '0.9rem', 
-                    fontWeight: active ? 600 : 400 
-                  }} 
+                  slotProps={{
+                    primary: {
+                      sx: {
+                        fontSize: '0.9rem',
+                        fontWeight: active ? 600 : 400
+                      }
+                    }
+                  }}
                 />
               </ListItemButton>
             </ListItem>
@@ -235,8 +244,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               {!collapsed && (
                 <>
                   <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="body2" fontWeight={600}>{user?.name}</Typography>
-                    <Typography variant="caption" color="rgba(255,255,255,0.5)">{user?.email}</Typography>
+                    <Typography variant="body2" sx={{
+                      fontWeight: 600
+                    }}>{user?.name}</Typography>
+                    <Typography variant="caption" sx={{
+                      color: "rgba(255,255,255,0.5)"
+                    }}>{user?.email}</Typography>
                   </Box>
                   <ExpandMore sx={{ color: 'rgba(255,255,255,0.5)' }} />
                 </>
@@ -284,12 +297,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               <Login />
             </ListItemIcon>
             {!collapsed && (
-              <ListItemText 
-                primary="Login" 
-                primaryTypographyProps={{ 
-                  fontSize: '0.9rem', 
-                  fontWeight: 600 
-                }} 
+              <ListItemText
+                primary="Login"
+                slotProps={{
+                  primary: {
+                    sx: {
+                      fontSize: '0.9rem',
+                      fontWeight: 600
+                    }
+                  }
+                }}
               />
             )}
           </ListItemButton>
@@ -301,7 +318,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <CssBaseline />
-      
       {/* Mobile App Bar */}
       <AppBar
         position="fixed"
@@ -325,13 +341,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           </IconButton>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box component="img" src="/logo.svg" alt="Visin Logo" sx={{ width: 24, height: 24 }} />
-            <Typography variant="h6" noWrap component="div" fontWeight={700}>
+            <Typography variant="h6" noWrap component="div" sx={{
+              fontWeight: 700
+            }}>
               Visin
             </Typography>
           </Box>
         </Toolbar>
       </AppBar>
-
       {/* Sidebar Navigation */}
       <Box
         component="nav"
@@ -380,7 +397,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           {getDrawerContent(!desktopOpen)}
         </Drawer>
       </Box>
-
       {/* Main Content */}
       <Box 
         component="main" 

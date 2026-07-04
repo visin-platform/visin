@@ -31,7 +31,12 @@ const TrainingTimeMetrics: React.FC<TrainingTimeMetricsProps> = ({
   const hasTimeData = epochTimes.some(t => t > 0);
 
   return (
-    <Box display="flex" flexDirection="column" gap={3}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 3
+      }}>
       {/* Epoch Time Charts */}
       {hasTimeData && (
         <Box sx={{ 

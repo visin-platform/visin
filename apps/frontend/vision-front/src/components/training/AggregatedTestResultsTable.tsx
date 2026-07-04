@@ -50,16 +50,26 @@ const AggregatedTestResultsTable: React.FC<AggregatedTestResultsTableProps> = ({
       }}
     >
       <Box
-        p={2}
-        bgcolor={alpha(theme.palette.secondary.main, 0.04)}
-        borderBottom={`1px solid ${theme.palette.divider}`}
-      >
-        <Box display="flex" justifyContent="space-between" alignItems="center">
+        sx={{
+          p: 2,
+          bgcolor: alpha(theme.palette.secondary.main, 0.04),
+          borderBottom: `1px solid ${theme.palette.divider}`
+        }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+          }}>
           <Box>
-            <Typography variant="subtitle1" fontWeight="bold">
+            <Typography variant="subtitle1" sx={{
+              fontWeight: "bold"
+            }}>
               Test Results (latest)
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               Showing the most recent test run for each training
             </Typography>
           </Box>
@@ -73,7 +83,6 @@ const AggregatedTestResultsTable: React.FC<AggregatedTestResultsTableProps> = ({
           </Button>
         </Box>
       </Box>
-
       <TableContainer>
         <Table size="small">
           <TableHead>

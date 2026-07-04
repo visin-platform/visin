@@ -21,10 +21,14 @@ const DatasetExportTab: React.FC<DatasetExportTabProps> = ({
       <Typography variant="h6" sx={{ mb: 3 }}>
         Export Images
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mb: 3
+        }}>
         Download a CSV file containing image names filtered by quality tags.
       </Typography>
-
       <Paper sx={{ p: 3, maxWidth: 500 }}>
         <Typography variant="subtitle1" sx={{ mb: 2 }}>
           Filter Options
@@ -64,7 +68,12 @@ const DatasetExportTab: React.FC<DatasetExportTabProps> = ({
           </Button>
         </Box>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mt: 2
+          }}>
           CSV format: One image name per line, simple text format.
         </Typography>
       </Paper>

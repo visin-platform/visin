@@ -25,7 +25,10 @@ const LatexExportDialog: React.FC<LatexExportDialogProps> = ({ open, onClose, la
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>Export Results as LaTeX</DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
-        <Typography variant="body2" color="text.secondary" paragraph>
+        <Typography variant="body2" component="p" sx={{
+          color: "text.secondary",
+          mb: 2
+        }}>
           You can copy the LaTeX code below and paste it into your LaTeX document to include the results table.
         </Typography>
         <Box

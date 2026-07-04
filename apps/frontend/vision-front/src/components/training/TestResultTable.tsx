@@ -55,13 +55,14 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
       }}
     >
       <Box
-        p={2}
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        bgcolor={alpha(theme.palette.primary.main, 0.04)}
-        borderBottom={`1px solid ${theme.palette.divider}`}
-      >
+        sx={{
+          p: 2,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          bgcolor: alpha(theme.palette.primary.main, 0.04),
+          borderBottom: `1px solid ${theme.palette.divider}`
+        }}>
         <Box>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -89,7 +90,6 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
           )}
         </Stack>
       </Box>
-
       <TableContainer>
         <Table size="small">
           <TableHead>
@@ -204,7 +204,6 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
           </TableBody>
         </Table>
       </TableContainer>
-
       {/* Confusion Matrices */}
       <Box sx={{ p: 2, pt: 0 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, mt: 2 }}>

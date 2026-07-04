@@ -124,7 +124,9 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
                       <TableCell>
                         {trainingId ? (
                           <Link to={`/trainings/${trainingId}?tab=benchmarks`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                            <Typography variant="body2" color="primary" fontWeight={500}>
+                            <Typography variant="body2" color="primary" sx={{
+                              fontWeight: 500
+                            }}>
                               {trainingName}
                             </Typography>
                           </Link>
@@ -170,11 +172,12 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
           </Box>
         </>
       ) : (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           No benchmarks found for this project.
         </Typography>
       )}
-
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onClose={handleCancelDelete}>
         <DialogTitle>Delete Benchmark</DialogTitle>

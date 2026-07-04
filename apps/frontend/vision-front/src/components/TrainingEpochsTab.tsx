@@ -83,8 +83,16 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h6" fontWeight="bold">
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3
+        }}>
+        <Typography variant="h6" sx={{
+          fontWeight: "bold"
+        }}>
           Epochs Management
         </Typography>
         <Box>
@@ -108,7 +116,6 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
         )}
         </Box>
       </Box>
-
       {/* Status Alerts */}
       {uploadError && (
         <Alert
@@ -136,7 +143,6 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
           {uploadSuccess}
         </Alert>
       )}
-
       {/* Epochs Table */}
       <Paper 
         elevation={0} 
@@ -148,11 +154,22 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
         }}
       >
         {epochs.length === 0 ? (
-          <Box p={6} textAlign="center">
-            <Typography variant="h6" color="text.secondary" gutterBottom>
+          <Box
+            sx={{
+              p: 6,
+              textAlign: "center"
+            }}>
+            <Typography variant="h6" gutterBottom sx={{
+              color: "text.secondary"
+            }}>
               No epochs uploaded yet
             </Typography>
-            <Typography variant="body2" color="text.secondary" mb={3}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 3
+              }}>
               Upload epoch JSON files to visualize training progress and metrics.
             </Typography>
             <Button
@@ -229,7 +246,6 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
           </TableContainer>
         )}
       </Paper>
-
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmationDialog
         open={deleteOpen}
@@ -239,7 +255,6 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
         message={`Are you sure you want to delete Epoch ${deleteTarget?.epoch}? This action cannot be undone.`}
         isDeleting={uploading}
       />
-
       {/* Upload Results Modal */}
       <UploadResultsDialog
         open={uploadResultsOpen}

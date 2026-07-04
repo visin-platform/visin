@@ -185,18 +185,18 @@ export const VisualizationsPage: React.FC = () => {
       <Typography variant="h4" sx={{ mb: 4 }}>
         Training Visualizations Comparison
       </Typography>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
-
       {/* Filter Controls */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {compareMode 
                 ? 'Select trainings to compare visualizations' 
                 : 'Expand trainings to view and compare visualizations'}
@@ -204,7 +204,9 @@ export const VisualizationsPage: React.FC = () => {
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               {compareMode && selectedTrainings.size > 0 && (
                 <>
-                  <Typography variant="body2" color="primary" fontWeight={600}>
+                  <Typography variant="body2" color="primary" sx={{
+                    fontWeight: 600
+                  }}>
                     {selectedTrainings.size} selected
                   </Typography>
                   <Button
@@ -228,7 +230,6 @@ export const VisualizationsPage: React.FC = () => {
           </Box>
         </CardContent>
       </Card>
-
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress />
@@ -292,7 +293,9 @@ export const VisualizationsPage: React.FC = () => {
                         <Typography variant="h6">
                           {trainingWithViz.training.name}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                          color: "text.secondary"
+                        }}>
                           {trainingWithViz.visualizations.length} visualizations across {availableTypes.length} types
                         </Typography>
                       </Box>
@@ -357,10 +360,21 @@ export const VisualizationsPage: React.FC = () => {
                                       }}
                                       onClick={() => handleImageClick(viz)}
                                     />
-                                    <Typography variant="caption" display="block" sx={{ mt: 1 }} color="text.secondary">
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        display: "block",
+                                        color: "text.secondary",
+                                        mt: 1
+                                      }}>
                                       {viz.filename}
                                     </Typography>
-                                    <Typography variant="caption" display="block" color="text.secondary">
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        display: "block",
+                                        color: "text.secondary"
+                                      }}>
                                       {formatDate(viz.uploadedAt)}
                                     </Typography>
                                   </CardContent>
@@ -373,7 +387,12 @@ export const VisualizationsPage: React.FC = () => {
                       {/* Show all types overview when none selected */}
                       {!selectedType && (
                         <Box>
-                          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: "text.secondary",
+                              mb: 2
+                            }}>
                             Select a visualization type above to view side-by-side comparison
                           </Typography>
                           <TableContainer component={Paper} variant="outlined">
@@ -414,7 +433,6 @@ export const VisualizationsPage: React.FC = () => {
           })}
         </Box>
       )}
-
       {/* Image Modal */}
       <Dialog
         open={imageModalOpen}

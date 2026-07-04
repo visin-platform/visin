@@ -315,7 +315,6 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           )}
         </Box>
       </Box>
-
       {/* Bulk Selection UI */}
       {selectedAnalysisIds.size > 0 && (
         <Box
@@ -330,7 +329,9 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
             borderRadius: 2
           }}
         >
-          <Typography variant="body2" fontWeight={600} color="primary">
+          <Typography variant="body2" color="primary" sx={{
+            fontWeight: 600
+          }}>
             {selectedAnalysisIds.size} selected
           </Typography>
           <Box sx={{ flexGrow: 1 }} />
@@ -347,9 +348,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           )}
         </Box>
       )}
-
       {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
-
       <Paper
         elevation={0}
         sx={{
@@ -450,12 +449,16 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                       <TableCell>{analysis.dataset}</TableCell>
                       <TableCell>{analysis.size || '-'}</TableCell>
                       <TableCell>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                          color: "text.secondary"
+                        }}>
                           {formatDateTime(analysis.createdAt)}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" sx={{
+                          color: "text.secondary"
+                        }}>
                           {formatDateTime(analysis.updatedAt)}
                         </Typography>
                       </TableCell>
@@ -532,7 +535,6 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           </Table>
         </TableContainer>
       </Paper>
-
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onClose={handleCancelDelete}>
         <DialogTitle>Delete Analysis</DialogTitle>
@@ -551,7 +553,6 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
-
       {/* Edit Dataset Name Dialog */}
       <Dialog open={editDialogOpen} onClose={handleEditCancel} maxWidth="sm" fullWidth>
         <DialogTitle>Edit Dataset Name</DialogTitle>

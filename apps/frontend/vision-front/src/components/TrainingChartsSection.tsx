@@ -21,7 +21,12 @@ export const TrainingChartsSection: React.FC<TrainingChartsSectionProps> = ({ ep
   const learningRates = epochs.map(e => e.learning_rate ?? null);
 
   return (
-    <Box display="flex" flexDirection="column" gap={3}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 3
+      }}>
       {/* Loss Chart */}
       {epochs.length > 0 && trainLoss.some(v => v !== undefined) && (
         <Paper sx={{ p: 3 }}>
@@ -38,23 +43,14 @@ export const TrainingChartsSection: React.FC<TrainingChartsSectionProps> = ({ ep
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'top', horizontal: 'middle' },
-                  padding: 0,
-                  itemMarkWidth: 10,
-                  itemMarkHeight: 2,
-                  markGap: 5,
-                  itemGap: 15,
-                  labelStyle: {
-                    fontSize: 12
-                  }
+                  direction: 'horizontal',
+                  position: { vertical: 'top', horizontal: 'center' },
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* Mean IoU Chart */}
       {epochs.length > 0 && trainMeanIoU.some(v => v !== undefined) && (
         <Paper sx={{ p: 3 }}>
@@ -71,23 +67,14 @@ export const TrainingChartsSection: React.FC<TrainingChartsSectionProps> = ({ ep
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'top', horizontal: 'middle' },
-                  padding: 0,
-                  itemMarkWidth: 10,
-                  itemMarkHeight: 2,
-                  markGap: 5,
-                  itemGap: 15,
-                  labelStyle: {
-                    fontSize: 12
-                  }
+                  direction: 'horizontal',
+                  position: { vertical: 'top', horizontal: 'center' },
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* Learning Rate Chart */}
       {epochs.length > 0 && learningRates.some(v => v !== null) && (
         <Paper sx={{ p: 3 }}>
@@ -107,23 +94,14 @@ export const TrainingChartsSection: React.FC<TrainingChartsSectionProps> = ({ ep
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'top', horizontal: 'middle' },
-                  padding: 0,
-                  itemMarkWidth: 10,
-                  itemMarkHeight: 2,
-                  markGap: 5,
-                  itemGap: 15,
-                  labelStyle: {
-                    fontSize: 12
-                  }
+                  direction: 'horizontal',
+                  position: { vertical: 'top', horizontal: 'center' },
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* Class IoU Over Time Chart */}
       {epochs.length > 0 && (
         <Paper sx={{ p: 3 }}>
@@ -178,16 +156,8 @@ export const TrainingChartsSection: React.FC<TrainingChartsSectionProps> = ({ ep
               margin={{ top: 10, bottom: 60, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'top', horizontal: 'middle' },
-                  padding: 0,
-                  itemMarkWidth: 10,
-                  itemMarkHeight: 2,
-                  markGap: 5,
-                  itemGap: 10,
-                  labelStyle: {
-                    fontSize: 11
-                  }
+                  direction: 'horizontal',
+                  position: { vertical: 'top', horizontal: 'center' },
                 }
               }}
             />

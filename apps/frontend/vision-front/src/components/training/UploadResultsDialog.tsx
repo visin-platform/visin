@@ -27,7 +27,9 @@ const UploadResultsDialog: React.FC<UploadResultsDialogProps> = ({ open, onClose
           {/* Successful Files */}
           {results.successful.length > 0 && (
             <Box>
-              <Typography variant="h6" color="success.main" gutterBottom>
+              <Typography variant="h6" gutterBottom sx={{
+                color: "success.main"
+              }}>
                 Successfully Processed ({results.successful.length})
               </Typography>
               <Box sx={{ maxHeight: 200, overflowY: 'auto', border: 1, borderColor: 'success.light', borderRadius: 1, p: 1 }}>
@@ -44,16 +46,25 @@ const UploadResultsDialog: React.FC<UploadResultsDialogProps> = ({ open, onClose
           {/* Failed Files */}
           {results.failed.length > 0 && (
             <Box>
-              <Typography variant="h6" color="error.main" gutterBottom>
+              <Typography variant="h6" gutterBottom sx={{
+                color: "error.main"
+              }}>
                 Failed to Process ({results.failed.length})
               </Typography>
               <Box sx={{ maxHeight: 200, overflowY: 'auto', border: 1, borderColor: 'error.light', borderRadius: 1, p: 1 }}>
                 {results.failed.map((file, index) => (
                   <Box key={index} sx={{ mb: 1 }}>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" sx={{
+                      fontWeight: "bold"
+                    }}>
                       {file.name}
                     </Typography>
-                    <Typography variant="body2" color="error.main" sx={{ ml: 2 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: "error.main",
+                        ml: 2
+                      }}>
                       {file.error}
                     </Typography>
                   </Box>

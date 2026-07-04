@@ -56,7 +56,13 @@ const ConfigsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 4
+        }}>
         <Typography variant="h4" component="h1">
           Configs Library
         </Typography>
@@ -71,11 +77,9 @@ const ConfigsPage: React.FC = () => {
           </IconButton>
         </Box>
       </Box>
-
       <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
         Manage training configurations. Configs are independent and can be selected when creating trainings.
       </Typography>
-
       {/* Messages */}
       {success && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
@@ -87,7 +91,6 @@ const ConfigsPage: React.FC = () => {
           {error}
         </Alert>
       )}
-
       <ConfigsTable
         configs={configs}
         loading={loading}
@@ -99,14 +102,12 @@ const ConfigsPage: React.FC = () => {
         onDelete={handleDeleteClick}
         onDeleteMultiple={() => setDeleteMultipleDialogOpen(true)}
       />
-
       {/* Details Dialog */}
       <ConfigDetailsDialog
         open={detailsDialogOpen}
         onClose={() => setDetailsDialogOpen(false)}
         config={selectedConfig}
       />
-
       {/* Edit Config Name Dialog */}
       <EditConfigDialog
         open={editDialogOpen}
@@ -117,7 +118,6 @@ const ConfigsPage: React.FC = () => {
         onConfigNameChange={setEditConfigName}
         loading={loading}
       />
-
       {/* Delete Confirmation Dialog */}
       <DeleteConfigDialog
         open={deleteDialogOpen}
@@ -125,7 +125,6 @@ const ConfigsPage: React.FC = () => {
         onConfirm={handleConfirmDelete}
         loading={loading}
       />
-
       {/* Delete Multiple Confirmation Dialog */}
       <DeleteMultipleConfigsDialog
         open={deleteMultipleDialogOpen}

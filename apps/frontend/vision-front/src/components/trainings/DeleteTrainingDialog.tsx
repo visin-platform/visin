@@ -25,7 +25,7 @@ const DeleteTrainingDialog: React.FC<DeleteTrainingDialogProps> = ({
     <Dialog 
       open={open} 
       onClose={onClose}
-      PaperProps={{ sx: { borderRadius: 2 } }}
+      slotProps={{ paper: { sx: { borderRadius: 2 } } }}
     >
       <DialogTitle>Delete Training</DialogTitle>
       <DialogContent>

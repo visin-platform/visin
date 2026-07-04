@@ -128,7 +128,13 @@ const BenchmarksPage: React.FC = () => {
 
   if (loading && benchmarks.length === 0) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "400px"
+        }}>
         <CircularProgress />
       </Box>
     );
@@ -136,12 +142,22 @@ const BenchmarksPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 4
+        }}>
         <Box>
-          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+          <Typography variant="h4" component="h1" gutterBottom sx={{
+            fontWeight: 700
+          }}>
             Benchmarks
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1" sx={{
+            color: "text.secondary"
+          }}>
             Performance benchmarking results for model evaluation
           </Typography>
         </Box>
@@ -163,13 +179,11 @@ const BenchmarksPage: React.FC = () => {
           </Tooltip>
         </Box>
       </Box>
-
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
-
       {/* Benchmarks Table */}
       <TableContainer 
         component={Paper} 
@@ -337,9 +351,12 @@ const BenchmarksPage: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
-
       {benchmarks.length === 0 && !loading && (
-        <Box textAlign="center" py={6}>
+        <Box
+          sx={{
+            textAlign: "center",
+            py: 6
+          }}>
           <Typography variant="h6" color="textSecondary">
             No benchmarks found
           </Typography>
@@ -348,7 +365,6 @@ const BenchmarksPage: React.FC = () => {
           </Typography>
         </Box>
       )}
-
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onClose={handleCancelDelete}>
         <DialogTitle>Delete Benchmark</DialogTitle>

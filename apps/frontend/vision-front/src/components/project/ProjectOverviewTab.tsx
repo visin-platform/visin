@@ -55,11 +55,15 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                 <Box sx={{ p: 1, borderRadius: 1, bgcolor: 'primary.light', color: 'primary.main', mr: 2 }}>
                   <TimelineIcon />
                 </Box>
-                <Typography variant="subtitle2" color="text.secondary">
+                <Typography variant="subtitle2" sx={{
+                  color: "text.secondary"
+                }}>
                   Total Trainings
                 </Typography>
               </Box>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h4" sx={{
+                fontWeight: "bold"
+              }}>
                 {stats?.totalTrainings || 0}
               </Typography>
             </CardContent>
@@ -73,11 +77,15 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                 <Box sx={{ p: 1, borderRadius: 1, bgcolor: 'info.light', color: 'info.main', mr: 2 }}>
                   <TimeIcon />
                 </Box>
-                <Typography variant="subtitle2" color="text.secondary">
+                <Typography variant="subtitle2" sx={{
+                  color: "text.secondary"
+                }}>
                   Total Training Time
                 </Typography>
               </Box>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h4" sx={{
+                fontWeight: "bold"
+              }}>
                 {formatTime(stats?.totalTime || 0)}
               </Typography>
             </CardContent>
@@ -91,11 +99,15 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                 <Box sx={{ p: 1, borderRadius: 1, bgcolor: 'warning.light', color: 'warning.main', mr: 2 }}>
                   <CostIcon />
                 </Box>
-                <Typography variant="subtitle2" color="text.secondary">
+                <Typography variant="subtitle2" sx={{
+                  color: "text.secondary"
+                }}>
                   Total Cost
                 </Typography>
               </Box>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h4" sx={{
+                fontWeight: "bold"
+              }}>
                 {formatCost(stats?.totalCost || 0)}
               </Typography>
             </CardContent>
@@ -109,11 +121,15 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                 <Box sx={{ p: 1, borderRadius: 1, bgcolor: 'success.light', color: 'success.main', mr: 2 }}>
                   <SpeedIcon />
                 </Box>
-                <Typography variant="subtitle2" color="text.secondary">
+                <Typography variant="subtitle2" sx={{
+                  color: "text.secondary"
+                }}>
                   Avg. Epoch Time
                 </Typography>
               </Box>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h4" sx={{
+                fontWeight: "bold"
+              }}>
                 {stats?.avgEpochTime ? formatTime(stats.avgEpochTime) : '-'}
               </Typography>
             </CardContent>
@@ -127,11 +143,15 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                 <Box sx={{ p: 1, borderRadius: 1, bgcolor: 'secondary.light', color: 'secondary.main', mr: 2 }}>
                   <AssessmentIcon />
                 </Box>
-                <Typography variant="subtitle2" color="text.secondary">
+                <Typography variant="subtitle2" sx={{
+                  color: "text.secondary"
+                }}>
                   Test Results
                 </Typography>
               </Box>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h4" sx={{
+                fontWeight: "bold"
+              }}>
                 {dashboardStats?.testResultsCount || 0}
               </Typography>
             </CardContent>
@@ -145,11 +165,15 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                 <Box sx={{ p: 1, borderRadius: 1, bgcolor: 'error.light', color: 'error.main', mr: 2 }}>
                   <ImageIcon />
                 </Box>
-                <Typography variant="subtitle2" color="text.secondary">
+                <Typography variant="subtitle2" sx={{
+                  color: "text.secondary"
+                }}>
                   Visualizations
                 </Typography>
               </Box>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h4" sx={{
+                fontWeight: "bold"
+              }}>
                 {dashboardStats?.visualizationsCount || 0}
               </Typography>
             </CardContent>
@@ -163,25 +187,33 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
                 <Box sx={{ p: 1, borderRadius: 1, bgcolor: 'orange.light', color: 'orange.main', mr: 2 }}>
                   <BarChartIcon />
                 </Box>
-                <Typography variant="subtitle2" color="text.secondary">
+                <Typography variant="subtitle2" sx={{
+                  color: "text.secondary"
+                }}>
                   Benchmarks
                 </Typography>
               </Box>
-              <Typography variant="h4" fontWeight="bold">
+              <Typography variant="h4" sx={{
+                fontWeight: "bold"
+              }}>
                 {dashboardStats?.benchmarksCount || 0}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
-
       {!isAuthenticated && (
         <Box sx={{ px: 3, py: 4 }}>
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="h6" gutterBottom>
               Project Overview
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography
+              variant="body1"
+              sx={{
+                color: "text.secondary",
+                mb: 3
+              }}>
               Monitor your machine learning project's progress and results.
             </Typography>
             {user && (

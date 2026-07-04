@@ -20,7 +20,7 @@ import {
   Delete as DeleteIcon,
   Visibility as VisibilityIcon,
   Edit as EditIcon,
-  DeleteOutline as DeleteOutlineIcon
+  DeleteOutlined as DeleteOutlineIcon
 } from '@mui/icons-material';
 import { Config } from '../../types';
 
@@ -64,7 +64,9 @@ const ConfigsTable: React.FC<ConfigsTableProps> = ({
     <>
       {selectedConfigIds.size > 0 && (
         <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             {selectedConfigIds.size} config(s) selected
           </Typography>
           <Button

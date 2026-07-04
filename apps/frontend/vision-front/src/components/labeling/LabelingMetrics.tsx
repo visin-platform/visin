@@ -64,39 +64,82 @@ const LabelingMetrics: React.FC<LabelingMetricsProps> = ({ loading, metrics }) =
         mb: 2 
       }}>
         <Box sx={{ textAlign: 'center' }}>
-          <Typography variant="h5" color="success.main" fontWeight="bold">
+          <Typography
+            variant="h5"
+            sx={{
+              color: "success.main",
+              fontWeight: "bold"
+            }}>
             {metrics.good.toLocaleString()}
           </Typography>
-          <Typography variant="caption" color="success.main" fontWeight={500} display="block">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "success.main",
+              fontWeight: 500,
+              display: "block"
+            }}>
             Good ({metrics.goodPercentage}%)
           </Typography>
         </Box>
         <Box sx={{ textAlign: 'center' }}>
-          <Typography variant="h5" color="error.main" fontWeight="bold">
+          <Typography
+            variant="h5"
+            sx={{
+              color: "error.main",
+              fontWeight: "bold"
+            }}>
             {metrics.bad.toLocaleString()}
           </Typography>
-          <Typography variant="caption" color="error.main" fontWeight={500} display="block">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "error.main",
+              fontWeight: 500,
+              display: "block"
+            }}>
             Bad ({metrics.badPercentage}%)
           </Typography>
         </Box>
         <Box sx={{ textAlign: 'center' }}>
-          <Typography variant="h5" color="warning.main" fontWeight="bold">
+          <Typography
+            variant="h5"
+            sx={{
+              color: "warning.main",
+              fontWeight: "bold"
+            }}>
             {metrics.unlabeled.toLocaleString()}
           </Typography>
-          <Typography variant="caption" color="warning.main" fontWeight={500} display="block">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "warning.main",
+              fontWeight: 500,
+              display: "block"
+            }}>
             Unlabeled ({metrics.unlabeledPercentage}%)
           </Typography>
         </Box>
         <Box sx={{ textAlign: 'center' }}>
-          <Typography variant="h5" color="primary.main" fontWeight="bold">
+          <Typography
+            variant="h5"
+            sx={{
+              color: "primary.main",
+              fontWeight: "bold"
+            }}>
             {metrics.total.toLocaleString()}
           </Typography>
-          <Typography variant="caption" color="primary.main" fontWeight={500} display="block">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "primary.main",
+              fontWeight: 500,
+              display: "block"
+            }}>
             Total
           </Typography>
         </Box>
       </Box>
-      
       {/* Progress Bar */}
       <Box sx={{ mt: 2 }}>
         <Typography variant="body2" sx={{ mb: 1, textAlign: 'center', fontWeight: 500, fontSize: '0.8rem' }}>

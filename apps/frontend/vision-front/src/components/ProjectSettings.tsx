@@ -182,7 +182,9 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
             />
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>
                 Public URL:
               </Typography>
               <Link
@@ -214,7 +216,6 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
           </Box>
         </CardContent>
       </Card>
-
       {/* API Tokens Section */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h6">API Tokens</Typography>
@@ -226,12 +227,15 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
           Generate New Token
         </Button>
       </Box>
-
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mb: 3
+        }}>
         API tokens allow you to authenticate requests to the Vision API programmatically. 
         Use these tokens to submit trainings or track usage from your scripts.
       </Typography>
-
       <TableContainer component={Paper} variant="outlined">
         <Table>
           <TableHead>
@@ -288,14 +292,15 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
             {( !tokensResponse?.data || tokensResponse?.data?.length === 0) && (
               <TableRow>
                 <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                  <Typography color="text.secondary">No API tokens found</Typography>
+                  <Typography sx={{
+                    color: "text.secondary"
+                  }}>No API tokens found</Typography>
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </TableContainer>
-
       <Dialog open={createDialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>Generate API Token</DialogTitle>
         <DialogContent>

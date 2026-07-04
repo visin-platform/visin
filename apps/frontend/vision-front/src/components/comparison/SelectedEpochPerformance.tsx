@@ -86,7 +86,12 @@ const SelectedEpochPerformance: React.FC<SelectedEpochPerformanceProps> = ({
                       >
                         <strong>{comp.training.name}</strong>
                         {selectedEpochData && (
-                          <Typography variant="caption" color="text.secondary" display="block">
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: "text.secondary",
+                              display: "block"
+                            }}>
                             Epoch {selectedEpochData.epoch}
                           </Typography>
                         )}
@@ -145,7 +150,6 @@ const SelectedEpochPerformance: React.FC<SelectedEpochPerformanceProps> = ({
           </Table>
         </TableContainer>
       </Paper>
-
       {/* Per-Class IoU Comparison */}
       {comparisonData.some(comp => getSelectedEpochData(comp.training._id)?.results?.val) && (
         <Paper sx={{ mb: 4, mt: 4 }}>
@@ -176,7 +180,9 @@ const SelectedEpochPerformance: React.FC<SelectedEpochPerformanceProps> = ({
             if (classNames.length === 0) {
               return (
                 <Box sx={{ p: 3, textAlign: 'center' }}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     No per-class metrics available for selected epochs
                   </Typography>
                 </Box>
@@ -206,7 +212,12 @@ const SelectedEpochPerformance: React.FC<SelectedEpochPerformanceProps> = ({
                             >
                               <strong>{comp.training.name}</strong>
                               {selectedEpochData && (
-                                <Typography variant="caption" color="text.secondary" display="block">
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    color: "text.secondary",
+                                    display: "block"
+                                  }}>
                                   Epoch {selectedEpochData.epoch}
                                 </Typography>
                               )}
@@ -280,7 +291,9 @@ const SelectedEpochPerformance: React.FC<SelectedEpochPerformanceProps> = ({
                                       {formatNumber(classMetrics.iou)}
                                     </Typography>
                                   ) : (
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                      color: "text.secondary"
+                                    }}>
                                       N/A
                                     </Typography>
                                   )}
@@ -296,7 +309,9 @@ const SelectedEpochPerformance: React.FC<SelectedEpochPerformanceProps> = ({
                                       {formatNumber(classMetrics.precision)}
                                     </Typography>
                                   ) : (
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                      color: "text.secondary"
+                                    }}>
                                       N/A
                                     </Typography>
                                   )}
@@ -312,7 +327,9 @@ const SelectedEpochPerformance: React.FC<SelectedEpochPerformanceProps> = ({
                                       {formatNumber(classMetrics.recall)}
                                     </Typography>
                                   ) : (
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                      color: "text.secondary"
+                                    }}>
                                       N/A
                                     </Typography>
                                   )}
@@ -328,7 +345,9 @@ const SelectedEpochPerformance: React.FC<SelectedEpochPerformanceProps> = ({
                                       {formatNumber(classMetrics.f1)}
                                     </Typography>
                                   ) : (
-                                    <Typography variant="body2" color="text.secondary">
+                                    <Typography variant="body2" sx={{
+                                      color: "text.secondary"
+                                    }}>
                                       N/A
                                     </Typography>
                                   )}

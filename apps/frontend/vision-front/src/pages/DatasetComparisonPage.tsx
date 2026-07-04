@@ -80,14 +80,15 @@ export const DatasetComparisonPage: React.FC = () => {
           <Typography variant="h4" component="h1" sx={{ mb: 1 }}>
             Dataset Analysis Comparison
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1" sx={{
+            color: "text.secondary"
+          }}>
             Comparing {comparisonData.length} dataset analysis{comparisonData.length !== 1 ? 'es' : ''}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
         </Box>
       </Box>
-
       {/* Analysis Overview Cards */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', lg: '1fr 1fr 1fr' }, gap: 3, mb: 4 }}>
         {comparisonData.map((comparison) => (
@@ -97,12 +98,19 @@ export const DatasetComparisonPage: React.FC = () => {
                 <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
                   {comparison.analysis.dataset}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{
+                  color: "text.secondary"
+                }}>
                   {formatDateTime(comparison.analysis.createdAt)}
                 </Typography>
               </Box>
 
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  mb: 1
+                }}>
                 Analysis Data:
               </Typography>
               <Paper sx={{ p: 2, backgroundColor: '#f5f5f5', maxHeight: 300, overflow: 'auto' }}>
@@ -114,7 +122,6 @@ export const DatasetComparisonPage: React.FC = () => {
           </Box>
         ))}
       </Box>
-
       {/* Detailed Comparison Table */}
       {comparisonData.length > 0 && (
         <Paper sx={{ mb: 4 }}>
@@ -122,7 +129,12 @@ export const DatasetComparisonPage: React.FC = () => {
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
               Analysis Data Comparison
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 2
+              }}>
               Each analysis contains dynamic JSON data. Expand the sections below to view the raw data.
             </Typography>
           </Box>
@@ -131,7 +143,12 @@ export const DatasetComparisonPage: React.FC = () => {
               <Accordion key={comp.analysis._id} sx={{ mb: 2 }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6">{comp.analysis.dataset}</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      ml: 2
+                    }}>
                     Created: {formatDateTime(comp.analysis.createdAt)}
                   </Typography>
                 </AccordionSummary>

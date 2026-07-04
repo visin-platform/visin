@@ -41,10 +41,14 @@ const TrainingSystemInfoTab: React.FC<TrainingSystemInfoTabProps> = ({ epochs })
         }}
       >
         <SpeedIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
-        <Typography variant="h6" color="text.secondary" gutterBottom>
+        <Typography variant="h6" gutterBottom sx={{
+          color: "text.secondary"
+        }}>
           No system information available
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           System metrics are recorded in epoch.json files. Upload epoch data to view system performance charts.
         </Typography>
       </Paper>
@@ -70,27 +74,46 @@ const TrainingSystemInfoTab: React.FC<TrainingSystemInfoTabProps> = ({ epochs })
 
   return (
     <Box>
-      <Box mb={3}>
-        <Typography variant="h6" fontWeight="bold" gutterBottom>
+      <Box sx={{
+        mb: 3
+      }}>
+        <Typography variant="h6" gutterBottom sx={{
+          fontWeight: "bold"
+        }}>
           System Metrics
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           Performance metrics collected during training epochs, including CPU memory, GPU memory, power usage, and thermal stats.
         </Typography>
       </Box>
-
       <Grid container spacing={3}>
         {/* Memory Usage GB */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
             <CardContent>
-              <Box display="flex" alignItems="center" mb={2}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  mb: 2
+                }}>
                 <MemoryIcon color="primary" sx={{ mr: 1 }} />
-                <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontSize: "1rem",
+                    fontWeight: 600
+                  }}>
                   System Memory Usage
                 </Typography>
               </Box>
-              <Box height={300} width="100%">
+              <Box
+                sx={{
+                  height: 300,
+                  width: "100%"
+                }}>
                 <LineChart
                   xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
                   series={[
@@ -109,7 +132,7 @@ const TrainingSystemInfoTab: React.FC<TrainingSystemInfoTabProps> = ({ epochs })
                     },
                   ]}
                   margin={{ left: 50, right: 20, top: 20, bottom: 30 }}
-                  slotProps={{ legend: { hidden: false, position: { vertical: 'top', horizontal: 'right' } } }}
+                  slotProps={{ legend: { position: { vertical: 'top', horizontal: 'end' } } }}
                 />
               </Box>
             </CardContent>
@@ -120,13 +143,27 @@ const TrainingSystemInfoTab: React.FC<TrainingSystemInfoTabProps> = ({ epochs })
         <Grid size={{ xs: 12, md: 6 }}>
           <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
             <CardContent>
-              <Box display="flex" alignItems="center" mb={2}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  mb: 2
+                }}>
                 <MemoryIcon sx={{ color: '#9c27b0', mr: 1 }} />
-                <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontSize: "1rem",
+                    fontWeight: 600
+                  }}>
                   GPU Memory Usage
                 </Typography>
               </Box>
-              <Box height={300} width="100%">
+              <Box
+                sx={{
+                  height: 300,
+                  width: "100%"
+                }}>
                 <LineChart
                   xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
                   series={[
@@ -151,7 +188,7 @@ const TrainingSystemInfoTab: React.FC<TrainingSystemInfoTabProps> = ({ epochs })
                     },
                   ]}
                   margin={{ left: 50, right: 20, top: 20, bottom: 30 }}
-                  slotProps={{ legend: { hidden: false, position: { vertical: 'top', horizontal: 'right' } } }}
+                  slotProps={{ legend: { position: { vertical: 'top', horizontal: 'end' } } }}
                 />
               </Box>
             </CardContent>
@@ -162,13 +199,27 @@ const TrainingSystemInfoTab: React.FC<TrainingSystemInfoTabProps> = ({ epochs })
         <Grid size={{ xs: 12, md: 6 }}>
           <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
             <CardContent>
-              <Box display="flex" alignItems="center" mb={2}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  mb: 2
+                }}>
                 <BoltIcon sx={{ color: '#f57c00', mr: 1 }} />
-                <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontSize: "1rem",
+                    fontWeight: 600
+                  }}>
                   GPU Power Consumption
                 </Typography>
               </Box>
-              <Box height={300} width="100%">
+              <Box
+                sx={{
+                  height: 300,
+                  width: "100%"
+                }}>
                 <LineChart
                   xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
                   series={[
@@ -187,7 +238,7 @@ const TrainingSystemInfoTab: React.FC<TrainingSystemInfoTabProps> = ({ epochs })
                     },
                   ]}
                   margin={{ left: 50, right: 20, top: 20, bottom: 30 }}
-                  slotProps={{ legend: { hidden: false, position: { vertical: 'top', horizontal: 'right' } } }}
+                  slotProps={{ legend: { position: { vertical: 'top', horizontal: 'end' } } }}
                 />
               </Box>
             </CardContent>
@@ -198,13 +249,27 @@ const TrainingSystemInfoTab: React.FC<TrainingSystemInfoTabProps> = ({ epochs })
         <Grid size={{ xs: 12, md: 6 }}>
           <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
             <CardContent>
-              <Box display="flex" alignItems="center" mb={2}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  mb: 2
+                }}>
                 <ThermostatIcon sx={{ color: '#00bcd4', mr: 1 }} />
-                <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontSize: "1rem",
+                    fontWeight: 600
+                  }}>
                   GPU Temperature & Fan Speed
                 </Typography>
               </Box>
-              <Box height={300} width="100%">
+              <Box
+                sx={{
+                  height: 300,
+                  width: "100%"
+                }}>
                 <LineChart
                   xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
                   yAxis={[
@@ -217,19 +282,18 @@ const TrainingSystemInfoTab: React.FC<TrainingSystemInfoTabProps> = ({ epochs })
                       label: 'Temp (°C)',
                       color: '#f44336',
                       showMark: false,
-                      yAxisKey: 'temp'
+                      yAxisId: 'temp'
                     },
                     {
                       data: chartData.map(d => d.gpuFanSpeed),
                       label: 'Fan Speed %',
                       color: '#00bcd4',
                       showMark: false,
-                      yAxisKey: 'fan'
+                      yAxisId: 'fan'
                     },
                   ]}
-                  rightAxis="fan"
                   margin={{ left: 50, right: 50, top: 20, bottom: 30 }}
-                  slotProps={{ legend: { hidden: false, position: { vertical: 'top', horizontal: 'right' } } }}
+                  slotProps={{ legend: { position: { vertical: 'top', horizontal: 'end' } } }}
                 />
               </Box>
             </CardContent>

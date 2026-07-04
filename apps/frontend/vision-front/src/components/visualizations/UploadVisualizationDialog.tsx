@@ -64,11 +64,13 @@ const UploadVisualizationDialog: React.FC<UploadVisualizationDialogProps> = ({
       onClose={onClose} 
       maxWidth="sm" 
       fullWidth
-      PaperProps={{ sx: { borderRadius: 2 } }}
+      slotProps={{ paper: { sx: { borderRadius: 2 } } }}
     >
       <DialogTitle>Upload Visualization</DialogTitle>
       <DialogContent>
-        <Stack spacing={3} mt={1}>
+        <Stack spacing={3} sx={{
+          mt: 1
+        }}>
           <FormControl fullWidth>
             <InputLabel>Epoch</InputLabel>
             <Select
@@ -115,10 +117,14 @@ const UploadVisualizationDialog: React.FC<UploadVisualizationDialogProps> = ({
               onChange={handleFileSelect}
             />
             <CloudUploadIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
-            <Typography variant="body1" fontWeight={500} gutterBottom>
+            <Typography variant="body1" gutterBottom sx={{
+              fontWeight: 500
+            }}>
               {selectedFile ? selectedFile.name : 'Click to Select Image'}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{
+              color: "text.secondary"
+            }}>
               Supports PNG, JPG, JPEG
             </Typography>
           </Box>

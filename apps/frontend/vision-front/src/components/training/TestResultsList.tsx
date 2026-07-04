@@ -49,7 +49,12 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
 
   if (testResultsLoading) {
     return (
-      <Box display="flex" justifyContent="center" py={8}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          py: 8
+        }}>
         <CircularProgress />
       </Box>
     );
@@ -67,10 +72,17 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
           bgcolor: 'background.paper'
         }}
       >
-        <Typography variant="h6" color="text.secondary" gutterBottom>
+        <Typography variant="h6" gutterBottom sx={{
+          color: "text.secondary"
+        }}>
           No test results found
         </Typography>
-        <Typography variant="body2" color="text.secondary" mb={3}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: 3
+          }}>
           Upload test result JSON files to see performance metrics.
         </Typography>
       </Paper>
@@ -87,10 +99,14 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
 
           return (
             <Box key={epoch}>
-              <Typography variant="h5" fontWeight="bold" mb={2}>
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: "bold",
+                  mb: 2
+                }}>
                 Epoch {epoch}
               </Typography>
-
               <Stack spacing={3}>
                 {epochTestResults.map((testResult) => (
                   <TestResultTable
@@ -107,7 +123,6 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
           );
         })}
       </Stack>
-
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmationDialog
         open={deleteDialogOpen}

@@ -64,7 +64,12 @@ const MIoUChart: React.FC<MIoUChartProps> = ({ epochs }) => {
           />
         </Box>
       ) : (
-        <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+        <Typography
+          sx={{
+            color: "text.secondary",
+            textAlign: 'center',
+            py: 4
+          }}>
           No MIoU data available for this training
         </Typography>
       )}

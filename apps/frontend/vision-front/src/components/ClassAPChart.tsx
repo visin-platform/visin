@@ -57,7 +57,9 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
   if (allClasses.size === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           Average Precision (AP) is not calculated during training epochs.
           AP metrics are available in test results.
         </Typography>
@@ -160,9 +162,8 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'column' as const,
-                  position: { vertical: 'top' as const, horizontal: 'right' as const },
-                  padding: 10
+                  direction: 'vertical' as const,
+                  position: { vertical: 'top' as const, horizontal: 'end' as const },
                 }
               }}
             />
@@ -180,9 +181,8 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
               margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'column' as const,
-                  position: { vertical: 'top' as const, horizontal: 'right' as const },
-                  padding: 10
+                  direction: 'vertical' as const,
+                  position: { vertical: 'top' as const, horizontal: 'end' as const },
                 }
               }}
             />

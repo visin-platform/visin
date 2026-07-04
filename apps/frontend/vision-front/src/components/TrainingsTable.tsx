@@ -176,7 +176,12 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
 
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" py={8}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          py: 8
+        }}>
         <CircularProgress />
       </Box>
     );
@@ -194,12 +199,16 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
           bgcolor: 'background.paper'
         }}
       >
-        <Typography variant="h6" color="text.secondary" gutterBottom>
+        <Typography variant="h6" gutterBottom sx={{
+          color: "text.secondary"
+        }}>
           {searchTerm
             ? 'No trainings found matching your search'
             : 'No training runs available'}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           {searchTerm ? 'Try adjusting your filters' : 'Create a new training to get started'}
         </Typography>
       </Paper>
@@ -293,7 +302,9 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                           navigate(`/trainings/${training._id}`);
                         }}
                       >
-                        <Typography variant="body2" fontWeight={600} color="primary">
+                        <Typography variant="body2" color="primary" sx={{
+                          fontWeight: 600
+                        }}>
                           {training.name}
                         </Typography>
                       </Link>
@@ -318,7 +329,13 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{
+                        color: "text.secondary",
+                        maxWidth: 200
+                      }}>
                       {training.description || '-'}
                     </Typography>
                   </TableCell>
@@ -326,27 +343,37 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                     <StatusChip status={training.status} />
                   </TableCell>
                   <TableCell align="center">
-                    <Typography variant="body2" fontWeight={500}>
+                    <Typography variant="body2" sx={{
+                      fontWeight: 500
+                    }}>
                       {training.metrics ? training.metrics.epochCount || 0 : 0}
                     </Typography>
                   </TableCell>
                   <TableCell align="center">
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {training.metrics ? formatDuration(training.metrics.totalTime) : '-'}
                     </Typography>
                   </TableCell>
                   <TableCell align="center">
-                    <Typography variant="body2" fontWeight={500}>
+                    <Typography variant="body2" sx={{
+                      fontWeight: 500
+                    }}>
                       {training.metrics ? `€${((training.metrics.cpuCost || 0) + (training.metrics.gpuCost || 0)).toFixed(2)}` : '-'}
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {formatDateTime(training.createdAt)}
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{
+                      color: "text.secondary"
+                    }}>
                       {formatDateTime(training.updatedAt)}
                     </Typography>
                   </TableCell>

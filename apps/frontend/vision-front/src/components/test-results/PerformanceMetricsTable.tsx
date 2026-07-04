@@ -305,11 +305,15 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
           Performance Metrics Comparison
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mt: 1
+          }}>
           Performance metrics (IoU, Precision, Recall, F1) for different weather conditions and object classes
         </Typography>
       </Box>
-
       {['day_fair', 'night_fair', 'day_rain', 'night_rain', 'snow'].map(condition => {
         const conditionTitle = condition.replace('_', ' ').toUpperCase();
         return (
@@ -410,7 +414,12 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                   {formatNumber(classMetrics.iou.mean)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -428,7 +437,12 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                   {formatNumber(classMetrics.precision.mean)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -446,7 +460,12 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                   {formatNumber(classMetrics.recall.mean)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -464,7 +483,12 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                   {formatNumber(classMetrics.f1_score.mean)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -487,7 +511,12 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                   {formatNumber(classMetrics.ap.mean)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -507,7 +536,12 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                             {formatNumber(conditionData.overall.fw_iou.mean)}
                           </Typography>
                         ) : (
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: "text.secondary",
+                              fontSize: '0.75rem'
+                            }}>
                             N/A
                           </Typography>
                         )}
@@ -521,7 +555,6 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
           </Paper>
         );
       })}
-      
       <LatexModal
         open={latexModalOpen}
         onClose={() => setLatexModalOpen(false)}

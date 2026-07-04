@@ -38,15 +38,25 @@ const LoggedInUser: React.FC<LoggedInUserProps> = ({ user, onContinue, onLogout 
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
         }} 
       />
-      <Typography variant="h6" fontWeight={700} color="#0f172a" gutterBottom>
+      <Typography
+        variant="h6"
+        gutterBottom
+        sx={{
+          fontWeight: 700,
+          color: "#0f172a"
+        }}>
         {user.name}
       </Typography>
-      <Typography variant="body2" color="#64748b">
+      <Typography variant="body2" sx={{
+        color: "#64748b"
+      }}>
         {user.email}
       </Typography>
     </Paper>
 
-    <Stack spacing={2} width="100%">
+    <Stack spacing={2} sx={{
+      width: "100%"
+    }}>
       <Button 
         variant="contained" 
         size="large"

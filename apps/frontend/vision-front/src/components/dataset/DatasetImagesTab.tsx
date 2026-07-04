@@ -105,7 +105,6 @@ const DatasetImagesTab: React.FC<DatasetImagesTabProps> = ({
           </Button>
         )}
       </Box>
-
       {/* Category Filter */}
       <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
         <FormControl size="small" sx={{ minWidth: 200 }}>
@@ -170,11 +169,10 @@ const DatasetImagesTab: React.FC<DatasetImagesTabProps> = ({
               helperText="Select one or more tags to filter images"
             />
           )}
-          renderTags={(value, getTagProps) =>
+          renderValue={(value, getItemProps) =>
             value.map((option, index) => (
               <Chip
-                {...getTagProps({ index })}
-                key={option}
+                {...getItemProps({ index })}
                 label={option}
                 size="small"
               />
@@ -183,30 +181,48 @@ const DatasetImagesTab: React.FC<DatasetImagesTabProps> = ({
           sx={{ minWidth: 200 }}
         />
       </Box>
-
       {isLoading ? (
         <Box sx={{ textAlign: 'center', py: 4 }}>
           <CircularProgress />
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 2
+            }}>
             Loading images...
           </Typography>
         </Box>
       ) : error ? (
         <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="h6" color="text.secondary">
+          <Typography variant="h6" sx={{
+            color: "text.secondary"
+          }}>
             Images not available
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 1
+            }}>
             This analysis dataset doesn't have associated images in the image management system. 
             Upload images separately to enable image labeling and categorization.
           </Typography>
         </Box>
       ) : images.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="h6" color="text.secondary">
+          <Typography variant="h6" sx={{
+            color: "text.secondary"
+          }}>
             No images available
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 1
+            }}>
             Images will be displayed here once uploaded to the dataset.
           </Typography>
         </Box>
@@ -325,7 +341,12 @@ const DatasetImagesTab: React.FC<DatasetImagesTabProps> = ({
                     {image.title || image.originalName}
                   </Typography>
                   {image.description && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: "text.secondary",
+                        mt: 0.5
+                      }}>
                       {image.description}
                     </Typography>
                   )}
@@ -343,12 +364,13 @@ const DatasetImagesTab: React.FC<DatasetImagesTabProps> = ({
           })}
         </Box>
       )}
-
       {/* Pagination */}
       {images.length > 0 && !error && (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 4, gap: 2, flexWrap: 'wrap' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               Show:
             </Typography>
             <Select
@@ -373,7 +395,9 @@ const DatasetImagesTab: React.FC<DatasetImagesTabProps> = ({
             Previous
           </Button>
 
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             Page {pagination.page} of {pagination.pages} (Total: {pagination.total.toLocaleString()} images)
           </Typography>
 

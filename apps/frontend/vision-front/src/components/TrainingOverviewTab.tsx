@@ -63,13 +63,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
           <Grid size={{ xs: 12, md: 6 }}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
               <CardContent>
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1
+                  }}>
                   <TimelineIcon color="primary" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: "1rem",
+                      fontWeight: 600
+                    }}>
                     Loss Metrics
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   Measures the training loss (typically cross-entropy loss for segmentation). Lower values indicate better model performance during training.
                 </Typography>
                 <LossChart epochs={epochs} />
@@ -80,13 +95,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
           <Grid size={{ xs: 12, md: 6 }}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
               <CardContent>
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1
+                  }}>
                   <TimelineIcon color="secondary" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: "1rem",
+                      fontWeight: 600
+                    }}>
                     Mean IoU
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   Intersection over Union averaged across all classes. Measures the overlap between predicted and ground truth regions, ranging from 0 to 1.
                 </Typography>
                 <MIoUChart epochs={epochs} />
@@ -97,13 +127,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
           <Grid size={{ xs: 12, md: 6 }}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
               <CardContent>
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1
+                  }}>
                   <TimelineIcon color="secondary" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: "1rem",
+                      fontWeight: 600
+                    }}>
                     Class IoU Over Epochs
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   IoU scores for each class tracked over training epochs. Shows how individual class performance evolves during training.
                 </Typography>
                 <ClassIoUOverEpochsChart
@@ -116,13 +161,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
           <Grid size={{ xs: 12, md: 6 }}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
               <CardContent>
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1
+                  }}>
                   <TimelineIcon color="warning" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: "1rem",
+                      fontWeight: 600
+                    }}>
                     Class Precision Scores
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   Precision scores for each class, measuring the accuracy of positive predictions. Higher values indicate fewer false positives for that class.
                 </Typography>
                 <ClassPrecisionChart
@@ -135,13 +195,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
           <Grid size={{ xs: 12, md: 6 }}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
               <CardContent>
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1
+                  }}>
                   <TimelineIcon color="info" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: "1rem",
+                      fontWeight: 600
+                    }}>
                     Class Recall Scores
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   Recall scores for each class, measuring the completeness of positive predictions. Higher values indicate fewer false negatives for that class.
                 </Typography>
                 <ClassRecallChart
@@ -154,13 +229,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
           <Grid size={{ xs: 12, md: 6 }}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
               <CardContent>
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1
+                  }}>
                   <TimelineIcon color="error" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: "1rem",
+                      fontWeight: 600
+                    }}>
                     Class F1 Scores
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   F1 scores for each class, measuring the balance between precision and recall. Higher values indicate better performance for individual classes.
                 </Typography>
                 <ClassF1Chart
@@ -176,13 +266,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
           <Grid size={{ xs: 12, md: 6 }}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
               <CardContent>
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1
+                  }}>
                   <TimelineIcon color="warning" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: "1rem",
+                      fontWeight: 600
+                    }}>
                     Pixel Accuracy
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   Measures the percentage of correctly classified pixels across the entire image. Higher values indicate better overall pixel-level accuracy, but can be misleading for imbalanced classes.
                 </Typography>
                 <PixelAccuracyChart epochs={epochs} />
@@ -193,13 +298,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
           <Grid size={{ xs: 12, md: 6 }}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
               <CardContent>
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1
+                  }}>
                   <TimelineIcon color="secondary" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: "1rem",
+                      fontWeight: 600
+                    }}>
                     Mean Accuracy
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   Calculates the average accuracy across all classes, giving equal weight to each class regardless of size. Useful for balanced class evaluation.
                 </Typography>
                 <MeanAccuracyChart epochs={epochs} />
@@ -212,13 +332,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
             <Grid size={{ xs: 12, md: 6 }}>
               <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
                 <CardContent>
-                  <Box display="flex" alignItems="center" mb={1}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      mb: 1
+                    }}>
                     <TimelineIcon color="info" sx={{ mr: 1 }} />
-                    <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        fontSize: "1rem",
+                        fontWeight: 600
+                      }}>
                       Standard Training IoU Over Epochs
                     </Typography>
                   </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 3
+                    }}>
                     Standard IoU metrics using the official evaluation protocol over training epochs.
                   </Typography>
                   
@@ -230,7 +365,7 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
                         { data: valStandardIoU, label: 'Validation IoU', color: '#2e7d32', showMark: false }
                       ]}
                       margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
-                      slotProps={{ legend: { hidden: false, position: { vertical: 'top', horizontal: 'right' } } }}
+                      slotProps={{ legend: { position: { vertical: 'top', horizontal: 'end' } } }}
                     />
                   </Box>
                 </CardContent>
@@ -242,13 +377,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
           <Grid size={{ xs: 12, md: 6 }}>
             <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
               <CardContent>
-                <Box display="flex" alignItems="center" mb={1}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mb: 1
+                  }}>
                   <TimelineIcon color="success" sx={{ mr: 1 }} />
-                  <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontSize: "1rem",
+                      fontWeight: 600
+                    }}>
                     Dice Score
                   </Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mb: 2
+                  }}>
                   Measures the overlap between predicted and ground truth segmentation masks. Also known as F1-score for segmentation, ranges from 0 to 1. Often used in medical imaging.
                 </Typography>
                 <DiceScoreChart epochs={epochs} />
@@ -268,13 +418,28 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
             <Grid size={{ xs: 12 }}>
               <Card variant="outlined" sx={{ borderRadius: 2 }}>
                 <CardContent>
-                  <Box display="flex" alignItems="center" mb={1}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      mb: 1
+                    }}>
                     <TableChartIcon color="action" sx={{ mr: 1 }} />
-                    <Typography variant="h6" fontSize="1rem" fontWeight={600}>
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        fontSize: "1rem",
+                        fontWeight: 600
+                      }}>
                       Per-Class Validation Metrics (Latest Epoch)
                     </Typography>
                   </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                      mb: 3
+                    }}>
                     These metrics are calculated on the validation dataset and represent the model's performance on unseen data during training.
                   </Typography>
                   

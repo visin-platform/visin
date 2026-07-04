@@ -11,7 +11,9 @@ const TrainingHardwareTab: React.FC<TrainingHardwareTabProps> = ({ epochs }) => 
   if (epochs.length === 0) {
     return (
       <Paper sx={{ p: 3 }}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           No epochs available to display hardware metrics.
         </Typography>
       </Paper>
@@ -86,7 +88,9 @@ const TrainingHardwareTab: React.FC<TrainingHardwareTabProps> = ({ epochs }) => 
   if (!hasHardwareData) {
     return (
       <Paper sx={{ p: 3 }}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           No hardware metrics data available in the epochs.
         </Typography>
       </Paper>
@@ -101,7 +105,12 @@ const TrainingHardwareTab: React.FC<TrainingHardwareTabProps> = ({ epochs }) => 
           <Typography variant="h6" gutterBottom>
             GPU Metrics Over Epochs
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             GPU utilization, memory usage, and temperature monitoring during training.
           </Typography>
           <Box sx={{ width: '100%', height: 400 }}>
@@ -130,23 +139,26 @@ const TrainingHardwareTab: React.FC<TrainingHardwareTabProps> = ({ epochs }) => 
               margin={{ top: 10, bottom: 80, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'bottom', horizontal: 'middle' },
-                  padding: 0
+                  direction: 'horizontal',
+                  position: { vertical: 'bottom', horizontal: 'center' }
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* GPU Memory Usage */}
       {(gpuMemoryUsedData.some(v => v !== null) || gpuMemoryTotalData.some(v => v !== null)) && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             GPU Memory Usage Over Epochs
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             GPU memory allocation in GB during training.
           </Typography>
           <Box sx={{ width: '100%', height: 400 }}>
@@ -169,23 +181,26 @@ const TrainingHardwareTab: React.FC<TrainingHardwareTabProps> = ({ epochs }) => 
               margin={{ top: 10, bottom: 80, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'bottom', horizontal: 'middle' },
-                  padding: 0
+                  direction: 'horizontal',
+                  position: { vertical: 'bottom', horizontal: 'center' }
                 }
               }}
             />
           </Box>
         </Paper>
       )}
-
       {/* CPU and System Memory */}
       {(cpuUtilData.some(v => v !== null) || systemMemoryPercentData.some(v => v !== null) || systemMemoryUsedData.some(v => v !== null) || cpuFreqData.some(v => v !== null) || systemMemoryTotalData.some(v => v !== null)) && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             CPU and System Memory Over Epochs
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 2
+            }}>
             CPU utilization, frequency, and system memory usage during training.
           </Typography>
           <Box sx={{ width: '100%', height: 400 }}>
@@ -226,9 +241,8 @@ const TrainingHardwareTab: React.FC<TrainingHardwareTabProps> = ({ epochs }) => 
               margin={{ top: 10, bottom: 80, left: 60, right: 10 }}
               slotProps={{
                 legend: {
-                  direction: 'row',
-                  position: { vertical: 'bottom', horizontal: 'middle' },
-                  padding: 0
+                  direction: 'horizontal',
+                  position: { vertical: 'bottom', horizontal: 'center' }
                 }
               }}
             />

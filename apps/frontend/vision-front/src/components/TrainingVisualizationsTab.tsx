@@ -78,8 +78,16 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
   return (
     <Box>
       {/* Header Actions */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h6" fontWeight="bold">
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3
+        }}>
+        <Typography variant="h6" sx={{
+          fontWeight: "bold"
+        }}>
           Visualizations
         </Typography>
         <Stack direction="row" spacing={2}>
@@ -103,7 +111,6 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
           )}
         </Stack>
       </Box>
-
       {/* Filters */}
       <VisualizationFilters
         selectedType={selectedType}
@@ -117,21 +124,23 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
         selectedForCompare={selectedForCompare}
         setSelectedForCompare={setSelectedForCompare}
       />
-
       {/* Error Alert */}
       {error && (
         <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
-
       {/* Loading State */}
       {loading && (
-        <Box display="flex" justifyContent="center" py={8}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            py: 8
+          }}>
           <CircularProgress />
         </Box>
       )}
-
       {/* Visualizations Grid */}
       {!loading && visualizations.length === 0 && (
         <Paper 
@@ -145,10 +154,17 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
           }}
         >
           <ImageIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom>
+          <Typography variant="h6" gutterBottom sx={{
+            color: "text.secondary"
+          }}>
             No visualizations found
           </Typography>
-          <Typography variant="body2" color="text.secondary" mb={3}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mb: 3
+            }}>
             Try adjusting your filters or upload a new visualization.
           </Typography>
           {isAuthenticated && (
@@ -162,7 +178,6 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
           )}
         </Paper>
       )}
-
       {!loading && visualizations.length > 0 && (
         <VisualizationGrid
           visualizations={visualizations}
@@ -173,7 +188,6 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
           isAuthenticated={isAuthenticated}
         />
       )}
-
       {/* Upload Dialog */}
       <UploadVisualizationDialog
         open={uploadDialogOpen}
@@ -182,14 +196,12 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
         onUpload={handleUpload}
         uploading={uploading}
       />
-
       {/* Compare Dialog */}
       <CompareVisualizationsDialog
         open={compareDialogOpen}
         onClose={() => setCompareDialogOpen(false)}
         selectedForCompare={selectedForCompare}
       />
-
       {/* Image View Dialog */}
       <ImageViewDialog
         open={imageDialogOpen}

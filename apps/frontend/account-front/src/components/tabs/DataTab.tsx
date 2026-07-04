@@ -30,8 +30,15 @@ const DataTab: React.FC = () => {
         {icon}
       </Avatar>
       <Box sx={{ flexGrow: 1 }}>
-        <Typography variant="subtitle1" fontWeight={600}>{title}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{description}</Typography>
+        <Typography variant="subtitle1" sx={{
+          fontWeight: 600
+        }}>{title}</Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: 2
+          }}>{description}</Typography>
         {action}
       </Box>
     </Box>
@@ -41,8 +48,12 @@ const DataTab: React.FC = () => {
     <Box>
       <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" fontWeight={600} gutterBottom>Data & Privacy</Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="h6" gutterBottom sx={{
+            fontWeight: 600
+          }}>Data & Privacy</Typography>
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             Manage your personal data, export your information, or delete your account.
           </Typography>
         </Box>
@@ -92,12 +103,15 @@ const DataTab: React.FC = () => {
           }
         />
       </Paper>
-
       <Box sx={{ mt: 4, p: 3, bgcolor: alpha(theme.palette.info.main, 0.03), borderRadius: 3, border: '1px solid', borderColor: alpha(theme.palette.info.main, 0.1), display: 'flex', alignItems: 'center', gap: 2 }}>
         <PrivacyTip color="info" />
         <Box>
-          <Typography variant="subtitle2" fontWeight={600}>Privacy Policy</Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="subtitle2" sx={{
+            fontWeight: 600
+          }}>Privacy Policy</Typography>
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             Learn more about how we handle your data in our Privacy Policy.
           </Typography>
         </Box>

@@ -245,11 +245,15 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
           IoU Metrics Comparison{classFilter ? ` - ${classFilter.join(', ')}` : ''}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mt: 1
+          }}>
           Test results showing IoU (Intersection over Union) metrics for different weather conditions{classFilter ? ` and ${classFilter.join(', ')} classes` : ' and object classes'}
         </Typography>
       </Box>
-
       {['day_fair', 'night_fair', 'day_rain', 'night_rain', 'snow'].map(condition => {
         const conditionTitle = condition.replace('_', ' ').toUpperCase();
         return (
@@ -325,7 +329,12 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
                                   {formatNumber(classMetrics.iou.mean)}
                                 </Typography>
                               ) : (
-                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.secondary",
+                                    fontSize: '0.75rem'
+                                  }}>
                                   N/A
                                 </Typography>
                               )}
@@ -341,7 +350,6 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
           </Paper>
         );
       })}
-
       <LatexModal
         open={latexModalOpen}
         onClose={() => setLatexModalOpen(false)}

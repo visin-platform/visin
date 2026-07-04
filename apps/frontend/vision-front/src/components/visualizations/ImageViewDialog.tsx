@@ -30,7 +30,7 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({
       onClose={onClose} 
       maxWidth="xl" 
       fullWidth
-      PaperProps={{ sx: { borderRadius: 2, bgcolor: 'black' } }}
+      slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: 'black' } } }}
     >
       <DialogTitle sx={{ color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="subtitle1">{selectedImage?.filename}</Typography>
@@ -54,7 +54,12 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({
       </DialogContent>
       <DialogActions sx={{ bgcolor: 'black', p: 2 }}>
         {selectedImage && (
-          <Box display="flex" gap={2} mr="auto">
+          <Box
+            sx={{
+              display: "flex",
+              gap: 2,
+              mr: "auto"
+            }}>
             <Chip label={selectedImage.type} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
             <Chip label={`Epoch ${selectedImage.epoch}`} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
           </Box>

@@ -61,17 +61,23 @@ const ImageLabelingPage: React.FC = () => {
       <Container maxWidth="xl" sx={{ pb: 4 }}>
         {/* Header */}
         <Box sx={{ mb: 4, textAlign: 'center' }}>
-          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+          <Typography variant="h4" component="h1" gutterBottom sx={{
+            fontWeight: 700
+          }}>
             Image Labeling
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 600, mx: 'auto' }}>
+          <Typography
+            variant="body1"
+            sx={{
+              color: "text.secondary",
+              maxWidth: 600,
+              mx: 'auto'
+            }}>
             Label images to improve dataset quality for better model training results
           </Typography>
         </Box>
-
         {/* Labeling Progress Overview */}
         <LabelingMetrics loading={metricsLoading} metrics={labelingMetrics} />
-
         <LabelingSetup
           imageLimit={imageLimit}
           setImageLimit={setImageLimit}
@@ -81,7 +87,6 @@ const ImageLabelingPage: React.FC = () => {
           loading={loading}
           weatherConditions={WEATHER_CONDITIONS}
         />
-
         {alert && (
           <Alert severity={alert.type} sx={{ mb: 3, maxWidth: 400, mx: 'auto', borderRadius: 2 }}>
             {alert.message}
@@ -100,7 +105,9 @@ const ImageLabelingPage: React.FC = () => {
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
             Loading {imageLimit} images for labeling...
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography variant="body1" sx={{
+            color: "text.secondary"
+          }}>
             This may take a moment depending on the number of images selected
           </Typography>
         </Box>
@@ -113,10 +120,21 @@ const ImageLabelingPage: React.FC = () => {
     return (
       <Container maxWidth="xl" sx={{ pb: 4 }}>
         <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="h5" color="text.secondary" sx={{ mb: 2, fontWeight: 600 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              color: "text.secondary",
+              mb: 2,
+              fontWeight: 600
+            }}>
             No images available for labeling
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+          <Typography
+            variant="body1"
+            sx={{
+              color: "text.secondary",
+              mb: 4
+            }}>
             Please check that images exist in the dataset and try adjusting your filters.
           </Typography>
           <Button 

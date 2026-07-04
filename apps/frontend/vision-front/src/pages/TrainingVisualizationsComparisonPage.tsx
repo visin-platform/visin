@@ -165,13 +165,11 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
           Copy Share Link
         </Button>
       </Box>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
-
       {trainings.length === 0 ? (
         <Card>
           <CardContent>
@@ -196,11 +194,15 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
                         to={`/trainings/${t.training._id}`}
                         style={{ textDecoration: 'none', color: 'inherit' }}
                       >
-                        <Typography variant="subtitle2" fontWeight={600}>
+                        <Typography variant="subtitle2" sx={{
+                          fontWeight: 600
+                        }}>
                           {t.training.name}
                         </Typography>
                       </Link>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" sx={{
+                        color: "text.secondary"
+                      }}>
                         {t.visualizations.length} visualizations
                       </Typography>
                     </CardContent>
@@ -264,7 +266,13 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
                               .map((viz) => (
                                 <Card key={viz.visualization_uuid} variant="outlined">
                                   <CardContent sx={{ p: 1.5 }}>
-                                    <Typography variant="caption" display="block" sx={{ mb: 1, fontWeight: 600 }}>
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        display: "block",
+                                        mb: 1,
+                                        fontWeight: 600
+                                      }}>
                                       Epoch {viz.epoch}
                                     </Typography>
                                     <Box
@@ -282,14 +290,26 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
                                       }}
                                       onClick={() => handleImageClick(viz)}
                                     />
-                                    <Typography variant="caption" display="block" sx={{ mt: 0.5 }} color="text.secondary">
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        display: "block",
+                                        color: "text.secondary",
+                                        mt: 0.5
+                                      }}>
                                       {formatDateTime(viz.uploadedAt)}
                                     </Typography>
                                   </CardContent>
                                 </Card>
                               ))
                           ) : (
-                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                color: "text.secondary",
+                                textAlign: 'center',
+                                py: 2
+                              }}>
                               No {selectedType} visualizations
                             </Typography>
                           )}
@@ -303,7 +323,6 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
           )}
         </>
       )}
-
       {/* Image Modal */}
       <Dialog
         open={imageModalOpen}

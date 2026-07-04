@@ -106,27 +106,35 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
   const lastEpoch = epochs.length > 0 ? epochs[epochs.length - 1] : null;
 
   const InfoItem = ({ icon, label, value, copyable = false }: { icon: React.ReactNode, label: string, value: string, copyable?: boolean }) => (
-    <Box display="flex" alignItems="flex-start">
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "flex-start"
+      }}>
       <Box sx={{ color: 'text.secondary', mr: 1.5, mt: 0.5 }}>
         {icon}
       </Box>
       <Box>
-        <Typography variant="caption" color="text.secondary" fontWeight={500}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            fontWeight: 500
+          }}>
           {label}
         </Typography>
         <Tooltip title={copyable ? "Click to copy" : ""} arrow placement="top">
-          <Typography 
-            variant="body2" 
-            fontWeight={500}
-            sx={{ 
-              fontFamily: copyable ? 'monospace' : 'inherit',
-              cursor: copyable ? 'pointer' : 'default',
-              '&:hover': copyable ? { color: 'primary.main' } : {}
-            }}
+          <Typography
+            variant="body2"
             onClick={() => {
               if (copyable) navigator.clipboard.writeText(value);
             }}
-          >
+            sx={{
+              fontWeight: 500,
+              fontFamily: copyable ? 'monospace' : 'inherit',
+              cursor: copyable ? 'pointer' : 'default',
+              '&:hover': copyable ? { color: 'primary.main' } : {}
+            }}>
             {value}
           </Typography>
         </Tooltip>
@@ -147,8 +155,20 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
         justifyContent: 'space-between'
       }}
     >
-      <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
-        <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          mb: 1
+        }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            fontWeight: 600,
+            textTransform: "uppercase"
+          }}>
           {title}
         </Typography>
         <Box sx={{ color: color, opacity: 0.8 }}>
@@ -156,11 +176,18 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
         </Box>
       </Box>
       <Box>
-        <Typography variant="h5" fontWeight={700} color="text.primary">
+        <Typography
+          variant="h5"
+          sx={{
+            fontWeight: 700,
+            color: "text.primary"
+          }}>
           {value}
         </Typography>
         {subValue && (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             {subValue}
           </Typography>
         )}
@@ -176,8 +203,16 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
           <Grid size={{ xs: 12, md: 4 }}>
             <Stack spacing={3}>
               <Box>
-                <Box display="flex" alignItems="center" gap={1} mb={1}>
-                  <Typography variant="h6" fontWeight={700}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    mb: 1
+                  }}>
+                  <Typography variant="h6" sx={{
+                    fontWeight: 700
+                  }}>
                     {training.name}
                   </Typography>
                   <Chip
@@ -188,7 +223,9 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                   />
                 </Box>
                 {training.description && (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{
+                    color: "text.secondary"
+                  }}>
                     {training.description}
                   </Typography>
                 )}
@@ -227,7 +264,13 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
           <Grid size={{ xs: 12, md: 8 }}>
             <Stack spacing={3}>
               <Box>
-                <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.secondary">
+                <Typography
+                  variant="subtitle2"
+                  gutterBottom
+                  sx={{
+                    fontWeight: 600,
+                    color: "text.secondary"
+                  }}>
                   Training Summary
                 </Typography>
                 <Grid container spacing={2}>
@@ -269,7 +312,13 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
 
               {lastEpoch && (
                 <Box>
-                  <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.secondary">
+                  <Typography
+                    variant="subtitle2"
+                    gutterBottom
+                    sx={{
+                      fontWeight: 600,
+                      color: "text.secondary"
+                    }}>
                     Latest Performance (Epoch {lastEpoch.epoch})
                   </Typography>
                   <Grid container spacing={2}>

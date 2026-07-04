@@ -20,11 +20,6 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env': env // Expose .env variables to the app
     },
-    optimizeDeps: {
-      esbuildOptions: {
-        loader: { '.js': 'jsx' }
-      }
-    },
     build: {
       modulePreload: false,
       target: 'esnext',

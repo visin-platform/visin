@@ -167,7 +167,9 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
           </Box>
         </>
       ) : (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{
+          color: "text.secondary"
+        }}>
           No test results found for this project.
         </Typography>
       )}

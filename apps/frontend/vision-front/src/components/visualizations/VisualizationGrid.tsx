@@ -60,9 +60,21 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
   return (
     <Box>
       {Object.values(groupedVisualizations).map((group, groupIdx) => (
-        <Box key={groupIdx} mb={4}>
-          <Box display="flex" alignItems="center" mb={2}>
-            <Typography variant="h6" fontWeight={600} sx={{ mr: 2 }}>
+        <Box key={groupIdx} sx={{
+          mb: 4
+        }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              mb: 2
+            }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+                mr: 2
+              }}>
               {group.type}
             </Typography>
             {group.epoch !== undefined && (
@@ -133,10 +145,17 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
                   </Box>
                   
                   <CardContent sx={{ p: 1.5, flexGrow: 1 }}>
-                    <Typography variant="body2" noWrap title={viz.filename} fontWeight={500}>
+                    <Typography variant="body2" noWrap title={viz.filename} sx={{
+                      fontWeight: 500
+                    }}>
                       {viz.filename}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" display="block">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary",
+                        display: "block"
+                      }}>
                       {formatDateTime(viz.uploadedAt)}
                     </Typography>
                   </CardContent>

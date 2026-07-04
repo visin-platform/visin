@@ -201,7 +201,14 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
   return (
     <Box sx={{ py: 2 }}>
       <Paper sx={{ p: 3 }}>
-        <Box display="grid" gridTemplateColumns="1fr 1fr auto" gap={2} alignItems="flex-end" mb={3}>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr auto",
+            gap: 2,
+            alignItems: "flex-end",
+            mb: 3
+          }}>
           <FormControl fullWidth>
             <InputLabel>Select Training</InputLabel>
             <Select
@@ -357,7 +364,6 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
           </Box>
         )}
       </Paper>
-
       {/* Epoch Details Dialog */}
       <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Epoch Details - Epoch {selectedEpoch?.epoch}</DialogTitle>
@@ -422,7 +428,6 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
           <Button onClick={() => setDetailsOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
-
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>
         <DialogTitle>Delete Epoch</DialogTitle>
@@ -438,7 +443,6 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
-
       {/* Upload Results Modal */}
       <Dialog 
         open={uploadResultsOpen} 

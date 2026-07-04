@@ -233,7 +233,13 @@ const TrainingDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "80vh"
+        }}>
         <CircularProgress />
       </Box>
     );
@@ -264,35 +270,52 @@ const TrainingDetailPage: React.FC = () => {
           { label: training.name, current: true }
         ]}
       />
-
       {/* Header */}
-      <Box mb={3}>
-        <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'flex-start' }} gap={2}>
+      <Box sx={{
+        mb: 3
+      }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: { xs: 'column', md: 'row' },
+            justifyContent: "space-between",
+            alignItems: { xs: 'flex-start', md: 'flex-start' },
+            gap: 2
+          }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Box display="flex" alignItems="center" gap={2} mb={1} flexWrap="wrap">
-              <Typography 
-                variant="h5" 
-                component="h1" 
-                fontWeight="bold"
-                sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}
-              >
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                mb: 1,
+                flexWrap: "wrap"
+              }}>
+              <Typography
+                variant="h5"
+                component="h1"
+                sx={{
+                  fontWeight: "bold",
+                  fontSize: { xs: '1.25rem', sm: '1.5rem' }
+                }}>
                 {training.name}
               </Typography>
             </Box>
-            <Typography 
-              variant="body2" 
-              color="text.secondary" 
-              sx={{ 
-                maxWidth: 600, 
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                maxWidth: 600,
                 mb: 1.5,
                 display: { xs: 'none', sm: 'block' }
-              }}
-            >
+              }}>
               {training.description || 'No description provided'}
             </Typography>
             
             {training.tags && training.tags.length > 0 && (
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Stack direction="row" spacing={1} useFlexGap sx={{
+                flexWrap: "wrap"
+              }}>
                 {training.tags.map((tag) => (
                   <Chip 
                     key={tag} 
@@ -343,7 +366,6 @@ const TrainingDetailPage: React.FC = () => {
           </Stack>
         </Box>
       </Box>
-
       {/* Tab Navigation */}
       <Paper 
         elevation={0} 
@@ -393,7 +415,6 @@ const TrainingDetailPage: React.FC = () => {
           <Tab label="Benchmarks" />
         </Tabs>
       </Paper>
-
       {/* Overview Tab */}
       {detailTab === 0 && (
         <TrainingOverviewTab
@@ -401,7 +422,6 @@ const TrainingDetailPage: React.FC = () => {
           epochs={epochs}
         />
       )}
-
       {/* Epochs Tab */}
       {detailTab === 1 && (
         <TrainingEpochsTab
@@ -421,7 +441,6 @@ const TrainingDetailPage: React.FC = () => {
           isAuthenticated={isAuthenticated}
         />
       )}
-
       {/* Test Results Tab */}
       {detailTab === 2 && (
         <TrainingTestResultsTab
@@ -443,7 +462,6 @@ const TrainingDetailPage: React.FC = () => {
           isAuthenticated={isAuthenticated}
         />
       )}
-
       {/* Visualizations Tab */}
       {detailTab === 3 && (
         <TrainingVisualizationsTab
@@ -452,14 +470,12 @@ const TrainingDetailPage: React.FC = () => {
           isAuthenticated={isAuthenticated}
         />
       )}
-
       {/* System Info Tab */}
       {detailTab === 4 && (
         <TrainingSystemInfoTab
           epochs={epochs}
         />
       )}
-
       {/* Config Tab */}
       {detailTab === 5 && (
         <TrainingConfigTab
@@ -468,7 +484,6 @@ const TrainingDetailPage: React.FC = () => {
           training={training}
         />
       )}
-
       {/* Benchmarks Tab */}
       {detailTab === 6 && (
         <TrainingBenchmarksTab
@@ -476,7 +491,6 @@ const TrainingDetailPage: React.FC = () => {
           isAuthenticated={isAuthenticated}
         />
       )}
-
       {/* Dialogs */}
       <DeleteConfirmationDialog
         open={deleteOpen}
@@ -486,7 +500,6 @@ const TrainingDetailPage: React.FC = () => {
         message={`Are you sure you want to delete Epoch ${deleteTarget?.epoch}? This action cannot be undone.`}
         isDeleting={uploading}
       />
-
       <DeleteConfirmationDialog
         open={trainingDeleteOpen}
         onClose={() => setTrainingDeleteOpen(false)}
@@ -495,19 +508,16 @@ const TrainingDetailPage: React.FC = () => {
         message="Are you sure you want to delete this training? This action cannot be undone and will also delete all associated epochs and test results."
         isDeleting={uploading}
       />
-
       <UploadResultsDialog
         open={uploadResultsOpen}
         onClose={() => setUploadResultsOpen(false)}
         results={uploadResults}
       />
-
       <LatexExportDialog
         open={latexModalOpen}
         onClose={() => setLatexModalOpen(false)}
         latexCode={latexCode}
       />
-
       <TrainingFormDialog
         open={editDialogOpen}
         onClose={handleEditCancel}

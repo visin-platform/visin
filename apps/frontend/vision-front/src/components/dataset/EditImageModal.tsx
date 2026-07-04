@@ -50,7 +50,12 @@ const EditImageModal: React.FC<EditImageModalProps> = ({
         Edit Image
       </DialogTitle>
       <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: 2
+          }}>
           Update the category, weather condition, and tags for this image.
         </Typography>
         <TextField
@@ -59,8 +64,10 @@ const EditImageModal: React.FC<EditImageModalProps> = ({
           label="Category"
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value)}
-          SelectProps={{
-            native: true,
+          slotProps={{
+            select: {
+              native: true,
+            }
           }}
           sx={{ mb: 2 }}
         >
@@ -77,8 +84,10 @@ const EditImageModal: React.FC<EditImageModalProps> = ({
           label="Weather Condition"
           value={selectedWeather}
           onChange={(e) => setSelectedWeather(e.target.value as WeatherCondition | '')}
-          SelectProps={{
-            native: true,
+          slotProps={{
+            select: {
+              native: true,
+            }
           }}
           sx={{ mb: 2 }}
         >

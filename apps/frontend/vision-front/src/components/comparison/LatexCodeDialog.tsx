@@ -69,7 +69,13 @@ const LatexCodeDialog: React.FC<LatexCodeDialogProps> = ({
             Copy
           </Button>
         </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            mt: 1,
+            display: 'block'
+          }}>
           This code generates a LaTeX table comparing the selected trainings. You can paste this directly into your LaTeX document.
           Requires the <code>booktabs</code> and <code>xcolor</code> packages.
         </Typography>

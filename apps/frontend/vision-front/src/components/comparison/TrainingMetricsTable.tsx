@@ -43,10 +43,14 @@ const TrainingMetricsTable: React.FC<TrainingMetricsTableProps> = ({ comparisonD
         }}
       >
         <Box sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h6" color="text.secondary" gutterBottom>
+          <Typography variant="h6" gutterBottom sx={{
+            color: "text.secondary"
+          }}>
             No Test Results Available
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             Test results metrics will appear here once trainings have completed testing
           </Typography>
         </Box>
@@ -71,11 +75,15 @@ const TrainingMetricsTable: React.FC<TrainingMetricsTableProps> = ({ comparisonD
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
           Performance Metrics Summary
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: 2
+          }}>
           Key metrics from test results across different conditions and classes
         </Typography>
       </Box>
-
       {conditions.map(condition => (
         <Box key={condition} sx={{ mb: 3 }}>
           <Typography variant="subtitle2" sx={{ px: 3, mb: 1, fontWeight: 600 }}>

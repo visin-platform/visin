@@ -28,16 +28,35 @@ const DatasetHeader: React.FC<DatasetHeaderProps> = ({
   canDelete
 }) => {
   return (
-    <Box mb={4}>
-      <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'flex-start' }} gap={3}>
+    <Box sx={{
+      mb: 4
+    }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: 'column', md: 'row' },
+          justifyContent: "space-between",
+          alignItems: { xs: 'flex-start', md: 'flex-start' },
+          gap: 3
+        }}>
         <Box>
-          <Typography variant="h4" component="h1" fontWeight="bold">
+          <Typography variant="h4" component="h1" sx={{
+            fontWeight: "bold"
+          }}>
             {analysis.dataset}
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 800, mb: 2 }}>
+          <Typography
+            variant="body1"
+            sx={{
+              color: "text.secondary",
+              maxWidth: 800,
+              mb: 2
+            }}>
             Dataset analysis with {imagesCount} images
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             Created: {new Date(analysis.createdAt).toLocaleString()} • 
             Updated: {new Date(analysis.updatedAt).toLocaleString()}
           </Typography>

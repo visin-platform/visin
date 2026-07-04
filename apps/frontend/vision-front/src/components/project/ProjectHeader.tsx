@@ -35,24 +35,24 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
     <Box sx={{ mb: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography 
-            variant="h4" 
-            component="h1" 
-            gutterBottom 
-            fontWeight="bold"
-            sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}
-          >
+          <Typography
+            variant="h4"
+            component="h1"
+            gutterBottom
+            sx={{
+              fontWeight: "bold",
+              fontSize: { xs: '1.5rem', sm: '2rem' }
+            }}>
             {project.name}
           </Typography>
-          <Typography 
-            variant="body2" 
-            color="text.secondary" 
-            sx={{ 
-              maxWidth: 600, 
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              maxWidth: 600,
               mb: 1.5,
               display: { xs: 'none', sm: 'block' }
-            }}
-          >
+            }}>
             {project.description || 'No description provided.'}
           </Typography>
         </Box>

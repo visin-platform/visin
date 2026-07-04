@@ -32,7 +32,7 @@ const CompareVisualizationsDialog: React.FC<CompareVisualizationsDialogProps> = 
       onClose={onClose} 
       maxWidth="xl" 
       fullWidth
-      PaperProps={{ sx: { borderRadius: 2, height: '90vh' } }}
+      slotProps={{ paper: { sx: { borderRadius: 2, height: '90vh' } } }}
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h6">Compare Visualizations</Typography>
@@ -54,7 +54,9 @@ const CompareVisualizationsDialog: React.FC<CompareVisualizationsDialogProps> = 
                   bgcolor: 'background.default'
                 }}
               >
-                <Box mb={2}>
+                <Box sx={{
+                  mb: 2
+                }}>
                   <Chip 
                     label={viz.type} 
                     size="small" 
@@ -93,7 +95,14 @@ const CompareVisualizationsDialog: React.FC<CompareVisualizationsDialogProps> = 
                   />
                 </Box>
                 
-                <Typography variant="caption" color="text.secondary" align="center" display="block" fontFamily="monospace">
+                <Typography
+                  variant="caption"
+                  align="center"
+                  sx={{
+                    color: "text.secondary",
+                    display: "block",
+                    fontFamily: "monospace"
+                  }}>
                   {viz.filename}
                 </Typography>
               </Paper>

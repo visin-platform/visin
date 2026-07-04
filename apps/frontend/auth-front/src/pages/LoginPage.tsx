@@ -119,19 +119,32 @@ const LoginPage: React.FC = () => {
                 height: 48,
               }}
             />
-            <Typography variant="h3" color="white" fontWeight="bold">
+            <Typography variant="h3" color="white" sx={{
+              fontWeight: "bold"
+            }}>
               Visin
             </Typography>
           </Box>
-          <Typography variant="h5" color="rgba(255,255,255,0.9)" fontWeight={300} sx={{ maxWidth: 600 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              color: "rgba(255,255,255,0.9)",
+              fontWeight: 300,
+              maxWidth: 600
+            }}>
             Advanced Computer Vision & Analytics Platform
           </Typography>
-          <Typography variant="body1" color="rgba(255,255,255,0.7)" sx={{ mt: 2, maxWidth: 500 }}>
+          <Typography
+            variant="body1"
+            sx={{
+              color: "rgba(255,255,255,0.7)",
+              mt: 2,
+              maxWidth: 500
+            }}>
             Manage your datasets, train models, and analyze results with our comprehensive suite of tools.
           </Typography>
         </Box>
       </Grid>
-
       {/* Right Side - Login Form */}
       <Grid 
         size={{ xs: 12, sm: 8, md: 5 }}
@@ -168,15 +181,33 @@ const LoginPage: React.FC = () => {
                   height: 40,
                 }}
              />
-             <Typography variant="h5" fontWeight={700} color="#1e293b">
+             <Typography
+               variant="h5"
+               sx={{
+                 fontWeight: 700,
+                 color: "#1e293b"
+               }}>
               Visin
             </Typography>
           </Box>
 
-          <Typography component="h1" variant="h4" fontWeight={800} color="#0f172a" gutterBottom>
+          <Typography
+            component="h1"
+            variant="h4"
+            gutterBottom
+            sx={{
+              fontWeight: 800,
+              color: "#0f172a"
+            }}>
             {user ? 'Welcome Back' : 'Sign In'}
           </Typography>
-          <Typography variant="body1" color="#64748b" sx={{ mb: 6, textAlign: 'center' }}>
+          <Typography
+            variant="body1"
+            sx={{
+              color: "#64748b",
+              mb: 6,
+              textAlign: 'center'
+            }}>
             {user ? 'You are currently logged in' : 'Access your dashboard using your credentials'}
           </Typography>
 
@@ -195,7 +226,9 @@ const LoginPage: React.FC = () => {
           </Box>
 
           <Box sx={{ mt: 8, textAlign: 'center' }}>
-            <Typography variant="caption" color="#94a3b8">
+            <Typography variant="caption" sx={{
+              color: "#94a3b8"
+            }}>
               © {new Date().getFullYear()} Visin. All rights reserved.
             </Typography>
           </Box>

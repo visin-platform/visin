@@ -28,7 +28,7 @@ import {
   Refresh as RefreshIcon,
   Add as AddIcon,
   Edit as EditIcon,
-  DeleteOutline as DeleteOutlineIcon,
+  DeleteOutlined as DeleteOutlineIcon,
   Public as PublicIcon,
   Lock as LockIcon
 } from '@mui/icons-material';
@@ -165,17 +165,25 @@ const ProjectsPage: React.FC = () => {
           { label: 'Projects', current: true }
         ]}
       />
-
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 4
+        }}>
         <Box>
-          <Typography variant="h4" component="h1" fontWeight={700} gutterBottom>
+          <Typography variant="h4" component="h1" gutterBottom sx={{
+            fontWeight: 700
+          }}>
             Projects
           </Typography>
-          <Typography 
-            variant="body1" 
-            color="text.secondary"
-            sx={{ display: { xs: 'none', sm: 'block' } }}
-          >
+          <Typography
+            variant="body1"
+            sx={{
+              color: "text.secondary",
+              display: { xs: 'none', sm: 'block' }
+            }}>
             Manage your research projects
           </Typography>
         </Box>
@@ -219,13 +227,11 @@ const ProjectsPage: React.FC = () => {
           </IconButton>
         </Box>
       </Box>
-
       {error && (
         <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
           {error instanceof Error ? error.message : 'Failed to load projects'}
         </Alert>
       )}
-
       <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: theme.shadows[2] }}>
         <Table>
           <TableHead>
@@ -257,27 +263,36 @@ const ProjectsPage: React.FC = () => {
             {projects.length === 0 && !isLoading ? (
               <TableRow>
                 <TableCell colSpan={5} align="center" sx={{ pb: 4 }}>
-                  <Typography color="text.secondary">No projects found</Typography>
+                  <Typography sx={{
+                    color: "text.secondary"
+                  }}>No projects found</Typography>
                 </TableCell>
               </TableRow>
             ) : (
               projects.map((project: Project) => (
                 <TableRow key={project._id} hover>
                   <TableCell>
-                    <Typography 
-                      fontWeight={600}
-                      sx={{ 
-                        cursor: 'pointer', 
+                    <Typography
+                      onClick={() => navigate(`/projects/${project._id}`)}
+                      sx={{
+                        fontWeight: 600,
+                        cursor: 'pointer',
                         color: 'primary.main',
                         '&:hover': { textDecoration: 'underline' }
-                      }}
-                      onClick={() => navigate(`/projects/${project._id}`)}
-                    >
+                      }}>
                       {project.name}
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: "text.secondary",
+                        maxWidth: 400,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
                       {project.description || '-'}
                     </Typography>
                   </TableCell>
@@ -315,7 +330,6 @@ const ProjectsPage: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
-
       <ProjectFormDialog
         open={createModalOpen}
         onClose={handleCloseModal}
@@ -331,11 +345,10 @@ const ProjectsPage: React.FC = () => {
         error={createError}
         success={createSuccess}
       />
-
       <Dialog 
         open={deleteDialogOpen} 
         onClose={() => setDeleteDialogOpen(false)}
-        PaperProps={{ sx: { borderRadius: 2 } }}
+        slotProps={{ paper: { sx: { borderRadius: 2 } } }}
       >
         <DialogTitle>Delete Project</DialogTitle>
         <DialogContent>

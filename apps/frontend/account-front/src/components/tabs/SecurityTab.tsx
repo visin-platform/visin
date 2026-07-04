@@ -26,8 +26,12 @@ const SecurityTab: React.FC = () => {
           {icon}
         </Avatar>
         <Box>
-          <Typography variant="subtitle1" fontWeight={600}>{title}</Typography>
-          <Typography variant="body2" color="text.secondary">{description}</Typography>
+          <Typography variant="subtitle1" sx={{
+            fontWeight: 600
+          }}>{title}</Typography>
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>{description}</Typography>
         </Box>
       </Box>
       <Button 
@@ -44,8 +48,12 @@ const SecurityTab: React.FC = () => {
     <Box>
       <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" fontWeight={600} gutterBottom>Security Settings</Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="h6" gutterBottom sx={{
+            fontWeight: 600
+          }}>Security Settings</Typography>
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             Manage your password and protect your account with additional security layers.
           </Typography>
         </Box>
@@ -71,12 +79,15 @@ const SecurityTab: React.FC = () => {
           actionLabel="View"
         />
       </Paper>
-
       <Box sx={{ mt: 4, p: 3, bgcolor: alpha(theme.palette.primary.main, 0.03), borderRadius: 3, border: '1px dashed', borderColor: 'primary.light', display: 'flex', alignItems: 'center', gap: 2 }}>
         <Security color="primary" />
         <Box>
-          <Typography variant="subtitle2" fontWeight={600}>Security Recommendation</Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="subtitle2" sx={{
+            fontWeight: 600
+          }}>Security Recommendation</Typography>
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             We recommend enabling Two-Factor Authentication to keep your account safe.
           </Typography>
         </Box>

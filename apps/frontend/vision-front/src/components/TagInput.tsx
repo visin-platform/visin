@@ -49,10 +49,14 @@ const TagInput: React.FC<TagInputProps> = ({
 
   return (
     <Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mb: 1
+        }}>
         {label}
       </Typography>
-
       <Autocomplete
         multiple
         freeSolo
@@ -68,11 +72,10 @@ const TagInput: React.FC<TagInputProps> = ({
             onTagsChange(newValue);
           }
         }}
-        renderTags={(value, getTagProps) =>
+        renderValue={(value, getItemProps) =>
           value.map((option, index) => (
             <Chip
-              {...getTagProps({ index })}
-              key={option}
+              {...getItemProps({ index })}
               label={option}
               size="small"
               onDelete={() => handleRemoveTag(option)}
@@ -96,7 +99,6 @@ const TagInput: React.FC<TagInputProps> = ({
           }
         }}
       />
-
       {tags.length > 0 && (
         <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
           {tags.map((tag) => (

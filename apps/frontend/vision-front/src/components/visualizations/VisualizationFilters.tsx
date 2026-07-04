@@ -50,10 +50,20 @@ const VisualizationFilters: React.FC<VisualizationFiltersProps> = ({
         bgcolor: 'background.paper'
       }}
     >
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
-        <Box display="flex" alignItems="center" color="text.secondary" sx={{ minWidth: { xs: 'auto', sm: 'fit-content' } }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{
+        alignItems: { xs: 'stretch', sm: 'center' }
+      }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            color: "text.secondary",
+            minWidth: { xs: 'auto', sm: 'fit-content' }
+          }}>
           <FilterListIcon sx={{ mr: 1 }} />
-          <Typography variant="subtitle2" fontWeight={600}>Filters:</Typography>
+          <Typography variant="subtitle2" sx={{
+            fontWeight: 600
+          }}>Filters:</Typography>
         </Box>
         
         <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 180 } }}>

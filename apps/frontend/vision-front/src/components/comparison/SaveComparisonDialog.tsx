@@ -107,7 +107,9 @@ const SaveComparisonDialog: React.FC<SaveComparisonDialogProps> = ({
                 </label>
               </Box>
             )) : (
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{
+                color: "text.secondary"
+              }}>
                 No training data available
               </Typography>
             )}

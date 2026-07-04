@@ -217,7 +217,9 @@ const ImageCategoriesPage: React.FC = () => {
                     {categories.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} align="center" sx={{ pb: 4 }}>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant="body2" sx={{
+                            color: "text.secondary"
+                          }}>
                             No categories found. Create your first category to get started.
                           </Typography>
                         </TableCell>
@@ -236,7 +238,9 @@ const ImageCategoriesPage: React.FC = () => {
                                   mr: 1
                                 }}
                               />
-                              <Typography variant="body1" fontWeight="medium">
+                              <Typography variant="body1" sx={{
+                                fontWeight: "medium"
+                              }}>
                                 {category.name}
                               </Typography>
                             </Box>
@@ -249,7 +253,9 @@ const ImageCategoriesPage: React.FC = () => {
                             />
                           </TableCell>
                           <TableCell>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                              color: "text.secondary"
+                            }}>
                               {category.description || 'No description'}
                             </Typography>
                           </TableCell>
@@ -264,7 +270,9 @@ const ImageCategoriesPage: React.FC = () => {
                             />
                           </TableCell>
                           <TableCell>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{
+                              color: "text.secondary"
+                            }}>
                               {new Date(category.createdAt).toLocaleDateString()}
                             </Typography>
                           </TableCell>
@@ -292,7 +300,6 @@ const ImageCategoriesPage: React.FC = () => {
               </TableContainer>
             )}
           </Box>
-
       {/* Create/Edit Category Modal */}
       <Dialog open={createModalOpen} onClose={handleCloseModal} maxWidth="sm" fullWidth>
         <DialogTitle>

@@ -26,7 +26,9 @@ export const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({ epoc
 
   return (
     <Paper>
-      <Box p={3}>
+      <Box sx={{
+        p: 3
+      }}>
         <Typography variant="h6" gutterBottom>
           Per-Class Metrics (Latest Epoch)
         </Typography>

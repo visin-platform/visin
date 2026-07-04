@@ -30,8 +30,16 @@ const TestResultsHeader: React.FC<TestResultsHeaderProps> = ({
   };
 
   return (
-    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-      <Typography variant="h6" fontWeight="bold">
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        mb: 3
+      }}>
+      <Typography variant="h6" sx={{
+        fontWeight: "bold"
+      }}>
         Test Results
       </Typography>
       <Box>

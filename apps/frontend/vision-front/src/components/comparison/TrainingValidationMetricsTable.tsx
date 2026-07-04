@@ -394,10 +394,14 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
         }}
       >
         <Box sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h6" color="text.secondary" gutterBottom>
+          <Typography variant="h6" gutterBottom sx={{
+            color: "text.secondary"
+          }}>
             No Validation Metrics Available
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{
+            color: "text.secondary"
+          }}>
             Validation metrics from training epochs will appear here once trainings have validation data
           </Typography>
         </Box>
@@ -419,7 +423,12 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             Training Validation Metrics
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 1
+            }}>
             Mean ± standard deviation from the top 10 epochs sorted by validation IoU. Precision, recall, and F1 are averaged across classes per epoch before calculating statistics.
           </Typography>
         </Box>
@@ -433,7 +442,6 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
           LaTeX
         </Button>
       </Box>
-
       <TableContainer>
         <Table>
           <TableHead>
@@ -475,7 +483,6 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
           </TableBody>
         </Table>
       </TableContainer>
-
       <LatexModal
         open={latexModalOpen}
         onClose={() => setLatexModalOpen(false)}

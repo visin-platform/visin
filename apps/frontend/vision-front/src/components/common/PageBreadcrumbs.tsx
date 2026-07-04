@@ -25,7 +25,9 @@ const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({ items, sx }) => {
         {items.map((item, index) => {
           if (item.current || !item.href) {
             return (
-              <Typography key={index} color="text.primary">
+              <Typography key={index} sx={{
+                color: "text.primary"
+              }}>
                 {item.label}
               </Typography>
             );
