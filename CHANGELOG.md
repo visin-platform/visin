@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.107](https://github.com/visin-platform/visin-monorepo/compare/v0.0.106...v0.0.107) (2026-07-04)
+
+
+### Bug Fixes
+
+* add frontend core library to landing page ([fd9cb65](https://github.com/visin-platform/visin-monorepo/commit/fd9cb652db3e7e911c4c64e9d47768f35f5ab73c))
+
 ### [0.0.106](https://github.com/visin-platform/visin-monorepo/compare/v0.0.105...v0.0.106) (2026-07-04)
 
 
