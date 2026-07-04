@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.105](https://github.com/visin-platform/visin-monorepo/compare/v0.0.104...v0.0.105) (2026-07-04)
+
+
+### Bug Fixes
+
+* buld libraries for test step in pipeline ([e4404d1](https://github.com/visin-platform/visin-monorepo/commit/e4404d1f880528c768ff6bcf7faaaa5a56bfefa6))
+
 ### [0.0.104](https://github.com/visin-platform/visin-monorepo/compare/v0.0.103...v0.0.104) (2026-07-04)
 
 
