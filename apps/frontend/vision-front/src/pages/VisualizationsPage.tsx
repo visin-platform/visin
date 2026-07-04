@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -40,27 +41,23 @@ interface TrainingWithVisualizations {
 
 export const VisualizationsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [trainings, setTrainings] = useState<TrainingWithVisualizations[]>([]);
   const [expandedTrainings, setExpandedTrainings] = useState<Set<string>>(new Set());
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedTrainings, setSelectedTrainings] = useState<Set<string>>(new Set());
   const [compareMode, setCompareMode] = useState(false);
   const [selectedImage, setSelectedImage] = useState<Visualization | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [actionError, setError] = useState<string | null>(null);
 
   usePageTitle('Visualizations - Vision');
 
-  useEffect(() => {
-    loadTrainingsWithVisualizations();
-  }, []);
-
-  const loadTrainingsWithVisualizations = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const {
+    data: trainings = [],
+    isLoading: loading,
+    error: queryError
+  } = useQuery({
+    queryKey: ['visualizations-overview'],
+    queryFn: async (): Promise<TrainingWithVisualizations[]> => {
       // Make two parallel requests instead of N+1 requests
       const [trainingsResponse, visualizationsResponse] = await Promise.all([
         trainingService.getTrainings({
@@ -80,7 +77,7 @@ export const VisualizationsPage: React.FC = () => {
 
       // Group visualizations by training_uuid (from epoch data)
       const visualizationsByTraining = new Map<string, Visualization[]>();
-      
+
       // We need to get epoch data to link visualizations to trainings
       // For now, let's group by the training info if available in the visualization
       // If not, we'll need to fetch epoch data
@@ -98,11 +95,11 @@ export const VisualizationsPage: React.FC = () => {
 
       // Build trainings with visualizations
       const trainingsWithViz: TrainingWithVisualizations[] = [];
-      
+
       for (const training of allTrainings) {
         const trainingUuid = training.uuid || training.training_uuid || '';
         const visualizations = visualizationsByTraining.get(trainingUuid) || [];
-        
+
         if (visualizations.length > 0) {
           // Group visualizations by type
           const visualizationsByType = new Map<string, Visualization[]>();
@@ -120,15 +117,13 @@ export const VisualizationsPage: React.FC = () => {
         }
       }
 
-      setTrainings(trainingsWithViz);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load trainings and visualizations');
-    } finally {
-      setLoading(false);
+      return trainingsWithViz;
     }
-  };
+  });
 
-
+  const error =
+    actionError ||
+    (queryError ? (queryError instanceof Error ? queryError.message : 'Failed to load trainings and visualizations') : null);
 
   const toggleTraining = (trainingId: string) => {
     const newExpanded = new Set(expandedTrainings);

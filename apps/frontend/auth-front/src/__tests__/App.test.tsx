@@ -5,6 +5,16 @@ import App from '../App';
 beforeAll(() => {
   // Stub fetch so components that call APIs on mount don't throw
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
+  // Node's own experimental global `localStorage` shadows jsdom's polyfill in
+  // this test environment (unrelated to app code, which always runs in a real
+  // browser) — stub it explicitly rather than relying on jsdom to provide it.
+  const store = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => { store.set(key, value); },
+    removeItem: (key: string) => { store.delete(key); },
+    clear: () => { store.clear(); }
+  });
   // Stub matchMedia required by MUI
   Object.defineProperty(window, 'matchMedia', {
     writable: true,

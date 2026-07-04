@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   Box,
@@ -28,38 +29,36 @@ interface TrainingWithVisualizations {
   visualizationsByType: Map<string, Visualization[]>;
 }
 
+interface ComparisonData {
+  trainings: TrainingWithVisualizations[];
+  availableTypes: string[];
+}
+
 export const TrainingVisualizationsComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [trainings, setTrainings] = useState<TrainingWithVisualizations[]>([]);
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [availableTypes, setAvailableTypes] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<Visualization | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
 
   usePageTitle('Compare Training Visualizations - Vision');
 
-  useEffect(() => {
-    loadTrainingsFromUrl();
-  }, [searchParams]);
+  const idsParam = searchParams.get('ids');
 
-  const loadTrainingsFromUrl = async () => {
-    const idsParam = searchParams.get('ids');
-    if (!idsParam) {
-      setError('No training IDs provided in URL');
-      return;
-    }
+  const {
+    data,
+    isLoading: loading,
+    error: queryError
+  } = useQuery({
+    queryKey: ['training-visualizations-comparison', idsParam],
+    queryFn: async (): Promise<ComparisonData> => {
+      if (!idsParam) {
+        throw new Error('No training IDs provided in URL');
+      }
 
-    const trainingIds = idsParam.split(',');
-    if (trainingIds.length < 2) {
-      setError('At least 2 training IDs are required for comparison');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
+      const trainingIds = idsParam.split(',');
+      if (trainingIds.length < 2) {
+        throw new Error('At least 2 training IDs are required for comparison');
+      }
 
       // First, fetch the selected trainings to get projectId
       const allTrainingsResponse = await trainingService.getTrainings({
@@ -67,13 +66,12 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
         limit: 1000
       });
       const allTrainings = allTrainingsResponse.data.trainings || [];
-      const selectedTrainings = allTrainings.filter((t: Training) => 
+      const selectedTrainings = allTrainings.filter((t: Training) =>
         trainingIds.includes(t.uuid)
       );
 
       if (selectedTrainings.length === 0) {
-        setError('No trainings found with the provided IDs');
-        return;
+        throw new Error('No trainings found with the provided IDs');
       }
 
       // Get projectId from first training (assuming all are from same project)
@@ -88,7 +86,7 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
       const groupedTrainings = visualizationsResponse.data.trainings || [];
 
       // Filter to only selected trainings
-      const selectedGroupedTrainings = groupedTrainings.filter((gt: any) => 
+      const selectedGroupedTrainings = groupedTrainings.filter((gt: any) =>
         trainingIds.includes(gt.training_uuid)
       );
 
@@ -116,19 +114,20 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
         });
       }
 
-      setTrainings(trainingsWithViz);
-      setAvailableTypes(Array.from(allTypesSet));
-      
-      // Auto-select first type if available
-      if (allTypesSet.size > 0 && !selectedType) {
-        setSelectedType(Array.from(allTypesSet)[0]);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load comparison data');
-    } finally {
-      setLoading(false);
+      return { trainings: trainingsWithViz, availableTypes: Array.from(allTypesSet) };
     }
-  };
+  });
+
+  const trainings = data?.trainings || [];
+  const availableTypes = data?.availableTypes || [];
+  const error = queryError instanceof Error ? queryError.message : (queryError ? 'Failed to load comparison data' : null);
+
+  // Auto-select first type once data loads
+  useEffect(() => {
+    if (availableTypes.length > 0 && !selectedType) {
+      setSelectedType(availableTypes[0]);
+    }
+  }, [availableTypes, selectedType]);
 
   const copyShareUrl = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -166,7 +165,7 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
         </Button>
       </Box>
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}

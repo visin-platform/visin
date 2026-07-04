@@ -1,9 +1,6 @@
 import express from 'express';
-import cors from 'cors';
-import rateLimit from 'express-rate-limit';
 import path from 'path';
-import { securityHeaders, requestLogger, errorHandler, logger } from '@visin/backend-core';
-import connectDB from './config/database';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler } from '@visin/backend-core';
 import datasetRoutes from './routes/datasetRoutes';
 import trainingRoutes from './routes/trainingRoutes';
 import epochRoutes from './routes/epochRoutes';
@@ -17,39 +14,22 @@ import comparisonRoutes from './routes/comparisonRoutes';
 import projectRoutes from './routes/projectRoutes';
 import apiTokenRoutes from './routes/apiTokenRoutes';
 import imageCategoryRoutes from './routes/imageCategoryRoutes';
-import { healthCheck } from './controllers/healthController';
 import { apiTokenMiddleware } from './middleware/apiTokenMiddleware';
 
 // Connect to MongoDB
-connectDB();
+connectDb({ serviceName: 'vision-service' }).catch((err) => {
+  logger.error('MongoDB connection error', { error: err.message });
+  process.exit(1);
+});
 
-const app = express();
 const PORT = process.env.PORT || 4010;
 
-// Every service runs behind the nginx reverse proxy — trust its X-Forwarded-*
-// headers so express-rate-limit and req.ip key on the real client, not the proxy.
-app.set('trust proxy', 1);
+const app = createBaseApp({
+  corsMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id'],
+  json: false
+});
 
-// Middleware
-app.use(securityHeaders);
-app.use(requestLogger);
-
-// Rate limiting
-app.use(rateLimit({ windowMs: 60_000, limit: 500, standardHeaders: true, legacyHeaders: false }));
-
-const allowedOrigins = (process.env.CORS_ORIGIN ?? '').split(',').map(s => s.trim()).filter(Boolean);
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS: ' + origin));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id']
-}));
 // Training/epoch/benchmark/test-result ingestion can carry large result payloads;
 // everything else (projects, comparisons, configs, ...) gets the smaller default.
 const LARGE_PAYLOAD_PREFIXES = ['/api/epochs', '/api/benchmarks', '/api/test-results', '/api/trainings'];
@@ -80,7 +60,7 @@ app.use('/api/image-categories', imageCategoryRoutes);
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));
 
 // Health check endpoint
-app.get('/health', healthCheck);
+app.get('/health', createHealthCheckHandler({ serviceName: 'vision-service' }));
 
 // Must be mounted last, after all routes
 app.use(errorHandler);

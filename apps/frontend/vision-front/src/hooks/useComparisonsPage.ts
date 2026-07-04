@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material';
 import { Comparison } from '@/types';
@@ -7,9 +8,6 @@ import { trainingService } from '@/services/trainingService';
 import { useAuth } from '../contexts/AuthContext';
 
 export const useComparisonsPage = () => {
-  const [comparisons, setComparisons] = useState<Comparison[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [comparisonToDelete, setComparisonToDelete] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -17,18 +15,81 @@ export const useComparisonsPage = () => {
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editSelectedIds, setEditSelectedIds] = useState<string[]>([]);
-  const [updating, setUpdating] = useState(false);
   const [trainingData, setTrainingData] = useState<Record<string, string>>({});
   const [loadingTrainings, setLoadingTrainings] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const navigate = useNavigate();
   const theme = useTheme();
   const { user, isAuthenticated } = useAuth();
   const [sortBy, setSortBy] = useState<'name' | 'type' | 'createdAt' | 'itemCount'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    loadComparisons();
-  }, [sortBy, sortOrder]);
+  const {
+    data,
+    isLoading: loading,
+    error: loadError,
+    refetch: loadComparisons
+  } = useQuery({
+    queryKey: ['comparisons', sortBy, sortOrder],
+    queryFn: () =>
+      comparisonService.getComparisons({
+        page: 1,
+        limit: 100,
+        sortBy: sortBy === 'itemCount' ? 'createdAt' : sortBy, // API doesn't support itemCount sorting
+        order: sortOrder
+      })
+  });
+
+  const comparisons = useMemo(() => {
+    let comparisonsData = data?.data.comparisons || [];
+    // Apply client-side sorting for itemCount
+    if (sortBy === 'itemCount') {
+      comparisonsData = [...comparisonsData].sort((a, b) => {
+        const aCount = a.itemIds.length;
+        const bCount = b.itemIds.length;
+        return sortOrder === 'asc' ? aCount - bCount : bCount - aCount;
+      });
+    }
+    return comparisonsData;
+  }, [data, sortBy, sortOrder]);
+
+  const error = actionError || (loadError ? 'Failed to load comparisons' : null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => comparisonService.deleteComparison(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comparisons'] });
+      setDeleteDialogOpen(false);
+      setComparisonToDelete(null);
+    },
+    onError: (err) => {
+      setActionError('Failed to delete comparison');
+      console.error('Error deleting comparison:', err);
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (vars: { id: string; name: string; description: string; itemIds: string[] }) =>
+      comparisonService.updateComparison(vars.id, {
+        name: vars.name,
+        description: vars.description,
+        itemIds: vars.itemIds
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comparisons'] });
+      setEditDialogOpen(false);
+      setComparisonToEdit(null);
+      setEditName('');
+      setEditDescription('');
+      setEditSelectedIds([]);
+      setTrainingData({});
+    },
+    onError: (err) => {
+      console.error('Error updating comparison:', err);
+      setActionError('Failed to update comparison');
+    }
+  });
 
   const handleSort = (column: 'name' | 'type' | 'createdAt' | 'itemCount') => {
     if (sortBy === column) {
@@ -41,40 +102,6 @@ export const useComparisonsPage = () => {
     }
   };
 
-  const loadComparisons = async () => {
-    try {
-      setLoading(true);
-      const response = await comparisonService.getComparisons({
-        page: 1,
-        limit: 100,
-        sortBy: sortBy === 'itemCount' ? 'createdAt' : sortBy, // API doesn't support itemCount sorting
-        order: sortOrder,
-      });
-      let comparisonsData = response.data.comparisons || [];
-      
-      // Apply client-side sorting for itemCount
-      if (sortBy === 'itemCount') {
-        comparisonsData = [...comparisonsData].sort((a, b) => {
-          const aCount = a.itemIds.length;
-          const bCount = b.itemIds.length;
-          if (sortOrder === 'asc') {
-            return aCount - bCount;
-          } else {
-            return bCount - aCount;
-          }
-        });
-      }
-      
-      setComparisons(comparisonsData);
-      setError(null);
-    } catch (err) {
-      console.error('Error loading comparisons:', err);
-      setError('Failed to load comparisons');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDeleteComparison = (id: string) => {
     setComparisonToDelete(id);
     setDeleteDialogOpen(true);
@@ -82,16 +109,7 @@ export const useComparisonsPage = () => {
 
   const handleConfirmDelete = async () => {
     if (!comparisonToDelete) return;
-
-    try {
-      await comparisonService.deleteComparison(comparisonToDelete);
-      loadComparisons();
-      setDeleteDialogOpen(false);
-      setComparisonToDelete(null);
-    } catch (err) {
-      setError('Failed to delete comparison');
-      console.error('Error deleting comparison:', err);
-    }
+    deleteMutation.mutate(comparisonToDelete);
   };
 
   const handleCancelDelete = () => {
@@ -102,7 +120,7 @@ export const useComparisonsPage = () => {
   // Check if user has permission to delete comparisons (owner or admin role)
   const canDeleteComparisons = () => {
     if (!isAuthenticated || !user) return false;
-    return user.groups.some(group => group.includes('owner') || group.includes('admin'));
+    return user.groups?.some(group => group.includes('owner') || group.includes('admin')) ?? false;
   };
 
   const handleEditComparison = async (comparison: Comparison) => {
@@ -119,16 +137,16 @@ export const useComparisonsPage = () => {
         // For now, fetch all trainings and filter - could be optimized later
         const response = await trainingService.getTrainings({
           page: 1,
-          limit: 1000, // Large limit to get all trainings
+          limit: 1000 // Large limit to get all trainings
         });
-        
+
         const trainings = response.data.trainings || [];
         const trainingMap: Record<string, string> = {};
-        
+
         trainings.forEach((training: any) => {
           trainingMap[training._id] = training.name;
         });
-        
+
         setTrainingData(trainingMap);
       } catch (error) {
         console.error('Error fetching training data:', error);
@@ -155,28 +173,12 @@ export const useComparisonsPage = () => {
 
   const handleUpdateComparison = async () => {
     if (!comparisonToEdit || !editName.trim()) return;
-
-    try {
-      setUpdating(true);
-      await comparisonService.updateComparison(comparisonToEdit._id, {
-        name: editName.trim(),
-        description: editDescription.trim(),
-        itemIds: editSelectedIds,
-      });
-
-      loadComparisons();
-      setEditDialogOpen(false);
-      setComparisonToEdit(null);
-      setEditName('');
-      setEditDescription('');
-      setEditSelectedIds([]);
-      setTrainingData({});
-    } catch (error) {
-      console.error('Error updating comparison:', error);
-      setError('Failed to update comparison');
-    } finally {
-      setUpdating(false);
-    }
+    updateMutation.mutate({
+      id: comparisonToEdit._id,
+      name: editName.trim(),
+      description: editDescription.trim(),
+      itemIds: editSelectedIds
+    });
   };
 
   const handleEditTrainingIdToggle = (trainingId: string) => {
@@ -238,7 +240,7 @@ export const useComparisonsPage = () => {
     editDescription,
     setEditDescription,
     editSelectedIds,
-    updating,
+    updating: updateMutation.isPending,
     trainingData,
     loadingTrainings,
     sortBy,

@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Typography, Alert, Grid, Paper } from '@mui/material';
+import { createAuthService, type AuthUser } from '@visin/frontend-core';
 import { initializeGoogleSignIn } from '../authFlow';
 import LoggedInUser from '../components/LoggedInUser';
 import LoginPrompt from '../components/LoginPrompt';
@@ -8,24 +9,22 @@ import { useConfig } from '../config/useConfig';
 const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [initializationAttempted, setInitializationAttempted] = useState(false);
   const config = useConfig();
+  // auth-front never redirects to itself, so authFrontUrl is unused here.
+  const authService = useMemo(
+    () => createAuthService({ authServiceUrl: () => config.AUTH_SERVICE_URL || '', authFrontUrl: () => '' }),
+    [config.AUTH_SERVICE_URL]
+  );
 
   useEffect(() => {
     const checkExistingAuth = async () => {
-      try {
-        const response = await fetch(`${config.AUTH_SERVICE_URL}/auth/verify`, {
-          credentials: 'include'
-        });
-        const data = await response.json();
-        if (data.success && data.authenticated) {
-          setUser(data.user);
-          setIsLoading(false);
-          return;
-        }
-      } catch (err) {
-        console.log('No existing auth found:', err);
+      const result = await authService.checkAuth();
+      if (result.authenticated) {
+        setUser(result.user);
+        setIsLoading(false);
+        return;
       }
 
       // Check for error in URL params
@@ -60,17 +59,10 @@ const LoginPage: React.FC = () => {
   }, [config]);
 
   const handleLogout = async () => {
-    try {
-      const response = await fetch(`${config.AUTH_SERVICE_URL}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-      if (response.ok) {
-        setUser(null);
-        window.location.reload();
-      }
-    } catch (err) {
-      console.error('Logout failed:', err);
+    const success = await authService.logout();
+    if (success) {
+      setUser(null);
+      window.location.reload();
     }
   };
 

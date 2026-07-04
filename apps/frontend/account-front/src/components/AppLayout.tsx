@@ -1,4 +1,4 @@
-import React, { useState, useEffect, ReactNode } from 'react';
+import React, { useState, ReactNode } from 'react';
 import {
   Box,
   Drawer,
@@ -28,9 +28,8 @@ import {
   Logout
 } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
-import { authService } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 import { getGlobalConfig } from '../config/ConfigProvider';
-import { User } from '../types';
 
 const DRAWER_WIDTH = 260;
 
@@ -42,18 +41,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
   const theme = useTheme();
   const config = getGlobalConfig();
-  
-  const [user, setUser] = useState<User | null>(null);
+  const { user, logout } = useAuth();
+
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      const currentUser = await authService.getCurrentUser();
-      setUser(currentUser);
-    };
-    fetchUser();
-  }, []);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -338,7 +329,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   }}>{user?.email}</Typography>
                 </Box>
                 <Divider />
-                <MenuItem onClick={() => { handleCloseUserMenu(); authService.logout(); }} sx={{ py: 1.5 }}>
+                <MenuItem onClick={() => { handleCloseUserMenu(); logout(); }} sx={{ py: 1.5 }}>
                   <ListItemIcon><Logout fontSize="small" /></ListItemIcon>
                   Logout
                 </MenuItem>

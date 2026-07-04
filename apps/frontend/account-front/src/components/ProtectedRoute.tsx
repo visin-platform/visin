@@ -1,5 +1,5 @@
-import { useState, useEffect, ReactNode } from 'react';
-import { authService } from '../services/authService';
+import { useEffect, ReactNode } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { Loader } from '@visin/frontend-core';
 
 interface ProtectedRouteProps {
@@ -7,29 +7,13 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { isAuthenticated, isLoading, login } = useAuth();
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const authenticated = await authService.isAuthenticated();
-        if (authenticated) {
-          setIsAuthenticated(true);
-        } else {
-          // Redirect to login if not authenticated
-          authService.redirectToLogin();
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error);
-        authService.redirectToLogin();
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
+    if (!isLoading && !isAuthenticated) {
+      login();
+    }
+  }, [isLoading, isAuthenticated, login]);
 
   if (isLoading) {
     return <Loader message="Checking authentication..." />;

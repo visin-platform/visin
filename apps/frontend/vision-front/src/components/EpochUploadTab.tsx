@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
   Paper,
@@ -45,11 +46,8 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
   onTrainingChange
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
-  const [epochs, setEpochs] = useState<Epoch[]>([]);
+  const [actionError, setUploadError] = useState<string | null>(null);
+  const [epochDeleted, setEpochDeleted] = useState(false);
   const [selectedEpoch, setSelectedEpoch] = useState<Epoch | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -60,46 +58,30 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
     failed: string[];
   }>({ successful: [], failed: [] });
 
-  // Load epochs when training changes
-  React.useEffect(() => {
-    if (selectedTrainingId) {
-      loadEpochs();
-    }
-  }, [selectedTrainingId]);
+  const queryClient = useQueryClient();
 
-  const loadEpochs = async () => {
-    if (!selectedTrainingId) return;
-
-    try {
-      setLoading(true);
-      setUploadError(null);
-      const response = await epochService.getEpochsByTraining(selectedTrainingId, {
+  const {
+    data: epochsData,
+    isLoading: loading,
+    error: loadError,
+    refetch: loadEpochs
+  } = useQuery({
+    queryKey: ['epochs', selectedTrainingId],
+    queryFn: () =>
+      epochService.getEpochsByTraining(selectedTrainingId, {
         limit: 1000,
         sortBy: 'epoch',
         order: 'asc'
-      });
-      setEpochs(response.data.epochs || []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load epochs';
-      setUploadError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      }),
+    enabled: !!selectedTrainingId
+  });
 
-  const handleFileClick = () => {
-    fileInputRef.current?.click();
-  };
+  const epochs: Epoch[] = epochsData?.data.epochs || [];
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+  const invalidateEpochs = () => queryClient.invalidateQueries({ queryKey: ['epochs', selectedTrainingId] });
 
-    try {
-      setUploading(true);
-      setUploadError(null);
-      setUploadSuccess(null);
-
+  const uploadMutation = useMutation({
+    mutationFn: async (files: FileList) => {
       const successfulFiles: string[] = [];
       const failedFiles: string[] = [];
 
@@ -126,22 +108,19 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
         }
       }
 
+      return { successfulFiles, failedFiles };
+    },
+    onSuccess: ({ successfulFiles, failedFiles }) => {
       // Set results for modal
-      setUploadResults({
-        successful: successfulFiles,
-        failed: failedFiles
-      });
-
-      // Build success/error message with counts only
-      if (successfulFiles.length > 0) {
-        setUploadSuccess(`${successfulFiles.length} epoch file(s) uploaded successfully!`);
-      }
+      setUploadResults({ successful: successfulFiles, failed: failedFiles });
 
       if (failedFiles.length > 0) {
         setUploadError(`Failed to upload ${failedFiles.length} file(s).`);
+      } else {
+        setUploadError(null);
       }
 
-      loadEpochs();
+      invalidateEpochs();
 
       // Reset file input
       if (fileInputRef.current) {
@@ -150,15 +129,31 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
 
       // Clear messages after 5 seconds
       setTimeout(() => {
-        setUploadSuccess(null);
         setUploadError(null);
       }, 5000);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to upload epochs';
-      setUploadError(message);
-    } finally {
-      setUploading(false);
+    },
+    onError: (err) => {
+      setUploadError(err instanceof Error ? err.message : 'Failed to upload epochs');
     }
+  });
+
+  const uploading = uploadMutation.isPending;
+  const uploadSuccess = uploadMutation.isSuccess && uploadMutation.data.successfulFiles.length > 0
+    ? `${uploadMutation.data.successfulFiles.length} epoch file(s) uploaded successfully!`
+    : epochDeleted
+      ? 'Epoch deleted successfully'
+      : null;
+  const uploadError = actionError || (loadError ? (loadError instanceof Error ? loadError.message : 'Failed to load epochs') : null);
+
+  const handleFileClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    setEpochDeleted(false);
+    uploadMutation.mutate(files);
   };
 
   const handleViewDetails = (epoch: Epoch) => {
@@ -171,22 +166,24 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
     setDeleteOpen(true);
   };
 
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
-
-    try {
-      setLoading(true);
-      await epochService.deleteEpoch(deleteTarget._id);
-      setUploadSuccess('Epoch deleted successfully');
-      loadEpochs();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete epoch';
-      setUploadError(message);
-    } finally {
-      setLoading(false);
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => epochService.deleteEpoch(id),
+    onSuccess: () => {
+      setEpochDeleted(true);
+      invalidateEpochs();
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    },
+    onError: (err) => {
+      setUploadError(err instanceof Error ? err.message : 'Failed to delete epoch');
       setDeleteOpen(false);
       setDeleteTarget(null);
     }
+  });
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    deleteMutation.mutate(deleteTarget._id);
   };
 
   const selectedTraining = trainings.find(t => t._id === selectedTrainingId);
@@ -246,7 +243,7 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
               {uploading ? 'Uploading...' : 'Select JSON Files'}
             </Button>
             <IconButton
-              onClick={loadEpochs}
+              onClick={() => loadEpochs()}
               disabled={loading || !selectedTrainingId}
               title="Refresh epochs"
             >
@@ -438,7 +435,7 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteOpen(false)}>Cancel</Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={loading}>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleteMutation.isPending}>
             Delete
           </Button>
         </DialogActions>

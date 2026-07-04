@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Box,
   Button,
@@ -24,7 +25,7 @@ import {
   Delete as DeleteIcon,
   PhotoLibrary as PhotoLibraryIcon
 } from '@mui/icons-material';
-import { getUploadSignedUrl, uploadFileToSignedUrl, createDatasetImage, getCategoriesByDataset, ImageCategory } from '../services/datasetImageService';
+import { getUploadSignedUrl, uploadFileToSignedUrl, createDatasetImage, getCategoriesByDataset } from '../services/datasetImageService';
 
 interface FileUploadProps {
   datasetId: string;
@@ -49,19 +50,22 @@ interface FileWithId {
 
 const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, onClose, onUploadComplete }) => {
   const [files, setFiles] = useState<FileWithId[]>([]);
-  const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>(categoryId || '');
-  const [categories, setCategories] = useState<ImageCategory[]>([]);
 
-  // Load categories when dialog opens
+  const { data: categories = [] } = useQuery({
+    queryKey: ['image-categories', datasetId],
+    queryFn: () => getCategoriesByDataset(datasetId),
+    enabled: open
+  });
+
+  // Reset selected category when dialog opens
   useEffect(() => {
     if (open) {
-      getCategoriesByDataset(datasetId).then(setCategories).catch(console.error);
       setSelectedCategory(categoryId || '');
     }
-  }, [open, datasetId, categoryId]);
+  }, [open, categoryId]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -97,17 +101,11 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const uploadFiles = async () => {
-    if (files.length === 0) return;
-
-    setUploading(true);
-    setError(null);
-    setUploadProgress(0);
-
-    try {
+  const uploadMutation = useMutation({
+    mutationFn: async (filesToUpload: FileWithId[]) => {
       let completed = 0;
 
-      for (const fileItem of files) {
+      for (const fileItem of filesToUpload) {
         const file = fileItem.file;
         try {
           // Get signed URL for upload from vision service (MinIO)
@@ -138,21 +136,30 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
           await createDatasetImage(imageData);
 
           completed++;
-          setUploadProgress((completed / files.length) * 100);
+          setUploadProgress((completed / filesToUpload.length) * 100);
         } catch (err) {
           console.error(`Failed to upload ${file.name}:`, err);
           throw new Error(`Failed to upload ${file.name}`, { cause: err });
         }
       }
-
+    },
+    onSuccess: () => {
       // Success - close dialog and refresh images
       handleClose();
       onUploadComplete();
-    } catch (err) {
+    },
+    onError: (err) => {
       setError(err instanceof Error ? err.message : 'Upload failed');
-    } finally {
-      setUploading(false);
     }
+  });
+
+  const uploading = uploadMutation.isPending;
+
+  const uploadFiles = () => {
+    if (files.length === 0) return;
+    setError(null);
+    setUploadProgress(0);
+    uploadMutation.mutate(files);
   };
 
   const handleClose = () => {

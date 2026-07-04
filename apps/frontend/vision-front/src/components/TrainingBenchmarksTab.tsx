@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
   Typography,
@@ -31,42 +32,40 @@ interface TrainingBenchmarksTabProps {
 }
 
 const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_uuid, isAuthenticated }) => {
-  const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    loadBenchmarks();
-  }, [training_uuid]);
-
-  const loadBenchmarks = async () => {
-    try {
-      setLoading(true);
-      const response = await benchmarkService.getBenchmarks({
+  const {
+    data,
+    isLoading: loading,
+    error: loadError
+  } = useQuery({
+    queryKey: ['benchmarks', { training_uuid }],
+    queryFn: () =>
+      benchmarkService.getBenchmarks({
         training_uuid,
         sortBy: 'timestamp',
-        order: 'desc',
-      });
-      setBenchmarks(response.data.benchmarks || []);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load benchmarks');
-      console.error('Error loading benchmarks:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+        order: 'desc'
+      })
+  });
 
-  const handleDeleteBenchmark = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this benchmark?')) return;
+  const benchmarks: Benchmark[] = data?.data.benchmarks || [];
+  const error = actionError || (loadError ? 'Failed to load benchmarks' : null);
 
-    try {
-      await benchmarkService.deleteBenchmark(id);
-      loadBenchmarks();
-    } catch (err) {
-      setError('Failed to delete benchmark');
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => benchmarkService.deleteBenchmark(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['benchmarks', { training_uuid }] });
+    },
+    onError: (err) => {
+      setActionError('Failed to delete benchmark');
       console.error('Error deleting benchmark:', err);
     }
+  });
+
+  const handleDeleteBenchmark = (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this benchmark?')) return;
+    deleteMutation.mutate(id);
   };
 
   const formatTimestamp = (timestamp: string) => {

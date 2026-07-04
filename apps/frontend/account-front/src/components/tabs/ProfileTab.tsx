@@ -40,12 +40,6 @@ const ProfileTab: React.FC = () => {
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        const isAuth = await authService.isAuthenticated();
-        if (!isAuth) {
-          authService.redirectToLogin();
-          return;
-        }
-
         const currentUser = await authService.getProfile();
         if (currentUser) {
           setUser(currentUser);

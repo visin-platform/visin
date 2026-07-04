@@ -1,6 +1,6 @@
 {
   "name": "@visin/frontend-core",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Shared frontend auth/API-client logic for Visin frontends",
   "author": "Toomas Tahves",
   "license": "MIT",

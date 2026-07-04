@@ -6,41 +6,31 @@ import {
   Paper,
   Alert,
   CircularProgress,
-  Tabs,
-  Tab,
   Dialog,
   DialogContent,
-  IconButton,
-  Button,
   DialogTitle,
   DialogContentText,
   DialogActions,
+  Button,
   useTheme,
   Typography
 } from '@mui/material';
-import {
-  Close as CloseIcon,
-  Delete as DeleteIcon
-} from '@mui/icons-material';
+import { Delete as DeleteIcon } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getAnalysisById, updateAnalysis, deleteAnalysis } from '../services/analysisService';
 import {
   DatasetImage,
-  WeatherCondition,
   deleteDatasetImage,
-  updateDatasetImage,
   getCategoriesByDataset,
-  ImageCategory,
-  createImageCategory,
-  updateImageCategory,
-  deleteImageCategory,
   getImagesByDataset
 } from '../services/datasetImageService';
-import { getGlobalConfig } from '../config/ConfigProvider';
 import FileUpload from '../components/FileUpload';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { useDatasetImages } from '../hooks/useDatasetImages';
+import { useDatasetCategoryManager } from '../hooks/useDatasetCategoryManager';
+import { useDatasetImageEditor } from '../hooks/useDatasetImageEditor';
+import { useDatasetImageExport } from '../hooks/useDatasetImageExport';
 
 // Components
 import DatasetHeader from '../components/dataset/DatasetHeader';
@@ -48,6 +38,8 @@ import DatasetInfoTab from '../components/dataset/DatasetInfoTab';
 import DatasetCategoriesTab from '../components/dataset/DatasetCategoriesTab';
 import DatasetImagesTab from '../components/dataset/DatasetImagesTab';
 import DatasetExportTab from '../components/dataset/DatasetExportTab';
+import DatasetDetailTabs from '../components/dataset/DatasetDetailTabs';
+import ImageLightboxDialog from '../components/dataset/ImageLightboxDialog';
 import CategoryModal from '../components/dataset/CategoryModal';
 import EditImageModal from '../components/dataset/EditImageModal';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
@@ -68,29 +60,9 @@ const DatasetDetailPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
-  
-  // Category management state
-  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<ImageCategory | null>(null);
-  const [categoryForm, setCategoryForm] = useState({
-    name: '',
-    description: '',
-    color: '#1976d2'
-  });
-  const [categoryAlert, setCategoryAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  
+
   // File upload state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  
-  // Image editing state
-  const [editingImage, setEditingImage] = useState<DatasetImage | null>(null);
-  const [editImageModalOpen, setEditImageModalOpen] = useState(false);
-  const [selectedCategoryForEdit, setSelectedCategoryForEdit] = useState<string>('');
-  const [selectedTagsForEdit, setSelectedTagsForEdit] = useState<string>('');
-  const [selectedWeatherForEdit, setSelectedWeatherForEdit] = useState<WeatherCondition | ''>('');
-  
-  // Export state
-  const [exporting, setExporting] = useState<'good' | 'bad' | 'all' | null>(null);
 
   const { data: analysis, isLoading, error, refetch } = useQuery({
     queryKey: ['analysis', id],
@@ -136,6 +108,38 @@ const DatasetDetailPage: React.FC = () => {
   const pagination = imagesData?.data?.pagination || { page: 1, limit: 50, total: 0, pages: 1 };
   const datasetCategories = categoriesData || [];
   const availableTags = availableTagsData || [];
+
+  const {
+    categoryModalOpen,
+    editingCategory,
+    categoryForm,
+    setCategoryForm,
+    categoryAlert,
+    showCategoryAlert,
+    closeCategoryModal,
+    handleSaveCategory,
+    handleDeleteCategory,
+    openEditCategoryModal
+  } = useDatasetCategoryManager(id);
+
+  const {
+    editImageModalOpen,
+    selectedCategoryForEdit,
+    setSelectedCategoryForEdit,
+    selectedTagsForEdit,
+    setSelectedTagsForEdit,
+    selectedWeatherForEdit,
+    setSelectedWeatherForEdit,
+    closeEditImageModal,
+    handleEditImageCategory,
+    handleSaveImageCategory
+  } = useDatasetImageEditor(
+    id,
+    (message) => showCategoryAlert('success', message),
+    (message) => showCategoryAlert('error', message)
+  );
+
+  const { exporting, handleExportImages } = useDatasetImageExport(id, (message) => showCategoryAlert('error', message));
 
   usePageTitle(analysis ? `Dataset: ${analysis.dataset} - Vision` : 'Dataset Details - Vision');
 
@@ -205,127 +209,6 @@ const DatasetDetailPage: React.FC = () => {
     }
   };
 
-  const showCategoryAlert = (type: 'success' | 'error', message: string) => {
-    setCategoryAlert({ type, message });
-    setTimeout(() => setCategoryAlert(null), 5000);
-  };
-
-  const handleSaveCategory = async () => {
-    if (!categoryForm.name.trim()) {
-      showCategoryAlert('error', 'Category name is required');
-      return;
-    }
-
-    try {
-      if (editingCategory) {
-        await updateImageCategory(editingCategory._id, {
-          name: categoryForm.name.trim(),
-          description: categoryForm.description.trim(),
-          color: categoryForm.color
-        });
-        showCategoryAlert('success', 'Category updated successfully');
-      } else {
-        await createImageCategory({
-          name: categoryForm.name.trim(),
-          description: categoryForm.description.trim(),
-          datasetId: id!,
-          color: categoryForm.color
-        });
-        showCategoryAlert('success', 'Category created successfully');
-      }
-      setCategoryModalOpen(false);
-      setEditingCategory(null);
-      setCategoryForm({ name: '', description: '', color: '#1976d2' });
-      queryClient.invalidateQueries({ queryKey: ['datasetCategories', id] });
-    } catch {
-      showCategoryAlert('error', `Failed to ${editingCategory ? 'update' : 'create'} category`);
-    }
-  };
-
-  const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm('Are you sure you want to delete this category?')) return;
-    try {
-      await deleteImageCategory(categoryId);
-      showCategoryAlert('success', 'Category deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['datasetCategories', id] });
-    } catch {
-      showCategoryAlert('error', 'Failed to delete category');
-    }
-  };
-
-  const openEditCategoryModal = (category: ImageCategory) => {
-    setEditingCategory(category);
-    setCategoryForm({
-      name: category.name,
-      description: category.description || '',
-      color: category.color || '#1976d2'
-    });
-    setCategoryModalOpen(true);
-  };
-
-  const handleEditImageCategory = (image: DatasetImage) => {
-    setEditingImage(image);
-    setSelectedCategoryForEdit(image.categoryId || '');
-    setSelectedTagsForEdit(image.tags.join(', '));
-    setSelectedWeatherForEdit(image.weatherCondition || '');
-    setEditImageModalOpen(true);
-  };
-
-  const handleSaveImageCategory = async () => {
-    if (!editingImage) return;
-    try {
-      const tags = selectedTagsForEdit
-        .split(',')
-        .map(tag => tag.trim())
-        .filter(tag => tag.length > 0);
-
-      await updateDatasetImage(editingImage._id, {
-        categoryId: selectedCategoryForEdit || undefined,
-        tags: tags,
-        weatherCondition: selectedWeatherForEdit || undefined
-      });
-      showCategoryAlert('success', 'Image updated successfully');
-      setEditImageModalOpen(false);
-      setEditingImage(null);
-      queryClient.invalidateQueries({ queryKey: ['datasetImages', id] });
-    } catch {
-      showCategoryAlert('error', 'Failed to update image');
-    }
-  };
-
-  const handleExportImages = async (filter: 'good' | 'bad' | 'all') => {
-    if (!id) return;
-    try {
-      setExporting(filter);
-      const config = getGlobalConfig();
-      const apiUrl = config.VISION_API_URL || 'http://localhost:4010';
-      const params = new URLSearchParams();
-      if (filter !== 'all') params.append('tag', filter);
-
-      const response = await fetch(`${apiUrl}/api/dataset-images/export-names/${id}?${params.toString()}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (!response.ok) throw new Error('Failed to export images');
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `images_${filter}_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Export failed:', error);
-      showCategoryAlert('error', 'Failed to export images');
-    } finally {
-      setExporting(null);
-    }
-  };
-
   const handleUploadComplete = () => {
     queryClient.invalidateQueries({ queryKey: ['datasetImages', id] });
   };
@@ -372,39 +255,7 @@ const DatasetDetailPage: React.FC = () => {
       />
 
       <Paper sx={{ mb: 4, borderRadius: 2, border: `1px solid ${theme.palette.divider}` }}>
-        <Tabs 
-          value={activeTab} 
-          onChange={handleTabChange} 
-          variant="scrollable"
-          scrollButtons="auto"
-          allowScrollButtonsMobile
-          sx={{ 
-            borderBottom: 1, 
-            borderColor: 'divider', 
-            '& .MuiTab-root': { 
-              fontWeight: 500,
-              minHeight: 48,
-              px: { xs: 2, sm: 3 },
-              minWidth: { xs: 'auto', sm: 90 },
-              flexShrink: 0
-            },
-            '& .MuiTabs-scrollButtons': {
-              display: { xs: 'flex', sm: 'auto' }
-            },
-            '& .MuiTabs-scroller': {
-              overflow: 'auto !important',
-              scrollbarWidth: 'none',
-              '&::-webkit-scrollbar': {
-                display: 'none'
-              }
-            }
-          }}
-        >
-          <Tab label="Description" />
-          <Tab label="Categories" />
-          <Tab label="Images" />
-          <Tab label="Export" />
-        </Tabs>
+        <DatasetDetailTabs value={activeTab} onChange={handleTabChange} />
 
         <Box sx={{ p: 3 }}>
           {activeTab === 0 && (
@@ -462,24 +313,11 @@ const DatasetDetailPage: React.FC = () => {
         </Box>
       </Paper>
 
-      <Dialog open={imageModalOpen} onClose={() => setImageModalOpen(false)} maxWidth="lg" fullWidth>
-        <DialogContent sx={{ p: 0, position: 'relative', height: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <IconButton
-            onClick={() => setImageModalOpen(false)}
-            sx={{ position: 'absolute', right: 8, top: 8, bgcolor: 'rgba(0, 0, 0, 0.5)', color: 'white', '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)' }, zIndex: 1 }}
-          >
-            <CloseIcon />
-          </IconButton>
-          {selectedImage && (
-            <Box
-              component="img"
-              src={selectedImage.signedUrl}
-              alt={selectedImage.title || selectedImage.originalName}
-              sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <ImageLightboxDialog
+        open={imageModalOpen}
+        image={selectedImage}
+        onClose={() => setImageModalOpen(false)}
+      />
 
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
         <DialogTitle>Delete Dataset Analysis</DialogTitle>
@@ -504,11 +342,7 @@ const DatasetDetailPage: React.FC = () => {
 
       <CategoryModal
         open={categoryModalOpen}
-        onClose={() => {
-          setCategoryModalOpen(false);
-          setEditingCategory(null);
-          setCategoryForm({ name: '', description: '', color: '#1976d2' });
-        }}
+        onClose={closeCategoryModal}
         onSave={handleSaveCategory}
         isEditing={!!editingCategory}
         form={categoryForm}
@@ -524,10 +358,7 @@ const DatasetDetailPage: React.FC = () => {
 
       <EditImageModal
         open={editImageModalOpen}
-        onClose={() => {
-          setEditImageModalOpen(false);
-          setEditingImage(null);
-        }}
+        onClose={closeEditImageModal}
         onSave={handleSaveImageCategory}
         categories={datasetCategories}
         selectedCategory={selectedCategoryForEdit}

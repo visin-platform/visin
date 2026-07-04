@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useRef, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { configService } from '../services/configService';
 import { Config } from '../types';
 
 export const useConfigsPage = () => {
   // State
-  const [configs, setConfigs] = useState<Config[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -24,25 +23,66 @@ export const useConfigsPage = () => {
   // File input refs
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load all configs on mount
-  useEffect(() => {
-    loadConfigs();
-  }, []);
+  const queryClient = useQueryClient();
 
-  // Load configs
-  const loadConfigs = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await configService.getAllConfigs();
-      setConfigs(response.data.configs || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load configs');
-      setConfigs([]);
-    } finally {
-      setLoading(false);
+  const {
+    data,
+    isLoading: loading,
+    refetch: loadConfigs
+  } = useQuery({
+    queryKey: ['configs'],
+    queryFn: () => configService.getAllConfigs()
+  });
+
+  const configs: Config[] = data?.data.configs || [];
+
+  const invalidateConfigs = () => queryClient.invalidateQueries({ queryKey: ['configs'] });
+
+  const editMutation = useMutation({
+    mutationFn: (vars: { id: string; config_name: string }) =>
+      configService.updateConfig(vars.id, { config_name: vars.config_name || undefined }),
+    onSuccess: () => {
+      setSuccess('Config name updated successfully!');
+      setEditDialogOpen(false);
+      setEditingConfig(null);
+      setEditConfigName('');
+      invalidateConfigs();
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to update config name');
     }
-  };
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (configId: string) => configService.deleteConfig(configId),
+    onSuccess: () => {
+      setSuccess('Config deleted successfully!');
+      setDeleteDialogOpen(false);
+      setDeleteConfigId(null);
+      invalidateConfigs();
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to delete config');
+    }
+  });
+
+  const deleteSelectedMutation = useMutation({
+    mutationFn: async (configIds: string[]) => {
+      for (const configId of configIds) {
+        await configService.deleteConfig(configId);
+      }
+      return configIds.length;
+    },
+    onSuccess: (count) => {
+      setSuccess(`${count} config(s) deleted successfully!`);
+      setDeleteMultipleDialogOpen(false);
+      setSelectedConfigIds(new Set());
+      invalidateConfigs();
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to delete configs');
+    }
+  });
 
   // Handle file selection and upload
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,7 +125,7 @@ export const useConfigsPage = () => {
 
       if (successCount > 0) {
         setSuccess(`Upload finished - ${successCount} config(s) processed`);
-        await loadConfigs();
+        await invalidateConfigs();
       }
 
       if (errors.length > 0) {
@@ -117,23 +157,7 @@ export const useConfigsPage = () => {
   // Handle edit save
   const handleEditSave = async () => {
     if (!editingConfig) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-      await configService.updateConfig(editingConfig._id, {
-        config_name: editConfigName.trim() || undefined
-      });
-      setSuccess('Config name updated successfully!');
-      setEditDialogOpen(false);
-      setEditingConfig(null);
-      setEditConfigName('');
-      await loadConfigs();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update config name');
-    } finally {
-      setLoading(false);
-    }
+    editMutation.mutate({ id: editingConfig._id, config_name: editConfigName.trim() });
   };
 
   // Handle delete click
@@ -145,19 +169,7 @@ export const useConfigsPage = () => {
   // Handle confirm delete
   const handleConfirmDelete = async () => {
     if (!deleteConfigId) return;
-
-    try {
-      setLoading(true);
-      await configService.deleteConfig(deleteConfigId);
-      setSuccess('Config deleted successfully!');
-      setDeleteDialogOpen(false);
-      setDeleteConfigId(null);
-      await loadConfigs();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete config');
-    } finally {
-      setLoading(false);
-    }
+    deleteMutation.mutate(deleteConfigId);
   };
 
   // Handle checkbox change
@@ -182,23 +194,7 @@ export const useConfigsPage = () => {
 
   // Handle delete selected
   const handleDeleteSelected = async () => {
-    try {
-      setLoading(true);
-      const configsToDelete = Array.from(selectedConfigIds);
-      
-      for (const configId of configsToDelete) {
-        await configService.deleteConfig(configId);
-      }
-      
-      setSuccess(`${configsToDelete.length} config(s) deleted successfully!`);
-      setDeleteMultipleDialogOpen(false);
-      setSelectedConfigIds(new Set());
-      await loadConfigs();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete configs');
-    } finally {
-      setLoading(false);
-    }
+    deleteSelectedMutation.mutate(Array.from(selectedConfigIds));
   };
 
   const handleRefresh = () => {
@@ -207,7 +203,7 @@ export const useConfigsPage = () => {
 
   return {
     configs,
-    loading,
+    loading: loading || editMutation.isPending || deleteMutation.isPending || deleteSelectedMutation.isPending,
     error,
     setError,
     success,

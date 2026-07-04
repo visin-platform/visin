@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { trainingService } from '../services/trainingService';
 import { configService } from '../services/configService';
 import { projectService } from '../services/projectService';
@@ -22,9 +23,27 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
   const [editLoadingDatasets, setEditLoadingDatasets] = useState(false);
   const [editLoadingProjects, setEditLoadingProjects] = useState(false);
   const [editProjectId, setEditProjectId] = useState('');
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [updateError, setUpdateError] = useState<string | null>(null);
-  const [updateSuccess, setUpdateSuccess] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
+
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!training) throw new Error('No training to update');
+      return trainingService.updateTraining(training._id, {
+        name: editName.trim(),
+        description: editDescription.trim(),
+        configId: editConfigId || undefined,
+        datasetId: editDatasetId || undefined,
+        projectId: editProjectId || undefined,
+        status: editStatus,
+        tags: editTags
+      });
+    },
+    onSuccess: () => {
+      refetch();
+      setEditDialogOpen(false);
+    }
+  });
 
   const handleEditTraining = async () => {
     if (!training) return;
@@ -34,11 +53,11 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
       setEditLoadingDatasets(true);
       setEditLoadingProjects(true);
 
-      // Load configs, datasets, and projects
+      // Load configs, datasets, and projects (cached across the app under these keys)
       const [configsRes, analysisRes, projectsRes] = await Promise.all([
-        configService.getAllConfigs(),
-        getAllAnalyses(100, 0),
-        projectService.getProjects()
+        queryClient.fetchQuery({ queryKey: ['configs'], queryFn: () => configService.getAllConfigs() }),
+        queryClient.fetchQuery({ queryKey: ['dataset-analyses', 100, 0], queryFn: () => getAllAnalyses(100, 0) }),
+        queryClient.fetchQuery({ queryKey: ['projects'], queryFn: () => projectService.getProjects() })
       ]);
 
       setEditConfigs(configsRes.data.configs || []);
@@ -46,9 +65,9 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
       setEditProjects(projectsRes.data || []);
 
       // Load available tags
-      const allTrainings = await trainingService.getTrainings({
-        page: 1,
-        limit: 1000
+      const allTrainings = await queryClient.fetchQuery({
+        queryKey: ['trainings-all-tags'],
+        queryFn: () => trainingService.getTrainings({ page: 1, limit: 1000 })
       });
       const tags = new Set<string>();
       allTrainings.data.trainings.forEach((t: Training) => {
@@ -78,30 +97,7 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
 
   const handleEditConfirm = async () => {
     if (!training || !editName.trim()) return;
-
-    try {
-      setIsUpdating(true);
-      setUpdateError(null);
-      setUpdateSuccess(null);
-
-      await trainingService.updateTraining(training._id, {
-        name: editName.trim(),
-        description: editDescription.trim(),
-        configId: editConfigId || undefined,
-        datasetId: editDatasetId || undefined,
-        projectId: editProjectId || undefined,
-        status: editStatus,
-        tags: editTags,
-      });
-      setUpdateSuccess('Training updated successfully');
-      refetch();
-      setEditDialogOpen(false);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update training';
-      setUpdateError(message);
-    } finally {
-      setIsUpdating(false);
-    }
+    updateMutation.mutate();
   };
 
   const handleEditCancel = () => {
@@ -112,8 +108,7 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
     setEditDatasetId('');
     setEditStatus('pending');
     setEditTags([]);
-    setUpdateError(null);
-    setUpdateSuccess(null);
+    updateMutation.reset();
   };
 
   return {
@@ -135,8 +130,8 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
     editLoadingConfigs,
     editLoadingDatasets,
     editLoadingProjects,
-    isUpdating,
-    updateError,
-    updateSuccess
+    isUpdating: updateMutation.isPending,
+    updateError: updateMutation.error instanceof Error ? updateMutation.error.message : (updateMutation.error ? 'Failed to update training' : null),
+    updateSuccess: updateMutation.isSuccess ? 'Training updated successfully' : null
   };
 };

@@ -9,6 +9,7 @@ import {
   Button
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { useMutation } from '@tanstack/react-query';
 
 import { projectService } from '../services/projectService';
 import { useAuth } from '../contexts/AuthContext';
@@ -67,8 +68,6 @@ const ProjectDashboardPage: React.FC = () => {
     description: '',
     isPublic: false
   });
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Use custom hook for all project data
   const {
@@ -113,6 +112,34 @@ const ProjectDashboardPage: React.FC = () => {
     }
   };
 
+  const updateProjectMutation = useMutation({
+    mutationFn: () => {
+      if (!id) throw new Error('No project id');
+      return projectService.updateProject(id, editFormData);
+    },
+    onSuccess: () => {
+      setEditDialogOpen(false);
+      invalidateProjectQueries();
+    },
+    onError: (error) => {
+      console.error('Failed to update project:', error);
+    }
+  });
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: () => {
+      if (!id) throw new Error('No project id');
+      return projectService.deleteProject(id);
+    },
+    onSuccess: () => {
+      setDeleteDialogOpen(false);
+      navigate('/projects');
+    },
+    onError: (error) => {
+      console.error('Failed to delete project:', error);
+    }
+  });
+
   // Project edit/delete handlers
   const handleEditProject = () => {
     if (project) {
@@ -125,34 +152,14 @@ const ProjectDashboardPage: React.FC = () => {
     }
   };
 
-  const handleUpdateProject = async () => {
+  const handleUpdateProject = () => {
     if (!id) return;
-
-    try {
-      setIsUpdating(true);
-      await projectService.updateProject(id, editFormData);
-      setEditDialogOpen(false);
-      invalidateProjectQueries();
-    } catch (error) {
-      console.error('Failed to update project:', error);
-    } finally {
-      setIsUpdating(false);
-    }
+    updateProjectMutation.mutate();
   };
 
-  const handleDeleteProject = async () => {
+  const handleDeleteProject = () => {
     if (!id) return;
-
-    try {
-      setIsDeleting(true);
-      await projectService.deleteProject(id);
-      setDeleteDialogOpen(false);
-      navigate('/projects');
-    } catch (error) {
-      console.error('Failed to delete project:', error);
-    } finally {
-      setIsDeleting(false);
-    }
+    deleteProjectMutation.mutate();
   };
 
   if (isProjectLoading || isStatsLoading || (tabValue === 0 && isDashboardStatsLoading)) {
@@ -237,14 +244,14 @@ const ProjectDashboardPage: React.FC = () => {
         formData={editFormData}
         onFormDataChange={setEditFormData}
         onSubmit={handleUpdateProject}
-        isUpdating={isUpdating}
+        isUpdating={updateProjectMutation.isPending}
       />
 
       <DeleteProjectDialog
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         onConfirm={handleDeleteProject}
-        isDeleting={isDeleting}
+        isDeleting={deleteProjectMutation.isPending}
       />
     </Container>
   );

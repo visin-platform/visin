@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { visualizationService } from '../services/visualizationService';
 import { Visualization, PaginatedResponse } from '../types';
 
@@ -7,113 +8,102 @@ interface UseTrainingVisualizationsProps {
 }
 
 export const useTrainingVisualizations = ({ training_uuid }: UseTrainingVisualizationsProps) => {
-  const [visualizations, setVisualizations] = useState<Visualization[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedEpochFilter, setSelectedEpochFilter] = useState<string>('all');
   const [selectedImageName, setSelectedImageName] = useState<string>('');
-  const [types, setTypes] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
 
-  // Load visualizations
-  const loadVisualizations = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const queryClient = useQueryClient();
 
-      const response = await visualizationService.getVisualizationsByTraining(
-        training_uuid,
-        {
-          type: selectedType !== 'all' ? selectedType : undefined,
-          limit: 100
-        }
-      ) as PaginatedResponse<Visualization>;
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['visualizations', training_uuid] });
+    queryClient.invalidateQueries({ queryKey: ['visualization-types', training_uuid] });
+  };
 
-      let visualizations = response.data.visualizations || [];
+  const {
+    data: visualizationsData,
+    isLoading: loadingVisualizations,
+    refetch: loadVisualizations
+  } = useQuery({
+    queryKey: ['visualizations', training_uuid, selectedType],
+    queryFn: () =>
+      visualizationService.getVisualizationsByTraining(training_uuid, {
+        type: selectedType !== 'all' ? selectedType : undefined,
+        limit: 100
+      }) as Promise<PaginatedResponse<Visualization>>
+  });
 
-      // Apply client-side filters
-      if (selectedEpochFilter !== 'all') {
-        const epochNum = parseInt(selectedEpochFilter);
-        visualizations = visualizations.filter((viz: Visualization) => viz.epoch === epochNum);
-      }
+  const { data: typesData } = useQuery({
+    queryKey: ['visualization-types', training_uuid],
+    queryFn: () => visualizationService.getVisualizationTypes({ training_uuid })
+  });
 
-      if (selectedImageName.trim()) {
-        const searchTerm = selectedImageName.toLowerCase().trim();
-        visualizations = visualizations.filter((viz: Visualization) =>
-          viz.filename.toLowerCase().includes(searchTerm)
-        );
-      }
+  const visualizations = useMemo(() => {
+    let result = visualizationsData?.data.visualizations || [];
 
-      setVisualizations(visualizations);
-    } catch (err) {
-      console.error('Failed to load visualizations:', err);
-      setError('Failed to load visualizations');
-    } finally {
-      setLoading(false);
+    // Apply client-side filters
+    if (selectedEpochFilter !== 'all') {
+      const epochNum = parseInt(selectedEpochFilter);
+      result = result.filter((viz: Visualization) => viz.epoch === epochNum);
     }
-  }, [training_uuid, selectedType, selectedEpochFilter, selectedImageName]);
 
-  // Load visualization types
-  const loadTypes = useCallback(async () => {
-    try {
-      const response = await visualizationService.getVisualizationTypes({ training_uuid });
-      setTypes(response.data.types || []);
-    } catch (err) {
-      console.error('Failed to load visualization types:', err);
+    if (selectedImageName.trim()) {
+      const searchTerm = selectedImageName.toLowerCase().trim();
+      result = result.filter((viz: Visualization) => viz.filename.toLowerCase().includes(searchTerm));
     }
-  }, [training_uuid]);
 
-  useEffect(() => {
-    loadVisualizations();
-    loadTypes();
-  }, [loadVisualizations, loadTypes]);
+    return result;
+  }, [visualizationsData, selectedEpochFilter, selectedImageName]);
 
-  // Handle upload
-  const handleUpload = async (
-    selectedEpoch: string,
-    selectedFile: File,
-    uploadType: string
-  ) => {
-    try {
-      setUploading(true);
-      setError(null);
+  const types = typesData?.data.types || [];
 
-      await visualizationService.uploadVisualization(
-        selectedEpoch,
-        selectedFile,
-        uploadType
-      );
-
-      loadVisualizations();
-      loadTypes();
-      return true;
-    } catch (err) {
+  const uploadMutation = useMutation({
+    mutationFn: ({ selectedEpoch, selectedFile, uploadType }: { selectedEpoch: string; selectedFile: File; uploadType: string }) =>
+      visualizationService.uploadVisualization(selectedEpoch, selectedFile, uploadType),
+    onSuccess: () => {
+      invalidate();
+    },
+    onError: (err) => {
       console.error('Failed to upload visualization:', err);
       setError('Failed to upload visualization');
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (visualization_uuid: string) => visualizationService.deleteVisualization(visualization_uuid),
+    onSuccess: () => {
+      invalidate();
+    },
+    onError: (err) => {
+      console.error('Failed to delete visualization:', err);
+      setError('Failed to delete visualization');
+    }
+  });
+
+  // Handle upload
+  const handleUpload = async (selectedEpoch: string, selectedFile: File, uploadType: string) => {
+    setError(null);
+    try {
+      await uploadMutation.mutateAsync({ selectedEpoch, selectedFile, uploadType });
+      return true;
+    } catch {
       return false;
-    } finally {
-      setUploading(false);
     }
   };
 
   // Handle delete
   const handleDelete = async (visualization_uuid: string) => {
     try {
-      await visualizationService.deleteVisualization(visualization_uuid);
-      loadVisualizations();
-      loadTypes();
+      await deleteMutation.mutateAsync(visualization_uuid);
       return true;
-    } catch (err) {
-      console.error('Failed to delete visualization:', err);
-      setError('Failed to delete visualization');
+    } catch {
       return false;
     }
   };
 
   return {
     visualizations,
-    loading,
+    loading: loadingVisualizations,
     error,
     setError,
     selectedType,
@@ -123,7 +113,7 @@ export const useTrainingVisualizations = ({ training_uuid }: UseTrainingVisualiz
     selectedImageName,
     setSelectedImageName,
     types,
-    uploading,
+    uploading: uploadMutation.isPending,
     handleUpload,
     handleDelete,
     refresh: loadVisualizations

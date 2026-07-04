@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Container,
   Typography,
@@ -40,10 +41,6 @@ import {
 import { datasetService, Dataset } from '../services/datasetService';
 
 const ImageCategoriesPage: React.FC = () => {
-  const [categories, setCategories] = useState<ImageCategory[]>([]);
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [datasetsLoading, setDatasetsLoading] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ImageCategory | null>(null);
   const [categoryForm, setCategoryForm] = useState({
@@ -53,96 +50,97 @@ const ImageCategoriesPage: React.FC = () => {
     color: '#1976d2'
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const queryClient = useQueryClient();
 
-  // Load categories and datasets on component mount
-  useEffect(() => {
-    loadCategories();
-    loadDatasets();
-  }, []);
+  const { data: categories = [], isLoading: loading } = useQuery({
+    queryKey: ['image-categories'],
+    queryFn: () => getAllCategories()
+  });
 
-  const loadCategories = async () => {
-    setLoading(true);
-    try {
-      const cats = await getAllCategories();
-      setCategories(cats);
-    } catch {
-      showAlert('error', 'Failed to load categories');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: datasetsData, isLoading: datasetsLoading } = useQuery({
+    queryKey: ['datasets', { limit: 1000 }],
+    queryFn: () => datasetService.getDatasets({ limit: 1000 })
+  });
 
-  const loadDatasets = async () => {
-    setDatasetsLoading(true);
-    try {
-      const response = await datasetService.getDatasets({ limit: 1000 }); // Get all datasets
-      setDatasets(response.data.datasets);
-    } catch {
-      showAlert('error', 'Failed to load datasets');
-    } finally {
-      setDatasetsLoading(false);
-    }
-  };
+  const datasets: Dataset[] = datasetsData?.data.datasets || [];
 
   const showAlert = (type: 'success' | 'error', message: string) => {
     setAlert({ type, message });
     setTimeout(() => setAlert(null), 5000);
   };
 
-  const handleCreateCategory = async () => {
-    if (!categoryForm.name.trim() || !categoryForm.datasetId.trim()) {
-      showAlert('error', 'Category name and dataset ID are required');
-      return;
-    }
+  const invalidateCategories = () => queryClient.invalidateQueries({ queryKey: ['image-categories'] });
 
-    try {
-      await createImageCategory({
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createImageCategory({
         ...categoryForm,
         name: categoryForm.name.trim(),
         description: categoryForm.description.trim(),
         datasetId: categoryForm.datasetId
-      });
+      }),
+    onSuccess: () => {
       showAlert('success', 'Category created successfully');
       setCreateModalOpen(false);
       setCategoryForm({ name: '', description: '', datasetId: '', color: '#1976d2' });
-      loadCategories();
-    } catch {
+      invalidateCategories();
+    },
+    onError: () => {
       showAlert('error', 'Failed to create category');
     }
-  };
+  });
 
-  const handleUpdateCategory = async () => {
-    if (!editingCategory || !categoryForm.name.trim()) {
-      showAlert('error', 'Category name is required');
-      return;
-    }
-
-    try {
-      await updateImageCategory(editingCategory._id, {
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!editingCategory) throw new Error('No category being edited');
+      return updateImageCategory(editingCategory._id, {
         name: categoryForm.name.trim(),
         description: categoryForm.description.trim(),
         color: categoryForm.color
       });
+    },
+    onSuccess: () => {
       showAlert('success', 'Category updated successfully');
       setCreateModalOpen(false);
       setEditingCategory(null);
       setCategoryForm({ name: '', description: '', datasetId: '', color: '#1976d2' });
-      loadCategories();
-    } catch {
+      invalidateCategories();
+    },
+    onError: () => {
       showAlert('error', 'Failed to update category');
     }
-  };
+  });
 
-  const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm('Are you sure you want to delete this category?')) return;
-
-    try {
-      await deleteImageCategory(categoryId);
+  const deleteMutation = useMutation({
+    mutationFn: (categoryId: string) => deleteImageCategory(categoryId),
+    onSuccess: () => {
       showAlert('success', 'Category deleted successfully');
-      loadCategories();
-    } catch {
+      invalidateCategories();
+    },
+    onError: () => {
       showAlert('error', 'Failed to delete category');
     }
+  });
+
+  const handleCreateCategory = () => {
+    if (!categoryForm.name.trim() || !categoryForm.datasetId.trim()) {
+      showAlert('error', 'Category name and dataset ID are required');
+      return;
+    }
+    createMutation.mutate();
+  };
+
+  const handleUpdateCategory = () => {
+    if (!editingCategory || !categoryForm.name.trim()) {
+      showAlert('error', 'Category name is required');
+      return;
+    }
+    updateMutation.mutate();
+  };
+
+  const handleDeleteCategory = (categoryId: string) => {
+    if (!confirm('Are you sure you want to delete this category?')) return;
+    deleteMutation.mutate(categoryId);
   };
 
   const openCreateModal = () => {

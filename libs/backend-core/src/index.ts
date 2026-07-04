@@ -37,3 +37,15 @@ export type { RequestSchemas } from './middleware/validate';
 // Re-exported so services can author zod schemas without their own direct
 // dependency on zod — one version, declared once, in this package.
 export { z } from 'zod';
+
+// Database
+export { connectDb } from './db/connectDb';
+export type { ConnectDbOptions } from './db/connectDb';
+
+// App factory
+export { createBaseApp } from './app/createBaseApp';
+export type { CreateBaseAppOptions } from './app/createBaseApp';
+
+// Health check
+export { createHealthCheckHandler } from './health/createHealthCheckHandler';
+export type { CreateHealthCheckHandlerOptions } from './health/createHealthCheckHandler';

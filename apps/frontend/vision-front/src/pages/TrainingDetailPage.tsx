@@ -1,29 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Box,
-  Container,
-  Typography,
-  Paper,
-  CircularProgress,
-  Alert,
-  Button,
-  Tabs,
-  Tab,
-  Chip,
-  Stack
-} from '@mui/material';
-import {
-  Refresh as RefreshIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon
-} from '@mui/icons-material';
-
-import { trainingService } from '../services/trainingService';
-import { epochService } from '../services/epochService';
-import { testResultService } from '../services/testResultService';
-import { Epoch, TestResult } from '../types';
+import { Box, Container, CircularProgress, Alert } from '@mui/material';
 
 import TrainingOverviewTab from '../components/TrainingOverviewTab';
 import TrainingEpochsTab from '../components/TrainingEpochsTab';
@@ -36,13 +14,14 @@ import TrainingFormDialog from '../components/TrainingFormDialog';
 import UploadResultsDialog from '../components/training/UploadResultsDialog';
 import LatexExportDialog from '../components/training/LatexExportDialog';
 import DeleteConfirmationDialog from '../components/training/DeleteConfirmationDialog';
+import TrainingDetailHeader from '../components/training/TrainingDetailHeader';
+import TrainingDetailTabs from '../components/training/TrainingDetailTabs';
 
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { useTrainingDetail } from '../hooks/useTrainingDetail';
 import { useTrainingEdit } from '../hooks/useTrainingEdit';
-import { processEpochFiles, processTestResultFiles, UploadResult } from '../utils/fileUploadHelpers';
-import { generateLatexCode } from '../utils/latexGenerator';
+import { useTrainingActions } from '../hooks/useTrainingActions';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import { projectService } from '../services/projectService';
 
@@ -60,18 +39,6 @@ const TrainingDetailPage: React.FC = () => {
   // Initialize tab from URL or default to 0
   const initialTab = getTabIndex(searchParams.get('tab') || 'overview');
   const [detailTab, setDetailTab] = useState(initialTab >= 0 ? initialTab : 0);
-
-  // State for uploads and deletes
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Epoch | null>(null);
-  const [trainingDeleteOpen, setTrainingDeleteOpen] = useState(false);
-  const [uploadResultsOpen, setUploadResultsOpen] = useState(false);
-  const [uploadResults, setUploadResults] = useState<UploadResult>({ successful: [], failed: [] });
-  const [latexModalOpen, setLatexModalOpen] = useState(false);
-  const [latexCode, setLatexCode] = useState('');
 
   // Custom hooks
   const {
@@ -120,6 +87,33 @@ const TrainingDetailPage: React.FC = () => {
     updateSuccess
   } = useTrainingEdit(training, refetch);
 
+  const {
+    uploading,
+    uploadError,
+    uploadSuccess,
+    deleteOpen,
+    setDeleteOpen,
+    deleteTarget,
+    trainingDeleteOpen,
+    setTrainingDeleteOpen,
+    uploadResultsOpen,
+    setUploadResultsOpen,
+    uploadResults,
+    latexModalOpen,
+    setLatexModalOpen,
+    latexCode,
+    handleFileUpload,
+    handleDeleteClick,
+    handleConfirmDelete,
+    handleConfirmDeleteTraining,
+    handleDeleteTestResult,
+    handleLatexExport
+  } = useTrainingActions({
+    trainingId: training?._id,
+    refetch,
+    onTrainingDeleted: () => navigate('/trainings')
+  });
+
   // Set page title
   usePageTitle(training ? `${training.name} - Vision` : 'Training Details - Vision');
 
@@ -129,106 +123,6 @@ const TrainingDetailPage: React.FC = () => {
     const newSearchParams = new URLSearchParams(searchParams);
     newSearchParams.set('tab', getTabName(newValue));
     setSearchParams(newSearchParams, { replace: true });
-  };
-
-  // File upload handlers
-  const handleFileUpload = async (files: FileList, type: 'epoch' | 'testResult') => {
-    if (!files || files.length === 0 || !training) return;
-
-    try {
-      setUploading(true);
-      setUploadError(null);
-      setUploadSuccess(null);
-
-      const results = type === 'epoch' 
-        ? await processEpochFiles(files, training._id)
-        : await processTestResultFiles(files);
-
-      setUploadResults(results);
-
-      if (results.successful.length > 0) {
-        setUploadSuccess(`${results.successful.length} file(s) processed successfully`);
-        refetch();
-      }
-
-      if (results.failed.length > 0) {
-        setUploadError(`Failed to process ${results.failed.length} file(s)`);
-      }
-
-      setTimeout(() => {
-        setUploadSuccess(null);
-        setUploadError(null);
-      }, 5000);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to upload files';
-      setUploadError(message);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // Epoch delete handlers
-  const handleDeleteClick = (epoch: Epoch) => {
-    setDeleteTarget(epoch);
-    setDeleteOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
-
-    try {
-      setUploading(true);
-      await epochService.deleteEpoch(deleteTarget._id);
-      setUploadSuccess('Epoch deleted successfully');
-      refetch();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete epoch';
-      setUploadError(message);
-    } finally {
-      setUploading(false);
-      setDeleteOpen(false);
-      setDeleteTarget(null);
-    }
-  };
-
-  // Training delete handlers
-  const handleConfirmDeleteTraining = async () => {
-    if (!training) return;
-
-    try {
-      setUploading(true);
-      await trainingService.deleteTraining(training._id);
-      setUploadSuccess('Training deleted successfully');
-      navigate('/trainings');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete training';
-      setUploadError(message);
-    } finally {
-      setUploading(false);
-      setTrainingDeleteOpen(false);
-    }
-  };
-
-  // Test result delete handler
-  const handleDeleteTestResult = async (testResultId: string) => {
-    try {
-      setUploading(true);
-      await testResultService.deleteTestResult(testResultId);
-      setUploadSuccess('Test result deleted successfully');
-      refetch(); // This will trigger the useEffect in useTrainingDetail to reload test results
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete test result';
-      setUploadError(message);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // LaTeX export handler
-  const handleLatexExport = (testResult: TestResult) => {
-    const latex = generateLatexCode(testResult);
-    setLatexCode(latex);
-    setLatexModalOpen(true);
   };
 
   if (isLoading) {
@@ -270,151 +164,15 @@ const TrainingDetailPage: React.FC = () => {
           { label: training.name, current: true }
         ]}
       />
-      {/* Header */}
-      <Box sx={{
-        mb: 3
-      }}>
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: { xs: 'column', md: 'row' },
-            justifyContent: "space-between",
-            alignItems: { xs: 'flex-start', md: 'flex-start' },
-            gap: 2
-          }}>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-                mb: 1,
-                flexWrap: "wrap"
-              }}>
-              <Typography
-                variant="h5"
-                component="h1"
-                sx={{
-                  fontWeight: "bold",
-                  fontSize: { xs: '1.25rem', sm: '1.5rem' }
-                }}>
-                {training.name}
-              </Typography>
-            </Box>
-            <Typography
-              variant="body2"
-              sx={{
-                color: "text.secondary",
-                maxWidth: 600,
-                mb: 1.5,
-                display: { xs: 'none', sm: 'block' }
-              }}>
-              {training.description || 'No description provided'}
-            </Typography>
-            
-            {training.tags && training.tags.length > 0 && (
-              <Stack direction="row" spacing={1} useFlexGap sx={{
-                flexWrap: "wrap"
-              }}>
-                {training.tags.map((tag) => (
-                  <Chip 
-                    key={tag} 
-                    label={tag} 
-                    size="small" 
-                    variant="outlined"
-                    sx={{ borderRadius: 1 }}
-                  />
-                ))}
-              </Stack>
-            )}
-          </Box>
-
-          <Stack direction="row" spacing={0.5}>
-            <Button 
-              startIcon={<RefreshIcon />} 
-              onClick={() => refetch()} 
-              variant="outlined" 
-              color="inherit"
-              disabled={isLoading}
-              size="small"
-            >
-              Refresh
-            </Button>
-            {isAuthenticated && (
-              <>
-                <Button 
-                  startIcon={<EditIcon />} 
-                  onClick={handleEditTraining} 
-                  variant="outlined"
-                  disabled={isLoading}
-                  size="small"
-                >
-                  Edit
-                </Button>
-                <Button 
-                  startIcon={<DeleteIcon />} 
-                  onClick={() => setTrainingDeleteOpen(true)} 
-                  color="error" 
-                  variant="outlined" 
-                  disabled={isLoading}
-                  size="small"
-                >
-                  Delete
-                </Button>
-              </>
-            )}
-          </Stack>
-        </Box>
-      </Box>
-      {/* Tab Navigation */}
-      <Paper 
-        elevation={0} 
-        variant="outlined" 
-        sx={{ 
-          mb: 3, 
-          borderRadius: 2, 
-          overflow: 'hidden',
-          bgcolor: 'background.paper'
-        }}
-      >
-        <Tabs 
-          value={detailTab} 
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-          allowScrollButtonsMobile
-          sx={{ 
-            borderBottom: 1, 
-            borderColor: 'divider',
-            '& .MuiTab-root': { 
-              textTransform: 'none',
-              fontWeight: 600,
-              minHeight: 48,
-              px: { xs: 2, sm: 3 },
-              minWidth: { xs: 'auto', sm: 90 },
-              flexShrink: 0
-            },
-            '& .MuiTabs-scrollButtons': {
-              display: { xs: 'flex', sm: 'auto' }
-            },
-            '& .MuiTabs-scroller': {
-              overflow: 'auto !important',
-              scrollbarWidth: 'none',
-              '&::-webkit-scrollbar': {
-                display: 'none'
-              }
-            }
-          }}
-        >
-          <Tab label="Overview" />
-          <Tab label="Epochs" />
-          <Tab label="Test Results" />
-          <Tab label="Visualizations" />
-          <Tab label="System Info" />
-          <Tab label="Config" />
-          <Tab label="Benchmarks" />
-        </Tabs>
-      </Paper>
+      <TrainingDetailHeader
+        training={training}
+        isAuthenticated={isAuthenticated}
+        isLoading={isLoading}
+        onRefresh={() => refetch()}
+        onEdit={handleEditTraining}
+        onDeleteClick={() => setTrainingDeleteOpen(true)}
+      />
+      <TrainingDetailTabs value={detailTab} onChange={handleTabChange} />
       {/* Overview Tab */}
       {detailTab === 0 && (
         <TrainingOverviewTab

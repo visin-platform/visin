@@ -8,8 +8,10 @@ export type { LoaderProps } from './components/Loader';
 export { ErrorPage } from './components/ErrorPage';
 export type { ErrorPageProps } from './components/ErrorPage';
 
-// Not yet extracted: account-front's `authService.ts`, auth-front's
-// `authFlow.ts`, and vision-front's `AuthContext.tsx` implement auth
-// (token storage, login/logout, session checks) three different ways
-// rather than as copies of one pattern, so unifying them needs its own
-// design pass across all three before landing here — see TODO.md.
+export { createAuthService } from './auth/authService';
+export type { AuthService, AuthServiceOptions, AuthUser, AuthCheckResult } from './auth/authService';
+export { createAuthContext } from './auth/AuthProvider';
+export type { AuthContextValue } from './auth/AuthProvider';
+
+export { createConfigProvider } from './config/createConfigProvider';
+export type { CreateConfigProviderOptions } from './config/createConfigProvider';

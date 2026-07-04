@@ -12,6 +12,7 @@ import {
   FormControlLabel,
   CircularProgress
 } from '@mui/material';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { comparisonService } from '../../services/comparisonService';
 
 interface SaveComparisonModalProps {
@@ -30,7 +31,7 @@ const SaveComparisonModal: React.FC<SaveComparisonModalProps> = ({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds);
-  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (open) {
@@ -40,23 +41,26 @@ const SaveComparisonModal: React.FC<SaveComparisonModalProps> = ({
     }
   }, [open, trainingIds, initialSelectedIds]);
 
-  const handleSave = async () => {
-    if (!name.trim()) return;
-
-    try {
-      setSaving(true);
-      await comparisonService.createComparison({
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      comparisonService.createComparison({
         name: name.trim(),
         description: description.trim(),
         type: 'trainings',
-        itemIds: selectedIds,
-      });
+        itemIds: selectedIds
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comparisons'] });
       onClose();
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error('Error saving comparison:', error);
-    } finally {
-      setSaving(false);
     }
+  });
+
+  const handleSave = () => {
+    if (!name.trim()) return;
+    saveMutation.mutate();
   };
 
   const handleToggleId = (id: string) => {
@@ -111,13 +115,13 @@ const SaveComparisonModal: React.FC<SaveComparisonModalProps> = ({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button 
-          onClick={handleSave} 
-          variant="contained" 
-          disabled={!name.trim() || selectedIds.length === 0 || saving}
+        <Button onClick={onClose} disabled={saveMutation.isPending}>Cancel</Button>
+        <Button
+          onClick={handleSave}
+          variant="contained"
+          disabled={!name.trim() || selectedIds.length === 0 || saveMutation.isPending}
         >
-          {saving ? <CircularProgress size={24} /> : 'Save'}
+          {saveMutation.isPending ? <CircularProgress size={24} /> : 'Save'}
         </Button>
       </DialogActions>
     </Dialog>

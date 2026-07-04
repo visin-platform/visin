@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
   Button,
@@ -42,20 +43,15 @@ export const EpochsPage: React.FC = () => {
   // Set page title
   usePageTitle('Epochs - Vision');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [epochs, setEpochs] = useState<Epoch[]>([]);
-  const [trainings, setTrainings] = useState<Training[]>([]);
   const [selectedTraining, setSelectedTraining] = useState<string>('');
   const [selectedEpoch, setSelectedEpoch] = useState<Epoch | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Epoch | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
-    loadTrainings();
     // Check if navigation state contains a training ID
     const state = location.state as any;
     if (state?.trainingId) {
@@ -63,42 +59,59 @@ export const EpochsPage: React.FC = () => {
     }
   }, [location.state]);
 
-  useEffect(() => {
-    if (selectedTraining) {
-      loadEpochs();
-    }
-  }, [selectedTraining]);
+  const { data: trainingsData, isLoading: loadingTrainings } = useQuery({
+    queryKey: ['trainings', { limit: 100 }],
+    queryFn: () => trainingService.getTrainings({ limit: 100 })
+  });
 
-  const loadTrainings = async () => {
-    try {
-      setLoading(true);
-      const response = await trainingService.getTrainings({ limit: 100 });
-      setTrainings(response.data.trainings || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load trainings');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const trainings: Training[] = trainingsData?.data.trainings || [];
 
-  const loadEpochs = async () => {
-    if (!selectedTraining) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await epochService.getEpochsByTraining(selectedTraining, {
+  const {
+    data: epochsData,
+    isLoading: loadingEpochs
+  } = useQuery({
+    queryKey: ['epochs', selectedTraining],
+    queryFn: () =>
+      epochService.getEpochsByTraining(selectedTraining, {
         limit: 1000,
         sortBy: 'epoch',
         order: 'asc'
-      });
-      setEpochs(response.data.epochs || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load epochs');
-    } finally {
-      setLoading(false);
+      }),
+    enabled: !!selectedTraining
+  });
+
+  const epochs: Epoch[] = epochsData?.data.epochs || [];
+  const loading = loadingTrainings || loadingEpochs;
+
+  const uploadMutation = useMutation({
+    mutationFn: (data: unknown) => epochService.uploadEpoch(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['epochs', selectedTraining] });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to upload epoch');
     }
-  };
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => epochService.deleteEpoch(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['epochs', selectedTraining] });
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to delete epoch');
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    }
+  });
+
+  const uploading = uploadMutation.isPending;
+  const success = uploadMutation.isSuccess ? 'Epoch uploaded successfully!' : deleteMutation.isSuccess ? 'Epoch deleted successfully' : null;
 
   const handleFileClick = () => {
     fileInputRef.current?.click();
@@ -114,30 +127,11 @@ export const EpochsPage: React.FC = () => {
       return;
     }
 
-    try {
-      setUploading(true);
-      setError(null);
-      setSuccess(null);
-
-      // Read file content
-      const content = await file.text();
-      const data = JSON.parse(content);
-
-      // Upload to API
-      await epochService.uploadEpoch(data);
-
-      setSuccess(`Epoch uploaded successfully!`);
-      loadEpochs();
-
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to upload epoch');
-    } finally {
-      setUploading(false);
-    }
+    setError(null);
+    // Read file content
+    const content = await file.text();
+    const data = JSON.parse(content);
+    uploadMutation.mutate(data);
   };
 
   const handleViewDetails = (epoch: Epoch) => {
@@ -152,19 +146,7 @@ export const EpochsPage: React.FC = () => {
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-
-    try {
-      setLoading(true);
-      await epochService.deleteEpoch(deleteTarget._id);
-      setSuccess('Epoch deleted successfully');
-      loadEpochs();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete epoch');
-    } finally {
-      setLoading(false);
-      setDeleteOpen(false);
-      setDeleteTarget(null);
-    }
+    deleteMutation.mutate(deleteTarget._id);
   };
 
   const formatDate = (dateString: string) => {

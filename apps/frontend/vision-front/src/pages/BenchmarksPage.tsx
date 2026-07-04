@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -35,8 +36,6 @@ import { benchmarkService } from '@/services/benchmarkService';
 import { useAuth } from '../contexts/AuthContext';
 
 const BenchmarksPage: React.FC = () => {
-  const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [benchmarkToDelete, setBenchmarkToDelete] = useState<string | null>(null);
@@ -44,29 +43,37 @@ const BenchmarksPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const theme = useTheme();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    loadBenchmarks();
-  }, []);
-
-  const loadBenchmarks = async () => {
-    try {
-      setLoading(true);
-      const response = await benchmarkService.getBenchmarks({
+  const {
+    data,
+    isLoading: loading,
+    refetch: loadBenchmarks
+  } = useQuery({
+    queryKey: ['benchmarks'],
+    queryFn: () =>
+      benchmarkService.getBenchmarks({
         page: 1,
         limit: 100,
         sortBy: 'timestamp',
-        order: 'desc',
-      });
-      setBenchmarks(response.data.benchmarks || []);
-      setError(null);
-    } catch (err) {
-      console.error('Error loading benchmarks:', err);
-      setError('Failed to load benchmarks');
-    } finally {
-      setLoading(false);
+        order: 'desc'
+      })
+  });
+
+  const benchmarks: Benchmark[] = data?.data.benchmarks || [];
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => benchmarkService.deleteBenchmark(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
+      setDeleteDialogOpen(false);
+      setBenchmarkToDelete(null);
+    },
+    onError: (err) => {
+      setError('Failed to delete benchmark');
+      console.error('Error deleting benchmark:', err);
     }
-  };
+  });
 
   const handleDeleteBenchmark = (id: string) => {
     setBenchmarkToDelete(id);
@@ -75,16 +82,7 @@ const BenchmarksPage: React.FC = () => {
 
   const handleConfirmDelete = async () => {
     if (!benchmarkToDelete) return;
-
-    try {
-      await benchmarkService.deleteBenchmark(benchmarkToDelete);
-      loadBenchmarks();
-      setDeleteDialogOpen(false);
-      setBenchmarkToDelete(null);
-    } catch (err) {
-      setError('Failed to delete benchmark');
-      console.error('Error deleting benchmark:', err);
-    }
+    deleteMutation.mutate(benchmarkToDelete);
   };
 
   const handleCancelDelete = () => {
@@ -104,7 +102,7 @@ const BenchmarksPage: React.FC = () => {
 
   const canDeleteBenchmarks = () => {
     if (!isAuthenticated || !user) return false;
-    return user.groups.some(group => group.includes('owner') || group.includes('admin'));
+    return user.groups?.some(group => group.includes('owner') || group.includes('admin')) ?? false;
   };
 
   const handleRowClick = (benchmark: Benchmark) => {

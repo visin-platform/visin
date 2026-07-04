@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Box,
@@ -36,36 +37,42 @@ export const TestResultsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const theme = useTheme();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TestResult | null>(null);
   const [selectedTestResults, setSelectedTestResults] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    loadTestResults();
-  }, []);
+  const {
+    data,
+    isLoading: loading
+  } = useQuery({
+    queryKey: ['test-results'],
+    queryFn: () => testResultService.getTestResults()
+  });
+
+  const testResults: TestResult[] = data?.data.testResults || [];
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => testResultService.deleteTestResult(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-results'] });
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to delete test result');
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    }
+  });
+
+  const success = deleteMutation.isSuccess ? 'Test result deleted successfully' : null;
 
   // Check if user has permission to delete test results (owner or admin role)
   const canDeleteTestResults = () => {
     if (!isAuthenticated || !user) return false;
-    return user.groups.some(group => group.includes('owner') || group.includes('admin'));
-  };
-
-  const loadTestResults = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await testResultService.getTestResults();
-      const testResultsData = response.data.testResults || [];
-      setTestResults(testResultsData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load test results');
-    } finally {
-      setLoading(false);
-    }
+    return user.groups?.some(group => group.includes('owner') || group.includes('admin')) ?? false;
   };
 
   const handleDeleteClick = (testResult: TestResult) => {
@@ -75,19 +82,7 @@ export const TestResultsPage: React.FC = () => {
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-
-    try {
-      setLoading(true);
-      await testResultService.deleteTestResult(deleteTarget._id);
-      setSuccess('Test result deleted successfully');
-      loadTestResults();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete test result');
-    } finally {
-      setLoading(false);
-      setDeleteOpen(false);
-      setDeleteTarget(null);
-    }
+    deleteMutation.mutate(deleteTarget._id);
   };
 
   const formatDate = (dateString: string) => {
