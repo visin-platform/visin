@@ -6,6 +6,10 @@ dist
 certs
 coverage
 paper
-playwright-report
-test-results
-blob-report
+
+# Playwright output — anchored to each frontend app's own root so these
+# don't accidentally match source directories with the same name, e.g.
+# apps/frontend/vision-front/src/components/test-results/.
+/apps/frontend/*/playwright-report
+/apps/frontend/*/test-results
+/apps/frontend/*/blob-report
