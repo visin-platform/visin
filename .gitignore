@@ -6,3 +6,6 @@ dist
 certs
 coverage
 paper
+playwright-report
+test-results
+blob-report

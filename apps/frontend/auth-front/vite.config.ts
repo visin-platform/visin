@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { defineConfig, loadEnv } from 'vite';
+import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
@@ -29,6 +30,7 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: 'jsdom',
+      exclude: [...configDefaults.exclude, 'e2e/**'],
       setupFiles: ['./src/test/setup.ts'],
       coverage: {
         provider: 'v8',
