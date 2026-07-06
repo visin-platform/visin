@@ -3,8 +3,9 @@ FROM node:26-alpine AS builder
 WORKDIR /app
 
 # Copy source code and build
-COPY . .
+COPY package*.json ./
 RUN npm i
+COPY . .
 RUN npm run build
 
 # ---- Production Stage ----
