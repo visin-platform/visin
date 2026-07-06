@@ -1,4 +1,16 @@
 # Visin Changelog
+### [0.0.108](https://github.com/visin-platform/visin-monorepo/compare/v0.0.107...v0.0.108) (2026-07-06)
+
+
+### Features
+
+* optimize ci build ([58835af](https://github.com/visin-platform/visin-monorepo/commit/58835afe4e5ac9b3069c06063fc481fbe8e44791))
+
+
+### Bug Fixes
+
+* add missing dependencies to landing front ([3c35783](https://github.com/visin-platform/visin-monorepo/commit/3c357830ca51a13a0961afec4d6d8cddbd8c77e8))
+
 ### [0.0.107](https://github.com/visin-platform/visin-monorepo/compare/v0.0.106...v0.0.107) (2026-07-04)
 
 
