@@ -33,4 +33,20 @@ describe('profileService.updateProfile', () => {
 
     await expect(profileService.updateProfile({ firstName: '' })).rejects.toThrow('Invalid name');
   });
+
+  it('falls back to an empty base URL when AUTH_SERVICE_URL is unconfigured', async () => {
+    vi.doMock('../config/ConfigProvider', () => ({ getGlobalConfig: () => ({}) }));
+    vi.resetModules();
+    const { profileService: freshProfileService } = await import('./profileService');
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, user: { id: 'u1' } }), { status: 200 })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await freshProfileService.updateProfile({ firstName: 'A' });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/auth/profile');
+    vi.doUnmock('../config/ConfigProvider');
+  });
 });

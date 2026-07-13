@@ -12,6 +12,16 @@ afterAll(() => {
 
 describe('hmac', () => {
   describe('signToken', () => {
+    it('throws when FILE_SERVICE_HMAC_SECRET is not configured', () => {
+      delete process.env.FILE_SERVICE_HMAC_SECRET;
+
+      expect(() => signToken('upload', 'file-123', Date.now())).toThrow(
+        'FILE_SERVICE_HMAC_SECRET env var is required'
+      );
+
+      process.env.FILE_SERVICE_HMAC_SECRET = SECRET;
+    });
+
     it('returns a hex string', () => {
       const token = signToken('upload', 'file-123', Date.now() + 60_000);
       expect(token).toMatch(/^[0-9a-f]{64}$/);

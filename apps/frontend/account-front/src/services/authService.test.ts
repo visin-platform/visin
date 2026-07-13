@@ -88,4 +88,38 @@ describe('authService', () => {
       expect(await authService.getProfile()).toBeNull();
     });
   });
+
+  describe('URL fallbacks when unconfigured', () => {
+    it('falls back to an empty base URL for API calls', async () => {
+      vi.doMock('../config/ConfigProvider', () => ({ getGlobalConfig: () => ({}) }));
+      vi.resetModules();
+      const { authService: freshAuthService } = await import('./authService');
+
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true, authenticated: true, user: { id: 'u1' } }), { status: 200 })
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      await freshAuthService.checkAuth();
+
+      expect(fetchMock.mock.calls[0][0]).not.toContain('http://auth-api.test');
+      vi.doUnmock('../config/ConfigProvider');
+    });
+
+    it('falls back to an empty auth-front URL when redirecting to login', async () => {
+      vi.doMock('../config/ConfigProvider', () => ({ getGlobalConfig: () => ({}) }));
+      vi.resetModules();
+      const { authService: freshAuthService } = await import('./authService');
+      Object.defineProperty(window, 'location', {
+        value: { ...window.location, href: 'http://app.test/page' },
+        writable: true,
+      });
+
+      freshAuthService.redirectToLogin();
+
+      expect(window.location.href).toContain('?redirect_uri=');
+      expect(window.location.href).not.toContain('auth-front.test');
+      vi.doUnmock('../config/ConfigProvider');
+    });
+  });
 });

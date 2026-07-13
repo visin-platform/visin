@@ -59,4 +59,52 @@ describe('visionApi', () => {
 
     await expect(visionApi.get('/projects/x')).rejects.toThrow('Project not found');
   });
+
+  it('PUT sends a JSON body and returns { data }, and surfaces a server error message', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: '1' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await visionApi.put('/projects/1', { name: 'y' });
+
+    expect(result).toEqual({ data: { id: '1' } });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.method).toBe('PUT');
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ message: 'Invalid update' }), { status: 400 }));
+    await expect(visionApi.put('/projects/1', {})).rejects.toThrow('Invalid update');
+  });
+
+  it('DELETE surfaces a server error message on failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'Cannot delete' }), { status: 400 }))
+    );
+
+    await expect(visionApi.delete('/projects/1')).rejects.toThrow('Cannot delete');
+  });
+
+  it('wraps a thrown non-Error value in a generic Error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('a plain string rejection'));
+
+    await expect(visionApi.get('/projects')).rejects.toThrow('API Error');
+  });
+
+  it('falls back to import.meta.env when getGlobalConfig throws (init/HMR)', async () => {
+    vi.resetModules();
+    vi.doMock('./ConfigProvider', () => ({
+      getGlobalConfig: () => {
+        throw new Error('not initialized');
+      },
+    }));
+    const { visionApi: freshVisionApi } = await import('./visionApi');
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await freshVisionApi.get('/projects');
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toContain('/api/projects');
+    vi.doUnmock('./ConfigProvider');
+  });
 });
