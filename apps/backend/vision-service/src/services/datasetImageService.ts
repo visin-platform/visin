@@ -40,7 +40,7 @@ export interface CreateDatasetImageData {
   tags?: string[];
   labels?: string[];
   weatherCondition?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateDatasetImageData {
@@ -50,10 +50,18 @@ export interface UpdateDatasetImageData {
   labels?: string[];
   categoryId?: string | null;
   weatherCondition?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
-async function enrichImagesWithUrls(images: any[]) {
+// Covers both real DatasetImage documents and the aggregate()+toObject-shim
+// POJOs built in getImages' `random` branch below.
+interface ImageLike {
+  minioFileId?: string;
+  minioThumbnailFileId?: string;
+  toObject?: () => Record<string, unknown>;
+}
+
+async function enrichImagesWithUrls(images: ImageLike[]) {
   let signedUrlMap: Record<string, SignedUrlData> = {};
 
   try {
@@ -77,7 +85,7 @@ async function enrichImagesWithUrls(images: any[]) {
     const signedUrlData = signedUrlMap[image.minioFileId || ''];
     const imageObj = typeof image.toObject === 'function' ? image.toObject() : image;
 
-    const result: any = { ...imageObj };
+    const result: Record<string, unknown> = { ...imageObj };
 
     if (signedUrlData) {
       result.signedUrl = signedUrlData.signedUrl;
@@ -143,7 +151,7 @@ export const getImages = async (options: ImageFilterOptions) => {
   const limitNum = Math.min(Number(limit), 1000000);
   const pageNum = Number(page);
   
-  let images: any[];
+  let images: ImageLike[];
 
   if (random && limitNum > 0) {
       const pipeline = [
@@ -159,7 +167,7 @@ export const getImages = async (options: ImageFilterOptions) => {
       minioThumbnailFileId: doc.minioThumbnailFileId
     }));
   } else {
-      const sortOptions: any = {};
+      const sortOptions: Record<string, 1 | -1> = {};
       const validSortFields = ['createdAt', 'updatedAt', 'filename'];
       
       if (validSortFields.includes(sortBy)) {
@@ -518,7 +526,7 @@ export const getImageById = async (id: string) => {
 
   try {
     const signedUrlData = await getPhotoSignedUrl(image, false, 60);
-    const result: any = {
+    const result: Record<string, unknown> = {
       ...image.toObject()
     };
 

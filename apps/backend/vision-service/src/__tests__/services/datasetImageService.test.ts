@@ -54,6 +54,9 @@ const mockedDataset = Dataset as unknown as Record<string, jest.Mock>;
 const mockedCategory = ImageCategory as unknown as Record<string, jest.Mock>;
 const mockedMinio = minio as unknown as Record<string, jest.Mock>;
 
+// Escape hatch for asserting on dynamically-shaped service results in tests;
+// modeling every ad-hoc return shape as an interface here would add noise, not safety.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDoc = Record<string, any>;
 
 const VALID_OBJECT_ID = '507f1f77bcf86cd799439011';

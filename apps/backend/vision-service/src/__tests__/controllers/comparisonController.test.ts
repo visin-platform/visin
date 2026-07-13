@@ -60,7 +60,7 @@ describe('createComparison', () => {
   it('prefers the API token project scope (req.projectId) over the body projectId', async () => {
     mockCheckProjectAccess.mockResolvedValueOnce(true);
     const save = jest.fn().mockResolvedValue({ uuid: 'x' });
-    (mockComparison as unknown as jest.Mock).mockImplementation(function (this: any, data: any) {
+    (mockComparison as unknown as jest.Mock).mockImplementation(function (this: Record<string, unknown>, data: Record<string, unknown>) {
       Object.assign(this, data);
       this.save = save;
     });

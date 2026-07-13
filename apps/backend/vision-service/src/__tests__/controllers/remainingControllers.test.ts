@@ -73,7 +73,7 @@ const mockedVisibleProjects = getVisibleProjectIds as jest.Mock;
 const mockedTokenScope = isWithinTokenScope as jest.Mock;
 const mockedImageSvc = imageService as unknown as Record<string, jest.Mock>;
 
-type AnyDoc = Record<string, any>;
+type AnyDoc = Record<string, unknown>;
 
 type MockRes = Response & { json: jest.Mock; status: jest.Mock; setHeader: jest.Mock; send: jest.Mock };
 

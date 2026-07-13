@@ -2,9 +2,30 @@ import { randomUUID as uuidv4 } from 'crypto';
 import { QueryFilter } from 'mongoose';
 import { ConflictError, ForbiddenError, NotFoundError, logger } from '@visin/backend-core';
 import TestResult, { ITestResult } from '../models/TestResult';
-import Epoch from '../models/Epoch';
-import Training from '../models/Training';
+import Epoch, { IEpoch } from '../models/Epoch';
+import Training, { ITraining } from '../models/Training';
 import { checkProjectAccess, getVisibleTrainingIds, isWithinTokenScope } from './projectAccessService';
+import type { z } from '@visin/backend-core';
+import type { createTestResultBodySchema, updateTestResultBodySchema } from '../validation/testResultSchemas';
+
+type CreateTestResultData = z.infer<typeof createTestResultBodySchema>;
+type UpdateTestResultData = z.infer<typeof updateTestResultBodySchema>;
+
+// aggregateTestResults only touches `test_results`, and that field's real shape is a
+// dynamic per-condition/per-class metrics blob (plus "overall"/"inference_time"
+// pseudo-keys) that doesn't line up with ITestResult's declared per-class shape —
+// so it's typed against just what's used here rather than the full Mongoose document.
+export interface TestResultLike {
+  test_results: Record<string, Record<string, unknown>>;
+}
+export interface MetricStat {
+  mean: number;
+  std: number;
+}
+// Depth below the condition/class level is genuinely dynamic (a "car"/"truck"/"overall"
+// key maps to a metric-name→MetricStat dict, while the "inference_time" pseudo-condition
+// maps straight to one) — callers narrow the specific sub-shape they expect.
+export type AggregatedResults = Record<string, Record<string, unknown>>;
 
 interface PaginationOptions {
   page?: number;
@@ -145,12 +166,12 @@ export const testResultService = {
     const epochMap = epochs.reduce((acc, epoch) => {
       acc[epoch.epoch_uuid] = epoch;
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, IEpoch>);
 
     const trainingMap = trainings.reduce((acc, training) => {
-      acc[(training._id as any).toString()] = training;
+      acc[training._id.toString()] = training;
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, ITraining>);
 
     const filteredTestResults = testResults.filter(testResult => {
       const epoch = epochMap[testResult.epoch_uuid];
@@ -262,12 +283,12 @@ export const testResultService = {
     const epochMap = epochs.reduce((acc, epoch) => {
       acc[epoch.epoch_uuid] = epoch;
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, IEpoch>);
 
     const trainingMap = trainings.reduce((acc, training) => {
-      acc[(training._id as any).toString()] = training;
+      acc[training._id.toString()] = training;
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, ITraining>);
 
     const filteredTestResults = testResults.filter(testResult => {
       const epoch = epochMap[testResult.epoch_uuid];
@@ -313,7 +334,7 @@ export const testResultService = {
     };
   },
 
-  async createTestResult(userId: string | undefined, reqProjectId: string | undefined, data: any) {
+  async createTestResult(userId: string | undefined, reqProjectId: string | undefined, data: CreateTestResultData) {
     const { timestamp, epoch, epoch_uuid, test_uuid, test_results } = data;
 
     if (test_uuid) {
@@ -352,7 +373,7 @@ export const testResultService = {
     return savedTestResult;
   },
 
-  async updateTestResult(id: string, userId: string | undefined, reqProjectId: string | undefined, data: any) {
+  async updateTestResult(id: string, userId: string | undefined, reqProjectId: string | undefined, data: UpdateTestResultData) {
     const testResult = await TestResult.findOne({ _id: id, deletedAt: null });
     if (!testResult) throw new NotFoundError('Test result not found');
     if (!(await this.checkTestResultAccess(testResult.epoch_uuid, userId, reqProjectId))) {
@@ -364,7 +385,7 @@ export const testResultService = {
     if (timestamp !== undefined) testResult.timestamp = new Date(timestamp);
     if (epoch !== undefined) testResult.epoch = epoch;
     if (epoch_uuid !== undefined) testResult.epoch_uuid = epoch_uuid;
-    if (test_results !== undefined) testResult.test_results = test_results;
+    if (test_results !== undefined) testResult.test_results = test_results as ITestResult['test_results'];
 
     const updatedTestResult = await testResult.save();
 
@@ -409,12 +430,12 @@ export const testResultService = {
     const epochMap = epochs.reduce((acc, epoch) => {
       acc[epoch.epoch_uuid] = epoch;
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, IEpoch>);
 
     const trainingMap = trainings.reduce((acc, training) => {
-      acc[(training._id as any).toString()] = training;
+      acc[training._id.toString()] = training;
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, ITraining>);
 
     // Silently drop test results whose training's project isn't visible to
     // the caller — comparing arbitrary ids shouldn't leak private-project data.
@@ -431,7 +452,7 @@ export const testResultService = {
       const epoch = epochMap[testResult.epoch_uuid];
       const training = epoch ? trainingMap[epoch.trainingId.toString()] : null;
 
-      const filteredTestResults: any = {};
+      const filteredTestResults: Record<string, Record<string, unknown>> = {};
       Object.keys(testResult.test_results).forEach(condition => {
         if (condition !== 'inference_time') {
           filteredTestResults[condition] = {};
@@ -474,7 +495,7 @@ export const testResultService = {
       classes: (() => {
         const allClasses = new Set<string>();
         comparisonData.forEach(comp => {
-          Object.values(comp.test_results).forEach((conditionData: any) => {
+          Object.values(comp.test_results).forEach((conditionData) => {
             if (conditionData && typeof conditionData === 'object') {
               Object.keys(conditionData).forEach(className => {
                 if (className !== 'inference_time' && !className.startsWith('mean_')) {
@@ -502,9 +523,9 @@ export const testResultService = {
     // Get training details
     const trainings = await Training.find({ _id: { $in: trainingIds }, deletedAt: null });
     const trainingMap = trainings.reduce((acc, training) => {
-      acc[(training._id as any).toString()] = training;
+      acc[training._id.toString()] = training;
       return acc;
-    }, {} as Record<string, any>);
+    }, {} as Record<string, ITraining>);
 
     // Silently drop trainings whose project isn't visible to the caller —
     // comparing arbitrary ids shouldn't leak private-project data.
@@ -568,7 +589,7 @@ export const testResultService = {
     return { comparison: trainingTestResults };
   },
 
-  aggregateTestResults(testResults: any[]) {
+  aggregateTestResults(testResults: TestResultLike[]): AggregatedResults | null {
     if (testResults.length === 0) return null;
 
     const conditions = Object.keys(testResults[0].test_results).filter(condition => condition !== 'inference_time');
@@ -576,7 +597,7 @@ export const testResultService = {
 
     // Collect all classes across all test results
     testResults.forEach(tr => {
-      Object.values(tr.test_results).forEach((conditionData: any) => {
+      Object.values(tr.test_results).forEach((conditionData) => {
         if (conditionData && typeof conditionData === 'object') {
           Object.keys(conditionData).forEach(className => {
             if (className !== 'inference_time' && !className.startsWith('mean_')) {
@@ -588,22 +609,23 @@ export const testResultService = {
     });
 
     const classArray = Array.from(classes).sort();
-    const aggregatedResults: any = {};
+    const aggregatedResults: AggregatedResults = {};
 
     conditions.forEach(condition => {
       aggregatedResults[condition] = {};
 
       classArray.forEach(className => {
         const metrics = ['iou', 'recall', 'precision', 'f1_score', 'ap'];
-        const classMetrics: any = {};
+        const classMetrics: Record<string, MetricStat> = {};
 
         metrics.forEach(metric => {
           const values: number[] = [];
 
           testResults.forEach(tr => {
             const conditionData = tr.test_results[condition];
-            if (conditionData && conditionData[className] && typeof conditionData[className] === 'object') {
-              const value = conditionData[className][metric];
+            const classData = conditionData?.[className];
+            if (classData && typeof classData === 'object') {
+              const value = (classData as Record<string, unknown>)[metric];
               if (typeof value === 'number' && !isNaN(value)) {
                 values.push(value);
               }
@@ -624,15 +646,16 @@ export const testResultService = {
 
       // Aggregate overall metrics
       const overallMetrics = ['mIoU_foreground', 'mean_accuracy', 'fw_iou', 'pixel_accuracy'];
-      const overallData: any = {};
+      const overallData: Record<string, MetricStat> = {};
 
       overallMetrics.forEach(metric => {
         const values: number[] = [];
 
         testResults.forEach(tr => {
           const conditionData = tr.test_results[condition];
-          if (conditionData && conditionData.overall && typeof conditionData.overall === 'object') {
-            const value = conditionData.overall[metric];
+          const overall = conditionData?.overall;
+          if (overall && typeof overall === 'object') {
+            const value = (overall as Record<string, unknown>)[metric];
             if (typeof value === 'number' && !isNaN(value)) {
               values.push(value);
             }
@@ -654,9 +677,10 @@ export const testResultService = {
     // Aggregate inference time
     const inferenceTimes: number[] = [];
     testResults.forEach(tr => {
-      Object.values(tr.test_results).forEach((conditionData: any) => {
-        if (conditionData && conditionData.inference_time && conditionData.inference_time.avg_per_sample_ms) {
-          inferenceTimes.push(conditionData.inference_time.avg_per_sample_ms);
+      Object.values(tr.test_results).forEach((conditionData) => {
+        const inferenceTime = conditionData?.inference_time as { avg_per_sample_ms?: number } | undefined;
+        if (inferenceTime?.avg_per_sample_ms) {
+          inferenceTimes.push(inferenceTime.avg_per_sample_ms);
         }
       });
     });

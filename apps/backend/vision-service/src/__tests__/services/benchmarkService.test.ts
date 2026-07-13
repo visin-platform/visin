@@ -44,6 +44,9 @@ const mockedCheckAccess = checkProjectAccess as jest.Mock;
 const mockedVisibleTrainings = getVisibleTrainingIds as jest.Mock;
 const mockedTokenScope = isWithinTokenScope as jest.Mock;
 
+// Escape hatch for asserting on dynamically-shaped service results in tests;
+// modeling every ad-hoc return shape as an interface here would add noise, not safety.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDoc = Record<string, any>;
 
 const benchmarkDoc = (overrides: AnyDoc = {}): AnyDoc => ({

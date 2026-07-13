@@ -42,6 +42,9 @@ const mockedCheckAccess = checkProjectAccess as jest.Mock;
 const mockedVisibleTrainings = getVisibleTrainingIds as jest.Mock;
 const mockedTokenScope = isWithinTokenScope as jest.Mock;
 
+// Escape hatch for asserting on dynamically-shaped service results in tests;
+// modeling every ad-hoc return shape as an interface here would add noise, not safety.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDoc = Record<string, any>;
 
 const trDoc = (epochUuid: string, overrides: AnyDoc = {}): AnyDoc => ({
@@ -349,7 +352,7 @@ describe('createTestResult', () => {
     mockedTestResult.findOne.mockResolvedValue(trDoc('e1'));
 
     await expect(
-      testResultService.createTestResult('u1', undefined, { test_uuid: 'dup', epoch_uuid: 'e1' })
+      testResultService.createTestResult('u1', undefined, { test_uuid: 'dup', epoch_uuid: 'e1', epoch: 1, test_results: {} })
     ).rejects.toThrow('already exists');
   });
 
@@ -395,7 +398,7 @@ describe('createTestResult', () => {
         epoch: 1,
         epoch_uuid: 'e1',
         test_results: {},
-        timestamp: '2026-01-01',
+        timestamp: new Date('2026-01-01'),
       })
     ).resolves.toBeDefined();
   });
@@ -448,7 +451,7 @@ describe('updateTestResult / deleteTestResult', () => {
     await testResultService.updateTestResult('x', 'u1', undefined, {
       epoch: 9,
       epoch_uuid: 'e2',
-      timestamp: '2026-02-01',
+      timestamp: new Date('2026-02-01'),
       test_results: { night: {} },
     });
 

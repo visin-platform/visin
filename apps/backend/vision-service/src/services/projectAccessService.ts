@@ -53,7 +53,7 @@ export async function isProjectOwner(userId: string | undefined, projectId: stri
 export async function getVisibleProjectIds(userId: string | undefined): Promise<string[]> {
   const query = userId ? { $or: [{ isPublic: true }, { ownerId: userId }] } : { isPublic: true };
   const projects = await Project.find(query).select('_id');
-  return projects.map(p => (p._id as any).toString());
+  return projects.map(p => p._id.toString());
 }
 
 /**
@@ -72,7 +72,7 @@ export async function getVisibleTrainingIds(userId: string | undefined): Promise
       { projectId: null }
     ]
   }).select('_id');
-  return trainings.map(t => (t._id as any).toString());
+  return trainings.map(t => t._id.toString());
 }
 
 /**

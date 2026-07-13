@@ -36,6 +36,7 @@ jest.mock('../../services/projectAccessService', () => ({
 }));
 
 import { trainingService } from '../../services/trainingService';
+import type { TrainingWithMetrics } from '../../services/trainingService';
 import Training from '../../models/Training';
 import Epoch from '../../models/Epoch';
 import TestResult from '../../models/TestResult';
@@ -57,7 +58,7 @@ const mockedAggregated = testResultService.getAggregatedTestResultsByTraining as
 
 const VALID_ID = 'a'.repeat(24);
 
-type AnyDoc = Record<string, any>;
+type AnyDoc = Record<string, unknown>;
 
 const trainingDoc = (id: string, overrides: AnyDoc = {}): AnyDoc => ({
   _id: { toString: () => id },
@@ -114,7 +115,7 @@ describe('getTrainings', () => {
         $or: [{ projectId: { $in: ['p1'] } }, { projectId: { $exists: false } }],
       })
     );
-    expect(result.trainings[0].metrics.totalTime).toBe(7200);
+    expect((result.trainings[0] as TrainingWithMetrics).metrics.totalTime).toBe(7200);
     expect(result.pagination).toEqual({ page: 2, limit: 10, total: 1, pages: 1 });
   });
 
@@ -212,7 +213,7 @@ describe('getTrainings', () => {
 
     const result = await trainingService.getTrainings('u1', {}, {});
 
-    expect(result.trainings[0].metrics).toEqual({
+    expect((result.trainings[0] as TrainingWithMetrics).metrics).toEqual({
       totalTime: 0,
       epochCount: 0,
       maxEpoch: 0,

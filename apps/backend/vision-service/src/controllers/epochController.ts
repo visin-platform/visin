@@ -2,9 +2,12 @@ import { Request, Response } from 'express';
 import { randomUUID as uuidv4 } from 'crypto';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Epoch from '../models/Epoch';
-import Training from '../models/Training';
+import Training, { ITraining } from '../models/Training';
 import { checkProjectAccess, isWithinTokenScope } from '../services/projectAccessService';
-import type { GetEpochsByTrainingQuery } from '../validation/epochSchemas';
+import type { z } from '@visin/backend-core';
+import type { GetEpochsByTrainingQuery, createEpochsBatchBodySchema } from '../validation/epochSchemas';
+
+type CreateEpochsBatchData = z.infer<typeof createEpochsBatchBodySchema>;
 
 // Get epochs for a training
 export const getEpochsByTraining = async (req: Request, res: Response): Promise<void> => {
@@ -211,26 +214,28 @@ export const createEpochFromJson = async (req: Request, res: Response): Promise<
     metadata
   } = req.body;
 
-  let training;
+  let training: ITraining;
   let trainId: string;
   let trainUuid: string;
 
   // If trainingId is provided, look it up by ID
   if (trainingId) {
-    training = await Training.findById(trainingId);
-    if (!training) {
+    const foundTraining = await Training.findById(trainingId);
+    if (!foundTraining) {
       throw new NotFoundError(`Training not found with id: ${trainingId}`);
     }
+    training = foundTraining;
     trainId = trainingId;
-    trainUuid = (training as any).uuid;
+    trainUuid = training.uuid;
   }
   // Otherwise, training_uuid must be provided
   else if (training_uuid) {
-    training = await Training.findOne({ uuid: training_uuid });
-    if (!training) {
+    const foundTraining = await Training.findOne({ uuid: training_uuid });
+    if (!foundTraining) {
       throw new NotFoundError(`Training not found with uuid: ${training_uuid}`);
     }
-    trainId = (training as any)._id.toString();
+    training = foundTraining;
+    trainId = training._id.toString();
     trainUuid = training_uuid;
   }
   // Neither provided
@@ -238,10 +243,10 @@ export const createEpochFromJson = async (req: Request, res: Response): Promise<
     throw new BadRequestError('Either trainingId or training_uuid is required');
   }
 
-  if (!(await checkProjectAccess(req.user?.id, (training as any).projectId))) {
+  if (!(await checkProjectAccess(req.user?.id, training.projectId))) {
     throw new ForbiddenError();
   }
-  if (!isWithinTokenScope(req.projectId, (training as any).projectId)) {
+  if (!isWithinTokenScope(req.projectId, training.projectId)) {
     throw new ForbiddenError('Training does not belong to the token\'s project');
   }
 
@@ -279,10 +284,10 @@ export const createEpochFromJson = async (req: Request, res: Response): Promise<
 
 // Batch create epochs
 export const createEpochsBatch = async (req: Request, res: Response): Promise<void> => {
-  const { epochs } = req.body as { epochs: any[] };
+  const { epochs } = req.body as CreateEpochsBatchData;
 
   // Prepare epochs (shape already validated by the route's zod schema)
-  const preparedEpochs: any[] = epochs.map((epoch: any) => ({
+  const preparedEpochs = epochs.map((epoch) => ({
     ...epoch,
     epoch_uuid: epoch.epoch_uuid || uuidv4(),
     timestamp: epoch.timestamp || new Date()
@@ -291,7 +296,7 @@ export const createEpochsBatch = async (req: Request, res: Response): Promise<vo
   // Verify access to every training referenced in the batch before inserting anything
   const uniqueTrainingIds = [...new Set(preparedEpochs.map(epoch => epoch.trainingId))];
   const trainings = await Training.find({ _id: { $in: uniqueTrainingIds } });
-  const trainingById = new Map(trainings.map(t => [(t._id as any).toString(), t]));
+  const trainingById = new Map(trainings.map(t => [t._id.toString(), t]));
   for (const trainingId of uniqueTrainingIds) {
     const training = trainingById.get(trainingId);
     if (!training || !(await checkProjectAccess(req.user?.id, training.projectId)) || !isWithinTokenScope(req.projectId, training.projectId)) {

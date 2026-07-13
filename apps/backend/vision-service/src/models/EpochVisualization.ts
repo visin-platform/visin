@@ -7,7 +7,7 @@ export interface IEpochVisualization extends Document {
   type: string;
   minioFileId: string;
   uploadedAt: Date;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }

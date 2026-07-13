@@ -6,10 +6,10 @@ export interface IEpoch extends Document {
   epoch_uuid: string;
   epoch: number;
   timestamp: Date;
-  results: any;
+  results: Record<string, unknown>;
   learning_rate?: number;
   epoch_time?: number;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date;

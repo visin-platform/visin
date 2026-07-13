@@ -3,7 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IDatasetAnalysis extends Document {
   dataset: string; // 'waymo', 'zod', etc.
   size?: string; // Human-readable size (e.g., "1.2 GB", "500 MB")
-  data: any; // Dynamic JSON structure
+  data: Record<string, unknown>; // Dynamic JSON structure
   createdAt: Date;
   updatedAt: Date;
 }

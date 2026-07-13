@@ -1,14 +1,29 @@
 import { randomUUID as uuidv4 } from 'crypto';
-import { QueryFilter } from 'mongoose';
+import { QueryFilter, Types } from 'mongoose';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Training, { ITraining } from '../models/Training';
-import Epoch from '../models/Epoch';
+import Epoch, { IEpoch } from '../models/Epoch';
 import TestResult from '../models/TestResult';
-import Benchmark from '../models/Benchmark';
+import Benchmark, { IBenchmark } from '../models/Benchmark';
 import Project from '../models/Project';
 import Comparison from '../models/Comparison';
 import { testResultService } from './testResultService';
 import { checkProjectAccess, getVisibleProjectIds } from './projectAccessService';
+
+interface TrainingMetrics {
+  totalTime: number;
+  epochCount: number;
+  maxEpoch: number;
+  lastEpochTimestamp: Date | null;
+  cpuCost?: number;
+  gpuCost?: number;
+  totalCost?: number;
+}
+export type TrainingWithMetrics = Record<string, unknown> & { metrics: TrainingMetrics };
+type TrainingComparisonItem = Awaited<ReturnType<typeof testResultService.getAggregatedTestResultsByTraining>>['comparison'][number];
+// benchmark.training_id is declared as a plain ObjectId, but these queries populate it
+// with `name`/`uuid` — Mongoose's static types don't reflect .populate() shape changes.
+type PopulatedTrainingRef = Pick<ITraining, '_id' | 'name' | 'uuid'>;
 
 interface PaginationOptions {
   page?: number;
@@ -33,7 +48,7 @@ interface CreateTrainingData {
   tags?: string | string[];
   startTime?: Date;
   endTime?: Date;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   uuid?: string;
 }
 
@@ -46,7 +61,7 @@ interface UpdateTrainingData {
   tags?: string | string[];
   startTime?: Date;
   endTime?: Date;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export const trainingService = {
@@ -136,7 +151,8 @@ export const trainingService = {
       Training.countDocuments(query)
     ]);
 
-    let trainings: any[] = fetchedTrainings;
+    const trainings: ITraining[] = fetchedTrainings;
+    let trainingsOutput: Array<ITraining | TrainingWithMetrics> = trainings;
 
     // Get metrics using aggregation for better performance
     if (trainings.length > 0) {
@@ -179,20 +195,20 @@ export const trainingService = {
       ]);
 
       // Create a map of metrics by training ID
-      const metricsMap = new Map();
+      const metricsMap = new Map<string, TrainingMetrics>();
       metricsAggregation.forEach(item => {
         metricsMap.set(item._id.toString(), item.metrics);
       });
 
       // Add metrics to trainings
-      trainings = trainings.map(training => ({
+      trainingsOutput = trainings.map(training => ({
         ...training.toObject(),
         metrics: metricsMap.get(training._id.toString()) || { totalTime: 0, epochCount: 0, maxEpoch: 0, lastEpochTimestamp: null, cpuCost: 0, gpuCost: 0, totalCost: 0 }
       }));
     }
 
     return {
-      trainings,
+      trainings: trainingsOutput,
       pagination: {
         page: Number(page),
         limit: Number(limit),
@@ -349,7 +365,7 @@ export const trainingService = {
     if (description !== undefined) training.description = description?.trim();
     if (datasetId !== undefined) training.datasetId = datasetId;
     if (configId !== undefined) training.configId = configId;
-    if (status !== undefined) training.status = status as any;
+    if (status !== undefined) training.status = status as ITraining['status'];
     if (tags !== undefined) training.tags = tags ? (Array.isArray(tags) ? tags : [tags]) : [];
     if (startTime !== undefined) training.startTime = startTime;
     if (endTime !== undefined) training.endTime = endTime;
@@ -534,7 +550,7 @@ export const trainingService = {
         trainings.push(training);
       }
     }
-    const foundTrainingIds = trainings.map(t => (t._id as any).toString());
+    const foundTrainingIds = trainings.map(t => t._id.toString());
     const epochs = await Epoch.find({ trainingId: { $in: foundTrainingIds }, deletedAt: null })
       .sort({ trainingId: 1, epoch: 1 });
 
@@ -554,21 +570,22 @@ export const trainingService = {
     }).populate('training_id', 'name uuid');
 
     // Group epochs by training ID
-    const epochsByTraining: Record<string, any[]> = epochs.reduce((acc, epoch) => {
+    const epochsByTraining: Record<string, IEpoch[]> = epochs.reduce((acc, epoch) => {
       const trainingId = epoch.trainingId.toString();
       if (!acc[trainingId]) {
         acc[trainingId] = [];
       }
       acc[trainingId].push(epoch);
       return acc;
-    }, {} as Record<string, any[]>);
+    }, {} as Record<string, IEpoch[]>);
 
     // Group benchmarks by training ID
-    const benchmarksByTraining: Record<string, any[]> = benchmarks.reduce((acc, benchmark) => {
-      let trainingId = null;
-      if (benchmark.training_id && typeof benchmark.training_id === 'object' && benchmark.training_id._id) {
-        trainingId = (benchmark.training_id as any)._id.toString();
-      } else if (benchmark.training_id && typeof benchmark.training_id === 'string') {
+    const benchmarksByTraining: Record<string, IBenchmark[]> = benchmarks.reduce((acc, benchmark) => {
+      let trainingId: string | null = null;
+      const populatedTrainingRef = benchmark.training_id as unknown as PopulatedTrainingRef | Types.ObjectId | string | null;
+      if (populatedTrainingRef && typeof populatedTrainingRef === 'object' && '_id' in populatedTrainingRef) {
+        trainingId = populatedTrainingRef._id.toString();
+      } else if (typeof benchmark.training_id === 'string') {
         trainingId = benchmark.training_id;
       } else {
         // Try to find via epoch_uuid
@@ -577,7 +594,7 @@ export const trainingService = {
           trainingId = epoch.trainingId.toString();
         }
       }
-      
+
       if (trainingId) {
         if (!acc[trainingId]) {
           acc[trainingId] = [];
@@ -585,13 +602,13 @@ export const trainingService = {
         acc[trainingId].push(benchmark);
       }
       return acc;
-    }, {} as Record<string, any[]>);
+    }, {} as Record<string, IBenchmark[]>);
 
     // Calculate comparison data for each training
     const comparisonData = trainings.map(training => {
-      const trainingId = (training._id as any).toString();
+      const trainingId = training._id.toString();
       const trainingEpochs = epochsByTraining[trainingId] || [];
-      const trainingAggregatedResults = aggregatedTestResults.comparison.find((item: any) => 
+      const trainingAggregatedResults: TrainingComparisonItem | undefined = aggregatedTestResults.comparison.find((item) =>
         item.training._id.toString() === trainingId
       );
       let trainingBenchmarks = benchmarksByTraining[trainingId] || [];
@@ -604,7 +621,7 @@ export const trainingService = {
       const lastEpoch = trainingEpochs.length > 0 ? trainingEpochs[trainingEpochs.length - 1] : null;
 
       // Calculate training metrics
-      const totalTime = trainingEpochs.reduce((sum: number, epoch: any) => sum + (epoch.epoch_time || 0), 0);
+      const totalTime = trainingEpochs.reduce((sum, epoch) => sum + (epoch.epoch_time || 0), 0);
       const avgEpochTime = trainingEpochs.length > 0 ? totalTime / trainingEpochs.length : 0;
 
       // Calculate costs (using the same rates as frontend)
@@ -628,7 +645,7 @@ export const trainingService = {
           totalEpochs: trainingEpochs.length,
           totalTime,
           avgEpochTime,
-          maxEpochTime: trainingEpochs.length > 0 ? Math.max(...trainingEpochs.map((e: any) => e.epoch_time || 0)) : 0,
+          maxEpochTime: trainingEpochs.length > 0 ? Math.max(...trainingEpochs.map((e) => e.epoch_time || 0)) : 0,
           cost: {
             totalHours,
             cpuCost,
@@ -641,7 +658,7 @@ export const trainingService = {
           results: lastEpoch.results,
           timestamp: lastEpoch.timestamp
         } : null,
-        epochs: trainingEpochs.map((epoch: any) => ({
+        epochs: trainingEpochs.map((epoch) => ({
           epoch: epoch.epoch,
           results: epoch.results,
           epoch_time: epoch.epoch_time,

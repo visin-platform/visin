@@ -1,6 +1,7 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface ITraining extends Document {
+  _id: Types.ObjectId;
   uuid: string;
   name: string;
   description?: string;
@@ -11,7 +12,7 @@ export interface ITraining extends Document {
   tags?: string[];
   startTime?: Date;
   endTime?: Date;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date;

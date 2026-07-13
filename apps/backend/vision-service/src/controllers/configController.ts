@@ -58,8 +58,8 @@ export const getConfigsByTraining = async (req: Request, res: Response): Promise
   }
 
   // If training has a configId, return that config
-  if ((training as any).configId) {
-    const config = await Config.findById((training as any).configId);
+  if (training.configId) {
+    const config = await Config.findById(training.configId);
     if (config) {
       res.json({
         success: true,

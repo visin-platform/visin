@@ -20,7 +20,7 @@ export interface IDatasetImage extends Document {
   tags: string[];
   labels: string[]; // User quality labels like 'good_annotations', 'bad_annotations'
   weatherCondition?: WeatherCondition; // Weather condition
-  metadata: any;
+  metadata: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }

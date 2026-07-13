@@ -130,7 +130,7 @@ BenchmarkSchema.methods.softDelete = function () {
 };
 
 // Add static method to find non-deleted benchmarks
-BenchmarkSchema.statics.findActive = function (query: any = {}) {
+BenchmarkSchema.statics.findActive = function (query: mongoose.QueryFilter<IBenchmark> = {}) {
   return this.find({ ...query, deletedAt: null });
 };
 

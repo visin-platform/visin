@@ -1,7 +1,7 @@
 import { QueryFilter } from 'mongoose';
 import { ForbiddenError, NotFoundError, logger } from '@visin/backend-core';
 import Benchmark, { IBenchmark } from '../models/Benchmark';
-import Training from '../models/Training';
+import Training, { ITraining } from '../models/Training';
 import { checkProjectAccess, getVisibleTrainingIds, isWithinTokenScope } from './projectAccessService';
 import type { GetBenchmarksQuery, CreateBenchmarkBody, UpdateBenchmarkBody } from '../validation/benchmarkSchemas';
 
@@ -75,7 +75,7 @@ export const getBenchmarks = async (filters: GetBenchmarksQuery, userId: string 
       }).select('name uuid');
 
       trainingMap = new Map(
-        trainings.map(training => [(training._id as any).toString(), training])
+        trainings.map(training => [training._id.toString(), training])
       );
     } catch (populateError) {
       logger.warn('Failed to fetch training data for benchmarks', { error: (populateError as Error).message });
@@ -102,7 +102,9 @@ export const getBenchmarkById = async (id: string, userId: string | undefined): 
     throw new NotFoundError('Benchmark not found');
   }
 
-  const trainingProjectId = (benchmark.training_id as any)?.projectId;
+  // .populate('training_id', ...) replaces the ObjectId with a partial
+  // training doc at runtime — Mongoose's static types don't reflect that.
+  const trainingProjectId = (benchmark.training_id as unknown as Pick<ITraining, 'projectId'> | null)?.projectId;
   if (!(await checkProjectAccess(userId, trainingProjectId))) {
     throw new ForbiddenError();
   }

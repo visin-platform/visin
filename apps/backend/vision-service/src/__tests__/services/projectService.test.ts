@@ -33,6 +33,9 @@ const mockedProject = Project as unknown as jest.Mock & Record<string, jest.Mock
 const mockedTraining = Training as unknown as Record<string, jest.Mock>;
 const mockedBenchmark = Benchmark as unknown as Record<string, jest.Mock>;
 
+// Escape hatch for asserting on dynamically-shaped service results in tests;
+// modeling every ad-hoc return shape as an interface here would add noise, not safety.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDoc = Record<string, any>;
 
 const projectDoc = (overrides: AnyDoc = {}): AnyDoc => ({

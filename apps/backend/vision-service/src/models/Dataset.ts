@@ -5,11 +5,11 @@ export interface IDataset extends Document {
   name: string;
   description?: string;
   timestamp: Date;
-  dataset_info?: any;
-  annotations?: any;
-  camera?: any;
-  lidar?: any;
-  metadata?: any;
+  dataset_info?: Record<string, unknown>;
+  annotations?: Record<string, unknown>;
+  camera?: Record<string, unknown>;
+  lidar?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   downloadUrl?: string;
   createdAt: Date;
   updatedAt: Date;

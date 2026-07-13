@@ -3,9 +3,9 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IConfig extends Document {
   config_uuid: string;
   summary: string;
-  config_data: any;
+  config_data: Record<string, unknown>;
   config_name?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }

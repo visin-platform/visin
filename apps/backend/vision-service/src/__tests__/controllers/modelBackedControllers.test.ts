@@ -96,7 +96,7 @@ const mockedLabelingStats = getLabelingStats as jest.Mock;
 const mockedGetSignedUrl = getSignedUrl as jest.Mock;
 const mockedIsOwner = isProjectOwner as jest.Mock;
 
-type AnyDoc = Record<string, any>;
+type AnyDoc = Record<string, unknown>;
 
 type MockRes = Response & { json: jest.Mock; status: jest.Mock };
 

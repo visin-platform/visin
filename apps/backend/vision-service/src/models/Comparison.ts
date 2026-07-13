@@ -7,7 +7,7 @@ export interface IComparison extends Document {
   type: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
   itemIds: string[]; // Array of IDs to compare (training IDs, test IDs, etc.)
   projectId?: string; // Project this comparison belongs to (optional for global comparisons)
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date;

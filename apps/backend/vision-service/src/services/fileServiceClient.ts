@@ -28,6 +28,40 @@ export interface FileUploadResult {
   etag: string;
 }
 
+export interface FileMetadata {
+  size: number;
+  lastModified: string;
+  etag: string;
+  contentType: string;
+  metadata: Record<string, unknown>;
+}
+
+interface UploadFileResponse {
+  fileId: string;
+}
+
+interface DownloadUrlResponse {
+  success: boolean;
+  data?: { downloadUrl: string; expiresMs: number };
+}
+
+interface UploadUrlResponse {
+  success: boolean;
+  data?: { uploadUrl: string };
+}
+
+interface DeleteFolderResponse {
+  count?: number;
+}
+
+interface FileMetadataResponse {
+  data: { size: number; lastModified: string };
+}
+
+interface ListFilesResponse {
+  data?: unknown[];
+}
+
 /**
  * Generate a secure file ID for storage with organized folder structure
  */
@@ -117,7 +151,7 @@ export const uploadFile = async (
       throw new Error(`Upload failed with status ${response.status}`);
     }
 
-    const result = await response.json() as any;
+    const result = await response.json() as UploadFileResponse;
 
     logger.info('File uploaded successfully', { fileId, bucket: 'vision', size });
 
@@ -169,7 +203,7 @@ export const getSignedUrl = async (
       throw new Error(`Failed to generate signed URL with status ${response.status}`);
     }
 
-    const data = await response.json() as any;
+    const data = await response.json() as DownloadUrlResponse;
 
     if (!data.success || !data.data) {
       throw new Error('Invalid response from file-service');
@@ -242,7 +276,7 @@ export const getUploadSignedUrl = async (
       throw new Error(`Failed to generate upload URL with status ${response.status}`);
     }
 
-    const data = await response.json() as any;
+    const data = await response.json() as UploadUrlResponse;
 
     if (!data.success || !data.data) {
       throw new Error('Invalid response from file-service');
@@ -299,7 +333,7 @@ export const deleteFolder = async (folderPrefix: string): Promise<boolean> => {
       throw new Error(`Delete folder failed with status ${response.status}`);
     }
 
-    const data = await response.json() as any;
+    const data = await response.json() as DeleteFolderResponse;
 
     logger.info('Folder deleted successfully', { folderPrefix, count: data.count || 0 });
 
@@ -331,7 +365,7 @@ export const fileExists = async (fileId: string): Promise<boolean> => {
 /**
  * Get file metadata
  */
-export const getFileMetadata = async (fileId: string): Promise<any> => {
+export const getFileMetadata = async (fileId: string): Promise<FileMetadata> => {
   try {
     const response = await fetch(`${FILE_SERVICE_URL()}/internal/meta/${fileId}`, {
       method: 'GET',
@@ -344,7 +378,7 @@ export const getFileMetadata = async (fileId: string): Promise<any> => {
       throw new Error('File not found');
     }
 
-    const data = await response.json() as any;
+    const data = await response.json() as FileMetadataResponse;
 
     return {
       size: data.data.size,
@@ -362,7 +396,7 @@ export const getFileMetadata = async (fileId: string): Promise<any> => {
 /**
  * List files with optional prefix
  */
-export const listFiles = async (prefix?: string, maxKeys: number = 1000) => {
+export const listFiles = async (prefix?: string, maxKeys: number = 1000): Promise<unknown[]> => {
   try {
     const params = new URLSearchParams();
     if (prefix) params.append('prefix', prefix);
@@ -382,7 +416,7 @@ export const listFiles = async (prefix?: string, maxKeys: number = 1000) => {
       throw new Error('Failed to list files');
     }
 
-    const data = await response.json() as any;
+    const data = await response.json() as ListFilesResponse;
 
     return data.data || [];
   } catch (error) {
