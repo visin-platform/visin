@@ -15,7 +15,7 @@ export interface CreateConfigProviderOptions<T> {
   loadingFallback?: ReactNode;
 }
 
-export function createConfigProvider<T extends Record<string, any>>(options: CreateConfigProviderOptions<T>) {
+export function createConfigProvider<T>(options: CreateConfigProviderOptions<T>) {
   const {
     createDevConfig,
     isDev,
