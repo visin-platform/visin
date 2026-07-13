@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.109](https://github.com/visin-platform/visin-monorepo/compare/v0.0.108...v0.0.109) (2026-07-13)
+
+
+### Features
+
+* setup tests with over 90% coverage ([2a03e2f](https://github.com/visin-platform/visin-monorepo/commit/2a03e2fe326db0e5f194f3e1dd19fd27d66c2b54))
+
 ### [0.0.108](https://github.com/visin-platform/visin-monorepo/compare/v0.0.107...v0.0.108) (2026-07-06)
 
 
