@@ -3,7 +3,6 @@ export * from './systemInfo';
 export * from './training';
 export * from './epoch';
 export * from './config';
-export * from './dataset';
 export * from './testResult';
 export * from './benchmark';
 export * from './visualization';

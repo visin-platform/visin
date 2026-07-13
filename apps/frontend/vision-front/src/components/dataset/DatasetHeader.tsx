@@ -9,9 +9,10 @@ import {
   Refresh as RefreshIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
+import { DatasetAnalysis } from '../../services/analysisService';
 
 interface DatasetHeaderProps {
-  analysis: any;
+  analysis: DatasetAnalysis;
   imagesCount: number;
   isLoading: boolean;
   onRefresh: () => void;

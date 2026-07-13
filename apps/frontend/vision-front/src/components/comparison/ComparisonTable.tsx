@@ -155,7 +155,7 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
   const generateDetailedComparisonLatex = (decimals: number = 2, multiplier: number = 100) => {
     // Sort trainings by top 10 validation mIoU average (descending)
     const sortedData = [...comparisonData].sort((a, b) => {
-      const getTop10Avg = (comp: any) => {
+      const getTop10Avg = (comp: TrainingComparison) => {
         const vmIoUs = comp.epochs
           .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
           .filter((vmIoU: number | undefined) => vmIoU !== undefined)

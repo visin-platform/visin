@@ -27,13 +27,13 @@ export const benchmarkService = {
     order?: 'asc' | 'desc';
   }): Promise<BenchmarksPaginatedResponse> {
     const response = await visionApi.get('/benchmarks', { params });
-    return response.data;
+    return response.data as BenchmarksPaginatedResponse;
   },
 
   // Get benchmark by ID
   async getBenchmarkById(id: string): Promise<ApiResponse<Benchmark>> {
     const response = await visionApi.get(`/benchmarks/${id}`);
-    return response.data;
+    return response.data as ApiResponse<Benchmark>;
   },
 
   // Get benchmark statistics
@@ -41,30 +41,30 @@ export const benchmarkService = {
     training_uuid?: string;
   }): Promise<ApiResponse<BenchmarkStats>> {
     const response = await visionApi.get('/benchmarks/stats', { params });
-    return response.data;
+    return response.data as ApiResponse<BenchmarkStats>;
   },
 
   // Create benchmark
   async createBenchmark(benchmarkData: CreateBenchmarkData): Promise<ApiResponse<Benchmark>> {
     const response = await visionApi.post('/benchmarks', benchmarkData);
-    return response.data;
+    return response.data as ApiResponse<Benchmark>;
   },
 
   // Upload benchmark from JSON file
-  async uploadBenchmark(benchmarkData: any): Promise<ApiResponse<Benchmark>> {
+  async uploadBenchmark(benchmarkData: CreateBenchmarkData): Promise<ApiResponse<Benchmark>> {
     const response = await visionApi.post('/benchmarks/upload', benchmarkData);
-    return response.data;
+    return response.data as ApiResponse<Benchmark>;
   },
 
   // Update benchmark
   async updateBenchmark(id: string, benchmarkData: Partial<CreateBenchmarkData>): Promise<ApiResponse<Benchmark>> {
     const response = await visionApi.put(`/benchmarks/${id}`, benchmarkData);
-    return response.data;
+    return response.data as ApiResponse<Benchmark>;
   },
 
   // Delete benchmark
   async deleteBenchmark(id: string): Promise<ApiResponse<void>> {
     const response = await visionApi.delete(`/benchmarks/${id}`);
-    return response.data;
+    return response.data as ApiResponse<void>;
   }
 };

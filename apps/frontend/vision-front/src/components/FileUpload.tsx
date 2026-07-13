@@ -121,7 +121,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
           await uploadFileToSignedUrl(signedUrlResponse.uploadUrl, file);
 
           // Create dataset image record in vision service with minioFileId
-          const imageData: any = {
+          const imageData: Parameters<typeof createDatasetImage>[0] = {
             filename: file.name,
             originalName: file.name,
             minioFileId: signedUrlResponse.minioFileId,

@@ -4,7 +4,7 @@ import {
   CreateTrainingData,
   TrainingWithEpochs,
   ApiResponse,
-  PaginatedResponse,
+  TrainingsPaginatedResponse,
   TrainingComparisonResponse
 } from '../types';
 
@@ -35,21 +35,21 @@ export const trainingService = {
     tags?: string[];
     sortBy?: string;
     order?: 'asc' | 'desc';
-  }): Promise<PaginatedResponse<Training>> {
+  }): Promise<TrainingsPaginatedResponse> {
     const response = await visionApi.get('/trainings', { params });
-    return response.data;
+    return response.data as TrainingsPaginatedResponse;
   },
 
   // Get training by ID
   async getTrainingById(id: string): Promise<ApiResponse<Training>> {
     const response = await visionApi.get(`/trainings/${id}`);
-    return response.data;
+    return response.data as ApiResponse<Training>;
   },
 
   // Get training by UUID
   async getTrainingByUuid(uuid: string): Promise<ApiResponse<Training>> {
     const response = await visionApi.get(`/trainings/uuid/${uuid}`);
-    return response.data;
+    return response.data as ApiResponse<Training>;
   },
 
   // Get training with all epochs
@@ -58,7 +58,7 @@ export const trainingService = {
     order?: 'asc' | 'desc';
   }): Promise<ApiResponse<TrainingWithEpochs>> {
     const response = await visionApi.get(`/trainings/${id}/epochs`, { params });
-    return response.data;
+    return response.data as ApiResponse<TrainingWithEpochs>;
   },
 
   // Get training statistics
@@ -69,30 +69,30 @@ export const trainingService = {
     tags?: string[];
   }): Promise<ApiResponse<TrainingStats>> {
     const response = await visionApi.get('/trainings/stats', { params });
-    return response.data;
+    return response.data as ApiResponse<TrainingStats>;
   },
 
   // Compare multiple trainings
   async compareTrainings(trainingIds: string[]): Promise<ApiResponse<TrainingComparisonResponse>> {
     const response = await visionApi.post('/trainings/compare', { trainingIds });
-    return response.data;
+    return response.data as ApiResponse<TrainingComparisonResponse>;
   },
 
   // Create training
   async createTraining(trainingData: CreateTrainingData): Promise<ApiResponse<Training>> {
     const response = await visionApi.post('/trainings', trainingData);
-    return response.data;
+    return response.data as ApiResponse<Training>;
   },
 
   // Update training
   async updateTraining(id: string, trainingData: Partial<CreateTrainingData>): Promise<ApiResponse<Training>> {
     const response = await visionApi.put(`/trainings/${id}`, trainingData);
-    return response.data;
+    return response.data as ApiResponse<Training>;
   },
 
   // Delete training
   async deleteTraining(id: string): Promise<ApiResponse<void>> {
     const response = await visionApi.delete(`/trainings/${id}`);
-    return response.data;
+    return response.data as ApiResponse<void>;
   }
 };

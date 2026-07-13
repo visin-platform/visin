@@ -42,7 +42,7 @@ export interface BenchmarkResult {
   batch_size?: number;
   warmup_iterations?: number;
   benchmark_iterations?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Benchmark {

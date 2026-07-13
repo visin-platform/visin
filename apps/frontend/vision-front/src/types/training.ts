@@ -13,7 +13,7 @@ export interface Training {
   tags?: string[];
   startTime?: string;
   endTime?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   metrics?: {
@@ -38,7 +38,7 @@ export interface CreateTrainingData {
   tags?: string[];
   startTime?: string;
   endTime?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TrainingsPaginatedResponse extends PaginatedResponse<Training> {

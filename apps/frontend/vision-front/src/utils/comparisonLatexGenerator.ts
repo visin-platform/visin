@@ -1,4 +1,4 @@
-import { TrainingComparison, ComparisonEpoch } from '@/types';
+import { TrainingComparison, ComparisonEpoch, EpochMetrics } from '@/types';
 
 export const formatTime = (seconds: number) => {
   if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -7,7 +7,7 @@ export const formatTime = (seconds: number) => {
   return `${(seconds / 86400).toFixed(1)}d`;
 };
 
-export const formatNumber = (value: any, decimals: number = 2, multiplier: number = 100): string => {
+export const formatNumber = (value: number | undefined, decimals: number = 2, multiplier: number = 100): string => {
   if (typeof value === 'number' && !isNaN(value)) {
     return (value * multiplier).toFixed(decimals);
   }
@@ -202,25 +202,25 @@ export const generateLatexTable = (
           iou: Math.max(...comparisonData.map(comp => {
             const selectedEpochData = getSelectedEpochData(comp.training._id);
             const valResults = selectedEpochData?.results?.val;
-            const classMetrics = valResults?.[className] as any;
+            const classMetrics = valResults?.[className] as EpochMetrics | undefined;
             return classMetrics?.iou ?? -Infinity;
           })),
           precision: Math.max(...comparisonData.map(comp => {
             const selectedEpochData = getSelectedEpochData(comp.training._id);
             const valResults = selectedEpochData?.results?.val;
-            const classMetrics = valResults?.[className] as any;
+            const classMetrics = valResults?.[className] as EpochMetrics | undefined;
             return classMetrics?.precision ?? -Infinity;
           })),
           recall: Math.max(...comparisonData.map(comp => {
             const selectedEpochData = getSelectedEpochData(comp.training._id);
             const valResults = selectedEpochData?.results?.val;
-            const classMetrics = valResults?.[className] as any;
+            const classMetrics = valResults?.[className] as EpochMetrics | undefined;
             return classMetrics?.recall ?? -Infinity;
           })),
           f1: Math.max(...comparisonData.map(comp => {
             const selectedEpochData = getSelectedEpochData(comp.training._id);
             const valResults = selectedEpochData?.results?.val;
-            const classMetrics = valResults?.[className] as any;
+            const classMetrics = valResults?.[className] as EpochMetrics | undefined;
             return classMetrics?.f1 ?? -Infinity;
           }))
         };
@@ -229,7 +229,7 @@ export const generateLatexTable = (
         comparisonData.forEach(comp => {
           const selectedEpochData = getSelectedEpochData(comp.training._id);
           const valResults = selectedEpochData?.results?.val;
-          const classMetrics = valResults?.[className] as any;
+          const classMetrics = valResults?.[className] as EpochMetrics | undefined;
           const iou = classMetrics?.iou;
           const precision = classMetrics?.precision;
           const recall = classMetrics?.recall;

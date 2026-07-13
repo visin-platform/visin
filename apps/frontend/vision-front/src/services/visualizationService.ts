@@ -5,7 +5,7 @@ import {
   VisualizationUploadUrlRequest,
   VisualizationUploadUrlResponse,
   ApiResponse,
-  PaginatedResponse,
+  VisualizationsPaginatedResponse,
   VisualizationsGroupedResponse
 } from '../types';
 
@@ -13,7 +13,7 @@ export const visualizationService = {
   // Get upload URL for visualization
   async getUploadUrl(data: VisualizationUploadUrlRequest): Promise<ApiResponse<VisualizationUploadUrlResponse>> {
     const response = await visionApi.post('/visualizations/upload-url', data);
-    return response.data;
+    return response.data as ApiResponse<VisualizationUploadUrlResponse>;
   },
 
   // Upload file to MinIO using signed URL
@@ -30,7 +30,7 @@ export const visualizationService = {
   // Create visualization record after upload
   async createVisualization(data: CreateVisualizationData): Promise<ApiResponse<Visualization>> {
     const response = await visionApi.post('/visualizations', data);
-    return response.data;
+    return response.data as ApiResponse<Visualization>;
   },
 
   // Complete upload process (get URL, upload file, create record)
@@ -38,7 +38,7 @@ export const visualizationService = {
     epoch_uuid: string,
     file: File,
     type: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): Promise<ApiResponse<Visualization>> {
     // Step 1: Get upload URL
     const uploadUrlResponse = await this.getUploadUrl({
@@ -73,7 +73,7 @@ export const visualizationService = {
   }>> {
     const params = type ? { type } : {};
     const response = await visionApi.get(`/visualizations/epoch/${epoch_uuid}`, { params });
-    return response.data;
+    return response.data as ApiResponse<{ visualizations: Visualization[]; total: number; }>;
   },
 
   // Get visualizations by training UUID
@@ -86,31 +86,31 @@ export const visualizationService = {
       projectId?: string;
       includeUrls?: boolean;
     }
-  ): Promise<PaginatedResponse<Visualization> | ApiResponse<VisualizationsGroupedResponse>> {
-    const endpoint = training_uuid && training_uuid.trim() !== '' 
+  ): Promise<VisualizationsPaginatedResponse | ApiResponse<VisualizationsGroupedResponse>> {
+    const endpoint = training_uuid && training_uuid.trim() !== ''
       ? `/visualizations/training/${training_uuid}`
       : `/visualizations/training`;
-    
+
     // Convert includeUrls boolean to string for query parameter
-    const queryParams: any = params ? { ...params } : {};
+    const queryParams: Record<string, unknown> = params ? { ...params } : {};
     if (queryParams.includeUrls !== undefined) {
-      queryParams.includeUrls = queryParams.includeUrls.toString();
+      queryParams.includeUrls = String(queryParams.includeUrls);
     }
-    
+
     const response = await visionApi.get(endpoint, { params: queryParams });
-    return response.data;
+    return response.data as VisualizationsPaginatedResponse | ApiResponse<VisualizationsGroupedResponse>;
   },
 
   // Get visualization by UUID
   async getVisualizationByUuid(visualization_uuid: string): Promise<ApiResponse<Visualization>> {
     const response = await visionApi.get(`/visualizations/${visualization_uuid}`);
-    return response.data;
+    return response.data as ApiResponse<Visualization>;
   },
 
   // Delete visualization
   async deleteVisualization(visualization_uuid: string): Promise<ApiResponse<void>> {
     const response = await visionApi.delete(`/visualizations/${visualization_uuid}`);
-    return response.data;
+    return response.data as ApiResponse<void>;
   },
 
   // Get all visualization types
@@ -119,6 +119,6 @@ export const visualizationService = {
     epoch_uuid?: string;
   }): Promise<ApiResponse<{ types: string[] }>> {
     const response = await visionApi.get('/visualizations/types', { params });
-    return response.data;
+    return response.data as ApiResponse<{ types: string[]; }>;
   }
 };

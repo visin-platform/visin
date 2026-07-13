@@ -1,4 +1,5 @@
 import { visionApi } from '../config/visionApi';
+import { ApiResponse } from '../types';
 
 export type WeatherCondition = 'day_fair' | 'night_fair' | 'day_rain' | 'night_rain' | 'snow';
 
@@ -19,7 +20,7 @@ export interface DatasetImage {
   tags: string[];
   labels: string[];
   weatherCondition?: WeatherCondition;
-  metadata: any;
+  metadata: Record<string, unknown>;
   signedUrl?: string;
   signedUrlExpiresAt?: string;
   signedUrlExpiresInMinutes?: number;
@@ -64,7 +65,7 @@ export const getAllImages = async (
       weatherCondition
     }
   });
-  return response.data;
+  return response.data as DatasetImagesResponse;
 };
 
 /**
@@ -84,7 +85,7 @@ export const getImagesByDataset = async (
   const response = await visionApi.get(`/dataset-images/dataset/${datasetId}`, {
     params: { page, limit, search, categoryId, tags, weatherCondition, sortBy, sortOrder }
   });
-  return response.data;
+  return response.data as DatasetImagesResponse;
 };
 
 /**
@@ -101,7 +102,7 @@ export const getImagesByCategory = async (
   const response = await visionApi.get(`/dataset-images/dataset/${datasetId}/category/${categoryId}`, {
     params: { page, limit, search, labels: labels && labels.length > 0 ? labels.join(',') : undefined }
   });
-  return response.data;
+  return response.data as DatasetImagesResponse;
 };
 
 /**
@@ -109,7 +110,7 @@ export const getImagesByCategory = async (
  */
 export const getImageById = async (id: string): Promise<DatasetImage> => {
   const response = await visionApi.get(`/dataset-images/${id}`);
-  return response.data.data;
+  return (response.data as ApiResponse<DatasetImage>).data;
 };
 
 /**
@@ -130,10 +131,10 @@ export const createDatasetImage = async (imageData: {
   tags?: string[];
   labels?: string[];
   weatherCondition?: WeatherCondition;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }): Promise<DatasetImage> => {
   const response = await visionApi.post('/dataset-images', imageData);
-  return response.data.data;
+  return (response.data as ApiResponse<DatasetImage>).data;
 };
 
 /**
@@ -148,11 +149,11 @@ export const updateDatasetImage = async (
     labels?: string[];
     categoryId?: string;
     weatherCondition?: WeatherCondition;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   }
 ): Promise<DatasetImage> => {
   const response = await visionApi.put(`/dataset-images/${id}`, updateData);
-  return response.data.data;
+  return (response.data as ApiResponse<DatasetImage>).data;
 };
 
 /**
@@ -162,6 +163,14 @@ export const deleteDatasetImage = async (id: string): Promise<void> => {
   await visionApi.delete(`/dataset-images/${id}`);
 };
 
+interface UploadSignedUrlResult {
+  uploadUrl: string;
+  minioFileId: string;
+  datasetId: string;
+  categoryId?: string;
+  expiresInMinutes: number;
+}
+
 /**
  * Get upload signed URL for direct client upload
  */
@@ -170,15 +179,9 @@ export const getUploadSignedUrl = async (data: {
   mimetype: string;
   datasetId: string;
   categoryId?: string;
-}): Promise<{
-  uploadUrl: string;
-  minioFileId: string;
-  datasetId: string;
-  categoryId?: string;
-  expiresInMinutes: number;
-}> => {
+}): Promise<UploadSignedUrlResult> => {
   const response = await visionApi.post('/dataset-images/upload-url', data);
-  return response.data.data;
+  return (response.data as ApiResponse<UploadSignedUrlResult>).data;
 };
 
 /**
@@ -203,10 +206,7 @@ export const uploadFileToSignedUrl = async (signedUrl: string, file: File): Prom
   }
 };
 
-/**
- * Get labeling statistics for all images (efficient aggregation)
- */
-export const getLabelingStats = async (): Promise<{
+interface LabelingStats {
   total: number;
   good: number;
   bad: number;
@@ -214,7 +214,12 @@ export const getLabelingStats = async (): Promise<{
   goodPercentage: number;
   badPercentage: number;
   unlabeledPercentage: number;
-}> => {
+}
+
+/**
+ * Get labeling statistics for all images (efficient aggregation)
+ */
+export const getLabelingStats = async (): Promise<LabelingStats> => {
   const response = await visionApi.get('/datasets/labeling-stats');
-  return response.data.data;
+  return (response.data as ApiResponse<LabelingStats>).data;
 };

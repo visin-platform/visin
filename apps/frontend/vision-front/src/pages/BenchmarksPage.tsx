@@ -107,7 +107,7 @@ const BenchmarksPage: React.FC = () => {
 
   const handleRowClick = (benchmark: Benchmark) => {
     if (benchmark.training_id && typeof benchmark.training_id === 'object' && '_id' in benchmark.training_id) {
-      navigate(`/trainings/${(benchmark.training_id as any)._id}?tab=benchmarks`);
+      navigate(`/trainings/${benchmark.training_id._id}?tab=benchmarks`);
     }
   };
 

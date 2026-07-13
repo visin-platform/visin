@@ -3,6 +3,23 @@ import { Paper, Typography, Box } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
 import { Epoch } from '../types';
 
+// A further dynamic sub-structure not modeled by EpochConditionResults —
+// present only when the training pipeline computed calibration/margin stats.
+interface MathMetrics {
+  ece?: number;
+  overall_margin?: number;
+  overall_variance?: number;
+  bin_accuracies?: number[];
+  bin_confidences?: number[];
+  margins_per_class?: Record<string, number>;
+  variance_per_class?: Record<string, number>;
+}
+
+interface ValResultsWithMathMetrics {
+  standard_iou?: number;
+  math_metrics?: MathMetrics;
+}
+
 interface TrainingOtherMetricsTabProps {
   epochs: Epoch[];
 }
@@ -24,44 +41,44 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
 
   // Extract math_metrics data
   const eceData = epochs.map(epoch => {
-    const mathMetrics = epoch.results?.val?.math_metrics as any;
+    const mathMetrics = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics;
     return mathMetrics?.ece ?? null;
   });
 
   const standardIouData = epochs.map(epoch => {
-    const valResults = epoch.results?.val as any;
+    const valResults = epoch.results?.val as ValResultsWithMathMetrics | undefined;
     return valResults?.standard_iou ?? null;
   });
 
   const overallMarginData = epochs.map(epoch => {
-    const mathMetrics = epoch.results?.val?.math_metrics as any;
+    const mathMetrics = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics;
     return mathMetrics?.overall_margin ?? null;
   });
 
   const overallVarianceData = epochs.map(epoch => {
-    const mathMetrics = epoch.results?.val?.math_metrics as any;
+    const mathMetrics = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics;
     return mathMetrics?.overall_variance ?? null;
   });
 
   // Extract bin accuracies and confidences
   const binAccuraciesData = epochs.map(epoch => {
-    const mathMetrics = epoch.results?.val?.math_metrics as any;
+    const mathMetrics = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics;
     return mathMetrics?.bin_accuracies || [];
   });
 
   const binConfidencesData = epochs.map(epoch => {
-    const mathMetrics = epoch.results?.val?.math_metrics as any;
+    const mathMetrics = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics;
     return mathMetrics?.bin_confidences || [];
   });
 
   // Extract margins and variances per class
   const marginsPerClassData = epochs.map(epoch => {
-    const mathMetrics = epoch.results?.val?.math_metrics as any;
+    const mathMetrics = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics;
     return mathMetrics?.margins_per_class || {};
   });
 
   const variancesPerClassData = epochs.map(epoch => {
-    const mathMetrics = epoch.results?.val?.math_metrics as any;
+    const mathMetrics = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics;
     return mathMetrics?.variance_per_class || {};
   });
 
@@ -246,7 +263,7 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
               series={binAccuraciesData[0]?.map((_: number, binIndex: number) => ({
                 data: epochs.map(epoch => {
-                  const bins = (epoch.results?.val?.math_metrics as any)?.bin_accuracies;
+                  const bins = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics?.bin_accuracies;
                   return bins && bins[binIndex] !== undefined ? bins[binIndex] : null;
                 }),
                 label: `Bin ${binIndex + 1}`,
@@ -288,7 +305,7 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
               series={binConfidencesData[0]?.map((_: number, binIndex: number) => ({
                 data: epochs.map(epoch => {
-                  const bins = (epoch.results?.val?.math_metrics as any)?.bin_confidences;
+                  const bins = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics?.bin_confidences;
                   return bins && bins[binIndex] !== undefined ? bins[binIndex] : null;
                 }),
                 label: `Bin ${binIndex + 1}`,
@@ -330,7 +347,7 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
               series={classesArray.map((className, index) => ({
                 data: epochs.map(epoch => {
-                  const margins = (epoch.results?.val?.math_metrics as any)?.margins_per_class;
+                  const margins = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics?.margins_per_class;
                   return margins && margins[className] !== undefined ? margins[className] : null;
                 }),
                 label: `Class ${className}`,
@@ -372,7 +389,7 @@ const TrainingOtherMetricsTab: React.FC<TrainingOtherMetricsTabProps> = ({ epoch
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
               series={classesArray.map((className, index) => ({
                 data: epochs.map(epoch => {
-                  const variances = (epoch.results?.val?.math_metrics as any)?.variance_per_class;
+                  const variances = (epoch.results?.val as ValResultsWithMathMetrics | undefined)?.math_metrics?.variance_per_class;
                   return variances && variances[className] !== undefined ? variances[className] : null;
                 }),
                 label: `Class ${className}`,

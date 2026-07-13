@@ -17,7 +17,7 @@ import {
   alpha
 } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
-import { Training, Epoch } from '../types';
+import { Training, Epoch, EpochConditionResults, EpochMetrics } from '../types';
 import ClassIoUOverEpochsChart from '../components/ClassIoUOverEpochsChart';
 import LossChart from '../components/LossChart';
 import MIoUChart from '../components/MIoUChart';
@@ -49,8 +49,8 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
   const lastEpoch = epochs[epochs.length - 1];
   const classMetrics = lastEpoch?.results?.metrics?.per_class || {};
   const epochNumbers = epochs.map(e => e.epoch);
-  const trainStandardIoU = epochs.map(e => e.results?.train_standard?.mean_iou ?? null);
-  const valStandardIoU = epochs.map(e => e.results?.val_standard?.mean_iou ?? null);
+  const trainStandardIoU = epochs.map(e => (e.results?.train_standard as EpochConditionResults | undefined)?.mean_iou ?? null);
+  const valStandardIoU = epochs.map(e => (e.results?.val_standard as EpochConditionResults | undefined)?.mean_iou ?? null);
 
   return (
     <Box>
@@ -455,7 +455,7 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {Object.entries(classMetrics).map(([className, metrics]: [string, any]) => (
+                        {Object.entries(classMetrics).map(([className, metrics]: [string, EpochMetrics]) => (
                           <TableRow key={className} hover>
                             <TableCell component="th" scope="row" sx={{ fontWeight: 500 }}>
                               {className}

@@ -3,6 +3,17 @@ import { Paper, Box, Typography } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
 import { Epoch } from '../types';
 
+// Unlike the other Class*Chart components, AP may come through either as a raw
+// number (per-epoch training metrics) or as an aggregated {mean, std} stat
+// (test-result comparisons).
+interface APMetric {
+  ap?: number | { mean: number; std: number };
+}
+
+/** Unwraps an aggregated {mean, std} stat down to its mean, passing raw numbers through. */
+const toApNumber = (value: number | { mean: number; std: number } | undefined): number | undefined =>
+  typeof value === 'object' ? value.mean : value;
+
 interface ClassAPChartProps {
   epochs: Epoch[];
 }
@@ -20,18 +31,18 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
 
   epochs.forEach(epoch => {
     // Try validation results first
-    const valResults = epoch.results?.val as Record<string, any> || {};
+    const valResults = (epoch.results?.val || {}) as Record<string, APMetric>;
     Object.keys(valResults).forEach(key => {
-      if (!EXCLUDED_KEYS.has(key) && (valResults[key]?.ap !== undefined || valResults[key]?.ap?.mean !== undefined)) {
+      if (!EXCLUDED_KEYS.has(key) && toApNumber(valResults[key]?.ap) !== undefined) {
         allClasses.add(key);
       }
     });
 
     // If no classes found in val, try train
     if (allClasses.size === 0) {
-      const trainResults = epoch.results?.train as Record<string, any> || {};
+      const trainResults = (epoch.results?.train || {}) as Record<string, APMetric>;
       Object.keys(trainResults).forEach(key => {
-        if (!EXCLUDED_KEYS.has(key) && (trainResults[key]?.ap !== undefined || trainResults[key]?.ap?.mean !== undefined)) {
+        if (!EXCLUDED_KEYS.has(key) && toApNumber(trainResults[key]?.ap) !== undefined) {
           allClasses.add(key);
         }
       });
@@ -39,15 +50,15 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
 
     // Try per_class structure as fallback
     if (allClasses.size === 0) {
-      let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+      let perClass = (epoch.results?.val?.per_class || {}) as Record<string, APMetric>;
       if (Object.keys(perClass).length === 0) {
-        perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+        perClass = (epoch.results?.train?.per_class || {}) as Record<string, APMetric>;
       }
       if (Object.keys(perClass).length === 0) {
-        perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+        perClass = (epoch.results?.metrics?.per_class || {}) as Record<string, APMetric>;
       }
       Object.keys(perClass).forEach(key => {
-        if (perClass[key]?.ap !== undefined || perClass[key]?.ap?.mean !== undefined) {
+        if (toApNumber(perClass[key]?.ap) !== undefined) {
           allClasses.add(key);
         }
       });
@@ -95,34 +106,29 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
     return classList.map((className, index) => {
       const classAPData = epochs.map(epoch => {
         // Try validation results first
-        const valResults = epoch.results?.val as Record<string, any> || {};
-        let apValue = valResults[className]?.ap;
-        if (apValue?.mean !== undefined) apValue = apValue.mean;
+        const valResults = (epoch.results?.val || {}) as Record<string, APMetric>;
+        let apValue = toApNumber(valResults[className]?.ap);
 
         // Try training results if val doesn't have it
         if (apValue === undefined) {
-          const trainResults = epoch.results?.train as Record<string, any> || {};
-          apValue = trainResults[className]?.ap;
-          if (apValue?.mean !== undefined) apValue = apValue.mean;
+          const trainResults = (epoch.results?.train || {}) as Record<string, APMetric>;
+          apValue = toApNumber(trainResults[className]?.ap);
         }
 
         // Try per_class structures as fallback
         if (apValue === undefined) {
-          const perClass = epoch.results?.val?.per_class as Record<string, any> || {};
-          apValue = perClass[className]?.ap;
-          if (apValue?.mean !== undefined) apValue = apValue.mean;
+          const perClass = (epoch.results?.val?.per_class || {}) as Record<string, APMetric>;
+          apValue = toApNumber(perClass[className]?.ap);
         }
 
         if (apValue === undefined) {
-          const perClass = epoch.results?.train?.per_class as Record<string, any> || {};
-          apValue = perClass[className]?.ap;
-          if (apValue?.mean !== undefined) apValue = apValue.mean;
+          const perClass = (epoch.results?.train?.per_class || {}) as Record<string, APMetric>;
+          apValue = toApNumber(perClass[className]?.ap);
         }
 
         if (apValue === undefined) {
-          const perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
-          apValue = perClass[className]?.ap;
-          if (apValue?.mean !== undefined) apValue = apValue.mean;
+          const perClass = (epoch.results?.metrics?.per_class || {}) as Record<string, APMetric>;
+          apValue = toApNumber(perClass[className]?.ap);
         }
 
         return apValue ?? null;

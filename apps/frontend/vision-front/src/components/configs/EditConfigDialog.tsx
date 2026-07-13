@@ -32,7 +32,7 @@ const EditConfigDialog: React.FC<EditConfigDialogProps> = ({
   loading
 }) => {
   // Format config data for display
-  const formatConfigData = (data: any, depth: number = 0): React.ReactNode => {
+  const formatConfigData = (data: unknown, depth: number = 0): React.ReactNode => {
     if (depth > 3) return null; // Limit nesting depth for display
     
     if (typeof data !== 'object' || data === null) {

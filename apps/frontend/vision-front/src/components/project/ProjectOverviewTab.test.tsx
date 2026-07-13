@@ -29,7 +29,7 @@ describe('ProjectOverviewTab', () => {
   it('renders stats cards with formatted values', () => {
     render(
       <MemoryRouter>
-        <ProjectOverviewTab stats={stats} dashboardStats={dashboardStats} isAuthenticated={true} user={{ id: 'u1' }} />
+        <ProjectOverviewTab stats={stats} dashboardStats={dashboardStats} isAuthenticated={true} user={{ id: 'u1', email: 'u1@test.dev', name: 'User One' }} />
       </MemoryRouter>
     );
     expect(screen.getByText('5')).toBeInTheDocument();
@@ -44,7 +44,7 @@ describe('ProjectOverviewTab', () => {
     render(
       <MemoryRouter>
         <ProjectOverviewTab
-          stats={{ ...stats, avgEpochTime: undefined }}
+          stats={{ ...stats, avgEpochTime: 0 }}
           dashboardStats={dashboardStats}
           isAuthenticated={true}
           user={null}
@@ -66,7 +66,7 @@ describe('ProjectOverviewTab', () => {
   it('shows the unauthenticated overview message and, when a user is present, a start training CTA', () => {
     render(
       <MemoryRouter>
-        <ProjectOverviewTab stats={stats} dashboardStats={dashboardStats} isAuthenticated={false} user={{ id: 'u1' }} />
+        <ProjectOverviewTab stats={stats} dashboardStats={dashboardStats} isAuthenticated={false} user={{ id: 'u1', email: 'u1@test.dev', name: 'User One' }} />
       </MemoryRouter>
     );
     expect(screen.getByText('Project Overview')).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe('ProjectOverviewTab', () => {
   it('does not show the overview CTA when authenticated', () => {
     render(
       <MemoryRouter>
-        <ProjectOverviewTab stats={stats} dashboardStats={dashboardStats} isAuthenticated={true} user={{ id: 'u1' }} />
+        <ProjectOverviewTab stats={stats} dashboardStats={dashboardStats} isAuthenticated={true} user={{ id: 'u1', email: 'u1@test.dev', name: 'User One' }} />
       </MemoryRouter>
     );
     expect(screen.queryByText('Project Overview')).not.toBeInTheDocument();

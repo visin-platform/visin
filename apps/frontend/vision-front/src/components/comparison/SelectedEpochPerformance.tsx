@@ -15,7 +15,7 @@ import {
   MenuItem
 } from '@mui/material';
 import { Link } from 'react-router-dom';
-import { TrainingComparison, ComparisonEpoch } from '@/types';
+import { TrainingComparison, ComparisonEpoch, EpochMetrics } from '@/types';
 import { formatNumber } from '@/utils/comparisonLatexGenerator';
 
 interface SelectedEpochPerformanceProps {
@@ -244,25 +244,25 @@ const SelectedEpochPerformance: React.FC<SelectedEpochPerformanceProps> = ({
                         iou: Math.max(...comparisonData.map(comp => {
                           const selectedEpochData = getSelectedEpochData(comp.training._id);
                           const valResults = selectedEpochData?.results?.val;
-                          const classMetrics = valResults?.[className] as any;
+                          const classMetrics = valResults?.[className] as EpochMetrics | undefined;
                           return classMetrics?.iou ?? -Infinity;
                         })),
                         precision: Math.max(...comparisonData.map(comp => {
                           const selectedEpochData = getSelectedEpochData(comp.training._id);
                           const valResults = selectedEpochData?.results?.val;
-                          const classMetrics = valResults?.[className] as any;
+                          const classMetrics = valResults?.[className] as EpochMetrics | undefined;
                           return classMetrics?.precision ?? -Infinity;
                         })),
                         recall: Math.max(...comparisonData.map(comp => {
                           const selectedEpochData = getSelectedEpochData(comp.training._id);
                           const valResults = selectedEpochData?.results?.val;
-                          const classMetrics = valResults?.[className] as any;
+                          const classMetrics = valResults?.[className] as EpochMetrics | undefined;
                           return classMetrics?.recall ?? -Infinity;
                         })),
                         f1: Math.max(...comparisonData.map(comp => {
                           const selectedEpochData = getSelectedEpochData(comp.training._id);
                           const valResults = selectedEpochData?.results?.val;
-                          const classMetrics = valResults?.[className] as any;
+                          const classMetrics = valResults?.[className] as EpochMetrics | undefined;
                           return classMetrics?.f1 ?? -Infinity;
                         }))
                       };
@@ -275,7 +275,7 @@ const SelectedEpochPerformance: React.FC<SelectedEpochPerformanceProps> = ({
                           {comparisonData.map((comp) => {
                             const selectedEpochData = getSelectedEpochData(comp.training._id);
                             const valResults = selectedEpochData?.results?.val;
-                            const classMetrics = valResults?.[className] as any;
+                            const classMetrics = valResults?.[className] as EpochMetrics | undefined;
 
                             return (
                               <React.Fragment key={comp.training._id}>

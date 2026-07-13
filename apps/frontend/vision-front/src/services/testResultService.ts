@@ -2,8 +2,10 @@ import { visionApi } from '../config/visionApi';
 import {
   TestResult,
   CreateTestResultData,
+  TestResultData,
   ApiResponse,
-  PaginatedResponse
+  TestResultsPaginatedResponse,
+  EpochResults
 } from '../types';
 
 // Test result comparison types
@@ -26,9 +28,9 @@ export interface TestResultComparison {
   epoch: {
     epoch: number;
     epoch_time?: number;
-    results: any;
+    results: EpochResults;
   } | null;
-  test_results: any;
+  test_results: TestResultData;
 }
 
 export interface TestResultComparisonResponse {
@@ -48,7 +50,7 @@ export interface AggregatedTestResultComparison {
     uuid: string;
     status: string;
   };
-  aggregatedResults: any;
+  aggregatedResults: Record<string, Record<string, unknown>> | null;
   testResultsCount: number;
 }
 
@@ -67,21 +69,21 @@ export const testResultService = {
     epoch_uuids?: string;
     training_uuid?: string;
     projectId?: string;
-  }): Promise<PaginatedResponse<TestResult>> {
+  }): Promise<TestResultsPaginatedResponse> {
     const response = await visionApi.get('/test-results', { params });
-    return response.data;
+    return response.data as TestResultsPaginatedResponse;
   },
 
   // Get test result by ID
   async getTestResultById(id: string): Promise<ApiResponse<TestResult>> {
     const response = await visionApi.get(`/test-results/${id}`);
-    return response.data;
+    return response.data as ApiResponse<TestResult>;
   },
 
   // Get test result by test UUID
   async getTestResultByTestUuid(testUuid: string): Promise<ApiResponse<TestResult>> {
     const response = await visionApi.get(`/test-results/test/${testUuid}`);
-    return response.data;
+    return response.data as ApiResponse<TestResult>;
   },
 
   // Get test results by epoch UUID
@@ -90,50 +92,50 @@ export const testResultService = {
     limit?: number;
     sortBy?: string;
     order?: 'asc' | 'desc';
-  }): Promise<PaginatedResponse<TestResult>> {
+  }): Promise<TestResultsPaginatedResponse> {
     const response = await visionApi.get(`/epochs/uuid/${epochUuid}/test-results`, { params });
-    return response.data;
+    return response.data as TestResultsPaginatedResponse;
   },
 
   // Create test result
   async createTestResult(testResultData: CreateTestResultData): Promise<ApiResponse<TestResult>> {
     const response = await visionApi.post('/test-results', testResultData);
-    return response.data;
+    return response.data as ApiResponse<TestResult>;
   },
 
   // Upload test result from JSON file
-  async uploadTestResult(testResultData: any): Promise<ApiResponse<TestResult>> {
+  async uploadTestResult(testResultData: CreateTestResultData): Promise<ApiResponse<TestResult>> {
     const response = await visionApi.post('/test-results/upload', testResultData);
-    return response.data;
+    return response.data as ApiResponse<TestResult>;
   },
 
   // Update test result
   async updateTestResult(id: string, testResultData: Partial<CreateTestResultData>): Promise<ApiResponse<TestResult>> {
     const response = await visionApi.put(`/test-results/${id}`, testResultData);
-    return response.data;
+    return response.data as ApiResponse<TestResult>;
   },
 
   // Delete test result
   async deleteTestResult(id: string): Promise<ApiResponse<void>> {
     const response = await visionApi.delete(`/test-results/${id}`);
-    return response.data;
+    return response.data as ApiResponse<void>;
   },
 
   // Get unique epochs that have test results
   async getTestResultEpochs(): Promise<ApiResponse<{ epochs: number[] }>> {
     const response = await visionApi.get('/test-results/epochs');
-    return response.data;
+    return response.data as ApiResponse<{ epochs: number[]; }>;
   },
 
   // Compare multiple test results
   async compareTestResults(testResultIds: string[]): Promise<ApiResponse<TestResultComparisonResponse>> {
     const response = await visionApi.post('/test-results/compare', { testResultIds });
-    return response.data;
+    return response.data as ApiResponse<TestResultComparisonResponse>;
   },
 
   // Compare aggregated test results by training
   async compareAggregatedTestResultsByTraining(trainingIds: string[]): Promise<ApiResponse<AggregatedTestResultComparisonResponse>> {
     const response = await visionApi.post('/test-results/compare/aggregated', { trainingIds });
-    return response.data;
+    return response.data as ApiResponse<AggregatedTestResultComparisonResponse>;
   }
 };

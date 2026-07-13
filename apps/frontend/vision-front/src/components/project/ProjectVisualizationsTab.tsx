@@ -14,9 +14,24 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { comparisonService } from '../../services/comparisonService';
 
+// getVisualizationsByTraining('', ...) — an empty training_uuid — always
+// resolves to the grouped-by-training shape, never the paginated one. Only
+// training_uuid/training_name/visualizations[].type are read below, so the
+// prop is typed against that rather than the full Visualization shape.
+interface TrainingVisualizationsSummary {
+  training_uuid: string;
+  training_name: string;
+  visualizations: Array<{ type: string }>;
+}
+
+export interface VisualizationsGroupedResult {
+  success: boolean;
+  data: { trainings: TrainingVisualizationsSummary[] };
+}
+
 interface ProjectVisualizationsTabProps {
   projectId: string;
-  visualizationsResponse: any;
+  visualizationsResponse: VisualizationsGroupedResult | undefined;
   isLoading: boolean;
 }
 
@@ -70,7 +85,7 @@ const ProjectVisualizationsTab: React.FC<ProjectVisualizationsTabProps> = ({
         <CircularProgress />
       ) : visualizationsResponse?.data?.trainings && visualizationsResponse.data.trainings.length > 0 ? (
         <>
-          {visualizationsResponse.data.trainings.map((training: any) => (
+          {visualizationsResponse.data.trainings.map((training) => (
             <Card key={training.training_uuid} sx={{ mb: 3 }}>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -98,7 +113,7 @@ const ProjectVisualizationsTab: React.FC<ProjectVisualizationsTabProps> = ({
                 {training.visualizations.length > 0 ? (
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
                     {(() => {
-                      const typeCounts = training.visualizations.reduce((acc: { [key: string]: number }, viz: any) => {
+                      const typeCounts = training.visualizations.reduce((acc: { [key: string]: number }, viz) => {
                         acc[viz.type] = (acc[viz.type] || 0) + 1;
                         return acc;
                       }, {});

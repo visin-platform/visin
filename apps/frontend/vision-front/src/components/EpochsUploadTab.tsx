@@ -19,7 +19,7 @@ import {
   Info as InfoIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { Epoch } from '../types';
+import { Epoch, EpochMetrics } from '../types';
 
 interface EpochsUploadTabProps {
   epochs: Epoch[];
@@ -137,10 +137,10 @@ export const EpochsUploadTab: React.FC<EpochsUploadTabProps> = ({
                     <TableCell align="right">{epoch.results?.val?.loss?.toFixed(4) || '-'}</TableCell>
                     <TableCell align="right">{epoch.results?.train?.mean_iou?.toFixed(4) || '-'}</TableCell>
                     <TableCell align="right">{epoch.results?.val?.mean_iou?.toFixed(4) || '-'}</TableCell>
-                    <TableCell align="right">{(epoch.results?.val?.vehicle as any)?.iou?.toFixed(4) || '-'}</TableCell>
-                    <TableCell align="right">{(epoch.results?.val?.sign as any)?.iou?.toFixed(4) || '-'}</TableCell>
-                    <TableCell align="right">{(epoch.results?.val?.cyclist as any)?.iou?.toFixed(4) || '-'}</TableCell>
-                    <TableCell align="right">{(epoch.results?.val?.pedestrian as any)?.iou?.toFixed(4) || '-'}</TableCell>
+                    <TableCell align="right">{(epoch.results?.val?.vehicle as EpochMetrics | undefined)?.iou?.toFixed(4) || '-'}</TableCell>
+                    <TableCell align="right">{(epoch.results?.val?.sign as EpochMetrics | undefined)?.iou?.toFixed(4) || '-'}</TableCell>
+                    <TableCell align="right">{(epoch.results?.val?.cyclist as EpochMetrics | undefined)?.iou?.toFixed(4) || '-'}</TableCell>
+                    <TableCell align="right">{(epoch.results?.val?.pedestrian as EpochMetrics | undefined)?.iou?.toFixed(4) || '-'}</TableCell>
                     <TableCell align="right">{epoch.learning_rate?.toExponential(2) || '-'}</TableCell>
                     <TableCell align="right">{epoch.epoch_time?.toFixed(2) || '-'}</TableCell>
                     <TableCell align="center">

@@ -19,7 +19,7 @@ import {
 } from '@mui/icons-material';
 import { visualizationService } from '../services/visualizationService';
 import { trainingService } from '../services/trainingService';
-import { Visualization, Training } from '../types';
+import { Visualization, Training, TrainingVisualizations } from '../types';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { formatDateTime } from '../utils';
 
@@ -81,12 +81,12 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
       const visualizationsResponse = await visualizationService.getVisualizationsByTraining('', {
         projectId,
         includeUrls: true // Need URLs for display
-      }) as { data: { trainings: any[] } };
+      }) as { data: { trainings: TrainingVisualizations[] } };
 
       const groupedTrainings = visualizationsResponse.data.trainings || [];
 
       // Filter to only selected trainings
-      const selectedGroupedTrainings = groupedTrainings.filter((gt: any) =>
+      const selectedGroupedTrainings = groupedTrainings.filter((gt) =>
         trainingIds.includes(gt.training_uuid)
       );
 

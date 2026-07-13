@@ -28,7 +28,7 @@ const makeWrapper = () => {
 
 const baseProps = {
   projectId: 'p1',
-  visualizationsResponse: { data: { trainings: [] } },
+  visualizationsResponse: { success: true, data: { trainings: [] } },
   isLoading: false,
 };
 
@@ -56,7 +56,7 @@ describe('ProjectVisualizationsTab', () => {
       training_name: 'Run 1',
       visualizations: [{ type: 'loss' }, { type: 'loss' }, { type: 'confusion' }],
     };
-    renderTab({ visualizationsResponse: { data: { trainings: [training] } } });
+    renderTab({ visualizationsResponse: { success: true, data: { trainings: [training] } } });
 
     expect(screen.getByText('Run 1')).toBeInTheDocument();
     expect(screen.getByText('3 visualizations')).toBeInTheDocument();
@@ -66,14 +66,14 @@ describe('ProjectVisualizationsTab', () => {
 
   it('singularizes the count label for exactly one visualization', () => {
     const training = { training_uuid: 't1', training_name: 'Run 1', visualizations: [{ type: 'loss' }] };
-    renderTab({ visualizationsResponse: { data: { trainings: [training] } } });
+    renderTab({ visualizationsResponse: { success: true, data: { trainings: [training] } } });
 
     expect(screen.getByText('1 visualization')).toBeInTheDocument();
   });
 
   it('shows a per-training empty message when it has no visualizations', () => {
     const training = { training_uuid: 't1', training_name: 'Run 1', visualizations: [] };
-    renderTab({ visualizationsResponse: { data: { trainings: [training] } } });
+    renderTab({ visualizationsResponse: { success: true, data: { trainings: [training] } } });
 
     expect(screen.getByText('No visualizations for this training.')).toBeInTheDocument();
   });
@@ -81,7 +81,7 @@ describe('ProjectVisualizationsTab', () => {
   it('selects a training and creates a comparison from the checkbox', async () => {
     mockedComparison.createComparison.mockResolvedValue({ success: true, data: { uuid: 'cmp-1' } } as never);
     const training = { training_uuid: 't1', training_name: 'Run 1', visualizations: [{ type: 'loss' }] };
-    renderTab({ visualizationsResponse: { data: { trainings: [training] } } });
+    renderTab({ visualizationsResponse: { success: true, data: { trainings: [training] } } });
 
     fireEvent.click(screen.getByRole('checkbox'));
     const compareButton = screen.getByRole('button', { name: /compare selected \(1\)/i });
@@ -97,7 +97,7 @@ describe('ProjectVisualizationsTab', () => {
 
   it('deselecting a training hides the compare button', () => {
     const training = { training_uuid: 't1', training_name: 'Run 1', visualizations: [] };
-    renderTab({ visualizationsResponse: { data: { trainings: [training] } } });
+    renderTab({ visualizationsResponse: { success: true, data: { trainings: [training] } } });
 
     const checkbox = screen.getByRole('checkbox');
     fireEvent.click(checkbox);

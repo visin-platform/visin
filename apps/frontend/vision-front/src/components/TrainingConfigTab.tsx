@@ -19,11 +19,13 @@ import {
   Info as InfoIcon,
   AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
+import { Config } from '../types';
 
 interface TrainingConfigTabProps {
-  config: any;
+  config: Config | null | undefined;
   configLoading: boolean;
-  training: any;
+  // Only configId is read below.
+  training: { configId?: string } | null | undefined;
 }
 
 const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({

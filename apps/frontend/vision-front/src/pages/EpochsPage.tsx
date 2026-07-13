@@ -36,6 +36,7 @@ import { epochService } from '../services/epochService';
 import { trainingService } from '../services/trainingService';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { Epoch, Training } from '../types';
+import type { UploadEpochData } from '../services/epochService';
 
 export const EpochsPage: React.FC = () => {
   const location = useLocation();
@@ -53,7 +54,7 @@ export const EpochsPage: React.FC = () => {
 
   useEffect(() => {
     // Check if navigation state contains a training ID
-    const state = location.state as any;
+    const state = location.state as { trainingId?: string } | null;
     if (state?.trainingId) {
       setSelectedTraining(state.trainingId);
     }
@@ -84,7 +85,7 @@ export const EpochsPage: React.FC = () => {
   const loading = loadingTrainings || loadingEpochs;
 
   const uploadMutation = useMutation({
-    mutationFn: (data: unknown) => epochService.uploadEpoch(data),
+    mutationFn: (data: UploadEpochData) => epochService.uploadEpoch(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['epochs', selectedTraining] });
       if (fileInputRef.current) {
@@ -153,7 +154,7 @@ export const EpochsPage: React.FC = () => {
     return new Date(dateString).toLocaleString();
   };
 
-  const formatNumber = (value: any, decimals: number = 4): string => {
+  const formatNumber = (value: number | undefined, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {
       return value.toFixed(decimals);
     }
@@ -353,7 +354,7 @@ export const EpochsPage: React.FC = () => {
                     </Typography>
                     {Object.entries(selectedEpoch.results.train).map(([key, value]) => {
                       if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                        const metrics = value as any;
+                        const metrics = value as Record<string, unknown>;
                         return (
                           <Box key={key} sx={{ gridColumn: '1 / -1' }}>
                             <Typography variant="body2" sx={{ ml: 1 }}>
@@ -390,7 +391,7 @@ export const EpochsPage: React.FC = () => {
                     </Typography>
                     {Object.entries(selectedEpoch.results.val).map(([key, value]) => {
                       if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                        const metrics = value as any;
+                        const metrics = value as Record<string, unknown>;
                         return (
                           <Box key={key} sx={{ gridColumn: '1 / -1' }}>
                             <Typography variant="body2" sx={{ ml: 1 }}>

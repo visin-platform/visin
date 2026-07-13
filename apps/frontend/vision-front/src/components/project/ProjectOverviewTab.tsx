@@ -18,12 +18,18 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import type { AuthUser } from '@visin/frontend-core';
+import { TrainingStats } from '../../services/trainingService';
+import { ProjectDashboardStats } from '../../services/projectService';
+
+export type ProjectOverviewStats = Pick<TrainingStats, 'totalTrainings' | 'totalTime' | 'totalCost' | 'avgEpochTime'>;
+export type ProjectOverviewDashboardStats = Pick<ProjectDashboardStats, 'testResultsCount' | 'visualizationsCount' | 'benchmarksCount'>;
 
 interface ProjectOverviewTabProps {
-  stats: any;
-  dashboardStats: any;
+  stats: ProjectOverviewStats | undefined;
+  dashboardStats: ProjectOverviewDashboardStats | undefined;
   isAuthenticated: boolean;
-  user: any;
+  user: AuthUser | null;
 }
 
 const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({

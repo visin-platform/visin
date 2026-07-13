@@ -15,12 +15,7 @@ import {
 } from '@mui/material';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-
-interface ComparisonData {
-  aggregatedResults: any;
-  training: { _id: string; name: string };
-  testResultsCount: number;
-}
+import type { ComparisonData, ConditionAggregates } from './performanceMetricsUtils';
 
 interface PerClassMetricsTableProps {
   comparisonData: ComparisonData[];
@@ -33,7 +28,7 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
 }) => {
   const theme = useTheme();
 
-  const formatNumber = (value: any, decimals: number = 4): string => {
+  const formatNumber = (value: number | undefined, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {
       return value.toFixed(decimals);
     }
@@ -45,7 +40,7 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
     const bestValues: { [key: string]: number } = {};
     
     comparisonData.forEach((comp) => {
-      const conditionData = comp.aggregatedResults?.[condition];
+      const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
       const classMetrics = conditionData?.[className];
       
       if (classMetrics) {
@@ -148,7 +143,7 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
                         {className.charAt(0).toUpperCase() + className.slice(1)}
                       </TableCell>
                       {comparisonData.map((comp) => {
-                        const conditionData = comp.aggregatedResults?.[condition];
+                        const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
                         const classMetrics = conditionData?.[className];
                         const bestValues = getBestValues(condition, className);
 

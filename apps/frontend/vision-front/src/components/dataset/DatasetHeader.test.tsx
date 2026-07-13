@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import DatasetHeader from './DatasetHeader';
+import type { DatasetAnalysis } from '../../services/analysisService';
 
-const analysis = { dataset: 'My Dataset', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z' };
+const analysis: DatasetAnalysis = { _id: 'a1', dataset: 'My Dataset', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z' };
 
 describe('DatasetHeader', () => {
   it('renders the dataset name and image count', () => {

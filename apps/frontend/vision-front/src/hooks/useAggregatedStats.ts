@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { TestResult } from '../types';
+import { TestResult, TestResultCondition, TestResultMetrics } from '../types';
 
 export interface AggregatedStats {
   [condition: string]: {
@@ -16,7 +16,7 @@ export const useAggregatedStats = (allTestResults: TestResult[]) => {
   const hasCyclistPedestrianData = useMemo(() => {
     return allTestResults.some(testResult => {
       return ['day_fair', 'day_rain', 'night_fair', 'night_rain', 'snow'].some(condition => {
-        const conditionData = (testResult.test_results as any)[condition];
+        const conditionData = testResult.test_results[condition] as TestResultCondition | undefined;
         return conditionData && conditionData['cyclist + pedestrian'];
       });
     });
@@ -46,11 +46,11 @@ export const useAggregatedStats = (allTestResults: TestResult[]) => {
     // Collect all values
     allTestResults.forEach(testResult => {
       conditions.forEach(condition => {
-        const conditionData = (testResult.test_results as any)[condition];
+        const conditionData = testResult.test_results[condition] as TestResultCondition | undefined;
         if (!conditionData) return;
 
         classes.forEach(className => {
-          const classData = conditionData[className];
+          const classData = conditionData[className] as TestResultMetrics | undefined;
           if (!classData) return;
 
           if (typeof classData.iou === 'number') aggregated[condition][className].iou.values.push(classData.iou);

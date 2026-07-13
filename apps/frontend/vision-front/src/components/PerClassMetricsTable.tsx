@@ -10,7 +10,7 @@ import {
   TableRow,
   Typography
 } from '@mui/material';
-import { Epoch } from '../types';
+import { Epoch, EpochMetrics } from '../types';
 
 interface PerClassMetricsTableProps {
   epochs: Epoch[];
@@ -45,7 +45,7 @@ export const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({ epoc
             </TableRow>
           </TableHead>
           <TableBody>
-            {Object.entries(classMetrics).map(([className, metrics]: [string, any]) => (
+            {Object.entries(classMetrics).map(([className, metrics]: [string, EpochMetrics]) => (
               <TableRow key={className}>
                 <TableCell>{className}</TableCell>
                 <TableCell align="right">{metrics.iou?.toFixed(4) || '-'}</TableCell>

@@ -1,5 +1,15 @@
+export interface MetricStat {
+  mean: number;
+  std?: number;
+}
+export type ClassAggregates = Record<string, MetricStat>;
+// One condition's aggregated data, keyed by class name (plus the "overall" pseudo-class).
+export type ConditionAggregates = Record<string, ClassAggregates>;
+
 export interface ComparisonData {
-  aggregatedResults: any;
+  // Matches TrainingComparison['aggregatedTestResults']'s loose shape; cast to
+  // ConditionAggregates/ClassAggregates at the point of use below.
+  aggregatedResults: Record<string, Record<string, unknown>> | null;
   training: { _id: string; name: string };
   testResultsCount: number;
 }
@@ -17,7 +27,8 @@ export function getBestValues(
   const bestValues: { [key: string]: number } = {};
 
   comparisonData.forEach((comp) => {
-    const classMetrics = comp.aggregatedResults?.[condition]?.[className];
+    const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
+    const classMetrics = conditionData?.[className];
     if (!classMetrics) return;
 
     METRICS.forEach((metric) => {
@@ -47,14 +58,17 @@ export function sortComparisonData(
     let aValue: number;
     let bValue: number;
 
+    const conditionDataA = a.aggregatedResults?.[condition] as ConditionAggregates | undefined;
+    const conditionDataB = b.aggregatedResults?.[condition] as ConditionAggregates | undefined;
+
     if (column === 'overall_fw_iou') {
-      aValue = a.aggregatedResults?.[condition]?.overall?.fw_iou?.mean ?? -Infinity;
-      bValue = b.aggregatedResults?.[condition]?.overall?.fw_iou?.mean ?? -Infinity;
+      aValue = conditionDataA?.overall?.fw_iou?.mean ?? -Infinity;
+      bValue = conditionDataB?.overall?.fw_iou?.mean ?? -Infinity;
     } else {
       // Column format: "<className>_<metric>" (e.g. "human_iou", "sign_precision")
       const [className, metric] = column.split('_');
-      aValue = a.aggregatedResults?.[condition]?.[className]?.[metric]?.mean ?? -Infinity;
-      bValue = b.aggregatedResults?.[condition]?.[className]?.[metric]?.mean ?? -Infinity;
+      aValue = conditionDataA?.[className]?.[metric]?.mean ?? -Infinity;
+      bValue = conditionDataB?.[className]?.[metric]?.mean ?? -Infinity;
     }
 
     const comparison = aValue - bValue;
@@ -94,7 +108,7 @@ export function generateConditionLatex(
 
   comparisonData.forEach(comp => {
     const trainingName = comp.training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
-    const conditionData = comp.aggregatedResults?.[condition];
+    const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
     latex += `${trainingName} `;
 
     classNames.forEach((className) => {

@@ -3,7 +3,9 @@ import {
   Box,
   Breadcrumbs,
   Link as MuiLink,
-  Typography
+  Typography,
+  SxProps,
+  Theme
 } from '@mui/material';
 import { Link } from 'react-router-dom';
 
@@ -15,7 +17,7 @@ export interface BreadcrumbItem {
 
 interface PageBreadcrumbsProps {
   items: BreadcrumbItem[];
-  sx?: any;
+  sx?: SxProps<Theme>;
 }
 
 const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({ items, sx }) => {

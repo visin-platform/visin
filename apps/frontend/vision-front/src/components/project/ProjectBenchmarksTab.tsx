@@ -24,9 +24,10 @@ import { Link } from 'react-router-dom';
 import { Delete as DeleteIcon } from '@mui/icons-material';
 import { formatDateTime } from '../../utils';
 import { benchmarkService } from '../../services/benchmarkService';
+import { BenchmarksPaginatedResponse, BenchmarkResult } from '../../types';
 
 interface ProjectBenchmarksTabProps {
-  benchmarksResponse: any;
+  benchmarksResponse: BenchmarksPaginatedResponse | undefined;
   isLoading: boolean;
   page: number;
   rowsPerPage: number;
@@ -97,10 +98,10 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {benchmarksResponse.data.benchmarks.map((benchmark: any) => {
+                {benchmarksResponse.data.benchmarks.map((benchmark) => {
                   const firstResult = benchmark.results && benchmark.results.length > 0 ? benchmark.results[0] : null;
 
-                  const formatParameters = (res: any) => {
+                  const formatParameters = (res: BenchmarkResult | null) => {
                     if (!res) return '-';
                     // Prefer explicit million field if present
                     if (res.total_parameters_m !== undefined && res.total_parameters_m !== null) {
@@ -117,7 +118,7 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
                   // Determine training link id (prefer object _id)
                   const trainingObj = benchmark.training_id && typeof benchmark.training_id === 'object' ? benchmark.training_id : null;
                   const trainingId = trainingObj?._id || null;
-                  const trainingName = trainingObj?.name || benchmark.training_name || 'Unknown';
+                  const trainingName = trainingObj?.name || 'Unknown';
 
                   return (
                     <TableRow key={benchmark._id}>

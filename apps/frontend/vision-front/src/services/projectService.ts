@@ -25,36 +25,36 @@ export const projectService = {
     sortOrder?: 'asc' | 'desc';
   }): Promise<ApiResponse<Project[]>> {
     const response = await visionApi.get('/projects', { params });
-    return response.data;
+    return response.data as ApiResponse<Project[]>;
   },
 
   // Get project by ID
   async getProjectById(id: string): Promise<ApiResponse<Project>> {
     const response = await visionApi.get(`/projects/${id}`);
-    return response.data;
+    return response.data as ApiResponse<Project>;
   },
 
   // Get project dashboard stats
   async getProjectDashboardStats(id: string): Promise<ApiResponse<ProjectDashboardStats>> {
     const response = await visionApi.get(`/projects/${id}/dashboard-stats`);
-    return response.data;
+    return response.data as ApiResponse<ProjectDashboardStats>;
   },
 
   // Create project
   async createProject(projectData: CreateProjectData): Promise<ApiResponse<Project>> {
     const response = await visionApi.post('/projects', projectData);
-    return response.data;
+    return response.data as ApiResponse<Project>;
   },
 
   // Update project
   async updateProject(id: string, projectData: UpdateProjectData): Promise<ApiResponse<Project>> {
     const response = await visionApi.put(`/projects/${id}`, projectData);
-    return response.data;
+    return response.data as ApiResponse<Project>;
   },
 
   // Delete project
   async deleteProject(id: string): Promise<ApiResponse<void>> {
     const response = await visionApi.delete(`/projects/${id}`);
-    return response.data;
+    return response.data as ApiResponse<void>;
   }
 };

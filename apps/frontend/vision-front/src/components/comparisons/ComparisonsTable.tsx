@@ -12,6 +12,7 @@ import {
   IconButton,
   Tooltip,
   Chip,
+  ChipProps,
   alpha,
   Theme
 } from '@mui/material';
@@ -33,7 +34,7 @@ interface ComparisonsTableProps {
   onDeleteComparison: (id: string) => void;
   canDelete: boolean;
   formatTimestamp: (timestamp: string) => string;
-  getTypeColor: (type: string) => any;
+  getTypeColor: (type: string) => ChipProps['color'];
   theme: Theme;
 }
 

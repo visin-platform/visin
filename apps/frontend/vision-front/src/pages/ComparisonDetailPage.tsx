@@ -214,7 +214,7 @@ const ComparisonDetailPage: React.FC = () => {
     if (!comparisonData.length) return [];
 
     const allBenchmarks = comparisonData.flatMap(comp =>
-      comp.benchmarks.map((benchmark: any) => ({
+      comp.benchmarks.map((benchmark) => ({
         ...benchmark,
         training_name: comp.training.name
       }))

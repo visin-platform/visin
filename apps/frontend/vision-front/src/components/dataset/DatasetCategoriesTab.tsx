@@ -23,7 +23,7 @@ import { ImageCategory } from '../../services/imageCategoryService';
 interface DatasetCategoriesTabProps {
   categories: ImageCategory[];
   isLoading: boolean;
-  error: any;
+  error: Error | null;
   canDelete: boolean;
   onEditCategory: (category: ImageCategory) => void;
   onDeleteCategory: (id: string) => void;

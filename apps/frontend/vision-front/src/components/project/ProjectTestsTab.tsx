@@ -19,10 +19,11 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { comparisonService } from '../../services/comparisonService';
 import { formatDateTime } from '../../utils';
+import { TestResultsPaginatedResponse } from '../../types';
 
 interface ProjectTestsTabProps {
   projectId: string;
-  testResultsResponse: any;
+  testResultsResponse: TestResultsPaginatedResponse | undefined;
   isLoading: boolean;
   page: number;
   rowsPerPage: number;
@@ -57,7 +58,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
     if (testResultsResponse?.data?.testResults && selectedTestResultIds.size === testResultsResponse.data.testResults.length) {
       setSelectedTestResultIds(new Set());
     } else {
-      const allIds = new Set<string>(testResultsResponse?.data?.testResults.map((tr: any) => tr._id) || []);
+      const allIds = new Set<string>(testResultsResponse?.data?.testResults.map((tr) => tr._id) || []);
       setSelectedTestResultIds(allIds);
     }
   };
@@ -82,11 +83,11 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
     if (selectedIds.length > 1) {
       // Get unique training IDs from selected test results
       const trainingIds = Array.from(new Set(
-        testResultsResponse.data.testResults
-          .filter((tr: any) => selectedTestResultIds.has(tr._id))
-          .map((tr: any) => tr.training?._id)
-          .filter((id: any) => id)
-      )) as string[];
+        (testResultsResponse?.data.testResults || [])
+          .filter((tr) => selectedTestResultIds.has(tr._id))
+          .map((tr) => tr.training?._id)
+          .filter((id): id is string => Boolean(id))
+      ));
       
       if (trainingIds.length > 0) {
         // Create a comparison with the trainings
@@ -138,7 +139,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {testResultsResponse.data.testResults.map((testResult: any) => (
+                {testResultsResponse.data.testResults.map((testResult) => (
                   <TableRow key={testResult._id}>
                     <TableCell padding="checkbox">
                       <Checkbox

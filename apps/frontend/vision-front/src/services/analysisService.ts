@@ -1,4 +1,5 @@
 import { visionApi } from '../config/visionApi';
+import { ApiResponse } from '../types';
 
 export interface AnalysisResponse {
   data: DatasetAnalysis[];
@@ -13,7 +14,9 @@ export interface DatasetAnalysis {
   _id: string;
   dataset: string;
   size?: string;
-  data: any; // Dynamic JSON structure
+  // Optional to reflect legacy records predating the `data` wrapper, where
+  // the JSON payload lived at the document's top level instead.
+  data?: Record<string, unknown>;
   downloadUrl?: string;
   createdAt: string;
   updatedAt: string;
@@ -29,7 +32,7 @@ export interface AnalysisComparisonResponse {
         createdAt: string;
         updatedAt: string;
       };
-      data: any; // Dynamic JSON data
+      data: Record<string, unknown>; // Dynamic JSON data
     }>;
     summary: {
       totalAnalyses: number;
@@ -41,16 +44,16 @@ export interface AnalysisComparisonResponse {
 /**
  * Upload analysis JSON data
  */
-export const uploadAnalysis = async (analysisData: any): Promise<DatasetAnalysis> => {
+export const uploadAnalysis = async (analysisData: Record<string, unknown>): Promise<DatasetAnalysis> => {
   const response = await visionApi.post('/analysis/upload', analysisData);
-  return response.data.data;
+  return (response.data as ApiResponse<DatasetAnalysis>).data;
 };
 
 /**
  * Create new dataset analysis (without data initially)
  */
 export const createAnalysis = async (datasetName: string, downloadUrl?: string, size?: string): Promise<DatasetAnalysis> => {
-  const body: any = { dataset: datasetName };
+  const body: { dataset: string; downloadUrl?: string; size?: string } = { dataset: datasetName };
   if (downloadUrl) {
     body.downloadUrl = downloadUrl;
   }
@@ -59,7 +62,7 @@ export const createAnalysis = async (datasetName: string, downloadUrl?: string, 
   }
 
   const response = await visionApi.post('/analysis/upload', body);
-  return response.data.data;
+  return (response.data as ApiResponse<DatasetAnalysis>).data;
 };
 
 /**
@@ -70,13 +73,13 @@ export const getAllAnalyses = async (
   skip: number = 0,
   dataset?: string
 ): Promise<AnalysisResponse> => {
-  const params: Record<string, any> = { limit, skip };
+  const params: Record<string, unknown> = { limit, skip };
   if (dataset) {
     params.dataset = dataset;
   }
 
   const response = await visionApi.get('/analysis', { params });
-  return response.data;
+  return response.data as AnalysisResponse;
 };
 
 /**
@@ -88,7 +91,7 @@ export const getAnalysesByDataset = async (
   skip: number = 0
 ): Promise<AnalysisResponse> => {
   const response = await visionApi.get(`/analysis/dataset/${datasetName}`, { params: { limit, skip } });
-  return response.data;
+  return response.data as AnalysisResponse;
 };
 
 /**
@@ -96,15 +99,15 @@ export const getAnalysesByDataset = async (
  */
 export const getAnalysisById = async (id: string): Promise<DatasetAnalysis> => {
   const response = await visionApi.get(`/analysis/${id}`);
-  return response.data.data;
+  return (response.data as ApiResponse<DatasetAnalysis>).data;
 };
 
 /**
  * Update analysis by ID
  */
-export const updateAnalysis = async (id: string, analysisData: any): Promise<DatasetAnalysis> => {
+export const updateAnalysis = async (id: string, analysisData: Record<string, unknown>): Promise<DatasetAnalysis> => {
   const response = await visionApi.put(`/analysis/${id}`, analysisData);
-  return response.data.data;
+  return (response.data as ApiResponse<DatasetAnalysis>).data;
 };
 
 /**
@@ -119,5 +122,5 @@ export const deleteAnalysis = async (id: string): Promise<void> => {
  */
 export const compareAnalyses = async (analysisIds: string[]): Promise<AnalysisComparisonResponse> => {
   const response = await visionApi.post('/analysis/compare', { analysisIds });
-  return response.data;
+  return response.data as AnalysisComparisonResponse;
 };

@@ -1,5 +1,7 @@
 import { PaginatedResponse } from './api';
 import { Training } from './training';
+import { EpochResults } from './epoch';
+import { Benchmark } from './benchmark';
 
 export interface Comparison {
   _id: string;
@@ -9,7 +11,7 @@ export interface Comparison {
   type: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
   itemIds: string[];
   projectId?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -22,7 +24,7 @@ export interface CreateComparisonData {
   type: 'trainings';
   itemIds: string[];
   projectId?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateComparisonData {
@@ -30,7 +32,7 @@ export interface UpdateComparisonData {
   description?: string;
   type?: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
   itemIds?: string[];
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ComparisonsPaginatedResponse extends PaginatedResponse<Comparison> {
@@ -48,7 +50,7 @@ export interface ComparisonsPaginatedResponse extends PaginatedResponse<Comparis
 // Training Comparison Types
 export interface ComparisonEpoch {
   epoch: number;
-  results: any;
+  results: EpochResults;
   epoch_time?: number;
   timestamp: string;
 }
@@ -76,9 +78,9 @@ export interface TrainingComparison {
   };
   lastEpoch: ComparisonEpoch | null;
   epochs: ComparisonEpoch[];
-  aggregatedTestResults: any | null;
+  aggregatedTestResults: Record<string, Record<string, unknown>> | null;
   testResultsCount: number;
-  benchmarks: any[];
+  benchmarks: Benchmark[];
 }
 
 export interface TrainingComparisonResponse {

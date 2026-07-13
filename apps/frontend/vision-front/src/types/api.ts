@@ -4,15 +4,17 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
 export interface PaginatedResponse<T> {
   success: boolean;
   data: {
-    [key: string]: T[] | any; // Allow any key for different data types
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      pages: number;
-    };
+    [key: string]: T[] | Pagination; // Allow any key for different data types
+    pagination: Pagination;
   };
 }

@@ -39,13 +39,13 @@ interface DatasetImagesTabProps {
   images: DatasetImage[];
   pagination: { page: number; limit: number; total: number; pages: number };
   isLoading: boolean;
-  error: any;
+  error: Error | null;
   filters: {
     category: string;
     tags: string[];
     weather: WeatherCondition | '';
   };
-  updateFilter: (key: 'category' | 'tags' | 'weather', value: any) => void;
+  updateFilter: (key: 'category' | 'tags' | 'weather', value: string | string[] | WeatherCondition) => void;
   categories: ImageCategory[];
   availableTags: string[];
   onImageClick: (image: DatasetImage) => void;

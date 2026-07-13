@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import PerClassMetricsTable from './PerClassMetricsTable';
+import type { ComparisonData } from './performanceMetricsUtils';
 
 const classMetric = (v: number) => ({
   iou: { mean: v, std: 0 },
@@ -23,13 +24,7 @@ const makeComparison = (id: string, name: string, v: number) => ({
   },
 });
 
-interface ComparisonDataLike {
-  training: { _id: string; name: string };
-  testResultsCount: number;
-  aggregatedResults: Record<string, unknown>;
-}
-
-const renderTable = (comparisonData: ComparisonDataLike[], onGenerateLatex = vi.fn()) =>
+const renderTable = (comparisonData: ComparisonData[], onGenerateLatex = vi.fn()) =>
   render(
     <MemoryRouter>
       <PerClassMetricsTable comparisonData={comparisonData} onGenerateLatex={onGenerateLatex} />

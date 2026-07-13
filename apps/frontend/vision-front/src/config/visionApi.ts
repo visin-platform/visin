@@ -15,7 +15,7 @@ const client = createApiClient({
   baseUrl: () => `${getVisionApiUrl()}/api`
 });
 
-function buildQueryString(params?: Record<string, any>): string {
+function buildQueryString(params?: Record<string, unknown>): string {
   if (!params) return '';
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -42,7 +42,7 @@ function toLegacyError(error: unknown): Error {
 }
 
 export const visionApi = {
-  async get(endpoint: string, options?: { params?: Record<string, any> }): Promise<{ data: any }> {
+  async get(endpoint: string, options?: { params?: Record<string, unknown> }): Promise<{ data: unknown }> {
     try {
       const data = await client.get(endpoint + buildQueryString(options?.params));
       return { data };
@@ -51,7 +51,7 @@ export const visionApi = {
     }
   },
 
-  async post(endpoint: string, body?: any): Promise<{ data: any }> {
+  async post(endpoint: string, body?: unknown): Promise<{ data: unknown }> {
     try {
       const data = await client.post(endpoint, body);
       return { data };
@@ -60,7 +60,7 @@ export const visionApi = {
     }
   },
 
-  async put(endpoint: string, body?: any): Promise<{ data: any }> {
+  async put(endpoint: string, body?: unknown): Promise<{ data: unknown }> {
     try {
       const data = await client.put(endpoint, body);
       return { data };
@@ -69,7 +69,7 @@ export const visionApi = {
     }
   },
 
-  async delete(endpoint: string): Promise<{ data: any }> {
+  async delete(endpoint: string): Promise<{ data: unknown }> {
     try {
       const data = await client.delete(endpoint);
       return { data };

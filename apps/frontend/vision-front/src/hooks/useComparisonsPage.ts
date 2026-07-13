@@ -143,7 +143,7 @@ export const useComparisonsPage = () => {
         const trainings = response.data.trainings || [];
         const trainingMap: Record<string, string> = {};
 
-        trainings.forEach((training: any) => {
+        trainings.forEach((training) => {
           trainingMap[training._id] = training.name;
         });
 

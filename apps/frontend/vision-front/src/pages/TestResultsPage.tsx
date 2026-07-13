@@ -30,7 +30,7 @@ import {
   Compare as CompareIcon
 } from '@mui/icons-material';
 import { testResultService } from '../services/testResultService';
-import { TestResult, TestResultData, TestResultMetrics, TestResultOverallMetrics } from '../types';
+import { TestResult, TestResultData, TestResultMetrics, TestResultOverallMetrics, TestResultCondition } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 export const TestResultsPage: React.FC = () => {
@@ -99,7 +99,7 @@ export const TestResultsPage: React.FC = () => {
   const getAverageMetric = (conditionData: TestResultData[string], metric: keyof TestResultMetrics): number => {
     const classNames: string[] = ['vehicle', 'sign', 'human'];
     const validClasses = classNames.filter(className => {
-      const classData = (conditionData as any)[className];
+      const classData = (conditionData as TestResultCondition)[className];
       return classData && typeof classData === 'object' && (
         metric in classData ||
         (metric === 'f1_score' && ('f1' in classData || 'mean_f1' in classData))
@@ -109,7 +109,7 @@ export const TestResultsPage: React.FC = () => {
     if (validClasses.length === 0) return 0;
 
     const sum = validClasses.reduce((acc, className) => {
-      const classData = (conditionData as any)[className] as TestResultMetrics;
+      const classData = (conditionData as TestResultCondition)[className] as TestResultMetrics;
       // Handle different F1 field names: f1_score, f1, or mean_f1
       const value = metric === 'f1_score' ?
         (classData.f1_score || classData.f1 || classData.mean_f1) :

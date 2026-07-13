@@ -113,7 +113,7 @@ export const useConfigsPage = () => {
           // Upload config
           await configService.uploadConfig({
             config_data: configData,
-            Summary: summary,
+            summary,
             config_name: configName
           });
 

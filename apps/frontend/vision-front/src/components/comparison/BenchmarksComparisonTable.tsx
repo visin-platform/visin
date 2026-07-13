@@ -3,9 +3,17 @@ import { Typography, Box } from '@mui/material';
 import LatexCodeDialog from './LatexCodeDialog';
 import BenchmarkDeviceTable from './BenchmarkDeviceTable';
 import { generateBenchmarkDeviceLatex } from '../../utils/latex/benchmarkComparisonLatex';
+import type { BenchmarkResult } from '../../types';
+
+// Only `_id`/`results`/`training_name` are read below — not the full Benchmark shape.
+interface BenchmarkWithTrainingName {
+  _id: string;
+  training_name: string;
+  results: BenchmarkResult[];
+}
 
 interface BenchmarksComparisonTableProps {
-  benchmarks: any[];
+  benchmarks: BenchmarkWithTrainingName[];
 }
 
 const BenchmarksComparisonTable: React.FC<BenchmarksComparisonTableProps> = ({ benchmarks }) => {
@@ -36,17 +44,17 @@ const BenchmarksComparisonTable: React.FC<BenchmarksComparisonTableProps> = ({ b
 
   // Separate CPU and GPU results
   const cpuResults = benchmarks.filter(b =>
-    b.results && b.results.some((r: any) => r.device_type === 'cpu' || r.device?.toLowerCase().includes('cpu'))
+    b.results && b.results.some((r) => r.device_type === 'cpu' || r.device?.toLowerCase().includes('cpu'))
   ).flatMap(b =>
-    b.results.filter((r: any) => r.device_type === 'cpu' || r.device?.toLowerCase().includes('cpu'))
-      .map((r: any) => ({ ...r, training_name: b.training_name || 'Unknown', benchmark_id: b._id }))
+    b.results.filter((r) => r.device_type === 'cpu' || r.device?.toLowerCase().includes('cpu'))
+      .map((r) => ({ ...r, training_name: b.training_name || 'Unknown', benchmark_id: b._id }))
   );
 
   const gpuResults = benchmarks.filter(b =>
-    b.results && b.results.some((r: any) => r.device_type === 'gpu' || r.device_type === 'cuda' || r.device?.toLowerCase().includes('gpu') || (!r.device_type && !r.device))
+    b.results && b.results.some((r) => r.device_type === 'gpu' || r.device_type === 'cuda' || r.device?.toLowerCase().includes('gpu') || (!r.device_type && !r.device))
   ).flatMap(b =>
-    b.results.filter((r: any) => r.device_type === 'gpu' || r.device_type === 'cuda' || r.device?.toLowerCase().includes('gpu') || (!r.device_type && !r.device))
-      .map((r: any) => ({ ...r, training_name: b.training_name || 'Unknown', benchmark_id: b._id }))
+    b.results.filter((r) => r.device_type === 'gpu' || r.device_type === 'cuda' || r.device?.toLowerCase().includes('gpu') || (!r.device_type && !r.device))
+      .map((r) => ({ ...r, training_name: b.training_name || 'Unknown', benchmark_id: b._id }))
   );
 
   if (benchmarks.length === 0) {

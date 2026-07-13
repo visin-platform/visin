@@ -17,16 +17,16 @@ export interface ApiToken {
 export const apiTokenService = {
   async getTokens(projectId: string): Promise<ApiResponse<ApiToken[]>> {
     const response = await visionApi.get(`/api-tokens/project/${projectId}`);
-    return response.data;
+    return response.data as ApiResponse<ApiToken[]>;
   },
 
   async createToken(data: { name: string; projectId: string; expiresInDays?: number }): Promise<ApiResponse<ApiToken>> {
     const response = await visionApi.post('/api-tokens', data);
-    return response.data;
+    return response.data as ApiResponse<ApiToken>;
   },
 
   async revokeToken(id: string): Promise<ApiResponse<void>> {
     const response = await visionApi.delete(`/api-tokens/${id}`);
-    return response.data;
+    return response.data as ApiResponse<void>;
   }
 };

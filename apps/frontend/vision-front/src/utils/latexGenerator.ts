@@ -1,4 +1,11 @@
-import { TestResult } from '../types';
+import { TestResult, TestResultCondition, TestResultMetrics } from '../types';
+
+interface MetricStat {
+  mean: number;
+  std?: number;
+}
+type ClassAggregates = Record<string, MetricStat>;
+export type AggregatedStats = Record<string, Record<string, ClassAggregates>>;
 
 export const generateLatexCode = (testResult: TestResult): string => {
   const conditions = [
@@ -19,12 +26,12 @@ export const generateLatexCode = (testResult: TestResult): string => {
 `;
 
   conditions.forEach((condition) => {
-    const conditionData = (testResult.test_results as any)[condition.key];
+    const conditionData = testResult.test_results[condition.key] as TestResultCondition | undefined;
     if (!conditionData) return;
 
     const vehicle = conditionData.vehicle;
     const sign = conditionData.sign;
-    const cyclistPedestrian = conditionData['cyclist + pedestrian'];
+    const cyclistPedestrian = conditionData['cyclist + pedestrian'] as TestResultMetrics | undefined;
     const human = conditionData.human;
     const overall = conditionData.overall;
     const inferenceTime = conditionData.inference_time;
@@ -43,7 +50,7 @@ Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4
   return latex;
 };
 
-export const generateAggregatedLatexCode = (aggregatedStats: any, hasCyclistPedestrianData: boolean, testResultsCount: number): string => {
+export const generateAggregatedLatexCode = (aggregatedStats: AggregatedStats, hasCyclistPedestrianData: boolean, testResultsCount: number): string => {
   const conditions = [
     { key: 'day_fair', label: 'Dry day' },
     { key: 'day_rain', label: 'Rainy day' },
@@ -83,7 +90,7 @@ export const generateAggregatedLatexCode = (aggregatedStats: any, hasCyclistPede
   };
 
   // Helper function to format value with bold if it's the best
-  const formatValue = (metricData: any, isBest: boolean): string => {
+  const formatValue = (metricData: MetricStat | undefined, isBest: boolean): string => {
     if (!metricData || typeof metricData.mean !== 'number') return '-';
     const value = `${metricData.mean.toFixed(2)}`;
     return isBest ? `\\textbf{${value}}` : value;

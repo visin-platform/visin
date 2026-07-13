@@ -15,6 +15,11 @@ import {
 import { Link } from 'react-router-dom';
 import { TrainingComparison } from '../../types';
 
+interface MetricStat {
+  mean: number;
+  std: number;
+}
+
 interface TrainingMetricsTableProps {
   comparisonData: TrainingComparison[];
 }
@@ -131,7 +136,7 @@ const TrainingMetricsTable: React.FC<TrainingMetricsTableProps> = ({ comparisonD
               </TableHead>
               <TableBody>
                 {trainingsWithMetrics.map((comp) => {
-                  const conditionData = comp.aggregatedTestResults?.[condition];
+                  const conditionData = comp.aggregatedTestResults?.[condition] as Record<string, Record<string, MetricStat>> | undefined;
                   return (
                     <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'grey.25' } }}>
                       <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>

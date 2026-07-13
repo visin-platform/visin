@@ -17,6 +17,7 @@ import { useAuth } from '../contexts/AuthContext';
 // New components
 import ProjectHeader from '../components/project/ProjectHeader';
 import ProjectTabs from '../components/project/ProjectTabs';
+import type { VisualizationsGroupedResult } from '../components/project/ProjectVisualizationsTab';
 import EditProjectDialog from '../components/project/EditProjectDialog';
 import DeleteProjectDialog from '../components/project/DeleteProjectDialog';
 
@@ -227,7 +228,7 @@ const ProjectDashboardPage: React.FC = () => {
         testsRowsPerPage={testsRowsPerPage}
         onTestsPageChange={handleTestsPageChange}
         onTestsRowsPerPageChange={handleTestsRowsPerPageChange}
-        visualizationsResponse={visualizations}
+        visualizationsResponse={visualizations as VisualizationsGroupedResult | undefined}
         isVisualizationsLoading={isVisualizationsLoading}
         benchmarksResponse={benchmarks}
         isBenchmarksLoading={isBenchmarksLoading}

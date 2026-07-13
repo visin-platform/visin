@@ -4,7 +4,7 @@ import {
   CreateComparisonData,
   UpdateComparisonData,
   ApiResponse,
-  PaginatedResponse
+  ComparisonsPaginatedResponse
 } from '../types';
 
 export interface ComparisonStats {
@@ -31,21 +31,21 @@ export const comparisonService = {
     projectId?: string;
     sortBy?: string;
     order?: 'asc' | 'desc';
-  }): Promise<PaginatedResponse<Comparison>> {
+  }): Promise<ComparisonsPaginatedResponse> {
     const response = await visionApi.get('/comparisons', { params });
-    return response.data;
+    return response.data as ComparisonsPaginatedResponse;
   },
 
   // Get comparison by ID
   async getComparisonById(id: string): Promise<ApiResponse<Comparison>> {
     const response = await visionApi.get(`/comparisons/${id}`);
-    return response.data;
+    return response.data as ApiResponse<Comparison>;
   },
 
   // Get comparison by UUID
   async getComparisonByUuid(uuid: string): Promise<ApiResponse<Comparison>> {
     const response = await visionApi.get(`/comparisons/uuid/${uuid}`);
-    return response.data;
+    return response.data as ApiResponse<Comparison>;
   },
 
   // Get comparison statistics
@@ -54,24 +54,24 @@ export const comparisonService = {
     projectId?: string;
   }): Promise<ApiResponse<ComparisonStats>> {
     const response = await visionApi.get('/comparisons/stats', { params });
-    return response.data;
+    return response.data as ApiResponse<ComparisonStats>;
   },
 
   // Create comparison
   async createComparison(comparisonData: CreateComparisonData): Promise<ApiResponse<Comparison>> {
     const response = await visionApi.post('/comparisons', comparisonData);
-    return response.data;
+    return response.data as ApiResponse<Comparison>;
   },
 
   // Update comparison
   async updateComparison(id: string, comparisonData: UpdateComparisonData): Promise<ApiResponse<Comparison>> {
     const response = await visionApi.put(`/comparisons/${id}`, comparisonData);
-    return response.data;
+    return response.data as ApiResponse<Comparison>;
   },
 
   // Delete comparison
   async deleteComparison(id: string): Promise<ApiResponse<void>> {
     const response = await visionApi.delete(`/comparisons/${id}`);
-    return response.data;
+    return response.data as ApiResponse<void>;
   }
 };

@@ -188,7 +188,7 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
 
   const selectedTraining = trainings.find(t => t._id === selectedTrainingId);
 
-  const formatNumber = (value: any, decimals: number = 4): string => {
+  const formatNumber = (value: number | undefined, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {
       return value.toFixed(decimals);
     }

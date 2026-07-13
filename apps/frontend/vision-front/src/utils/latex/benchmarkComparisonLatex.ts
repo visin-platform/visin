@@ -1,10 +1,14 @@
+import type { BenchmarkResult } from '@/types';
+
+type BenchmarkResultWithTrainingName = BenchmarkResult & { training_name: string };
+
 /**
  * LaTeX generator for a single device's (GPU or CPU) benchmark comparison
  * table, extracted from BenchmarksComparisonTable so the same formatting
  * logic backs both the "LaTeX" button per-table and (via
  * comparisonExportLatex.ts) the page-level "Export All LaTeX" dialog.
  */
-export function generateBenchmarkDeviceLatex(results: any[], device: 'gpu' | 'cpu'): string {
+export function generateBenchmarkDeviceLatex(results: BenchmarkResultWithTrainingName[], device: 'gpu' | 'cpu'): string {
   const memoryLabel = device === 'gpu' ? 'GPU Memory (MB)' : 'RAM Memory (MB)';
   const meanKey = device === 'gpu' ? 'gpu_memory_mean_mb' : 'ram_memory_mean_mb';
   const stdKey = device === 'gpu' ? 'gpu_memory_std_mb' : 'ram_memory_std_mb';

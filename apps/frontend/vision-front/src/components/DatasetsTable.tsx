@@ -156,8 +156,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
 
   const sortedAnalyses = React.useMemo(() => {
     return [...analyses].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
+      let aValue: string | number;
+      let bValue: string | number;
 
       switch (sortField) {
         case 'dataset':

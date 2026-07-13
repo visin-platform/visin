@@ -3,8 +3,10 @@ import {
   Epoch,
   CreateEpochData,
   ApiResponse,
-  PaginatedResponse
+  EpochsPaginatedResponse
 } from '../types';
+
+export type UploadEpochData = CreateEpochData & { _id?: string };
 
 export const epochService = {
   // Get epochs by training
@@ -13,52 +15,52 @@ export const epochService = {
     limit?: number;
     sortBy?: string;
     order?: 'asc' | 'desc';
-  }): Promise<PaginatedResponse<Epoch>> {
+  }): Promise<EpochsPaginatedResponse> {
     const response = await visionApi.get(`/epochs/training/${trainingId}`, { params });
-    return response.data;
+    return response.data as EpochsPaginatedResponse;
   },
 
   // Get epoch by ID
   async getEpochById(id: string): Promise<ApiResponse<Epoch>> {
     const response = await visionApi.get(`/epochs/${id}`);
-    return response.data;
+    return response.data as ApiResponse<Epoch>;
   },
 
   // Get epoch by UUID
   async getEpochByUuid(uuid: string): Promise<ApiResponse<Epoch>> {
     const response = await visionApi.get(`/epochs/uuid/${uuid}`);
-    return response.data;
+    return response.data as ApiResponse<Epoch>;
   },
 
   // Create epoch
   async createEpoch(epochData: CreateEpochData): Promise<ApiResponse<Epoch>> {
     const response = await visionApi.post('/epochs', epochData);
-    return response.data;
+    return response.data as ApiResponse<Epoch>;
   },
 
   // Upload epoch from JSON file
-  async uploadEpoch(epochData: any, trainingId?: string): Promise<ApiResponse<Epoch>> {
+  async uploadEpoch(epochData: UploadEpochData, trainingId?: string): Promise<ApiResponse<Epoch>> {
     const payload = trainingId 
       ? { ...epochData, trainingId }
       : epochData;
     const response = await visionApi.post('/epochs/upload', payload);
-    return response.data;
+    return response.data as ApiResponse<Epoch>;
   },
 
   // Create multiple epochs (batch)
   async createEpochsBatch(epochs: CreateEpochData[]): Promise<ApiResponse<Epoch[]>> {
     const response = await visionApi.post('/epochs/batch', { epochs });
-    return response.data;
+    return response.data as ApiResponse<Epoch[]>;
   },
 
   // Update epoch
   async updateEpoch(id: string, epochData: Partial<CreateEpochData>): Promise<ApiResponse<Epoch>> {
     const response = await visionApi.put(`/epochs/${id}`, epochData);
-    return response.data;
+    return response.data as ApiResponse<Epoch>;
   },
 
   // Upload or update epoch (smart method)
-  async uploadOrUpdateEpoch(epochData: any, trainingId?: string): Promise<ApiResponse<Epoch>> {
+  async uploadOrUpdateEpoch(epochData: UploadEpochData, trainingId?: string): Promise<ApiResponse<Epoch>> {
     const payload = trainingId 
       ? { ...epochData, trainingId }
       : epochData;
@@ -83,6 +85,6 @@ export const epochService = {
   // Delete epoch
   async deleteEpoch(id: string): Promise<ApiResponse<void>> {
     const response = await visionApi.delete(`/epochs/${id}`);
-    return response.data;
+    return response.data as ApiResponse<void>;
   }
 };

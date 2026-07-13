@@ -20,12 +20,7 @@ import {
 import { Code as CodeIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import LatexModal from '../common/LatexModal';
-
-interface ComparisonData {
-  aggregatedResults: any;
-  training: { _id: string; name: string };
-  testResultsCount: number;
-}
+import type { ComparisonData, ConditionAggregates } from './performanceMetricsUtils';
 
 interface IoUMetricsTableProps {
   comparisonData: ComparisonData[];
@@ -52,7 +47,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
     'snow': {column: 'training', direction: 'asc'}
   });
 
-  const formatNumber = (value: any): string => {
+  const formatNumber = (value: number | undefined): string => {
     if (typeof value === 'number' && !isNaN(value)) {
       return (value * multiplier).toFixed(decimals);
     }
@@ -97,8 +92,8 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
         bString = b.training.name.toLowerCase();
       } else {
         // For class columns, extract IoU mean value
-        const conditionDataA = a.aggregatedResults?.[condition];
-        const conditionDataB = b.aggregatedResults?.[condition];
+        const conditionDataA = a.aggregatedResults?.[condition] as ConditionAggregates | undefined;
+        const conditionDataB = b.aggregatedResults?.[condition] as ConditionAggregates | undefined;
         const classMetricsA = conditionDataA?.[column];
         const classMetricsB = conditionDataB?.[column];
         aValue = classMetricsA?.iou?.mean ?? -Infinity;
@@ -160,7 +155,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
     let bestIoU = -Infinity;
 
     comparisonData.forEach((comp) => {
-      const conditionData = comp.aggregatedResults?.[condition];
+      const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
       const classMetrics = conditionData?.[className];
       const iouValue = classMetrics?.iou?.mean;
 
@@ -196,7 +191,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
       latex += `${trainingName} `;
 
       classNames.forEach((className) => {
-        const conditionData = comp.aggregatedResults?.[condition];
+        const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
         const classMetrics = conditionData?.[className];
         const bestIoU = getBestIoUValues(condition, className);
 
@@ -305,7 +300,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
                           </Link>
                         </TableCell>
                         {classNames.map((className) => {
-                          const conditionData = comp.aggregatedResults?.[condition];
+                          const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
                           const classMetrics = conditionData?.[className];
                           const bestIoU = getBestIoUValues(condition, className);
 

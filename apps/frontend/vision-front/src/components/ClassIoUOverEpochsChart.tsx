@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Paper } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
-import { Epoch } from '../types';
+import { Epoch, EpochMetrics } from '../types';
 
 interface ClassIoUOverEpochsChartProps {
   epochs: Epoch[];
@@ -20,7 +20,7 @@ const ClassIoUOverEpochsChart: React.FC<ClassIoUOverEpochsChartProps> = ({
 
   epochs.forEach(epoch => {
     // Try validation results first
-    const valResults = epoch.results?.val as Record<string, any> || {};
+    const valResults = (epoch.results?.val || {}) as Record<string, EpochMetrics>;
     Object.keys(valResults).forEach(key => {
       if (!EXCLUDED_KEYS.has(key) && valResults[key]?.iou !== undefined) {
         allClasses.add(key);
@@ -29,7 +29,7 @@ const ClassIoUOverEpochsChart: React.FC<ClassIoUOverEpochsChartProps> = ({
 
     // If no classes found in val, try train
     if (allClasses.size === 0) {
-      const trainResults = epoch.results?.train as Record<string, any> || {};
+      const trainResults = (epoch.results?.train || {}) as Record<string, EpochMetrics>;
       Object.keys(trainResults).forEach(key => {
         if (!EXCLUDED_KEYS.has(key) && trainResults[key]?.iou !== undefined) {
           allClasses.add(key);
@@ -39,12 +39,12 @@ const ClassIoUOverEpochsChart: React.FC<ClassIoUOverEpochsChartProps> = ({
 
     // Try per_class structure as fallback
     if (allClasses.size === 0) {
-      let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+      let perClass = epoch.results?.val?.per_class || {};
       if (Object.keys(perClass).length === 0) {
-        perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+        perClass = epoch.results?.train?.per_class || {};
       }
       if (Object.keys(perClass).length === 0) {
-        perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+        perClass = epoch.results?.metrics?.per_class || {};
       }
       Object.keys(perClass).forEach(key => {
         if (perClass[key]?.iou !== undefined) {
@@ -84,23 +84,23 @@ const ClassIoUOverEpochsChart: React.FC<ClassIoUOverEpochsChartProps> = ({
     return classList.map((className, index) => {
       const classIoUData = epochs.map(epoch => {
         // Try validation results first
-        const valResults = epoch.results?.val as Record<string, any> || {};
+        const valResults = (epoch.results?.val || {}) as Record<string, EpochMetrics>;
         let iouValue = valResults[className]?.iou;
 
         // Try training results if val doesn't have it
         if (iouValue === undefined) {
-          const trainResults = epoch.results?.train as Record<string, any> || {};
+          const trainResults = (epoch.results?.train || {}) as Record<string, EpochMetrics>;
           iouValue = trainResults[className]?.iou;
         }
 
         // Try per_class structure
         if (iouValue === undefined) {
-          let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+          let perClass = epoch.results?.val?.per_class || {};
           if (!perClass[className]) {
-            perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+            perClass = epoch.results?.train?.per_class || {};
           }
           if (!perClass[className]) {
-            perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+            perClass = epoch.results?.metrics?.per_class || {};
           }
           iouValue = perClass[className]?.iou;
         }

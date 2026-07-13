@@ -22,6 +22,11 @@ import { Project } from '../types/Project';
 import { DatasetAnalysis } from '../services/analysisService';
 import TagInput from './TagInput';
 
+interface DatasetAnalysisSummary {
+  total_frames?: number;
+  total_classes?: number;
+}
+
 interface TrainingFormDialogProps {
   open: boolean;
   onClose: () => void;
@@ -192,11 +197,14 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
             <MenuItem value="">
               <em>None</em>
             </MenuItem>
-            {datasets.map((dataset: DatasetAnalysis) => (
-              <MenuItem key={dataset._id} value={dataset._id}>
-                {dataset.dataset} ({dataset.data?.total_frames || 0} frames, {dataset.data?.total_classes || 0} classes)
-              </MenuItem>
-            ))}
+            {datasets.map((dataset: DatasetAnalysis) => {
+              const summary = dataset.data as DatasetAnalysisSummary | undefined;
+              return (
+                <MenuItem key={dataset._id} value={dataset._id}>
+                  {dataset.dataset} ({summary?.total_frames || 0} frames, {summary?.total_classes || 0} classes)
+                </MenuItem>
+              );
+            })}
           </Select>
         </FormControl>
         <FormControl fullWidth sx={{ mb: 2 }}>

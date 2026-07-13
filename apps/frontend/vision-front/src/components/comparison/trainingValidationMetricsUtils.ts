@@ -1,4 +1,4 @@
-import { TrainingComparison } from '../../types';
+import { TrainingComparison, EpochMetrics } from '../../types';
 
 export interface ValidationMetrics {
   meanIoU?: { mean: number; std: number };
@@ -60,12 +60,12 @@ export function computeTrainingMetrics(comparisonData: TrainingComparison[]): Tr
 
       Object.keys(valResults).forEach(key => {
         if (key === 'loss' || key === 'mean_iou' || key === 'val_loss') return;
-        const classData = valResults[key];
+        const classData = valResults[key] as EpochMetrics | undefined;
         if (classData && typeof classData === 'object') {
           if (typeof classData.precision === 'number') epochPrecision.push(classData.precision);
           if (typeof classData.recall === 'number') epochRecall.push(classData.recall);
-          if (typeof (classData.f1_score || classData.f1) === 'number') {
-            epochF1.push(classData.f1_score || classData.f1);
+          if (typeof classData.f1_score === 'number' || typeof classData.f1 === 'number') {
+            epochF1.push((classData.f1_score ?? classData.f1) as number);
           }
         }
       });

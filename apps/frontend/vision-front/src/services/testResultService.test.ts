@@ -6,6 +6,7 @@ vi.mock('../config/visionApi', () => ({
 
 import { visionApi } from '../config/visionApi';
 import { testResultService } from './testResultService';
+import type { CreateTestResultData } from '../types';
 
 const mockedApi = vi.mocked(visionApi);
 
@@ -41,19 +42,21 @@ describe('testResultService', () => {
 
   it('createTestResult posts test result data', async () => {
     mockedApi.post.mockResolvedValue({ data: { success: true, data: { _id: 'tr1' } } });
-    await testResultService.createTestResult({ epoch: 1 } as any);
-    expect(mockedApi.post).toHaveBeenCalledWith('/test-results', { epoch: 1 });
+    const testResultData = { epoch: 1, epoch_uuid: 'e1', test_results: {} } as unknown as CreateTestResultData;
+    await testResultService.createTestResult(testResultData);
+    expect(mockedApi.post).toHaveBeenCalledWith('/test-results', testResultData);
   });
 
   it('uploadTestResult posts to /test-results/upload', async () => {
     mockedApi.post.mockResolvedValue({ data: { success: true, data: {} } });
-    await testResultService.uploadTestResult({ raw: true });
-    expect(mockedApi.post).toHaveBeenCalledWith('/test-results/upload', { raw: true });
+    const testResultData = { epoch: 1, epoch_uuid: 'e1', test_results: { raw: true } } as unknown as CreateTestResultData;
+    await testResultService.uploadTestResult(testResultData);
+    expect(mockedApi.post).toHaveBeenCalledWith('/test-results/upload', testResultData);
   });
 
   it('updateTestResult puts partial data', async () => {
     mockedApi.put.mockResolvedValue({ data: { success: true, data: {} } });
-    await testResultService.updateTestResult('tr1', { epoch: 2 } as any);
+    await testResultService.updateTestResult('tr1', { epoch: 2 });
     expect(mockedApi.put).toHaveBeenCalledWith('/test-results/tr1', { epoch: 2 });
   });
 

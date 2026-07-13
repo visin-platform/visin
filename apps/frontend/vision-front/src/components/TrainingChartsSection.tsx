@@ -5,7 +5,7 @@ import {
   Typography
 } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
-import { Epoch } from '../types';
+import { Epoch, EpochMetrics } from '../types';
 
 interface TrainingChartsSectionProps {
   epochs: Epoch[];
@@ -113,42 +113,42 @@ export const TrainingChartsSection: React.FC<TrainingChartsSectionProps> = ({ ep
               xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
               series={[
                 {
-                  data: epochs.map(epoch => (epoch.results?.val?.vehicle as any)?.iou || 0),
+                  data: epochs.map(epoch => (epoch.results?.val?.vehicle as EpochMetrics | undefined)?.iou || 0),
                   label: 'Vehicle (Val)',
                   color: '#e57373'
                 },
                 {
-                  data: epochs.map(epoch => (epoch.results?.train?.vehicle as any)?.iou || 0),
+                  data: epochs.map(epoch => (epoch.results?.train?.vehicle as EpochMetrics | undefined)?.iou || 0),
                   label: 'Vehicle (Train)',
                   color: '#ffcdd2'
                 },
                 {
-                  data: epochs.map(epoch => (epoch.results?.val?.sign as any)?.iou || 0),
+                  data: epochs.map(epoch => (epoch.results?.val?.sign as EpochMetrics | undefined)?.iou || 0),
                   label: 'Sign (Val)',
                   color: '#81c784'
                 },
                 {
-                  data: epochs.map(epoch => (epoch.results?.train?.sign as any)?.iou || 0),
+                  data: epochs.map(epoch => (epoch.results?.train?.sign as EpochMetrics | undefined)?.iou || 0),
                   label: 'Sign (Train)',
                   color: '#c8e6c9'
                 },
                 {
-                  data: epochs.map(epoch => (epoch.results?.val?.cyclist as any)?.iou || 0),
+                  data: epochs.map(epoch => (epoch.results?.val?.cyclist as EpochMetrics | undefined)?.iou || 0),
                   label: 'Cyclist (Val)',
                   color: '#64b5f6'
                 },
                 {
-                  data: epochs.map(epoch => (epoch.results?.train?.cyclist as any)?.iou || 0),
+                  data: epochs.map(epoch => (epoch.results?.train?.cyclist as EpochMetrics | undefined)?.iou || 0),
                   label: 'Cyclist (Train)',
                   color: '#bbdefb'
                 },
                 {
-                  data: epochs.map(epoch => (epoch.results?.val?.pedestrian as any)?.iou || 0),
+                  data: epochs.map(epoch => (epoch.results?.val?.pedestrian as EpochMetrics | undefined)?.iou || 0),
                   label: 'Pedestrian (Val)',
                   color: '#ffb74d'
                 },
                 {
-                  data: epochs.map(epoch => (epoch.results?.train?.pedestrian as any)?.iou || 0),
+                  data: epochs.map(epoch => (epoch.results?.train?.pedestrian as EpochMetrics | undefined)?.iou || 0),
                   label: 'Pedestrian (Train)',
                   color: '#ffe0b2'
                 }

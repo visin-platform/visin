@@ -184,7 +184,7 @@ describe('useConfigsPage', () => {
 
     expect(mockedConfig.uploadConfig).toHaveBeenCalledWith({
       config_data: { Summary: 'sum' },
-      Summary: 'sum',
+      summary: 'sum',
       config_name: 'my-config'
     });
     await waitFor(() => expect(result.current.success).toBe('Upload finished - 1 config(s) processed'));

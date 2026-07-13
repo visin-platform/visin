@@ -2,10 +2,13 @@ import React from 'react';
 import { Box, Button, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import { Code as CodeIcon } from '@mui/icons-material';
 import SortableTableCell from './SortableTableCell';
+import type { BenchmarkResult } from '../../types';
+
+type BenchmarkResultRow = BenchmarkResult & { training_name: string; benchmark_id: string };
 
 interface BenchmarkDeviceTableProps {
   device: 'gpu' | 'cpu';
-  results: any[];
+  results: BenchmarkResultRow[];
   sortColumn: string;
   sortDirection: 'asc' | 'desc';
   onSort: (column: string) => void;

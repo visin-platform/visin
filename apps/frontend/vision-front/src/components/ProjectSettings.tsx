@@ -32,6 +32,7 @@ import {
   Save as SaveIcon
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ApiError } from '@visin/frontend-core';
 import { apiTokenService, ApiToken } from '../services/apiTokenService';
 import { projectService } from '../services/projectService';
 import { Project, UpdateProjectData } from '../types/Project';
@@ -83,8 +84,8 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
       queryClient.invalidateQueries({ queryKey: ['project', project._id] });
       setProjectUpdateError(null);
     },
-    onError: (error: any) => {
-      setProjectUpdateError(error.response?.data?.message || 'Failed to update project');
+    onError: (error: ApiError | Error) => {
+      setProjectUpdateError(error.message || 'Failed to update project');
     }
   });
 

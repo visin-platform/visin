@@ -12,9 +12,10 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon
 } from '@mui/icons-material';
+import type { DatasetAnalysis } from '../../services/analysisService';
 
 interface DatasetInfoTabProps {
-  analysis: any;
+  analysis: DatasetAnalysis;
   canDelete: boolean;
   onUploadJson: (event: React.ChangeEvent<HTMLInputElement>) => void;
   uploadingJson: boolean;
@@ -103,7 +104,7 @@ const DatasetInfoTab: React.FC<DatasetInfoTabProps> = ({
         <pre style={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
           {JSON.stringify(analysis.data || (() => {
             // Handle legacy data structure where JSON is at top level
-            const { _id, createdAt, updatedAt, ...jsonData } = analysis as any;
+            const { _id, createdAt, updatedAt, ...jsonData } = analysis;
             return jsonData;
           })(), null, 2)}
         </pre>

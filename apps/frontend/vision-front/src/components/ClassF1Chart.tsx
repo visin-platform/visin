@@ -1,7 +1,7 @@
 import React from 'react';
 import { Paper, Box } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
-import { Epoch } from '../types';
+import { Epoch, EpochMetrics } from '../types';
 
 interface ClassF1ChartProps {
   epochs: Epoch[];
@@ -20,7 +20,7 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
 
   epochs.forEach(epoch => {
     // Try validation results first
-    const valResults = epoch.results?.val as Record<string, any> || {};
+    const valResults = (epoch.results?.val || {}) as Record<string, EpochMetrics>;
     Object.keys(valResults).forEach(key => {
       if (!EXCLUDED_KEYS.has(key) && valResults[key]?.f1 !== undefined) {
         allClasses.add(key);
@@ -29,7 +29,7 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
 
     // If no classes found in val, try train
     if (allClasses.size === 0) {
-      const trainResults = epoch.results?.train as Record<string, any> || {};
+      const trainResults = (epoch.results?.train || {}) as Record<string, EpochMetrics>;
       Object.keys(trainResults).forEach(key => {
         if (!EXCLUDED_KEYS.has(key) && trainResults[key]?.f1 !== undefined) {
           allClasses.add(key);
@@ -39,12 +39,12 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
 
     // Try per_class structure as fallback
     if (allClasses.size === 0) {
-      let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+      let perClass = epoch.results?.val?.per_class || {};
       if (Object.keys(perClass).length === 0) {
-        perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+        perClass = epoch.results?.train?.per_class || {};
       }
       if (Object.keys(perClass).length === 0) {
-        perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+        perClass = epoch.results?.metrics?.per_class || {};
       }
       Object.keys(perClass).forEach(key => {
         if (perClass[key]?.f1 !== undefined) {
@@ -84,28 +84,28 @@ const ClassF1Chart: React.FC<ClassF1ChartProps> = ({
     return classList.map((className, index) => {
       const classF1Data = epochs.map(epoch => {
         // Try validation results first
-        const valResults = epoch.results?.val as Record<string, any> || {};
+        const valResults = (epoch.results?.val || {}) as Record<string, EpochMetrics>;
         let f1Value = valResults[className]?.f1;
 
         // Try training results if val doesn't have it
         if (f1Value === undefined) {
-          const trainResults = epoch.results?.train as Record<string, any> || {};
+          const trainResults = (epoch.results?.train || {}) as Record<string, EpochMetrics>;
           f1Value = trainResults[className]?.f1;
         }
 
         // Try per_class structures as fallback
         if (f1Value === undefined) {
-          const perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.val?.per_class || {};
           f1Value = perClass[className]?.f1;
         }
 
         if (f1Value === undefined) {
-          const perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.train?.per_class || {};
           f1Value = perClass[className]?.f1;
         }
 
         if (f1Value === undefined) {
-          const perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.metrics?.per_class || {};
           f1Value = perClass[className]?.f1;
         }
 

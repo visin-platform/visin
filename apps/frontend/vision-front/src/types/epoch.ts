@@ -8,28 +8,28 @@ export interface EpochMetrics {
   recall?: number;
   f1?: number;
   ap?: number;
-  [key: string]: any;
+  [key: string]: number | undefined;
+}
+
+// Real-world payloads nest per-class metrics under train/val/metrics directly,
+// or under a further `per_class` key — consumers (the Class*Chart components)
+// try both, so both shapes are allowed here.
+export interface EpochConditionResults {
+  loss?: number;
+  mean_iou?: number;
+  pixel_accuracy?: number;
+  mean_accuracy?: number;
+  dice_score?: number;
+  per_class?: Record<string, EpochMetrics>;
+  [className: string]: EpochMetrics | number | Record<string, EpochMetrics> | undefined;
 }
 
 export interface EpochResults {
-  train?: {
-    loss?: number;
-    mean_iou?: number;
-    pixel_accuracy?: number;
-    mean_accuracy?: number;
-    dice_score?: number;
-    [className: string]: EpochMetrics | number | undefined;
-  };
-  val?: {
-    loss?: number;
-    mean_iou?: number;
-    pixel_accuracy?: number;
-    mean_accuracy?: number;
-    dice_score?: number;
-    [className: string]: EpochMetrics | number | undefined;
-  };
+  train?: EpochConditionResults;
+  val?: EpochConditionResults;
+  metrics?: EpochConditionResults;
   system_info?: SystemInfo;
-  [key: string]: any;
+  [key: string]: EpochConditionResults | SystemInfo | undefined;
 }
 
 export interface Epoch {
@@ -42,7 +42,7 @@ export interface Epoch {
   results: EpochResults;
   learning_rate?: number;
   epoch_time?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,7 +56,7 @@ export interface CreateEpochData {
   results: EpochResults;
   learning_rate?: number;
   epoch_time?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface EpochsPaginatedResponse extends PaginatedResponse<Epoch> {

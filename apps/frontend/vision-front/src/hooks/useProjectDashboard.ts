@@ -6,13 +6,15 @@ import { testResultService } from '../services/testResultService';
 import { visualizationService } from '../services/visualizationService';
 import { benchmarkService } from '../services/benchmarkService';
 
+type TrainingSortColumn = 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
+
 export const useProjectDashboard = (projectId: string | undefined, tabValue: number) => {
   const queryClient = useQueryClient();
 
   // Table state
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
-  const [sortBy, setSortBy] = useState<'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount'>('updatedAt');
+  const [sortBy, setSortBy] = useState<TrainingSortColumn>('updatedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Pagination state for Tests tab
@@ -139,7 +141,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     setBenchmarksPage(0);
   };
 
-  const handleSort = (column: any) => {
+  const handleSort = (column: TrainingSortColumn) => {
     const isAsc = sortBy === column && sortOrder === 'asc';
     setSortOrder(isAsc ? 'desc' : 'asc');
     setSortBy(column);

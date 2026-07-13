@@ -1,9 +1,19 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import DatasetInfoTab from './DatasetInfoTab';
+import type { DatasetAnalysis } from '../../services/analysisService';
+
+const makeAnalysis = (overrides: Partial<DatasetAnalysis> = {}): DatasetAnalysis => ({
+  _id: 'a1',
+  dataset: 'ds1',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  data: { foo: 'bar' },
+  ...overrides,
+});
 
 const baseProps = {
-  analysis: { data: { foo: 'bar' } },
+  analysis: makeAnalysis(),
   canDelete: true,
   onUploadJson: vi.fn(),
   uploadingJson: false,
@@ -19,7 +29,8 @@ describe('DatasetInfoTab', () => {
   });
 
   it('falls back to the legacy top-level data shape when analysis.data is absent', () => {
-    render(<DatasetInfoTab {...baseProps} analysis={{ _id: 'a1', createdAt: 'x', updatedAt: 'y', legacyField: 'value' }} />);
+    const legacyAnalysis = { ...makeAnalysis({ data: undefined }), legacyField: 'value' } as DatasetAnalysis;
+    render(<DatasetInfoTab {...baseProps} analysis={legacyAnalysis} />);
 
     expect(screen.getByText(/"legacyField": "value"/)).toBeInTheDocument();
   });

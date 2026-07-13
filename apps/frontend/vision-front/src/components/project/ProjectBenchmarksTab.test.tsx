@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ProjectBenchmarksTab from './ProjectBenchmarksTab';
+import type { Benchmark, BenchmarksPaginatedResponse } from '../../types';
 
 vi.mock('../../services/benchmarkService', () => ({
   benchmarkService: { deleteBenchmark: vi.fn() },
@@ -10,8 +11,26 @@ vi.mock('../../services/benchmarkService', () => ({
 import { benchmarkService } from '../../services/benchmarkService';
 const mockedBenchmark = vi.mocked(benchmarkService);
 
+const makeBenchmark = (overrides: Partial<Benchmark> = {}): Benchmark => ({
+  _id: 'b1',
+  results: [],
+  timestamp: '2026-01-01T00:00:00.000Z',
+  system_info: {},
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  ...overrides,
+});
+
+const makeResponse = (benchmarks: Benchmark[]): BenchmarksPaginatedResponse => ({
+  success: true,
+  data: {
+    benchmarks,
+    pagination: { page: 0, limit: 25, total: benchmarks.length, pages: 1 },
+  },
+});
+
 const baseProps = {
-  benchmarksResponse: { data: { benchmarks: [], pagination: { total: 0 } } },
+  benchmarksResponse: makeResponse([]),
   isLoading: false,
   page: 0,
   rowsPerPage: 25,
@@ -44,13 +63,11 @@ describe('ProjectBenchmarksTab', () => {
   });
 
   it('renders a linked training name, FPS, and parameters (M-scaled from total_parameters_m)', () => {
-    const benchmark = {
-      _id: 'b1',
-      training_id: { _id: 't1', name: 'Run 1' },
+    const benchmark = makeBenchmark({
+      training_id: { _id: 't1', name: 'Run 1', uuid: 'uuid-1' },
       results: [{ fps: 30.456, total_parameters_m: 25.3 }],
-      timestamp: '2026-01-01T00:00:00.000Z',
-    };
-    renderTab({ benchmarksResponse: { data: { benchmarks: [benchmark], pagination: { total: 1 } } } });
+    });
+    renderTab({ benchmarksResponse: makeResponse([benchmark]) });
 
     expect(screen.getByRole('link', { name: 'Run 1' })).toHaveAttribute('href', '/trainings/t1?tab=benchmarks');
     expect(screen.getByText('30.46')).toBeInTheDocument();
@@ -58,23 +75,17 @@ describe('ProjectBenchmarksTab', () => {
   });
 
   it('falls back to a raw parameter count converted to millions, and "-" when absent', () => {
-    const withRawParams = {
-      _id: 'b1',
-      training_id: null,
-      training_name: 'Untracked',
-      results: [{ total_parameters: 5_000_000 }],
-      timestamp: '2026-01-01T00:00:00.000Z',
-    };
+    const withRawParams = makeBenchmark({ results: [{ total_parameters: 5_000_000 }] });
     const { rerender } = renderTab({
-      benchmarksResponse: { data: { benchmarks: [withRawParams], pagination: { total: 1 } } },
+      benchmarksResponse: makeResponse([withRawParams]),
     });
-    expect(screen.getByText('Untracked')).toBeInTheDocument();
+    expect(screen.getByText('Unknown')).toBeInTheDocument();
     expect(screen.getByText('5.0M')).toBeInTheDocument();
 
-    const noParams = { _id: 'b2', training_id: null, results: [], timestamp: '2026-01-01T00:00:00.000Z' };
+    const noParams = makeBenchmark({ _id: 'b2' });
     rerender(
       <MemoryRouter>
-        <ProjectBenchmarksTab {...baseProps} benchmarksResponse={{ data: { benchmarks: [noParams], pagination: { total: 1 } } }} />
+        <ProjectBenchmarksTab {...baseProps} benchmarksResponse={makeResponse([noParams])} />
       </MemoryRouter>
     );
     expect(screen.getByText('Unknown')).toBeInTheDocument();
@@ -82,9 +93,8 @@ describe('ProjectBenchmarksTab', () => {
   });
 
   it('hides the Actions column when not the owner', () => {
-    const benchmark = { _id: 'b1', training_id: null, results: [], timestamp: '2026-01-01T00:00:00.000Z' };
     renderTab({
-      benchmarksResponse: { data: { benchmarks: [benchmark], pagination: { total: 1 } } },
+      benchmarksResponse: makeResponse([makeBenchmark()]),
       isOwner: false,
     });
 
@@ -93,8 +103,7 @@ describe('ProjectBenchmarksTab', () => {
 
   it('deletes a benchmark via the confirmation dialog and reloads the page', async () => {
     mockedBenchmark.deleteBenchmark.mockResolvedValue(undefined as never);
-    const benchmark = { _id: 'b1', training_id: null, results: [], timestamp: '2026-01-01T00:00:00.000Z' };
-    renderTab({ benchmarksResponse: { data: { benchmarks: [benchmark], pagination: { total: 1 } } } });
+    renderTab({ benchmarksResponse: makeResponse([makeBenchmark()]) });
 
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
     expect(screen.getByText('Delete Benchmark')).toBeInTheDocument();
@@ -108,8 +117,7 @@ describe('ProjectBenchmarksTab', () => {
   it('shows an error message when deletion fails', async () => {
     mockedBenchmark.deleteBenchmark.mockRejectedValue(new Error('nope'));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const benchmark = { _id: 'b1', training_id: null, results: [], timestamp: '2026-01-01T00:00:00.000Z' };
-    renderTab({ benchmarksResponse: { data: { benchmarks: [benchmark], pagination: { total: 1 } } } });
+    renderTab({ benchmarksResponse: makeResponse([makeBenchmark()]) });
 
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
@@ -119,8 +127,7 @@ describe('ProjectBenchmarksTab', () => {
   });
 
   it('cancels the delete dialog without deleting', () => {
-    const benchmark = { _id: 'b1', training_id: null, results: [], timestamp: '2026-01-01T00:00:00.000Z' };
-    renderTab({ benchmarksResponse: { data: { benchmarks: [benchmark], pagination: { total: 1 } } } });
+    renderTab({ benchmarksResponse: makeResponse([makeBenchmark()]) });
 
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));

@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
-import { generateAggregatedLatexCode } from '../utils/latexGenerator';
+import { generateAggregatedLatexCode, AggregatedStats } from '../utils/latexGenerator';
 
 interface ComparisonData {
-  aggregatedResults: any;
+  aggregatedResults: AggregatedStats;
   training: { _id: string; name: string };
   testResultsCount: number;
 }
@@ -17,7 +17,7 @@ export const useLatexGenerator = (comparisonData: ComparisonData[]) => {
     const testResultsCount = comparisonData[0].testResultsCount || 0;
     
     // Check if we have cyclist + pedestrian data
-    const hasCyclistPedestrianData = Object.values(aggregatedStats || {}).some((conditionData: any) => 
+    const hasCyclistPedestrianData = Object.values(aggregatedStats || {}).some((conditionData) => 
       conditionData && conditionData['cyclist + pedestrian']
     );
 
@@ -32,7 +32,7 @@ export const useLatexGenerator = (comparisonData: ComparisonData[]) => {
     const testResultsCount = comparisonData[0].testResultsCount || 0;
     
     // Check if we have cyclist + pedestrian data
-    const hasCyclistPedestrianData = Object.values(aggregatedStats || {}).some((conditionData: any) => 
+    const hasCyclistPedestrianData = Object.values(aggregatedStats || {}).some((conditionData) => 
       conditionData && conditionData['cyclist + pedestrian']
     );
 
@@ -47,7 +47,7 @@ export const useLatexGenerator = (comparisonData: ComparisonData[]) => {
     const testResultsCount = comparisonData[0].testResultsCount || 0;
     
     // Check if we have cyclist + pedestrian data
-    const hasCyclistPedestrianData = Object.values(aggregatedStats || {}).some((conditionData: any) => 
+    const hasCyclistPedestrianData = Object.values(aggregatedStats || {}).some((conditionData) => 
       conditionData && conditionData['cyclist + pedestrian']
     );
 

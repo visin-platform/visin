@@ -14,7 +14,7 @@ import {
   Chip
 } from '@mui/material';
 import { Link } from 'react-router-dom';
-import { TrainingComparison, ComparisonEpoch } from '../../types';
+import { TrainingComparison, ComparisonEpoch, EpochMetrics } from '../../types';
 
 interface TopEpochsTableProps {
   comparisonData: TrainingComparison[];
@@ -66,12 +66,12 @@ const TopEpochsTable: React.FC<TopEpochsTableProps> = ({ comparisonData }) => {
             const f1s: number[] = [];
 
             classKeys.forEach(classKey => {
-              const classMetrics = valResults[classKey];
+              const classMetrics = valResults[classKey] as EpochMetrics | undefined;
               if (classMetrics && typeof classMetrics === 'object') {
                 if (typeof classMetrics.precision === 'number') precisions.push(classMetrics.precision);
                 if (typeof classMetrics.recall === 'number') recalls.push(classMetrics.recall);
                 if (typeof classMetrics.f1_score === 'number' || typeof classMetrics.f1 === 'number') {
-                  f1s.push(classMetrics.f1_score || classMetrics.f1);
+                  f1s.push((classMetrics.f1_score ?? classMetrics.f1) as number);
                 }
               }
             });

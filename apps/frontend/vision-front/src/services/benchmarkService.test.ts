@@ -41,8 +41,9 @@ describe('benchmarkService', () => {
 
   it('uploadBenchmark posts to /benchmarks/upload', async () => {
     mockedApi.post.mockResolvedValue({ data: { success: true, data: {} } });
-    await benchmarkService.uploadBenchmark({ raw: true });
-    expect(mockedApi.post).toHaveBeenCalledWith('/benchmarks/upload', { raw: true });
+    const benchmarkData = { training_uuid: 'u1' } as any;
+    await benchmarkService.uploadBenchmark(benchmarkData);
+    expect(mockedApi.post).toHaveBeenCalledWith('/benchmarks/upload', benchmarkData);
   });
 
   it('updateBenchmark puts partial data', async () => {

@@ -1,4 +1,5 @@
 import { visionApi } from '../config/visionApi';
+import { ApiResponse } from '../types';
 
 export interface ImageCategory {
   _id: string;
@@ -15,7 +16,7 @@ export interface ImageCategory {
  */
 export const getCategoriesByDataset = async (datasetId: string): Promise<ImageCategory[]> => {
   const response = await visionApi.get(`/image-categories/dataset/${datasetId}`);
-  return response.data.data;
+  return (response.data as ApiResponse<ImageCategory[]>).data;
 };
 
 /**
@@ -23,7 +24,7 @@ export const getCategoriesByDataset = async (datasetId: string): Promise<ImageCa
  */
 export const getAllCategories = async (): Promise<ImageCategory[]> => {
   const response = await visionApi.get('/image-categories');
-  return response.data.data;
+  return (response.data as ApiResponse<ImageCategory[]>).data;
 };
 
 /**
@@ -31,7 +32,7 @@ export const getAllCategories = async (): Promise<ImageCategory[]> => {
  */
 export const getCategoryById = async (id: string): Promise<ImageCategory> => {
   const response = await visionApi.get(`/image-categories/${id}`);
-  return response.data.data;
+  return (response.data as ApiResponse<ImageCategory>).data;
 };
 
 /**
@@ -44,7 +45,7 @@ export const createImageCategory = async (categoryData: {
   color?: string;
 }): Promise<ImageCategory> => {
   const response = await visionApi.post('/image-categories', categoryData);
-  return response.data.data;
+  return (response.data as ApiResponse<ImageCategory>).data;
 };
 
 /**
@@ -59,7 +60,7 @@ export const updateImageCategory = async (
   }
 ): Promise<ImageCategory> => {
   const response = await visionApi.put(`/image-categories/${id}`, updateData);
-  return response.data.data;
+  return (response.data as ApiResponse<ImageCategory>).data;
 };
 
 /**

@@ -1,8 +1,18 @@
-import type { ComparisonEpoch, TrainingComparison } from '@/types';
+import type { ComparisonEpoch, TrainingComparison, EpochMetrics, BenchmarkResult } from '@/types';
 import { formatTime, formatNumber } from '../comparisonLatexGenerator';
 
+interface MetricStat {
+  mean: number;
+  std: number;
+}
+type ClassAggregates = Record<string, MetricStat>;
+type ConditionAggregates = Record<string, ClassAggregates>;
+
 export interface TestResultsDatum {
-  aggregatedResults: any;
+  // Matches TrainingComparison['aggregatedTestResults']'s loose shape; the
+  // more precise ConditionAggregates/ClassAggregates nesting is applied via
+  // a cast at the point of use below, once per condition being read.
+  aggregatedResults: Record<string, Record<string, unknown>> | null;
   training: TrainingComparison['training'];
   testResultsCount: number;
 }
@@ -77,7 +87,7 @@ export function generateTrainingLatex(
       const val = ep.results?.val;
       if (val) Object.keys(val).forEach(k => {
         if (k !== 'loss' && k !== 'mean_iou' && k !== 'val_loss') {
-          const cd = val[k];
+          const cd = val[k] as EpochMetrics | undefined;
           if (cd && typeof cd === 'object' && typeof cd.iou === 'number') {
             if (!classMap[k]) classMap[k] = {};
             if (!classMap[k][tid]) classMap[k][tid] = [];
@@ -145,7 +155,7 @@ export function generateTrainingLatex(
       const cls = Object.keys(val).filter(k => k !== 'loss' && k !== 'mean_iou' && k !== 'val_loss');
       const ps: number[] = [], rs: number[] = [], fs: number[] = [];
       cls.forEach(k => {
-        const cd = val[k];
+        const cd = val[k] as EpochMetrics | undefined;
         if (cd && typeof cd === 'object') {
           if (typeof cd.precision === 'number') ps.push(cd.precision);
           if (typeof cd.recall === 'number') rs.push(cd.recall);
@@ -227,7 +237,7 @@ export function generateTestingLatex(
     }).join(' & ') + ' & FW IoU \\\\\n\\hline\n';
     testResultsData.forEach(({ training, aggregatedResults }) => {
       const name = training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
-      const condData = (aggregatedResults as any)?.[cond];
+      const condData = aggregatedResults?.[cond] as ConditionAggregates | undefined;
       perfTbl += `${name} `;
       classNames.forEach(cn => {
         const cls = condData?.[cn];
@@ -254,7 +264,7 @@ export function generateTestingLatex(
     }).join('') + ' \\\\\n\\hline\n';
     testResultsData.forEach(({ training, aggregatedResults }) => {
       const name = training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
-      const condData = (aggregatedResults as any)?.[cond];
+      const condData = aggregatedResults?.[cond] as ConditionAggregates | undefined;
       iouTbl += `${name} `;
       classNames.forEach(cn => {
         const v = condData?.[cn]?.iou?.mean;
@@ -274,7 +284,7 @@ export function generateTestingLatex(
     }).join('') + ' \\\\\n\\hline\n';
     testResultsData.forEach(({ training, aggregatedResults }) => {
       const name = training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
-      const condData = (aggregatedResults as any)?.[cond];
+      const condData = aggregatedResults?.[cond] as ConditionAggregates | undefined;
       apTbl += `${name} `;
       classNames.forEach(cn => {
         const v = condData?.[cn]?.ap?.mean;
@@ -292,39 +302,46 @@ export function generateTestingLatex(
  * Builds the "Export All LaTeX" benchmarking tab: GPU/CPU performance
  * tables. Mirrors the flattening logic in BenchmarksComparisonTable.
  */
-export function generateBenchmarkingLatex(benchmarksData: any[]): string {
+// Only `results` + `training_name` are read below — not the full Benchmark shape.
+interface BenchmarkWithTrainingName {
+  results: BenchmarkResult[];
+  training_name: string;
+}
+type BenchmarkResultWithTrainingName = BenchmarkResult & { training_name: string };
+
+export function generateBenchmarkingLatex(benchmarksData: BenchmarkWithTrainingName[]): string {
   if (!benchmarksData.length) return '';
 
-  const gpuResults = benchmarksData
-    .filter((b: any) => b.results?.some((r: any) =>
+  const gpuResults: BenchmarkResultWithTrainingName[] = benchmarksData
+    .filter((b) => b.results?.some((r) =>
       r.device_type === 'gpu' || r.device_type === 'cuda' ||
       r.device?.toLowerCase().includes('gpu') ||
       (!r.device_type && !r.device)
     ))
-    .flatMap((b: any) =>
+    .flatMap((b) =>
       b.results
-        .filter((r: any) =>
+        .filter((r) =>
           r.device_type === 'gpu' || r.device_type === 'cuda' ||
           r.device?.toLowerCase().includes('gpu') ||
           (!r.device_type && !r.device)
         )
-        .map((r: any) => ({ ...r, training_name: b.training_name }))
+        .map((r) => ({ ...r, training_name: b.training_name }))
     );
 
-  const cpuResults = benchmarksData
-    .filter((b: any) => b.results?.some((r: any) =>
+  const cpuResults: BenchmarkResultWithTrainingName[] = benchmarksData
+    .filter((b) => b.results?.some((r) =>
       r.device_type === 'cpu' || r.device?.toLowerCase().includes('cpu')
     ))
-    .flatMap((b: any) =>
+    .flatMap((b) =>
       b.results
-        .filter((r: any) =>
+        .filter((r) =>
           r.device_type === 'cpu' || r.device?.toLowerCase().includes('cpu')
         )
-        .map((r: any) => ({ ...r, training_name: b.training_name }))
+        .map((r) => ({ ...r, training_name: b.training_name }))
     );
   let out = '';
 
-  const fmtBench = (result: any, device: 'gpu' | 'cpu') => {
+  const fmtBench = (result: BenchmarkResultWithTrainingName, device: 'gpu' | 'cpu') => {
     const name = result.training_name.replace(/[&%$#_{}~^\\]/g, '\\$&');
     const time = result.mean_time_ms && result.std_time_ms
       ? `${result.mean_time_ms.toFixed(1)} \\pm ${result.std_time_ms.toFixed(1)}`
@@ -348,7 +365,7 @@ export function generateBenchmarkingLatex(benchmarksData: any[]): string {
     const memCol = 'GPU Memory (MB)';
     let tbl = `\\begin{table*}[ht]\n\\centering\n\\caption{GPU Benchmark Performance Comparison}\n\\label{tab:gpu_benchmark}\n\\begin{tabular}{|l|c|c|c|c|c|c|c|}\n\\hline\n`;
     tbl += `Training & Time (ms) & FPS & ${memCol} & Params (M) & FLOPs (G) & Image Size & Num Runs \\\\\n\\hline\n`;
-    gpuResults.forEach((r: any) => { tbl += fmtBench(r, 'gpu'); });
+    gpuResults.forEach((r) => { tbl += fmtBench(r, 'gpu'); });
     tbl += '\\hline\n\\end{tabular}\n\\end{table*}\n';
     out += tbl + '\n';
   }
@@ -357,7 +374,7 @@ export function generateBenchmarkingLatex(benchmarksData: any[]): string {
     const memCol = 'RAM Memory (MB)';
     let tbl = `\\begin{table*}[ht]\n\\centering\n\\caption{CPU Benchmark Performance Comparison}\n\\label{tab:cpu_benchmark}\n\\begin{tabular}{|l|c|c|c|c|c|c|c|}\n\\hline\n`;
     tbl += `Training & Time (ms) & FPS & ${memCol} & Params (M) & FLOPs (G) & Image Size & Num Runs \\\\\n\\hline\n`;
-    cpuResults.forEach((r: any) => { tbl += fmtBench(r, 'cpu'); });
+    cpuResults.forEach((r) => { tbl += fmtBench(r, 'cpu'); });
     tbl += '\\hline\n\\end{tabular}\n\\end{table*}\n';
     out += tbl;
   }

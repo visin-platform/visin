@@ -30,13 +30,19 @@ import {
 } from '@mui/icons-material';
 import { visualizationService } from '../services/visualizationService';
 import { trainingService } from '../services/trainingService';
-import { Visualization, Training, PaginatedResponse } from '../types';
+import { Visualization, Training, VisualizationsPaginatedResponse } from '../types';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 interface TrainingWithVisualizations {
   training: Training;
   visualizations: Visualization[];
   visualizationsByType: Map<string, Visualization[]>;
+}
+
+// The endpoint may enrich each visualization with its parent training's uuid,
+// either flattened onto the record or nested under a `training` object.
+interface VisualizationWithTrainingRef extends Visualization {
+  training?: { uuid: string };
 }
 
 export const VisualizationsPage: React.FC = () => {
@@ -73,7 +79,7 @@ export const VisualizationsPage: React.FC = () => {
       ]);
 
       const allTrainings = trainingsResponse.data.trainings || [];
-      const allVisualizations = (visualizationsResponse as PaginatedResponse<Visualization>).data.visualizations || [];
+      const allVisualizations = (visualizationsResponse as VisualizationsPaginatedResponse).data.visualizations || [];
 
       // Group visualizations by training_uuid (from epoch data)
       const visualizationsByTraining = new Map<string, Visualization[]>();
@@ -81,11 +87,11 @@ export const VisualizationsPage: React.FC = () => {
       // We need to get epoch data to link visualizations to trainings
       // For now, let's group by the training info if available in the visualization
       // If not, we'll need to fetch epoch data
-      allVisualizations.forEach((viz: Visualization) => {
+      allVisualizations.forEach((viz: VisualizationWithTrainingRef) => {
         // Try to find training from epoch_uuid
         // Since we have the epoch data in the visualization response, we can use it
         // Note: This requires backend to include training_uuid in the response
-        const trainingUuid = (viz as any).training_uuid || (viz as any).training?.uuid;
+        const trainingUuid = viz.training_uuid || viz.training?.uuid;
         if (trainingUuid) {
           const existing = visualizationsByTraining.get(trainingUuid) || [];
           existing.push(viz);

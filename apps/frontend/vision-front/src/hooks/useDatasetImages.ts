@@ -33,7 +33,7 @@ export const useDatasetImages = ({ datasetId, initialPageSize = 50 }: UseDataset
     placeholderData: keepPreviousData,
   });
 
-  const updateFilter = (key: keyof typeof filters, value: any) => {
+  const updateFilter = (key: keyof typeof filters, value: string | string[] | WeatherCondition) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setPage(1); // Reset to first page on filter change
   };

@@ -40,26 +40,31 @@ describe('configService', () => {
 
   it('createConfig posts config data', async () => {
     mockedApi.post.mockResolvedValue({ data: { success: true, data: {} } });
-    await configService.createConfig({ name: 'cfg' } as any);
-    expect(mockedApi.post).toHaveBeenCalledWith('/configs', { name: 'cfg' });
+    await configService.createConfig({ summary: 'cfg', config_data: {} });
+    expect(mockedApi.post).toHaveBeenCalledWith('/configs', { summary: 'cfg', config_data: {} });
   });
 
   it('uploadConfig posts to /configs/upload', async () => {
     mockedApi.post.mockResolvedValue({ data: { success: true, data: {} } });
-    await configService.uploadConfig({ raw: true });
-    expect(mockedApi.post).toHaveBeenCalledWith('/configs/upload', { raw: true });
+    await configService.uploadConfig({ summary: 'uploaded', config_data: { raw: true } });
+    expect(mockedApi.post).toHaveBeenCalledWith('/configs/upload', { summary: 'uploaded', config_data: { raw: true } });
   });
 
   it('createConfigsBatch posts array wrapped as configs', async () => {
     mockedApi.post.mockResolvedValue({ data: { success: true, data: [] } });
-    await configService.createConfigsBatch([{ name: 'a' } as any, { name: 'b' } as any]);
-    expect(mockedApi.post).toHaveBeenCalledWith('/configs/batch', { configs: [{ name: 'a' }, { name: 'b' }] });
+    await configService.createConfigsBatch([
+      { summary: 'a', config_data: {} },
+      { summary: 'b', config_data: {} }
+    ]);
+    expect(mockedApi.post).toHaveBeenCalledWith('/configs/batch', {
+      configs: [{ summary: 'a', config_data: {} }, { summary: 'b', config_data: {} }]
+    });
   });
 
   it('updateConfig puts partial data', async () => {
     mockedApi.put.mockResolvedValue({ data: { success: true, data: {} } });
-    await configService.updateConfig('c1', { name: 'updated' } as any);
-    expect(mockedApi.put).toHaveBeenCalledWith('/configs/c1', { name: 'updated' });
+    await configService.updateConfig('c1', { summary: 'updated' });
+    expect(mockedApi.put).toHaveBeenCalledWith('/configs/c1', { summary: 'updated' });
   });
 
   it('deleteConfig deletes by id', async () => {

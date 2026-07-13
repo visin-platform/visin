@@ -35,7 +35,7 @@ const testResult = (id: string, trainingId: string) => ({
 
 const baseProps = {
   projectId: 'p1',
-  testResultsResponse: { data: { testResults: [], pagination: { total: 0 } } },
+  testResultsResponse: { success: true, data: { testResults: [], pagination: { page: 0, limit: 25, total: 0, pages: 1 } } },
   isLoading: false,
   page: 0,
   rowsPerPage: 25,
@@ -65,7 +65,7 @@ describe('ProjectTestsTab', () => {
   it('lists test results with training name, epoch, and timestamp', () => {
     renderTab({
       testResultsResponse: {
-        data: { testResults: [testResult('tr1', 't1')], pagination: { total: 1 } },
+        success: true, data: { testResults: [testResult('tr1', 't1')], pagination: { page: 0, limit: 25, total: 1, pages: 1 } },
       },
     });
 
@@ -75,7 +75,7 @@ describe('ProjectTestsTab', () => {
 
   it('falls back to "Unknown" when the training is missing', () => {
     const orphan = { _id: 'tr1', epoch: 1, timestamp: '2026-01-01T00:00:00.000Z', training: null };
-    renderTab({ testResultsResponse: { data: { testResults: [orphan], pagination: { total: 1 } } } });
+    renderTab({ testResultsResponse: { success: true, data: { testResults: [orphan], pagination: { page: 0, limit: 25, total: 1, pages: 1 } } } });
 
     expect(screen.getByText('Unknown')).toBeInTheDocument();
   });
@@ -84,7 +84,7 @@ describe('ProjectTestsTab', () => {
     mockedComparison.createComparison.mockResolvedValue({ success: true, data: { uuid: 'cmp-1' } } as never);
     renderTab({
       testResultsResponse: {
-        data: { testResults: [testResult('tr1', 't1'), testResult('tr2', 't2')], pagination: { total: 2 } },
+        success: true, data: { testResults: [testResult('tr1', 't1'), testResult('tr2', 't2')], pagination: { page: 0, limit: 25, total: 2, pages: 1 } },
       },
     });
 
@@ -104,7 +104,7 @@ describe('ProjectTestsTab', () => {
   it('toggles select-all', () => {
     renderTab({
       testResultsResponse: {
-        data: { testResults: [testResult('tr1', 't1'), testResult('tr2', 't2')], pagination: { total: 2 } },
+        success: true, data: { testResults: [testResult('tr1', 't1'), testResult('tr2', 't2')], pagination: { page: 0, limit: 25, total: 2, pages: 1 } },
       },
     });
 

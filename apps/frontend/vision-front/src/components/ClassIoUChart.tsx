@@ -1,7 +1,7 @@
 import React from 'react';
 import { Paper, Box } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
-import { Epoch } from '../types';
+import { Epoch, EpochMetrics } from '../types';
 
 interface ClassIoUChartProps {
   epochs: Epoch[];
@@ -21,7 +21,7 @@ const ClassIoUChart: React.FC<ClassIoUChartProps> = ({
 
   epochs.forEach(epoch => {
     // Try validation results first
-    const valResults = epoch.results?.val as Record<string, any> || {};
+    const valResults = (epoch.results?.val || {}) as Record<string, EpochMetrics>;
     Object.keys(valResults).forEach(key => {
       if (!EXCLUDED_KEYS.has(key) && valResults[key]?.iou !== undefined) {
         allClasses.add(key);
@@ -30,7 +30,7 @@ const ClassIoUChart: React.FC<ClassIoUChartProps> = ({
 
     // If no classes found in val, try train
     if (allClasses.size === 0) {
-      const trainResults = epoch.results?.train as Record<string, any> || {};
+      const trainResults = (epoch.results?.train || {}) as Record<string, EpochMetrics>;
       Object.keys(trainResults).forEach(key => {
         if (!EXCLUDED_KEYS.has(key) && trainResults[key]?.iou !== undefined) {
           allClasses.add(key);
@@ -40,12 +40,12 @@ const ClassIoUChart: React.FC<ClassIoUChartProps> = ({
 
     // Try per_class structure
     if (allClasses.size === 0) {
-      let perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+      let perClass = epoch.results?.val?.per_class || {};
       if (Object.keys(perClass).length === 0) {
-        perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+        perClass = epoch.results?.train?.per_class || {};
       }
       if (Object.keys(perClass).length === 0) {
-        perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+        perClass = epoch.results?.metrics?.per_class || {};
       }
       Object.keys(perClass).forEach(key => allClasses.add(key));
     }
@@ -81,28 +81,28 @@ const ClassIoUChart: React.FC<ClassIoUChartProps> = ({
     return classList.map((className, index) => {
       const classIoUData = epochs.map(epoch => {
         // Try validation results first
-        const valResults = epoch.results?.val as Record<string, any> || {};
+        const valResults = (epoch.results?.val || {}) as Record<string, EpochMetrics>;
         let iouValue = valResults[className]?.iou;
 
         // Try training results if val doesn't have it
         if (iouValue === undefined) {
-          const trainResults = epoch.results?.train as Record<string, any> || {};
+          const trainResults = (epoch.results?.train || {}) as Record<string, EpochMetrics>;
           iouValue = trainResults[className]?.iou;
         }
 
         // Try per_class structures
         if (iouValue === undefined) {
-          const perClass = epoch.results?.val?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.val?.per_class || {};
           iouValue = perClass[className]?.iou;
         }
 
         if (iouValue === undefined) {
-          const perClass = epoch.results?.train?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.train?.per_class || {};
           iouValue = perClass[className]?.iou;
         }
 
         if (iouValue === undefined) {
-          const perClass = epoch.results?.metrics?.per_class as Record<string, any> || {};
+          const perClass = epoch.results?.metrics?.per_class || {};
           iouValue = perClass[className]?.iou;
         }
 

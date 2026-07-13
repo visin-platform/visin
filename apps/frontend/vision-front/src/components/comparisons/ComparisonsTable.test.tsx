@@ -40,7 +40,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof ComparisonsTab
     onDeleteComparison: vi.fn(),
     canDelete: true,
     formatTimestamp: (t: string) => `formatted-${t}`,
-    getTypeColor: () => 'primary',
+    getTypeColor: () => 'primary' as const,
     theme,
     ...overrides
   };

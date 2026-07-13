@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { visualizationService } from '../services/visualizationService';
-import { Visualization, PaginatedResponse } from '../types';
+import { Visualization, VisualizationsPaginatedResponse } from '../types';
 
 interface UseTrainingVisualizationsProps {
   training_uuid: string;
@@ -30,7 +30,7 @@ export const useTrainingVisualizations = ({ training_uuid }: UseTrainingVisualiz
       visualizationService.getVisualizationsByTraining(training_uuid, {
         type: selectedType !== 'all' ? selectedType : undefined,
         limit: 100
-      }) as Promise<PaginatedResponse<Visualization>>
+      }) as Promise<VisualizationsPaginatedResponse>
   });
 
   const { data: typesData } = useQuery({

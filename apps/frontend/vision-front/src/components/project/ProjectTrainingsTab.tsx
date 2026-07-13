@@ -19,7 +19,10 @@ import { configService } from '../../services/configService';
 import { projectService } from '../../services/projectService';
 import { getAllAnalyses, type DatasetAnalysis } from '../../services/analysisService';
 import { comparisonService } from '../../services/comparisonService';
-import { Training } from '../../types';
+import { Training, Config } from '../../types';
+import { Project } from '../../types/Project';
+
+export type TrainingSortColumn = 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
 
 interface ProjectTrainingsTabProps {
   projectId: string;
@@ -30,9 +33,9 @@ interface ProjectTrainingsTabProps {
   total: number;
   onPageChange: (event: unknown, newPage: number) => void;
   onRowsPerPageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  sortBy: 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
+  sortBy: TrainingSortColumn;
   sortOrder: 'asc' | 'desc';
-  onSort: (column: any) => void;
+  onSort: (column: TrainingSortColumn) => void;
   isAuthenticated: boolean;
 }
 
@@ -67,8 +70,8 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
   const [trainingTags, setTrainingTags] = useState<string[]>([]);
   
   const [datasets, setDatasets] = useState<DatasetAnalysis[]>([]);
-  const [configs, setConfigs] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
+  const [configs, setConfigs] = useState<Config[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [loadingConfigs, setLoadingConfigs] = useState(false);

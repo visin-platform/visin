@@ -54,7 +54,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
     return `${(seconds / 86400).toFixed(1)}d`;
   };
 
-  const formatNumber = (value: any, decimals: number = 3): string => {
+  const formatNumber = (value: number | undefined, decimals: number = 3): string => {
     if (typeof value === 'number' && !isNaN(value)) {
       return value.toFixed(decimals);
     }

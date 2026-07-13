@@ -10,6 +10,33 @@ import {
 import { BarChart } from '@mui/x-charts';
 import { Training } from '../types';
 
+interface DatasetClassStats {
+  name?: string;
+  total_pixels?: number;
+  frames_with_class?: number;
+}
+
+// The dataset analysis pipeline's output — a Mixed/dynamic field on the
+// backend, so its real shape is only known here at the point of use.
+interface DatasetInfo {
+  segmentation_statistics?: {
+    classes?: Record<string, DatasetClassStats>;
+  };
+  dataset_overview?: {
+    name?: string;
+    version?: string;
+    total_frames?: number;
+    total_pixels?: number;
+    classes?: Record<string, unknown>;
+  };
+  dataset_splits?: {
+    train_frames?: number;
+    validation_frames?: number;
+    test_frames?: number;
+    test_breakdown?: Record<string, { count?: number; percentage?: number }>;
+  };
+}
+
 interface DatasetInfoSectionProps {
   training: Training;
 }
@@ -19,11 +46,11 @@ export const DatasetInfoSection: React.FC<DatasetInfoSectionProps> = ({ training
     return null;
   }
 
-  const datasetInfo = training.metadata.dataset_info;
+  const datasetInfo = training.metadata.dataset_info as DatasetInfo;
   const classes = datasetInfo.segmentation_statistics?.classes;
-  const classNames = classes ? Object.values(classes).map((cls: any) => cls.name || 'Unknown') : [];
-  const pixelData = classes ? Object.values(classes).map((cls: any) => cls.total_pixels || 0) : [];
-  const frameData = classes ? Object.values(classes).map((cls: any) => cls.frames_with_class || 0) : [];
+  const classNames = classes ? Object.values(classes).map((cls) => cls.name || 'Unknown') : [];
+  const pixelData = classes ? Object.values(classes).map((cls) => cls.total_pixels || 0) : [];
+  const frameData = classes ? Object.values(classes).map((cls) => cls.frames_with_class || 0) : [];
 
   // Calculate percentages
   const totalFrames = datasetInfo.dataset_overview?.total_frames || 1;
@@ -164,7 +191,7 @@ export const DatasetInfoSection: React.FC<DatasetInfoSectionProps> = ({ training
                   valueFormatter: (value, context) => {
                     const conditions = ['day_fair', 'day_rain', 'night_fair', 'night_rain'];
                     const condition = conditions[context.dataIndex];
-                    const percentage = datasetInfo.dataset_splits.test_breakdown[condition]?.percentage?.toFixed(1) || '0.0';
+                    const percentage = datasetInfo.dataset_splits?.test_breakdown?.[condition]?.percentage?.toFixed(1) || '0.0';
                     return `${value?.toLocaleString() || 0} (${percentage}%)`;
                   }
                 }]}

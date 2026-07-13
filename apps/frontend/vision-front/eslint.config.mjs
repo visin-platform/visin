@@ -16,10 +16,10 @@ export default tseslint.config(
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       // Deferred to the lint burn-down (TODO.md §4): exhaustive-deps, the
-      // react-hooks v7 compiler rules, only-export-components, no-explicit-any.
+      // react-hooks v7 compiler rules, only-export-components.
       'react-hooks/exhaustive-deps': 'off',
       'react-refresh/only-export-components': 'off',
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -29,6 +29,15 @@ export default tseslint.config(
           ignoreRestSiblings: true,
         },
       ],
+    },
+  },
+  {
+    // Test fixtures and mocked-component props deliberately use `any` for
+    // throwaway shapes (partial API fixtures, vi.mock prop stand-ins) —
+    // production code and real types are still held to no-explicit-any.
+    files: ['**/*.test.{ts,tsx}', '**/__tests__/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   }
 );

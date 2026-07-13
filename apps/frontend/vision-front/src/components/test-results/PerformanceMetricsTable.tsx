@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom';
 import LatexModal from '../common/LatexModal';
 import {
   type ComparisonData,
+  type ConditionAggregates,
   getBestValues,
   sortComparisonData,
   formatMetricNumber,
@@ -224,7 +225,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
               </TableHead>
               <TableBody>
                 {getSortedData(condition).map((comp) => {
-                  const conditionData = comp.aggregatedResults?.[condition];
+                  const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
                   return (
                     <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'grey.25' } }}>
                       <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 150 }}>
@@ -238,7 +239,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                         </Link>
                       </TableCell>
                       {classNames.map((className) => {
-                        const conditionData = comp.aggregatedResults?.[condition];
+                        const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
                         const classMetrics = conditionData?.[className];
                         const bestValues = getBestValues(comparisonData, condition, className);
 

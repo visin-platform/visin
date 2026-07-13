@@ -71,7 +71,7 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
 
   // Create/update comparison mutation
   const saveComparisonMutation = useMutation({
-    mutationFn: (data: { id?: string; name: string; description?: string; type: ComparisonType; itemIds: string[]; projectId?: string; metadata?: any }) => {
+    mutationFn: (data: { id?: string; name: string; description?: string; type: ComparisonType; itemIds: string[]; projectId?: string; metadata?: Record<string, unknown> }) => {
       if (data.id) {
         return comparisonService.updateComparison(data.id, {
           name: data.name,

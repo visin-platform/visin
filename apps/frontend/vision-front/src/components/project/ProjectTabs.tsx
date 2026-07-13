@@ -5,15 +5,18 @@ import {
   Tabs,
   Tab
 } from '@mui/material';
+import type { AuthUser } from '@visin/frontend-core';
 
 // New Tab Components
-import ProjectOverviewTab from './ProjectOverviewTab';
-import ProjectTrainingsTab from './ProjectTrainingsTab';
+import ProjectOverviewTab, { type ProjectOverviewStats, type ProjectOverviewDashboardStats } from './ProjectOverviewTab';
+import ProjectTrainingsTab, { type TrainingSortColumn } from './ProjectTrainingsTab';
 import ProjectTestsTab from './ProjectTestsTab';
-import ProjectVisualizationsTab from './ProjectVisualizationsTab';
+import ProjectVisualizationsTab, { type VisualizationsGroupedResult } from './ProjectVisualizationsTab';
 import ProjectBenchmarksTab from './ProjectBenchmarksTab';
 import ProjectComparisonsTab from './ProjectComparisonsTab';
 import ProjectSettings from '../ProjectSettings';
+import { Training, TestResultsPaginatedResponse, BenchmarksPaginatedResponse } from '../../types';
+import { Project } from '../../types/Project';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -46,40 +49,40 @@ interface ProjectTabsProps {
   onTabChange: (event: React.SyntheticEvent, newValue: number) => void;
   isOwner: boolean;
   projectId: string;
-  stats: any;
-  dashboardStats: any;
+  stats: ProjectOverviewStats | undefined;
+  dashboardStats: ProjectOverviewDashboardStats | undefined;
   isAuthenticated: boolean;
-  user: any;
+  user: AuthUser | null;
   // Trainings tab props
-  trainings: any[];
+  trainings: Training[];
   isFullTrainingsLoading: boolean;
   page: number;
   rowsPerPage: number;
   total: number;
   onPageChange: (event: unknown, newPage: number) => void;
   onRowsPerPageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  sortBy: 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
+  sortBy: TrainingSortColumn;
   sortOrder: 'asc' | 'desc';
-  onSort: (column: any) => void;
+  onSort: (column: TrainingSortColumn) => void;
   // Tests tab props
-  testResultsResponse: any;
+  testResultsResponse: TestResultsPaginatedResponse | undefined;
   isTestResultsLoading: boolean;
   testsPage: number;
   testsRowsPerPage: number;
   onTestsPageChange: (event: unknown, newPage: number) => void;
   onTestsRowsPerPageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   // Visualizations tab props
-  visualizationsResponse: any;
+  visualizationsResponse: VisualizationsGroupedResult | undefined;
   isVisualizationsLoading: boolean;
   // Benchmarks tab props
-  benchmarksResponse: any;
+  benchmarksResponse: BenchmarksPaginatedResponse | undefined;
   isBenchmarksLoading: boolean;
   benchmarksPage: number;
   benchmarksRowsPerPage: number;
   onBenchmarksPageChange: (event: unknown, newPage: number) => void;
   onBenchmarksRowsPerPageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   // Project for settings
-  project: any;
+  project: Project;
 }
 
 const ProjectTabs: React.FC<ProjectTabsProps> = ({

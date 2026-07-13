@@ -20,12 +20,7 @@ import {
 import { Code as CodeIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import LatexModal from '../common/LatexModal';
-
-interface ComparisonData {
-  aggregatedResults: any;
-  training: { _id: string; name: string };
-  testResultsCount: number;
-}
+import type { ComparisonData, ConditionAggregates } from './performanceMetricsUtils';
 
 interface APMetricsTableProps {
   comparisonData: ComparisonData[];
@@ -50,7 +45,7 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
     'snow': {column: 'training', direction: 'asc'}
   });
 
-  const formatNumber = (value: any): string => {
+  const formatNumber = (value: number | undefined): string => {
     if (typeof value === 'number' && !isNaN(value)) {
       return (value * multiplier).toFixed(decimals);
     }
@@ -62,7 +57,7 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
     let bestAP = -Infinity;
 
     comparisonData.forEach((comp) => {
-      const conditionData = comp.aggregatedResults?.[condition];
+      const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
       const classMetrics = conditionData?.[className];
       const apValue = classMetrics?.ap?.mean;
 
@@ -112,8 +107,8 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
         bString = b.training.name.toLowerCase();
       } else {
         // For class columns, extract AP mean value
-        const conditionDataA = a.aggregatedResults?.[condition];
-        const conditionDataB = b.aggregatedResults?.[condition];
+        const conditionDataA = a.aggregatedResults?.[condition] as ConditionAggregates | undefined;
+        const conditionDataB = b.aggregatedResults?.[condition] as ConditionAggregates | undefined;
         const classMetricsA = conditionDataA?.[column];
         const classMetricsB = conditionDataB?.[column];
         aValue = classMetricsA?.ap?.mean ?? -Infinity;
@@ -195,7 +190,7 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
       latex += `${trainingName} `;
 
       classNames.forEach((className) => {
-        const conditionData = comp.aggregatedResults?.[condition];
+        const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
         const classMetrics = conditionData?.[className];
         const bestAP = getBestAPValues(condition, className);
 
@@ -302,7 +297,7 @@ const APMetricsTable: React.FC<APMetricsTableProps> = ({
                           </Link>
                         </TableCell>
                         {classNames.map((className) => {
-                          const conditionData = comp.aggregatedResults?.[condition];
+                          const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
                           const classMetrics = conditionData?.[className];
                           const bestAP = getBestAPValues(condition, className);
 

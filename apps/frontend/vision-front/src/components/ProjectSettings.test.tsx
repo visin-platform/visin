@@ -110,9 +110,7 @@ describe('ProjectSettings', () => {
   });
 
   it('shows an error alert when saving the project fails', async () => {
-    mockedProjectService.updateProject.mockRejectedValue({
-      response: { data: { message: 'Slug already taken' } }
-    });
+    mockedProjectService.updateProject.mockRejectedValue(new Error('Slug already taken'));
     renderComponent();
 
     fireEvent.click(screen.getByRole('button', { name: /save/i }));

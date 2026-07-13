@@ -3,6 +3,25 @@ import { Paper, Typography, Box } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
 import { Epoch } from '../types';
 
+// A per-epoch hardware snapshot — a dynamic sub-structure not modeled by
+// EpochConditionResults, and distinct in shape from the benchmark SystemInfo type.
+interface EpochSystemSnapshot {
+  gpu?: {
+    gpu_util?: number;
+    memory_util?: number;
+    memory_used?: number;
+    memory_total?: number;
+    temperature?: number;
+  };
+  cpu?: {
+    percent?: number;
+    memory_used?: number;
+    memory_total?: number;
+    memory_percent?: number;
+    freq_current?: number;
+  };
+}
+
 interface TrainingHardwareTabProps {
   epochs: Epoch[];
 }
@@ -24,53 +43,53 @@ const TrainingHardwareTab: React.FC<TrainingHardwareTabProps> = ({ epochs }) => 
 
   // Extract GPU metrics
   const gpuUtilData = epochs.map(epoch => {
-    const gpu = epoch.results?.system?.gpu as any;
+    const gpu = (epoch.results?.system as EpochSystemSnapshot | undefined)?.gpu;
     return gpu?.gpu_util ?? null;
   });
 
   const gpuMemoryUtilData = epochs.map(epoch => {
-    const gpu = epoch.results?.system?.gpu as any;
+    const gpu = (epoch.results?.system as EpochSystemSnapshot | undefined)?.gpu;
     return gpu?.memory_util ?? null;
   });
 
   const gpuMemoryUsedData = epochs.map(epoch => {
-    const gpu = epoch.results?.system?.gpu as any;
+    const gpu = (epoch.results?.system as EpochSystemSnapshot | undefined)?.gpu;
     return gpu?.memory_used ? gpu.memory_used / 1024 : null; // Convert to GB
   });
 
   const gpuMemoryTotalData = epochs.map(epoch => {
-    const gpu = epoch.results?.system?.gpu as any;
+    const gpu = (epoch.results?.system as EpochSystemSnapshot | undefined)?.gpu;
     return gpu?.memory_total ? gpu.memory_total / 1024 : null; // Convert to GB
   });
 
   const gpuTempData = epochs.map(epoch => {
-    const gpu = epoch.results?.system?.gpu as any;
+    const gpu = (epoch.results?.system as EpochSystemSnapshot | undefined)?.gpu;
     return gpu?.temperature ?? null;
   });
 
   // Extract CPU metrics
   const cpuUtilData = epochs.map(epoch => {
-    const cpu = epoch.results?.system?.cpu as any;
+    const cpu = (epoch.results?.system as EpochSystemSnapshot | undefined)?.cpu;
     return cpu?.percent ?? null;
   });
 
   const systemMemoryUsedData = epochs.map(epoch => {
-    const cpu = epoch.results?.system?.cpu as any;
+    const cpu = (epoch.results?.system as EpochSystemSnapshot | undefined)?.cpu;
     return cpu?.memory_used ? cpu.memory_used / (1024**3) : null; // Convert to GB
   });
 
   const systemMemoryTotalData = epochs.map(epoch => {
-    const cpu = epoch.results?.system?.cpu as any;
+    const cpu = (epoch.results?.system as EpochSystemSnapshot | undefined)?.cpu;
     return cpu?.memory_total ? cpu.memory_total / (1024**3) : null; // Convert to GB
   });
 
   const systemMemoryPercentData = epochs.map(epoch => {
-    const cpu = epoch.results?.system?.cpu as any;
+    const cpu = (epoch.results?.system as EpochSystemSnapshot | undefined)?.cpu;
     return cpu?.memory_percent ?? null;
   });
 
   const cpuFreqData = epochs.map(epoch => {
-    const cpu = epoch.results?.system?.cpu as any;
+    const cpu = (epoch.results?.system as EpochSystemSnapshot | undefined)?.cpu;
     return cpu?.freq_current ? cpu.freq_current / 1000 : null; // Convert to GHz
   });
 

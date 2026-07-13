@@ -8,7 +8,7 @@ export interface Visualization {
   type: string;
   minioFileId: string;
   uploadedAt: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   signedUrl?: string;
   urlExpiresAt?: string;
   epoch?: number;
@@ -36,7 +36,7 @@ export interface CreateVisualizationData {
   minioFileId: string;
   mimetype: string;
   size: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface VisualizationUploadUrlRequest {

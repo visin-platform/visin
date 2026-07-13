@@ -17,7 +17,7 @@ import {
   alpha
 } from '@mui/material';
 import { Code as CodeIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { TestResult } from '../../types';
+import { TestResult, TestResultCondition, TestResultMetrics } from '../../types';
 import ConfusionMatrix from './ConfusionMatrix';
 
 interface TestResultTableProps {
@@ -37,7 +37,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
 }) => {
   const theme = useTheme();
 
-  const formatNumber = (value: any, decimals: number = 4): string => {
+  const formatNumber = (value: number | undefined, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {
       return value.toFixed(decimals);
     }
@@ -136,12 +136,12 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
               { key: 'night_fair', label: 'Dry Night' },
               { key: 'night_rain', label: 'Rainy Night' }
             ].map((condition) => {
-              const conditionData = (testResult.test_results as any)[condition.key];
+              const conditionData = testResult.test_results[condition.key] as TestResultCondition | undefined;
               if (!conditionData) return null;
 
               const vehicle = conditionData.vehicle;
               const sign = conditionData.sign;
-              const cyclistPedestrian = conditionData['cyclist + pedestrian'];
+              const cyclistPedestrian = conditionData['cyclist + pedestrian'] as TestResultMetrics | undefined;
               const human = conditionData.human;
               const overall = conditionData.overall;
 
@@ -222,20 +222,20 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
 
             const matrices = conditions
               .map(condition => {
-                const conditionData = (testResult.test_results as any)[condition.key];
+                const conditionData = testResult.test_results[condition.key] as TestResultCondition | undefined;
                 return conditionData?.overall?.confusion_matrix;
               })
-              .filter(matrix => matrix && Array.isArray(matrix) && matrix.length > 0);
+              .filter((matrix): matrix is number[][] => Boolean(matrix) && Array.isArray(matrix) && matrix.length > 0);
 
             // Get labels from the first available condition's overall test results
             const firstConditionWithLabels = conditions.find(condition => {
-              const conditionData = (testResult.test_results as any)[condition.key];
+              const conditionData = testResult.test_results[condition.key] as TestResultCondition | undefined;
               return conditionData?.overall?.confusion_matrix_labels;
             });
-            
-            const labels = firstConditionWithLabels 
-              ? (testResult.test_results as any)[firstConditionWithLabels.key].overall.confusion_matrix_labels
-              : ['Background', 'Vehicle', 'Sign', 'Human'];
+
+            const labels = (firstConditionWithLabels
+              ? (testResult.test_results[firstConditionWithLabels.key] as TestResultCondition).overall.confusion_matrix_labels
+              : undefined) ?? ['Background', 'Vehicle', 'Sign', 'Human'];
 
             if (matrices.length > 0) {
               // Sum all confusion matrices
@@ -270,7 +270,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
             { key: 'night_fair', label: 'Dry Night' },
             { key: 'night_rain', label: 'Rainy Night' }
           ].map((condition) => {
-            const conditionData = (testResult.test_results as any)[condition.key];
+            const conditionData = testResult.test_results[condition.key] as TestResultCondition | undefined;
             const confusionMatrix = conditionData?.overall?.confusion_matrix;
 
             if (!confusionMatrix) return null;
