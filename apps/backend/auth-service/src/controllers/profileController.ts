@@ -63,7 +63,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   res.json({
     success: true,
     user: {
-      id: (updatedUser._id as any).toString(),
+      id: updatedUser._id.toString(),
       email: updatedUser.email,
       firstName: updatedUser.firstName,
       lastName: updatedUser.lastName,

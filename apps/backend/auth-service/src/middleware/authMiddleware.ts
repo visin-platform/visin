@@ -1,11 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '@visin/backend-core';
 import { verifyJWT } from '../services/jwtService';
-import { User } from '../models/User';
+import { User, IUser } from '../models/User';
 // req.user is typed globally via @visin/backend-core's Express.Request
 // augmentation, active program-wide once index.ts imports that package —
 // no local declare global needed; a second, non-identical declaration here
-// would conflict.
+// would conflict. dbUser is local to auth-service (per that augmentation's
+// own comment), so it's declared here instead.
+declare global {
+  namespace Express {
+    interface Request {
+      dbUser?: IUser;
+    }
+  }
+}
 
 /**
  * Deliberately not folded into @visin/backend-core's authenticateToken, even
@@ -43,7 +51,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     req.user = decoded;
 
     // attach db user (if needed elsewhere)
-    (req as any).dbUser = dbUser;
+    req.dbUser = dbUser;
     next();
   } catch (error) {
     logger.error('Token verification failed', { error: (error as Error)?.message });
@@ -75,7 +83,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
 
 export const requireRole = (role: string) => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const dbUser = (req as any).dbUser;
+    const dbUser = req.dbUser;
     if (!dbUser || !dbUser.roles || !dbUser.roles.includes(role)) {
       res.status(403).json({ success: false, message: 'Forbidden' });
       return;
@@ -86,7 +94,7 @@ export const requireRole = (role: string) => {
 
 // Enforce approval after basic authentication for protected areas; allow only specific endpoints before approval
 export const requireApproved = (req: Request, res: Response, next: NextFunction): void => {
-  const dbUser = (req as any).dbUser;
+  const dbUser = req.dbUser;
   if (!dbUser) {
     res.status(401).json({ success: false, message: 'Not authenticated' });
     return;

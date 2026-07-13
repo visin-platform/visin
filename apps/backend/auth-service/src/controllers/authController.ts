@@ -43,7 +43,7 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
 
   // Update userPayload to use database user ID instead of Google sub
   const userPayload: UserPayload = {
-    id: (dbUser._id as any).toString(), // Use MongoDB _id instead of Google sub
+    id: dbUser._id.toString(), // Use MongoDB _id instead of Google sub
     email: googleUser.email || '',
     name: googleUser.name || '',
     picture: googleUser.picture,
@@ -136,7 +136,7 @@ const getUserGroups = async (email: string): Promise<string[]> => {
 };
 
 export const verifyAuth = async (req: Request, res: Response): Promise<void> => {
-  const currentUser = (req as any).user as UserPayload;
+  const currentUser = req.user;
   if (!currentUser?.email) {
     throw new UnauthorizedError('No authenticated user');
   }
@@ -148,7 +148,7 @@ export const verifyAuth = async (req: Request, res: Response): Promise<void> => 
   const jwtPayload: UserPayload = {
     id: currentUser.id,
     email: currentUser.email,
-    name: currentUser.name,
+    name: currentUser.name || '',
     picture: currentUser.picture,
     groups: userGroups,
     tokenVersion: currentUser.tokenVersion || 1
@@ -171,7 +171,7 @@ export const verifyAuth = async (req: Request, res: Response): Promise<void> => 
 
 export const refreshToken = async (req: Request, res: Response): Promise<void> => {
   // Get current user from JWT
-  const currentUser = (req as any).user as UserPayload;
+  const currentUser = req.user;
   if (!currentUser?.email) {
     throw new UnauthorizedError('No authenticated user');
   }
@@ -183,7 +183,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
   const jwtPayload: UserPayload = {
     id: currentUser.id,
     email: currentUser.email,
-    name: currentUser.name,
+    name: currentUser.name || '',
     picture: currentUser.picture,
     groups: userGroups,
     tokenVersion: currentUser.tokenVersion || 1
