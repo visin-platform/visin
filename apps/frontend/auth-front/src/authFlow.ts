@@ -1,8 +1,22 @@
 import { getGlobalConfig } from './config/ConfigProvider';
 
+// Minimal shape of the Google Identity Services SDK (loaded via external <script>,
+// not installed as an npm package) covering only what this file calls.
+interface GoogleIdentityServices {
+  accounts: {
+    id: {
+      initialize: (config: {
+        client_id: string;
+        callback: (response: { credential: string }) => void;
+      }) => void;
+      renderButton: (parent: HTMLElement, options: { theme?: string; size?: string }) => void;
+    };
+  };
+}
+
 declare global {
   interface Window {
-    google: any;
+    google?: GoogleIdentityServices;
     googleScriptLoaded?: boolean;
   }
 }
@@ -77,7 +91,9 @@ export function initializeGoogleSignIn(clientId: string, redirectUri: string) {
       // Clear any existing content first
       buttonElement.innerHTML = '';
 
-      window.google.accounts.id.renderButton(buttonElement, { theme: 'outline', size: 'large' });
+      // renderGoogleButton is only called after initializeGoogle's guard confirms
+      // window.google.accounts.id is loaded.
+      window.google!.accounts.id.renderButton(buttonElement, { theme: 'outline', size: 'large' });
       console.log('Google Sign-In button rendered successfully');
       return true;
     } catch (error) {
