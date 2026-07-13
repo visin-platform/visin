@@ -18,10 +18,18 @@ import {
   PrivacyTip
 } from '@mui/icons-material';
 
+interface DataSectionProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  action: React.ReactNode;
+  danger?: boolean;
+}
+
 const DataTab: React.FC = () => {
   const theme = useTheme();
 
-  const DataSection = ({ icon, title, description, action, danger }: any) => (
+  const DataSection = ({ icon, title, description, action, danger }: DataSectionProps) => (
     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 3, py: 3 }}>
       <Avatar sx={{ 
         bgcolor: danger ? alpha(theme.palette.error.main, 0.1) : alpha(theme.palette.primary.main, 0.1), 

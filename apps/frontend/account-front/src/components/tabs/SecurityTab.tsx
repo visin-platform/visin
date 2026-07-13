@@ -16,10 +16,17 @@ import {
   Security
 } from '@mui/icons-material';
 
+interface SecurityItemProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  actionLabel: string;
+}
+
 const SecurityTab: React.FC = () => {
   const theme = useTheme();
 
-  const SecurityItem = ({ icon, title, description, actionLabel }: any) => (
+  const SecurityItem = ({ icon, title, description, actionLabel }: SecurityItemProps) => (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
         <Avatar sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main' }}>
