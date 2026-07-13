@@ -139,11 +139,11 @@ export async function addMember(
     throw new ConflictError('User is already a member');
   }
   
-  group.members.push({ 
-    email: memberEmail.toLowerCase(), 
-    role, 
-    joinedAt: new Date() 
-  } as any);
+  group.members.push({
+    email: memberEmail.toLowerCase(),
+    role,
+    joinedAt: new Date()
+  });
   
   await group.save();
   return group;
