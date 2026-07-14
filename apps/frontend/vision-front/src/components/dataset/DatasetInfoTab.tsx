@@ -96,7 +96,7 @@ const DatasetInfoTab: React.FC<DatasetInfoTabProps> = ({
       )}
       <Paper sx={{ 
         p: 2, 
-        backgroundColor: '#f5f5f5', 
+        backgroundColor: 'background.default',
         maxHeight: jsonExpanded ? 'none' : '70vh', 
         overflow: jsonExpanded ? 'visible' : 'auto',
         transition: 'max-height 0.3s ease-in-out'

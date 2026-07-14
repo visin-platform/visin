@@ -63,7 +63,10 @@ const TrainingComparisonPage: React.FC = () => {
     enabled: trainingIds.length > 0
   });
 
-  const comparisonData = data?.data?.comparison || [];
+  const comparisonData = React.useMemo(
+    () => data?.data?.comparison || [],
+    [data?.data?.comparison]
+  );
 
   // Process test results data - use the already aggregated data from backend
   const testResultsData = React.useMemo(() => {

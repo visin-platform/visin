@@ -355,7 +355,7 @@ export const VisualizationsPage: React.FC = () => {
                                         height: 'auto',
                                         maxHeight: '400px',
                                         objectFit: 'contain',
-                                        bgcolor: 'grey.100',
+                                        bgcolor: 'background.default',
                                         borderRadius: 1,
                                         cursor: 'pointer'
                                       }}

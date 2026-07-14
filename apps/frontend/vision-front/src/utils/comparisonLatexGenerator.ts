@@ -1,4 +1,5 @@
 import { TrainingComparison, ComparisonEpoch, EpochMetrics } from '@/types';
+import { getBestEpoch, getBestValMeanIoU, getTop10ValMeanIoUStats } from './epochMetrics';
 
 export const formatTime = (seconds: number) => {
   if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -83,11 +84,7 @@ export const generateLatexTable = (
   // Best Epoch
   latex += 'Best Epoch ';
   comparisonData.forEach(comp => {
-    const bestEpoch = comp.epochs.reduce((best, epoch) => {
-      const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
-      const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
-      return currentVmIoU > bestVmIoU ? epoch : best;
-    }, comp.epochs[0]);
+    const bestEpoch = getBestEpoch(comp);
     latex += `& ${bestEpoch ? bestEpoch.epoch : 'N/A'} `;
   });
   latex += '\\\\ \\hline\n';
@@ -95,7 +92,7 @@ export const generateLatexTable = (
   // Best Validation mIoU
   latex += 'Best Val mIoU ';
   comparisonData.forEach(comp => {
-    const bestVmIoU = Math.max(...comp.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
+    const bestVmIoU = getBestValMeanIoU(comp);
     latex += `& ${bestVmIoU !== -Infinity ? formatNumber(bestVmIoU) : 'N/A'} `;
   });
   latex += '\\\\ \\hline\n';
@@ -103,17 +100,11 @@ export const generateLatexTable = (
   // Top 5 Validation mIoU Average
   latex += 'Top 5 Val mIoU Avg ';
   comparisonData.forEach(comp => {
-    const vmIoUs = comp.epochs
-      .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
-      .filter((vmIoU: number | undefined) => vmIoU !== undefined)
-      .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
-      .slice(0, 10);
-    
-    if (vmIoUs.length === 0) {
+    const top10Stats = getTop10ValMeanIoUStats(comp);
+    if (!top10Stats) {
       latex += '& N/A ';
     } else {
-      const mean = vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
-      latex += `& ${formatNumber(mean)} `;
+      latex += `& ${formatNumber(top10Stats.mean)} `;
     }
   });
   latex += '\\\\ \\hline\n';

@@ -310,7 +310,7 @@ export const EpochUploadTab: React.FC<EpochUploadTabProps> = ({
               <TableContainer>
                 <Table>
                   <TableHead>
-                    <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                    <TableRow sx={{ backgroundColor: 'background.default' }}>
                       <TableCell><strong>Epoch #</strong></TableCell>
                       <TableCell align="right"><strong>Loss (Train)</strong></TableCell>
                       <TableCell align="right"><strong>Loss (Val)</strong></TableCell>

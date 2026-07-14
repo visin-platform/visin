@@ -10,6 +10,7 @@ import {
   Paper
 } from '@mui/material';
 import { Config } from '../../types';
+import ConfigDataView from './ConfigDataView';
 
 interface ConfigDetailsDialogProps {
   open: boolean;
@@ -22,36 +23,6 @@ const ConfigDetailsDialog: React.FC<ConfigDetailsDialogProps> = ({
   onClose,
   config
 }) => {
-  // Format config data for display
-  const formatConfigData = (data: unknown, depth: number = 0): React.ReactNode => {
-    if (depth > 3) return null; // Limit nesting depth for display
-    
-    if (typeof data !== 'object' || data === null) {
-      return String(data);
-    }
-
-    if (Array.isArray(data)) {
-      return `[${data.join(', ')}]`;
-    }
-
-    return (
-      <Box sx={{ pl: 2 }}>
-        {Object.entries(data).map(([key, value]) => (
-          <Box key={key} sx={{ mb: 1 }}>
-            <Typography variant="body2" component="span" sx={{ fontWeight: 600 }}>
-              {key}:
-            </Typography>{' '}
-            <Typography variant="body2" component="span">
-              {typeof value === 'object' && value !== null
-                ? formatConfigData(value, depth + 1)
-                : String(value)}
-            </Typography>
-          </Box>
-        ))}
-      </Box>
-    );
-  };
-
   return (
     <Dialog
       open={open}
@@ -96,8 +67,8 @@ const ConfigDetailsDialog: React.FC<ConfigDetailsDialogProps> = ({
                 Config Data:
               </Typography>
             </Box>
-            <Paper sx={{ p: 2, backgroundColor: '#f9f9f9', overflow: 'auto' }}>
-              {formatConfigData(config.config_data)}
+            <Paper sx={{ p: 2, backgroundColor: 'background.default', overflow: 'auto' }}>
+              <ConfigDataView data={config.config_data} />
             </Paper>
           </Box>
         )}

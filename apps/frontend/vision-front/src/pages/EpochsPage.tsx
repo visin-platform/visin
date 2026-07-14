@@ -244,7 +244,7 @@ export const EpochsPage: React.FC = () => {
               <TableContainer component={Paper}>
                 <Table>
                   <TableHead>
-                    <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                    <TableRow sx={{ backgroundColor: 'background.default' }}>
                       <TableCell>
                         <strong>Epoch #</strong>
                       </TableCell>

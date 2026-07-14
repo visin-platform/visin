@@ -54,6 +54,29 @@ describe('computeTrainingMetrics', () => {
     expect(result[0].metrics?.meanPrecision?.mean).toBeCloseTo(0.6);
   });
 
+  it('accepts f1 fallback keys and ignores non-class validation fields', () => {
+    const epoch: TrainingComparison['epochs'][number] = {
+      epoch: 1,
+      timestamp: '',
+      results: {
+        val: {
+          mean_iou: 0.5,
+          loss: 0.1,
+          val_loss: 0.2,
+          classA: { precision: 0.2, recall: 0.4, f1: 0.6 },
+          classB: { precision: 0.8, recall: 0.6, f1_score: 0.8 },
+          metadata: 'ignored' as never
+        }
+      }
+    };
+
+    const result = computeTrainingMetrics([makeTraining('a', 'A', [epoch])]);
+
+    expect(result[0].metrics?.meanPrecision?.mean).toBeCloseTo(0.5);
+    expect(result[0].metrics?.meanRecall?.mean).toBeCloseTo(0.5);
+    expect(result[0].metrics?.meanF1?.mean).toBeCloseTo(0.7);
+  });
+
   it('only considers the top 10 epochs by IoU when more are present', () => {
     const epochs = Array.from({ length: 12 }, (_, i) => makeEpoch(i / 100));
     const result = computeTrainingMetrics([makeTraining('a', 'A', epochs)]);
@@ -83,6 +106,24 @@ describe('sortTrainingsWithMetrics', () => {
     const sorted = sortTrainingsWithMetrics(data, 'training', 'asc');
     expect(sorted.map(d => d.training._id)).toEqual(['a', 'b']);
   });
+
+  it('sorts by training name descending', () => {
+    const sorted = sortTrainingsWithMetrics(data, 'training', 'desc');
+    expect(sorted.map(d => d.training._id)).toEqual(['b', 'a']);
+  });
+
+  it('sorts ascending by metric value and treats missing metrics as lowest', () => {
+    const sorted = sortTrainingsWithMetrics(
+      [
+        ...data,
+        { training: { _id: 'd', name: 'D' } as any, metrics: {} }
+      ],
+      'meanIoU',
+      'asc'
+    );
+
+    expect(sorted.map(d => d.training._id)).toEqual(['d', 'a', 'b']);
+  });
 });
 
 describe('computeBestValues', () => {
@@ -107,6 +148,10 @@ describe('formatNumber / formatMeanStd', () => {
     expect(formatNumber(undefined)).toBe('N/A');
   });
 
+  it('returns N/A for NaN', () => {
+    expect(formatNumber(Number.NaN)).toBe('N/A');
+  });
+
   it('formats mean ± std', () => {
     expect(formatMeanStd({ mean: 0.5, std: 0.1 }, 2)).toBe('0.50 ± 0.10');
   });
@@ -127,5 +172,16 @@ describe('generateValidationMetricsLatex', () => {
 
     expect(latex).toContain('\\textbf{90.00 ± 10.00}');
     expect(latex).toContain('& N/A');
+  });
+
+  it('escapes LaTeX-sensitive training names without bolding non-best values', () => {
+    const data = [
+      { training: { _id: 'a', name: 'A&B_1' } as any, metrics: { meanIoU: { mean: 0.5, std: 0.1 } } },
+      { training: { _id: 'b', name: 'B' } as any, metrics: { meanIoU: { mean: 0.9, std: 0.1 } } }
+    ];
+    const latex = generateValidationMetricsLatex(data, computeBestValues(data), 1, 1);
+
+    expect(latex).toContain('A\\&B\\_1');
+    expect(latex).toContain('& 0.5 ± 0.1');
   });
 });

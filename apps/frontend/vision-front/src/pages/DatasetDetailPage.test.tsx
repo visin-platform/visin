@@ -158,10 +158,13 @@ const defaultCategoryManager = {
   categoryForm: { name: '', description: '', color: '#000' },
   setCategoryForm: vi.fn(),
   categoryAlert: null,
+  categoryIdToDelete: null,
   showCategoryAlert: vi.fn(),
   closeCategoryModal: vi.fn(),
   handleSaveCategory: vi.fn(),
   handleDeleteCategory: vi.fn(),
+  confirmDeleteCategory: vi.fn(),
+  cancelDeleteCategory: vi.fn(),
   openEditCategoryModal: vi.fn()
 };
 

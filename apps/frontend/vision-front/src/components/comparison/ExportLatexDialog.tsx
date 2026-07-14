@@ -78,7 +78,7 @@ const ExportLatexDialog: React.FC<ExportLatexDialogProps> = ({
                 elevation={0}
                 sx={{
                   p: 2,
-                  bgcolor: '#f5f5f5',
+                  bgcolor: 'background.default',
                   fontFamily: 'monospace',
                   fontSize: '0.8rem',
                   whiteSpace: 'pre-wrap',

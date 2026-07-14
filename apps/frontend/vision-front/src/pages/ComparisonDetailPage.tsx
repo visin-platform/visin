@@ -111,7 +111,10 @@ const ComparisonDetailPage: React.FC = () => {
     enabled: !!comparison?.itemIds && comparison.itemIds.length > 0
   });
 
-  const comparisonData = trainingComparisonResponse?.data?.comparison || [];
+  const comparisonData = React.useMemo(
+    () => trainingComparisonResponse?.data?.comparison || [],
+    [trainingComparisonResponse?.data?.comparison]
+  );
 
   // Handler functions
   const handleEditComparison = async () => {

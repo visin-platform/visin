@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { trainingService } from '../services/trainingService';
@@ -37,7 +37,6 @@ export const useTrainingsPage = () => {
   const [selectedTrainingIds, setSelectedTrainingIds] = useState<Set<string>>(new Set());
   const [deleteMultipleDialogOpen, setDeleteMultipleDialogOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [excludedTags, setExcludedTags] = useState<string[]>([]);
 
   // Configs/datasets/projects for the create/edit modal — only fetched while
@@ -139,9 +138,9 @@ export const useTrainingsPage = () => {
     }
   });
 
-  // Load available tags
-  const loadTags = useCallback(async () => {
-    try {
+  const { data: availableTags = [], refetch: refetchTags } = useQuery({
+    queryKey: ['training-tags'],
+    queryFn: async () => {
       const allTrainings = await trainingService.getTrainings({
         page: 1,
         limit: 1000 // Get a large number to collect all tags
@@ -152,18 +151,11 @@ export const useTrainingsPage = () => {
           training.tags.forEach(tag => tags.add(tag));
         }
       });
-      setAvailableTags(Array.from(tags).sort());
-    } catch (err) {
-      console.error('Failed to load tags:', err);
-      setAvailableTags([]);
+      return Array.from(tags).sort();
     }
-  }, []);
+  });
 
-  useEffect(() => {
-    loadTags();
-  }, [loadTags]);
-
-  const allTrainings = data?.data?.trainings || [];
+  const allTrainings = useMemo(() => data?.data?.trainings || [], [data?.data?.trainings]);
   const backendTotal = data?.data?.pagination?.total || 0;
 
   // Filter out trainings that have excluded tags
@@ -266,7 +258,7 @@ export const useTrainingsPage = () => {
       setSelectedConfigId('');
       setSelectedProjectId('');
       refetch();
-      loadTags();
+      refetchTags();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to save training');
     } finally {
@@ -321,7 +313,7 @@ export const useTrainingsPage = () => {
       setDeleteTrainingId(null);
       setTimeout(() => {
         refetch();
-        loadTags();
+        refetchTags();
       }, 500);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to delete training');
@@ -369,7 +361,7 @@ export const useTrainingsPage = () => {
       setSelectedTrainingIds(new Set());
       setTimeout(() => {
         refetch();
-        loadTags();
+        refetchTags();
       }, 500);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to delete trainings');

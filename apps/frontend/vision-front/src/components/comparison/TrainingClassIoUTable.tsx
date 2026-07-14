@@ -84,7 +84,7 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
           alignItems: 'center', 
           justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
           cursor: 'pointer',
-          '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' }
+          '&:hover': { bgcolor: 'action.hover' }
         }}
         onClick={() => handleSort(column)}
       >
@@ -350,7 +350,7 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
       <TableContainer>
         <Table>
           <TableHead>
-            <TableRow sx={{ bgcolor: 'grey.50' }}>
+            <TableRow sx={{ bgcolor: 'background.default' }}>
               <SortableTableCell column="training" align="left">Training</SortableTableCell>
               {classIoUData.map(classData => (
                 <SortableTableCell key={classData.className} column={classData.className}>

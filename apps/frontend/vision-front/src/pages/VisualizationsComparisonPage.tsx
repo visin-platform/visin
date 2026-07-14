@@ -128,7 +128,7 @@ const VisualizationsComparisonPage: React.FC = () => {
           >
             {typeVisualizations.map((viz: Visualization) => (
               <Box key={viz.visualization_uuid}>
-                <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
+                <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                   <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
                     {viz.filename}
                   </Typography>
@@ -149,7 +149,7 @@ const VisualizationsComparisonPage: React.FC = () => {
                       height: 'auto',
                       maxHeight: 500,
                       objectFit: 'contain',
-                      bgcolor: 'white',
+                      bgcolor: 'background.paper',
                       border: '1px solid',
                       borderColor: 'grey.300',
                       borderRadius: 1
@@ -180,7 +180,7 @@ const VisualizationsComparisonPage: React.FC = () => {
           >
             {visualizations.map((viz: Visualization) => (
               <Box key={viz.visualization_uuid}>
-                <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
+                <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
                   <Typography variant="subtitle1" sx={{ mb: 0.5, fontWeight: 600 }}>
                     {viz.filename}
                   </Typography>
@@ -201,7 +201,7 @@ const VisualizationsComparisonPage: React.FC = () => {
                       height: 'auto',
                       maxHeight: 500,
                       objectFit: 'contain',
-                      bgcolor: 'white',
+                      bgcolor: 'background.paper',
                       border: '1px solid',
                       borderColor: 'grey.300',
                       borderRadius: 1

@@ -49,6 +49,7 @@ const ImageCategoriesPage: React.FC = () => {
     datasetId: '',
     color: '#1976d2'
   });
+  const [categoryToDelete, setCategoryToDelete] = useState<ImageCategory | null>(null);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const queryClient = useQueryClient();
 
@@ -115,6 +116,7 @@ const ImageCategoriesPage: React.FC = () => {
     mutationFn: (categoryId: string) => deleteImageCategory(categoryId),
     onSuccess: () => {
       showAlert('success', 'Category deleted successfully');
+      setCategoryToDelete(null);
       invalidateCategories();
     },
     onError: () => {
@@ -138,9 +140,13 @@ const ImageCategoriesPage: React.FC = () => {
     updateMutation.mutate();
   };
 
-  const handleDeleteCategory = (categoryId: string) => {
-    if (!confirm('Are you sure you want to delete this category?')) return;
-    deleteMutation.mutate(categoryId);
+  const handleDeleteCategory = (category: ImageCategory) => {
+    setCategoryToDelete(category);
+  };
+
+  const handleConfirmDeleteCategory = () => {
+    if (!categoryToDelete) return;
+    deleteMutation.mutate(categoryToDelete._id);
   };
 
   const openCreateModal = () => {
@@ -284,7 +290,7 @@ const ImageCategoriesPage: React.FC = () => {
                             </IconButton>
                             <IconButton
                               size="small"
-                              onClick={() => handleDeleteCategory(category._id)}
+                              onClick={() => handleDeleteCategory(category)}
                               color="error"
                             >
                               <DeleteIcon />
@@ -357,6 +363,25 @@ const ImageCategoriesPage: React.FC = () => {
             disabled={!categoryForm.name.trim() || (!editingCategory && !categoryForm.datasetId.trim())}
           >
             {editingCategory ? 'Update' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={!!categoryToDelete} onClose={() => setCategoryToDelete(null)}>
+        <DialogTitle>Delete Category</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete "{categoryToDelete?.name}"? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCategoryToDelete(null)}>Cancel</Button>
+          <Button
+            onClick={handleConfirmDeleteCategory}
+            color="error"
+            variant="contained"
+            disabled={deleteMutation.isPending}
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

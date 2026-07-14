@@ -40,10 +40,10 @@ const LatexExportDialog: React.FC<LatexExportDialogProps> = ({ open, onClose, la
             whiteSpace: 'pre-wrap',
             wordWrap: 'break-word',
             p: 2,
-            bgcolor: 'grey.50',
+            bgcolor: 'background.default',
             borderRadius: 1,
             border: '1px solid',
-            borderColor: 'grey.300',
+            borderColor: 'divider',
             maxHeight: '400px',
             overflowY: 'auto'
           }}

@@ -1,9 +1,5 @@
 import { Request, Response } from 'express';
-import { randomUUID as uuidv4 } from 'crypto';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@visin/backend-core';
-import Epoch from '../models/Epoch';
-import Training, { ITraining } from '../models/Training';
-import { checkProjectAccess, isWithinTokenScope } from '../services/projectAccessService';
+import * as epochService from '../services/epochService';
 import type { z } from '@visin/backend-core';
 import type { GetEpochsByTrainingQuery, createEpochsBatchBodySchema } from '../validation/epochSchemas';
 
@@ -11,71 +7,23 @@ type CreateEpochsBatchData = z.infer<typeof createEpochsBatchBodySchema>;
 
 // Get epochs for a training
 export const getEpochsByTraining = async (req: Request, res: Response): Promise<void> => {
-  const { trainingId } = req.params;
-  const { page, limit, sortBy, order } = req.query as unknown as GetEpochsByTrainingQuery;
+  const { trainingId } = req.params as { trainingId: string };
+  const data = await epochService.getEpochsByTraining(
+    trainingId,
+    req.query as unknown as GetEpochsByTrainingQuery,
+    req.user?.id
+  );
 
-  // Check if training exists
-  const training = await Training.findById(trainingId);
-  if (!training) {
-    throw new NotFoundError('Training not found');
-  }
-
-  if (!(await checkProjectAccess(req.user?.id, training.projectId))) {
-    throw new ForbiddenError();
-  }
-
-  let query = Epoch.find({ trainingId }).sort({ [sortBy]: order });
-
-  // If pagination is provided
-  if (page && limit) {
-    const skip = (Number(page) - 1) * Number(limit);
-    query = query.skip(skip).limit(Number(limit));
-
-    const [epochs, total] = await Promise.all([
-      query,
-      Epoch.countDocuments({ trainingId })
-    ]);
-
-    res.json({
-      success: true,
-      data: {
-        epochs,
-        pagination: {
-          page: Number(page),
-          limit: Number(limit),
-          total,
-          pages: Math.ceil(total / Number(limit))
-        }
-      }
-    });
-  } else {
-    // Return all epochs without pagination
-    const epochs = await query;
-
-    res.json({
-      success: true,
-      data: {
-        epochs,
-        total: epochs.length
-      }
-    });
-  }
+  res.json({
+    success: true,
+    data
+  });
 };
 
 // Get epoch by ID
 export const getEpochById = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-
-  const epoch = await Epoch.findById(id);
-
-  if (!epoch) {
-    throw new NotFoundError('Epoch not found');
-  }
-
-  const training = await Training.findById(epoch.trainingId);
-  if (!(await checkProjectAccess(req.user?.id, training?.projectId))) {
-    throw new ForbiddenError();
-  }
+  const { id } = req.params as { id: string };
+  const epoch = await epochService.getEpochById(id, req.user?.id);
 
   res.json({
     success: true,
@@ -85,18 +33,8 @@ export const getEpochById = async (req: Request, res: Response): Promise<void> =
 
 // Get epoch by UUID
 export const getEpochByUuid = async (req: Request, res: Response): Promise<void> => {
-  const { uuid } = req.params;
-
-  const epoch = await Epoch.findOne({ epoch_uuid: uuid });
-
-  if (!epoch) {
-    throw new NotFoundError('Epoch not found');
-  }
-
-  const training = await Training.findById(epoch.trainingId);
-  if (!(await checkProjectAccess(req.user?.id, training?.projectId))) {
-    throw new ForbiddenError();
-  }
+  const { uuid } = req.params as { uuid: string };
+  const epoch = await epochService.getEpochByUuid(uuid, req.user?.id);
 
   res.json({
     success: true,
@@ -106,51 +44,7 @@ export const getEpochByUuid = async (req: Request, res: Response): Promise<void>
 
 // Create epoch
 export const createEpoch = async (req: Request, res: Response): Promise<void> => {
-  const {
-    trainingId,
-    training_uuid,
-    epoch,
-    timestamp,
-    results,
-    learning_rate,
-    epoch_time,
-    system_info,
-    metadata
-  } = req.body;
-
-  // Check if training exists
-  const training = await Training.findById(trainingId);
-  if (!training) {
-    throw new NotFoundError('Training not found');
-  }
-
-  if (!(await checkProjectAccess(req.user?.id, training.projectId))) {
-    throw new ForbiddenError();
-  }
-  if (!isWithinTokenScope(req.projectId, training.projectId)) {
-    throw new ForbiddenError('Training does not belong to the token\'s project');
-  }
-
-  // Generate UUID if not provided
-  const epoch_uuid = req.body.epoch_uuid || uuidv4();
-
-  const epochData = new Epoch({
-    trainingId,
-    training_uuid,
-    epoch_uuid,
-    epoch,
-    timestamp: timestamp || new Date(),
-    results,
-    learning_rate,
-    epoch_time,
-    system_info,
-    metadata
-  });
-
-  const savedEpoch = await epochData.save();
-
-  // Update training's updatedAt timestamp
-  await Training.findByIdAndUpdate(trainingId, { updatedAt: new Date() });
+  const savedEpoch = await epochService.createEpoch(req.body, req.user?.id, req.projectId);
 
   res.status(201).json({
     success: true,
@@ -161,37 +55,8 @@ export const createEpoch = async (req: Request, res: Response): Promise<void> =>
 
 // Update epoch
 export const updateEpoch = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const {
-    timestamp,
-    results,
-    learning_rate,
-    epoch_time,
-    metadata
-  } = req.body;
-
-  const epoch = await Epoch.findById(id);
-
-  if (!epoch) {
-    throw new NotFoundError('Epoch not found');
-  }
-
-  const training = await Training.findById(epoch.trainingId);
-  if (!(await checkProjectAccess(req.user?.id, training?.projectId))) {
-    throw new ForbiddenError();
-  }
-  if (!isWithinTokenScope(req.projectId, training?.projectId)) {
-    throw new ForbiddenError('Training does not belong to the token\'s project');
-  }
-
-  // Update fields
-  if (timestamp !== undefined) epoch.timestamp = timestamp;
-  if (results !== undefined) epoch.results = results;
-  if (learning_rate !== undefined) epoch.learning_rate = learning_rate;
-  if (epoch_time !== undefined) epoch.epoch_time = epoch_time;
-  if (metadata !== undefined) epoch.metadata = metadata;
-
-  const updatedEpoch = await epoch.save();
+  const { id } = req.params as { id: string };
+  const updatedEpoch = await epochService.updateEpoch(id, req.body, req.user?.id, req.projectId);
 
   res.json({
     success: true,
@@ -202,78 +67,7 @@ export const updateEpoch = async (req: Request, res: Response): Promise<void> =>
 
 // Create epoch from JSON file (accepts training_uuid and looks up trainingId, or accepts trainingId directly)
 export const createEpochFromJson = async (req: Request, res: Response): Promise<void> => {
-  const {
-    trainingId,
-    training_uuid,
-    epoch_uuid,
-    epoch,
-    timestamp,
-    results,
-    learning_rate,
-    epoch_time,
-    metadata
-  } = req.body;
-
-  let training: ITraining;
-  let trainId: string;
-  let trainUuid: string;
-
-  // If trainingId is provided, look it up by ID
-  if (trainingId) {
-    const foundTraining = await Training.findById(trainingId);
-    if (!foundTraining) {
-      throw new NotFoundError(`Training not found with id: ${trainingId}`);
-    }
-    training = foundTraining;
-    trainId = trainingId;
-    trainUuid = training.uuid;
-  }
-  // Otherwise, training_uuid must be provided
-  else if (training_uuid) {
-    const foundTraining = await Training.findOne({ uuid: training_uuid });
-    if (!foundTraining) {
-      throw new NotFoundError(`Training not found with uuid: ${training_uuid}`);
-    }
-    training = foundTraining;
-    trainId = training._id.toString();
-    trainUuid = training_uuid;
-  }
-  // Neither provided
-  else {
-    throw new BadRequestError('Either trainingId or training_uuid is required');
-  }
-
-  if (!(await checkProjectAccess(req.user?.id, training.projectId))) {
-    throw new ForbiddenError();
-  }
-  if (!isWithinTokenScope(req.projectId, training.projectId)) {
-    throw new ForbiddenError('Training does not belong to the token\'s project');
-  }
-
-  // Check if epoch already exists
-  if (epoch_uuid) {
-    const existingEpoch = await Epoch.findOne({ epoch_uuid });
-    if (existingEpoch) {
-      throw new ConflictError(`Epoch with uuid ${epoch_uuid} already exists`);
-    }
-  }
-
-  const epochData = new Epoch({
-    trainingId: trainId,
-    training_uuid: trainUuid,
-    epoch_uuid: epoch_uuid || uuidv4(),
-    epoch,
-    timestamp: timestamp || new Date(),
-    results,
-    learning_rate,
-    epoch_time,
-    metadata
-  });
-
-  const savedEpoch = await epochData.save();
-
-  // Update training's updatedAt timestamp
-  await Training.findByIdAndUpdate(trainId, { updatedAt: new Date() });
+  const savedEpoch = await epochService.createEpochFromJson(req.body, req.user?.id, req.projectId);
 
   res.status(201).json({
     success: true,
@@ -284,31 +78,10 @@ export const createEpochFromJson = async (req: Request, res: Response): Promise<
 
 // Batch create epochs
 export const createEpochsBatch = async (req: Request, res: Response): Promise<void> => {
-  const { epochs } = req.body as CreateEpochsBatchData;
-
-  // Prepare epochs (shape already validated by the route's zod schema)
-  const preparedEpochs = epochs.map((epoch) => ({
-    ...epoch,
-    epoch_uuid: epoch.epoch_uuid || uuidv4(),
-    timestamp: epoch.timestamp || new Date()
-  }));
-
-  // Verify access to every training referenced in the batch before inserting anything
-  const uniqueTrainingIds = [...new Set(preparedEpochs.map(epoch => epoch.trainingId))];
-  const trainings = await Training.find({ _id: { $in: uniqueTrainingIds } });
-  const trainingById = new Map(trainings.map(t => [t._id.toString(), t]));
-  for (const trainingId of uniqueTrainingIds) {
-    const training = trainingById.get(trainingId);
-    if (!training || !(await checkProjectAccess(req.user?.id, training.projectId)) || !isWithinTokenScope(req.projectId, training.projectId)) {
-      throw new ForbiddenError();
-    }
-  }
-
-  const savedEpochs = await Epoch.insertMany(preparedEpochs);
-
-  await Training.updateMany(
-    { _id: { $in: uniqueTrainingIds } },
-    { updatedAt: new Date() }
+  const savedEpochs = await epochService.createEpochsBatch(
+    req.body as CreateEpochsBatchData,
+    req.user?.id,
+    req.projectId
   );
 
   res.status(201).json({

@@ -104,7 +104,7 @@ export function useTrainingActions({ trainingId, refetch, onTrainingDeleted }: U
       setUploading(true);
       await testResultService.deleteTestResult(testResultId);
       setUploadSuccess('Test result deleted successfully');
-      refetch(); // This will trigger the useEffect in useTrainingDetail to reload test results
+      refetch();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete test result';
       setUploadError(message);

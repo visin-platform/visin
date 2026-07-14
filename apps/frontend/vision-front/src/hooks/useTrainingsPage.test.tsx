@@ -98,12 +98,11 @@ describe('useTrainingsPage', () => {
     mockedTraining.getTrainings.mockImplementation(() =>
       Promise.reject(new Error('boom'))
     );
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
 
+    await waitFor(() => expect(mockedTraining.getTrainings).toHaveBeenCalled());
     await waitFor(() => expect(result.current.availableTags).toEqual([]));
-    expect(consoleError).toHaveBeenCalled();
   });
 
   it('debounces search and resets to page 0', async () => {

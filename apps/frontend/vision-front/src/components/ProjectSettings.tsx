@@ -48,6 +48,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
   const [newTokenName, setNewTokenName] = useState('');
   const [expiresInDays, setExpiresInDays] = useState<string>('30');
   const [createdToken, setCreatedToken] = useState<ApiToken | null>(null);
+  const [tokenToRevoke, setTokenToRevoke] = useState<ApiToken | null>(null);
 
   // Project editing state
   const [editName, setEditName] = useState(project.name);
@@ -105,6 +106,12 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+  };
+
+  const handleConfirmRevokeToken = () => {
+    if (!tokenToRevoke) return;
+    revokeMutation.mutate(tokenToRevoke._id);
+    setTokenToRevoke(null);
   };
 
   // Form is always editable now — edit fields are initialized with project values
@@ -277,11 +284,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
                       <IconButton 
                         color="error" 
                         size="small"
-                        onClick={() => {
-                          if (window.confirm('Are you sure you want to revoke this token?')) {
-                            revokeMutation.mutate(token._id);
-                          }
-                        }}
+                        onClick={() => setTokenToRevoke(token)}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -335,7 +338,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
                 variant="outlined" 
                 sx={{ 
                   p: 2, 
-                  bgcolor: 'grey.50', 
+                  bgcolor: 'background.default',
                   display: 'flex', 
                   alignItems: 'center',
                   justifyContent: 'space-between'
@@ -368,6 +371,27 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
               Done
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+      <Dialog open={Boolean(tokenToRevoke)} onClose={() => setTokenToRevoke(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Revoke API Token</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Are you sure you want to revoke {tokenToRevoke?.name ? `"${tokenToRevoke.name}"` : 'this token'}?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTokenToRevoke(null)} disabled={revokeMutation.isPending}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmRevokeToken}
+            color="error"
+            variant="contained"
+            disabled={revokeMutation.isPending}
+          >
+            Revoke
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

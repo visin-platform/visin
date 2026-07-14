@@ -25,7 +25,25 @@ import DeleteProjectDialog from '../components/project/DeleteProjectDialog';
 import { useProjectDashboard } from '../hooks/useProjectDashboard';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
+const tabNameToIndex: Record<string, number> = {
+  overview: 0,
+  trainings: 1,
+  tests: 2,
+  visualizations: 3,
+  benchmarks: 4,
+  comparisons: 5,
+  settings: 6
+};
 
+const indexToTabName: Record<number, string> = {
+  0: 'overview',
+  1: 'trainings',
+  2: 'tests',
+  3: 'visualizations',
+  4: 'benchmarks',
+  5: 'comparisons',
+  6: 'settings'
+};
 
 const ProjectDashboardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,26 +51,6 @@ const ProjectDashboardPage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
-
-  const tabNameToIndex: Record<string, number> = {
-    overview: 0,
-    trainings: 1,
-    tests: 2,
-    visualizations: 3,
-    benchmarks: 4,
-    comparisons: 5,
-    settings: 6
-  };
-
-  const indexToTabName: Record<number, string> = {
-    0: 'overview',
-    1: 'trainings',
-    2: 'tests',
-    3: 'visualizations',
-    4: 'benchmarks',
-    5: 'comparisons',
-    6: 'settings'
-  };
 
   React.useEffect(() => {
     const tabQuery = searchParams.get('tab');

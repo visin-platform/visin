@@ -56,7 +56,7 @@ const LatexModal: React.FC<LatexModalProps> = ({
           <Paper
             sx={{
               p: 2,
-              bgcolor: '#f5f5f5',
+              bgcolor: 'background.default',
               fontFamily: 'monospace',
               whiteSpace: 'pre-wrap',
               maxHeight: '60vh',

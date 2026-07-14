@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import VisualizationGrid from './VisualizationGrid';
 import { Visualization } from '../../types';
@@ -62,28 +62,21 @@ describe('VisualizationGrid', () => {
   });
 
   describe('delete confirmation', () => {
-    beforeEach(() => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
-    });
-    afterEach(() => {
-      vi.restoreAllMocks();
-    });
-
     it('calls handleDelete when delete is confirmed', () => {
       const handleDelete = vi.fn();
       render(<VisualizationGrid {...baseProps({ handleDelete })} />);
       fireEvent.click(screen.getByTestId('DeleteIcon'));
-      expect(window.confirm).toHaveBeenCalled();
+      expect(screen.getByText('Delete Visualization')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
       expect(handleDelete).toHaveBeenCalledWith('viz-1');
     });
   });
 
   it('does not call handleDelete when the confirmation is cancelled', () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     const handleDelete = vi.fn();
     render(<VisualizationGrid {...baseProps({ handleDelete })} />);
     fireEvent.click(screen.getByTestId('DeleteIcon'));
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
     expect(handleDelete).not.toHaveBeenCalled();
-    vi.restoreAllMocks();
   });
 });

@@ -64,7 +64,7 @@ export const EpochsUploadTab: React.FC<EpochsUploadTabProps> = ({
         </Box>
 
         {/* Upload Section */}
-        <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+        <Box sx={{ mb: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
           <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
             Upload Epoch JSON File
           </Typography>

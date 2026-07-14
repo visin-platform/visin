@@ -49,7 +49,6 @@ const benchmark: Benchmark = {
 describe('TrainingBenchmarksTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.confirm = vi.fn(() => true);
   });
 
   it('renders empty state when there are no benchmarks', async () => {
@@ -93,6 +92,8 @@ describe('TrainingBenchmarksTab', () => {
 
     const deleteButton = screen.getByRole('button');
     fireEvent.click(deleteButton);
+    expect(screen.getByText('Delete Benchmark')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
 
     await waitFor(() => {
       expect(mockedBenchmarkService.deleteBenchmark).toHaveBeenCalledWith('b1');

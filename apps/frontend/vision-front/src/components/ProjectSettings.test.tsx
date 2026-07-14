@@ -66,7 +66,6 @@ const renderComponent = () => {
 describe('ProjectSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.confirm = vi.fn(() => true);
     mockedApiTokenService.getTokens.mockResolvedValue({ data: [] } as any);
   });
 
@@ -157,6 +156,8 @@ describe('ProjectSettings', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /revoke token/i }));
+    expect(screen.getByText('Revoke API Token')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^revoke$/i }));
 
     await waitFor(() => {
       expect(mockedApiTokenService.revokeToken).toHaveBeenCalled();

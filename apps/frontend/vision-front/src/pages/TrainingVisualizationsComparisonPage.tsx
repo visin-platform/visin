@@ -118,8 +118,8 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
     }
   });
 
-  const trainings = data?.trainings || [];
-  const availableTypes = data?.availableTypes || [];
+  const trainings = React.useMemo(() => data?.trainings || [], [data?.trainings]);
+  const availableTypes = React.useMemo(() => data?.availableTypes || [], [data?.availableTypes]);
   const error = queryError instanceof Error ? queryError.message : (queryError ? 'Failed to load comparison data' : null);
 
   // Auto-select first type once data loads
@@ -283,7 +283,7 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
                                         height: 'auto',
                                         maxHeight: '400px',
                                         objectFit: 'contain',
-                                        bgcolor: 'grey.100',
+                                        bgcolor: 'background.default',
                                         borderRadius: 1,
                                         cursor: 'pointer'
                                       }}

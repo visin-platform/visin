@@ -108,9 +108,8 @@ describe('ImageCategoriesPage', () => {
     expect(screen.getByDisplayValue('Cars')).toBeInTheDocument();
   });
 
-  it('deletes a category after confirming the browser confirm dialog', async () => {
+  it('deletes a category after confirming the delete dialog', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     getAllCategoriesMock.mockResolvedValue([
       {
         _id: 'c1',
@@ -127,13 +126,14 @@ describe('ImageCategoriesPage', () => {
     await screen.findByText('Cars');
     const deleteButtons = screen.getAllByRole('button').filter((b) => b.querySelector('[data-testid="DeleteIcon"]'));
     await user.click(deleteButtons[0]);
+    expect(screen.getByRole('dialog', { name: 'Delete Category' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(deleteImageCategoryMock).toHaveBeenCalledWith('c1'));
   });
 
-  it('does not delete when the browser confirm dialog is dismissed', async () => {
+  it('does not delete when the delete dialog is canceled', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     getAllCategoriesMock.mockResolvedValue([
       { _id: 'c1', name: 'Cars', description: '', color: '#ff0000', datasetId: 'd1', createdAt: '2024-01-01T00:00:00Z' }
     ]);
@@ -142,6 +142,7 @@ describe('ImageCategoriesPage', () => {
     await screen.findByText('Cars');
     const deleteButtons = screen.getAllByRole('button').filter((b) => b.querySelector('[data-testid="DeleteIcon"]'));
     await user.click(deleteButtons[0]);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(deleteImageCategoryMock).not.toHaveBeenCalled();
   });

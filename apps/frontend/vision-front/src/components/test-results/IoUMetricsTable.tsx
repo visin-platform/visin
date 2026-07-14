@@ -133,7 +133,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
             alignItems: 'center', 
             justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
             cursor: 'pointer',
-            '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' }
+            '&:hover': { bgcolor: 'action.hover' }
           }}
           onClick={() => handleSort(condition, column)}
         >
@@ -253,7 +253,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
         const conditionTitle = condition.replace('_', ' ').toUpperCase();
         return (
           <Paper key={condition} sx={{ mb: 3, mx: 3 }}>
-            <Box sx={{ p: 2, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'grey.50' }}>
+            <Box sx={{ p: 2, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'background.default' }}>
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
                 {conditionTitle}
               </Typography>
@@ -270,7 +270,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
             <TableContainer sx={{ overflowX: 'auto' }}>
               <Table size="small">
                 <TableHead>
-                  <TableRow sx={{ bgcolor: 'grey.100' }}>
+                  <TableRow sx={{ bgcolor: 'background.default' }}>
                     <SortableTableCell condition={condition} column="training" align="left">
                       Test Result
                     </SortableTableCell>
@@ -288,7 +288,7 @@ const IoUMetricsTable: React.FC<IoUMetricsTableProps> = ({
                 <TableBody>
                   {getSortedData(condition).map((comp) => {
                     return (
-                      <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'grey.25' } }}>
+                      <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'action.hover' } }}>
                         <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 150 }}>
                           <Link
                             to={`/trainings/${comp.training._id}`}

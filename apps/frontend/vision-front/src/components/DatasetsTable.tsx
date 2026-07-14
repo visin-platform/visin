@@ -65,7 +65,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
     queryFn: () => getAllAnalyses(100)
   });
 
-  const analyses: DatasetAnalysis[] = data?.data || [];
+  const analyses: DatasetAnalysis[] = React.useMemo(() => data?.data || [], [data?.data]);
   const error = actionError || (loadError ? 'Failed to load analyses' : null);
 
   const invalidateAnalyses = () => queryClient.invalidateQueries({ queryKey: ['analyses'] });

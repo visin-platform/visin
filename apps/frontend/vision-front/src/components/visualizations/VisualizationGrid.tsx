@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -12,7 +12,11 @@ import {
   Tooltip,
   IconButton,
   Divider,
-  useTheme
+  useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   CompareArrows as CompareIcon,
@@ -40,6 +44,7 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
   isAuthenticated
 }) => {
   const theme = useTheme();
+  const [visualizationToDelete, setVisualizationToDelete] = useState<string | null>(null);
 
   // Group visualizations by type and epoch
   const groupedVisualizations = visualizations.reduce((acc, viz) => {
@@ -52,9 +57,13 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
   }, {} as Record<string, { type: string; epoch?: number; items: Visualization[] }>);
 
   const onDeleteClick = (uuid: string) => {
-    if (confirm('Are you sure you want to delete this visualization?')) {
-      handleDelete(uuid);
-    }
+    setVisualizationToDelete(uuid);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!visualizationToDelete) return;
+    handleDelete(visualizationToDelete);
+    setVisualizationToDelete(null);
   };
 
   return (
@@ -106,7 +115,7 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
                     }
                   }}
                 >
-                  <Box sx={{ position: 'relative', pt: '75%', bgcolor: 'grey.100', overflow: 'hidden' }}>
+                  <Box sx={{ position: 'relative', pt: '75%', bgcolor: 'background.default', overflow: 'hidden' }}>
                     <CardMedia
                       component="img"
                       image={viz.signedUrl || ''}
@@ -193,6 +202,22 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
           </Grid>
         </Box>
       ))}
+      <Dialog open={Boolean(visualizationToDelete)} onClose={() => setVisualizationToDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete Visualization</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Are you sure you want to delete this visualization?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setVisualizationToDelete(null)}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

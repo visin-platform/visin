@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   DatasetImage,
@@ -16,7 +16,6 @@ export const useImageLabeling = () => {
 
   const [images, setImages] = useState<DatasetImage[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [loading, setLoading] = useState(false);
   const [labeling, setLabeling] = useState(false);
   const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [setupMode, setSetupMode] = useState(true);
@@ -41,10 +40,30 @@ export const useImageLabeling = () => {
     retry: false,
   });
 
-  const showAlert = (type: 'success' | 'error' | 'info', message: string) => {
+  const showAlert = useCallback((type: 'success' | 'error' | 'info', message: string) => {
     setAlert({ type, message });
     setTimeout(() => setAlert(null), 3000);
-  };
+  }, []);
+
+  const loadUnlabeledImages = useCallback(async () => {
+    const response = await getAllImages(1, imageLimit, undefined, undefined, true, selectedWeatherFilter || undefined);
+
+    if (response.success && response.data.images) {
+      return response.data.images.filter((image: DatasetImage) =>
+        !image.tags || image.tags.length === 0
+      );
+    }
+
+    return [];
+  }, [imageLimit, selectedWeatherFilter]);
+
+  const {
+    mutate: loadImages,
+    mutateAsync: loadImagesAsync,
+    isPending: loading
+  } = useMutation({
+    mutationFn: loadUnlabeledImages
+  });
 
   const startLabeling = async () => {
     if (imageLimit < 1) {
@@ -52,24 +71,16 @@ export const useImageLabeling = () => {
       return;
     }
 
-    setLoading(true);
     setSetupMode(false);
 
     try {
-      const response = await getAllImages(1, imageLimit, undefined, undefined, true, selectedWeatherFilter || undefined);
+      const unlabeledImages = await loadImagesAsync();
 
-      if (response.success && response.data.images) {
-        const allImages = response.data.images;
-        const unlabeledImages = allImages.filter((image: DatasetImage) =>
-          !image.tags || image.tags.length === 0
-        );
-
-        if (unlabeledImages.length > 0) {
-          setImages(unlabeledImages);
-          setCurrentImageIndex(0);
-          navigate(`/image-labeling/${unlabeledImages[0]._id}`, { replace: true });
-          return;
-        }
+      if (unlabeledImages.length > 0) {
+        setImages(unlabeledImages);
+        setCurrentImageIndex(0);
+        navigate(`/image-labeling/${unlabeledImages[0]._id}`, { replace: true });
+        return;
       }
 
       showAlert('info', 'No unlabeled images found matching the selected criteria. Please check your filters or upload some images first.');
@@ -79,8 +90,6 @@ export const useImageLabeling = () => {
       console.error('Error loading images:', error);
       showAlert('error', 'Failed to load images for labeling. Please check that images exist in the system.');
       setSetupMode(true);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -176,46 +185,25 @@ export const useImageLabeling = () => {
 
   useEffect(() => {
     if (imageId && setupMode && !loading && images.length === 0) {
-      const autoStartLabeling = async () => {
-        setLoading(true);
-        setSetupMode(false);
-
-        const showAlertLocal = (type: 'success' | 'error' | 'info', message: string) => {
-          setAlert({ type, message });
-          setTimeout(() => setAlert(null), 3000);
-        };
-
-        try {
-          const response = await getAllImages(1, imageLimit, undefined, undefined, true, selectedWeatherFilter || undefined);
-
-          if (response.success && response.data.images) {
-            const allImages = response.data.images;
-            const unlabeledImages = allImages.filter((image: DatasetImage) =>
-              !image.tags || image.tags.length === 0
-            );
-
-            if (unlabeledImages.length > 0) {
-              const selectedImages = unlabeledImages.slice(0, imageLimit);
-              setImages(selectedImages);
-              return;
-            }
+      setSetupMode(false);
+      loadImages(undefined, {
+        onSuccess: (unlabeledImages) => {
+          if (unlabeledImages.length > 0) {
+            setImages(unlabeledImages.slice(0, imageLimit));
+            return;
           }
 
-          showAlertLocal('info', 'No unlabeled images found in the system. Please upload some images first.');
+          showAlert('info', 'No unlabeled images found in the system. Please upload some images first.');
           setSetupMode(true);
-
-        } catch (error) {
+        },
+        onError: (error) => {
           console.error('Error auto-loading images:', error);
-          showAlertLocal('error', 'Failed to load images for labeling. Please check that images exist in the system.');
+          showAlert('error', 'Failed to load images for labeling. Please check that images exist in the system.');
           setSetupMode(true);
-        } finally {
-          setLoading(false);
         }
-      };
-
-      autoStartLabeling();
+      });
     }
-  }, [imageId, setupMode, loading, images.length, imageLimit]);
+  }, [imageId, setupMode, loading, images.length, imageLimit, loadImages, showAlert]);
 
   return {
     images,

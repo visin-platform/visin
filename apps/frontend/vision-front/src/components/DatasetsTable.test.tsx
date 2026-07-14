@@ -61,7 +61,6 @@ const renderTable = (props: Partial<React.ComponentProps<typeof AnalysisTable>> 
 describe('AnalysisTable (DatasetsTable)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.confirm = vi.fn(() => true);
     mockedUseAuth.mockReturnValue({
       isAuthenticated: true,
       user: { groups: ['owner'] }

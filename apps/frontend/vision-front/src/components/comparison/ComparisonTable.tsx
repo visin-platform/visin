@@ -17,8 +17,9 @@ import {
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { Code as CodeIcon } from '@mui/icons-material';
-import { TrainingComparison, ComparisonEpoch } from '@/types';
+import { TrainingComparison } from '@/types';
 import { formatTime, formatNumber } from '@/utils/comparisonLatexGenerator';
+import { getBestEpoch, getBestValMeanIoU, getTop10ValMeanIoU, getTop10ValMeanIoUStats } from '@/utils/epochMetrics';
 import LatexModal from '../common/LatexModal';
 
 interface ComparisonTableProps {
@@ -65,7 +66,7 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
           alignItems: 'center', 
           justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
           cursor: 'pointer',
-          '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' }
+          '&:hover': { bgcolor: 'action.hover' }
         }}
         onClick={() => handleSort(column)}
       >
@@ -102,41 +103,19 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
           bValue = b.metrics.avgEpochTime;
           break;
         case 'bestEpoch': {
-          const aBestEpoch = a.epochs.reduce((best, epoch) => {
-            const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
-            const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
-            return currentVmIoU > bestVmIoU ? epoch : best;
-          }, a.epochs[0]);
-          const bBestEpoch = b.epochs.reduce((best, epoch) => {
-            const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
-            const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
-            return currentVmIoU > bestVmIoU ? epoch : best;
-          }, b.epochs[0]);
-          aValue = aBestEpoch ? aBestEpoch.epoch : -Infinity;
-          bValue = bBestEpoch ? bBestEpoch.epoch : -Infinity;
+          aValue = getBestEpoch(a)?.epoch ?? -Infinity;
+          bValue = getBestEpoch(b)?.epoch ?? -Infinity;
           break;
         }
         case 'bestVmIoU': {
-          const aBestVmIoU = Math.max(...a.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
-          const bBestVmIoU = Math.max(...b.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
-          aValue = aBestVmIoU;
-          bValue = bBestVmIoU;
+          aValue = getBestValMeanIoU(a);
+          bValue = getBestValMeanIoU(b);
           break;
         }
         case 'top10Avg':
         default: {
-          const getTop10Avg = (comp: TrainingComparison) => {
-            const vmIoUs = comp.epochs
-              .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
-              .filter((vmIoU: number | undefined) => vmIoU !== undefined)
-              .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
-              .slice(0, 10);
-
-            if (vmIoUs.length === 0) return -Infinity;
-            return vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
-          };
-          aValue = getTop10Avg(a);
-          bValue = getTop10Avg(b);
+          aValue = getTop10ValMeanIoU(a);
+          bValue = getTop10ValMeanIoU(b);
           break;
         }
       }
@@ -155,19 +134,8 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
   const generateDetailedComparisonLatex = (decimals: number = 2, multiplier: number = 100) => {
     // Sort trainings by top 10 validation mIoU average (descending)
     const sortedData = [...comparisonData].sort((a, b) => {
-      const getTop10Avg = (comp: TrainingComparison) => {
-        const vmIoUs = comp.epochs
-          .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
-          .filter((vmIoU: number | undefined) => vmIoU !== undefined)
-          .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
-          .slice(0, 10);
-        
-        if (vmIoUs.length === 0) return -Infinity;
-        return vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
-      };
-      
-      const aAvg = getTop10Avg(a);
-      const bAvg = getTop10Avg(b);
+      const aAvg = getTop10ValMeanIoU(a);
+      const bAvg = getTop10ValMeanIoU(b);
       return bAvg - aAvg; // Descending order
     });
 
@@ -190,31 +158,19 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
       latex += `& ${formatTime(comp.metrics.avgEpochTime)} `;
       
       // Best Epoch
-      const bestEpoch = comp.epochs.reduce((best, epoch) => {
-        const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
-        const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
-        return currentVmIoU > bestVmIoU ? epoch : best;
-      }, comp.epochs[0]);
+      const bestEpoch = getBestEpoch(comp);
       latex += `& ${bestEpoch ? bestEpoch.epoch : 'N/A'} `;
       
       // Best Validation mIoU
-      const bestVmIoU = Math.max(...comp.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
+      const bestVmIoU = getBestValMeanIoU(comp);
       latex += `& ${bestVmIoU !== -Infinity ? formatNumber(bestVmIoU, decimals, multiplier) : 'N/A'} `;
       
       // Top 10 Validation mIoU Average
-      const vmIoUs = comp.epochs
-        .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
-        .filter((vmIoU: number | undefined) => vmIoU !== undefined)
-        .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
-        .slice(0, 10);
-      
-      if (vmIoUs.length === 0) {
+      const top10Stats = getTop10ValMeanIoUStats(comp);
+      if (!top10Stats) {
         latex += '& N/A ';
       } else {
-        const mean = vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
-        const variance = vmIoUs.reduce((sum: number, vmIoU: number) => sum + Math.pow((vmIoU ?? 0) - mean, 2), 0) / vmIoUs.length;
-        const std = Math.sqrt(variance);
-        latex += `& ${formatNumber(mean, decimals, multiplier)} ± ${formatNumber(std, decimals, multiplier)} `;
+        latex += `& ${formatNumber(top10Stats.mean, decimals, multiplier)} ± ${formatNumber(top10Stats.std, decimals, multiplier)} `;
       }
       
       latex += '\\\\ \\hline\n';
@@ -263,29 +219,16 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({
           <TableBody>
             {sortedComparisonData.map((comp) => {
               // Calculate best epoch
-              const bestEpoch = comp.epochs.reduce((best, epoch) => {
-                const currentVmIoU = epoch.results?.val?.mean_iou ?? -Infinity;
-                const bestVmIoU = best.results?.val?.mean_iou ?? -Infinity;
-                return currentVmIoU > bestVmIoU ? epoch : best;
-              }, comp.epochs[0]);
+              const bestEpoch = getBestEpoch(comp);
 
               // Calculate best validation mIoU
-              const bestVmIoU = Math.max(...comp.epochs.map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou ?? -Infinity));
+              const bestVmIoU = getBestValMeanIoU(comp);
 
               // Calculate top 10 validation mIoU average
-              const vmIoUs = comp.epochs
-                .map((epoch: ComparisonEpoch) => epoch.results?.val?.mean_iou)
-                .filter((vmIoU: number | undefined) => vmIoU !== undefined)
-                .sort((a: number, b: number) => (b ?? 0) - (a ?? 0))
-                .slice(0, 10);
-              
-              let top10Avg = 'N/A';
-              if (vmIoUs.length > 0) {
-                const mean = vmIoUs.reduce((sum: number, vmIoU: number) => sum + (vmIoU ?? 0), 0) / vmIoUs.length;
-                const variance = vmIoUs.reduce((sum: number, vmIoU: number) => sum + Math.pow((vmIoU ?? 0) - mean, 2), 0) / vmIoUs.length;
-                const std = Math.sqrt(variance);
-                top10Avg = `${formatNumber(mean, decimals, multiplier)} ± ${formatNumber(std, decimals, multiplier)}`;
-              }
+              const top10Stats = getTop10ValMeanIoUStats(comp);
+              const top10Avg = top10Stats
+                ? `${formatNumber(top10Stats.mean, decimals, multiplier)} ± ${formatNumber(top10Stats.std, decimals, multiplier)}`
+                : 'N/A';
 
               return (
                 <TableRow key={comp.training._id}>

@@ -18,6 +18,11 @@ import {
   Tooltip,
   Chip,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -33,6 +38,7 @@ interface TrainingBenchmarksTabProps {
 
 const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_uuid, isAuthenticated }) => {
   const [actionError, setActionError] = useState<string | null>(null);
+  const [benchmarkToDelete, setBenchmarkToDelete] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const {
@@ -64,8 +70,19 @@ const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_
   });
 
   const handleDeleteBenchmark = (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this benchmark?')) return;
-    deleteMutation.mutate(id);
+    setBenchmarkToDelete(id);
+  };
+
+  const handleConfirmDeleteBenchmark = () => {
+    if (!benchmarkToDelete) return;
+    deleteMutation.mutate(benchmarkToDelete);
+    setBenchmarkToDelete(null);
+  };
+
+  const handleCancelDeleteBenchmark = () => {
+    if (!deleteMutation.isPending) {
+      setBenchmarkToDelete(null);
+    }
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -322,6 +339,22 @@ const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_
           })}
         </Box>
       )}
+      <Dialog open={Boolean(benchmarkToDelete)} onClose={handleCancelDeleteBenchmark} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete Benchmark</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Are you sure you want to delete this benchmark?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelDeleteBenchmark} disabled={deleteMutation.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmDeleteBenchmark} color="error" variant="contained" disabled={deleteMutation.isPending}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

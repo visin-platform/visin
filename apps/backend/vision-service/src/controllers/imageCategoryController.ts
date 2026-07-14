@@ -1,32 +1,8 @@
 import { Request, Response } from 'express';
-import { UpdateQuery } from 'mongoose';
-import { ConflictError, NotFoundError, logger } from '@visin/backend-core';
-import ImageCategory, { IImageCategory } from '../models/ImageCategory';
-import DatasetImage from '../models/DatasetImage';
+import * as imageCategoryService from '../services/imageCategoryService';
 
 export const createImageCategory = async (req: Request, res: Response): Promise<void> => {
-  const { name, description, datasetId, color } = req.body;
-
-  // Check if category with this name already exists for the dataset
-  const existingCategory = await ImageCategory.findOne({ datasetId, name });
-  if (existingCategory) {
-    throw new ConflictError('Category with this name already exists for this dataset');
-  }
-
-  const category = new ImageCategory({
-    name,
-    description,
-    datasetId,
-    color
-  });
-
-  const savedCategory = await category.save();
-
-  logger.info('Image category created', {
-    id: savedCategory._id,
-    datasetId,
-    name: savedCategory.name
-  });
+  const savedCategory = await imageCategoryService.createImageCategory(req.body);
 
   res.status(201).json({
     success: true,
@@ -36,9 +12,8 @@ export const createImageCategory = async (req: Request, res: Response): Promise<
 };
 
 export const getCategoriesByDataset = async (req: Request, res: Response): Promise<void> => {
-  const { datasetId } = req.params;
-
-  const categories = await ImageCategory.find({ datasetId }).sort({ createdAt: -1 });
+  const { datasetId } = req.params as { datasetId: string };
+  const categories = await imageCategoryService.getCategoriesByDataset(datasetId);
   res.json({
     success: true,
     data: categories
@@ -46,7 +21,7 @@ export const getCategoriesByDataset = async (req: Request, res: Response): Promi
 };
 
 export const getAllCategories = async (req: Request, res: Response): Promise<void> => {
-  const categories = await ImageCategory.find({}).sort({ createdAt: -1 });
+  const categories = await imageCategoryService.getAllCategories();
 
   res.json({
     success: true,
@@ -55,13 +30,8 @@ export const getAllCategories = async (req: Request, res: Response): Promise<voi
 };
 
 export const getCategoryById = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-
-  const category = await ImageCategory.findById(id);
-
-  if (!category) {
-    throw new NotFoundError('Image category not found');
-  }
+  const { id } = req.params as { id: string };
+  const category = await imageCategoryService.getCategoryById(id);
 
   res.json({
     success: true,
@@ -71,32 +41,7 @@ export const getCategoryById = async (req: Request, res: Response): Promise<void
 
 export const updateCategory = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
-  const { name, description, color } = req.body;
-
-  const updateData: UpdateQuery<IImageCategory> = {};
-  if (name !== undefined) updateData.name = name;
-  if (description !== undefined) updateData.description = description;
-  if (color !== undefined) updateData.color = color;
-
-  // If updating name, check for uniqueness
-  if (name) {
-    const category = await ImageCategory.findById(id);
-    if (category) {
-      const existingCategory = await ImageCategory.findOne({
-        datasetId: category.datasetId,
-        name,
-        _id: { $ne: id }
-      });
-      if (existingCategory) {
-        throw new ConflictError('Category with this name already exists for this dataset');
-      }
-    }
-  }
-
-  const category = await ImageCategory.findByIdAndUpdate(id, updateData, { new: true });
-  if (!category) {
-    throw new NotFoundError('Image category not found');
-  }
+  const category = await imageCategoryService.updateCategory(id, req.body);
 
   res.json({
     success: true,
@@ -106,27 +51,8 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
 };
 
 export const deleteCategory = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-
-  const category = await ImageCategory.findById(id);
-  if (!category) {
-    throw new NotFoundError('Image category not found');
-  }
-
-  // Check if category is being used by any images
-  const imagesCount = await DatasetImage.countDocuments({ categoryId: id });
-
-  if (imagesCount > 0) {
-    throw new ConflictError(`Cannot delete category. It is being used by ${imagesCount} image(s).`);
-  }
-
-  await ImageCategory.findByIdAndDelete(id);
-
-  logger.info('Image category deleted', {
-    id,
-    datasetId: category.datasetId,
-    name: category.name
-  });
+  const { id } = req.params as { id: string };
+  await imageCategoryService.deleteCategory(id);
 
   res.json({
     success: true,

@@ -1,23 +1,14 @@
 import React from 'react';
 import { 
   Box, 
-  Paper, 
   Typography, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow,
   Grid,
   Card,
   CardContent,
-  Stack,
-  useTheme,
-  alpha
+  Stack
 } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
-import { Training, Epoch, EpochConditionResults, EpochMetrics } from '../types';
+import { Training, Epoch, EpochConditionResults } from '../types';
 import ClassIoUOverEpochsChart from '../components/ClassIoUOverEpochsChart';
 import LossChart from '../components/LossChart';
 import MIoUChart from '../components/MIoUChart';
@@ -29,6 +20,7 @@ import TrainingOverviewCard from '../components/TrainingOverviewCard';
 import ClassPrecisionChart from '../components/ClassPrecisionChart';
 import ClassRecallChart from '../components/ClassRecallChart';
 import ClassF1Chart from '../components/ClassF1Chart';
+import PerClassMetricsTable from '../components/PerClassMetricsTable';
 import { 
   Timeline as TimelineIcon,
   TableChart as TableChartIcon
@@ -43,8 +35,6 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
   training,
   epochs
 }) => {
-  const theme = useTheme();
-  
   // Calculate chart data
   const lastEpoch = epochs[epochs.length - 1];
   const classMetrics = lastEpoch?.results?.metrics?.per_class || {};
@@ -418,65 +408,17 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
             <Grid size={{ xs: 12 }}>
               <Card variant="outlined" sx={{ borderRadius: 2 }}>
                 <CardContent>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      mb: 1
-                    }}>
-                    <TableChartIcon color="action" sx={{ mr: 1 }} />
-                    <Typography
-                      variant="h6"
-                      sx={{
-                        fontSize: "1rem",
-                        fontWeight: 600
-                      }}>
-                      Per-Class Validation Metrics (Latest Epoch)
-                    </Typography>
-                  </Box>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "text.secondary",
-                      mb: 3
-                    }}>
-                    These metrics are calculated on the validation dataset and represent the model's performance on unseen data during training.
-                  </Typography>
-                  
-                  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
-                    <Table size="small">
-                      <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-                        <TableRow>
-                          <TableCell><strong>Class</strong></TableCell>
-                          <TableCell align="right"><strong>IoU</strong></TableCell>
-                          <TableCell align="right"><strong>Precision</strong></TableCell>
-                          <TableCell align="right"><strong>Recall</strong></TableCell>
-                          <TableCell align="right"><strong>F1 Score</strong></TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {Object.entries(classMetrics).map(([className, metrics]: [string, EpochMetrics]) => (
-                          <TableRow key={className} hover>
-                            <TableCell component="th" scope="row" sx={{ fontWeight: 500 }}>
-                              {className}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
-                              {metrics.iou?.toFixed(4) || '-'}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
-                              {metrics.precision?.toFixed(4) || '-'}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
-                              {metrics.recall?.toFixed(4) || '-'}
-                            </TableCell>
-                            <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
-                              {metrics.f1?.toFixed(4) || '-'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <PerClassMetricsTable
+                    epochs={epochs}
+                    title="Per-Class Validation Metrics (Latest Epoch)"
+                    description="These metrics are calculated on the validation dataset and represent the model's performance on unseen data during training."
+                    headerIcon={<TableChartIcon color="action" sx={{ mr: 1 }} />}
+                    variant="inline"
+                    size="small"
+                    highlightHeader
+                    hoverRows
+                    monospaceValues
+                  />
                 </CardContent>
               </Card>
             </Grid>

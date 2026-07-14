@@ -36,14 +36,6 @@ interface FileUploadProps {
   onUploadComplete: () => void;
 }
 
-interface FileUploadProps {
-  datasetId: string;
-  categoryId?: string;
-  open: boolean;
-  onClose: () => void;
-  onUploadComplete: () => void;
-}
-
 interface FileWithId {
   file: File;
   id: string;
@@ -242,10 +234,10 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
             borderRadius: 2,
             p: 4,
             textAlign: 'center',
-            bgcolor: 'grey.50',
+            bgcolor: 'background.default',
             cursor: 'pointer',
             mb: 2,
-            '&:hover': { bgcolor: 'grey.100' }
+            '&:hover': { bgcolor: 'action.hover' }
           }}
           onDrop={handleDrop}
           onDragOver={handleDragOver}

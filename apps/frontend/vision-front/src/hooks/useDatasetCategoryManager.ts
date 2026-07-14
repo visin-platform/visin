@@ -21,6 +21,7 @@ export function useDatasetCategoryManager(datasetId: string | undefined) {
   const [editingCategory, setEditingCategory] = useState<ImageCategory | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryForm>(emptyForm);
   const [categoryAlert, setCategoryAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [categoryIdToDelete, setCategoryIdToDelete] = useState<string | null>(null);
 
   const showCategoryAlert = (type: 'success' | 'error', message: string) => {
     setCategoryAlert({ type, message });
@@ -63,14 +64,25 @@ export function useDatasetCategoryManager(datasetId: string | undefined) {
     }
   };
 
-  const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm('Are you sure you want to delete this category?')) return;
+  const handleDeleteCategory = (categoryId: string) => {
+    setCategoryIdToDelete(categoryId);
+  };
+
+  const cancelDeleteCategory = () => {
+    setCategoryIdToDelete(null);
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!categoryIdToDelete) return;
+
     try {
-      await deleteImageCategory(categoryId);
+      await deleteImageCategory(categoryIdToDelete);
       showCategoryAlert('success', 'Category deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['datasetCategories', datasetId] });
     } catch {
       showCategoryAlert('error', 'Failed to delete category');
+    } finally {
+      setCategoryIdToDelete(null);
     }
   };
 
@@ -91,10 +103,13 @@ export function useDatasetCategoryManager(datasetId: string | undefined) {
     categoryForm,
     setCategoryForm,
     categoryAlert,
+    categoryIdToDelete,
     showCategoryAlert,
     closeCategoryModal,
     handleSaveCategory,
     handleDeleteCategory,
+    confirmDeleteCategory,
+    cancelDeleteCategory,
     openEditCategoryModal
   };
 }

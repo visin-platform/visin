@@ -176,7 +176,7 @@ const TopEpochsTable: React.FC<TopEpochsTableProps> = ({ comparisonData }) => {
       <TableContainer>
         <Table size="small">
           <TableHead>
-            <TableRow sx={{ bgcolor: 'grey.50' }}>
+            <TableRow sx={{ bgcolor: 'background.default' }}>
               <TableCell sx={{ fontWeight: 600, minWidth: 60 }}>Rank</TableCell>
               <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Training</TableCell>
               <TableCell sx={{ fontWeight: 600, minWidth: 80 }}>Epoch</TableCell>
@@ -191,7 +191,7 @@ const TopEpochsTable: React.FC<TopEpochsTableProps> = ({ comparisonData }) => {
           </TableHead>
           <TableBody>
             {topEpochs.map((epoch, index) => (
-              <TableRow key={`${epoch.trainingId}-${epoch.epoch}`} sx={{ '&:nth-of-type(odd)': { bgcolor: 'grey.25' } }}>
+              <TableRow key={`${epoch.trainingId}-${epoch.epoch}`} sx={{ '&:nth-of-type(odd)': { bgcolor: 'action.hover' } }}>
                 <TableCell sx={{ fontWeight: 600, color: theme.palette.primary.main }}>
                   #{index + 1}
                 </TableCell>

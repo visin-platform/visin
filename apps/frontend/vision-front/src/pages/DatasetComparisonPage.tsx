@@ -113,7 +113,7 @@ export const DatasetComparisonPage: React.FC = () => {
                 }}>
                 Analysis Data:
               </Typography>
-              <Paper sx={{ p: 2, backgroundColor: '#f5f5f5', maxHeight: 300, overflow: 'auto' }}>
+              <Paper sx={{ p: 2, backgroundColor: 'background.default', maxHeight: 300, overflow: 'auto' }}>
                 <pre style={{ fontSize: '0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                   {JSON.stringify(comparison.data, null, 2)}
                 </pre>
@@ -153,7 +153,7 @@ export const DatasetComparisonPage: React.FC = () => {
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Paper sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
+                  <Paper sx={{ p: 2, backgroundColor: 'background.default' }}>
                     <pre style={{ fontSize: '0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                       {JSON.stringify(comp.data, null, 2)}
                     </pre>

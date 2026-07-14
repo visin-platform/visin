@@ -254,8 +254,8 @@ const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
                   p: 0,
                   maxHeight: '600px',
                   overflowY: 'auto',
-                  bgcolor: '#1e1e1e', // Dark background for code
-                  color: '#d4d4d4', // Light text for code
+                  bgcolor: theme.palette.grey[900],
+                  color: theme.palette.grey[100],
                 }}
               >
                 <Box

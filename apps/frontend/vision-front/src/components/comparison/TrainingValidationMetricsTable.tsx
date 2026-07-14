@@ -75,7 +75,7 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
           alignItems: 'center', 
           justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
           cursor: 'pointer',
-          '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' }
+          '&:hover': { bgcolor: 'action.hover' }
         }}
         onClick={() => handleSort(column)}
       >
@@ -196,7 +196,7 @@ const TrainingValidationMetricsTable: React.FC<TrainingValidationMetricsTablePro
       <TableContainer>
         <Table>
           <TableHead>
-            <TableRow sx={{ bgcolor: 'grey.50' }}>
+            <TableRow sx={{ bgcolor: 'background.default' }}>
               <SortableTableCell column="training" align="left">Training</SortableTableCell>
               <SortableTableCell column="meanIoU">Val mIoU</SortableTableCell>
               <SortableTableCell column="meanPrecision">Precision</SortableTableCell>

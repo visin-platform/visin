@@ -34,7 +34,7 @@ export default defineConfig(() => ({
       // ratchet these up as more tests are added.
       thresholds: {
         statements: 89,
-        branches: 77,
+        branches: 78,
         functions: 86,
         lines: 90,
       },

@@ -119,6 +119,9 @@ const DatasetDetailPage: React.FC = () => {
     closeCategoryModal,
     handleSaveCategory,
     handleDeleteCategory,
+    confirmDeleteCategory,
+    cancelDeleteCategory,
+    categoryIdToDelete,
     openEditCategoryModal
   } = useDatasetCategoryManager(id);
 
@@ -348,6 +351,21 @@ const DatasetDetailPage: React.FC = () => {
         form={categoryForm}
         setForm={setCategoryForm}
       />
+
+      <Dialog open={!!categoryIdToDelete} onClose={cancelDeleteCategory}>
+        <DialogTitle>Delete Category</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete this category? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDeleteCategory}>Cancel</Button>
+          <Button onClick={confirmDeleteCategory} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <FileUpload
         datasetId={id!}

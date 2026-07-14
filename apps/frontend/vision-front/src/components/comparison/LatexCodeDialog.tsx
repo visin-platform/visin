@@ -50,7 +50,7 @@ const LatexCodeDialog: React.FC<LatexCodeDialogProps> = ({
             variant="outlined"
             sx={{
               p: 2,
-              bgcolor: 'grey.50',
+              bgcolor: 'background.default',
               fontFamily: 'monospace',
               whiteSpace: 'pre-wrap',
               maxHeight: '400px',

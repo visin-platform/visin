@@ -23,7 +23,7 @@ const NumberFormattingControls: React.FC<NumberFormattingControlsProps> = ({
   onMultiplierChange
 }) => {
   return (
-    <Paper sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
+    <Paper sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
       <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
         Number Format
       </Typography>

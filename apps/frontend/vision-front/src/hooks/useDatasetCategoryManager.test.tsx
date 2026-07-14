@@ -95,30 +95,47 @@ describe('useDatasetCategoryManager', () => {
     expect(result.current.categoryAlert).toEqual({ type: 'error', message: 'Failed to create category' });
   });
 
-  it('deletes a category after window.confirm returns true', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('opens a pending delete state before deleting a category', () => {
+    const { result } = renderHook(() => useDatasetCategoryManager('ds1'), { wrapper: makeWrapper() });
+
+    act(() => {
+      result.current.handleDeleteCategory('c1');
+    });
+
+    expect(result.current.categoryIdToDelete).toBe('c1');
+    expect(mockedDelete).not.toHaveBeenCalled();
+  });
+
+  it('deletes a category after dialog confirmation', async () => {
     mockedDelete.mockResolvedValue(undefined);
     const { result } = renderHook(() => useDatasetCategoryManager('ds1'), { wrapper: makeWrapper() });
 
+    act(() => {
+      result.current.handleDeleteCategory('c1');
+    });
+
     await act(async () => {
-      await result.current.handleDeleteCategory('c1');
+      await result.current.confirmDeleteCategory();
     });
 
     expect(mockedDelete).toHaveBeenCalledWith('c1');
+    expect(result.current.categoryIdToDelete).toBeNull();
     expect(result.current.categoryAlert).toEqual({ type: 'success', message: 'Category deleted successfully' });
-    confirmSpy.mockRestore();
   });
 
-  it('skips deletion when window.confirm returns false', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('skips deletion when the dialog is canceled', () => {
     const { result } = renderHook(() => useDatasetCategoryManager('ds1'), { wrapper: makeWrapper() });
 
-    await act(async () => {
-      await result.current.handleDeleteCategory('c1');
+    act(() => {
+      result.current.handleDeleteCategory('c1');
+    });
+
+    act(() => {
+      result.current.cancelDeleteCategory();
     });
 
     expect(mockedDelete).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
+    expect(result.current.categoryIdToDelete).toBeNull();
   });
 
   it('clears the alert automatically after 5 seconds', async () => {

@@ -402,7 +402,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         component="main" 
         sx={{ 
           flexGrow: 1, 
-          bgcolor: '#f3f4f6', 
+          bgcolor: 'background.default',
           minHeight: '100vh', 
           display: 'flex', 
           flexDirection: 'column',

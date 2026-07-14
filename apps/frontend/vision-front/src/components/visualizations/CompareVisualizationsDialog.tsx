@@ -77,7 +77,7 @@ const CompareVisualizationsDialog: React.FC<CompareVisualizationsDialogProps> = 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    bgcolor: 'grey.100',
+                    bgcolor: 'background.default',
                     borderRadius: 1,
                     overflow: 'hidden',
                     mb: 2

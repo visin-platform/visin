@@ -56,7 +56,7 @@ const LoginPage: React.FC = () => {
       }
     };
     checkExistingAuth();
-  }, [config]);
+  }, [authService, config.GOOGLE_CLIENT_ID]);
 
   const handleLogout = async () => {
     const success = await authService.logout();

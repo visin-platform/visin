@@ -25,7 +25,7 @@ const SortableTableCell: React.FC<SortableTableCellProps> = ({
         alignItems: 'center',
         justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
         cursor: 'pointer',
-        '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' }
+        '&:hover': { bgcolor: 'action.hover' }
       }}
       onClick={() => onSort(column)}
     >

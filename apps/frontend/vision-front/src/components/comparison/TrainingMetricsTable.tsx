@@ -97,7 +97,7 @@ const TrainingMetricsTable: React.FC<TrainingMetricsTableProps> = ({ comparisonD
           <TableContainer component={Paper} sx={{ mx: 3, mb: 2, overflowX: 'auto' }}>
             <Table size="small">
               <TableHead>
-                <TableRow sx={{ bgcolor: 'grey.50' }}>
+                <TableRow sx={{ bgcolor: 'background.default' }}>
                   <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>Training</TableCell>
                   {classes.map(className => (
                     <TableCell
@@ -113,7 +113,7 @@ const TrainingMetricsTable: React.FC<TrainingMetricsTableProps> = ({ comparisonD
                     </TableCell>
                   ))}
                 </TableRow>
-                <TableRow sx={{ bgcolor: 'grey.100' }}>
+                <TableRow sx={{ bgcolor: 'background.default' }}>
                   <TableCell sx={{ fontWeight: 600 }}></TableCell>
                   {classes.map(className => (
                     <React.Fragment key={className}>
@@ -138,7 +138,7 @@ const TrainingMetricsTable: React.FC<TrainingMetricsTableProps> = ({ comparisonD
                 {trainingsWithMetrics.map((comp) => {
                   const conditionData = comp.aggregatedTestResults?.[condition] as Record<string, Record<string, MetricStat>> | undefined;
                   return (
-                    <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'grey.25' } }}>
+                    <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'action.hover' } }}>
                       <TableCell sx={{ fontWeight: 600, minWidth: 150 }}>
                         <Link
                           to={`/trainings/${comp.training._id}`}

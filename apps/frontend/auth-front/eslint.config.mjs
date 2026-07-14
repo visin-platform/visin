@@ -20,10 +20,9 @@ export default tseslint.config(
     },
     rules: {
       'react-hooks/rules-of-hooks': 'error',
-      // Deferred to the lint burn-down (TODO.md §4): exhaustive-deps, the
-      // react-hooks v7 compiler rules, only-export-components.
-      'react-hooks/exhaustive-deps': 'off',
-      'react-refresh/only-export-components': 'off',
+      'react-hooks/exhaustive-deps': 'error',
+      'react-refresh/only-export-components': 'error',
+      'no-console': ['error', { allow: ['warn', 'error'] }],
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
