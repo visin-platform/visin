@@ -32,6 +32,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   document.body.innerHTML = '';
+  Object.defineProperty(document, 'readyState', { configurable: true, value: 'complete' });
 });
 
 describe('initializeGoogleSignIn', () => {
@@ -103,6 +104,31 @@ describe('initializeGoogleSignIn', () => {
     await vi.advanceTimersByTimeAsync(15000);
 
     expect(buttonElement.innerHTML).toContain('Google Sign-In failed to load');
+  });
+
+  it('lets the visitor skip login from the fallback message', async () => {
+    initializeGoogleSignIn(CLIENT_ID, REDIRECT_URI);
+
+    await vi.advanceTimersByTimeAsync(15000);
+    buttonElement.querySelectorAll('button')[1].click();
+
+    expect(window.location.href).toBe(REDIRECT_URI);
+  });
+
+  it('initializes after DOMContentLoaded when the document is still loading', async () => {
+    Object.defineProperty(document, 'readyState', { configurable: true, value: 'loading' });
+    const initialize = vi.fn();
+    const renderButton = vi.fn();
+    window.google = { accounts: { id: { initialize, renderButton } } };
+
+    initializeGoogleSignIn(CLIENT_ID, REDIRECT_URI);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(initialize).toHaveBeenCalledWith(
+      expect.objectContaining({ client_id: CLIENT_ID, callback: expect.any(Function) })
+    );
+    expect(renderButton).toHaveBeenCalledWith(buttonElement, { theme: 'outline', size: 'large' });
   });
 
   describe('handleCredentialResponse (exercised via the captured Google callback)', () => {
