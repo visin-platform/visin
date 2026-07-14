@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.113](https://github.com/visin-platform/visin-monorepo/compare/v0.0.112...v0.0.113) (2026-07-14)
+
+
+### Features
+
+* increase auth-front code coverage over 90% ([7b1c52a](https://github.com/visin-platform/visin-monorepo/commit/7b1c52aedef127e9f02a4f4cf4018300006bab76))
+
 ### [0.0.112](https://github.com/visin-platform/visin-monorepo/compare/v0.0.111...v0.0.112) (2026-07-14)
 
 
