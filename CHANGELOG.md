@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.111](https://github.com/visin-platform/visin-monorepo/compare/v0.0.110...v0.0.111) (2026-07-14)
+
+
+### Bug Fixes
+
+* tsconfig parser ([aaee016](https://github.com/visin-platform/visin-monorepo/commit/aaee016dd3ab8c3f2d12c47a018a5f8aa6f567d2))
+
 ### [0.0.110](https://github.com/visin-platform/visin-monorepo/compare/v0.0.109...v0.0.110) (2026-07-13)
 
 
