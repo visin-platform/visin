@@ -77,9 +77,6 @@ const ClassAPChart: React.FC<ClassAPChartProps> = ({
       </Box>
     );
   }
-
-  console.log('ClassAPChart - Found classes:', Array.from(allClasses));
-
   // Separate classes into regular and _2d groups
   const classesArray = Array.from(allClasses).sort();
   const regularClasses = classesArray.filter(className => !className.endsWith('_2d'));

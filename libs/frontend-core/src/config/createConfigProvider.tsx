@@ -53,7 +53,6 @@ export function createConfigProvider<T>(options: CreateConfigProviderOptions<T>)
       // In development, use environment variables directly
       if (isDev) {
         const devConfig = createDevConfig();
-        console.log('Using development configuration from environment variables:', devConfig);
         setConfig(devConfig);
         globalConfig = devConfig;
         return;
@@ -66,7 +65,6 @@ export function createConfigProvider<T>(options: CreateConfigProviderOptions<T>)
           return res.json();
         })
         .then((loadedConfig) => {
-          console.log('Using production configuration from config.json:', loadedConfig);
           setConfig(loadedConfig);
           globalConfig = loadedConfig;
         })

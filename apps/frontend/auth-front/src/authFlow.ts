@@ -25,8 +25,6 @@ function handleCredentialResponse(response: { credential: string }, redirectUri:
   const idToken = response.credential;
   const config = getGlobalConfig();
 
-  console.log('Sending token to auth service:', config.AUTH_SERVICE_URL);
-
   fetch(`${config.AUTH_SERVICE_URL}/auth/validate`, {
     method: 'POST',
     headers: { 
@@ -42,7 +40,6 @@ function handleCredentialResponse(response: { credential: string }, redirectUri:
       return res.json();
     })
     .then((data) => {
-      console.log('Auth service response:', data);
       if (data.success) {
         window.location.href = redirectUri; // Redirect back without JWT
       } else {
@@ -62,17 +59,12 @@ function handleCredentialResponse(response: { credential: string }, redirectUri:
 }
 
 export function initializeGoogleSignIn(clientId: string, redirectUri: string) {
-  console.log('Starting Google Sign-In initialization...');
-  console.log('Client ID:', clientId);
-  console.log('Redirect URI:', redirectUri);
-
   let retryCount = 0;
   const maxRetries = 100; // Wait up to 10 seconds
   let googleInitialized = false;
   const renderGoogleButton = () => {
     const buttonElement = document.getElementById('google-signin-button');
     if (!buttonElement) {
-      console.log('Button element not found yet');
       return false;
     }
 
@@ -82,11 +74,9 @@ export function initializeGoogleSignIn(clientId: string, redirectUri: string) {
       buttonElement.querySelector('div[role="button"]') ||
       buttonElement.innerHTML.includes('Sign in with Google')
     ) {
-      console.log('Google button already rendered');
       return true;
     }
 
-    console.log('Found button element, rendering Google button...');
     try {
       // Clear any existing content first
       buttonElement.innerHTML = '';
@@ -94,7 +84,6 @@ export function initializeGoogleSignIn(clientId: string, redirectUri: string) {
       // renderGoogleButton is only called after initializeGoogle's guard confirms
       // window.google.accounts.id is loaded.
       window.google!.accounts.id.renderButton(buttonElement, { theme: 'outline', size: 'large' });
-      console.log('Google Sign-In button rendered successfully');
       return true;
     } catch (error) {
       console.error('Error rendering Google Sign-In button:', error);
@@ -103,16 +92,10 @@ export function initializeGoogleSignIn(clientId: string, redirectUri: string) {
   };
   const initializeGoogle = () => {
     retryCount++;
-    console.log(`Attempt ${retryCount}: Checking for Google Sign-In...`);
-    console.log('- Google object:', !!window.google);
-    console.log('- Google script loaded flag:', window.googleScriptLoaded);
-    console.log('- Google accounts:', !!(window.google && window.google.accounts));
-    console.log('- Google accounts.id:', !!(window.google && window.google.accounts && window.google.accounts.id));
 
     // Check if Google Sign-In library is loaded
     if (!window.google || !window.google.accounts || !window.google.accounts.id) {
       if (retryCount < maxRetries) {
-        console.log('Google Sign-In library not ready yet, retrying...');
         setTimeout(initializeGoogle, 100);
         return;
       } else {
@@ -124,13 +107,11 @@ export function initializeGoogleSignIn(clientId: string, redirectUri: string) {
 
     // Initialize Google Sign-In if not already done
     if (!googleInitialized) {
-      console.log('Google Sign-In library loaded successfully, initializing...');
       try {
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: (response: { credential: string }) => handleCredentialResponse(response, redirectUri)
         });
-        console.log('Google Sign-In initialized');
         googleInitialized = true;
       } catch (error) {
         console.error('Error during Google Sign-In initialization:', error);
@@ -143,7 +124,6 @@ export function initializeGoogleSignIn(clientId: string, redirectUri: string) {
     const buttonRendered = renderGoogleButton();
 
     if (!buttonRendered && retryCount < maxRetries) {
-      console.log('Button not rendered yet, retrying...');
       setTimeout(initializeGoogle, 100);
     } else if (!buttonRendered) {
       console.error('Failed to render Google Sign-In button after maximum retries');
@@ -154,20 +134,33 @@ export function initializeGoogleSignIn(clientId: string, redirectUri: string) {
   const showFallbackMessage = () => {
     const buttonElement = document.getElementById('google-signin-button');
     if (buttonElement && !buttonElement.hasChildNodes()) {
-      buttonElement.innerHTML = `
-        <div style="padding: 20px; text-align: center; color: #d32f2f; border: 1px solid #ddd; border-radius: 4px;">
-          <p style="margin: 0 0 10px 0;">⚠️ Google Sign-In failed to load</p>
-          <p style="margin: 0 0 15px 0; font-size: 0.9rem; color: #666;">
-            This might be due to network issues or browser extensions blocking Google services.
-          </p>
-          <button onclick="window.location.reload()" style="padding: 10px 20px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
-            Reload Page
-          </button>
-          <button onclick="window.open('${redirectUri}', '_self')" style="padding: 10px 20px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
-            Skip Login
-          </button>
-        </div>
-      `;
+      const fallback = document.createElement('div');
+      fallback.style.cssText = 'padding: 20px; text-align: center; color: #d32f2f; border: 1px solid #ddd; border-radius: 4px;';
+
+      const title = document.createElement('p');
+      title.style.cssText = 'margin: 0 0 10px 0;';
+      title.textContent = 'Google Sign-In failed to load';
+
+      const description = document.createElement('p');
+      description.style.cssText = 'margin: 0 0 15px 0; font-size: 0.9rem; color: #666;';
+      description.textContent = 'This might be due to network issues or browser extensions blocking Google services.';
+
+      const reloadButton = document.createElement('button');
+      reloadButton.type = 'button';
+      reloadButton.style.cssText = 'padding: 10px 20px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;';
+      reloadButton.textContent = 'Reload Page';
+      reloadButton.addEventListener('click', () => window.location.reload());
+
+      const skipButton = document.createElement('button');
+      skipButton.type = 'button';
+      skipButton.style.cssText = 'padding: 10px 20px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;';
+      skipButton.textContent = 'Skip Login';
+      skipButton.addEventListener('click', () => {
+        window.location.href = redirectUri;
+      });
+
+      fallback.append(title, description, reloadButton, skipButton);
+      buttonElement.append(fallback);
     }
   };
 
