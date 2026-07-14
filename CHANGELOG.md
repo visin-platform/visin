@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.114](https://github.com/visin-platform/visin-monorepo/compare/v0.0.113...v0.0.114) (2026-07-14)
+
+
+### Features
+
+* update todo ([9056481](https://github.com/visin-platform/visin-monorepo/commit/90564811079f97a894c462f8fc93f37035a10780))
+
 ### [0.0.113](https://github.com/visin-platform/visin-monorepo/compare/v0.0.112...v0.0.113) (2026-07-14)
 
 
