@@ -1,0 +1,26 @@
+services:
+  label-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: toomastahves/label-service:latest
+    restart: unless-stopped
+    ports:
+      - '5008:5008'
+    environment:
+      - PORT=5008
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - GROUP_SERVICE_URL=${GROUP_SERVICE_URL}
+      - FILE_SERVICE_URL=${FILE_SERVICE_URL}
+      - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+    init: true
+    networks:
+      - visinnet
+
+networks:
+  visinnet:
+    external: true

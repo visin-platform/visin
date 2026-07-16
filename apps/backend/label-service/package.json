@@ -1,0 +1,38 @@
+{
+  "name": "label-service",
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/visin-platform/visin-monorepo.git",
+    "directory": "apps/backend/label-service"
+  },
+  "author": "Toomas Tahves",
+  "license": "MIT",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "dev": "nodemon --exec \"node --env-file-if-exists=.env -r ts-node/register\" src/index.ts",
+    "build": "tsc",
+    "test": "jest --passWithNoTests",
+    "test:coverage": "jest --coverage --passWithNoTests",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@visin/backend-core": "*",
+    "express": "^5.2.1",
+    "mongoose": "^9.7.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.0",
+    "eslint": "^10.6.0",
+    "jest": "^30.4.2",
+    "nodemon": "^3.1.14",
+    "ts-jest": "^29.4.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.1"
+  }
+}

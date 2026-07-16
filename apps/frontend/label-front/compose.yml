@@ -1,0 +1,21 @@
+services:
+  # Frontend apps
+  label-front:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: toomastahves/label-front:latest
+    restart: unless-stopped
+    environment:
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      AUTH_FRONT_URL: ${AUTH_FRONT_URL}
+      LABEL_SERVICE_URL: ${LABEL_SERVICE_URL}
+    ports:
+      - '3008:80'
+    init: true
+    networks:
+      - visinnet
+
+networks:
+  visinnet:
+    external: true

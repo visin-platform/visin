@@ -53,6 +53,9 @@ jobs:
             group-service:
               - *backend-shared
               - 'apps/backend/group-service/**'
+            label-service:
+              - *backend-shared
+              - 'apps/backend/label-service/**'
             vision-service:
               - *backend-shared
               - 'apps/backend/vision-service/**'
@@ -62,6 +65,9 @@ jobs:
             auth-front:
               - *frontend-shared
               - 'apps/frontend/auth-front/**'
+            label-front:
+              - *frontend-shared
+              - 'apps/frontend/label-front/**'
             landing-front:
               - *shared
               - 'apps/frontend/landing-front/**'

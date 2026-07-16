@@ -1,0 +1,12 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="20" y1="20" x2="180" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+  </defs>
+  <!-- Abstract representation of pixels/data forming a V shape -->
+  <rect x="40" y="40" width="45" height="45" rx="12" fill="url(#grad)" />
+  <rect x="115" y="40" width="45" height="45" rx="12" fill="url(#grad)" />
+  <rect x="77.5" y="115" width="45" height="45" rx="12" fill="url(#grad)" />
+</svg>
