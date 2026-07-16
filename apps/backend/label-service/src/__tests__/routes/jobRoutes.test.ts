@@ -21,11 +21,21 @@ describe('jobRoutes', () => {
   it('registers all expected routes', () => {
     expect(find('post', '/')).toBeDefined();
     expect(find('get', '/')).toBeDefined();
-    expect(routes).toHaveLength(2);
+    expect(find('get', '/:id')).toBeDefined();
+    expect(find('post', '/:id/materialize')).toBeDefined();
+    expect(find('post', '/:id/activate')).toBeDefined();
+    expect(find('post', '/:id/pause')).toBeDefined();
+    expect(find('post', '/:id/resume')).toBeDefined();
+    expect(find('post', '/:id/archive')).toBeDefined();
+    expect(find('post', '/:id/next')).toBeDefined();
+    expect(find('get', '/:id/export')).toBeDefined();
+    expect(find('get', '/:id/stats')).toBeDefined();
+    expect(routes).toHaveLength(11);
   });
 
-  it('validates the body on job creation', () => {
-    // validateRequest + controller
-    expect(find('post', '/')!.handlerCount).toBe(2);
+  it('validates bodies/queries where schemas exist', () => {
+    expect(find('post', '/')!.handlerCount).toBe(2); // validateRequest + controller
+    expect(find('get', '/')!.handlerCount).toBe(2);
+    expect(find('post', '/:id/materialize')!.handlerCount).toBe(2);
   });
 });

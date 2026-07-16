@@ -12,6 +12,14 @@ export interface IJobChoice {
   hotkey?: string;
 }
 
+export const SELECTION_KINDS = ['filter', 'manifest'] as const;
+export type SelectionKind = (typeof SELECTION_KINDS)[number];
+
+export interface IJobSelection {
+  kind: SelectionKind;
+  spec?: Record<string, unknown>; // provenance of the task set (sampleN/seed, manifest source)
+}
+
 export interface ILabelJob extends Document {
   _id: Types.ObjectId;
   name: string;
@@ -30,7 +38,9 @@ export interface ILabelJob extends Document {
   };
   annotationSets: string[];
   redundancy: number;
+  selection?: IJobSelection;
   status: JobStatus;
+  tasksCount: number; // denormalized at materialization
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,7 +69,16 @@ const LabelJobSchema = new Schema<ILabelJob>(
     },
     annotationSets: [{ type: String, trim: true }],
     redundancy: { type: Number, default: 1, min: 1, max: 10 },
-    status: { type: String, enum: JOB_STATUSES, default: 'draft', index: true }
+    selection: {
+      type: {
+        _id: false,
+        kind: { type: String, enum: SELECTION_KINDS, required: true },
+        spec: { type: Schema.Types.Mixed }
+      },
+      default: undefined
+    },
+    status: { type: String, enum: JOB_STATUSES, default: 'draft', index: true },
+    tasksCount: { type: Number, default: 0 }
   },
   { timestamps: true }
 );

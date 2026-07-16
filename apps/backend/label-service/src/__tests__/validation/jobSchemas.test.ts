@@ -1,4 +1,4 @@
-import { createJobBodySchema } from '../../validation/jobSchemas';
+import { createJobBodySchema, listJobsQuerySchema, materializeBodySchema } from '../../validation/jobSchemas';
 
 const validBody = {
   name: 'Mask verification',
@@ -8,11 +8,24 @@ const validBody = {
 };
 
 describe('createJobBodySchema', () => {
-  it('accepts a minimal mask_toggle job and defaults redundancy to 1', () => {
+  it('accepts a minimal mask_toggle job and applies defaults', () => {
     const parsed = createJobBodySchema.parse(validBody);
 
     expect(parsed.redundancy).toBe(1);
+    expect(parsed.annotationSets).toEqual([]);
+    expect(parsed.bundleId).toBeUndefined();
     expect(parsed.question.choices).toBeUndefined();
+  });
+
+  it('accepts bundleId and annotationSets', () => {
+    const parsed = createJobBodySchema.parse({
+      ...validBody,
+      bundleId: 'b1',
+      annotationSets: ['llava_34b'],
+    });
+
+    expect(parsed.bundleId).toBe('b1');
+    expect(parsed.annotationSets).toEqual(['llava_34b']);
   });
 
   it('accepts a single_choice job with choices', () => {
@@ -59,5 +72,36 @@ describe('createJobBodySchema', () => {
     ).toBe(false);
     expect(createJobBodySchema.safeParse({ ...validBody, redundancy: 0 }).success).toBe(false);
     expect(createJobBodySchema.safeParse({ ...validBody, redundancy: 11 }).success).toBe(false);
+  });
+});
+
+describe('listJobsQuerySchema', () => {
+  it('defaults role to worker and accepts admin', () => {
+    expect(listJobsQuerySchema.parse({})).toEqual({ role: 'worker' });
+    expect(listJobsQuerySchema.parse({ role: 'admin' })).toEqual({ role: 'admin' });
+    expect(listJobsQuerySchema.safeParse({ role: 'boss' }).success).toBe(false);
+  });
+});
+
+describe('materializeBodySchema', () => {
+  it('accepts the manifest path with and without inline content', () => {
+    expect(materializeBodySchema.parse({ kind: 'manifest' })).toEqual({ kind: 'manifest' });
+    expect(materializeBodySchema.parse({ kind: 'manifest', content: 'filename\na.png', format: 'csv' })).toMatchObject({
+      content: 'filename\na.png',
+    });
+  });
+
+  it('accepts the filter path with sampleN + seed', () => {
+    expect(materializeBodySchema.parse({ kind: 'filter', sampleN: 100, seed: 7 })).toEqual({
+      kind: 'filter',
+      sampleN: 100,
+      seed: 7,
+    });
+    expect(materializeBodySchema.parse({ kind: 'filter' })).toEqual({ kind: 'filter' });
+  });
+
+  it('rejects unknown kinds and non-positive sampleN', () => {
+    expect(materializeBodySchema.safeParse({ kind: 'query' }).success).toBe(false);
+    expect(materializeBodySchema.safeParse({ kind: 'filter', sampleN: 0 }).success).toBe(false);
   });
 });

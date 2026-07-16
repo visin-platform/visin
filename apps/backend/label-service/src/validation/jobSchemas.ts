@@ -11,12 +11,33 @@ export const createJobBodySchema = z.object({
   name: z.string().trim().min(1, 'name required').max(120),
   description: z.string().trim().max(1000).optional(),
   groupId: z.string().trim().min(1, 'groupId required'),
+  bundleId: z.string().trim().min(1).optional(),
   taskType: z.enum(TASK_TYPES),
   question: z.object({
     prompt: z.string().trim().min(1, 'prompt required').max(500),
     choices: z.array(choiceSchema).min(2).optional()
   }),
+  annotationSets: z.array(z.string().trim().min(1)).default([]),
   redundancy: z.number().int().min(1).max(10).default(1)
 });
 
 export type CreateJobBody = z.infer<typeof createJobBodySchema>;
+
+export const listJobsQuerySchema = z.object({
+  role: z.enum(['worker', 'admin']).default('worker')
+});
+
+export const materializeBodySchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('manifest'),
+    content: z.string().min(1).optional(), // absent → use the manifest from the bundle zip
+    format: z.enum(['csv', 'jsonl']).optional()
+  }),
+  z.object({
+    kind: z.literal('filter'),
+    sampleN: z.number().int().positive().optional(), // absent → all frames
+    seed: z.number().int().optional()
+  })
+]);
+
+export type MaterializeBody = z.infer<typeof materializeBodySchema>;

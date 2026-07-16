@@ -1,0 +1,248 @@
+jest.mock('unzipper', () => ({ Parse: jest.fn(() => 'PARSER') }));
+jest.mock('sharp', () => {
+  const instance = {
+    metadata: jest.fn().mockResolvedValue({ width: 64, height: 32 }),
+    resize: jest.fn().mockReturnThis(),
+    jpeg: jest.fn().mockReturnThis(),
+    toBuffer: jest.fn().mockResolvedValue(Buffer.from('thumb')),
+  };
+  const factory = jest.fn(() => instance);
+  (factory as unknown as { __instance: typeof instance }).__instance = instance;
+  return factory;
+});
+jest.mock('../../models/ImportJob', () => ({
+  ImportJob: { findById: jest.fn(), updateOne: jest.fn() },
+}));
+jest.mock('../../models/LabelBundle', () => ({
+  LabelBundle: { updateOne: jest.fn() },
+}));
+jest.mock('../../models/LabelImage', () => ({
+  LabelImage: {
+    exists: jest.fn(),
+    create: jest.fn(),
+    updateOne: jest.fn(),
+    countDocuments: jest.fn(),
+    distinct: jest.fn(),
+  },
+}));
+jest.mock('../../clients/fileServiceClient', () => ({
+  getFileStream: jest.fn(),
+  putFile: jest.fn(),
+}));
+jest.mock('@visin/backend-core', () => ({
+  ...jest.requireActual('@visin/backend-core'),
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
+import sharp from 'sharp';
+import { runImport, bundleFileId } from '../../services/ingestService';
+import { ImportJob } from '../../models/ImportJob';
+import { LabelBundle } from '../../models/LabelBundle';
+import { LabelImage } from '../../models/LabelImage';
+import * as files from '../../clients/fileServiceClient';
+
+const mockedImport = ImportJob as unknown as Record<string, jest.Mock>;
+const mockedBundle = LabelBundle as unknown as Record<string, jest.Mock>;
+const mockedImage = LabelImage as unknown as Record<string, jest.Mock>;
+const mockedFiles = files as unknown as Record<string, jest.Mock>;
+const sharpInstance = (sharp as unknown as { __instance: Record<string, jest.Mock> }).__instance;
+
+interface FakeEntry {
+  path: string;
+  type: 'File' | 'Directory';
+  content?: Buffer;
+}
+
+const makeEntry = (entry: FakeEntry) => ({
+  path: entry.path,
+  type: entry.type,
+  buffer: jest.fn().mockResolvedValue(entry.content ?? Buffer.from('bytes')),
+  autodrain: jest.fn(() => ({ promise: jest.fn().mockResolvedValue(undefined) })),
+});
+
+const stubZip = (entries: FakeEntry[]) => {
+  const iterable = {
+    async *[Symbol.asyncIterator]() {
+      for (const entry of entries) yield makeEntry(entry);
+    },
+  };
+  mockedFiles.getFileStream.mockResolvedValue({ pipe: jest.fn(() => iterable) });
+};
+
+const makeImportJob = () => {
+  const doc: Record<string, unknown> = {
+    _id: 'i1',
+    bundleId: { toString: () => 'b1' },
+    zipFileId: 'label-bundles/b1/upload-1.zip',
+    status: 'pending',
+    save: jest.fn(),
+  };
+  return doc;
+};
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  sharpInstance.metadata.mockResolvedValue({ width: 64, height: 32 });
+  mockedImage.exists.mockResolvedValue(null);
+  mockedImage.create.mockResolvedValue({});
+  mockedImage.updateOne.mockResolvedValue({ matchedCount: 1 });
+  mockedImage.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+  mockedImage.distinct.mockResolvedValue(['setA']);
+  mockedBundle.updateOne.mockResolvedValue({});
+  mockedImport.updateOne.mockResolvedValue({});
+  mockedFiles.putFile.mockResolvedValue(undefined);
+});
+
+describe('bundleFileId', () => {
+  it('namespaces files under the bundle', () => {
+    expect(bundleFileId('b1', 'frames/a.png')).toBe('label-bundles/b1/frames/a.png');
+  });
+});
+
+describe('runImport', () => {
+  it('ingests frames (with thumbnails), layers, id maps, masks.json, and the manifest', async () => {
+    const importJob = makeImportJob();
+    mockedImport.findById.mockResolvedValue(importJob);
+    stubZip([
+      { path: 'frames/', type: 'Directory' },
+      { path: 'frames/a.png', type: 'File' },
+      { path: 'ann/setA/a.png', type: 'File' },
+      { path: 'ann/setA/a.ids.png', type: 'File' },
+      { path: 'ann/setA/a.masks.json', type: 'File', content: Buffer.from('[{"id":1,"class":"vehicle"}]') },
+      { path: 'manifest.csv', type: 'File', content: Buffer.from('filename,stratum\na.png,v') },
+      { path: '__MACOSX/junk', type: 'File' },
+    ]);
+
+    await runImport('i1');
+
+    // Frame stored + thumbnail; layer and idmap stored without thumbnails.
+    expect(mockedFiles.putFile).toHaveBeenCalledWith('label-bundles/b1/frames/a.png', expect.any(Buffer));
+    expect(mockedFiles.putFile).toHaveBeenCalledWith('label-bundles/b1/thumbs/a.jpg', expect.any(Buffer));
+    expect(mockedImage.create).toHaveBeenCalledTimes(3);
+    expect(mockedImage.create).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'frame', stem: 'a', width: 64, height: 32, thumbnailFileId: 'label-bundles/b1/thumbs/a.jpg' })
+    );
+    expect(mockedImage.create).toHaveBeenCalledWith(expect.objectContaining({ kind: 'layer', annotationSet: 'setA' }));
+    expect(mockedImage.create).toHaveBeenCalledWith(expect.objectContaining({ kind: 'idmap', annotationSet: 'setA' }));
+
+    // masks.json applied to the idmap record.
+    expect(mockedImage.updateOne).toHaveBeenCalledWith(
+      { bundleId: 'b1', kind: 'idmap', annotationSet: 'setA', stem: 'a' },
+      { $set: { 'metadata.masks': [{ id: 1, class: 'vehicle' }] } }
+    );
+
+    // Bundle finalized with counts, sets, manifest, ready status.
+    expect(mockedBundle.updateOne).toHaveBeenLastCalledWith(
+      { _id: 'b1' },
+      {
+        $set: expect.objectContaining({
+          counts: { frames: 1, layers: 2 },
+          annotationSets: ['setA'],
+          manifest: [{ stem: 'a', stratum: 'v' }],
+          status: 'ready',
+        }),
+      }
+    );
+
+    expect(importJob.status).toBe('done');
+    expect(importJob.fileErrors).toEqual([]);
+    expect(importJob.processed).toBe(5);
+    expect(importJob.save).toHaveBeenCalled();
+  });
+
+  it('skips already-ingested files so re-import resumes', async () => {
+    const importJob = makeImportJob();
+    mockedImport.findById.mockResolvedValue(importJob);
+    mockedImage.exists.mockResolvedValue({ _id: 'existing' });
+    stubZip([{ path: 'frames/a.png', type: 'File' }]);
+
+    await runImport('i1');
+
+    expect(mockedFiles.putFile).not.toHaveBeenCalled();
+    expect(mockedImage.create).not.toHaveBeenCalled();
+    expect(importJob.skipped).toBe(1);
+    expect(importJob.status).toBe('done');
+  });
+
+  it('collects per-file errors without failing the import', async () => {
+    const importJob = makeImportJob();
+    mockedImport.findById.mockResolvedValue(importJob);
+    sharpInstance.metadata.mockRejectedValueOnce(new Error('bad image'));
+    stubZip([
+      { path: 'frames/broken.png', type: 'File' },
+      { path: 'frames/notes/file.txt', type: 'File' },
+      { path: 'ann/setA/bad.masks.json', type: 'File', content: Buffer.from('{"not":"array"}') },
+      { path: 'frames/good.png', type: 'File' },
+    ]);
+
+    await runImport('i1');
+
+    expect(importJob.status).toBe('done');
+    expect(importJob.fileErrors).toEqual([
+      { path: 'frames/broken.png', reason: 'Not a readable image' },
+      { path: 'frames/notes/file.txt', reason: 'Outside frames/, ann/<set>/, manifest.*' },
+      { path: 'ann/setA/bad.masks.json', reason: 'masks.json is not a JSON array' },
+    ]);
+    expect(importJob.processed).toBe(1);
+  });
+
+  it('reports a masks.json without a matching idmap', async () => {
+    const importJob = makeImportJob();
+    mockedImport.findById.mockResolvedValue(importJob);
+    mockedImage.updateOne.mockResolvedValue({ matchedCount: 0 });
+    stubZip([
+      { path: 'frames/a.png', type: 'File' },
+      { path: 'ann/setA/a.masks.json', type: 'File', content: Buffer.from('[]') },
+    ]);
+
+    await runImport('i1');
+
+    expect(importJob.fileErrors).toEqual([
+      { path: 'ann/setA/a.masks.json', reason: 'No matching .ids.png in this set' },
+    ]);
+  });
+
+  it('fails the import and the bundle when the zip cannot be read', async () => {
+    const importJob = makeImportJob();
+    mockedImport.findById.mockResolvedValue(importJob);
+    mockedFiles.getFileStream.mockRejectedValue(new Error('zip gone'));
+
+    await runImport('i1');
+
+    expect(importJob.status).toBe('failed');
+    expect(importJob.fileErrors).toEqual([{ path: '(zip)', reason: 'zip gone' }]);
+    expect(mockedBundle.updateOne).toHaveBeenLastCalledWith({ _id: 'b1' }, { $set: { status: 'failed' } });
+  });
+
+  it('fails an import that ingested nothing', async () => {
+    const importJob = makeImportJob();
+    mockedImport.findById.mockResolvedValue(importJob);
+    stubZip([{ path: 'outside.txt', type: 'File' }]);
+
+    await runImport('i1');
+
+    expect(importJob.status).toBe('failed');
+  });
+
+  it('rejects oversized entries', async () => {
+    const importJob = makeImportJob();
+    mockedImport.findById.mockResolvedValue(importJob);
+    stubZip([
+      { path: 'frames/huge.png', type: 'File', content: Buffer.alloc(51 * 1024 * 1024) },
+      { path: 'frames/ok.png', type: 'File' },
+    ]);
+
+    await runImport('i1');
+
+    expect(importJob.fileErrors).toEqual([
+      { path: 'frames/huge.png', reason: expect.stringContaining('exceeds') },
+    ]);
+    expect(importJob.processed).toBe(1);
+  });
+
+  it('throws when the ImportJob does not exist', async () => {
+    mockedImport.findById.mockResolvedValue(null);
+
+    await expect(runImport('missing')).rejects.toThrow('not found');
+  });
+});

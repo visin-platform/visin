@@ -1,5 +1,7 @@
 import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, authenticateToken } from '@visin/backend-core';
 import jobRoutes from './routes/jobRoutes';
+import bundleRoutes from './routes/bundleRoutes';
+import taskRoutes from './routes/taskRoutes';
 
 const app = createBaseApp({
   corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id']
@@ -16,7 +18,9 @@ app.get('/health', createHealthCheckHandler({
 
 // No anonymous access anywhere: every /api route requires a signed-in user.
 app.use('/api', authenticateToken);
+app.use('/api/bundles', bundleRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/tasks', taskRoutes);
 
 // Must be mounted last, after all routes
 app.use(errorHandler);
