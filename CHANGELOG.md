@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.116](https://github.com/visin-platform/visin-monorepo/compare/v0.0.115...v0.0.116) (2026-07-16)
+
+
+### Features
+
+* setup label tool v2 ([a7a24fd](https://github.com/visin-platform/visin-monorepo/commit/a7a24fd3b17654bf48dd62c813dc708b160654ba))
+
 ### [0.0.115](https://github.com/visin-platform/visin-monorepo/compare/v0.0.114...v0.0.115) (2026-07-16)
 
 
