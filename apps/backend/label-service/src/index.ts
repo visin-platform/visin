@@ -2,6 +2,7 @@ import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandle
 import jobRoutes from './routes/jobRoutes';
 import bundleRoutes from './routes/bundleRoutes';
 import taskRoutes from './routes/taskRoutes';
+import meRoutes from './routes/meRoutes';
 
 const app = createBaseApp({
   corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id']
@@ -21,6 +22,7 @@ app.use('/api', authenticateToken);
 app.use('/api/bundles', bundleRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/me', meRoutes);
 
 // Must be mounted last, after all routes
 app.use(errorHandler);

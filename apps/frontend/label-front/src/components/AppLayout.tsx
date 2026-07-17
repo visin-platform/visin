@@ -21,6 +21,8 @@ import {
 import { alpha } from '@mui/material/styles';
 import {
   Assignment,
+  AddBox,
+  Inventory2,
   Person,
   Menu as MenuIcon,
   Logout
@@ -56,9 +58,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const menuItems = [
     { text: 'Jobs', icon: <Assignment />, path: '/jobs' },
+    { text: 'New job', icon: <AddBox />, path: '/jobs/new' },
+    { text: 'Bundles', icon: <Inventory2 />, path: '/bundles' },
   ];
 
-  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
+  const isActive = (path: string) =>
+    location.pathname === path ||
+    (location.pathname.startsWith(path + '/') && !menuItems.some((item) => item.path !== path && item.path === location.pathname));
 
   const drawer = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#111827', color: '#fff' }}>
@@ -230,7 +236,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           alignItems: 'center'
         }}
       >
-        <Box sx={{ width: '100%', maxWidth: 1100 }}>
+        <Box sx={{ width: '100%', maxWidth: 1400 }}>
           {/* Desktop Header */}
           <Box sx={{
             display: { xs: 'none', sm: 'flex' },

@@ -1,0 +1,224 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+
+vi.mock('../services/jobService', () => ({
+  getJob: vi.fn(),
+}));
+const queueState: {
+  current: unknown;
+  status: string;
+  error: string | null;
+  sessionAnswered: number;
+  canUndo: boolean;
+  answer: ReturnType<typeof vi.fn>;
+  undoLast: ReturnType<typeof vi.fn>;
+} = {
+  current: null,
+  status: 'loading',
+  error: null,
+  sessionAnswered: 0,
+  canUndo: false,
+  answer: vi.fn(),
+  undoLast: vi.fn(),
+};
+vi.mock('../workbench/useWorkQueue', () => ({
+  useWorkQueue: () => queueState,
+}));
+vi.mock('../workbench/idmapLoader', () => ({
+  loadMaskIndex: vi.fn(),
+}));
+vi.mock('../workbench/FrameViewer', () => ({
+  default: (props: { onToggleMask?: (id: number) => void }) => (
+    <div data-testid="viewer">
+      <button onClick={() => props.onToggleMask?.(1)}>fake-toggle-mask-1</button>
+    </div>
+  ),
+}));
+
+import { getJob } from '../services/jobService';
+import { loadMaskIndex } from '../workbench/idmapLoader';
+import WorkbenchPage from './WorkbenchPage';
+import { renderWithProviders } from '../test/renderWithProviders';
+import { buildMaskIndex } from '../workbench/maskIndex';
+
+const mockedGetJob = getJob as ReturnType<typeof vi.fn>;
+const mockedLoadIndex = loadMaskIndex as ReturnType<typeof vi.fn>;
+
+const maskJob = (overrides: Record<string, unknown> = {}) => ({
+  _id: 'j1',
+  name: 'Mask check',
+  status: 'active',
+  taskType: 'mask_toggle',
+  redundancy: 1,
+  tasksCount: 10,
+  question: { prompt: 'Mark all incorrect masks' },
+  progress: { tasks: 10, completed: 0, answers: 0, myAnswers: 2 },
+  ...overrides,
+});
+
+const workItem = {
+  task: {
+    _id: 't1',
+    jobId: 'j1',
+    labelImageId: 'img',
+    order: 0,
+    stratum: 'vehicle',
+    payload: {
+      maskMap: { imageId: 'idmap', masks: [{ id: 1, class: 'vehicle', bbox: [0, 0, 10, 10] }, { id: 2, class: 'sign' }] },
+    },
+  },
+  images: {
+    frame: { url: 'frame.png', width: 100, height: 100 },
+    layers: [{ set: 'llava', url: 'layer.png' }],
+    idmap: { url: 'idmap.png' },
+  },
+};
+
+const renderPage = () => renderWithProviders(<WorkbenchPage />, { route: '/jobs/j1/work', path: '/jobs/:id/work' });
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  queueState.current = workItem;
+  queueState.status = 'working';
+  queueState.error = null;
+  queueState.sessionAnswered = 3;
+  queueState.canUndo = true;
+  queueState.answer = vi.fn().mockResolvedValue(undefined);
+  queueState.undoLast = vi.fn().mockResolvedValue(undefined);
+  mockedGetJob.mockResolvedValue(maskJob());
+  mockedLoadIndex.mockResolvedValue(buildMaskIndex(new Uint8ClampedArray([2, 2, 2, 255]), 1, 1));
+});
+
+describe('WorkbenchPage', () => {
+  it('renders header, progress, stratum, layer controls, and prompt', async () => {
+    renderPage();
+
+    expect(await screen.findByText('Mask check')).toBeInTheDocument();
+    expect(screen.getByText('vehicle')).toBeInTheDocument();
+    expect(screen.getByText('5/10 · session 3')).toBeInTheDocument(); // 2 previous + 3 this session
+    expect(screen.getByText('Mark all incorrect masks')).toBeInTheDocument();
+    expect(screen.getByLabelText('Layer: llava')).toBeInTheDocument();
+    expect(mockedLoadIndex).toHaveBeenCalledWith('idmap.png');
+  });
+
+  it('submits toggled masks on the submit button', async () => {
+    renderPage();
+    await screen.findByText('Mask check');
+
+    fireEvent.click(screen.getByText('fake-toggle-mask-1'));
+    fireEvent.click(screen.getByRole('button', { name: /Submit \(1 incorrect\)/ }));
+
+    await waitFor(() =>
+      expect(queueState.answer).toHaveBeenCalledWith(
+        expect.objectContaining({ rejectedMaskIds: [1], elapsedMs: expect.any(Number) })
+      )
+    );
+  });
+
+  it('submits via Enter and walks masks via Tab/Space', async () => {
+    renderPage();
+    await screen.findByText('Mask check');
+
+    fireEvent.keyDown(window, { key: 'Tab' }); // focus mask idx 0 (id 1)
+    fireEvent.keyDown(window, { key: ' ' }); // toggle it
+    fireEvent.keyDown(window, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(queueState.answer).toHaveBeenCalledWith(expect.objectContaining({ rejectedMaskIds: [1] }))
+    );
+  });
+
+  it('undoes via the u key', async () => {
+    renderPage();
+    await screen.findByText('Mask check');
+
+    fireEvent.keyDown(window, { key: 'u' });
+
+    await waitFor(() => expect(queueState.undoLast).toHaveBeenCalled());
+  });
+
+  it('renders choice buttons and hotkeys for single_choice jobs', async () => {
+    mockedGetJob.mockResolvedValue(
+      maskJob({
+        taskType: 'single_choice',
+        question: { prompt: 'Good frame?', choices: [{ key: 'good', label: 'Good', hotkey: 'g' }, { key: 'bad', label: 'Bad', hotkey: 'b' }] },
+      })
+    );
+    queueState.current = { ...workItem, task: { ...workItem.task, payload: undefined } };
+    renderPage();
+    await screen.findByText('Good frame?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Good (g)' }));
+    await waitFor(() => expect(queueState.answer).toHaveBeenCalledWith(expect.objectContaining({ choiceKey: 'good' })));
+
+    fireEvent.keyDown(window, { key: 'b' });
+    await waitFor(() => expect(queueState.answer).toHaveBeenCalledWith(expect.objectContaining({ choiceKey: 'bad' })));
+  });
+
+  it('shows the done screen with the session count', async () => {
+    queueState.status = 'done';
+    queueState.current = null;
+    renderPage();
+
+    expect(await screen.findByText('All done')).toBeInTheDocument();
+    expect(screen.getByText(/You answered 3 this session/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to job' })).toHaveAttribute('href', '/jobs/j1');
+  });
+
+  it('shows queue errors', async () => {
+    queueState.status = 'error';
+    queueState.error = 'lease failed';
+    renderPage();
+
+    expect(await screen.findByText('lease failed')).toBeInTheDocument();
+  });
+});
+
+describe('WorkbenchPage controls', () => {
+  it('toggles layer visibility and opacity, clears marks, undo button works', async () => {
+    renderPage();
+    await screen.findByText('Mask check');
+
+    fireEvent.click(screen.getByLabelText('Layer: llava')); // Switch toggle
+    fireEvent.click(screen.getByText('fake-toggle-mask-1'));
+    expect(screen.getByRole('button', { name: /Submit \(1 incorrect\)/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear marks' }));
+    expect(screen.getByRole('button', { name: /Submit \(0 incorrect\)/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'undo last answer' }));
+    await waitFor(() => expect(queueState.undoLast).toHaveBeenCalled());
+  });
+
+  it('walks forward to the second mask and back with Shift-Tab', async () => {
+    renderPage();
+    await screen.findByText('Mask check');
+
+    fireEvent.keyDown(window, { key: 'Tab' }); // idx 0 (id 1)
+    fireEvent.keyDown(window, { key: 'Tab' }); // idx 1 (id 2)
+    fireEvent.keyDown(window, { key: ' ' }); // toggle mask id 2
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true }); // back to idx 0
+    fireEvent.keyDown(window, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(queueState.answer).toHaveBeenCalledWith(expect.objectContaining({ rejectedMaskIds: [2] }))
+    );
+  });
+
+  it('surfaces id map load failures', async () => {
+    mockedLoadIndex.mockRejectedValue(new Error('CORS blocked'));
+    renderPage();
+
+    expect(await screen.findByText(/Id map failed to load: CORS blocked/)).toBeInTheDocument();
+  });
+
+  it('surfaces submit failures inline', async () => {
+    queueState.answer = vi.fn().mockRejectedValue(new Error('Already answered'));
+    renderPage();
+    await screen.findByText('Mask check');
+
+    fireEvent.click(screen.getByRole('button', { name: /Submit \(0 incorrect\)/ }));
+
+    expect(await screen.findByText('Already answered')).toBeInTheDocument();
+  });
+});

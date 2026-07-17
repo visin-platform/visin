@@ -9,6 +9,7 @@ export interface GroupMembership {
 
 export interface MyGroup {
   groupId: string;
+  name: string;
   role: GroupRole;
 }
 
@@ -43,11 +44,12 @@ export const getMyGroups = async (userEmail: string): Promise<MyGroup[]> => {
     throw new Error(`group-service group listing failed (${response.status})`);
   }
   const body = (await response.json()) as {
-    data: { _id: string; members: { email: string; role: GroupRole }[] }[];
+    data: { _id: string; name: string; members: { email: string; role: GroupRole }[] }[];
   };
   const email = userEmail.toLowerCase();
   return (body.data || []).map((group) => ({
     groupId: String(group._id),
+    name: group.name,
     role: group.members.find((m) => m.email === email)?.role || 'member'
   }));
 };

@@ -1,0 +1,199 @@
+import React, { useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  LinearProgress,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography
+} from '@mui/material';
+import { Inventory2Outlined, UploadFile, Delete } from '@mui/icons-material';
+import { Loader } from '@visin/frontend-core';
+import { createBundle, deleteBundle, listBundles } from '../services/bundleService';
+import { getMyGroups } from '../services/jobService';
+import { useBundleUpload } from '../hooks/useBundleUpload';
+import { LabelBundle } from '../types';
+
+const STATUS_COLORS: Record<string, 'default' | 'success' | 'warning' | 'error'> = {
+  empty: 'default',
+  importing: 'warning',
+  ready: 'success',
+  failed: 'error'
+};
+
+const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ bundle, onChanged }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { state, start } = useBundleUpload(bundle._id, onChanged);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const remove = useMutation({
+    mutationFn: () => deleteBundle(bundle._id),
+    onSuccess: onChanged,
+    onError: (err) => setDeleteError((err as Error).message)
+  });
+
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 3 }}>
+      <CardContent>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, flexGrow: 1 }}>
+            {bundle.name}
+          </Typography>
+          <Chip size="small" label={bundle.status} color={STATUS_COLORS[bundle.status]} />
+        </Stack>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+          {bundle.counts.frames} frames · {bundle.counts.layers} annotation images
+          {bundle.annotationSets.length > 0 && <> · sets: {bundle.annotationSets.join(', ')}</>}
+          {bundle.manifest && <> · manifest ({bundle.manifest.length} rows)</>}
+        </Typography>
+
+        {state.phase === 'uploading' && (
+          <Box sx={{ mt: 1.5 }}>
+            <Typography variant="caption">Uploading zip… {(state.uploadFraction * 100).toFixed(0)}%</Typography>
+            <LinearProgress variant="determinate" value={state.uploadFraction * 100} />
+          </Box>
+        )}
+        {state.phase === 'importing' && (
+          <Box sx={{ mt: 1.5 }}>
+            <Typography variant="caption">
+              Importing… {state.importJob?.processed ?? 0} files ({state.importJob?.skipped ?? 0} skipped)
+            </Typography>
+            <LinearProgress />
+          </Box>
+        )}
+        {state.phase === 'failed' && (
+          <Alert severity="error" sx={{ mt: 1.5 }}>
+            {state.error || 'Import failed'}
+          </Alert>
+        )}
+        {state.importJob && state.importJob.fileErrors.length > 0 && state.phase !== 'importing' && (
+          <Alert severity="warning" sx={{ mt: 1.5 }}>
+            {state.importJob.fileErrors.length} file(s) had problems, e.g.{' '}
+            {state.importJob.fileErrors[0].path}: {state.importJob.fileErrors[0].reason}
+          </Alert>
+        )}
+        {deleteError && (
+          <Alert severity="error" onClose={() => setDeleteError(null)} sx={{ mt: 1.5 }}>
+            {deleteError}
+          </Alert>
+        )}
+      </CardContent>
+      <CardActions>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".zip"
+          hidden
+          data-testid={`zip-input-${bundle._id}`}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) start(file);
+            event.target.value = '';
+          }}
+        />
+        <Button
+          size="small"
+          startIcon={<UploadFile />}
+          disabled={state.phase === 'uploading' || state.phase === 'importing'}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Upload zip
+        </Button>
+        <Button size="small" color="error" startIcon={<Delete />} onClick={() => remove.mutate()}>
+          Delete
+        </Button>
+      </CardActions>
+    </Card>
+  );
+};
+
+const BundlesPage: React.FC = () => {
+  const queryClient = useQueryClient();
+  const { data: bundles, isLoading } = useQuery({ queryKey: ['bundles'], queryFn: listBundles });
+  const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const adminGroups = (groups || []).filter((group) => group.role === 'owner' || group.role === 'admin');
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['bundles'] });
+
+  const create = useMutation({
+    mutationFn: () => createBundle({ name, groupId }),
+    onSuccess: () => {
+      setDialogOpen(false);
+      setName('');
+      refresh();
+    },
+    onError: (err) => setCreateError((err as Error).message)
+  });
+
+  if (isLoading) {
+    return <Loader message="Loading bundles..." />;
+  }
+
+  return (
+    <Stack spacing={2}>
+      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+          Bundles are uploaded image sets (frames + annotation layers) that jobs draw from.
+        </Typography>
+        <Button variant="contained" onClick={() => setDialogOpen(true)} disabled={adminGroups.length === 0}>
+          New bundle
+        </Button>
+      </Stack>
+
+      {(!bundles || bundles.length === 0) && (
+        <Box sx={{ textAlign: 'center', py: 6 }}>
+          <Inventory2Outlined sx={{ fontSize: 48, color: 'text.secondary' }} />
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            No bundles yet
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            Create one, then upload a bundle zip (frames/ + ann/&lt;set&gt;/ + manifest).
+          </Typography>
+        </Box>
+      )}
+
+      {(bundles || []).map((bundle) => (
+        <BundleCard key={bundle._id} bundle={bundle} onChanged={refresh} />
+      ))}
+
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>New bundle</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField label="Name" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+            <TextField select label="Group" value={groupId} onChange={(event) => setGroupId(event.target.value)}>
+              {adminGroups.map((group) => (
+                <MenuItem key={group.groupId} value={group.groupId}>
+                  {group.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            {createError && <Alert severity="error">{createError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" disabled={!name.trim() || !groupId} onClick={() => create.mutate()}>
+            Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Stack>
+  );
+};
+
+export default BundlesPage;

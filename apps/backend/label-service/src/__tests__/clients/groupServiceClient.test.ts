@@ -44,15 +44,19 @@ describe('getMyGroups', () => {
       jsonResponse({
         success: true,
         data: [
-          { _id: 'g1', members: [{ email: 'user@x.com', role: 'owner' }] },
-          { _id: 'g2', members: [{ email: 'other@x.com', role: 'owner' }, { email: 'user@x.com', role: 'member' }] },
+          { _id: 'g1', name: 'Team A', members: [{ email: 'user@x.com', role: 'owner' }] },
+          {
+            _id: 'g2',
+            name: 'Team B',
+            members: [{ email: 'other@x.com', role: 'owner' }, { email: 'user@x.com', role: 'member' }],
+          },
         ],
       })
     );
 
     expect(await getMyGroups('User@X.com')).toEqual([
-      { groupId: 'g1', role: 'owner' },
-      { groupId: 'g2', role: 'member' },
+      { groupId: 'g1', name: 'Team A', role: 'owner' },
+      { groupId: 'g2', name: 'Team B', role: 'member' },
     ]);
   });
 
