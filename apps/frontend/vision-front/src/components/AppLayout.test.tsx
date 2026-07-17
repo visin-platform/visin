@@ -55,7 +55,7 @@ describe('AppLayout', () => {
     expect(screen.getAllByText('Projects').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Trainings').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Datasets').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Image Labeling').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Labeling').length).toBeGreaterThan(0);
   });
 
   it('shows the Login button when the user is not authenticated', () => {

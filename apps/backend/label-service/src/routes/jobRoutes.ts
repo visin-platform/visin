@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, validateRequest } from '@visin/backend-core';
 import { createJobBodySchema, listJobsQuerySchema, materializeBodySchema } from '../validation/jobSchemas';
+import { nextBodySchema } from '../validation/taskSchemas';
 import * as ctrl from '../controllers/jobController';
 import * as taskCtrl from '../controllers/taskController';
 
@@ -14,7 +15,7 @@ router.post('/:id/activate', asyncHandler(ctrl.activateJob));
 router.post('/:id/pause', asyncHandler(ctrl.pauseJob));
 router.post('/:id/resume', asyncHandler(ctrl.resumeJob));
 router.post('/:id/archive', asyncHandler(ctrl.archiveJob));
-router.post('/:id/next', asyncHandler(taskCtrl.nextTask));
+router.post('/:id/next', validateRequest({ body: nextBodySchema }), asyncHandler(taskCtrl.nextTask));
 router.get('/:id/export', asyncHandler(ctrl.exportJob));
 router.get('/:id/stats', asyncHandler(ctrl.jobStats));
 

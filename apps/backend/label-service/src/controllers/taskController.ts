@@ -11,7 +11,7 @@ export const nextTask = async (req: Request, res: Response): Promise<void> => {
   if (job.status !== 'active') {
     throw new ConflictError(`Job is ${job.status}`);
   }
-  const next = await tasks.nextTask(job, user);
+  const next = await tasks.nextTask(job, user, req.body?.excludeTaskIds || []);
   res.json({ success: true, data: next }); // null → nothing left for this user
 };
 

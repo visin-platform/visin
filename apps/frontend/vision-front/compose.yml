@@ -11,6 +11,7 @@ services:
       AUTH_FRONT_URL: ${AUTH_FRONT_URL}
       GROUP_SERVICE_URL: ${GROUP_SERVICE_URL}
       ACCOUNT_FRONT_URL: ${ACCOUNT_FRONT_URL}
+      LABEL_FRONT_URL: ${LABEL_FRONT_URL}
     ports:
       - '3012:80'
     init: true

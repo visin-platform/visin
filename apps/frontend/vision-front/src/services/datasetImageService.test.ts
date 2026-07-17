@@ -14,8 +14,7 @@ import {
   updateDatasetImage,
   deleteDatasetImage,
   getUploadSignedUrl,
-  uploadFileToSignedUrl,
-  getLabelingStats
+  uploadFileToSignedUrl
 } from './datasetImageService';
 
 const mockedApi = vi.mocked(visionApi);
@@ -112,14 +111,6 @@ describe('datasetImageService', () => {
     expect(result.uploadUrl).toBe('http://x');
   });
 
-  it('getLabelingStats returns data.data', async () => {
-    mockedApi.get.mockResolvedValue({
-      data: { data: { total: 10, good: 5, bad: 3, unlabeled: 2, goodPercentage: 50, badPercentage: 30, unlabeledPercentage: 20 } }
-    });
-    const result = await getLabelingStats();
-    expect(mockedApi.get).toHaveBeenCalledWith('/datasets/labeling-stats');
-    expect(result.total).toBe(10);
-  });
 
   describe('uploadFileToSignedUrl', () => {
     afterEach(() => {

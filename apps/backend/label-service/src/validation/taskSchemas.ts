@@ -1,5 +1,10 @@
 import { z } from '@visin/backend-core';
 
+export const nextBodySchema = z.object({
+  // Tasks the client already holds leases on (current + prefetched).
+  excludeTaskIds: z.array(z.string().regex(/^[0-9a-f]{24}$/i)).max(10).default([])
+});
+
 export const answerBodySchema = z
   .object({
     choiceKey: z.string().trim().min(1).optional(),

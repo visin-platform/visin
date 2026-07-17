@@ -92,7 +92,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     { text: 'Projects', icon: <Folder />, path: '/projects' },
     { text: 'Trainings', icon: <ModelTraining />, path: '/trainings' },
     { text: 'Datasets', icon: <Storage />, path: '/datasets' },
-    { text: 'Image Labeling', icon: <ImageIcon />, path: '/image-labeling' },
+    { text: 'Labeling', icon: <ImageIcon />, path: '/image-labeling' },
   ];
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');

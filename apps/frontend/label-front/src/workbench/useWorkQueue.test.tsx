@@ -37,6 +37,10 @@ describe('useWorkQueue', () => {
     await waitFor(() => expect(result.current.status).toBe('working'));
     expect(result.current.current?.task._id).toBe('t1');
     expect(mockedNext).toHaveBeenCalledTimes(2);
+    // The prefetch excludes the task we already hold — the backend re-serves
+    // the caller's own leases otherwise.
+    expect(mockedNext).toHaveBeenNthCalledWith(1, 'j1', []);
+    expect(mockedNext).toHaveBeenNthCalledWith(2, 'j1', ['t1']);
     expect(preloadImages).toHaveBeenCalledWith(['frame-t1', 'layer-t1', 'idmap-t1']);
   });
 

@@ -61,7 +61,10 @@ describe('jobService', () => {
   it('pulls, answers, and undoes tasks', async () => {
     mockedApi.post.mockResolvedValue({ success: true, data: null });
     expect(await nextTask('j1')).toBeNull();
-    expect(mockedApi.post).toHaveBeenCalledWith('/jobs/j1/next');
+    expect(mockedApi.post).toHaveBeenCalledWith('/jobs/j1/next', { excludeTaskIds: [] });
+
+    await nextTask('j1', ['t9']);
+    expect(mockedApi.post).toHaveBeenCalledWith('/jobs/j1/next', { excludeTaskIds: ['t9'] });
 
     await submitAnswer('t1', { rejectedMaskIds: [1] });
     expect(mockedApi.post).toHaveBeenCalledWith('/tasks/t1/answer', { rejectedMaskIds: [1] });

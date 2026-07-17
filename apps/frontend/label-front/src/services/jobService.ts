@@ -41,8 +41,8 @@ export type JobAction = 'activate' | 'pause' | 'resume' | 'archive';
 export const transitionJob = async (jobId: string, action: JobAction): Promise<LabelJob> =>
   (await labelApi.post<ApiResponse<LabelJob>>(`/jobs/${jobId}/${action}`)).data;
 
-export const nextTask = async (jobId: string): Promise<WorkItem | null> =>
-  (await labelApi.post<ApiResponse<WorkItem | null>>(`/jobs/${jobId}/next`)).data;
+export const nextTask = async (jobId: string, excludeTaskIds: string[] = []): Promise<WorkItem | null> =>
+  (await labelApi.post<ApiResponse<WorkItem | null>>(`/jobs/${jobId}/next`, { excludeTaskIds })).data;
 
 export const submitAnswer = async (taskId: string, body: AnswerBody): Promise<void> => {
   await labelApi.post(`/tasks/${taskId}/answer`, body);

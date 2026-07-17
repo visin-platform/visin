@@ -88,6 +88,14 @@ describe('nextTask', () => {
     expect(await svc.nextTask(activeJob(), user)).toBeNull();
   });
 
+  it('excludes tasks the client already holds (prefetch double-serve guard)', async () => {
+    mockedTask.findOneAndUpdate.mockResolvedValue(null);
+
+    await svc.nextTask(activeJob(), user, ['abc123']);
+
+    expect(mockedTask.findOneAndUpdate.mock.calls[0][0]).toMatchObject({ _id: { $nin: ['abc123'] } });
+  });
+
   it('fails loudly when a task image is missing from the bundle', async () => {
     mockedTask.findOneAndUpdate.mockResolvedValue(maskTask());
     mockedImage.find.mockResolvedValue([]);

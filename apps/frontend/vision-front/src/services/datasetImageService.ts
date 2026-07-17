@@ -205,21 +205,3 @@ export const uploadFileToSignedUrl = async (signedUrl: string, file: File): Prom
     throw new Error('Failed to upload file to signed URL');
   }
 };
-
-interface LabelingStats {
-  total: number;
-  good: number;
-  bad: number;
-  unlabeled: number;
-  goodPercentage: number;
-  badPercentage: number;
-  unlabeledPercentage: number;
-}
-
-/**
- * Get labeling statistics for all images (efficient aggregation)
- */
-export const getLabelingStats = async (): Promise<LabelingStats> => {
-  const response = await visionApi.get('/datasets/labeling-stats');
-  return (response.data as ApiResponse<LabelingStats>).data;
-};

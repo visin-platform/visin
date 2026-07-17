@@ -45,16 +45,21 @@ const buildTaskImages = async (task: ILabelTask): Promise<TaskImages> => {
 /**
  * Lease-based pull: atomically grab the first task this user hasn't answered,
  * that still needs answers (< K) and has no live lease held by someone else.
+ * A task leased by the caller is eligible again (resume after refresh), so a
+ * client holding tasks (the workbench prefetches one ahead) must pass their
+ * ids in `excludeTaskIds` or it would be handed the same task twice.
  * Returns null when the user is done with this job.
  */
 export const nextTask = async (
   job: ILabelJob,
-  user: UserPayload
+  user: UserPayload,
+  excludeTaskIds: string[] = []
 ): Promise<{ task: ILabelTask; images: TaskImages } | null> => {
   const now = new Date();
   const task = await LabelTask.findOneAndUpdate(
     {
       jobId: job._id,
+      ...(excludeTaskIds.length ? { _id: { $nin: excludeTaskIds } } : {}),
       answersCount: { $lt: job.redundancy },
       answeredBy: { $ne: user.id },
       $or: [{ leaseExpiresAt: null }, { leaseExpiresAt: { $lt: now } }, { leasedBy: user.id }]

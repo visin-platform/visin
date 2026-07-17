@@ -33,13 +33,18 @@ export const useWorkQueue = (jobId: string): WorkQueue => {
   const lastAnsweredRef = useRef<WorkItem | null>(null);
   const [canUndo, setCanUndo] = useState(false);
 
-  const pull = useCallback(async (): Promise<WorkItem | null> => {
-    const item = await nextTask(jobId);
-    if (item) {
-      preloadImages(imageUrls(item));
-    }
-    return item;
-  }, [jobId]);
+  // Tasks the client already holds must be excluded, or the backend's
+  // lease-resume behavior would hand us the same task again as the prefetch.
+  const pull = useCallback(
+    async (excludeTaskIds: string[] = []): Promise<WorkItem | null> => {
+      const item = await nextTask(jobId, excludeTaskIds);
+      if (item) {
+        preloadImages(imageUrls(item));
+      }
+      return item;
+    },
+    [jobId]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -60,7 +65,7 @@ export const useWorkQueue = (jobId: string): WorkQueue => {
         }
         setCurrent(first);
         setStatus('working');
-        prefetchedRef.current = await pull();
+        prefetchedRef.current = await pull([first.task._id]);
       } catch (err) {
         if (!cancelled) {
           setError((err as Error).message);
@@ -86,12 +91,12 @@ export const useWorkQueue = (jobId: string): WorkQueue => {
       prefetchedRef.current = null;
       if (upNext) {
         setCurrent(upNext);
-        prefetchedRef.current = await pull();
+        prefetchedRef.current = await pull([upNext.task._id]);
       } else {
         const pulled = await pull();
         if (pulled) {
           setCurrent(pulled);
-          prefetchedRef.current = await pull();
+          prefetchedRef.current = await pull([pulled.task._id]);
         } else {
           setCurrent(null);
           setStatus('done');
