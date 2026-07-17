@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.119](https://github.com/visin-platform/visin-monorepo/compare/v0.0.118...v0.0.119) (2026-07-17)
+
+
+### Features
+
+* add more tests to libraries ([cf70569](https://github.com/visin-platform/visin-monorepo/commit/cf70569f612411c018b872a05cc18107a9d2d522))
+
 ### [0.0.118](https://github.com/visin-platform/visin-monorepo/compare/v0.0.117...v0.0.118) (2026-07-17)
 
 
