@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Visin: a computer vision & analytics platform (manage datasets, train models, analyze results). An npm-workspaces
-monorepo of 4 independently-deployable backend services and 4 React frontends, plus 2 shared libraries.
+Visin: a computer vision & analytics platform (manage datasets, train models, analyze results, label images). An
+npm-workspaces monorepo of 5 independently-deployable backend services and 5 React frontends, plus 2 shared
+libraries.
 
 ```
-apps/backend/{auth,file,group,vision}-service   Express + TypeScript + Mongoose
-apps/frontend/{landing,auth,account,vision}-front  React + Vite + MUI
+apps/backend/{auth,file,group,vision,label}-service   Express + TypeScript + Mongoose
+apps/frontend/{landing,auth,account,vision,label}-front  React + Vite + MUI
 libs/backend-core     @visin/backend-core   — shared Express middleware/app bootstrap
 libs/frontend-core    @visin/frontend-core  — shared auth/API-client/React components
 apps/infra/visin-proxy  Nginx reverse proxy config
@@ -100,9 +101,11 @@ what the controller actually receives.
 
 `vision-front`'s API calls go through `config/visionApi.ts` (wraps `@visin/frontend-core`'s `createApiClient`),
 which every `services/*Service.ts` file calls — don't hand-roll `fetch` for a vision-service endpoint. The one
-legitimate exception is uploading to a MinIO signed URL (`uploadFileToSignedUrl`, `visualizationService.uploadFile`):
-that's a direct-to-storage PUT with the signature as the credential, not a vision-service API call, so it
-deliberately bypasses `visionApi` (no `/api` prefix, no auth cookie).
+legitimate exception is uploading via a file-service signed URL (`uploadFileToSignedUrl`,
+`visualizationService.uploadFile`): that's a direct-to-storage PUT against file-service with the signature as the
+credential, not a vision-service API call, so it deliberately bypasses `visionApi` (no `/api` prefix, no auth
+cookie). File-service stores files on local disk, not MinIO/S3 — despite some lingering `minio`-named identifiers
+in older code/comments, there is no object-storage backend to configure.
 
 Data fetching is React Query (`useQuery`/`useMutation`) throughout; a `useEffect` that calls a service function and
 sets loading/data state by hand is legacy and should be converted when touched. Not every `useEffect` is a fetch,

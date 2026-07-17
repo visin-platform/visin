@@ -60,6 +60,15 @@ describe('visionApi', () => {
     await expect(visionApi.get('/projects/x')).rejects.toThrow('Project not found');
   });
 
+  it('POST surfaces a server error message on failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'Cannot create' }), { status: 400 }))
+    );
+
+    await expect(visionApi.post('/projects', { name: 'x' })).rejects.toThrow('Cannot create');
+  });
+
   it('PUT sends a JSON body and returns { data }, and surfaces a server error message', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: '1' }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);

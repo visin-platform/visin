@@ -16,7 +16,7 @@ export const visualizationService = {
     return response.data as ApiResponse<VisualizationUploadUrlResponse>;
   },
 
-  // Upload file to MinIO using signed URL
+  // Upload file to file-service using a signed URL
   async uploadFile(uploadUrl: string, file: File): Promise<void> {
     await fetch(uploadUrl, {
       method: 'PUT',

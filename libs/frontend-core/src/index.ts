@@ -7,6 +7,8 @@ export { Loader } from './components/Loader';
 export type { LoaderProps } from './components/Loader';
 export { ErrorPage } from './components/ErrorPage';
 export type { ErrorPageProps } from './components/ErrorPage';
+export { AppLayout } from './components/AppLayout';
+export type { AppLayoutProps, AppLayoutNavItem, AppLayoutFooterLink, AppLayoutUser } from './components/AppLayout';
 
 export { createAuthService } from './auth/authService';
 export type { AuthService, AuthServiceOptions, AuthUser, AuthCheckResult } from './auth/authService';

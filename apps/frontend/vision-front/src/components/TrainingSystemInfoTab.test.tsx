@@ -58,4 +58,22 @@ describe('TrainingSystemInfoTab', () => {
     render(<TrainingSystemInfoTab epochs={[makeEpoch(1), makeEpoch(2, false)]} />);
     expect(screen.getByText('System Metrics')).toBeInTheDocument();
   });
+
+  it('defaults every metric to 0 when system_info has no gpu data', () => {
+    const epoch: Epoch = {
+      _id: 'e1',
+      trainingId: 't1',
+      training_uuid: 'training-uuid-1',
+      epoch_uuid: 'epoch-uuid-1',
+      epoch: 1,
+      timestamp: '2026-01-01T10:00:00.000Z',
+      results: { system_info: {} as any },
+      createdAt: '2026-01-01T10:00:00.000Z',
+      updatedAt: '2026-01-01T10:00:00.000Z'
+    };
+
+    render(<TrainingSystemInfoTab epochs={[epoch]} />);
+
+    expect(screen.getByText('System Metrics')).toBeInTheDocument();
+  });
 });

@@ -90,4 +90,58 @@ describe('BenchmarkDeviceTable', () => {
     expect(rows[0]).toHaveTextContent('Zeta');
     expect(rows[1]).toHaveTextContent('Alpha');
   });
+
+  const sortableNumericColumns: Array<[string, string]> = [
+    ['time', 'mean_time_ms'],
+    ['fps', 'fps'],
+    ['parameters', 'total_parameters_m'],
+    ['flops', 'flops_giga'],
+    ['image_size', 'image_size'],
+    ['num_runs', 'num_runs']
+  ];
+
+  it.each(sortableNumericColumns)('sorts results by %s ascending, treating a missing value as -Infinity', (sortColumn, field) => {
+    const results = [
+      baseResult({ benchmark_id: 'b1', training_name: 'High', [field]: 100 }),
+      baseResult({ benchmark_id: 'b2', training_name: 'Missing', [field]: undefined })
+    ];
+    render(
+      <BenchmarkDeviceTable device="gpu" results={results} sortColumn={sortColumn} sortDirection="asc" onSort={vi.fn()} onExportLatex={vi.fn()} />
+    );
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows[0]).toHaveTextContent('Missing');
+    expect(rows[1]).toHaveTextContent('High');
+  });
+
+  it('sorts results by the device memory column', () => {
+    const results = [
+      baseResult({ benchmark_id: 'b1', training_name: 'Low', gpu_memory_mean_mb: 100 }),
+      baseResult({ benchmark_id: 'b2', training_name: 'High', gpu_memory_mean_mb: 900 })
+    ];
+    render(
+      <BenchmarkDeviceTable device="gpu" results={results} sortColumn="gpu_memory" sortDirection="desc" onSort={vi.fn()} onExportLatex={vi.fn()} />
+    );
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows[0]).toHaveTextContent('High');
+    expect(rows[1]).toHaveTextContent('Low');
+  });
+
+  it('renders a bare value (no ±) when the mean is present but the std deviation is missing', () => {
+    const result = baseResult({ mean_time_ms: 12.3, std_time_ms: undefined, gpu_memory_mean_mb: 400, gpu_memory_std_mb: undefined });
+    render(
+      <BenchmarkDeviceTable device="gpu" results={[result]} sortColumn="training_name" sortDirection="asc" onSort={vi.fn()} onExportLatex={vi.fn()} />
+    );
+    expect(screen.getByText('12.3')).toBeInTheDocument();
+    expect(screen.getByText('400')).toBeInTheDocument();
+  });
+
+  it('shows N/A for falsy-but-defined image_size and num_runs, but "0.00" for a zero fps', () => {
+    const result = baseResult({ fps: 0, image_size: 0, num_runs: 0 });
+    render(
+      <BenchmarkDeviceTable device="gpu" results={[result]} sortColumn="training_name" sortDirection="asc" onSort={vi.fn()} onExportLatex={vi.fn()} />
+    );
+    // fps uses `?.toFixed()` (only null/undefined skip it), so 0 still formats.
+    expect(screen.getByText('0.00')).toBeInTheDocument();
+    expect(screen.getAllByText('N/A').length).toBe(2);
+  });
 });

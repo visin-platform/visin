@@ -36,7 +36,8 @@
   "peerDependencies": {
     "@mui/icons-material": "^9.2.0",
     "@mui/material": "^9.2.0",
-    "react": "^19.2.7"
+    "react": "^19.2.7",
+    "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -51,6 +52,7 @@
     "jsdom": "^29.1.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1",
     "standard-version": "^9.5.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.1",

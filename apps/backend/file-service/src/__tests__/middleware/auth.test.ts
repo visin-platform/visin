@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { HttpError } from '@visin/backend-core';
 import { requireApiKey, requireSignedToken } from '../../middleware/auth';
 import { signToken } from '../../utils/hmac';
 
@@ -12,6 +13,16 @@ const makeRes = () => {
   const res = { status: jest.fn(), json: jest.fn() };
   res.status.mockReturnValue(res);
   return res as unknown as Response & { status: jest.Mock; json: jest.Mock };
+};
+
+const statusOf = (fn: () => void): number => {
+  try {
+    fn();
+  } catch (err) {
+    if (err instanceof HttpError) return err.statusCode;
+    throw err;
+  }
+  throw new Error('expected middleware to throw');
 };
 
 let next: jest.Mock;
@@ -29,24 +40,22 @@ afterAll(() => {
 
 describe('requireApiKey', () => {
   it('rejects a missing key', () => {
-    const res = makeRes();
-
-    requireApiKey(makeReq(), res, next as unknown as NextFunction);
-
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(
+      statusOf(() => requireApiKey(makeReq(), makeRes(), next as unknown as NextFunction))
+    ).toBe(401);
     expect(next).not.toHaveBeenCalled();
   });
 
   it('rejects a wrong key', () => {
-    const res = makeRes();
-
-    requireApiKey(
-      makeReq({ headers: { 'x-internal-api-key': 'wrong' } }),
-      res,
-      next as unknown as NextFunction
-    );
-
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(
+      statusOf(() =>
+        requireApiKey(
+          makeReq({ headers: { 'x-internal-api-key': 'wrong' } }),
+          makeRes(),
+          next as unknown as NextFunction
+        )
+      )
+    ).toBe(401);
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -72,58 +81,59 @@ describe('requireSignedToken', () => {
     });
 
   it('rejects when token or expires is missing', () => {
-    const res = makeRes();
-
-    middleware(makeReq({ params: { fileId: ['a'] } }), res, next as unknown as NextFunction);
-
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(
+      statusOf(() =>
+        middleware(makeReq({ params: { fileId: ['a'] } }), makeRes(), next as unknown as NextFunction)
+      )
+    ).toBe(401);
     expect(next).not.toHaveBeenCalled();
   });
 
   it('rejects a non-numeric expires value', () => {
-    const res = makeRes();
-
-    middleware(
-      makeReq({ params: { fileId: ['a'] }, query: { token: 'x', expires: 'soon' } }),
-      res,
-      next as unknown as NextFunction
-    );
-
-    expect(res.status).toHaveBeenCalledWith(400);
+    expect(
+      statusOf(() =>
+        middleware(
+          makeReq({ params: { fileId: ['a'] }, query: { token: 'x', expires: 'soon' } }),
+          makeRes(),
+          next as unknown as NextFunction
+        )
+      )
+    ).toBe(400);
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('returns 500 when verification itself fails (malformed token hex)', () => {
-    const res = makeRes();
+  it('rejects with 403 when verification itself fails (malformed token hex)', () => {
     const expiresMs = Date.now() + 60_000;
 
-    middleware(signedReq(expiresMs, 'not-hex-of-right-length'), res, next as unknown as NextFunction);
-
-    expect(res.status).toHaveBeenCalledWith(500);
+    expect(
+      statusOf(() =>
+        middleware(signedReq(expiresMs, 'not-hex-of-right-length'), makeRes(), next as unknown as NextFunction)
+      )
+    ).toBe(403);
     expect(next).not.toHaveBeenCalled();
   });
 
   it('rejects an expired token', () => {
-    const res = makeRes();
     const expiresMs = Date.now() - 1000;
 
-    middleware(signedReq(expiresMs), res, next as unknown as NextFunction);
-
-    expect(res.status).toHaveBeenCalledWith(403);
+    expect(
+      statusOf(() => middleware(signedReq(expiresMs), makeRes(), next as unknown as NextFunction))
+    ).toBe(403);
     expect(next).not.toHaveBeenCalled();
   });
 
   it('rejects a token signed for a different operation', () => {
-    const res = makeRes();
     const expiresMs = Date.now() + 60_000;
 
-    middleware(
-      signedReq(expiresMs, signToken('download', fileId, expiresMs)),
-      res,
-      next as unknown as NextFunction
-    );
-
-    expect(res.status).toHaveBeenCalledWith(403);
+    expect(
+      statusOf(() =>
+        middleware(
+          signedReq(expiresMs, signToken('download', fileId, expiresMs)),
+          makeRes(),
+          next as unknown as NextFunction
+        )
+      )
+    ).toBe(403);
     expect(next).not.toHaveBeenCalled();
   });
 

@@ -107,6 +107,29 @@ describe('useTrainingActions', () => {
     expect(result.current.uploadSuccess).toBeNull();
   });
 
+  it('handleFileUpload surfaces an error message when the processor rejects', async () => {
+    mockedProcessEpoch.mockRejectedValue(new Error('parse failed'));
+    const { result } = renderHook(() => useTrainingActions({ trainingId: 't1', refetch: vi.fn(), onTrainingDeleted: vi.fn() }));
+
+    await act(async () => {
+      await result.current.handleFileUpload(makeFileList(['a.json']), 'epoch');
+    });
+
+    expect(result.current.uploadError).toBe('parse failed');
+    expect(result.current.uploading).toBe(false);
+  });
+
+  it('handleFileUpload falls back to a generic message for a non-Error rejection', async () => {
+    mockedProcessEpoch.mockRejectedValue('boom');
+    const { result } = renderHook(() => useTrainingActions({ trainingId: 't1', refetch: vi.fn(), onTrainingDeleted: vi.fn() }));
+
+    await act(async () => {
+      await result.current.handleFileUpload(makeFileList(['a.json']), 'epoch');
+    });
+
+    expect(result.current.uploadError).toBe('Failed to upload files');
+  });
+
   it('handleDeleteClick opens the delete dialog with the target epoch', () => {
     const { result } = renderHook(() => useTrainingActions({ trainingId: 't1', refetch: vi.fn(), onTrainingDeleted: vi.fn() }));
     const epoch = { _id: 'e1' } as any;
@@ -153,6 +176,37 @@ describe('useTrainingActions', () => {
     expect(result.current.uploadError).toBe('boom');
   });
 
+  it('handleConfirmDelete does nothing when there is no delete target', async () => {
+    const { result } = renderHook(() => useTrainingActions({ trainingId: 't1', refetch: vi.fn(), onTrainingDeleted: vi.fn() }));
+
+    await act(async () => {
+      await result.current.handleConfirmDelete();
+    });
+
+    expect(mockedEpoch.deleteEpoch).not.toHaveBeenCalled();
+  });
+
+  it('handleConfirmDeleteTraining does nothing when there is no trainingId', async () => {
+    const { result } = renderHook(() => useTrainingActions({ trainingId: undefined, refetch: vi.fn(), onTrainingDeleted: vi.fn() }));
+
+    await act(async () => {
+      await result.current.handleConfirmDeleteTraining();
+    });
+
+    expect(mockedTraining.deleteTraining).not.toHaveBeenCalled();
+  });
+
+  it('handleConfirmDeleteTraining falls back to a generic message for a non-Error rejection', async () => {
+    mockedTraining.deleteTraining.mockRejectedValue('boom');
+    const { result } = renderHook(() => useTrainingActions({ trainingId: 't1', refetch: vi.fn(), onTrainingDeleted: vi.fn() }));
+
+    await act(async () => {
+      await result.current.handleConfirmDeleteTraining();
+    });
+
+    expect(result.current.uploadError).toBe('Failed to delete training');
+  });
+
   it('handleConfirmDeleteTraining deletes the training and calls onTrainingDeleted', async () => {
     mockedTraining.deleteTraining.mockResolvedValue({ success: true } as any);
     const onTrainingDeleted = vi.fn();
@@ -178,6 +232,19 @@ describe('useTrainingActions', () => {
     expect(mockedTestResult.deleteTestResult).toHaveBeenCalledWith('tr1');
     expect(refetch).toHaveBeenCalled();
     expect(result.current.uploadSuccess).toBe('Test result deleted successfully');
+  });
+
+  it('handleDeleteTestResult surfaces an error message on failure', async () => {
+    mockedTestResult.deleteTestResult.mockRejectedValue(new Error('cannot delete'));
+    const refetch = vi.fn();
+    const { result } = renderHook(() => useTrainingActions({ trainingId: 't1', refetch, onTrainingDeleted: vi.fn() }));
+
+    await act(async () => {
+      await result.current.handleDeleteTestResult('tr1');
+    });
+
+    expect(result.current.uploadError).toBe('cannot delete');
+    expect(refetch).not.toHaveBeenCalled();
   });
 
   it('handleLatexExport generates latex code and opens the modal', () => {

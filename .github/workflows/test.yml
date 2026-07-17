@@ -18,6 +18,7 @@ jobs:
       pull-requests: read
     outputs:
       workspaces: ${{ steps.set-matrix.outputs.workspaces }}
+      e2e-workspaces: ${{ steps.set-e2e-matrix.outputs.workspaces }}
     steps:
       - uses: actions/checkout@v4
 
@@ -78,6 +79,10 @@ jobs:
       - name: Build workspace matrix
         id: set-matrix
         run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c 'map(select(. != "shared" and . != "backend-shared" and . != "frontend-shared"))')" >> "$GITHUB_OUTPUT"
+
+      - name: Build e2e workspace matrix
+        id: set-e2e-matrix
+        run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c '[.[] | select(IN("account-front","auth-front","label-front","landing-front","vision-front"))]')" >> "$GITHUB_OUTPUT"
 
   lint:
     needs: changes
@@ -149,4 +154,48 @@ jobs:
         with:
           name: coverage-${{ steps.safe-name.outputs.name }}
           path: '**/coverage/lcov.info'
+          if-no-files-found: ignore
+
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.e2e-workspaces != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: ${{ fromJSON(needs.changes.outputs.e2e-workspaces) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 26
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared libraries
+        run: |
+          npm run build --workspace=@visin/backend-core
+          npm run build --workspace=@visin/frontend-core
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e tests
+        run: npm run test:e2e --workspace=${{ matrix.workspace }}
+
+      - name: Sanitize workspace name for artifact
+        id: safe-name
+        if: always()
+        run: echo "name=$(printf '%s' '${{ matrix.workspace }}' | tr -c '[:alnum:]-' '-')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ steps.safe-name.outputs.name }}
+          path: apps/frontend/${{ matrix.workspace }}/playwright-report
           if-no-files-found: ignore
