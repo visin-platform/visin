@@ -1,4 +1,16 @@
 # Visin Changelog
+### [0.0.118](https://github.com/visin-platform/visin-monorepo/compare/v0.0.117...v0.0.118) (2026-07-17)
+
+
+### Features
+
+* migrate old labels to v2 ([e56e4d5](https://github.com/visin-platform/visin-monorepo/commit/e56e4d5b7036fef8204e4e1e1e45ecdbd19c8daf))
+
+
+### Bug Fixes
+
+* cors parsing issues ([ea2781d](https://github.com/visin-platform/visin-monorepo/commit/ea2781d9ecdc3971406e15be62fb21ef782f5795))
+
 ### [0.0.117](https://github.com/visin-platform/visin-monorepo/compare/v0.0.116...v0.0.117) (2026-07-17)
 
 
