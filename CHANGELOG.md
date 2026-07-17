@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.120](https://github.com/visin-platform/visin-monorepo/compare/v0.0.119...v0.0.120) (2026-07-17)
+
+
+### Features
+
+* reduce duplications ([844439e](https://github.com/visin-platform/visin-monorepo/commit/844439ed99815caa99c1a3202a757c1f7c12c784))
+
 ### [0.0.119](https://github.com/visin-platform/visin-monorepo/compare/v0.0.118...v0.0.119) (2026-07-17)
 
 
