@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.117](https://github.com/visin-platform/visin-monorepo/compare/v0.0.116...v0.0.117) (2026-07-17)
+
+
+### Features
+
+* setup label front v2 ([1cfca7b](https://github.com/visin-platform/visin-monorepo/commit/1cfca7b68d8beebd90cd1946c448194e7d32de6d))
+
 ### [0.0.116](https://github.com/visin-platform/visin-monorepo/compare/v0.0.115...v0.0.116) (2026-07-16)
 
 
