@@ -3,13 +3,18 @@ import type { AddressInfo } from 'net';
 import { createBaseApp } from '../../app/createBaseApp';
 import { errorHandler } from '../../middleware/errorHandler';
 
+import type { CreateBaseAppOptions } from '../../app/createBaseApp';
+
 async function withServer(
-  allowedOrigins: string[],
+  options: string[] | CreateBaseAppOptions,
   run: (baseUrl: string) => Promise<void>
 ): Promise<void> {
-  const app = createBaseApp({ corsOrigins: allowedOrigins });
+  const app = createBaseApp(Array.isArray(options) ? { corsOrigins: options } : options);
   app.get('/cookie-check', (req, res) => {
     res.json({ cookies: req.cookies });
+  });
+  app.post('/echo', (req, res) => {
+    res.json({ body: req.body ?? null });
   });
   app.use(errorHandler);
 
@@ -72,6 +77,58 @@ describe('createBaseApp CORS', () => {
     });
   });
 
+  it('falls back to the comma-separated CORS_ORIGIN env var when corsOrigins is not passed', async () => {
+    const original = process.env.CORS_ORIGIN;
+    process.env.CORS_ORIGIN = 'https://a.example, https://b.example';
+    try {
+      await withServer({}, async baseUrl => {
+        const allowed = await fetch(`${baseUrl}/cookie-check`, {
+          headers: { Origin: 'https://b.example' }
+        });
+        expect(allowed.status).toBe(200);
+        expect(allowed.headers.get('access-control-allow-origin')).toBe('https://b.example');
+
+        const denied = await fetch(`${baseUrl}/cookie-check`, {
+          headers: { Origin: 'https://evil.example' }
+        });
+        expect(denied.status).toBe(403);
+      });
+    } finally {
+      if (original === undefined) delete process.env.CORS_ORIGIN;
+      else process.env.CORS_ORIGIN = original;
+    }
+  });
+
+  it('reflects configured corsMethods/corsAllowedHeaders/corsExposedHeaders on preflight', async () => {
+    await withServer(
+      {
+        corsOrigins: ['https://allowed.example'],
+        corsMethods: ['GET', 'DELETE'],
+        corsAllowedHeaders: ['Content-Type', 'X-Custom'],
+        corsExposedHeaders: ['X-Total-Count']
+      },
+      async baseUrl => {
+        const preflight = await fetch(`${baseUrl}/cookie-check`, {
+          method: 'OPTIONS',
+          headers: {
+            Origin: 'https://allowed.example',
+            'Access-Control-Request-Method': 'DELETE',
+            'Access-Control-Request-Headers': 'x-custom'
+          }
+        });
+
+        expect(preflight.status).toBe(204);
+        expect(preflight.headers.get('access-control-allow-methods')).toBe('GET,DELETE');
+        expect(preflight.headers.get('access-control-allow-headers')).toBe('Content-Type,X-Custom');
+
+        const res = await fetch(`${baseUrl}/cookie-check`, {
+          headers: { Origin: 'https://allowed.example' }
+        });
+        expect(res.headers.get('access-control-expose-headers')).toBe('X-Total-Count');
+      }
+    );
+  });
+
   it('parses cookies onto req.cookies via the mounted cookie-parser', async () => {
     await withServer(['https://allowed.example'], async baseUrl => {
       const res = await fetch(`${baseUrl}/cookie-check`, {
@@ -81,6 +138,51 @@ describe('createBaseApp CORS', () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as { cookies: Record<string, string> };
       expect(body.cookies).toEqual({ access_token: 'tok123' });
+    });
+  });
+});
+
+describe('createBaseApp JSON body parsing', () => {
+  const origins = { corsOrigins: ['https://allowed.example'] };
+
+  it('parses JSON bodies by default', async () => {
+    await withServer(origins, async baseUrl => {
+      const res = await fetch(`${baseUrl}/echo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hello: 'world' })
+      });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ body: { hello: 'world' } });
+    });
+  });
+
+  it('passes custom options through to express.json()', async () => {
+    // strict: false accepts a bare JSON primitive that the default parser rejects,
+    // proving the options object reaches express.json().
+    await withServer({ ...origins, json: { strict: false } }, async baseUrl => {
+      const res = await fetch(`${baseUrl}/echo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '"just a string"'
+      });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ body: 'just a string' });
+    });
+  });
+
+  it('skips the global JSON parser when json: false', async () => {
+    await withServer({ ...origins, json: false }, async baseUrl => {
+      const res = await fetch(`${baseUrl}/echo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hello: 'world' })
+      });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ body: null });
     });
   });
 });
