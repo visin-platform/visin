@@ -48,6 +48,23 @@ describe('createBaseApp CORS', () => {
     });
   });
 
+  it('answers a preflight OPTIONS without corsMethods configured (regression: explicit undefined methods crashed the cors package)', async () => {
+    await withServer(['https://allowed.example'], async baseUrl => {
+      const res = await fetch(`${baseUrl}/cookie-check`, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://allowed.example',
+          'Access-Control-Request-Method': 'GET',
+          'Access-Control-Request-Headers': 'content-type'
+        }
+      });
+
+      expect(res.status).toBe(204);
+      expect(res.headers.get('access-control-allow-origin')).toBe('https://allowed.example');
+      expect(res.headers.get('access-control-allow-methods')).toContain('GET');
+    });
+  });
+
   it('allows requests with no Origin header (e.g. server-to-server calls)', async () => {
     await withServer(['https://allowed.example'], async baseUrl => {
       const res = await fetch(`${baseUrl}/cookie-check`);

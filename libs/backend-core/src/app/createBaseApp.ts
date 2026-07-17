@@ -55,9 +55,12 @@ export function createBaseApp(options: CreateBaseAppOptions = {}): Express {
       }
     },
     credentials: true,
-    methods: options.corsMethods,
-    allowedHeaders: options.corsAllowedHeaders,
-    exposedHeaders: options.corsExposedHeaders
+    // Only pass these when actually configured: an explicit `methods: undefined`
+    // overrides the cors package's defaults and crashes its preflight handler
+    // (`methods.join` on undefined) — a 500 on every OPTIONS request.
+    ...(options.corsMethods ? { methods: options.corsMethods } : {}),
+    ...(options.corsAllowedHeaders ? { allowedHeaders: options.corsAllowedHeaders } : {}),
+    ...(options.corsExposedHeaders ? { exposedHeaders: options.corsExposedHeaders } : {})
   }));
 
   if (options.json !== false) {
