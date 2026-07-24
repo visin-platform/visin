@@ -1,4 +1,6 @@
 # Visin Changelog
+### [0.0.121](https://github.com/visin-platform/visin-monorepo/compare/v0.0.120...v0.0.121) (2026-07-24)
+
 ### [0.0.120](https://github.com/visin-platform/visin-monorepo/compare/v0.0.119...v0.0.120) (2026-07-17)
 
 
