@@ -108,6 +108,11 @@ describe('Benchmark', () => {
 
     expect(doc.deletedAt).toBeInstanceOf(Date);
     expect(save).toHaveBeenCalled();
+    // Under strict mode, assigning a path absent from the schema is
+    // silently dropped by save() even though the in-memory getter still
+    // reads it back — modifiedPaths() is what actually reflects what a
+    // real save() would persist.
+    expect(doc.modifiedPaths()).toContain('deletedAt');
   });
 
   it('findActive filters out soft-deleted docs', () => {

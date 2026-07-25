@@ -15,7 +15,7 @@ const LoginRedirect = () => {
       try {
         const result = await refresh();
         if (result.authenticated) {
-          navigate('/account', { replace: true });
+          navigate('/jobs', { replace: true });
         } else {
           setError('Authentication failed. Please try logging in again.');
         }
