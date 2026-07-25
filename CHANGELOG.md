@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.122](https://github.com/visin-platform/visin-monorepo/compare/v0.0.121...v0.0.122) (2026-07-25)
+
+
+### Bug Fixes
+
+* address confirmed bugs and build gap from TODO analysis ([3b43fdc](https://github.com/visin-platform/visin-monorepo/commit/3b43fdc95e4ecfa48967cf950f7e0285ceb5cd01))
+
 ### [0.0.121](https://github.com/visin-platform/visin-monorepo/compare/v0.0.120...v0.0.121) (2026-07-24)
 
 ### [0.0.120](https://github.com/visin-platform/visin-monorepo/compare/v0.0.119...v0.0.120) (2026-07-17)
