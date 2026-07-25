@@ -28,13 +28,13 @@ const renderIt = () =>
   );
 
 describe('LoginRedirect', () => {
-  it('shows a loader, then navigates to /account on success', async () => {
+  it('shows a loader, then navigates to /jobs on success', async () => {
     mockRefresh.mockResolvedValue({ authenticated: true, user: { id: 'u1' } });
     renderIt();
 
     expect(screen.getByText('Checking authentication...')).toBeInTheDocument();
 
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/account', { replace: true }));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/jobs', { replace: true }));
   });
 
   it('shows an error and a retry button when auth check reports failure', async () => {

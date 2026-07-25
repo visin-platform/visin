@@ -18,6 +18,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run clean && npm run build",
     "release": "standard-version && npm run build && npm publish --access public",
     "release:beta": "standard-version --prerelease beta && npm run build && npm publish --access public --tag beta",

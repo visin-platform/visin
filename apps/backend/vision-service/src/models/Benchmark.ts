@@ -115,7 +115,10 @@ const BenchmarkSchema: Schema = new Schema(
       gpu_memory_max_mb: Number,
       device: String,
       device_type: String
-    }]
+    }],
+    deletedAt: {
+      type: Date
+    }
   },
   {
     timestamps: true,
