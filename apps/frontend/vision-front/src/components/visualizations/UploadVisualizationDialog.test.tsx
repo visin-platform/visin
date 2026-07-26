@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import UploadVisualizationDialog from './UploadVisualizationDialog';
 import { Epoch } from '../../types';
 
@@ -73,10 +73,10 @@ describe('UploadVisualizationDialog', () => {
     expect(uploadButton).not.toBeDisabled();
     fireEvent.click(uploadButton);
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(onUpload).toHaveBeenCalledWith('epoch-uuid-2', file, 'segment');
     });
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
   });

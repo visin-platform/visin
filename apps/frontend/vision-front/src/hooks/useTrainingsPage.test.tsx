@@ -223,7 +223,7 @@ describe('useTrainingsPage', () => {
   });
 
   it('opens and confirms a single-training delete', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.useFakeTimers();
     mockedTraining.deleteTraining.mockResolvedValue({ success: true } as never);
     const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
     await vi.waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -239,6 +239,10 @@ describe('useTrainingsPage', () => {
     expect(mockedTraining.deleteTraining).toHaveBeenCalledWith('t1');
     expect(result.current.createSuccess).toBe('Training deleted successfully!');
     expect(result.current.deleteDialogOpen).toBe(false);
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
     vi.useRealTimers();
   });
 
@@ -296,7 +300,7 @@ describe('useTrainingsPage', () => {
   });
 
   it('deletes multiple selected trainings', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.useFakeTimers();
     mockedTraining.deleteTraining.mockResolvedValue({ success: true } as never);
     const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
     await vi.waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -309,6 +313,10 @@ describe('useTrainingsPage', () => {
     expect(mockedTraining.deleteTraining).toHaveBeenCalledWith('t1');
     expect(result.current.createSuccess).toContain('deleted successfully');
     expect(result.current.selectedTrainingIds.size).toBe(0);
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
     vi.useRealTimers();
   });
 
