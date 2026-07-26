@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.125](https://github.com/visin-platform/visin-monorepo/compare/v0.0.124...v0.0.125) (2026-07-26)
+
+
+### Features
+
+* shard slow vision front tests ([2410efe](https://github.com/visin-platform/visin-monorepo/commit/2410efe33c97ef5ac057be435c152bc862a2ccea))
+
 ### [0.0.124](https://github.com/visin-platform/visin-monorepo/compare/v0.0.123...v0.0.124) (2026-07-26)
 
 
