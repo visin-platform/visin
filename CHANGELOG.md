@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.123](https://github.com/visin-platform/visin-monorepo/compare/v0.0.122...v0.0.123) (2026-07-26)
+
+
+### Features
+
+* release libraries ([f08f82a](https://github.com/visin-platform/visin-monorepo/commit/f08f82a5f275ea575cf492b740c4e7642d6a8825))
+
 ### [0.0.122](https://github.com/visin-platform/visin-monorepo/compare/v0.0.121...v0.0.122) (2026-07-25)
 
 
