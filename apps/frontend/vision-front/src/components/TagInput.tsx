@@ -73,15 +73,19 @@ const TagInput: React.FC<TagInputProps> = ({
           }
         }}
         renderValue={(value, getItemProps) =>
-          value.map((option, index) => (
-            <Chip
-              {...getItemProps({ index })}
-              label={option}
-              size="small"
-              onDelete={() => handleRemoveTag(option)}
-              sx={{ mr: 0.5, mb: 0.5 }}
-            />
-          ))
+          value.map((option, index) => {
+            const { key, ...itemProps } = getItemProps({ index });
+            return (
+              <Chip
+                key={key}
+                {...itemProps}
+                label={option}
+                size="small"
+                onDelete={() => handleRemoveTag(option)}
+                sx={{ mr: 0.5, mb: 0.5 }}
+              />
+            );
+          })
         }
         renderInput={(params) => (
           <TextField

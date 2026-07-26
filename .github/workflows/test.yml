@@ -18,6 +18,7 @@ jobs:
       pull-requests: read
     outputs:
       workspaces: ${{ steps.set-matrix.outputs.workspaces }}
+      workspaces-single-shard: ${{ steps.set-matrix-single-shard.outputs.workspaces }}
       e2e-workspaces: ${{ steps.set-e2e-matrix.outputs.workspaces }}
     steps:
       - uses: actions/checkout@v4
@@ -80,6 +81,14 @@ jobs:
         id: set-matrix
         run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c 'map(select(. != "shared" and . != "backend-shared" and . != "frontend-shared"))')" >> "$GITHUB_OUTPUT"
 
+      # vision-front has ~180 test files and is CI-CPU-bound (GitHub-hosted runners default
+      # Vitest's worker count to `cpus - 1`, i.e. 1 worker on a 2-vCPU runner, so it runs
+      # effectively single-threaded). It's sharded into parallel jobs below instead of running
+      # in the single-shard `test` job that covers every other workspace.
+      - name: Build single-shard workspace matrix (excludes vision-front)
+        id: set-matrix-single-shard
+        run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c 'map(select(. != "shared" and . != "backend-shared" and . != "frontend-shared" and . != "vision-front"))')" >> "$GITHUB_OUTPUT"
+
       - name: Build e2e workspace matrix
         id: set-e2e-matrix
         run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c '[.[] | select(IN("account-front","auth-front","label-front","landing-front","vision-front"))]')" >> "$GITHUB_OUTPUT"
@@ -117,12 +126,12 @@ jobs:
 
   test:
     needs: changes
-    if: needs.changes.outputs.workspaces != '[]'
+    if: needs.changes.outputs.workspaces-single-shard != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        workspace: ${{ fromJSON(needs.changes.outputs.workspaces) }}
+        workspace: ${{ fromJSON(needs.changes.outputs.workspaces-single-shard) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -154,6 +163,74 @@ jobs:
         with:
           name: coverage-${{ steps.safe-name.outputs.name }}
           path: '**/coverage/lcov.info'
+          if-no-files-found: ignore
+
+  test-vision-front:
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.workspaces), 'vision-front')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 26
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared libraries
+        run: npm run build --workspace=@visin/frontend-core
+
+      - name: Run test shard ${{ matrix.shard }}/4
+        working-directory: apps/frontend/vision-front
+        run: npx vitest run --coverage --reporter=blob --shard=${{ matrix.shard }}/4 --no-coverage.thresholds
+
+      - name: Upload blob report
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-front-blob-report-${{ matrix.shard }}
+          path: apps/frontend/vision-front/.vitest-reports
+          include-hidden-files: true
+
+  test-vision-front-merge:
+    needs: test-vision-front
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 26
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download blob reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vision-front-blob-report-*
+          path: apps/frontend/vision-front/.vitest-reports
+          merge-multiple: true
+
+      - name: Merge shard reports and check coverage thresholds
+        working-directory: apps/frontend/vision-front
+        run: npm run test:coverage:merge
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-vision-front
+          path: apps/frontend/vision-front/coverage/lcov.info
           if-no-files-found: ignore
 
   e2e:

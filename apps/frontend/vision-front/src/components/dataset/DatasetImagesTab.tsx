@@ -171,13 +171,17 @@ const DatasetImagesTab: React.FC<DatasetImagesTabProps> = ({
             />
           )}
           renderValue={(value, getItemProps) =>
-            value.map((option, index) => (
-              <Chip
-                {...getItemProps({ index })}
-                label={option}
-                size="small"
-              />
-            ))
+            value.map((option, index) => {
+              const { key, ...itemProps } = getItemProps({ index });
+              return (
+                <Chip
+                  key={key}
+                  {...itemProps}
+                  label={option}
+                  size="small"
+                />
+              );
+            })
           }
           sx={{ minWidth: 200 }}
         />

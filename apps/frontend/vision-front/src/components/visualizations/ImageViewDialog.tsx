@@ -33,7 +33,7 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({
       slotProps={{ paper: { sx: { borderRadius: 2, bgcolor: 'black' } } }}
     >
       <DialogTitle sx={{ color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="subtitle1">{selectedImage?.filename}</Typography>
+        <Typography variant="subtitle1" component="span">{selectedImage?.filename}</Typography>
         <IconButton onClick={onClose} sx={{ color: 'white' }}>
           <CloseIcon />
         </IconButton>

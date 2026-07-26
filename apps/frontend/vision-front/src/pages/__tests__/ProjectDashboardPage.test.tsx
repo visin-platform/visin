@@ -112,6 +112,7 @@ const renderPage = (path = '/projects/p1') => {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/projects/:id" element={<ProjectDashboardPage />} />
+          <Route path="/projects" element={<div>projects list</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>

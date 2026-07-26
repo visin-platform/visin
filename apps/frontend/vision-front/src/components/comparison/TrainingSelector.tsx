@@ -99,14 +99,18 @@ const TrainingSelector: React.FC<TrainingSelectorProps> = ({
             />
           )}
           renderValue={(value, getItemProps) =>
-            value.map((option, index) => (
-              <Chip
-                {...getItemProps({ index })}
-                label={option}
-                size="small"
-                onDelete={() => handleTagRemove(option)}
-              />
-            ))
+            value.map((option, index) => {
+              const { key, ...itemProps } = getItemProps({ index });
+              return (
+                <Chip
+                  key={key}
+                  {...itemProps}
+                  label={option}
+                  size="small"
+                  onDelete={() => handleTagRemove(option)}
+                />
+              );
+            })
           }
           size="small"
           sx={{ mb: 1 }}
@@ -165,6 +169,7 @@ const TrainingSelector: React.FC<TrainingSelectorProps> = ({
                 />
                 <ListItemText
                   primary={training.name}
+                  slotProps={{ secondary: { component: 'div' } }}
                   secondary={
                     <Box>
                       {training.description && (

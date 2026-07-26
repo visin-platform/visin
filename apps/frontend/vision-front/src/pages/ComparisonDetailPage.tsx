@@ -308,15 +308,17 @@ const ComparisonDetailPage: React.FC = () => {
 
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Tooltip title="Export All LaTeX">
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<CodeIcon />}
-                onClick={() => { setExportLatexOpen(true); setExportLatexTab(0); }}
-                disabled={!comparisonData.length}
-              >
-                Export LaTeX
-              </Button>
+              <span>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<CodeIcon />}
+                  onClick={() => { setExportLatexOpen(true); setExportLatexTab(0); }}
+                  disabled={!comparisonData.length}
+                >
+                  Export LaTeX
+                </Button>
+              </span>
             </Tooltip>
             <Tooltip title="Edit Comparison">
               <IconButton

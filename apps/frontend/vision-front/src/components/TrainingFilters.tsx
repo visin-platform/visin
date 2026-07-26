@@ -76,18 +76,22 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
             value={selectedTags}
             onChange={(_, newValue) => onTagsChange(newValue)}
             renderValue={(value, getItemProps) =>
-              value.map((option, index) => (
-                <Chip
-                  {...getItemProps({ index })}
-                  label={option}
-                  size="small"
-                  sx={{
-                    bgcolor: alpha(theme.palette.primary.main, 0.1),
-                    color: theme.palette.primary.main,
-                    fontWeight: 500
-                  }}
-                />
-              ))
+              value.map((option, index) => {
+                const { key, ...itemProps } = getItemProps({ index });
+                return (
+                  <Chip
+                    key={key}
+                    {...itemProps}
+                    label={option}
+                    size="small"
+                    sx={{
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      color: theme.palette.primary.main,
+                      fontWeight: 500
+                    }}
+                  />
+                );
+              })
             }
             renderInput={(params) => (
               <TextField
@@ -120,15 +124,19 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
             value={excludedTags}
             onChange={(_, newValue) => onExcludedTagsChange(newValue)}
             renderValue={(value, getItemProps) =>
-              value.map((option, index) => (
-                <Chip
-                  {...getItemProps({ index })}
-                  label={option}
-                  size="small"
-                  color="error"
-                  variant="outlined"
-                />
-              ))
+              value.map((option, index) => {
+                const { key, ...itemProps } = getItemProps({ index });
+                return (
+                  <Chip
+                    key={key}
+                    {...itemProps}
+                    label={option}
+                    size="small"
+                    color="error"
+                    variant="outlined"
+                  />
+                );
+              })
             }
             renderInput={(params) => (
               <TextField

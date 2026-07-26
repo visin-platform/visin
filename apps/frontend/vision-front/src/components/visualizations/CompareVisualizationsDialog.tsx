@@ -35,7 +35,7 @@ const CompareVisualizationsDialog: React.FC<CompareVisualizationsDialogProps> = 
       slotProps={{ paper: { sx: { borderRadius: 2, height: '90vh' } } }}
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h6">Compare Visualizations</Typography>
+        <Typography variant="h6" component="span">Compare Visualizations</Typography>
         <IconButton onClick={onClose}>
           <CloseIcon />
         </IconButton>

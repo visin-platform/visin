@@ -223,6 +223,9 @@ describe('useTrainingsPage', () => {
   });
 
   it('opens and confirms a single-training delete', async () => {
+    // Fake timers (never advanced) suppress the hook's post-delete `setTimeout(refetch, 500)`
+    // entirely -- switching back to real timers below discards it rather than letting it fire
+    // in the background against an unmounted component.
     vi.useFakeTimers();
     mockedTraining.deleteTraining.mockResolvedValue({ success: true } as never);
     const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
@@ -240,9 +243,6 @@ describe('useTrainingsPage', () => {
     expect(result.current.createSuccess).toBe('Training deleted successfully!');
     expect(result.current.deleteDialogOpen).toBe(false);
 
-    await act(async () => {
-      vi.advanceTimersByTime(500);
-    });
     vi.useRealTimers();
   });
 
@@ -314,9 +314,6 @@ describe('useTrainingsPage', () => {
     expect(result.current.createSuccess).toContain('deleted successfully');
     expect(result.current.selectedTrainingIds.size).toBe(0);
 
-    await act(async () => {
-      vi.advanceTimersByTime(500);
-    });
     vi.useRealTimers();
   });
 
