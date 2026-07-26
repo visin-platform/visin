@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.124](https://github.com/visin-platform/visin-monorepo/compare/v0.0.123...v0.0.124) (2026-07-26)
+
+
+### Features
+
+* reduce test warnings ([549b647](https://github.com/visin-platform/visin-monorepo/commit/549b647ff6c7d0cb1c3932c2b039896853d2386a))
+
 ### [0.0.123](https://github.com/visin-platform/visin-monorepo/compare/v0.0.122...v0.0.123) (2026-07-26)
 
 
