@@ -1,5 +1,4 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import { mirrorLegacyFileIdKeys } from '../legacyMinioCompat';
 
 // Weather condition types
 export const WEATHER_CONDITIONS = ['day_fair', 'night_fair', 'day_rain', 'night_rain', 'snow'] as const;
@@ -99,11 +98,6 @@ const DatasetImageSchema: Schema = new Schema(
     timestamps: true
   }
 );
-
-// Serialized documents also carry the legacy `minio*` key names for one
-// deprecation cycle — see legacyMinioCompat.ts.
-DatasetImageSchema.set('toJSON', { transform: mirrorLegacyFileIdKeys });
-DatasetImageSchema.set('toObject', { transform: mirrorLegacyFileIdKeys });
 
 // Indexes for performance
 DatasetImageSchema.index({ fileId: 1 }); // createDatasetImage's duplicate check

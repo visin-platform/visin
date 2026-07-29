@@ -5,7 +5,6 @@ import EpochVisualization, { IEpochVisualization } from '../models/EpochVisualiz
 import Epoch from '../models/Epoch';
 import Training from '../models/Training';
 import { getSignedUrl, getUploadSignedUrl, type SignedUrlData } from './fileServiceClient';
-import { withLegacyFileIdKeys } from '../legacyMinioCompat';
 import { checkProjectAccess, getVisibleTrainingIds, isWithinTokenScope } from './projectAccessService';
 import type { GetVisualizationsByTrainingQuery } from '../validation/visualizationSchemas';
 
@@ -67,15 +66,14 @@ export const getVisualizationUploadUrl = async (
     filename
   });
 
-  // Training pipelines echo the returned file id back on the follow-up create
-  // call, so this response still carries the legacy `minioFileId` key too.
-  return withLegacyFileIdKeys({
+  // Training pipelines echo the returned file id back on the follow-up create call.
+  return {
     uploadUrl,
     visualization_uuid,
     fileId,
     epoch_uuid,
     expiresInMinutes: 15
-  });
+  };
 };
 
 interface CreateVisualizationData {

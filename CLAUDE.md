@@ -125,16 +125,14 @@ which every `services/*Service.ts` file calls — don't hand-roll `fetch` for a 
 legitimate exception is uploading via a file-service signed URL (`uploadFileToSignedUrl`,
 `visualizationService.uploadFile`): that's a direct-to-storage PUT against file-service with the signature as the
 credential, not a vision-service API call, so it deliberately bypasses `visionApi` (no `/api` prefix, no auth
-cookie). File-service stores files on local disk, not MinIO/S3 — there is no object-storage backend to configure.
+cookie). File-service stores files on local disk — there is no object-storage backend to configure.
 
 The stored-file reference is called `fileId` (`thumbnailFileId` for thumbnails) everywhere: Mongo, the HTTP API,
-and file-service itself. It used to be `minioFileId`; `scripts/migrateMinioFieldNames.ts` renamed the Mongo
-fields (`npm run migrate:minio --workspace=vision-service`, dry-run by default). Because callers we don't deploy
-— training pipelines posting epoch visualizations with project-scoped API tokens — still send and read the old
-name, `src/legacyMinioCompat.ts` keeps accepting it on request bodies and mirrors it back into responses. That
-shim is the only place `minio` should appear in vision-service; deleting the file and its imports completes the
-removal. Note the Mongo rename and the code deploy are not independent — the new code cannot read un-migrated
-documents, so run the migration as part of the deploy, not on a separate day.
+and file-service itself. It was once called `minioFileId`, back when storage was object-based; that rename is
+finished end to end — the persisted fields were migrated, the migration script was removed, and the
+request/response compat shim that used to translate the old spelling is gone too. `fileId` is now the only
+accepted spelling: a caller posting `minioFileId` gets a 400, and responses no longer mirror the old key.
+Nothing in the repo should reference the old name again.
 
 Data fetching is React Query (`useQuery`/`useMutation`) throughout; a `useEffect` that calls a service function and
 sets loading/data state by hand is legacy and should be converted when touched. Not every `useEffect` is a fetch,

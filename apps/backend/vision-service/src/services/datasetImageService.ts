@@ -11,7 +11,6 @@ import {
   generateFileId, 
   getUploadSignedUrl 
 } from './fileServiceClient';
-import { withLegacyFileIdKeys } from '../legacyMinioCompat';
 
 export interface ImageFilterOptions {
   datasetId?: string;
@@ -109,10 +108,7 @@ async function enrichImagesWithUrls(images: ImageLike[]) {
       }
     }
 
-    // The aggregate() branch below hands us plain POJOs, which never went
-    // through the schema's toObject transform — mirror the legacy keys here so
-    // both branches serialize identically.
-    return withLegacyFileIdKeys(result);
+    return result;
   });
 }
 
@@ -630,15 +626,14 @@ export const getUploadSignedUrlRequest = async (data: { filename: string, mimety
   
   const uploadUrl = await getUploadSignedUrl(fileId, mimetype, 15);
 
-  // Clients echo the returned file id back on the follow-up create call, so
-  // this response still carries the legacy `minioFileId` key too.
-  return withLegacyFileIdKeys({
+  // Clients echo the returned file id back on the follow-up create call.
+  return {
     uploadUrl,
     fileId,
     datasetId,
     categoryId,
     expiresInMinutes: 15
-  });
+  };
 };
 
 export const exportImageNames = async (datasetId: string, tag?: string) => {

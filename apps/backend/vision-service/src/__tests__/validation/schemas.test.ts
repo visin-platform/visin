@@ -228,7 +228,7 @@ describe('datasetImageSchemas', () => {
     expect(createDatasetImageBodySchema.safeParse({ ...valid, filename: '' }).success).toBe(false);
   });
 
-  it('createDatasetImageBodySchema still accepts the legacy minioFileId key', () => {
+  it('createDatasetImageBodySchema rejects the removed legacy minioFileId key', () => {
     const base = {
       filename: 'f.jpg',
       originalName: 'o.jpg',
@@ -238,16 +238,14 @@ describe('datasetImageSchemas', () => {
       size: 123,
     };
 
-    const legacy = createDatasetImageBodySchema.parse({ ...base, minioFileId: 'legacy' });
-    expect(legacy.fileId).toBe('legacy');
-    expect('minioFileId' in legacy).toBe(false);
+    // minioFileId is no longer translated into fileId, so it no longer satisfies it.
+    expect(createDatasetImageBodySchema.safeParse({ ...base, minioFileId: 'legacy' }).success).toBe(false);
 
-    // An explicit current-name key wins when a client sends both.
-    const both = createDatasetImageBodySchema.parse({ ...base, fileId: 'current', minioFileId: 'legacy' });
-    expect(both.fileId).toBe('current');
-
-    // Neither key at all is still a validation failure.
+    // Missing fileId entirely is likewise a validation failure.
     expect(createDatasetImageBodySchema.safeParse(base).success).toBe(false);
+
+    const parsed = createDatasetImageBodySchema.parse({ ...base, fileId: 'current' });
+    expect(parsed.fileId).toBe('current');
   });
 
   it('updateImageBodySchema allows nullable categoryId', () => {
@@ -424,8 +422,8 @@ describe('visualizationSchemas', () => {
     expect(parsed.size).toBe(10);
   });
 
-  it('createVisualizationBodySchema still accepts the legacy minioFileId key', () => {
-    const parsed = createVisualizationBodySchema.parse({
+  it('createVisualizationBodySchema rejects the removed legacy minioFileId key', () => {
+    const result = createVisualizationBodySchema.safeParse({
       epoch_uuid: 'e',
       visualization_uuid: 'v',
       filename: 'f',
@@ -434,8 +432,7 @@ describe('visualizationSchemas', () => {
       mimetype: 'image/png',
       size: 10,
     });
-    expect(parsed.fileId).toBe('legacy');
-    expect('minioFileId' in parsed).toBe(false);
+    expect(result.success).toBe(false);
   });
 
   it('query schemas apply defaults', () => {

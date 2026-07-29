@@ -1,5 +1,4 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import { mirrorLegacyFileIdKeys } from '../legacyMinioCompat';
 
 export interface IEpochVisualization extends Document {
   epoch_uuid: string;
@@ -51,11 +50,6 @@ const EpochVisualizationSchema: Schema = new Schema(
     timestamps: true
   }
 );
-
-// Serialized documents also carry the legacy `minioFileId` key for one
-// deprecation cycle — see legacyMinioCompat.ts.
-EpochVisualizationSchema.set('toJSON', { transform: mirrorLegacyFileIdKeys });
-EpochVisualizationSchema.set('toObject', { transform: mirrorLegacyFileIdKeys });
 
 // Compound indexes for querying
 EpochVisualizationSchema.index({ epoch_uuid: 1, type: 1 });

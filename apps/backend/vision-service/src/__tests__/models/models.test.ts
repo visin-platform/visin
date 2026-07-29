@@ -176,7 +176,7 @@ describe('DatasetImage', () => {
     expect(image.validateSync()?.errors.weatherCondition).toBeDefined();
   });
 
-  it('mirrors fileId/thumbnailFileId under their deprecated minio* names when serialized', () => {
+  it('serializes fileId/thumbnailFileId under their current names only', () => {
     const image = new DatasetImage({
       filename: 'f.jpg',
       originalName: 'o.jpg',
@@ -188,34 +188,18 @@ describe('DatasetImage', () => {
       size: 1,
     });
 
-    // The deprecated aliases are added by the schema transform at runtime and
-    // deliberately kept off IDatasetImage, so read them untyped.
     for (const doc of [image.toJSON(), image.toObject()]) {
       const serialized = doc as unknown as Record<string, unknown>;
       expect(serialized.fileId).toBe('id');
-      expect(serialized.minioFileId).toBe('id');
       expect(serialized.thumbnailFileId).toBe('thumb');
-      expect(serialized.minioThumbnailFileId).toBe('thumb');
+      expect('minioFileId' in serialized).toBe(false);
+      expect('minioThumbnailFileId' in serialized).toBe(false);
     }
-  });
-
-  it('omits the deprecated thumbnail alias when there is no thumbnail', () => {
-    const image = new DatasetImage({
-      filename: 'f.jpg',
-      originalName: 'o.jpg',
-      fileId: 'id',
-      datasetId: new mongoose.Types.ObjectId(),
-      categoryId: new mongoose.Types.ObjectId(),
-      mimetype: 'image/jpeg',
-      size: 1,
-    });
-
-    expect((image.toJSON() as unknown as Record<string, unknown>).minioThumbnailFileId).toBeUndefined();
   });
 });
 
 describe('EpochVisualization', () => {
-  it('mirrors fileId under its deprecated minioFileId name when serialized', () => {
+  it('serializes fileId under its current name only', () => {
     const viz = new EpochVisualization({
       epoch_uuid: 'e',
       visualization_uuid: 'v',
@@ -227,7 +211,7 @@ describe('EpochVisualization', () => {
     for (const doc of [viz.toJSON(), viz.toObject()]) {
       const serialized = doc as unknown as Record<string, unknown>;
       expect(serialized.fileId).toBe('visualizations/e/segment/v.png');
-      expect(serialized.minioFileId).toBe('visualizations/e/segment/v.png');
+      expect('minioFileId' in serialized).toBe(false);
     }
   });
 });

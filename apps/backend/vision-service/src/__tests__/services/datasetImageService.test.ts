@@ -500,8 +500,6 @@ describe('getUploadSignedUrlRequest', () => {
     expect(result).toEqual({
       uploadUrl: 'http://upload',
       fileId: 'vision/u1/d1/f.jpg',
-      // Deprecated mirror kept so clients that echo the id back still work.
-      minioFileId: 'vision/u1/d1/f.jpg',
       datasetId: 'd1',
       categoryId: undefined,
       expiresInMinutes: 15,

@@ -1,6 +1,5 @@
 import { z } from '@visin/backend-core';
 import { looseStringParam } from './common';
-import { acceptLegacyFileIdKeys } from '../legacyMinioCompat';
 
 export const getAllImagesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -33,27 +32,23 @@ export type GetImagesByDatasetQuery = z.infer<typeof getImagesByDatasetQuerySche
 const REQUIRED_FIELDS_MSG =
   'Missing required fields: filename, originalName, fileId, datasetId, categoryId, mimetype, size';
 
-// Wrapped so a client still sending the legacy `minioFileId` key validates —
-// see legacyMinioCompat.ts.
-export const createDatasetImageBodySchema = acceptLegacyFileIdKeys(
-  z.object({
-    filename: z.string().min(1, REQUIRED_FIELDS_MSG),
-    originalName: z.string().min(1, REQUIRED_FIELDS_MSG),
-    fileId: z.string().min(1, REQUIRED_FIELDS_MSG),
-    datasetId: z.string().min(1, REQUIRED_FIELDS_MSG),
-    categoryId: z.string().min(1, REQUIRED_FIELDS_MSG),
-    mimetype: z.string().min(1, REQUIRED_FIELDS_MSG),
-    size: z.coerce.number({ error: REQUIRED_FIELDS_MSG }),
-    title: z.string().optional(),
-    description: z.string().optional(),
-    width: z.coerce.number().optional(),
-    height: z.coerce.number().optional(),
-    tags: z.array(z.string()).default([]),
-    labels: z.array(z.string()).default([]),
-    weatherCondition: z.string().optional(),
-    metadata: z.unknown().default({})
-  })
-);
+export const createDatasetImageBodySchema = z.object({
+  filename: z.string().min(1, REQUIRED_FIELDS_MSG),
+  originalName: z.string().min(1, REQUIRED_FIELDS_MSG),
+  fileId: z.string().min(1, REQUIRED_FIELDS_MSG),
+  datasetId: z.string().min(1, REQUIRED_FIELDS_MSG),
+  categoryId: z.string().min(1, REQUIRED_FIELDS_MSG),
+  mimetype: z.string().min(1, REQUIRED_FIELDS_MSG),
+  size: z.coerce.number({ error: REQUIRED_FIELDS_MSG }),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  width: z.coerce.number().optional(),
+  height: z.coerce.number().optional(),
+  tags: z.array(z.string()).default([]),
+  labels: z.array(z.string()).default([]),
+  weatherCondition: z.string().optional(),
+  metadata: z.unknown().default({})
+});
 
 export const updateImageBodySchema = z.object({
   title: z.string().optional(),
