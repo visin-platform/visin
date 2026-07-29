@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.129](https://github.com/visin-platform/visin-monorepo/compare/v0.0.128...v0.0.129) (2026-07-29)
+
+
+### Features
+
+* remove old migration ([4322f90](https://github.com/visin-platform/visin-monorepo/commit/4322f90416ee1e750833e40fc5e252053ee077c1))
+
 ### [0.0.128](https://github.com/visin-platform/visin-monorepo/compare/v0.0.127...v0.0.128) (2026-07-29)
 
 
