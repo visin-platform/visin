@@ -2,7 +2,7 @@ import { randomUUID as uuidv4 } from 'crypto';
 import { QueryFilter } from 'mongoose';
 import { NotFoundError } from '@visin/backend-core';
 import Dataset, { IDataset } from '../models/Dataset';
-import { getSignedUrl as getMinioSignedUrl } from './minioService';
+import { getSignedUrl } from './fileServiceClient';
 import type { GetDatasetsQuery } from '../validation/datasetSchemas';
 
 interface CreateDatasetData {
@@ -83,7 +83,7 @@ export const getDatasetDownload = async (uuid: string) => {
 
   if (dataset.downloadUrl) {
     if (dataset.downloadUrl.startsWith('datasets/') || dataset.downloadUrl.startsWith('vision/')) {
-      const signedUrlData = await getMinioSignedUrl(dataset.downloadUrl, 60);
+      const signedUrlData = await getSignedUrl(dataset.downloadUrl, 60);
       if (!signedUrlData) {
         throw new NotFoundError('Could not generate signed URL for the dataset');
       }
@@ -92,8 +92,8 @@ export const getDatasetDownload = async (uuid: string) => {
       downloadUrl = dataset.downloadUrl;
     }
   } else {
-    const minioKey = `datasets/${dataset.name}.zip`;
-    const signedUrlData = await getMinioSignedUrl(minioKey, 60);
+    const fallbackKey = `datasets/${dataset.name}.zip`;
+    const signedUrlData = await getSignedUrl(fallbackKey, 60);
     if (!signedUrlData) {
       throw new NotFoundError('Could not generate signed URL for the dataset');
     }
@@ -107,7 +107,7 @@ export const getDatasetDownload = async (uuid: string) => {
 };
 
 export const getSignedUrlForPath = async (path: string) => {
-  const signedUrlData = await getMinioSignedUrl(path, 60);
+  const signedUrlData = await getSignedUrl(path, 60);
 
   if (!signedUrlData) {
     throw new NotFoundError('Could not generate signed URL for the specified path');

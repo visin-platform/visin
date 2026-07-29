@@ -57,7 +57,7 @@ jest.mock('../../models/Training', () => ({
 jest.mock('../../services/datasetImageService', () => ({
   getLabelingStats: jest.fn(),
 }));
-jest.mock('../../services/minioService', () => ({
+jest.mock('../../services/fileServiceClient', () => ({
   getSignedUrl: jest.fn(),
 }));
 jest.mock('../../services/projectAccessService', () => ({
@@ -82,7 +82,7 @@ import DatasetImage from '../../models/DatasetImage';
 import ApiToken from '../../models/ApiToken';
 import Training from '../../models/Training';
 import { getLabelingStats } from '../../services/datasetImageService';
-import { getSignedUrl } from '../../services/minioService';
+import { getSignedUrl } from '../../services/fileServiceClient';
 import { isProjectOwner } from '../../services/projectAccessService';
 
 const mockedAnalysis = DatasetAnalysis as unknown as jest.Mock & Record<string, jest.Mock>;
@@ -367,8 +367,8 @@ describe('datasetController', () => {
     expect(res.json).toHaveBeenCalledWith({ success: true, data: { total: 1 } });
   });
 
-  it('downloadDataset covers stored MinIO path, absolute URL, and default fallback', async () => {
-    // stored minio path
+  it('downloadDataset covers stored storage path, absolute URL, and default fallback', async () => {
+    // stored storage path
     mockedDataset.findOne.mockResolvedValue({ uuid: 'u', name: 'D', downloadUrl: 'datasets/D.zip' });
     mockedGetSignedUrl.mockResolvedValue({ signedUrl: 'http://signed' });
     const res = makeRes();

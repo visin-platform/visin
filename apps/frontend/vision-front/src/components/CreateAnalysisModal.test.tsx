@@ -21,10 +21,10 @@ describe('CreateAnalysisModal', () => {
     expect(screen.getByText('Create New Dataset Analysis')).toBeInTheDocument();
   });
 
-  it('disables submit and the MinIO path button while the name is empty', () => {
+  it('disables submit and the storage path button while the name is empty', () => {
     render(<CreateAnalysisModal {...baseProps} />);
     expect(screen.getByRole('button', { name: /Create Analysis/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Use MinIO Path/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Use Storage Path/i })).toBeDisabled();
   });
 
   it('shows a validation error and does not call onCreate for a too-short name', async () => {
@@ -46,10 +46,10 @@ describe('CreateAnalysisModal', () => {
     expect(onCreate).toHaveBeenCalledWith('waymo', 'https://example.com/x.zip', '1.2 GB');
   });
 
-  it('fills the MinIO path field when "Use MinIO Path" is clicked', async () => {
+  it('fills the path field when "Use Storage Path" is clicked', async () => {
     render(<CreateAnalysisModal {...baseProps} />);
     await userEvent.type(screen.getByLabelText('Dataset Name'), 'waymo');
-    await userEvent.click(screen.getByRole('button', { name: /Use MinIO Path/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Use Storage Path/i }));
     expect(screen.getByLabelText('Download URL (optional)')).toHaveValue('datasets/waymo_dataset.zip');
   });
 

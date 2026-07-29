@@ -6,7 +6,7 @@ export interface Visualization {
   visualization_uuid: string;
   filename: string;
   type: string;
-  minioFileId: string;
+  fileId: string;
   uploadedAt: string;
   metadata?: Record<string, unknown>;
   signedUrl?: string;
@@ -33,7 +33,7 @@ export interface CreateVisualizationData {
   visualization_uuid: string;
   filename: string;
   type: string;
-  minioFileId: string;
+  fileId: string;
   mimetype: string;
   size: number;
   metadata?: Record<string, unknown>;
@@ -49,7 +49,7 @@ export interface VisualizationUploadUrlRequest {
 export interface VisualizationUploadUrlResponse {
   uploadUrl: string;
   visualization_uuid: string;
-  minioFileId: string;
+  fileId: string;
   epoch_uuid: string;
   expiresInMinutes: number;
 }

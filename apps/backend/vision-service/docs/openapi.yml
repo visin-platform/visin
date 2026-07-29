@@ -133,8 +133,15 @@ components:
           type: string
         originalName:
           type: string
+        fileId:
+          type: string
+          description: file-service storage path for the file.
         minioFileId:
           type: string
+          deprecated: true
+          description: >-
+            Pre-file-service alias for `fileId`. Still accepted on requests and
+            still mirrored into responses; will be removed.
         datasetId:
           type: string
         categoryId:
@@ -320,8 +327,15 @@ components:
           type: string
         filename:
           type: string
+        fileId:
+          type: string
+          description: file-service storage path for the file.
         minioFileId:
           type: string
+          deprecated: true
+          description: >-
+            Pre-file-service alias for `fileId`. Still accepted on requests and
+            still mirrored into responses; will be removed.
         signedUrl:
           type: string
         signedUrlExpiresAt:
@@ -2238,8 +2252,15 @@ paths:
                   type: string
                 filename:
                   type: string
+                fileId:
+                  type: string
+                  description: file-service storage path for the file.
                 minioFileId:
                   type: string
+                  deprecated: true
+                  description: >-
+                    Pre-file-service alias for `fileId`. Still accepted on requests and
+                    still mirrored into responses; will be removed.
       responses:
         '201':
           description: Visualization created successfully

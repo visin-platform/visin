@@ -10,7 +10,7 @@ const makeViz = (overrides: Partial<Visualization> = {}): Visualization => ({
   visualization_uuid: 'viz-1',
   filename: 'file1.png',
   type: 'segment',
-  minioFileId: 'minio1',
+  fileId: 'file1',
   uploadedAt: '2024-01-01T00:00:00.000Z',
   epoch: 1,
   createdAt: '2024-01-01T00:00:00.000Z',

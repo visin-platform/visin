@@ -10,7 +10,8 @@ import {
   getPhotoSignedUrl, 
   generateFileId, 
   getUploadSignedUrl 
-} from './minioService';
+} from './fileServiceClient';
+import { withLegacyFileIdKeys } from '../legacyMinioCompat';
 
 export interface ImageFilterOptions {
   datasetId?: string;
@@ -28,7 +29,7 @@ export interface ImageFilterOptions {
 export interface CreateDatasetImageData {
   filename: string;
   originalName: string;
-  minioFileId: string;
+  fileId: string;
   datasetId: string;
   categoryId: string;
   title?: string;
@@ -56,8 +57,8 @@ export interface UpdateDatasetImageData {
 // Covers both real DatasetImage documents and the aggregate()+toObject-shim
 // POJOs built in getImages' `random` branch below.
 interface ImageLike {
-  minioFileId?: string;
-  minioThumbnailFileId?: string;
+  fileId?: string;
+  thumbnailFileId?: string;
   toObject?: () => Record<string, unknown>;
 }
 
@@ -70,7 +71,7 @@ async function enrichImagesWithUrls(images: ImageLike[]) {
     logger.error('Failed to fetch batch signed URLs for dataset images', { error: (error as Error).message });
   }
 
-  const imagesWithThumbnails = images.filter((image) => image.minioThumbnailFileId);
+  const imagesWithThumbnails = images.filter((image) => image.thumbnailFileId);
   let thumbnailSignedUrlMap: Record<string, SignedUrlData> = {};
 
   if (imagesWithThumbnails.length > 0) {
@@ -82,7 +83,7 @@ async function enrichImagesWithUrls(images: ImageLike[]) {
   }
 
   return images.map((image) => {
-    const signedUrlData = signedUrlMap[image.minioFileId || ''];
+    const signedUrlData = signedUrlMap[image.fileId || ''];
     const imageObj = typeof image.toObject === 'function' ? image.toObject() : image;
 
     const result: Record<string, unknown> = { ...imageObj };
@@ -93,8 +94,8 @@ async function enrichImagesWithUrls(images: ImageLike[]) {
       result.signedUrlExpiresInMinutes = signedUrlData.expiresInMinutes;
     }
 
-    if (image.minioThumbnailFileId) {
-      const thumbnailSignedUrlData = thumbnailSignedUrlMap[image.minioFileId || ''];
+    if (image.thumbnailFileId) {
+      const thumbnailSignedUrlData = thumbnailSignedUrlMap[image.fileId || ''];
       if (thumbnailSignedUrlData) {
         result.thumbnailSignedUrl = thumbnailSignedUrlData.signedUrl;
         result.thumbnailSignedUrlExpiresAt = thumbnailSignedUrlData.expiresAt;
@@ -108,7 +109,10 @@ async function enrichImagesWithUrls(images: ImageLike[]) {
       }
     }
 
-    return result;
+    // The aggregate() branch below hands us plain POJOs, which never went
+    // through the schema's toObject transform — mirror the legacy keys here so
+    // both branches serialize identically.
+    return withLegacyFileIdKeys(result);
   });
 }
 
@@ -163,8 +167,8 @@ export const getImages = async (options: ImageFilterOptions) => {
     images = rawImages.map(doc => ({
       ...doc,
       toObject: () => doc,
-      minioFileId: doc.minioFileId,
-      minioThumbnailFileId: doc.minioThumbnailFileId
+      fileId: doc.fileId,
+      thumbnailFileId: doc.thumbnailFileId
     }));
   } else {
       const sortOptions: Record<string, 1 | -1> = {};
@@ -216,7 +220,7 @@ export const createDatasetImage = async (data: CreateDatasetImageData) => {
   const {
     filename,
     originalName,
-    minioFileId,
+    fileId,
     datasetId,
     categoryId,
     title,
@@ -237,16 +241,16 @@ export const createDatasetImage = async (data: CreateDatasetImageData) => {
     throw new BadRequestError('Invalid categoryId. Category does not exist.');
   }
 
-  // Check if image with this minioFileId already exists
-  const existingImage = await DatasetImage.findOne({ minioFileId });
+  // Check if image with this fileId already exists
+  const existingImage = await DatasetImage.findOne({ fileId });
   if (existingImage) {
-    throw new ConflictError('Image with this MinIO file ID already exists');
+    throw new ConflictError('Image with this file ID already exists');
   }
 
   const image = new DatasetImage({
     filename,
     originalName,
-    minioFileId,
+    fileId,
     datasetId,
     categoryId,
     title: title?.trim(),
@@ -537,7 +541,7 @@ export const getImageById = async (id: string) => {
     }
 
     // Add thumbnail URL if available
-    if (image.minioThumbnailFileId) {
+    if (image.thumbnailFileId) {
       try {
         const thumbnailSignedUrlData = await getPhotoSignedUrl(image, true, 60);
         if (thumbnailSignedUrlData) {
@@ -584,20 +588,20 @@ export const deleteImage = async (id: string) => {
     throw new NotFoundError('Dataset image not found');
   }
 
-  // Delete files from MinIO (both original and thumbnail if exists)
+  // Delete the stored files (both original and thumbnail if exists)
   try {
     // Delete original file
-    await deleteFile(image.minioFileId);
-    logger.info('Deleted original file from MinIO', { minioFileId: image.minioFileId });
+    await deleteFile(image.fileId);
+    logger.info('Deleted original file', { fileId: image.fileId });
 
     // Delete thumbnail file if it exists
-    if (image.minioThumbnailFileId) {
-      await deleteFile(image.minioThumbnailFileId);
-      logger.info('Deleted thumbnail file from MinIO', { minioThumbnailFileId: image.minioThumbnailFileId });
+    if (image.thumbnailFileId) {
+      await deleteFile(image.thumbnailFileId);
+      logger.info('Deleted thumbnail file', { thumbnailFileId: image.thumbnailFileId });
     }
   } catch (error) {
-    logger.error('Failed to delete files for dataset image', { minioFileId: image.minioFileId, error: (error as Error).message });
-    // Continue with database deletion even if MinIO deletion fails
+    logger.error('Failed to delete files for dataset image', { fileId: image.fileId, error: (error as Error).message });
+    // Continue with database deletion even if file deletion fails
   }
 
   // Delete the image record from database
@@ -605,8 +609,8 @@ export const deleteImage = async (id: string) => {
 
   return {
     datasetId: image.datasetId,
-    minioFileId: image.minioFileId,
-    hadThumbnail: !!image.minioThumbnailFileId
+    fileId: image.fileId,
+    hadThumbnail: !!image.thumbnailFileId
   };
 };
 
@@ -624,16 +628,17 @@ export const getUploadSignedUrlRequest = async (data: { filename: string, mimety
   // Generate secure file ID
   const fileId = generateFileId(userId, datasetId, filename, 'vision'); // Using 'vision' as groupId
   
-  // Get upload URL directly from MinIO
   const uploadUrl = await getUploadSignedUrl(fileId, mimetype, 15);
 
-  return {
+  // Clients echo the returned file id back on the follow-up create call, so
+  // this response still carries the legacy `minioFileId` key too.
+  return withLegacyFileIdKeys({
     uploadUrl,
-    minioFileId: fileId,
+    fileId,
     datasetId,
     categoryId,
     expiresInMinutes: 15
-  };
+  });
 };
 
 export const exportImageNames = async (datasetId: string, tag?: string) => {

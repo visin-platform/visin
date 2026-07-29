@@ -214,7 +214,7 @@ describe('datasetImageSchemas', () => {
     const valid = {
       filename: 'f.jpg',
       originalName: 'o.jpg',
-      minioFileId: 'm',
+      fileId: 'm',
       datasetId: 'd',
       categoryId: 'c',
       mimetype: 'image/jpeg',
@@ -226,6 +226,28 @@ describe('datasetImageSchemas', () => {
     expect(parsed.labels).toEqual([]);
 
     expect(createDatasetImageBodySchema.safeParse({ ...valid, filename: '' }).success).toBe(false);
+  });
+
+  it('createDatasetImageBodySchema still accepts the legacy minioFileId key', () => {
+    const base = {
+      filename: 'f.jpg',
+      originalName: 'o.jpg',
+      datasetId: 'd',
+      categoryId: 'c',
+      mimetype: 'image/jpeg',
+      size: 123,
+    };
+
+    const legacy = createDatasetImageBodySchema.parse({ ...base, minioFileId: 'legacy' });
+    expect(legacy.fileId).toBe('legacy');
+    expect('minioFileId' in legacy).toBe(false);
+
+    // An explicit current-name key wins when a client sends both.
+    const both = createDatasetImageBodySchema.parse({ ...base, fileId: 'current', minioFileId: 'legacy' });
+    expect(both.fileId).toBe('current');
+
+    // Neither key at all is still a validation failure.
+    expect(createDatasetImageBodySchema.safeParse(base).success).toBe(false);
   });
 
   it('updateImageBodySchema allows nullable categoryId', () => {
@@ -395,11 +417,25 @@ describe('visualizationSchemas', () => {
       visualization_uuid: 'v',
       filename: 'f',
       type: 't',
-      minioFileId: 'm',
+      fileId: 'm',
       mimetype: 'image/png',
       size: '10',
     });
     expect(parsed.size).toBe(10);
+  });
+
+  it('createVisualizationBodySchema still accepts the legacy minioFileId key', () => {
+    const parsed = createVisualizationBodySchema.parse({
+      epoch_uuid: 'e',
+      visualization_uuid: 'v',
+      filename: 'f',
+      type: 't',
+      minioFileId: 'legacy',
+      mimetype: 'image/png',
+      size: 10,
+    });
+    expect(parsed.fileId).toBe('legacy');
+    expect('minioFileId' in parsed).toBe(false);
   });
 
   it('query schemas apply defaults', () => {

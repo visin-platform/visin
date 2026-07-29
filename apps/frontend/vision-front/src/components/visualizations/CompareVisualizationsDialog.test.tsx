@@ -9,7 +9,7 @@ const viz = (overrides: Partial<Visualization> = {}): Visualization => ({
   visualization_uuid: 'viz-1',
   filename: 'file1.png',
   type: 'segment',
-  minioFileId: 'minio1',
+  fileId: 'file1',
   uploadedAt: '2024-01-01T00:00:00.000Z',
   signedUrl: 'https://example.com/file1.png',
   epoch: 1,

@@ -4,7 +4,8 @@ import { ConflictError, ForbiddenError, NotFoundError, logger } from '@visin/bac
 import EpochVisualization, { IEpochVisualization } from '../models/EpochVisualization';
 import Epoch from '../models/Epoch';
 import Training from '../models/Training';
-import { getSignedUrl, getUploadSignedUrl, type SignedUrlData } from './minioService';
+import { getSignedUrl, getUploadSignedUrl, type SignedUrlData } from './fileServiceClient';
+import { withLegacyFileIdKeys } from '../legacyMinioCompat';
 import { checkProjectAccess, getVisibleTrainingIds, isWithinTokenScope } from './projectAccessService';
 import type { GetVisualizationsByTrainingQuery } from '../validation/visualizationSchemas';
 
@@ -55,9 +56,9 @@ export const getVisualizationUploadUrl = async (
 
   const visualization_uuid = uuidv4();
   const extension = filename.split('.').pop();
-  const minioFileId = `visualizations/${epoch_uuid}/${type}/${visualization_uuid}.${extension}`;
+  const fileId = `visualizations/${epoch_uuid}/${type}/${visualization_uuid}.${extension}`;
 
-  const uploadUrl = await getUploadSignedUrl(minioFileId, mimetype, 15);
+  const uploadUrl = await getUploadSignedUrl(fileId, mimetype, 15);
 
   logger.info('Visualization upload URL generated', {
     visualization_uuid,
@@ -66,13 +67,15 @@ export const getVisualizationUploadUrl = async (
     filename
   });
 
-  return {
+  // Training pipelines echo the returned file id back on the follow-up create
+  // call, so this response still carries the legacy `minioFileId` key too.
+  return withLegacyFileIdKeys({
     uploadUrl,
     visualization_uuid,
-    minioFileId,
+    fileId,
     epoch_uuid,
     expiresInMinutes: 15
-  };
+  });
 };
 
 interface CreateVisualizationData {
@@ -80,7 +83,7 @@ interface CreateVisualizationData {
   visualization_uuid: string;
   filename: string;
   type: string;
-  minioFileId: string;
+  fileId: string;
   mimetype: string;
   size: number;
   metadata?: unknown;
@@ -91,7 +94,7 @@ export const createVisualization = async (
   userId: string | undefined,
   reqProjectId: string | undefined
 ): Promise<IEpochVisualization> => {
-  const { epoch_uuid, visualization_uuid, filename, type, minioFileId, mimetype, size, metadata } = data;
+  const { epoch_uuid, visualization_uuid, filename, type, fileId, mimetype, size, metadata } = data;
 
   const epoch = await Epoch.findOne({ epoch_uuid });
   if (!epoch) {
@@ -112,7 +115,7 @@ export const createVisualization = async (
     visualization_uuid,
     filename,
     type,
-    minioFileId,
+    fileId,
     uploadedAt: new Date(),
     metadata: {
       ...(metadata as object),
@@ -144,7 +147,7 @@ export const getVisualizationByUuid = async (visualization_uuid: string, userId:
     throw new ForbiddenError();
   }
 
-  const signedUrlData = await getSignedUrl(visualization.minioFileId, 60);
+  const signedUrlData = await getSignedUrl(visualization.fileId, 60);
 
   return withSignedUrl(visualization, signedUrlData);
 };
@@ -164,8 +167,8 @@ export const deleteVisualization = async (
     throw new ForbiddenError();
   }
 
-  // Note: We don't delete from MinIO to preserve the file
-  // Only delete the database record
+  // Note: we deliberately leave the stored file in place and only delete the
+  // database record
   await EpochVisualization.deleteOne({ visualization_uuid });
 
   logger.info('Visualization deleted', { visualization_uuid });
@@ -187,7 +190,7 @@ export const getVisualizationsByEpoch = async (
 
   const visualizations = await EpochVisualization.find(query).sort({ uploadedAt: -1 });
   const visualizationsWithUrls = await Promise.all(
-    visualizations.map(async (viz) => withSignedUrl(viz, await getSignedUrl(viz.minioFileId, 60)))
+    visualizations.map(async (viz) => withSignedUrl(viz, await getSignedUrl(viz.fileId, 60)))
   );
 
   return {
@@ -245,7 +248,7 @@ export const getVisualizationsByTraining = async (
         const epoch = epochs.find(e => e.epoch_uuid === viz.epoch_uuid);
         const result: Record<string, unknown> = { ...viz.toObject(), epoch: epoch?.epoch };
         if (shouldIncludeUrls) {
-          const signedUrlData = await getSignedUrl(viz.minioFileId, 60);
+          const signedUrlData = await getSignedUrl(viz.fileId, 60);
           result.signedUrl = signedUrlData?.signedUrl;
           result.urlExpiresAt = signedUrlData?.expiresAt;
         }
@@ -293,7 +296,7 @@ export const getVisualizationsByTraining = async (
             const epoch = epochs.find(e => e.epoch_uuid === viz.epoch_uuid);
             const result: Record<string, unknown> = { ...viz.toObject(), epoch: epoch?.epoch };
             if (shouldIncludeUrls) {
-              const signedUrlData = await getSignedUrl(viz.minioFileId, 60);
+              const signedUrlData = await getSignedUrl(viz.fileId, 60);
               result.signedUrl = signedUrlData?.signedUrl;
               result.urlExpiresAt = signedUrlData?.expiresAt;
             }
@@ -340,7 +343,7 @@ export const getVisualizationsByTraining = async (
         training_uuid: epoch?.training_uuid
       };
       if (shouldIncludeUrls) {
-        const signedUrlData = await getSignedUrl(viz.minioFileId, 60);
+        const signedUrlData = await getSignedUrl(viz.fileId, 60);
         result.signedUrl = signedUrlData?.signedUrl;
         result.urlExpiresAt = signedUrlData?.expiresAt;
       }

@@ -62,7 +62,7 @@ describe('visualizationService', () => {
 
       mockedApi.post
         .mockResolvedValueOnce({
-          data: { success: true, data: { uploadUrl: 'http://signed', visualization_uuid: 'vu1', minioFileId: 'm1' } }
+          data: { success: true, data: { uploadUrl: 'http://signed', visualization_uuid: 'vu1', fileId: 'm1' } }
         })
         .mockResolvedValueOnce({ data: { success: true, data: { _id: 'v1' } } });
 
@@ -81,7 +81,7 @@ describe('visualizationService', () => {
         visualization_uuid: 'vu1',
         filename: 'chart.png',
         type: 'chart',
-        minioFileId: 'm1',
+        fileId: 'm1',
         mimetype: 'image/png',
         size: file.size,
         metadata: { note: 'x' }

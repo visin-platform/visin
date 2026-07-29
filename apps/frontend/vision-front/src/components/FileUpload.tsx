@@ -101,7 +101,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
       for (const fileItem of filesToUpload) {
         const file = fileItem.file;
         try {
-          // Get signed URL for upload from vision service (MinIO)
+          // Get signed URL for upload from vision-service
           const signedUrlResponse = await getUploadSignedUrl({
             filename: file.name,
             mimetype: file.type,
@@ -109,14 +109,14 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
             ...(selectedCategory && { categoryId: selectedCategory })
           });
 
-          // Upload file directly to MinIO
+          // Upload the file straight to file-service using the signed URL
           await uploadFileToSignedUrl(signedUrlResponse.uploadUrl, file);
 
-          // Create dataset image record in vision service with minioFileId
+          // Create dataset image record in vision service with fileId
           const imageData: Parameters<typeof createDatasetImage>[0] = {
             filename: file.name,
             originalName: file.name,
-            minioFileId: signedUrlResponse.minioFileId,
+            fileId: signedUrlResponse.fileId,
             datasetId: datasetId,
             mimetype: file.type,
             size: file.size

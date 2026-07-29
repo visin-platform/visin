@@ -16,7 +16,8 @@
     "test": "jest --passWithNoTests",
     "test:coverage": "jest --coverage --passWithNoTests",
     "lint": "eslint . --max-warnings 0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate:minio": "TS_NODE_PROJECT=scripts/tsconfig.json node --env-file-if-exists=.env -r ts-node/register scripts/migrateMinioFieldNames.ts"
   },
   "dependencies": {
     "@visin/backend-core": "*",

@@ -18,7 +18,7 @@ jest.mock('../../models/ImageCategory', () => ({
   __esModule: true,
   default: { findById: jest.fn() },
 }));
-jest.mock('../../services/minioService', () => ({
+jest.mock('../../services/fileServiceClient', () => ({
   getPhotoSignedUrlsBatch: jest.fn(),
   getPhotoSignedUrl: jest.fn(),
   deleteFile: jest.fn(),
@@ -47,12 +47,12 @@ import {
 import DatasetImage from '../../models/DatasetImage';
 import Dataset from '../../models/Dataset';
 import ImageCategory from '../../models/ImageCategory';
-import * as minio from '../../services/minioService';
+import * as fileService from '../../services/fileServiceClient';
 
 const mockedImage = DatasetImage as unknown as jest.Mock & Record<string, jest.Mock>;
 const mockedDataset = Dataset as unknown as Record<string, jest.Mock>;
 const mockedCategory = ImageCategory as unknown as Record<string, jest.Mock>;
-const mockedMinio = minio as unknown as Record<string, jest.Mock>;
+const mockedFileService = fileService as unknown as Record<string, jest.Mock>;
 
 // Escape hatch for asserting on dynamically-shaped service results in tests;
 // modeling every ad-hoc return shape as an interface here would add noise, not safety.
@@ -63,11 +63,11 @@ const VALID_OBJECT_ID = '507f1f77bcf86cd799439011';
 
 const imageDoc = (fileId: string, overrides: AnyDoc = {}): AnyDoc => ({
   _id: `img-${fileId}`,
-  minioFileId: fileId,
-  minioThumbnailFileId: undefined,
+  fileId: fileId,
+  thumbnailFileId: undefined,
   datasetId: 'd1',
   toObject() {
-    return { _id: this._id, minioFileId: this.minioFileId };
+    return { _id: this._id, fileId: this.fileId };
   },
   save: jest.fn().mockImplementation(function (this: unknown) {
     return Promise.resolve(this);
@@ -97,7 +97,7 @@ const mockFindChain = (docs: unknown[]) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockedMinio.getPhotoSignedUrlsBatch.mockResolvedValue({});
+  mockedFileService.getPhotoSignedUrlsBatch.mockResolvedValue({});
 });
 
 describe('getImages', () => {
@@ -105,7 +105,7 @@ describe('getImages', () => {
     const doc = imageDoc('f1');
     const chain = mockFindChain([doc]);
     mockedImage.countDocuments.mockResolvedValue(1);
-    mockedMinio.getPhotoSignedUrlsBatch.mockResolvedValue({ f1: signedUrl('http://s/f1') });
+    mockedFileService.getPhotoSignedUrlsBatch.mockResolvedValue({ f1: signedUrl('http://s/f1') });
 
     const result = await getImages({
       datasetId: 'd1',
@@ -134,7 +134,7 @@ describe('getImages', () => {
   });
 
   it('uses a $sample pipeline for random selection', async () => {
-    mockedImage.aggregate.mockResolvedValue([{ _id: 'i1', minioFileId: 'f1' }]);
+    mockedImage.aggregate.mockResolvedValue([{ _id: 'i1', fileId: 'f1' }]);
     mockedImage.countDocuments.mockResolvedValue(5);
 
     const result = await getImages({ random: true, limit: 3 });
@@ -157,10 +157,10 @@ describe('getImages', () => {
   });
 
   it('uses dedicated thumbnail URLs when present and survives batch URL failures', async () => {
-    const doc = imageDoc('f1', { minioThumbnailFileId: 'thumb-f1' });
+    const doc = imageDoc('f1', { thumbnailFileId: 'thumb-f1' });
     mockFindChain([doc]);
     mockedImage.countDocuments.mockResolvedValue(1);
-    mockedMinio.getPhotoSignedUrlsBatch
+    mockedFileService.getPhotoSignedUrlsBatch
       .mockRejectedValueOnce(new Error('batch down'))
       .mockResolvedValueOnce({ f1: signedUrl('http://s/thumb') });
 
@@ -175,7 +175,7 @@ describe('createDatasetImage', () => {
   const data = {
     filename: 'f.jpg',
     originalName: 'o.jpg',
-    minioFileId: 'm1',
+    fileId: 'm1',
     datasetId: 'd1',
     categoryId: 'c1',
     mimetype: 'image/jpeg',
@@ -188,7 +188,7 @@ describe('createDatasetImage', () => {
     await expect(createDatasetImage(data)).rejects.toThrow('Invalid categoryId');
   });
 
-  it('409s when the minioFileId already exists', async () => {
+  it('409s when the fileId already exists', async () => {
     mockedCategory.findById.mockResolvedValue({ _id: 'c1' });
     mockedImage.findOne.mockResolvedValue(imageDoc('m1'));
 
@@ -362,10 +362,10 @@ describe('getImageById', () => {
   });
 
   it('attaches signed URLs including thumbnails', async () => {
-    const doc = imageDoc('f1', { minioThumbnailFileId: 'thumb' });
+    const doc = imageDoc('f1', { thumbnailFileId: 'thumb' });
     const populate = jest.fn().mockResolvedValue(doc);
     mockedImage.findById.mockReturnValue({ populate });
-    mockedMinio.getPhotoSignedUrl
+    mockedFileService.getPhotoSignedUrl
       .mockResolvedValueOnce(signedUrl('http://s/orig'))
       .mockResolvedValueOnce(signedUrl('http://s/thumb'));
 
@@ -379,7 +379,7 @@ describe('getImageById', () => {
     const doc = imageDoc('f1');
     const populate = jest.fn().mockResolvedValue(doc);
     mockedImage.findById.mockReturnValue({ populate });
-    mockedMinio.getPhotoSignedUrl.mockRejectedValue(new Error('minio down'));
+    mockedFileService.getPhotoSignedUrl.mockRejectedValue(new Error('file-service down'));
 
     const result = (await getImageById('x')) as AnyDoc;
 
@@ -388,10 +388,10 @@ describe('getImageById', () => {
   });
 
   it('keeps the original URL when only the thumbnail signing fails', async () => {
-    const doc = imageDoc('f1', { minioThumbnailFileId: 'thumb' });
+    const doc = imageDoc('f1', { thumbnailFileId: 'thumb' });
     const populate = jest.fn().mockResolvedValue(doc);
     mockedImage.findById.mockReturnValue({ populate });
-    mockedMinio.getPhotoSignedUrl
+    mockedFileService.getPhotoSignedUrl
       .mockResolvedValueOnce(signedUrl('http://s/orig'))
       .mockRejectedValueOnce(new Error('thumb fail'));
 
@@ -445,21 +445,21 @@ describe('deleteImage', () => {
   });
 
   it('deletes storage files (original + thumbnail) then the record', async () => {
-    mockedImage.findById.mockResolvedValue(imageDoc('f1', { minioThumbnailFileId: 'thumb' }));
-    mockedMinio.deleteFile.mockResolvedValue(undefined);
+    mockedImage.findById.mockResolvedValue(imageDoc('f1', { thumbnailFileId: 'thumb' }));
+    mockedFileService.deleteFile.mockResolvedValue(undefined);
     mockedImage.findByIdAndDelete.mockResolvedValue({});
 
     const result = await deleteImage('x');
 
-    expect(mockedMinio.deleteFile).toHaveBeenCalledWith('f1');
-    expect(mockedMinio.deleteFile).toHaveBeenCalledWith('thumb');
+    expect(mockedFileService.deleteFile).toHaveBeenCalledWith('f1');
+    expect(mockedFileService.deleteFile).toHaveBeenCalledWith('thumb');
     expect(mockedImage.findByIdAndDelete).toHaveBeenCalledWith('x');
-    expect(result).toEqual({ datasetId: 'd1', minioFileId: 'f1', hadThumbnail: true });
+    expect(result).toEqual({ datasetId: 'd1', fileId: 'f1', hadThumbnail: true });
   });
 
   it('still removes the record when storage deletion fails', async () => {
     mockedImage.findById.mockResolvedValue(imageDoc('f1'));
-    mockedMinio.deleteFile.mockRejectedValue(new Error('minio down'));
+    mockedFileService.deleteFile.mockRejectedValue(new Error('file-service down'));
     mockedImage.findByIdAndDelete.mockResolvedValue({});
 
     const result = await deleteImage('x');
@@ -485,8 +485,8 @@ describe('getUploadSignedUrlRequest', () => {
   });
 
   it('generates a file id and a signed upload URL', async () => {
-    mockedMinio.generateFileId.mockReturnValue('vision/u1/d1/f.jpg');
-    mockedMinio.getUploadSignedUrl.mockResolvedValue('http://upload');
+    mockedFileService.generateFileId.mockReturnValue('vision/u1/d1/f.jpg');
+    mockedFileService.getUploadSignedUrl.mockResolvedValue('http://upload');
 
     const result = await getUploadSignedUrlRequest({
       filename: 'f.jpg',
@@ -495,10 +495,12 @@ describe('getUploadSignedUrlRequest', () => {
       userId: 'u1',
     });
 
-    expect(mockedMinio.generateFileId).toHaveBeenCalledWith('u1', 'd1', 'f.jpg', 'vision');
-    expect(mockedMinio.getUploadSignedUrl).toHaveBeenCalledWith('vision/u1/d1/f.jpg', 'image/jpeg', 15);
+    expect(mockedFileService.generateFileId).toHaveBeenCalledWith('u1', 'd1', 'f.jpg', 'vision');
+    expect(mockedFileService.getUploadSignedUrl).toHaveBeenCalledWith('vision/u1/d1/f.jpg', 'image/jpeg', 15);
     expect(result).toEqual({
       uploadUrl: 'http://upload',
+      fileId: 'vision/u1/d1/f.jpg',
+      // Deprecated mirror kept so clients that echo the id back still work.
       minioFileId: 'vision/u1/d1/f.jpg',
       datasetId: 'd1',
       categoryId: undefined,

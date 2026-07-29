@@ -1,6 +1,6 @@
 /**
  * File Service Client
- * Replaces MinIO client by calling the local file-service API
+ * All file storage goes through the local file-service API (disk-backed).
  */
 import { logger, fetchWithTimeout, TRANSFER_FETCH_TIMEOUT_MS } from '@visin/backend-core';
 
@@ -172,15 +172,14 @@ export const uploadFile = async (
 };
 
 /**
- * Get signed URL for photo file
+ * Get a signed URL for a stored image, picking the original or the thumbnail.
  */
 export const getPhotoSignedUrl = async (
-  photo: { minioFileId?: string; minioThumbnailFileId?: string },
+  image: { fileId?: string; thumbnailFileId?: string },
   isThumbnail: boolean = false,
   expiresInMinutes: number = 60
 ): Promise<SignedUrlData | null> => {
-  // Use minioFileId and minioThumbnailFileId
-  const fileIdToUse = isThumbnail ? photo.minioThumbnailFileId : photo.minioFileId;
+  const fileIdToUse = isThumbnail ? image.thumbnailFileId : image.fileId;
   if (!fileIdToUse) return null;
   return await getSignedUrl(fileIdToUse, expiresInMinutes);
 };
@@ -226,10 +225,11 @@ export const getSignedUrl = async (
 };
 
 /**
- * Get signed URLs for multiple photos in batch
+ * Get signed URLs for multiple images in batch, keyed by the original `fileId`
+ * (also for thumbnails, so callers can look both up off the same image).
  */
 export const getPhotoSignedUrlsBatch = async (
-  photos: Array<{ minioFileId?: string; minioThumbnailFileId?: string }>,
+  images: Array<{ fileId?: string; thumbnailFileId?: string }>,
   isThumbnail: boolean = false,
   expiresInMinutes: number = 60
 ): Promise<Record<string, SignedUrlData>> => {
@@ -237,18 +237,17 @@ export const getPhotoSignedUrlsBatch = async (
 
   // Process in parallel with concurrency limit
   const concurrencyLimit = 10;
-  for (let i = 0; i < photos.length; i += concurrencyLimit) {
-    const batch = photos.slice(i, i + concurrencyLimit);
-    const batchPromises = batch.map(async (photo) => {
+  for (let i = 0; i < images.length; i += concurrencyLimit) {
+    const batch = images.slice(i, i + concurrencyLimit);
+    const batchPromises = batch.map(async (image) => {
       try {
-        const signedUrlData = await getPhotoSignedUrl(photo, isThumbnail, expiresInMinutes);
-        // Use the actual minioFileId as the key for backward compatibility
-        if (signedUrlData && photo.minioFileId) {
-          result[photo.minioFileId] = signedUrlData;
+        const signedUrlData = await getPhotoSignedUrl(image, isThumbnail, expiresInMinutes);
+        if (signedUrlData && image.fileId) {
+          result[image.fileId] = signedUrlData;
         }
       } catch (error) {
-        logger.warn('Failed to get signed URL for photo', { minioFileId: photo.minioFileId, error: (error as Error).message });
-        // Continue with other photos
+        logger.warn('Failed to get signed URL for image', { fileId: image.fileId, error: (error as Error).message });
+        // Continue with other images
       }
     });
 

@@ -76,7 +76,7 @@ describe('datasetImageService', () => {
     const result = await createDatasetImage({
       filename: 'f.png',
       originalName: 'f.png',
-      minioFileId: 'm1',
+      fileId: 'm1',
       datasetId: 'ds1',
       mimetype: 'image/png',
       size: 100
@@ -100,7 +100,7 @@ describe('datasetImageService', () => {
 
   it('getUploadSignedUrl posts upload request and returns data.data', async () => {
     mockedApi.post.mockResolvedValue({
-      data: { data: { uploadUrl: 'http://x', minioFileId: 'm1', datasetId: 'ds1', expiresInMinutes: 10 } }
+      data: { data: { uploadUrl: 'http://x', fileId: 'm1', datasetId: 'ds1', expiresInMinutes: 10 } }
     });
     const result = await getUploadSignedUrl({ filename: 'f.png', mimetype: 'image/png', datasetId: 'ds1' });
     expect(mockedApi.post).toHaveBeenCalledWith('/dataset-images/upload-url', {

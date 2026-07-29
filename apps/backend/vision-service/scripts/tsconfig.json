@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    // Files outside the service's `include` don't pick up @types/node
+    // automatically, so `process`/`console`/`fs` fail to resolve under ts-node.
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}

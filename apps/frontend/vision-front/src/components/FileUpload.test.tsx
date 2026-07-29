@@ -108,8 +108,8 @@ describe('FileUpload', () => {
 
   it('uploads selected files and calls onUploadComplete on success', async () => {
     mockedGetUploadSignedUrl.mockResolvedValue({
-      uploadUrl: 'https://minio/upload',
-      minioFileId: 'minio-1'
+      uploadUrl: 'https://files/upload',
+      fileId: 'file-1'
     } as any);
     mockedUploadFileToSignedUrl.mockResolvedValue(undefined as any);
     mockedCreateDatasetImage.mockResolvedValue({ _id: 'img1' } as any);

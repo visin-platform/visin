@@ -87,12 +87,11 @@ export const datasetService = {
     return (response.data as ApiResponse<{ downloadUrl: string; expiresAt?: string }>).data;
   },
 
-  // Get signed URL for a specific MinIO path
-  async getSignedUrl(minioPath: string): Promise<{ signedUrl: string; expiresAt: string }> {
-    // This would need a backend endpoint to generate signed URLs for arbitrary MinIO paths
+  // Get signed URL for a specific storage path
+  async getSignedUrl(storagePath: string): Promise<{ signedUrl: string; expiresAt: string }> {
     // For now, we'll use the existing download endpoint with a special parameter
     const response = await visionApi.get(`/datasets/signed-url`, {
-      params: { path: minioPath }
+      params: { path: storagePath }
     });
     return (response.data as ApiResponse<{ signedUrl: string; expiresAt: string }>).data;
   }

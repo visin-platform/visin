@@ -28,9 +28,9 @@ const CreateAnalysisModal: React.FC<CreateAnalysisModalProps> = ({
   const [datasetSize, setDatasetSize] = useState('');
   const [error, setError] = useState('');
 
-  const handleSetMinioUrl = () => {
+  const handleSetStoragePath = () => {
     if (datasetName.trim()) {
-      // Set a MinIO path that the backend will recognize and generate signed URL for
+      // A `datasets/` path the backend recognizes and turns into a signed URL
       setDownloadUrl(`datasets/${datasetName.trim()}_dataset.zip`);
     }
   };
@@ -105,18 +105,18 @@ const CreateAnalysisModal: React.FC<CreateAnalysisModalProps> = ({
             onChange={(e) => setDownloadUrl(e.target.value)}
             disabled={loading}
             placeholder="https://example.com/dataset.zip or datasets/xod_dataset.zip"
-            helperText="Direct download link or MinIO bucket path (e.g., datasets/xod_dataset.zip)"
+            helperText="Direct download link or storage path (e.g., datasets/xod_dataset.zip)"
             sx={{ mb: 1 }}
           />
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button
               size="small"
               variant="outlined"
-              onClick={handleSetMinioUrl}
+              onClick={handleSetStoragePath}
               disabled={loading || !datasetName.trim()}
               sx={{ textTransform: 'none' }}
             >
-              Use MinIO Path
+              Use Storage Path
             </Button>
           </Box>
         </DialogContent>

@@ -9,7 +9,7 @@ const image: Visualization = {
   visualization_uuid: 'viz-1',
   filename: 'result.png',
   type: 'overlay',
-  minioFileId: 'minio1',
+  fileId: 'file1',
   uploadedAt: '2024-01-01T00:00:00.000Z',
   signedUrl: 'https://example.com/result.png',
   epoch: 3,

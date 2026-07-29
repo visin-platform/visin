@@ -35,7 +35,7 @@ export const createDatasetImage = async (req: Request, res: Response): Promise<v
   const {
     filename,
     originalName,
-    minioFileId,
+    fileId,
     datasetId,
     categoryId,
     title,
@@ -53,7 +53,7 @@ export const createDatasetImage = async (req: Request, res: Response): Promise<v
   const savedImage = await createDatasetImageService({
     filename,
     originalName,
-    minioFileId,
+    fileId,
     datasetId,
     categoryId,
     title,
@@ -72,7 +72,7 @@ export const createDatasetImage = async (req: Request, res: Response): Promise<v
     id: savedImage._id,
     datasetId,
     categoryId,
-    minioFileId
+    fileId
   });
 
   res.status(201).json({

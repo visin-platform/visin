@@ -54,8 +54,8 @@ describe('datasetService', () => {
 
   it('getSignedUrl passes path as a query param', async () => {
     mockedApi.get.mockResolvedValue({ data: { data: { signedUrl: 'http://x', expiresAt: 'later' } } });
-    const result = await datasetService.getSignedUrl('/minio/path');
-    expect(mockedApi.get).toHaveBeenCalledWith('/datasets/signed-url', { params: { path: '/minio/path' } });
+    const result = await datasetService.getSignedUrl('datasets/my-ds.zip');
+    expect(mockedApi.get).toHaveBeenCalledWith('/datasets/signed-url', { params: { path: 'datasets/my-ds.zip' } });
     expect(result.signedUrl).toBe('http://x');
   });
 });

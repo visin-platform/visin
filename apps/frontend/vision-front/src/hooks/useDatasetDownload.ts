@@ -20,16 +20,14 @@ export function useDatasetDownload(onError: (message: string) => void) {
       const filename = `${analysis.dataset}.zip`;
 
       if (analysis.downloadUrl) {
-        const isMinioPath = analysis.downloadUrl.startsWith('minio:') || analysis.downloadUrl.startsWith('datasets/');
-        if (isMinioPath) {
-          const minioPath = analysis.downloadUrl.startsWith('minio:')
-            ? analysis.downloadUrl.substring(6)
-            : analysis.downloadUrl;
+        // A `datasets/` value is a file-service storage path, not a URL, so it
+        // has to be exchanged for a signed URL first.
+        if (analysis.downloadUrl.startsWith('datasets/')) {
           try {
-            const signedUrlData = await datasetService.getSignedUrl(minioPath);
+            const signedUrlData = await datasetService.getSignedUrl(analysis.downloadUrl);
             triggerDownload(signedUrlData.signedUrl, filename);
           } catch {
-            onError('Failed to generate download URL for MinIO path');
+            onError('Failed to generate download URL for storage path');
           }
           return;
         }

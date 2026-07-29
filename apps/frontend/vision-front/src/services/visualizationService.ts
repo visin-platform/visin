@@ -48,9 +48,9 @@ export const visualizationService = {
       mimetype: file.type
     });
 
-    const { uploadUrl, visualization_uuid, minioFileId } = uploadUrlResponse.data;
+    const { uploadUrl, visualization_uuid, fileId } = uploadUrlResponse.data;
 
-    // Step 2: Upload file to MinIO
+    // Step 2: Upload the file using the signed URL
     await this.uploadFile(uploadUrl, file);
 
     // Step 3: Create visualization record
@@ -59,7 +59,7 @@ export const visualizationService = {
       visualization_uuid,
       filename: file.name,
       type,
-      minioFileId,
+      fileId,
       mimetype: file.type,
       size: file.size,
       metadata

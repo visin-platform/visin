@@ -582,7 +582,7 @@ describe('datasetImageController', () => {
         body: {
           filename: 'f.jpg',
           originalName: 'o.jpg',
-          minioFileId: 'm',
+          fileId: 'm',
           datasetId: 'd',
           categoryId: 'c',
           mimetype: 'image/jpeg',
@@ -593,7 +593,7 @@ describe('datasetImageController', () => {
     );
 
     expect(mockedImageSvc.createDatasetImage).toHaveBeenCalledWith(
-      expect.objectContaining({ filename: 'f.jpg', minioFileId: 'm' })
+      expect.objectContaining({ filename: 'f.jpg', fileId: 'm' })
     );
     expect(res.status).toHaveBeenCalledWith(201);
   });

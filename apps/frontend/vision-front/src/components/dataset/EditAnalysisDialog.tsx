@@ -61,7 +61,7 @@ const EditAnalysisDialog: React.FC<EditAnalysisDialogProps> = ({
         onChange={(e) => onDownloadUrlChange(e.target.value)}
         disabled={loading}
         placeholder="https://example.com/dataset.zip or datasets/xod_dataset.zip"
-        helperText="Direct download link or MinIO bucket path (e.g., datasets/xod_dataset.zip)"
+        helperText="Direct download link or storage path (e.g., datasets/xod_dataset.zip)"
         sx={{ mb: 2 }}
       />
     </DialogContent>

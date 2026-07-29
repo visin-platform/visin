@@ -1,4 +1,5 @@
 import { z } from '@visin/backend-core';
+import { acceptLegacyFileIdKeys } from '../legacyMinioCompat';
 
 const UPLOAD_URL_REQUIRED_MSG = 'epoch_uuid, filename, type, and mimetype are required';
 
@@ -9,18 +10,22 @@ export const getVisualizationUploadUrlBodySchema = z.object({
   mimetype: z.string().min(1, UPLOAD_URL_REQUIRED_MSG)
 });
 
-const VISUALIZATION_REQUIRED_MSG = 'epoch_uuid, visualization_uuid, filename, type, minioFileId, mimetype, and size are required';
+const VISUALIZATION_REQUIRED_MSG = 'epoch_uuid, visualization_uuid, filename, type, fileId, mimetype, and size are required';
 
-export const createVisualizationBodySchema = z.object({
-  epoch_uuid: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
-  visualization_uuid: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
-  filename: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
-  type: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
-  minioFileId: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
-  mimetype: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
-  size: z.coerce.number({ error: VISUALIZATION_REQUIRED_MSG }),
-  metadata: z.unknown().optional()
-});
+// Wrapped so training pipelines still sending the legacy `minioFileId` key
+// validate — see legacyMinioCompat.ts.
+export const createVisualizationBodySchema = acceptLegacyFileIdKeys(
+  z.object({
+    epoch_uuid: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
+    visualization_uuid: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
+    filename: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
+    type: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
+    fileId: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
+    mimetype: z.string().min(1, VISUALIZATION_REQUIRED_MSG),
+    size: z.coerce.number({ error: VISUALIZATION_REQUIRED_MSG }),
+    metadata: z.unknown().optional()
+  })
+);
 
 export const getVisualizationsByEpochQuerySchema = z.object({
   type: z.string().optional()

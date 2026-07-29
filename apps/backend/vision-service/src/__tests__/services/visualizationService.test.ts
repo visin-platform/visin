@@ -16,7 +16,7 @@ jest.mock('../../models/Training', () => ({
   __esModule: true,
   default: { find: jest.fn(), findOne: jest.fn(), findById: jest.fn() },
 }));
-jest.mock('../../services/minioService', () => ({
+jest.mock('../../services/fileServiceClient', () => ({
   getSignedUrl: jest.fn(),
   getUploadSignedUrl: jest.fn(),
 }));
@@ -42,7 +42,7 @@ import {
 import EpochVisualization from '../../models/EpochVisualization';
 import Epoch from '../../models/Epoch';
 import Training from '../../models/Training';
-import * as minio from '../../services/minioService';
+import * as fileService from '../../services/fileServiceClient';
 import {
   checkProjectAccess,
   getVisibleTrainingIds,
@@ -52,7 +52,7 @@ import {
 const mockedViz = EpochVisualization as unknown as jest.Mock & Record<string, jest.Mock>;
 const mockedEpoch = Epoch as unknown as Record<string, jest.Mock>;
 const mockedTraining = Training as unknown as Record<string, jest.Mock>;
-const mockedMinio = minio as unknown as Record<string, jest.Mock>;
+const mockedFileService = fileService as unknown as Record<string, jest.Mock>;
 const mockedCheckAccess = checkProjectAccess as jest.Mock;
 const mockedVisibleTrainings = getVisibleTrainingIds as jest.Mock;
 const mockedTokenScope = isWithinTokenScope as jest.Mock;
@@ -65,7 +65,7 @@ type AnyDoc = Record<string, any>;
 const vizDoc = (uuid: string, overrides: AnyDoc = {}): AnyDoc => ({
   visualization_uuid: uuid,
   epoch_uuid: 'e1',
-  minioFileId: `viz/${uuid}.png`,
+  fileId: `viz/${uuid}.png`,
   type: 'confusion_matrix',
   toObject() {
     return { visualization_uuid: this.visualization_uuid, epoch_uuid: this.epoch_uuid };
@@ -107,7 +107,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedCheckAccess.mockResolvedValue(true);
   mockedTokenScope.mockReturnValue(true);
-  mockedMinio.getSignedUrl.mockResolvedValue(signed);
+  mockedFileService.getSignedUrl.mockResolvedValue(signed);
 });
 
 describe('getVisualizationUploadUrl', () => {
@@ -130,12 +130,12 @@ describe('getVisualizationUploadUrl', () => {
   it('generates a uuid-keyed path and signed upload URL', async () => {
     mockedEpoch.findOne.mockResolvedValue(epochDoc('e1'));
     mockedTraining.findById.mockResolvedValue({ projectId: 'p1' });
-    mockedMinio.getUploadSignedUrl.mockResolvedValue('http://upload');
+    mockedFileService.getUploadSignedUrl.mockResolvedValue('http://upload');
 
     const result = await getVisualizationUploadUrl(data, 'u1', undefined);
 
     expect(result.uploadUrl).toBe('http://upload');
-    expect(result.minioFileId).toMatch(/^visualizations\/e1\/loss\/[0-9a-f-]{36}\.png$/);
+    expect(result.fileId).toMatch(/^visualizations\/e1\/loss\/[0-9a-f-]{36}\.png$/);
     expect(result.expiresInMinutes).toBe(15);
   });
 });
@@ -146,7 +146,7 @@ describe('createVisualization', () => {
     visualization_uuid: 'v1',
     filename: 'plot.png',
     type: 'loss',
-    minioFileId: 'viz/v1.png',
+    fileId: 'viz/v1.png',
     mimetype: 'image/png',
     size: 10,
   };

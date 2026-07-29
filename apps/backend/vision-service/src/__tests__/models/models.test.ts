@@ -163,7 +163,7 @@ describe('DatasetImage', () => {
     const image = new DatasetImage({
       filename: 'f.jpg',
       originalName: 'o.jpg',
-      minioFileId: 'id',
+      fileId: 'id',
       datasetId: new mongoose.Types.ObjectId(),
       categoryId: new mongoose.Types.ObjectId(),
       mimetype: 'image/jpeg',
@@ -174,6 +174,61 @@ describe('DatasetImage', () => {
 
     image.weatherCondition = 'volcano' as never;
     expect(image.validateSync()?.errors.weatherCondition).toBeDefined();
+  });
+
+  it('mirrors fileId/thumbnailFileId under their deprecated minio* names when serialized', () => {
+    const image = new DatasetImage({
+      filename: 'f.jpg',
+      originalName: 'o.jpg',
+      fileId: 'id',
+      thumbnailFileId: 'thumb',
+      datasetId: new mongoose.Types.ObjectId(),
+      categoryId: new mongoose.Types.ObjectId(),
+      mimetype: 'image/jpeg',
+      size: 1,
+    });
+
+    // The deprecated aliases are added by the schema transform at runtime and
+    // deliberately kept off IDatasetImage, so read them untyped.
+    for (const doc of [image.toJSON(), image.toObject()]) {
+      const serialized = doc as unknown as Record<string, unknown>;
+      expect(serialized.fileId).toBe('id');
+      expect(serialized.minioFileId).toBe('id');
+      expect(serialized.thumbnailFileId).toBe('thumb');
+      expect(serialized.minioThumbnailFileId).toBe('thumb');
+    }
+  });
+
+  it('omits the deprecated thumbnail alias when there is no thumbnail', () => {
+    const image = new DatasetImage({
+      filename: 'f.jpg',
+      originalName: 'o.jpg',
+      fileId: 'id',
+      datasetId: new mongoose.Types.ObjectId(),
+      categoryId: new mongoose.Types.ObjectId(),
+      mimetype: 'image/jpeg',
+      size: 1,
+    });
+
+    expect((image.toJSON() as unknown as Record<string, unknown>).minioThumbnailFileId).toBeUndefined();
+  });
+});
+
+describe('EpochVisualization', () => {
+  it('mirrors fileId under its deprecated minioFileId name when serialized', () => {
+    const viz = new EpochVisualization({
+      epoch_uuid: 'e',
+      visualization_uuid: 'v',
+      filename: 'f.png',
+      type: 'segment',
+      fileId: 'visualizations/e/segment/v.png',
+    });
+
+    for (const doc of [viz.toJSON(), viz.toObject()]) {
+      const serialized = doc as unknown as Record<string, unknown>;
+      expect(serialized.fileId).toBe('visualizations/e/segment/v.png');
+      expect(serialized.minioFileId).toBe('visualizations/e/segment/v.png');
+    }
   });
 });
 

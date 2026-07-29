@@ -26,7 +26,7 @@ describe('useDatasetDownload', () => {
     clickSpy.mockRestore();
   });
 
-  it('downloads directly using a non-MinIO downloadUrl', async () => {
+  it('downloads directly using an absolute downloadUrl', async () => {
     const onError = vi.fn();
     const { result } = renderHook(() => useDatasetDownload(onError));
 
@@ -39,20 +39,6 @@ describe('useDatasetDownload', () => {
     expect(mockedService.getSignedUrl).not.toHaveBeenCalled();
   });
 
-  it('resolves a minio: downloadUrl through getSignedUrl', async () => {
-    mockedService.getSignedUrl.mockResolvedValue({ signedUrl: 'http://signed.example/file.zip', expiresAt: 'later' });
-    const onError = vi.fn();
-    const { result } = renderHook(() => useDatasetDownload(onError));
-
-    await act(async () => {
-      await result.current.download({ _id: 'a1', dataset: 'my-ds', downloadUrl: 'minio:datasets/my-ds.zip' } as any);
-    });
-
-    expect(mockedService.getSignedUrl).toHaveBeenCalledWith('datasets/my-ds.zip');
-    expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(onError).not.toHaveBeenCalled();
-  });
-
   it('resolves a datasets/-prefixed downloadUrl through getSignedUrl', async () => {
     mockedService.getSignedUrl.mockResolvedValue({ signedUrl: 'http://signed.example/file.zip', expiresAt: 'later' });
     const onError = vi.fn();
@@ -63,18 +49,20 @@ describe('useDatasetDownload', () => {
     });
 
     expect(mockedService.getSignedUrl).toHaveBeenCalledWith('datasets/my-ds.zip');
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
   });
 
-  it('reports an error when getSignedUrl fails for a MinIO path', async () => {
+  it('reports an error when getSignedUrl fails for a storage path', async () => {
     mockedService.getSignedUrl.mockRejectedValue(new Error('boom'));
     const onError = vi.fn();
     const { result } = renderHook(() => useDatasetDownload(onError));
 
     await act(async () => {
-      await result.current.download({ _id: 'a1', dataset: 'my-ds', downloadUrl: 'minio:datasets/my-ds.zip' } as any);
+      await result.current.download({ _id: 'a1', dataset: 'my-ds', downloadUrl: 'datasets/my-ds.zip' } as any);
     });
 
-    expect(onError).toHaveBeenCalledWith('Failed to generate download URL for MinIO path');
+    expect(onError).toHaveBeenCalledWith('Failed to generate download URL for storage path');
   });
 
   it('falls back to a dataset lookup when there is no downloadUrl', async () => {
@@ -132,7 +120,7 @@ describe('useDatasetDownload', () => {
 
     let downloadPromise!: Promise<void>;
     act(() => {
-      downloadPromise = result.current.download({ _id: 'a1', dataset: 'my-ds', downloadUrl: 'minio:datasets/my-ds.zip' } as any);
+      downloadPromise = result.current.download({ _id: 'a1', dataset: 'my-ds', downloadUrl: 'datasets/my-ds.zip' } as any);
     });
 
     await waitFor(() => expect(result.current.downloadingId).toBe('a1'));

@@ -67,7 +67,7 @@ export const downloadDataset = async (req: Request, res: Response): Promise<void
   });
 };
 
-// Get signed URL for arbitrary MinIO path
+// Get signed URL for an arbitrary file-service path
 export const getSignedUrlForPath = async (req: Request, res: Response): Promise<void> => {
   const { path } = req.query as unknown as { path: string };
   const data = await datasetService.getSignedUrlForPath(path);

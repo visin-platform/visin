@@ -123,23 +123,23 @@ describe('getSignedUrl / getPhotoSignedUrl', () => {
       okJson({ success: true, data: { downloadUrl: 'http://dl', expiresMs: 1 } })
     );
 
-    await getPhotoSignedUrl({ minioFileId: 'orig', minioThumbnailFileId: 'thumb' }, true);
+    await getPhotoSignedUrl({ fileId: 'orig', thumbnailFileId: 'thumb' }, true);
     expect(mockFetch.mock.calls[0][1].body).toContain('thumb');
 
-    await expect(getPhotoSignedUrl({ minioFileId: 'orig' }, true)).resolves.toBeNull();
+    await expect(getPhotoSignedUrl({ fileId: 'orig' }, true)).resolves.toBeNull();
     await expect(getPhotoSignedUrl({}, false)).resolves.toBeNull();
   });
 });
 
 describe('getPhotoSignedUrlsBatch', () => {
-  it('maps successful URLs by minioFileId and skips failures', async () => {
+  it('maps successful URLs by fileId and skips failures', async () => {
     mockFetch
       .mockResolvedValueOnce(okJson({ success: true, data: { downloadUrl: 'http://1', expiresMs: 1 } }))
       .mockResolvedValueOnce({ ok: false, status: 500 });
 
     const result = await getPhotoSignedUrlsBatch([
-      { minioFileId: 'f1' },
-      { minioFileId: 'f2' },
+      { fileId: 'f1' },
+      { fileId: 'f2' },
       {}, // no id at all — skipped without a fetch
     ]);
 
@@ -151,7 +151,7 @@ describe('getPhotoSignedUrlsBatch', () => {
     mockFetch.mockResolvedValue(
       okJson({ success: true, data: { downloadUrl: 'http://n', expiresMs: 1 } })
     );
-    const photos = Array.from({ length: 12 }, (_, i) => ({ minioFileId: `f${i}` }));
+    const photos = Array.from({ length: 12 }, (_, i) => ({ fileId: `f${i}` }));
 
     const result = await getPhotoSignedUrlsBatch(photos);
 

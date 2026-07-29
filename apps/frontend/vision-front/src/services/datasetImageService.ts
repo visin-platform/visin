@@ -7,8 +7,8 @@ export interface DatasetImage {
   _id: string;
   filename: string;
   originalName: string;
-  minioFileId: string;
-  minioThumbnailFileId?: string;
+  fileId: string;
+  thumbnailFileId?: string;
   datasetId: string;
   categoryId: string;
   title?: string;
@@ -119,7 +119,7 @@ export const getImageById = async (id: string): Promise<DatasetImage> => {
 export const createDatasetImage = async (imageData: {
   filename: string;
   originalName: string;
-  minioFileId: string;
+  fileId: string;
   datasetId: string;
   categoryId?: string;
   title?: string;
@@ -165,7 +165,7 @@ export const deleteDatasetImage = async (id: string): Promise<void> => {
 
 interface UploadSignedUrlResult {
   uploadUrl: string;
-  minioFileId: string;
+  fileId: string;
   datasetId: string;
   categoryId?: string;
   expiresInMinutes: number;
@@ -188,7 +188,7 @@ export const getUploadSignedUrl = async (data: {
  * Upload file to signed URL.
  *
  * Deliberately raw `fetch`, not `visionApi`: the signed URL points at
- * object storage (MinIO), not vision-service — it needs neither the
+ * file-service directly, not vision-service — it needs neither the
  * `/api` base URL nor the shared auth cookie (the signature in the URL
  * itself is the credential).
  */

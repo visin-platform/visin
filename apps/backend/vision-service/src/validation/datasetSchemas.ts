@@ -26,5 +26,5 @@ export const createDatasetBodySchema = z.object({
 });
 
 export const getSignedUrlForPathQuerySchema = z.object({
-  path: z.string().min(1, 'MinIO path is required')
+  path: z.string().min(1, 'File path is required')
 });
