@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.128](https://github.com/visin-platform/visin-monorepo/compare/v0.0.127...v0.0.128) (2026-07-29)
+
+
+### Features
+
+* migrate minio fileid references to local file system ([a9e37f4](https://github.com/visin-platform/visin-monorepo/commit/a9e37f43a5c7d9ba61fc3c92a8f6682c73b51bff))
+
 ### [0.0.127](https://github.com/visin-platform/visin-monorepo/compare/v0.0.126...v0.0.127) (2026-07-29)
 
 
