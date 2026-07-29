@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { BadRequestError, logger } from '@visin/backend-core';
+import { BadRequestError, logger, fetchWithTimeout } from '@visin/backend-core';
 import { InternalServiceRequest } from '../middleware/internalServiceAuth';
 import * as svc from '../services/groupService';
 import { GroupRole } from '../models/Group';
@@ -17,14 +17,17 @@ const invalidateUserTokens = async (userEmails: string[]): Promise<void> => {
   // Invalidate tokens for affected users by incrementing their token version
   for (const email of userEmails) {
     try {
-      const invalidateResponse = await fetch(`${authServiceUrl}/api/auth/internal/invalidate-tokens`, {
+      // One request per affected user, so an untimed call here stalls the whole
+      // membership change for every remaining email behind it.
+      const invalidateResponse = await fetchWithTimeout(`${authServiceUrl}/api/auth/internal/invalidate-tokens`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-internal-token': internalToken,
           'x-service-id': 'group-service'
         },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email }),
+        serviceName: 'auth-service'
       });
 
       if (invalidateResponse.ok) {

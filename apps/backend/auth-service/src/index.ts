@@ -1,13 +1,12 @@
 import express, { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv } from '@visin/backend-core';
 import authRoutes from './routes/authRoutes';
 import path from 'path';
 
-if (!process.env.JWT_SECRET) {
-  logger.error('Fatal: JWT_SECRET environment variable must be set');
-  process.exit(1);
-}
+// JWT_SECRET signs every session; GOOGLE_CLIENT_ID is the sign-in audience;
+// INTERNAL_SERVICE_TOKEN gates /auth/internal/*.
+assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'GOOGLE_CLIENT_ID', 'INTERNAL_SERVICE_TOKEN']);
 
 const PORT = process.env.PORT || 5001;
 

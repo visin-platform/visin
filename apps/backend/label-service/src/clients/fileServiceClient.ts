@@ -1,5 +1,5 @@
 import { Readable } from 'stream';
-import { requireEnv } from '@visin/backend-core';
+import { requireEnv, fetchWithTimeout, TRANSFER_FETCH_TIMEOUT_MS } from '@visin/backend-core';
 
 export interface SignedUrl {
   url: string;
@@ -19,10 +19,11 @@ const signedUrl = async (
   expiresInMinutes: number,
   mimetype?: string
 ): Promise<SignedUrl> => {
-  const response = await fetch(`${baseUrl()}/internal/${kind}-url`, {
+  const response = await fetchWithTimeout(`${baseUrl()}/internal/${kind}-url`, {
     method: 'POST',
     headers: { ...apiKeyHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileId, expiresInMinutes, ...(mimetype ? { mimetype } : {}) })
+    body: JSON.stringify({ fileId, expiresInMinutes, ...(mimetype ? { mimetype } : {}) }),
+    serviceName: 'file-service'
   });
   if (!response.ok) {
     throw new Error(`file-service ${kind}-url failed (${response.status})`);
@@ -41,10 +42,13 @@ export const getDownloadUrl = (fileId: string, expiresInMinutes = 60): Promise<S
 
 /** Server-to-server store of one file (ingest). */
 export const putFile = async (fileId: string, data: Buffer): Promise<void> => {
-  const response = await fetch(`${baseUrl()}/internal/files/${fileId}`, {
+  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
     method: 'PUT',
     headers: { ...apiKeyHeaders(), 'Content-Type': 'application/octet-stream' },
-    body: new Uint8Array(data)
+    body: new Uint8Array(data),
+    // Moves file bytes — sized for the payload, not the control-plane default.
+    timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
+    serviceName: 'file-service'
   });
   if (!response.ok) {
     throw new Error(`file-service put failed for ${fileId} (${response.status})`);
@@ -53,7 +57,13 @@ export const putFile = async (fileId: string, data: Buffer): Promise<void> => {
 
 /** Server-to-server streaming read (ingest reads the uploaded zip). */
 export const getFileStream = async (fileId: string): Promise<Readable> => {
-  const response = await fetch(`${baseUrl()}/internal/files/${fileId}`, { headers: apiKeyHeaders() });
+  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
+    headers: apiKeyHeaders(),
+    // The deadline covers reading the body too, so a multi-hundred-MB bundle
+    // zip needs the transfer budget rather than the control-plane one.
+    timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
+    serviceName: 'file-service'
+  });
   if (!response.ok || !response.body) {
     throw new Error(`file-service get failed for ${fileId} (${response.status})`);
   }
@@ -62,19 +72,21 @@ export const getFileStream = async (fileId: string): Promise<Readable> => {
 
 /** Whether a file already exists (idempotent re-import checks). */
 export const fileExists = async (fileId: string): Promise<boolean> => {
-  const response = await fetch(`${baseUrl()}/internal/files/${fileId}`, {
+  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
     method: 'HEAD',
-    headers: apiKeyHeaders()
+    headers: apiKeyHeaders(),
+    serviceName: 'file-service'
   });
   return response.ok;
 };
 
 /** Delete every stored file under a prefix (bundle deletion). */
 export const deleteFolder = async (prefix: string): Promise<void> => {
-  const response = await fetch(`${baseUrl()}/internal/files/folder`, {
+  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/folder`, {
     method: 'DELETE',
     headers: { ...apiKeyHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prefix })
+    body: JSON.stringify({ prefix }),
+    serviceName: 'file-service'
   });
   if (!response.ok) {
     throw new Error(`file-service folder delete failed for ${prefix} (${response.status})`);

@@ -4,7 +4,7 @@
 export type { UserPayload } from './types/auth';
 
 // Config
-export { requireEnv } from './config/env';
+export { requireEnv, assertRequiredEnv } from './config/env';
 
 // Errors
 export {
@@ -14,8 +14,13 @@ export {
   ForbiddenError,
   NotFoundError,
   ConflictError,
-  TooManyRequestsError
+  TooManyRequestsError,
+  GatewayTimeoutError
 } from './errors/HttpError';
+
+// HTTP client
+export { fetchWithTimeout, DEFAULT_FETCH_TIMEOUT_MS, TRANSFER_FETCH_TIMEOUT_MS } from './http/fetchWithTimeout';
+export type { FetchWithTimeoutInit } from './http/fetchWithTimeout';
 
 // Logging
 export { logger } from './logging/logger';

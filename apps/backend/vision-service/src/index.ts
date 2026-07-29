@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'path';
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv } from '@visin/backend-core';
 import datasetRoutes from './routes/datasetRoutes';
 import trainingRoutes from './routes/trainingRoutes';
 import epochRoutes from './routes/epochRoutes';
@@ -15,6 +15,10 @@ import projectRoutes from './routes/projectRoutes';
 import apiTokenRoutes from './routes/apiTokenRoutes';
 import imageCategoryRoutes from './routes/imageCategoryRoutes';
 import { apiTokenMiddleware } from './middleware/apiTokenMiddleware';
+
+// JWT_SECRET verifies user sessions; FILE_SERVICE_API_KEY authenticates every
+// dataset-image/visualization storage call.
+assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'FILE_SERVICE_API_KEY']);
 
 // Connect to MongoDB
 connectDb({ serviceName: 'vision-service' }).catch((err) => {

@@ -31,6 +31,40 @@ export async function checkProjectAccess(userId: string | undefined, projectId: 
 }
 
 /**
+ * A `checkProjectAccess` bound to one user and memoized on project id, for
+ * loops that check row after row.
+ *
+ * Each bare `checkProjectAccess` runs `resolveProject`, i.e. up to two
+ * indexed queries (`findOne({slug})` then `findById`), so a 100-row
+ * comparison issues ~200 project lookups for what is usually a handful of
+ * distinct projects. Semantics are identical — the same id yields the same
+ * answer — the only change is that repeats are served from the memo.
+ *
+ * Deliberately per-call, not a module-level cache: the memo lives exactly as
+ * long as the request that made it, so a privacy change is never served from
+ * a stale entry.
+ */
+export function createProjectAccessChecker(
+  userId: string | undefined
+): (projectId: string | undefined | null) => Promise<boolean> {
+  const inFlight = new Map<string, Promise<boolean>>();
+
+  return (projectId) => {
+    if (!projectId) return Promise.resolve(true);
+
+    // String only as the map key — `checkProjectAccess` still receives the
+    // caller's original value, so nothing about the lookup changes.
+    const key = projectId.toString();
+    let result = inFlight.get(key);
+    if (!result) {
+      result = checkProjectAccess(userId, projectId);
+      inFlight.set(key, result);
+    }
+    return result;
+  };
+}
+
+/**
  * True only if userId is projectId's owner — public projects don't relax
  * this. For operations that are administrative on the project itself (API
  * token management) rather than reading/writing the project's data, where

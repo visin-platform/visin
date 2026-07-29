@@ -19,15 +19,18 @@ describe('signed URLs', () => {
 
     const signed = await getUploadUrl('label-bundles/b1/upload-1.zip');
 
-    expect(fetchMock).toHaveBeenCalledWith('http://files.test/internal/upload-url', {
-      method: 'POST',
-      headers: { 'x-internal-api-key': 'api-key', 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fileId: 'label-bundles/b1/upload-1.zip',
-        expiresInMinutes: 240,
-        mimetype: 'application/zip',
-      }),
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://files.test/internal/upload-url',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'x-internal-api-key': 'api-key', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileId: 'label-bundles/b1/upload-1.zip',
+          expiresInMinutes: 240,
+          mimetype: 'application/zip',
+        }),
+      })
+    );
     expect(signed).toEqual({ url: 'http://signed/put', fileId: 'label-bundles/b1/upload-1.zip', expiresMs: 123 });
   });
 
@@ -100,17 +103,33 @@ describe('fileExists', () => {
   });
 });
 
+describe('request deadlines', () => {
+  it('gives every outbound call an abort signal, so a stalled file-service cannot hang the caller', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: { downloadUrl: 'http://signed/get', expiresMs: 1 } }));
+
+    await getDownloadUrl('f1');
+    await fileExists('f1');
+
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+});
+
 describe('deleteFolder', () => {
   it('DELETEs by prefix', async () => {
     fetchMock.mockResolvedValue(jsonResponse({}));
 
     await deleteFolder('label-bundles/b1/');
 
-    expect(fetchMock).toHaveBeenCalledWith('http://files.test/internal/files/folder', {
-      method: 'DELETE',
-      headers: { 'x-internal-api-key': 'api-key', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prefix: 'label-bundles/b1/' }),
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://files.test/internal/files/folder',
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: { 'x-internal-api-key': 'api-key', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefix: 'label-bundles/b1/' }),
+      })
+    );
   });
 
   it('throws on failure', async () => {

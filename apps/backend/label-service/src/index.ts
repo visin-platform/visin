@@ -1,8 +1,12 @@
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, authenticateToken } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, authenticateToken, assertRequiredEnv } from '@visin/backend-core';
 import jobRoutes from './routes/jobRoutes';
 import bundleRoutes from './routes/bundleRoutes';
 import taskRoutes from './routes/taskRoutes';
 import meRoutes from './routes/meRoutes';
+
+// The two client modules call requireEnv() lazily, per request — asserting
+// here turns a missing token into a boot failure rather than a 500 mid-ingest.
+assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'INTERNAL_SERVICE_TOKEN', 'FILE_SERVICE_API_KEY']);
 
 const app = createBaseApp({
   corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id']

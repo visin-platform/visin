@@ -2,7 +2,7 @@
  * File Service Client
  * Replaces MinIO client by calling the local file-service API
  */
-import { logger } from '@visin/backend-core';
+import { logger, fetchWithTimeout, TRANSFER_FETCH_TIMEOUT_MS } from '@visin/backend-core';
 
 const FILE_SERVICE_URL = (): string => {
   // Use internal service URL for server-to-server communication
@@ -137,14 +137,17 @@ export const uploadFile = async (
   size: number
 ): Promise<FileUploadResult> => {
   try {
-    const response = await fetch(`${FILE_SERVICE_URL()}/internal/files/${fileId}`, {
+    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/files/${fileId}`, {
       method: 'PUT',
       headers: {
         'X-Internal-Api-Key': FILE_SERVICE_API_KEY(),
         'Content-Type': mimetype,
         'Content-Length': String(size)
       },
-      body: fileBuffer
+      body: fileBuffer,
+      // Moves file bytes — sized for the payload, not the control-plane default.
+      timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
+      serviceName: 'file-service'
     });
 
     if (!response.ok) {
@@ -190,13 +193,14 @@ export const getSignedUrl = async (
   expiresInMinutes: number = 60
 ): Promise<SignedUrlData | null> => {
   try {
-    const response = await fetch(`${FILE_SERVICE_URL()}/internal/download-url`, {
+    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/download-url`, {
       method: 'POST',
       headers: {
         'X-Internal-Api-Key': FILE_SERVICE_API_KEY(),
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ fileId, expiresInMinutes })
+      body: JSON.stringify({ fileId, expiresInMinutes }),
+      serviceName: 'file-service'
     });
 
     if (!response.ok) {
@@ -263,13 +267,14 @@ export const getUploadSignedUrl = async (
   expiresInMinutes: number = 15
 ): Promise<string> => {
   try {
-    const response = await fetch(`${FILE_SERVICE_URL()}/internal/upload-url`, {
+    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/upload-url`, {
       method: 'POST',
       headers: {
         'X-Internal-Api-Key': FILE_SERVICE_API_KEY(),
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ fileId, expiresInMinutes })
+      body: JSON.stringify({ fileId, expiresInMinutes }),
+      serviceName: 'file-service'
     });
 
     if (!response.ok) {
@@ -296,11 +301,12 @@ export const getUploadSignedUrl = async (
  */
 export const deleteFile = async (fileId: string): Promise<boolean> => {
   try {
-    const response = await fetch(`${FILE_SERVICE_URL()}/internal/files/${fileId}`, {
+    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/files/${fileId}`, {
       method: 'DELETE',
       headers: {
         'X-Internal-Api-Key': FILE_SERVICE_API_KEY()
-      }
+      },
+      serviceName: 'file-service'
     });
 
     if (!response.ok && response.status !== 404) {
@@ -320,13 +326,14 @@ export const deleteFile = async (fileId: string): Promise<boolean> => {
  */
 export const deleteFolder = async (folderPrefix: string): Promise<boolean> => {
   try {
-    const response = await fetch(`${FILE_SERVICE_URL()}/internal/files/folder`, {
+    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/files/folder`, {
       method: 'DELETE',
       headers: {
         'X-Internal-Api-Key': FILE_SERVICE_API_KEY(),
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ prefix: folderPrefix })
+      body: JSON.stringify({ prefix: folderPrefix }),
+      serviceName: 'file-service'
     });
 
     if (!response.ok) {
@@ -349,11 +356,12 @@ export const deleteFolder = async (folderPrefix: string): Promise<boolean> => {
  */
 export const fileExists = async (fileId: string): Promise<boolean> => {
   try {
-    const response = await fetch(`${FILE_SERVICE_URL()}/internal/files/${fileId}`, {
+    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/files/${fileId}`, {
       method: 'HEAD',
       headers: {
         'X-Internal-Api-Key': FILE_SERVICE_API_KEY()
-      }
+      },
+      serviceName: 'file-service'
     });
 
     return response.ok;
@@ -367,11 +375,12 @@ export const fileExists = async (fileId: string): Promise<boolean> => {
  */
 export const getFileMetadata = async (fileId: string): Promise<FileMetadata> => {
   try {
-    const response = await fetch(`${FILE_SERVICE_URL()}/internal/meta/${fileId}`, {
+    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/meta/${fileId}`, {
       method: 'GET',
       headers: {
         'X-Internal-Api-Key': FILE_SERVICE_API_KEY()
-      }
+      },
+      serviceName: 'file-service'
     });
 
     if (!response.ok) {
@@ -402,13 +411,14 @@ export const listFiles = async (prefix?: string, maxKeys: number = 1000): Promis
     if (prefix) params.append('prefix', prefix);
     params.append('maxKeys', String(maxKeys));
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${FILE_SERVICE_URL()}/internal/files?${params.toString()}`,
       {
         method: 'GET',
         headers: {
           'X-Internal-Api-Key': FILE_SERVICE_API_KEY()
-        }
+        },
+        serviceName: 'file-service'
       }
     );
 

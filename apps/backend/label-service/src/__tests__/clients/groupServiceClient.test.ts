@@ -20,7 +20,11 @@ describe('checkMembership', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://groups.test/api/groups/g1/membership?userEmail=user%40x.com',
-      { headers: { 'x-internal-token': 'internal-token', 'x-service-id': 'label-service' } }
+      expect.objectContaining({
+        headers: { 'x-internal-token': 'internal-token', 'x-service-id': 'label-service' },
+        // A stalled group-service must not hang the caller (fetchWithTimeout).
+        signal: expect.any(AbortSignal),
+      })
     );
     expect(result).toEqual({ member: true, role: 'admin' });
   });

@@ -1,14 +1,9 @@
-import { createBaseApp, errorHandler, logger, createHealthCheckHandler } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, createHealthCheckHandler, assertRequiredEnv } from '@visin/backend-core';
 import routes from './routes/routes';
 
-// Validate required env vars at startup
-const REQUIRED_ENV = ['FILE_SERVICE_API_KEY', 'FILE_SERVICE_HMAC_SECRET'];
-for (const key of REQUIRED_ENV) {
-  if (!process.env[key]) {
-    logger.error(`Fatal: missing required environment variable: ${key}`);
-    process.exit(1);
-  }
-}
+// API key authenticates internal callers; HMAC secret signs the browser-direct
+// upload/download URLs.
+assertRequiredEnv(['FILE_SERVICE_API_KEY', 'FILE_SERVICE_HMAC_SECRET']);
 
 const PORT = process.env.PORT || 5002;
 

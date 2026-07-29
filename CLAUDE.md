@@ -68,6 +68,10 @@ folded into the shared, stateless backend-core version.
 Frontends never touch the JWT directly: `libs/frontend-core`'s `createApiClient` defaults every request to
 `credentials: 'include'`, and `createAuthService`/`createAuthContext` (wrapping it) is what every front's own
 `authService.ts`/`AuthContext.tsx` thinly re-exports. There is no `localStorage` token — don't reintroduce one.
+The two auth-shaped route components are shared the same way: `createProtectedRoute(useAuth)` and
+`createLoginRedirect(useAuth, { redirectTo })` are factories, not plain components, because each front builds its
+own auth context — a context imported inside the lib would be a different, always-empty one. `redirectTo` has no
+default on purpose: the fronts' post-login routes genuinely differ (`/account` vs. `/jobs`).
 
 ### Internal-service-to-service auth
 
@@ -78,6 +82,18 @@ another internal service — mount the `validate*` one globally on the router, t
 after user auth middleware). Adding a new inter-service route means picking the right one of these two patterns;
 skipping the gate on a route meant to be internal-only silently opens it to any authenticated user.
 
+Every outbound inter-service `fetch` goes through `backend-core`'s `fetchWithTimeout`, never bare `fetch`: undici
+leaves a stalled peer hanging the caller for minutes, long enough to exhaust the caller's own capacity while a
+dependency is degraded. It defaults to `DEFAULT_FETCH_TIMEOUT_MS` (control-plane JSON calls) and takes
+`TRANSFER_FETCH_TIMEOUT_MS` for calls that move file bytes, since the deadline covers reading the body too. An
+expired deadline becomes a `GatewayTimeoutError` (504), so the shared `errorHandler` reports it as an upstream
+failure rather than a 500 server bug.
+
+Each service asserts its required env vars at the top of `index.ts` via `backend-core`'s `assertRequiredEnv`,
+which logs every missing name at once and exits. Without it a service missing e.g. `INTERNAL_SERVICE_TOKEN` boots
+healthy and then 500s on every internal call — a config error surfacing as a runtime outage. Adding a new required
+var means adding it to that list, to the service's `compose.yml`, and to `.env.example`.
+
 ### vision-service project privacy
 
 Almost every vision-service resource (trainings, epochs, test results, comparisons, benchmarks, visualizations)
@@ -87,6 +103,11 @@ services throughout — a new endpoint that reads project-scoped data needs this
 data. `isWithinTokenScope(reqProjectId, resourceProjectId)` additionally confines a project-scoped API token to its
 own project on writes. Endpoints with no explicit project filter must still scope to `getVisibleProjectIds`/
 `getVisibleTrainingIds` (see `testResultService`/`comparisonController`) rather than returning everything.
+
+Checking access row by row uses `createProjectAccessChecker(userId)` instead of a bare `checkProjectAccess` per
+row: each bare call re-runs `resolveProject` (up to two indexed queries), so a 100-row comparison issued ~200
+lookups for a handful of distinct projects. The checker is per-request by design — never hoist it to module scope,
+or a privacy change gets served from a stale memo.
 
 ### Layering (vision-service, and the pattern the other backends follow)
 

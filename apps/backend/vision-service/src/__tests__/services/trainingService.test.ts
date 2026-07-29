@@ -30,10 +30,18 @@ jest.mock('../../models/Comparison', () => ({
 jest.mock('../../services/testResultService', () => ({
   testResultService: { getAggregatedTestResultsByTraining: jest.fn() },
 }));
-jest.mock('../../services/projectAccessService', () => ({
-  checkProjectAccess: jest.fn(),
-  getVisibleProjectIds: jest.fn(),
-}));
+jest.mock('../../services/projectAccessService', () => {
+  const checkProjectAccess = jest.fn();
+  return {
+    checkProjectAccess,
+    // Delegates straight through, so these tests keep asserting on
+    // checkProjectAccess per row; the memoization itself is covered in
+    // projectAccessService.test.ts against the real implementation.
+    createProjectAccessChecker: (userId?: string) => (projectId?: string | null) =>
+      checkProjectAccess(userId, projectId),
+    getVisibleProjectIds: jest.fn(),
+  };
+});
 
 import { trainingService } from '../../services/trainingService';
 import type { TrainingWithMetrics } from '../../services/trainingService';

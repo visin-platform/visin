@@ -55,3 +55,15 @@ export class TooManyRequestsError extends HttpError {
     super(429, message);
   }
 }
+
+/**
+ * A downstream service didn't answer within its deadline (see
+ * `fetchWithTimeout`). A 504 rather than a 500 because the failure is the
+ * upstream dependency's, not this service's — and it tells the caller a
+ * retry may well succeed.
+ */
+export class GatewayTimeoutError extends HttpError {
+  constructor(message = 'Upstream service timed out') {
+    super(504, message);
+  }
+}

@@ -15,11 +15,19 @@ jest.mock('../../models/Training', () => ({
   __esModule: true,
   default: { find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), findByIdAndUpdate: jest.fn() },
 }));
-jest.mock('../../services/projectAccessService', () => ({
-  checkProjectAccess: jest.fn(),
-  getVisibleTrainingIds: jest.fn(),
-  isWithinTokenScope: jest.fn(),
-}));
+jest.mock('../../services/projectAccessService', () => {
+  const checkProjectAccess = jest.fn();
+  return {
+    checkProjectAccess,
+    // Delegates straight through, so these tests keep asserting on
+    // checkProjectAccess per row; the memoization itself is covered in
+    // projectAccessService.test.ts against the real implementation.
+    createProjectAccessChecker: (userId?: string) => (projectId?: string | null) =>
+      checkProjectAccess(userId, projectId),
+    getVisibleTrainingIds: jest.fn(),
+    isWithinTokenScope: jest.fn(),
+  };
+});
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { NotFoundError, UnauthorizedError, logger } from '@visin/backend-core';
+import { NotFoundError, UnauthorizedError, logger, fetchWithTimeout } from '@visin/backend-core';
 import { verifyGoogleToken } from '../services/googleAuthService';
 import { generateJWT, UserPayload } from '../services/jwtService';
 import { User } from '../models/User';
@@ -111,14 +111,17 @@ const getUserGroups = async (email: string): Promise<string[]> => {
     const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
 
     if (groupServiceUrl && internalToken) {
-      const groupResponse = await fetch(`${groupServiceUrl}/api/groups/mine/ids?userEmail=${encodeURIComponent(email)}`, {
+      const groupResponse = await fetchWithTimeout(`${groupServiceUrl}/api/groups/mine/ids?userEmail=${encodeURIComponent(email)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'x-internal-token': internalToken,
           'x-service-id': 'auth-service'
         },
-        signal: AbortSignal.timeout(3000)
+        // Tighter than the shared default: this sits on the sign-in path, and
+        // a missing group list degrades gracefully (caught below).
+        timeoutMs: 3000,
+        serviceName: 'group-service'
       });
 
       if (groupResponse.ok) {

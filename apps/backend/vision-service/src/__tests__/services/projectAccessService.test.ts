@@ -9,6 +9,7 @@ jest.mock('../../models/Training', () => ({
 
 import {
   checkProjectAccess,
+  createProjectAccessChecker,
   isProjectOwner,
   getVisibleProjectIds,
   getVisibleTrainingIds,
@@ -70,6 +71,65 @@ describe('checkProjectAccess', () => {
     await expect(checkProjectAccess('owner-1', 'p2')).resolves.toBe(true);
     await expect(checkProjectAccess('stranger', 'p2')).resolves.toBe(false);
     await expect(checkProjectAccess(undefined, 'p2')).resolves.toBe(false);
+  });
+});
+
+describe('createProjectAccessChecker', () => {
+  it('resolves a repeated project id once, not once per row', async () => {
+    mockedProject.findOne.mockResolvedValue(publicProject);
+    const hasAccess = createProjectAccessChecker('u1');
+
+    const results = await Promise.all(['p1', 'p1', 'p1'].map(hasAccess));
+
+    expect(results).toEqual([true, true, true]);
+    expect(mockedProject.findOne).toHaveBeenCalledTimes(1);
+  });
+
+  it('memoizes sequential calls too, not just concurrent ones', async () => {
+    mockedProject.findOne.mockResolvedValue(publicProject);
+    const hasAccess = createProjectAccessChecker('u1');
+
+    await hasAccess('p1');
+    await hasAccess('p1');
+
+    expect(mockedProject.findOne).toHaveBeenCalledTimes(1);
+  });
+
+  it('still resolves each distinct project separately', async () => {
+    mockedProject.findOne.mockImplementation((query: { slug: string }) =>
+      Promise.resolve(query.slug === 'p1' ? publicProject : privateProject)
+    );
+    const hasAccess = createProjectAccessChecker('u1');
+
+    await expect(hasAccess('p1')).resolves.toBe(true);
+    await expect(hasAccess('p2')).resolves.toBe(false);
+    expect(mockedProject.findOne).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the unscoped-resource shortcut, without a lookup', async () => {
+    const hasAccess = createProjectAccessChecker('u1');
+
+    await expect(hasAccess(undefined)).resolves.toBe(true);
+    await expect(hasAccess(null)).resolves.toBe(true);
+    expect(mockedProject.findOne).not.toHaveBeenCalled();
+  });
+
+  it('gives the same answer as a bare checkProjectAccess for the same user', async () => {
+    mockedProject.findOne.mockResolvedValue(privateProject);
+
+    await expect(createProjectAccessChecker('owner-1')('p2')).resolves.toBe(
+      await checkProjectAccess('owner-1', 'p2')
+    );
+    await expect(createProjectAccessChecker('someone-else')('p2')).resolves.toBe(
+      await checkProjectAccess('someone-else', 'p2')
+    );
+  });
+
+  it('does not share its memo between two checkers', async () => {
+    mockedProject.findOne.mockResolvedValue(privateProject);
+
+    await expect(createProjectAccessChecker('owner-1')('p2')).resolves.toBe(true);
+    await expect(createProjectAccessChecker('intruder')('p2')).resolves.toBe(false);
   });
 });
 

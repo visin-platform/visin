@@ -8,7 +8,7 @@ import Benchmark, { IBenchmark } from '../models/Benchmark';
 import Project from '../models/Project';
 import Comparison from '../models/Comparison';
 import { testResultService } from './testResultService';
-import { checkProjectAccess, getVisibleProjectIds } from './projectAccessService';
+import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from './projectAccessService';
 
 interface TrainingMetrics {
   totalTime: number;
@@ -544,9 +544,11 @@ export const trainingService = {
     // Fetch trainings, dropping any whose project isn't visible to the
     // caller — comparing arbitrary ids shouldn't leak private-project data.
     const foundTrainings = await Training.find({ _id: { $in: trainingIds }, deletedAt: null });
+    // Memoized per request: up to 30 trainings usually span far fewer projects.
+    const hasProjectAccess = createProjectAccessChecker(userId);
     const trainings = [];
     for (const training of foundTrainings) {
-      if (await this.checkProjectAccess(userId, training.projectId)) {
+      if (await hasProjectAccess(training.projectId)) {
         trainings.push(training);
       }
     }

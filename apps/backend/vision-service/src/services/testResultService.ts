@@ -4,7 +4,7 @@ import { ConflictError, ForbiddenError, NotFoundError, logger } from '@visin/bac
 import TestResult, { ITestResult } from '../models/TestResult';
 import Epoch, { IEpoch } from '../models/Epoch';
 import Training, { ITraining } from '../models/Training';
-import { checkProjectAccess, getVisibleTrainingIds, isWithinTokenScope } from './projectAccessService';
+import { checkProjectAccess, createProjectAccessChecker, getVisibleTrainingIds, isWithinTokenScope } from './projectAccessService';
 import type { z } from '@visin/backend-core';
 import type { createTestResultBodySchema, updateTestResultBodySchema } from '../validation/testResultSchemas';
 
@@ -439,11 +439,13 @@ export const testResultService = {
 
     // Silently drop test results whose training's project isn't visible to
     // the caller — comparing arbitrary ids shouldn't leak private-project data.
+    // Memoized per request: many rows usually share a handful of projects.
+    const hasProjectAccess = createProjectAccessChecker(userId);
     const testResults = [];
     for (const testResult of foundTestResults) {
       const epoch = epochMap[testResult.epoch_uuid];
       const training = epoch ? trainingMap[epoch.trainingId.toString()] : null;
-      if (await checkProjectAccess(userId, training?.projectId)) {
+      if (await hasProjectAccess(training?.projectId)) {
         testResults.push(testResult);
       }
     }
@@ -529,10 +531,11 @@ export const testResultService = {
 
     // Silently drop trainings whose project isn't visible to the caller —
     // comparing arbitrary ids shouldn't leak private-project data.
+    const hasProjectAccess = createProjectAccessChecker(userId);
     const visibleTrainingIds = new Set<string>();
     for (const trainingId of trainingIds) {
       const training = trainingMap[trainingId];
-      if (training && (await checkProjectAccess(userId, training.projectId))) {
+      if (training && (await hasProjectAccess(training.projectId))) {
         visibleTrainingIds.add(trainingId);
       }
     }

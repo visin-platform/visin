@@ -9,6 +9,10 @@ export { ErrorPage } from './components/ErrorPage';
 export type { ErrorPageProps } from './components/ErrorPage';
 export { AppLayout } from './components/AppLayout';
 export type { AppLayoutProps, AppLayoutNavItem, AppLayoutFooterLink, AppLayoutUser } from './components/AppLayout';
+export { createProtectedRoute } from './components/ProtectedRoute';
+export type { ProtectedRouteProps, ProtectedRouteAuth } from './components/ProtectedRoute';
+export { createLoginRedirect } from './components/LoginRedirect';
+export type { LoginRedirectAuth, LoginRedirectOptions } from './components/LoginRedirect';
 
 export { createAuthService } from './auth/authService';
 export type { AuthService, AuthServiceOptions, AuthUser, AuthCheckResult } from './auth/authService';
