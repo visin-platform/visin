@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.130](https://github.com/visin-platform/visin-monorepo/compare/v0.0.129...v0.0.130) (2026-07-29)
+
+
+### Features
+
+* remove references to minio ([80ff233](https://github.com/visin-platform/visin-monorepo/commit/80ff233cefce90334439759bdcb835d62261681e))
+
 ### [0.0.129](https://github.com/visin-platform/visin-monorepo/compare/v0.0.128...v0.0.129) (2026-07-29)
 
 
