@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.132](https://github.com/visin-platform/visin-monorepo/compare/v0.0.131...v0.0.132) (2026-07-30)
+
+
+### Features
+
+* update readme ([3aa81f5](https://github.com/visin-platform/visin-monorepo/commit/3aa81f5638761a80c9ddbb9282a7830a7bbd62e6))
+
 ### [0.0.131](https://github.com/visin-platform/visin-monorepo/compare/v0.0.130...v0.0.131) (2026-07-30)
 
 
