@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.131](https://github.com/visin-platform/visin-monorepo/compare/v0.0.130...v0.0.131) (2026-07-30)
+
+
+### Features
+
+* add beszel ([98c1b85](https://github.com/visin-platform/visin-monorepo/commit/98c1b857e0303b6aee7655ee45972b49068233cd))
+
 ### [0.0.130](https://github.com/visin-platform/visin-monorepo/compare/v0.0.129...v0.0.130) (2026-07-29)
 
 
