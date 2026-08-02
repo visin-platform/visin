@@ -20,7 +20,7 @@
     "export:legacy-labels": "node --env-file-if-exists=.env -r ts-node/register scripts/exportLegacyLabels.ts"
   },
   "dependencies": {
-    "@visin/backend-core": "0.1.14",
+    "@visin/backend-core": "0.1.15",
     "express": "^5.2.1",
     "mongoose": "^9.7.3",
     "sharp": "^0.35.3",
