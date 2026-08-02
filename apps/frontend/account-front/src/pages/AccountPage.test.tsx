@@ -4,8 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import AccountPage from './AccountPage';
 
 vi.mock('../components/tabs/ProfileTab', () => ({ default: () => <div>profile-tab</div> }));
-vi.mock('../components/tabs/SecurityTab', () => ({ default: () => <div>security-tab</div> }));
-vi.mock('../components/tabs/DataTab', () => ({ default: () => <div>data-tab</div> }));
+vi.mock('../components/tabs/GroupsTab', () => ({ default: () => <div>groups-tab</div> }));
 
 const renderAt = (path: string) =>
   render(
@@ -26,13 +25,8 @@ describe('AccountPage', () => {
     expect(screen.getByText('profile-tab')).toBeInTheDocument();
   });
 
-  it('renders the security tab', () => {
-    renderAt('/security');
-    expect(screen.getByText('security-tab')).toBeInTheDocument();
-  });
-
-  it('renders the data tab', () => {
-    renderAt('/data');
-    expect(screen.getByText('data-tab')).toBeInTheDocument();
+  it('renders the groups tab', () => {
+    renderAt('/groups');
+    expect(screen.getByText('groups-tab')).toBeInTheDocument();
   });
 });

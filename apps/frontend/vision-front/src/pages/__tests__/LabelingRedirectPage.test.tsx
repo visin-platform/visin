@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 vi.mock('../../config/ConfigProvider', () => ({
@@ -8,18 +8,45 @@ vi.mock('../../config/ConfigProvider', () => ({
 import LabelingRedirectPage from '../LabelingRedirectPage';
 import { getGlobalConfig } from '../../config/ConfigProvider';
 
+const replace = vi.fn();
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(getGlobalConfig).mockReturnValue({ LABEL_FRONT_URL: 'https://label.test' });
+  Object.defineProperty(window, 'location', {
+    value: { replace },
+    writable: true,
+  });
+});
+
 describe('LabelingRedirectPage', () => {
-  it('links to the configured label-front', () => {
+  it('forwards straight to label-front instead of showing an interstitial', () => {
     render(<LabelingRedirectPage />);
 
-    expect(screen.getByText('Labeling has moved')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open Labeling/ })).toHaveAttribute('href', 'https://label.test');
+    expect(replace).toHaveBeenCalledWith('https://label.test/jobs');
+    expect(screen.queryByText('Labeling has moved')).not.toBeInTheDocument();
+  });
+
+  it('offers a manual link in case the redirect is blocked', () => {
+    render(<LabelingRedirectPage />);
+
+    expect(screen.getByRole('link', { name: /Continue to Labeling/ })).toHaveAttribute(
+      'href',
+      'https://label.test/jobs'
+    );
+  });
+
+  it('trims a trailing slash off the configured URL', () => {
+    vi.mocked(getGlobalConfig).mockReturnValue({ LABEL_FRONT_URL: 'https://label.test/' });
+    render(<LabelingRedirectPage />);
+
+    expect(replace).toHaveBeenCalledWith('https://label.test/jobs');
   });
 
   it('falls back to the production URL without config', () => {
     vi.mocked(getGlobalConfig).mockReturnValue({});
     render(<LabelingRedirectPage />);
 
-    expect(screen.getByRole('link', { name: /Open Labeling/ })).toHaveAttribute('href', 'https://label.visin.eu');
+    expect(replace).toHaveBeenCalledWith('https://label.visin.eu/jobs');
   });
 });

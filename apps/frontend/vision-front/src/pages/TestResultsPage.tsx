@@ -32,6 +32,7 @@ import {
 import { testResultService } from '../services/testResultService';
 import { TestResult, TestResultData, TestResultMetrics, TestResultOverallMetrics, TestResultCondition } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { isGroupAdmin } from '../utils/permissions';
 
 export const TestResultsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -70,10 +71,7 @@ export const TestResultsPage: React.FC = () => {
   const success = deleteMutation.isSuccess ? 'Test result deleted successfully' : null;
 
   // Check if user has permission to delete test results (owner or admin role)
-  const canDeleteTestResults = () => {
-    if (!isAuthenticated || !user) return false;
-    return user.groups?.some(group => group.includes('owner') || group.includes('admin')) ?? false;
-  };
+  const canDeleteTestResults = () => isAuthenticated && isGroupAdmin(user);
 
   const handleDeleteClick = (testResult: TestResult) => {
     setDeleteTarget(testResult);

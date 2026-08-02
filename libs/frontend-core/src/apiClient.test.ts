@@ -72,6 +72,36 @@ describe('createApiClient', () => {
     expect(result).toBeUndefined();
   });
 
+  it('explains a non-JSON success response instead of leaking a parse error', async () => {
+    // What an unconfigured base URL produces: the request lands on the app's own
+    // origin and the SPA fallback answers with index.html.
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('<!doctype html><html></html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' }
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApiClient({ baseUrl: () => '' });
+
+    await expect(client.get('/api/groups/mine')).rejects.toMatchObject({
+      status: 200,
+      message:
+        'Expected JSON from /api/groups/mine but received text/html. Check the service base URL is configured.'
+    });
+  });
+
+  it('reports an unknown content type when the response carries none', async () => {
+    // A bodyless 200 carries no content-type at all.
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = createApiClient({ baseUrl: () => 'http://api.test' });
+
+    await expect(client.get('/things')).rejects.toThrow(/received unknown/);
+  });
+
   it('JSON-encodes the body for post/put/patch', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);

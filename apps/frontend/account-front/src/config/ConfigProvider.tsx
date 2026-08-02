@@ -5,13 +5,15 @@ export interface AppConfig {
   AUTH_SERVICE_URL?: string;
   AUTH_FRONT_URL?: string;
   VISION_FRONT_URL?: string;
+  GROUP_SERVICE_URL?: string;
 }
 
 function createDevConfig(): AppConfig {
   return {
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL,
     AUTH_FRONT_URL: import.meta.env.VITE_AUTH_FRONT_URL,
-    VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL
+    VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL,
+    GROUP_SERVICE_URL: import.meta.env.VITE_GROUP_SERVICE_URL
   };
 }
 

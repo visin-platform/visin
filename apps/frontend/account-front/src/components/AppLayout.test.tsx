@@ -38,15 +38,14 @@ describe('AppLayout', () => {
     expect(screen.getAllByText('Visin').length).toBeGreaterThan(0);
     expect(screen.getByText('page content')).toBeInTheDocument();
     expect(screen.getAllByText('Profile').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Security').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Data').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Groups').length).toBeGreaterThan(0);
   });
 
   it('shows the active section title in the desktop header', () => {
-    renderAt('/account/security');
+    renderAt('/account/groups');
 
     // The h4 page title mirrors the active menu item's label.
-    expect(screen.getByRole('heading', { level: 4, name: 'Security' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 4, name: 'Groups' })).toBeInTheDocument();
   });
 
   it('falls back to "Account" as the title outside known routes', () => {
@@ -92,15 +91,13 @@ describe('AppLayout', () => {
     mockUser = { email: 'anon@example.com' };
     renderAt('/account/profile');
 
-    expect(screen.getByText('User')).toBeInTheDocument();
+    expect(screen.getAllByText('User').length).toBeGreaterThan(0);
   });
 
   it('opens the user menu and logs out on click', () => {
     renderAt('/account/profile');
 
-    const avatarButtons = screen.getAllByRole('button');
-    const userMenuButton = avatarButtons.find((btn) => btn.querySelector('.MuiAvatar-root'));
-    fireEvent.click(userMenuButton!);
+    fireEvent.click(screen.getAllByLabelText('open user menu')[0]);
 
     const logoutItem = screen.getByText('Logout');
     fireEvent.click(logoutItem);
@@ -111,8 +108,8 @@ describe('AppLayout', () => {
   it('closes the mobile drawer when a nav item is clicked', () => {
     renderAt('/account/profile');
 
-    const securityLinks = screen.getAllByText('Security');
-    fireEvent.click(securityLinks[0]);
+    const groupsLinks = screen.getAllByText('Groups');
+    fireEvent.click(groupsLinks[0]);
 
     // The click handler just closes the mobile drawer; the app itself
     // stays mounted and doesn't throw.

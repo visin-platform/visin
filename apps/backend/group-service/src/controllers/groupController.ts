@@ -42,11 +42,14 @@ const invalidateUserTokens = async (userEmails: string[]): Promise<void> => {
 };
 
 const userEmail = (req: InternalServiceRequest): string => {
-  // For internal service requests, extract email from request body or params
+  // Internal services act on behalf of a user named in `?userEmail=`. It has to
+  // come from the query string: `validateRequest` parses the body through a Zod
+  // object schema, which strips unknown keys, so a `userEmail` sent in the body
+  // never reaches the controller.
   if (req.isInternalService) {
-    const email = req.body?.userEmail || req.query?.userEmail || req.params?.userEmail;
-    // Ensure we return a string, not an array
-    return Array.isArray(email) ? email[0] : email || '';
+    const email = req.query?.userEmail;
+    const value = Array.isArray(email) ? email[0] : email;
+    return typeof value === 'string' ? value.toLowerCase() : '';
   }
   // For user requests, extract from authenticated user
   return (req.user?.email || '').toLowerCase();
@@ -70,9 +73,7 @@ export const listMine = async (req: InternalServiceRequest, res: Response): Prom
   const groups = await svc.listMyGroups(email);
 
   // Update last activity for this user in each group
-  for (const group of groups) {
-    await svc.updateMemberActivity(group._id.toString(), email);
-  }
+  await svc.updateMemberActivity(groups.map((group) => group._id.toString()), email);
 
   res.json({ success: true, data: groups });
 };
@@ -86,14 +87,22 @@ export const listMyDeleted = async (req: InternalServiceRequest, res: Response):
   res.json({ success: true, data: groups });
 };
 
-export const getUserGroupIds = async (req: InternalServiceRequest, res: Response): Promise<void> => {
+/**
+ * Feeds auth-service's `groupRoles` JWT claim: the distinct roles the user
+ * holds across all their groups. The fronts gate admin-only UI on "am I
+ * owner/admin anywhere", and that is the only thing the token needs — anything
+ * wanting the groups themselves (account-front's management UI, label-service)
+ * asks this service directly rather than trusting a claim that goes stale
+ * between refreshes.
+ */
+export const getMyGroupRoles = async (req: InternalServiceRequest, res: Response): Promise<void> => {
   const email = userEmail(req);
   if (!email) {
     throw new BadRequestError('User email required');
   }
   const groups = await svc.listMyGroups(email);
-  const groupIds = groups.map(group => group._id.toString());
-  res.json({ success: true, data: groupIds });
+  const roles = [...new Set(groups.map(group => svc.memberRole(group, email)).filter(Boolean))];
+  res.json({ success: true, data: roles });
 };
 
 export const getOne = async (req: Request, res: Response): Promise<void> => {

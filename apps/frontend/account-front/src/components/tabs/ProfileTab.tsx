@@ -7,31 +7,20 @@ import {
   Avatar,
   Alert,
   CircularProgress,
-  Switch,
   Grid,
   Paper,
-  IconButton,
-  Fade,
-  useTheme
+  Fade
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
-import { 
-  Person, 
-  Email, 
-  Save, 
-  PhotoCamera
-} from '@mui/icons-material';
+import { Person, Save } from '@mui/icons-material';
 import { authService } from '../../services/authService';
 import { profileService } from '../../services/profileService';
 import { User } from '../../types';
 
 const ProfileTab: React.FC = () => {
-  const theme = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [emailNotifications, setEmailNotifications] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -143,26 +132,13 @@ const ProfileTab: React.FC = () => {
                 alignItems: "center"
               }}>
                 <Grid size={{ xs: 12, md: 3 }}>
-                  <Box sx={{ position: 'relative', width: 100, height: 100, mx: { xs: 'auto', md: 0 } }}>
-                    <Avatar 
-                      src={user?.picture} 
+                  <Box sx={{ width: 100, height: 100, mx: { xs: 'auto', md: 0 } }}>
+                    <Avatar
+                      src={user?.picture}
                       sx={{ width: 100, height: 100, border: '1px solid', borderColor: 'divider' }}
                     >
                       <Person sx={{ fontSize: 40 }} />
                     </Avatar>
-                    <IconButton 
-                      size="small"
-                      sx={{ 
-                        position: 'absolute', 
-                        bottom: 0, 
-                        right: 0, 
-                        bgcolor: 'background.paper',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                        '&:hover': { bgcolor: 'grey.50' }
-                      }}
-                    >
-                      <PhotoCamera fontSize="small" />
-                    </IconButton>
                   </Box>
                 </Grid>
                 
@@ -205,36 +181,6 @@ const ProfileTab: React.FC = () => {
             </Paper>
           </Grid>
 
-          {/* Notifications Section */}
-          <Grid size={12}>
-            <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
-              <SectionHeader 
-                title="Notifications" 
-                subtitle="Manage how you receive updates and alerts." 
-              />
-              
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Avatar sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main' }}>
-                    <Email fontSize="small" />
-                  </Avatar>
-                  <Box>
-                    <Typography variant="subtitle2" sx={{
-                      fontWeight: 600
-                    }}>Email Notifications</Typography>
-                    <Typography variant="caption" sx={{
-                      color: "text.secondary"
-                    }}>Receive updates about your account via email.</Typography>
-                  </Box>
-                </Box>
-                <Switch 
-                  checked={emailNotifications} 
-                  onChange={(e) => setEmailNotifications(e.target.checked)}
-                  color="primary"
-                />
-              </Box>
-            </Paper>
-          </Grid>
         </Grid>
 
         {/* Action Bar */}

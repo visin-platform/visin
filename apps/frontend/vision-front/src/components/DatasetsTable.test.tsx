@@ -63,7 +63,7 @@ describe('AnalysisTable (DatasetsTable)', () => {
     vi.clearAllMocks();
     mockedUseAuth.mockReturnValue({
       isAuthenticated: true,
-      user: { groups: ['owner'] }
+      user: { groupRoles: ['owner'] }
     } as any);
   });
 

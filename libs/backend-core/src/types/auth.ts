@@ -5,7 +5,12 @@ export interface UserPayload {
   picture?: string;
   roles?: string[];
   isApproved?: boolean;
-  groups?: string[];
+  /**
+   * Distinct group roles ('owner' | 'admin' | 'member') the user holds, from
+   * group-service. Group ids are not carried: nothing reads them, and callers
+   * needing the groups themselves query group-service directly.
+   */
+  groupRoles?: string[];
   tokenVersion?: number;
 }
 

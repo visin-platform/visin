@@ -72,7 +72,7 @@ const testResult1 = {
 describe('TestResultsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAuthMock.mockReturnValue({ user: { id: 'u1', groups: ['owner'] }, isAuthenticated: true });
+    useAuthMock.mockReturnValue({ user: { id: 'u1', groupRoles: ['owner'] }, isAuthenticated: true });
   });
 
   it('shows a loading spinner while test results are loading', () => {
@@ -106,7 +106,7 @@ describe('TestResultsPage', () => {
   });
 
   it('hides the delete action for users without owner/admin role', async () => {
-    useAuthMock.mockReturnValue({ user: { id: 'u2', groups: ['member'] }, isAuthenticated: true });
+    useAuthMock.mockReturnValue({ user: { id: 'u2', groupRoles: ['member'] }, isAuthenticated: true });
     testResultServiceMock.getTestResults.mockResolvedValue({ data: { testResults: [testResult1] } });
 
     renderPage();

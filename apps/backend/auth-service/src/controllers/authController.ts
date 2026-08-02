@@ -50,13 +50,12 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
     tokenVersion: dbUser.tokenVersion || 1
   };
 
-  // Fetch user groups and include in JWT payload
-  const userGroups = await getUserGroups(userPayload.email);
+  // Fetch user group roles and include in JWT payload
+  const groupRoles = await getUserGroupRoles(userPayload.email);
 
-  // Include groups in the JWT payload
   const jwtPayload: UserPayload = {
     ...userPayload,
-    groups: userGroups
+    groupRoles
   };
 
   const jwtToken = generateJWT(jwtPayload);
@@ -103,15 +102,22 @@ export const invalidateUserTokens = async (req: Request, res: Response): Promise
   });
 };
 
-const getUserGroups = async (email: string): Promise<string[]> => {
+/**
+ * The distinct group roles ('owner' | 'admin' | 'member') the user holds, for
+ * the `groupRoles` claim. Group *ids* are deliberately not in the token: no
+ * service or front reads them, and callers that need the groups themselves ask
+ * group-service directly instead of trusting a claim that goes stale between
+ * refreshes.
+ */
+const getUserGroupRoles = async (email: string): Promise<string[]> => {
   // Fetch fresh data from group service
-  let userGroups: string[] = [];
+  let groupRoles: string[] = [];
   try {
     const groupServiceUrl = process.env.GROUP_SERVICE_URL;
     const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
 
     if (groupServiceUrl && internalToken) {
-      const groupResponse = await fetchWithTimeout(`${groupServiceUrl}/api/groups/mine/ids?userEmail=${encodeURIComponent(email)}`, {
+      const groupResponse = await fetchWithTimeout(`${groupServiceUrl}/api/groups/mine/roles?userEmail=${encodeURIComponent(email)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -127,7 +133,7 @@ const getUserGroups = async (email: string): Promise<string[]> => {
       if (groupResponse.ok) {
         const groupResult = await groupResponse.json();
         if (groupResult.success) {
-          userGroups = groupResult.data || [];
+          groupRoles = groupResult.data || [];
         }
       }
     }
@@ -135,7 +141,7 @@ const getUserGroups = async (email: string): Promise<string[]> => {
     logger.warn('Failed to fetch user groups for JWT', { email, error: (error as Error).message });
   }
 
-  return userGroups;
+  return groupRoles;
 };
 
 export const verifyAuth = async (req: Request, res: Response): Promise<void> => {
@@ -144,16 +150,16 @@ export const verifyAuth = async (req: Request, res: Response): Promise<void> => 
     throw new UnauthorizedError('No authenticated user');
   }
 
-  // Fetch fresh user groups
-  const userGroups = await getUserGroups(currentUser.email);
+  // Fetch fresh user group roles
+  const groupRoles = await getUserGroupRoles(currentUser.email);
 
-  // Generate new JWT with fresh groups
+  // Generate new JWT with fresh roles
   const jwtPayload: UserPayload = {
     id: currentUser.id,
     email: currentUser.email,
     name: currentUser.name || '',
     picture: currentUser.picture,
-    groups: userGroups,
+    groupRoles,
     tokenVersion: currentUser.tokenVersion || 1
   };
 
@@ -162,7 +168,10 @@ export const verifyAuth = async (req: Request, res: Response): Promise<void> => 
   // Update cookie with fresh token
   res.cookie('access_token', newToken, ACCESS_TOKEN_COOKIE_OPTIONS);
 
-  logger.info('Generated new token with fresh groups', { email: currentUser.email, groupCount: userGroups.length });
+  logger.info('Generated new token with fresh group roles', {
+    email: currentUser.email,
+    groupRoles
+  });
 
   res.json({
     success: true,
@@ -179,16 +188,16 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
     throw new UnauthorizedError('No authenticated user');
   }
 
-  // Fetch fresh user groups
-  const userGroups = await getUserGroups(currentUser.email);
+  // Fetch fresh user group roles
+  const groupRoles = await getUserGroupRoles(currentUser.email);
 
-  // Generate new JWT with updated groups
+  // Generate new JWT with updated roles
   const jwtPayload: UserPayload = {
     id: currentUser.id,
     email: currentUser.email,
     name: currentUser.name || '',
     picture: currentUser.picture,
-    groups: userGroups,
+    groupRoles,
     tokenVersion: currentUser.tokenVersion || 1
   };
 
@@ -200,7 +209,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
   res.json({
     success: true,
     token: newToken,
-    groups: userGroups
+    groupRoles
   });
 };
 

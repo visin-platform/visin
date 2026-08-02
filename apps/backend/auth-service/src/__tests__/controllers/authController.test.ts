@@ -146,7 +146,7 @@ describe('validateToken', () => {
     expect(res.json.mock.calls[0][0].user.tokenVersion).toBe(1);
   });
 
-  it('includes groups from the group service in the JWT', async () => {
+  it('includes group roles from the group service in the JWT', async () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
@@ -154,24 +154,27 @@ describe('validateToken', () => {
     mockedUser.updateOne.mockResolvedValue({});
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ success: true, data: ['group-1', 'group-2'] }),
+      json: async () => ({ success: true, data: ['owner', 'member'] }),
     }) as unknown as typeof fetch;
     const res = makeRes();
 
     await validateToken(makeReq({ body: { idToken: 'x' } }), res);
 
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('http://group/api/groups/mine/ids?userEmail='),
+      expect.stringContaining('http://group/api/groups/mine/roles?userEmail='),
       expect.objectContaining({ headers: expect.objectContaining({ 'x-internal-token': 'internal' }) })
     );
-    expect(verifyJWT(res.json.mock.calls[0][0].token).groups).toEqual(['group-1', 'group-2']);
+    const claims = verifyJWT(res.json.mock.calls[0][0].token);
+    // Roles, not group ids: ids could never be matched against 'owner'/'admin'
+    // by the fronts, and nothing else read them.
+    expect(claims.groupRoles).toEqual(['owner', 'member']);
   });
 });
 
-describe('getUserGroups edge cases (via verifyAuth)', () => {
+describe('getUserGroupRoles edge cases (via verifyAuth)', () => {
   const reqWithUser = () => makeReq({ user: jwtUser });
 
-  it('returns empty groups when the group service responds non-ok', async () => {
+  it('returns empty roles when the group service responds non-ok', async () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
     global.fetch = jest.fn().mockResolvedValue({ ok: false }) as unknown as typeof fetch;
@@ -179,10 +182,10 @@ describe('getUserGroups edge cases (via verifyAuth)', () => {
 
     await verifyAuth(reqWithUser(), res);
 
-    expect(res.json.mock.calls[0][0].user.groups).toEqual([]);
+    expect(res.json.mock.calls[0][0].user.groupRoles).toEqual([]);
   });
 
-  it('returns empty groups when the group service reports failure', async () => {
+  it('returns empty roles when the group service reports failure', async () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
     global.fetch = jest.fn().mockResolvedValue({
@@ -193,10 +196,10 @@ describe('getUserGroups edge cases (via verifyAuth)', () => {
 
     await verifyAuth(reqWithUser(), res);
 
-    expect(res.json.mock.calls[0][0].user.groups).toEqual([]);
+    expect(res.json.mock.calls[0][0].user.groupRoles).toEqual([]);
   });
 
-  it('returns empty groups when data is missing from a successful response', async () => {
+  it('returns empty roles when they are missing from a successful response', async () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
     global.fetch = jest.fn().mockResolvedValue({
@@ -207,10 +210,10 @@ describe('getUserGroups edge cases (via verifyAuth)', () => {
 
     await verifyAuth(reqWithUser(), res);
 
-    expect(res.json.mock.calls[0][0].user.groups).toEqual([]);
+    expect(res.json.mock.calls[0][0].user.groupRoles).toEqual([]);
   });
 
-  it('returns empty groups when fetch rejects', async () => {
+  it('returns empty roles when fetch rejects', async () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
     global.fetch = jest.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch;
@@ -218,7 +221,7 @@ describe('getUserGroups edge cases (via verifyAuth)', () => {
 
     await verifyAuth(reqWithUser(), res);
 
-    expect(res.json.mock.calls[0][0].user.groups).toEqual([]);
+    expect(res.json.mock.calls[0][0].user.groupRoles).toEqual([]);
   });
 
   it('skips the group service call when env vars are missing', async () => {
@@ -228,7 +231,7 @@ describe('getUserGroups edge cases (via verifyAuth)', () => {
     await verifyAuth(reqWithUser(), res);
 
     expect(global.fetch).not.toHaveBeenCalled();
-    expect(res.json.mock.calls[0][0].user.groups).toEqual([]);
+    expect(res.json.mock.calls[0][0].user.groupRoles).toEqual([]);
   });
 });
 
@@ -301,14 +304,14 @@ describe('refreshToken', () => {
     await expect(refreshToken(makeReq(), makeRes())).rejects.toThrow('No authenticated user');
   });
 
-  it('sets a new cookie and returns token + groups', async () => {
+  it('sets a new cookie and returns token + group roles', async () => {
     const res = makeRes();
 
     await refreshToken(makeReq({ user: jwtUser }), res);
 
     expect(res.cookie).toHaveBeenCalledWith('access_token', expect.any(String), expect.any(Object));
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: true, token: expect.any(String), groups: [] })
+      expect.objectContaining({ success: true, token: expect.any(String), groupRoles: [] })
     );
   });
 

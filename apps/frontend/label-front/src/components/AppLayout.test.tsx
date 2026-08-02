@@ -51,15 +51,15 @@ describe('AppLayout', () => {
   it('shows the signed-in user name and email', () => {
     renderAt('/jobs');
 
-    expect(screen.getByText('Test User')).toBeInTheDocument();
-    expect(screen.getByText('test@example.com')).toBeInTheDocument();
+    expect(screen.getAllByText('Test User').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('test@example.com').length).toBeGreaterThan(0);
   });
 
   it('falls back to "User" when the user has no name', () => {
     mockUser = { email: 'test@example.com' };
     renderAt('/jobs');
 
-    expect(screen.getByText('User')).toBeInTheDocument();
+    expect(screen.getAllByText('User').length).toBeGreaterThan(0);
   });
 
   it('logs out from the user menu', () => {

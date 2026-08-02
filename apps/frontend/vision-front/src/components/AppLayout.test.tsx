@@ -28,7 +28,10 @@ const renderLayout = (initialPath = '/trainings') =>
 describe('AppLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedGetGlobalConfig.mockReturnValue({ ACCOUNT_FRONT_URL: 'http://account.example.com' } as any);
+    mockedGetGlobalConfig.mockReturnValue({
+      ACCOUNT_FRONT_URL: 'http://account.example.com',
+      LABEL_FRONT_URL: 'https://label.example.com'
+    } as any);
   });
 
   it('renders children content', () => {
@@ -56,6 +59,55 @@ describe('AppLayout', () => {
     expect(screen.getAllByText('Trainings').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Datasets').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Labeling').length).toBeGreaterThan(0);
+  });
+
+  it('shows one Labeling entry, not label-front own sections', () => {
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      login: vi.fn(),
+      logout: vi.fn()
+    } as any);
+
+    renderLayout();
+
+    // Jobs and Bundles belong in label-front's sidebar, not Vision's.
+    expect(screen.queryByText('Jobs')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bundles')).not.toBeInTheDocument();
+    expect(screen.queryByText('New job')).not.toBeInTheDocument();
+  });
+
+  it('sends Labeling straight to label-front', () => {
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      login: vi.fn(),
+      logout: vi.fn()
+    } as any);
+
+    renderLayout();
+
+    // No interstitial page in between — the menu item is the label-front URL.
+    expect(screen.getAllByText('Labeling')[0].closest('a')).toHaveAttribute(
+      'href',
+      'https://label.example.com/jobs'
+    );
+  });
+
+  it('drops the Labeling entry when label-front is unconfigured', () => {
+    mockedGetGlobalConfig.mockReturnValue({} as any);
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      login: vi.fn(),
+      logout: vi.fn()
+    } as any);
+
+    renderLayout();
+
+    // Better an absent entry than one that 404s inside Vision.
+    expect(screen.queryByText('Labeling')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Projects').length).toBeGreaterThan(0);
   });
 
   it('shows the Login button when the user is not authenticated', () => {
@@ -96,11 +148,24 @@ describe('AppLayout', () => {
     } as any);
 
     renderLayout();
-    const nameButtons = screen.getAllByText('Jane Doe');
-    fireEvent.click(nameButtons[0]);
-    const logoutItems = screen.getAllByText('Logout');
-    fireEvent.click(logoutItems[0]);
+    // The user block sits at the bottom of the drawer, where it always has.
+    fireEvent.click(screen.getAllByLabelText('open user menu')[0]);
+    fireEvent.click(screen.getAllByText('Logout')[0]);
     expect(logout).toHaveBeenCalled();
+  });
+
+  it('offers an Account link to account-front', () => {
+    mockedUseAuth.mockReturnValue({
+      user: { name: 'Jane Doe', email: 'jane@example.com' },
+      isAuthenticated: true,
+      login: vi.fn(),
+      logout: vi.fn()
+    } as any);
+
+    renderLayout();
+    fireEvent.click(screen.getAllByLabelText('open user menu')[0]);
+
+    expect(screen.getByText('Account')).toBeInTheDocument();
   });
 
   it('highlights the active nav item based on the current route', () => {

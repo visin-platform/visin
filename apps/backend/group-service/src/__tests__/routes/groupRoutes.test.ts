@@ -29,7 +29,7 @@ describe('groupRoutes', () => {
     expect(find('post', '/')).toBeDefined();
     expect(find('get', '/mine')).toBeDefined();
     expect(find('get', '/mine/deleted')).toBeDefined();
-    expect(find('get', '/mine/ids')).toBeDefined();
+    expect(find('get', '/mine/roles')).toBeDefined();
     expect(find('get', '/:id')).toBeDefined();
     expect(find('patch', '/:id')).toBeDefined();
     expect(find('delete', '/:id')).toBeDefined();

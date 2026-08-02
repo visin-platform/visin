@@ -34,6 +34,7 @@ import {
 import { Benchmark } from '@/types';
 import { benchmarkService } from '@/services/benchmarkService';
 import { useAuth } from '../contexts/AuthContext';
+import { isGroupAdmin } from '../utils/permissions';
 
 const BenchmarksPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
@@ -100,10 +101,8 @@ const BenchmarksPage: React.FC = () => {
     setExpandedRows(newExpandedRows);
   };
 
-  const canDeleteBenchmarks = () => {
-    if (!isAuthenticated || !user) return false;
-    return user.groups?.some(group => group.includes('owner') || group.includes('admin')) ?? false;
-  };
+  // Check if user has permission to delete benchmarks (owner or admin role)
+  const canDeleteBenchmarks = () => isAuthenticated && isGroupAdmin(user);
 
   const handleRowClick = (benchmark: Benchmark) => {
     if (benchmark.training_id && typeof benchmark.training_id === 'object' && '_id' in benchmark.training_id) {

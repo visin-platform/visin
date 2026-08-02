@@ -55,10 +55,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GroupMember'
-        invites:
-          type: array
-          items:
-            $ref: '#/components/schemas/GroupInvite'
         deletedAt:
           type: string
           format: date-time
@@ -100,36 +96,7 @@ components:
         - role
         - joinedAt
 
-    GroupInvite:
-      type: object
-      properties:
-        email:
-          type: string
-          format: email
-          example: "invitee@example.com"
-        role:
-          type: string
-          enum: ["owner", "admin", "member"]
-          example: "member"
-        token:
-          type: string
-          example: "invite-token-123"
-        expiresAt:
-          type: string
-          format: date-time
-          example: "2023-01-08T00:00:00.000Z"
-        createdAt:
-          type: string
-          format: date-time
-          example: "2023-01-01T00:00:00.000Z"
-      required:
-        - email
-        - role
-        - token
-        - expiresAt
-        - createdAt
-
-    GroupIdsResponse:
+    GroupRolesResponse:
       type: object
       properties:
         success:
@@ -139,7 +106,12 @@ components:
           type: array
           items:
             type: string
-          example: ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012"]
+            enum: ["owner", "admin", "member"]
+          description: >-
+            Distinct roles the user holds across all their groups. This is what
+            callers gate admin-only behaviour on; the groups themselves are
+            fetched from /api/groups/mine rather than carried in a token.
+          example: ["owner", "member"]
       required:
         - success
         - data
@@ -432,20 +404,21 @@ paths:
         - bearerAuth: []
         - internalAuth: []
 
-  /api/groups/mine/ids:
+  /api/groups/mine/roles:
     get:
       tags: [My Groups]
-      summary: Get user's group IDs
+      summary: Get the distinct roles the user holds across their groups
       description: |
-        Retrieves the IDs of all groups where the authenticated user is a member.
-        This endpoint is optimized for use by other services.
+        Retrieves the distinct roles held by the authenticated user across every
+        group they belong to. Optimized for other services — auth-service calls
+        it once on the sign-in path to build the `groupRoles` JWT claim.
       responses:
         '200':
-          description: Group IDs retrieved successfully
+          description: Group roles retrieved successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GroupIdsResponse'
+                $ref: '#/components/schemas/GroupRolesResponse'
         '400':
           description: Bad request - user email required
           content:

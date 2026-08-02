@@ -14,6 +14,7 @@ jest.mock('../../services/groupService', () => ({
   removeMember: jest.fn(),
   checkMembership: jest.fn(),
   updateMemberActivity: jest.fn(),
+  memberRole: jest.fn(),
 }));
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),
@@ -59,18 +60,30 @@ describe('userEmail resolution', () => {
     expect(mockedSvc.createGroup).toHaveBeenCalledWith('user@x.com', 'Team');
   });
 
-  it('uses body userEmail for internal service requests', async () => {
+  it('ignores a body userEmail for internal service requests', async () => {
+    // validateRequest parses the body through a Zod object schema, which strips
+    // unknown keys — a userEmail sent in the body never reaches the controller,
+    // so it must not look like a working alternative to the query string.
+    await expect(
+      ctrl.createGroup(
+        makeReq({ isInternalService: true, body: { name: 'Team', userEmail: 'svc@x.com' } }),
+        makeRes()
+      )
+    ).rejects.toThrow('User email required');
+  });
+
+  it('uses query userEmail for internal service requests, lowercased', async () => {
     mockedSvc.createGroup.mockResolvedValue(group);
 
     await ctrl.createGroup(
-      makeReq({ isInternalService: true, body: { name: 'Team', userEmail: 'svc@x.com' } }),
+      makeReq({ isInternalService: true, body: { name: 'Team' }, query: { userEmail: 'Svc@X.com' } }),
       makeRes()
     );
 
     expect(mockedSvc.createGroup).toHaveBeenCalledWith('svc@x.com', 'Team');
   });
 
-  it('falls back to query userEmail and unwraps arrays', async () => {
+  it('unwraps a repeated query userEmail', async () => {
     const sortable = [group];
     mockedSvc.listMyGroups.mockResolvedValue(sortable);
     mockedSvc.updateMemberActivity.mockResolvedValue(undefined);
@@ -91,7 +104,7 @@ describe('userEmail resolution', () => {
       'User email required'
     );
     await expect(ctrl.listMyDeleted(makeReq(), makeRes())).rejects.toThrow('User email required');
-    await expect(ctrl.getUserGroupIds(makeReq(), makeRes())).rejects.toThrow('User email required');
+    await expect(ctrl.getMyGroupRoles(makeReq(), makeRes())).rejects.toThrow('User email required');
   });
 });
 
@@ -108,7 +121,7 @@ describe('createGroup', () => {
 });
 
 describe('listMine', () => {
-  it('lists groups and refreshes member activity for each', async () => {
+  it('lists groups and refreshes member activity in a single write', async () => {
     const groups = [group, { _id: { toString: () => 'g2' }, name: 'Two' }];
     mockedSvc.listMyGroups.mockResolvedValue(groups);
     mockedSvc.updateMemberActivity.mockResolvedValue(undefined);
@@ -116,8 +129,8 @@ describe('listMine', () => {
 
     await ctrl.listMine(userReq(), res);
 
-    expect(mockedSvc.updateMemberActivity).toHaveBeenCalledTimes(2);
-    expect(mockedSvc.updateMemberActivity).toHaveBeenCalledWith('g1', 'user@x.com');
+    expect(mockedSvc.updateMemberActivity).toHaveBeenCalledTimes(1);
+    expect(mockedSvc.updateMemberActivity).toHaveBeenCalledWith(['g1', 'g2'], 'user@x.com');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: groups });
   });
 });
@@ -133,14 +146,26 @@ describe('listMyDeleted', () => {
   });
 });
 
-describe('getUserGroupIds', () => {
-  it('maps groups to their string ids', async () => {
-    mockedSvc.listMyGroups.mockResolvedValue([group]);
+describe('getMyGroupRoles', () => {
+  it('returns the distinct roles held across the user groups', async () => {
+    const second = { _id: { toString: () => 'g2' }, name: 'Two' };
+    mockedSvc.listMyGroups.mockResolvedValue([group, second]);
+    mockedSvc.memberRole.mockReturnValueOnce('owner').mockReturnValueOnce('member');
     const res = makeRes();
 
-    await ctrl.getUserGroupIds(userReq(), res);
+    await ctrl.getMyGroupRoles(userReq(), res);
 
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: ['g1'] });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: ['owner', 'member'] });
+  });
+
+  it('de-duplicates repeated roles', async () => {
+    mockedSvc.listMyGroups.mockResolvedValue([group, { _id: { toString: () => 'g2' } }]);
+    mockedSvc.memberRole.mockReturnValue('admin');
+    const res = makeRes();
+
+    await ctrl.getMyGroupRoles(userReq(), res);
+
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: ['admin'] });
   });
 });
 

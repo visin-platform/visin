@@ -27,6 +27,7 @@ import { getCategoriesByDataset } from '../services/imageCategoryService';
 import FileUpload from '../components/FileUpload';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
+import { isGroupAdmin } from '../utils/permissions';
 import { useDatasetImages } from '../hooks/useDatasetImages';
 import { useDatasetCategoryManager } from '../hooks/useDatasetCategoryManager';
 import { useDatasetImageEditor } from '../hooks/useDatasetImageEditor';
@@ -146,9 +147,7 @@ const DatasetDetailPage: React.FC = () => {
 
   usePageTitle(analysis ? `Dataset: ${analysis.dataset} - Vision` : 'Dataset Details - Vision');
 
-  const canDeleteDatasets = () => {
-    return isAuthenticated && user?.groups && (user.groups.includes('owner') || user.groups.includes('admin'));
-  };
+  const canDeleteDatasets = () => isAuthenticated && isGroupAdmin(user);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);

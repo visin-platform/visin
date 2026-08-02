@@ -2,8 +2,8 @@ import { createApiClient, ApiError } from '../apiClient';
 
 /**
  * Fields observed across the auth-service endpoints frontends call:
- * `/auth/verify` always returns `groups` (JWT-derived); `/auth/profile`
- * returns `firstName`/`lastName` (DB-derived) but not `groups`. Optional
+ * `/auth/verify` always returns `groupRoles` (JWT-derived); `/auth/profile`
+ * returns `firstName`/`lastName` (DB-derived) but not `groupRoles`. Optional
  * fields reflect which endpoint populated the result, not that the field
  * is unreliable.
  */
@@ -15,7 +15,12 @@ export interface AuthUser {
   firstName?: string;
   lastName?: string;
   username?: string;
-  groups?: string[];
+  /**
+   * Distinct roles ('owner' | 'admin' | 'member') the user holds across their
+   * groups — what admin-only UI gates on. The token carries no group ids;
+   * anything needing the groups themselves calls group-service.
+   */
+  groupRoles?: string[];
 }
 
 export interface AuthCheckResult {

@@ -1,13 +1,12 @@
 import { ReactNode } from 'react';
-import { Person, Security, Storage, ArrowBack } from '@mui/icons-material';
+import { Person, Groups, ArrowBack } from '@mui/icons-material';
 import { AppLayout as SharedAppLayout, type AppLayoutNavItem } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { getGlobalConfig } from '../config/ConfigProvider';
 
 const navItems: AppLayoutNavItem[] = [
   { text: 'Profile', icon: <Person />, path: '/account/profile' },
-  { text: 'Security', icon: <Security />, path: '/account/security' },
-  { text: 'Data', icon: <Storage />, path: '/account/data' }
+  { text: 'Groups', icon: <Groups />, path: '/account/groups' }
 ];
 
 interface AppLayoutProps {
@@ -21,7 +20,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <SharedAppLayout
       appName="Account"
-      subtitle="Manage your personal information and security settings."
+      subtitle="Manage your personal information and the groups you share work with."
       navItems={navItems}
       user={user}
       onLogout={logout}

@@ -6,6 +6,7 @@ import { Comparison } from '@/types';
 import { comparisonService } from '@/services/comparisonService';
 import { trainingService } from '@/services/trainingService';
 import { useAuth } from '../contexts/AuthContext';
+import { isGroupAdmin } from '../utils/permissions';
 
 export const useComparisonsPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -118,10 +119,7 @@ export const useComparisonsPage = () => {
   };
 
   // Check if user has permission to delete comparisons (owner or admin role)
-  const canDeleteComparisons = () => {
-    if (!isAuthenticated || !user) return false;
-    return user.groups?.some(group => group.includes('owner') || group.includes('admin')) ?? false;
-  };
+  const canDeleteComparisons = () => isAuthenticated && isGroupAdmin(user);
 
   const handleEditComparison = async (comparison: Comparison) => {
     setComparisonToEdit(comparison);

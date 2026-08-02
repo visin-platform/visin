@@ -68,7 +68,7 @@ const benchmark1 = {
 describe('BenchmarksPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAuthMock.mockReturnValue({ user: { id: 'u1', groups: ['owner'] }, isAuthenticated: true });
+    useAuthMock.mockReturnValue({ user: { id: 'u1', groupRoles: ['owner'] }, isAuthenticated: true });
   });
 
   it('shows a loading spinner while benchmarks are loading', () => {
@@ -159,7 +159,7 @@ describe('BenchmarksPage', () => {
   });
 
   it('hides the delete action for users without owner/admin role', async () => {
-    useAuthMock.mockReturnValue({ user: { id: 'u2', groups: ['member'] }, isAuthenticated: true });
+    useAuthMock.mockReturnValue({ user: { id: 'u2', groupRoles: ['member'] }, isAuthenticated: true });
     benchmarkServiceMock.getBenchmarks.mockResolvedValue({ data: { benchmarks: [benchmark1] } });
 
     renderPage();

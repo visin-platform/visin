@@ -134,18 +134,13 @@ describe('ProfileTab', () => {
     expect(screen.queryByText('Profile updated successfully')).not.toBeInTheDocument();
   });
 
-  it('updates last name and the notifications toggle', async () => {
+  it('updates last name', async () => {
     mockedGetProfile.mockResolvedValue(user);
     render(<ProfileTab />);
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Hopper' } });
     expect(screen.getByDisplayValue('Hopper')).toBeInTheDocument();
-
-    const notificationsSwitch = screen.getByRole('switch');
-    expect(notificationsSwitch).toBeChecked();
-    fireEvent.click(notificationsSwitch);
-    expect(notificationsSwitch).not.toBeChecked();
   });
 
   it('falls back to empty names when the profile has none, and cancel restores that', async () => {

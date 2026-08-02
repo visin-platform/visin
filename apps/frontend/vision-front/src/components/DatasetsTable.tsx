@@ -24,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import { getAllAnalyses, DatasetAnalysis, deleteAnalysis, updateAnalysis } from '../services/analysisService';
 import { useAuth } from '../contexts/AuthContext';
+import { isGroupAdmin } from '../utils/permissions';
 import { useDatasetDownload } from '../hooks/useDatasetDownload';
 import AnalysisTableRow from './dataset/AnalysisTableRow';
 import DeleteAnalysisDialog from './dataset/DeleteAnalysisDialog';
@@ -111,8 +112,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
 
   const canEditDatasets = () => isAuthenticated;
 
-  const canDeleteDatasets = () =>
-    isAuthenticated && user?.groups && (user.groups.includes('owner') || user.groups.includes('admin'));
+  const canDeleteDatasets = () => isAuthenticated && isGroupAdmin(user);
 
   const handleDeleteClick = (analysis: DatasetAnalysis) => {
     setSelectedAnalysis(analysis);

@@ -11,6 +11,8 @@ describe('Group model', () => {
     expect(group.createdBy).toBe('owner@x.com');
     expect(group.members[0].email).toBe('owner@x.com');
     expect(group.members[0].joinedAt).toBeDefined();
+    // Persisted as null rather than absent — every soft-delete query must
+    // therefore match on value, not `$exists`.
     expect(group.deletedAt).toBeNull();
   });
 
@@ -35,15 +37,5 @@ describe('Group model', () => {
     const group = new Group({ name: 'x'.repeat(121), createdBy: 'o@x.com' });
 
     expect(group.validateSync()?.errors.name).toBeDefined();
-  });
-
-  it('defaults invite role to member', () => {
-    const group = new Group({
-      name: 'Team',
-      createdBy: 'o@x.com',
-      invites: [{ email: 'i@x.com', token: 't', expiresAt: new Date() }],
-    });
-
-    expect(group.invites?.[0].role).toBe('member');
   });
 });

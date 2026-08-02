@@ -8,7 +8,16 @@ export type { LoaderProps } from './components/Loader';
 export { ErrorPage } from './components/ErrorPage';
 export type { ErrorPageProps } from './components/ErrorPage';
 export { AppLayout } from './components/AppLayout';
-export type { AppLayoutProps, AppLayoutNavItem, AppLayoutFooterLink, AppLayoutUser } from './components/AppLayout';
+export type {
+  AppLayoutProps,
+  AppLayoutNavItem,
+  AppLayoutInternalNavItem,
+  AppLayoutExternalNavItem,
+  AppLayoutFooterLink,
+  AppLayoutUser
+} from './components/AppLayout';
+export { createVisinNavItems } from './navigation';
+export type { VisinApp, VisinAppUrls } from './navigation';
 export { createProtectedRoute } from './components/ProtectedRoute';
 export type { ProtectedRouteProps, ProtectedRouteAuth } from './components/ProtectedRoute';
 export { createLoginRedirect } from './components/LoginRedirect';

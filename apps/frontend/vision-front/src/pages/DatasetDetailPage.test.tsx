@@ -209,7 +209,7 @@ function renderPage() {
 describe('DatasetDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAuthMock.mockReturnValue({ isAuthenticated: true, user: { id: 'u1', groups: ['owner'] } });
+    useAuthMock.mockReturnValue({ isAuthenticated: true, user: { id: 'u1', groupRoles: ['owner'] } });
     useDatasetImagesMock.mockReturnValue(defaultDatasetImages);
     useDatasetCategoryManagerMock.mockReturnValue(defaultCategoryManager);
     useDatasetImageEditorMock.mockReturnValue(defaultImageEditor);
@@ -302,7 +302,7 @@ describe('DatasetDetailPage', () => {
   });
 
   it('hides the delete action in the header for users without owner/admin role', async () => {
-    useAuthMock.mockReturnValue({ isAuthenticated: true, user: { id: 'u2', groups: ['member'] } });
+    useAuthMock.mockReturnValue({ isAuthenticated: true, user: { id: 'u2', groupRoles: ['member'] } });
     getAnalysisByIdMock.mockResolvedValue(analysis1);
 
     renderPage();

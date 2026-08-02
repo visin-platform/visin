@@ -34,8 +34,9 @@ export class ApiError extends Error {
 export function createApiClient(options: ApiClientOptions) {
   async function request<T = unknown>(path: string, init: ApiRequestOptions = {}): Promise<T> {
     const { skipAuthRedirect, headers, ...rest } = init;
+    const url = `${options.baseUrl()}${path}`;
 
-    const response = await fetch(`${options.baseUrl()}${path}`, {
+    const response = await fetch(url, {
       credentials: 'include',
       ...rest,
       headers: {
@@ -62,7 +63,19 @@ export function createApiClient(options: ApiClientOptions) {
     if (response.status === 204) {
       return undefined as T;
     }
-    return response.json();
+
+    try {
+      return await response.json();
+    } catch {
+      // Almost always a misconfigured base URL: the request fell through to the
+      // app's own origin and a dev server or nginx answered with index.html, so
+      // the raw `JSON.parse: unexpected character` gave no hint where to look.
+      const contentType = response.headers.get('content-type') ?? 'unknown';
+      throw new ApiError(
+        response.status,
+        `Expected JSON from ${url} but received ${contentType}. Check the service base URL is configured.`
+      );
+    }
   }
 
   return {

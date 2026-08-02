@@ -19,16 +19,41 @@ import {
   IconButton
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import { Menu as MenuIcon, Logout, Person } from '@mui/icons-material';
+import {
+  Menu as MenuIcon,
+  Logout,
+  Person,
+  Login,
+  ChevronLeft,
+  ChevronRight,
+  ExpandMore,
+  AccountCircle
+} from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 
 const DRAWER_WIDTH = 260;
+const COLLAPSED_DRAWER_WIDTH = 88;
 
-export interface AppLayoutNavItem {
+interface NavItemBase {
   text: string;
   icon: ReactNode;
-  path: string;
+  /** Draws a divider above this item, to separate groups of sections. */
+  dividerBefore?: boolean;
 }
+
+/** A section of the current app, navigated to client-side. */
+export interface AppLayoutInternalNavItem extends NavItemBase {
+  path: string;
+  href?: undefined;
+}
+
+/** A section owned by a sibling app, reached by a full page load. */
+export interface AppLayoutExternalNavItem extends NavItemBase {
+  href: string;
+  path?: undefined;
+}
+
+export type AppLayoutNavItem = AppLayoutInternalNavItem | AppLayoutExternalNavItem;
 
 export interface AppLayoutFooterLink {
   text: string;
@@ -55,15 +80,35 @@ export interface AppLayoutProps {
   footerLink?: AppLayoutFooterLink;
   /** Max width of the centered content column. Defaults to 800. */
   maxContentWidth?: number;
+  /**
+   * False shows a Login button in place of the user block. Defaults to true —
+   * only vision-front serves anonymous visitors.
+   */
+  isAuthenticated?: boolean;
+  /** Required when `isAuthenticated` can be false. */
+  onLogin?: () => void;
+  /** Adds an "Account" entry to the user menu, linking to account-front. */
+  accountUrl?: string;
+  /** Lets the desktop drawer collapse to an icon rail. Defaults to false. */
+  collapsible?: boolean;
+  /**
+   * False drops the page title/subtitle header, for apps whose pages render
+   * their own headings. Defaults to true.
+   */
+  showPageHeader?: boolean;
 }
 
 /**
- * Shared sidebar/appbar shell used by the account and label fronts: fixed
- * dark drawer with nav items, mobile temporary drawer, avatar menu with
- * logout, and a centered content column with a page title derived from the
- * active nav item. vision-front's collapsible-drawer layout has different
- * enough behavior (login/logout dual state, no page-title header) that it
- * stays a standalone component rather than forcing it through these props.
+ * The single sidebar/appbar shell behind every Visin front: dark drawer with
+ * nav items, mobile temporary drawer, a user block pinned to the drawer
+ * bottom, and a content column. vision-front used to carry its own
+ * near-duplicate of this so it could collapse the drawer and serve anonymous
+ * visitors; those are now options here, so navigation looks and behaves
+ * identically across apps.
+ *
+ * Account, Logout and Login all live in the drawer's user block, never in a
+ * page header: a header user block costs every page a band of vertical space
+ * and puts account actions somewhere different from the navigation.
  */
 export function AppLayout({
   children,
@@ -73,13 +118,21 @@ export function AppLayout({
   user,
   onLogout,
   footerLink,
-  maxContentWidth = 800
+  maxContentWidth = 800,
+  isAuthenticated = true,
+  onLogin,
+  accountUrl,
+  collapsible = false,
+  showPageHeader = true
 }: AppLayoutProps) {
   const location = useLocation();
   const theme = useTheme();
 
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(true);
+
+  const drawerWidth = collapsible && !desktopOpen ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH;
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
   const handleOpenUserMenu = (event: MouseEvent<HTMLElement>) => setAnchorElUser(event.currentTarget);
@@ -87,75 +140,118 @@ export function AppLayout({
 
   // An exact match always wins; a prefix match only counts if no other nav
   // item is an exact match for the current path (avoids '/jobs' lighting up
-  // while on '/jobs/new').
-  const isActive = (path: string) =>
-    location.pathname === path ||
-    (location.pathname.startsWith(path + '/') &&
-      !navItems.some((item) => item.path !== path && item.path === location.pathname));
+  // while on '/jobs/new'). External items are never active — they belong to a
+  // different app.
+  const isActive = (item: AppLayoutNavItem) =>
+    item.path !== undefined &&
+    (location.pathname === item.path ||
+      (location.pathname.startsWith(item.path + '/') &&
+        !navItems.some((other) => other.path !== item.path && other.path === location.pathname)));
 
-  const activeItem = navItems.find((item) => isActive(item.path));
+  const activeItem = navItems.find(isActive);
 
-  const drawer = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#111827', color: '#fff' }}>
-      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Box component="img" src="/logo.svg" alt="Visin Logo" sx={{ width: 32, height: 32 }} />
-        <Typography variant="h6" sx={{ fontWeight: 700, color: 'inherit', letterSpacing: '-0.5px' }}>
-          Visin
-        </Typography>
-      </Box>
+  // The mobile drawer is temporary and always renders expanded — collapsing to
+  // an icon rail only makes sense for the permanent desktop one.
+  const renderDrawer = (variant: 'mobile' | 'desktop') => {
+    const collapsed = variant === 'desktop' && collapsible && !desktopOpen;
+    const showCollapseToggle = variant === 'desktop' && collapsible;
 
-      <List sx={{ px: 2, flexGrow: 1 }}>
-        {navItems.map((item) => {
-          const active = isActive(item.path);
-          return (
-            <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                component={Link}
-                to={item.path}
-                selected={active}
-                onClick={() => setMobileOpen(false)}
-                sx={{
-                  borderRadius: 2,
-                  py: 1.2,
-                  color: 'rgba(255,255,255,0.7)',
-                  '&.Mui-selected': {
-                    bgcolor: alpha(theme.palette.primary.main, 0.15),
-                    color: theme.palette.primary.light,
-                    '&:hover': {
-                      bgcolor: alpha(theme.palette.primary.main, 0.25)
+    return (
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#111827', color: '#fff' }}>
+        <Box
+          sx={{
+            p: 3,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            justifyContent: collapsed ? 'center' : 'space-between'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box component="img" src="/logo.svg" alt="Visin Logo" sx={{ width: 32, height: 32, flexShrink: 0 }} />
+            {!collapsed && (
+              <Typography variant="h6" sx={{ fontWeight: 700, color: 'inherit', letterSpacing: '-0.5px' }}>
+                Visin
+              </Typography>
+            )}
+          </Box>
+          {showCollapseToggle && (
+            <IconButton
+              onClick={() => setDesktopOpen(!desktopOpen)}
+              aria-label={collapsed ? 'expand navigation' : 'collapse navigation'}
+              sx={{ color: 'rgba(255,255,255,0.5)', display: { xs: 'none', sm: 'flex' }, p: 0.5 }}
+            >
+              {collapsed ? <ChevronRight /> : <ChevronLeft />}
+            </IconButton>
+          )}
+        </Box>
+
+        <List sx={{ px: 2, flexGrow: 1 }}>
+          {navItems.map((item) => {
+            const active = isActive(item);
+            // An external item is a plain anchor: it belongs to a sibling app,
+            // so it needs a full page load, not a client-side route change.
+            const linkProps =
+              item.path !== undefined
+                ? { component: Link, to: item.path }
+                : { component: 'a' as const, href: item.href };
+
+            return (
+              <ListItem key={item.text} disablePadding sx={{ mb: 0.5, display: 'block' }}>
+                {item.dividerBefore && <Divider sx={{ my: 1.5, mx: 1, borderColor: 'rgba(255,255,255,0.1)' }} />}
+                <ListItemButton
+                  {...linkProps}
+                  selected={active}
+                  onClick={() => setMobileOpen(false)}
+                  sx={{
+                    borderRadius: 2,
+                    py: 1.2,
+                    justifyContent: collapsed ? 'center' : 'initial',
+                    color: 'rgba(255,255,255,0.7)',
+                    '&.Mui-selected': {
+                      bgcolor: alpha(theme.palette.primary.main, 0.15),
+                      color: theme.palette.primary.light,
+                      '&:hover': {
+                        bgcolor: alpha(theme.palette.primary.main, 0.25)
+                      },
+                      '& .MuiListItemIcon-root': {
+                        color: theme.palette.primary.light
+                      }
                     },
-                    '& .MuiListItemIcon-root': {
-                      color: theme.palette.primary.light
+                    '&:hover': {
+                      bgcolor: 'rgba(255,255,255,0.05)',
+                      color: '#fff',
+                      '& .MuiListItemIcon-root': {
+                        color: '#fff'
+                      }
                     }
-                  },
-                  '&:hover': {
-                    bgcolor: 'rgba(255,255,255,0.05)',
-                    color: '#fff',
-                    '& .MuiListItemIcon-root': {
-                      color: '#fff'
-                    }
-                  }
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 40, color: active ? 'inherit' : 'rgba(255,255,255,0.5)' }}>
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  slotProps={{
-                    primary: { sx: { fontWeight: active ? 600 : 500, fontSize: '0.925rem' } }
                   }}
-                />
-              </ListItemButton>
-            </ListItem>
-          );
-        })}
-      </List>
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: collapsed ? 0 : 40,
+                      justifyContent: 'center',
+                      color: active ? 'inherit' : 'rgba(255,255,255,0.5)'
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
+                  {!collapsed && (
+                    <ListItemText
+                      primary={item.text}
+                      slotProps={{
+                        primary: { sx: { fontWeight: active ? 600 : 500, fontSize: '0.925rem' } }
+                      }}
+                    />
+                  )}
+                </ListItemButton>
+              </ListItem>
+            );
+          })}
+        </List>
 
-      {footerLink && (
-        <>
-          <Divider sx={{ mx: 2, opacity: 0.1, bgcolor: 'rgba(255,255,255,0.1)' }} />
-          <List sx={{ px: 2, py: 2 }}>
+        {footerLink && (
+          <List sx={{ px: 2 }}>
             <ListItem disablePadding>
               <ListItemButton
                 component="a"
@@ -163,6 +259,7 @@ export function AppLayout({
                 sx={{
                   borderRadius: 2,
                   py: 1.2,
+                  justifyContent: collapsed ? 'center' : 'initial',
                   color: 'rgba(255,255,255,0.5)',
                   '&:hover': {
                     bgcolor: 'rgba(255,255,255,0.05)',
@@ -173,18 +270,82 @@ export function AppLayout({
                   }
                 }}
               >
-                <ListItemIcon sx={{ minWidth: 40, color: 'inherit' }}>{footerLink.icon}</ListItemIcon>
-                <ListItemText
-                  primary={footerLink.text}
-                  slotProps={{ primary: { sx: { fontWeight: 500, fontSize: '0.925rem' } } }}
-                />
+                <ListItemIcon sx={{ minWidth: collapsed ? 0 : 40, justifyContent: 'center', color: 'inherit' }}>
+                  {footerLink.icon}
+                </ListItemIcon>
+                {!collapsed && (
+                  <ListItemText
+                    primary={footerLink.text}
+                    slotProps={{ primary: { sx: { fontWeight: 500, fontSize: '0.925rem' } } }}
+                  />
+                )}
               </ListItemButton>
             </ListItem>
           </List>
-        </>
-      )}
-    </Box>
-  );
+        )}
+
+        <Divider sx={{ mx: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+
+        <Box sx={{ p: 2 }}>
+          {isAuthenticated ? (
+            <ListItemButton
+              onClick={handleOpenUserMenu}
+              aria-label="open user menu"
+              sx={{
+                borderRadius: 2,
+                justifyContent: collapsed ? 'center' : 'initial',
+                px: collapsed ? 1 : 2,
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
+              }}
+            >
+              <Avatar
+                src={user?.picture}
+                sx={{ width: 32, height: 32, mr: collapsed ? 0 : 2, bgcolor: theme.palette.secondary.main }}
+              >
+                {user?.name?.charAt(0) || <Person fontSize="small" />}
+              </Avatar>
+              {!collapsed && (
+                <>
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                      {user?.name || 'User'}
+                    </Typography>
+                    <Typography variant="caption" noWrap sx={{ color: 'rgba(255,255,255,0.5)', display: 'block' }}>
+                      {user?.email}
+                    </Typography>
+                  </Box>
+                  <ExpandMore sx={{ color: 'rgba(255,255,255,0.5)' }} />
+                </>
+              )}
+            </ListItemButton>
+          ) : (
+            <ListItemButton
+              onClick={onLogin}
+              sx={{
+                borderRadius: 2,
+                justifyContent: collapsed ? 'center' : 'initial',
+                px: collapsed ? 1 : 2,
+                color: 'rgba(255,255,255,0.7)',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }
+              }}
+            >
+              <ListItemIcon
+                sx={{ minWidth: collapsed ? 0 : 40, justifyContent: 'center', color: 'rgba(255,255,255,0.5)' }}
+              >
+                <Login />
+              </ListItemIcon>
+              {!collapsed && (
+                <ListItemText
+                  primary="Login"
+                  slotProps={{ primary: { sx: { fontWeight: 600, fontSize: '0.925rem' } } }}
+                />
+              )}
+            </ListItemButton>
+          )}
+        </Box>
+      </Box>
+    );
+  };
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -207,15 +368,10 @@ export function AppLayout({
           <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700, flexGrow: 1 }}>
             {appName}
           </Typography>
-          <Avatar
-            src={user?.picture}
-            sx={{ width: 32, height: 32, border: '1px solid rgba(255,255,255,0.1)' }}
-            onClick={handleOpenUserMenu}
-          />
         </Toolbar>
       </AppBar>
       {/* Sidebar for Desktop */}
-      <Box component="nav" sx={{ width: { sm: DRAWER_WIDTH }, flexShrink: { sm: 0 } }}>
+      <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 }, transition: 'width 0.2s' }}>
         <Drawer
           variant="temporary"
           open={mobileOpen}
@@ -232,7 +388,7 @@ export function AppLayout({
             }
           }}
         >
-          {drawer}
+          {renderDrawer('mobile')}
         </Drawer>
 
         <Drawer
@@ -241,24 +397,68 @@ export function AppLayout({
             display: { xs: 'none', sm: 'block' },
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
-              width: DRAWER_WIDTH,
+              width: drawerWidth,
               borderRight: '1px solid rgba(255,255,255,0.1)',
               bgcolor: '#111827',
-              color: '#fff'
+              color: '#fff',
+              transition: 'width 0.2s',
+              overflowX: 'hidden'
             }
           }}
           open
         >
-          {drawer}
+          {renderDrawer('desktop')}
         </Drawer>
       </Box>
+
+      {/* Rendered once, outside both drawers, so the two user buttons share it. */}
+      <Menu
+        anchorEl={anchorElUser}
+        open={Boolean(anchorElUser)}
+        onClose={handleCloseUserMenu}
+        transformOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+        anchorOrigin={{ horizontal: 'left', vertical: 'top' }}
+        slotProps={{
+          paper: { sx: { minWidth: 200, borderRadius: 2, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' } }
+        }}
+      >
+        {accountUrl && (
+          <MenuItem
+            onClick={() => {
+              handleCloseUserMenu();
+              window.location.href = accountUrl;
+            }}
+            sx={{ py: 1.5 }}
+          >
+            <ListItemIcon>
+              <AccountCircle fontSize="small" />
+            </ListItemIcon>
+            Account
+          </MenuItem>
+        )}
+        {accountUrl && <Divider />}
+        <MenuItem
+          onClick={() => {
+            handleCloseUserMenu();
+            onLogout();
+          }}
+          sx={{ py: 1.5 }}
+        >
+          <ListItemIcon>
+            <Logout fontSize="small" />
+          </ListItemIcon>
+          Logout
+        </MenuItem>
+      </Menu>
+
       {/* Main Content */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           p: { xs: 2, sm: 4, md: 8 },
-          width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` },
+          width: { sm: `calc(100% - ${drawerWidth}px)` },
+          transition: 'width 0.2s',
           mt: { xs: 7, sm: 0 },
           display: 'flex',
           flexDirection: 'column',
@@ -266,9 +466,8 @@ export function AppLayout({
         }}
       >
         <Box sx={{ width: '100%', maxWidth: maxContentWidth }}>
-          {/* Desktop Header */}
-          <Box sx={{ display: { xs: 'none', sm: 'flex' }, justifyContent: 'space-between', alignItems: 'center', mb: 8 }}>
-            <Box>
+          {showPageHeader && (
+            <Box sx={{ display: { xs: 'none', sm: 'block' }, mb: 6 }}>
               <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: '-1px', mb: 1 }}>
                 {activeItem?.text || appName}
               </Typography>
@@ -276,55 +475,7 @@ export function AppLayout({
                 {subtitle}
               </Typography>
             </Box>
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ textAlign: 'right' }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                  {user?.name || 'User'}
-                </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  {user?.email}
-                </Typography>
-              </Box>
-              <IconButton onClick={handleOpenUserMenu} sx={{ p: 0.5, border: '1px solid', borderColor: 'divider' }}>
-                <Avatar src={user?.picture} sx={{ width: 40, height: 40 }}>
-                  <Person />
-                </Avatar>
-              </IconButton>
-              <Menu
-                anchorEl={anchorElUser}
-                open={Boolean(anchorElUser)}
-                onClose={handleCloseUserMenu}
-                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-                slotProps={{
-                  paper: { sx: { mt: 1.5, minWidth: 200, borderRadius: 2, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' } }
-                }}
-              >
-                <Box sx={{ px: 2, py: 1.5 }}>
-                  <Typography variant="subtitle2" noWrap>
-                    {user?.name}
-                  </Typography>
-                  <Typography variant="caption" noWrap sx={{ color: 'text.secondary' }}>
-                    {user?.email}
-                  </Typography>
-                </Box>
-                <Divider />
-                <MenuItem
-                  onClick={() => {
-                    handleCloseUserMenu();
-                    onLogout();
-                  }}
-                  sx={{ py: 1.5 }}
-                >
-                  <ListItemIcon>
-                    <Logout fontSize="small" />
-                  </ListItemIcon>
-                  Logout
-                </MenuItem>
-              </Menu>
-            </Box>
-          </Box>
+          )}
 
           {children}
         </Box>

@@ -5,13 +5,18 @@ export interface AppConfig {
   AUTH_SERVICE_URL?: string;
   AUTH_FRONT_URL?: string;
   LABEL_SERVICE_URL?: string;
+  /** Needed for the shared menu's cross-app links and the Account entry. */
+  VISION_FRONT_URL?: string;
+  ACCOUNT_FRONT_URL?: string;
 }
 
 function createDevConfig(): AppConfig {
   return {
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL,
     AUTH_FRONT_URL: import.meta.env.VITE_AUTH_FRONT_URL,
-    LABEL_SERVICE_URL: import.meta.env.VITE_LABEL_SERVICE_URL
+    LABEL_SERVICE_URL: import.meta.env.VITE_LABEL_SERVICE_URL,
+    VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL,
+    ACCOUNT_FRONT_URL: import.meta.env.VITE_ACCOUNT_FRONT_URL
   };
 }
 

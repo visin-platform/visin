@@ -13,7 +13,7 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-let authState = { user: { groups: ['owner'] } as any, isAuthenticated: true };
+let authState = { user: { groupRoles: ['owner'] } as any, isAuthenticated: true };
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => authState
 }));
@@ -52,7 +52,7 @@ const makeComparison = (overrides: Partial<Comparison> = {}): Comparison =>
 describe('useComparisonsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authState = { user: { groups: ['owner'] }, isAuthenticated: true };
+    authState = { user: { groupRoles: ['owner'] }, isAuthenticated: true };
     mockedComparison.getComparisons.mockResolvedValue({
       success: true,
       data: { comparisons: [makeComparison()], pagination: {} as any }
@@ -120,7 +120,7 @@ describe('useComparisonsPage', () => {
   });
 
   it('canDeleteComparisons is false for a user without owner/admin groups', async () => {
-    authState = { user: { groups: ['viewer'] }, isAuthenticated: true };
+    authState = { user: { groupRoles: ['member'] }, isAuthenticated: true };
     const { result } = renderHook(() => useComparisonsPage(), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.canDeleteComparisons()).toBe(false);
