@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.137](https://github.com/visin-platform/visin-monorepo/compare/v0.0.136...v0.0.137) (2026-08-02)
+
+
+### Features
+
+* add edit bundle ([2948206](https://github.com/visin-platform/visin-monorepo/commit/29482069ee9abd865f7b46b64bfcab1889bebcde))
+
 ### [0.0.136](https://github.com/visin-platform/visin-monorepo/compare/v0.0.135...v0.0.136) (2026-08-02)
 
 
