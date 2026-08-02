@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.136](https://github.com/visin-platform/visin-monorepo/compare/v0.0.135...v0.0.136) (2026-08-02)
+
+
+### Features
+
+* add mapping step to labeling ([e708f14](https://github.com/visin-platform/visin-monorepo/commit/e708f1450e41b843f71022b45fb23c4363a65ab1))
+
 ### [0.0.135](https://github.com/visin-platform/visin-monorepo/compare/v0.0.134...v0.0.135) (2026-08-02)
 
 
