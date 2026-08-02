@@ -1,4 +1,16 @@
 # Visin Changelog
+### [0.0.139](https://github.com/visin-platform/visin-monorepo/compare/v0.0.138...v0.0.139) (2026-08-02)
+
+
+### Features
+
+* optimize infra deployment ([0e71ff2](https://github.com/visin-platform/visin-monorepo/commit/0e71ff20a3730a4319db96037c161b70619ae9ea))
+
+
+### Bug Fixes
+
+* file upload error ([abc4061](https://github.com/visin-platform/visin-monorepo/commit/abc40612e32d9454b70c3d7f6f7d5810b407103b))
+
 ### [0.0.138](https://github.com/visin-platform/visin-monorepo/compare/v0.0.137...v0.0.138) (2026-08-02)
 
 
