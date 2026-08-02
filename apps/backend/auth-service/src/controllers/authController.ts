@@ -1,19 +1,135 @@
 import { Request, Response } from 'express';
-import { NotFoundError, UnauthorizedError, logger, fetchWithTimeout } from '@visin/backend-core';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  logger
+} from '@visin/backend-core';
 import { verifyGoogleToken } from '../services/googleAuthService';
 import { generateJWT, UserPayload } from '../services/jwtService';
+import { hashPassword, verifyPassword } from '../services/passwordService';
+import {
+  ACCESS_TOKEN_COOKIE_OPTIONS,
+  displayName,
+  getUserGroupRoles,
+  issueSession
+} from '../services/sessionService';
 import { User } from '../models/User';
 
-const ACCESS_TOKEN_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
-  domain: process.env.COOKIE_DOMAIN || 'localhost',
-  path: '/',
-  maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+/** True only while the instance has no users at all — the first-run window. */
+const isFirstRun = async (): Promise<boolean> => (await User.countDocuments()) === 0;
+
+/**
+ * Lets the sign-in page decide what to show before asking for credentials: a
+ * fresh deployment has no users and no way to create one, so the first visitor
+ * is offered the setup form instead of a login that could never succeed.
+ */
+export const getSetupStatus = async (_req: Request, res: Response): Promise<void> => {
+  res.json({
+    success: true,
+    needsSetup: await isFirstRun(),
+    // The sign-in page hides the Google button entirely when unconfigured,
+    // rather than rendering one that fails on click.
+    googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID)
+  });
+};
+
+/**
+ * First-run bootstrap: creates the owner account and signs it in. Guarded by
+ * the collection being empty, so it closes permanently the moment it succeeds
+ * — there is no window in which a second caller can claim admin.
+ */
+export const setupFirstUser = async (req: Request, res: Response): Promise<void> => {
+  if (!(await isFirstRun())) {
+    throw new ConflictError('Setup has already been completed');
+  }
+
+  const { email, password, firstName, lastName } = req.body as {
+    email: string;
+    password: string;
+    firstName?: string;
+    lastName?: string;
+  };
+
+  const dbUser = await User.create({
+    email: email.toLowerCase(),
+    firstName,
+    lastName,
+    signupMethod: 'password',
+    passwordHash: await hashPassword(password),
+    // The first account administers the instance.
+    roles: ['admin'],
+    lastLoginAt: new Date()
+  });
+
+  logger.info('First user created via setup', { email: dbUser.email });
+
+  const name = displayName(dbUser);
+  const { payload, token } = await issueSession(res, dbUser, name);
+  res.status(201).json({ success: true, user: payload, token });
+};
+
+/**
+ * Self-registration, which signs the new account straight in. There is no
+ * approval step: what a user can actually reach is decided by group
+ * membership and by whether a project is public, so an account with no groups
+ * sees only public work and gates nothing behind an administrator's inbox.
+ */
+export const register = async (req: Request, res: Response): Promise<void> => {
+  const { email, password, firstName, lastName } = req.body as {
+    email: string;
+    password: string;
+    firstName?: string;
+    lastName?: string;
+  };
+
+  const normalizedEmail = email.toLowerCase();
+  if (await User.findOne({ email: normalizedEmail })) {
+    throw new ConflictError('An account with that email already exists');
+  }
+
+  const dbUser = await User.create({
+    email: normalizedEmail,
+    firstName,
+    lastName,
+    signupMethod: 'password',
+    passwordHash: await hashPassword(password),
+    roles: [],
+    lastLoginAt: new Date()
+  });
+
+  logger.info('User registered', { email: normalizedEmail });
+
+  const { payload, token } = await issueSession(res, dbUser, displayName(dbUser));
+  res.status(201).json({ success: true, user: payload, token });
+};
+
+export const login = async (req: Request, res: Response): Promise<void> => {
+  const { email, password } = req.body as { email: string; password: string };
+
+  // passwordHash is select:false on the schema, so it has to be asked for.
+  const dbUser = await User.findOne({ email: email.toLowerCase() }).select('+passwordHash');
+
+  // One message for "no such user" and "wrong password", so the response can't
+  // be used to enumerate which emails have accounts.
+  const ok = dbUser ? await verifyPassword(password, dbUser.passwordHash) : false;
+  if (!dbUser || !ok) {
+    throw new UnauthorizedError('Incorrect email or password');
+  }
+
+  await User.updateOne({ _id: dbUser._id }, { $set: { lastLoginAt: new Date() } });
+
+  const name = displayName(dbUser);
+  const { payload, token } = await issueSession(res, dbUser, name);
+  res.json({ success: true, user: payload, token });
 };
 
 export const validateToken = async (req: Request, res: Response): Promise<void> => {
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    throw new ForbiddenError('Google sign-in is not configured on this instance');
+  }
+
   const { idToken } = req.body;
 
   let googleUser;
@@ -66,7 +182,6 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
   res.json({
     success: true,
     user: userPayload,
-    approved: dbUser.isApproved,
     token: jwtToken
   });
 };
@@ -102,47 +217,6 @@ export const invalidateUserTokens = async (req: Request, res: Response): Promise
   });
 };
 
-/**
- * The distinct group roles ('owner' | 'admin' | 'member') the user holds, for
- * the `groupRoles` claim. Group *ids* are deliberately not in the token: no
- * service or front reads them, and callers that need the groups themselves ask
- * group-service directly instead of trusting a claim that goes stale between
- * refreshes.
- */
-const getUserGroupRoles = async (email: string): Promise<string[]> => {
-  // Fetch fresh data from group service
-  let groupRoles: string[] = [];
-  try {
-    const groupServiceUrl = process.env.GROUP_SERVICE_URL;
-    const internalToken = process.env.INTERNAL_SERVICE_TOKEN;
-
-    if (groupServiceUrl && internalToken) {
-      const groupResponse = await fetchWithTimeout(`${groupServiceUrl}/api/groups/mine/roles?userEmail=${encodeURIComponent(email)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-internal-token': internalToken,
-          'x-service-id': 'auth-service'
-        },
-        // Tighter than the shared default: this sits on the sign-in path, and
-        // a missing group list degrades gracefully (caught below).
-        timeoutMs: 3000,
-        serviceName: 'group-service'
-      });
-
-      if (groupResponse.ok) {
-        const groupResult = await groupResponse.json();
-        if (groupResult.success) {
-          groupRoles = groupResult.data || [];
-        }
-      }
-    }
-  } catch (error) {
-    logger.warn('Failed to fetch user groups for JWT', { email, error: (error as Error).message });
-  }
-
-  return groupRoles;
-};
 
 export const verifyAuth = async (req: Request, res: Response): Promise<void> => {
   const currentUser = req.user;
@@ -211,23 +285,6 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
     token: newToken,
     groupRoles
   });
-};
-
-// Admin utility: mark a user approved
-export const approveUser = async (req: Request, res: Response): Promise<void> => {
-  const { email } = req.body;
-
-  const user = await User.findOneAndUpdate(
-    { email: email.toLowerCase() },
-    { $set: { isApproved: true } },
-    { new: true }
-  );
-
-  if (!user) {
-    throw new NotFoundError('User not found');
-  }
-
-  res.json({ success: true, user });
 };
 
 // Admin utility: list users

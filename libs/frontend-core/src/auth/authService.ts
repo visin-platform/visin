@@ -21,6 +21,12 @@ export interface AuthUser {
    * anything needing the groups themselves calls group-service.
    */
   groupRoles?: string[];
+  /**
+   * Whether the account has a password set. False for one created through
+   * Google, which can set one from account settings. Only `/auth/profile`
+   * reports it.
+   */
+  hasPassword?: boolean;
 }
 
 export interface AuthCheckResult {

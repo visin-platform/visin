@@ -14,6 +14,7 @@ import {
 import { Person, Save } from '@mui/icons-material';
 import { authService } from '../../services/authService';
 import { profileService } from '../../services/profileService';
+import PasswordCard from './PasswordCard';
 import { User } from '../../types';
 
 const ProfileTab: React.FC = () => {
@@ -179,6 +180,13 @@ const ProfileTab: React.FC = () => {
                 </Grid>
               </Grid>
             </Paper>
+          </Grid>
+
+          <Grid size={12}>
+            <PasswordCard
+              hasPassword={Boolean(user?.hasPassword)}
+              onChanged={() => setUser((current) => (current ? { ...current, hasPassword: true } : current))}
+            />
           </Grid>
 
         </Grid>

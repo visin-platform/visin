@@ -18,7 +18,6 @@ import {
   authenticateToken,
   optionalAuth,
   requireRole,
-  requireApproved,
 } from '../../middleware/authMiddleware';
 import { verifyJWT } from '../../services/jwtService';
 import { User } from '../../models/User';
@@ -237,33 +236,3 @@ describe('requireRole', () => {
   });
 });
 
-describe('requireApproved', () => {
-  it('rejects with 401 when there is no db user', () => {
-    const res = makeRes();
-
-    requireApproved(makeReq(), res, next as unknown as NextFunction);
-
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('rejects with 403 when the user is not approved', () => {
-    const res = makeRes();
-
-    requireApproved(
-      makeReq({ dbUser: { ...dbUser, isApproved: false } }),
-      res,
-      next as unknown as NextFunction
-    );
-
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: 'User not approved' }));
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('passes for an approved user', () => {
-    requireApproved(makeReq({ dbUser }), makeRes(), next as unknown as NextFunction);
-
-    expect(next).toHaveBeenCalledTimes(1);
-  });
-});

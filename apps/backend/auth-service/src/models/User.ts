@@ -5,9 +5,14 @@ export interface IUser extends Document {
   email: string;
   firstName?: string;
   lastName?: string;
-  signupMethod: string; // e.g. google
+  signupMethod: string; // 'google' | 'password'
+  /**
+   * Only set for password accounts. `select: false` keeps it out of every
+   * query that doesn't ask for it, so it can't leak through a controller that
+   * returns a user document.
+   */
+  passwordHash?: string;
   roles: string[];
-  isApproved: boolean; // automatic approval for new users
   lastLoginAt?: Date;
   tokenVersion: number; // for token invalidation
   createdAt: Date;
@@ -20,8 +25,8 @@ const UserSchema = new Schema<IUser>(
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
     signupMethod: { type: String, required: true },
+    passwordHash: { type: String, select: false },
     roles: { type: [String], default: [] },
-    isApproved: { type: Boolean, default: true },
     lastLoginAt: { type: Date },
     tokenVersion: { type: Number, default: 1 }
   },

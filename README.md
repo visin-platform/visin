@@ -55,7 +55,15 @@ Infrastructure in `apps/infra/`: Nginx reverse proxy, MongoDB, Cloudflare DDNS c
 
 ### Auth
 
-User sessions ride an httpOnly `access_token` cookie issued by `auth-service` on Google sign-in (its domain is a
+Two sign-in strategies, both issuing the same session:
+
+- **Email + password** — always available. Passwords are hashed with scrypt (`node:crypto`, no native
+  dependency) and never leave the database; `passwordHash` is `select: false` on the schema so it cannot
+  leak through a controller that returns a user.
+- **Google** — enabled only when `GOOGLE_CLIENT_ID` is set. Without it the button simply doesn't appear,
+  and `/auth/validate` returns 403; nothing else changes.
+
+User sessions ride an httpOnly `access_token` cookie issued by `auth-service` (its domain is a
 shared parent across every Visin subdomain in production, so one cookie authenticates all four services).
 Backend services accept that cookie, falling back to an `Authorization: Bearer` header for non-browser callers —
 vision-service's project API tokens use that header path, never the cookie.
@@ -102,10 +110,26 @@ mongo-express UI at <http://localhost:8081>.
 Backends and frontends can also be started separately with `npm run dev:back`
 and `npm run dev:front`.
 
-> Google sign-in requires a `GOOGLE_CLIENT_ID` (auth-service) and
-> `VITE_GOOGLE_CLIENT_ID` (auth-front) from a
-> [Google OAuth client](https://console.cloud.google.com/apis/credentials);
-> everything else works without external accounts.
+### 5. Create the first account
+
+Open the sign-in page at <http://localhost:3004>. A fresh database has no users,
+so it offers **Create the owner account** instead of a login form. That account
+gets the `admin` role, because there is nobody who could grant it.
+
+The setup form closes permanently as soon as it succeeds. Afterwards:
+
+- Anyone can register at the same page and is signed in immediately. **There is
+  no approval step** — what an account can actually reach is decided by group
+  membership and by whether a project is public, so a new account with no groups
+  simply sees only public work until someone invites it to a group
+  (Account → Groups).
+- Google sign-in is optional. Set `GOOGLE_CLIENT_ID` (auth-service) and
+  `VITE_GOOGLE_CLIENT_ID` (auth-front) from a
+  [Google OAuth client](https://console.cloud.google.com/apis/credentials) to
+  enable it; leave them blank to run with passwords only. Google accounts must
+  already exist — that path authenticates, it does not register.
+- Signed in with Google and want a password too? **Account → Profile → Set a
+  password.** Changing an existing password signs out every other session.
 
 ## Development commands
 

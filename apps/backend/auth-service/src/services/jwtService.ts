@@ -8,7 +8,6 @@ export interface UserPayload {
   name: string;
   picture?: string;
   roles?: string[];
-  isApproved?: boolean;
   /**
    * Distinct group roles ('owner' | 'admin' | 'member') the user holds, from
    * group-service. Group ids are not carried: nothing reads them, and callers

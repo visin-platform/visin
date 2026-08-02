@@ -4,9 +4,16 @@ import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandle
 import authRoutes from './routes/authRoutes';
 import path from 'path';
 
-// JWT_SECRET signs every session; GOOGLE_CLIENT_ID is the sign-in audience;
-// INTERNAL_SERVICE_TOKEN gates /auth/internal/*.
-assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'GOOGLE_CLIENT_ID', 'INTERNAL_SERVICE_TOKEN']);
+// JWT_SECRET signs every session; INTERNAL_SERVICE_TOKEN gates /auth/internal/*.
+// GOOGLE_CLIENT_ID is deliberately NOT required: password sign-in works without
+// it, and demanding a Google project just to boot the service would block any
+// self-hosted deployment that doesn't want Google in the loop. The Google
+// endpoint reports its own absence instead (see googleAuthService).
+assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'INTERNAL_SERVICE_TOKEN']);
+
+if (!process.env.GOOGLE_CLIENT_ID) {
+  logger.warn('GOOGLE_CLIENT_ID is not set — Google sign-in is disabled, password sign-in still works');
+}
 
 const PORT = process.env.PORT || 5001;
 
@@ -18,9 +25,16 @@ const app = createBaseApp({
   corsExposedHeaders: ['Content-Type', 'Content-Length', 'ETag', 'Cache-Control']
 });
 
-// Extra rate limit on the login endpoint, on top of the general limiter
+// Extra rate limit on the credential endpoints, on top of the general limiter.
+// Password login is guessable in a way a Google id-token is not, so it gets a
+// tighter budget than the shared one.
 const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });
 app.use('/auth/validate', loginLimiter);
+
+const passwordLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
+app.use('/auth/login', passwordLimiter);
+app.use('/auth/register', passwordLimiter);
+app.use('/auth/setup', passwordLimiter);
 
 // Serve static documentation files
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));

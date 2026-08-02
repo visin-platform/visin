@@ -23,6 +23,27 @@ tags:
 
 components:
   schemas:
+    CredentialsRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: owner@example.com
+        password:
+          type: string
+          format: password
+          minLength: 10
+          maxLength: 200
+          description: At least 10 characters; hashed with scrypt before storage.
+        firstName:
+          type: string
+          maxLength: 100
+        lastName:
+          type: string
+          maxLength: 100
+
     Error:
       type: object
       properties:
@@ -61,9 +82,6 @@ components:
           items:
             type: string
           example: ["user", "admin"]
-        isApproved:
-          type: boolean
-          example: true
         lastLoginAt:
           type: string
           format: date-time
@@ -116,16 +134,12 @@ components:
           example: true
         user:
           $ref: '#/components/schemas/UserPayload'
-        approved:
-          type: boolean
-          example: true
         token:
           type: string
           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
       required:
         - success
         - user
-        - approved
         - token
 
     UserPayload:
@@ -204,13 +218,9 @@ components:
           example: true
         user:
           $ref: '#/components/schemas/UserProfile'
-        approved:
-          type: boolean
-          example: true
       required:
         - success
         - user
-        - approved
 
     UsersListResponse:
       type: object
@@ -296,15 +306,147 @@ components:
       description: Internal service token for inter-service communication
 
 paths:
+  # Password strategy (public)
+  /auth/setup-status:
+    get:
+      tags: [Authentication]
+      summary: Whether this instance still needs its first account
+      description: |
+        Public. Lets the sign-in page decide what to render before asking for
+        credentials: a deployment with no users has no way to create one, so
+        the first visitor is offered the setup form instead of a login that
+        could never succeed. Also reports whether Google sign-in is configured,
+        so the button can be hidden rather than rendered and failing on click.
+      responses:
+        '200':
+          description: Status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  needsSetup:
+                    type: boolean
+                    description: True while the users collection is empty.
+                    example: false
+                  googleEnabled:
+                    type: boolean
+                    description: True when the server has a GOOGLE_CLIENT_ID.
+                    example: true
+
+  /auth/setup:
+    post:
+      tags: [Authentication]
+      summary: Create the first (owner) account
+      description: |
+        Public, but only while no user exists — it returns 409 forever after.
+        The account it creates is an admin, because there is nobody who could
+        promote it. Signs the new owner in on success.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialsRequest'
+      responses:
+        '201':
+          description: Owner created and signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Validation failed (e.g. password too short)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Setup has already been completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register with email and password
+      description: |
+        Public, and signs the new account straight in. There is no approval
+        step: what a user can reach is decided by group membership and by
+        whether a project is public, so a fresh account simply sees only
+        public work until it is invited to a group.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialsRequest'
+      responses:
+        '201':
+          description: Account created, pending approval
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  approved: { type: boolean, example: false }
+                  message: { type: string }
+        '409':
+          description: An account with that email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Sign in with email and password
+      description: |
+        Public. Returns the same session as Google sign-in: a JWT plus the
+        HTTP-only `access_token` cookie. An unknown email and a wrong password
+        give the same 401, so the response cannot be used to discover which
+        emails have accounts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Incorrect email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   # Authentication Endpoints
   /auth/validate:
     post:
       tags: [Authentication]
       summary: Validate Google OAuth token and authenticate user
       description: |
-        Validates a Google OAuth ID token and creates/authenticates a user account.
+        Validates a Google OAuth ID token and authenticates an existing user.
         This endpoint is public and used for initial login/authentication.
         On success, returns a JWT token and sets an HTTP-only cookie.
+
+        Returns 403 when the server has no `GOOGLE_CLIENT_ID` — Google is
+        optional, and an instance may run with password sign-in only.
       requestBody:
         required: true
         content:
@@ -508,65 +650,6 @@ paths:
         - bearerAuth: []
 
   # Admin Endpoints
-  /auth/admin/approve:
-    post:
-      tags: [Admin]
-      summary: Approve user account
-      description: |
-        Approves a user account, allowing them to access protected resources.
-        Requires admin role and a valid JWT token.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ApproveUserRequest'
-      responses:
-        '200':
-          description: User approved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  user:
-                    $ref: '#/components/schemas/User'
-        '400':
-          description: Bad request - missing email
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized - invalid token or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden - admin role required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - bearerAuth: []
-
   /auth/admin/users:
     get:
       tags: [Admin]

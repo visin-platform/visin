@@ -92,16 +92,3 @@ export const requireRole = (role: string) => {
   };
 };
 
-// Enforce approval after basic authentication for protected areas; allow only specific endpoints before approval
-export const requireApproved = (req: Request, res: Response, next: NextFunction): void => {
-  const dbUser = req.dbUser;
-  if (!dbUser) {
-    res.status(401).json({ success: false, message: 'Not authenticated' });
-    return;
-  }
-  if (!dbUser.isApproved) {
-    res.status(403).json({ success: false, message: 'User not approved' });
-    return;
-  }
-  next();
-};

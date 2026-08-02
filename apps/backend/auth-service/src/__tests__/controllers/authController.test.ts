@@ -22,7 +22,6 @@ import {
   invalidateUserTokens,
   verifyAuth,
   refreshToken,
-  approveUser,
   listUsers,
 } from '../../controllers/authController';
 import { verifyGoogleToken } from '../../services/googleAuthService';
@@ -46,7 +45,6 @@ const makeReq = (overrides: Record<string, unknown> = {}): Request =>
 const dbUser = {
   _id: { toString: () => 'db-id-1' },
   email: 'test@example.com',
-  isApproved: true,
   tokenVersion: 3,
 };
 
@@ -60,10 +58,12 @@ const jwtUser = {
 
 beforeAll(() => {
   process.env.JWT_SECRET = 'test-jwt-secret-long-enough-for-tests';
+  process.env.GOOGLE_CLIENT_ID = 'test-google-client-id';
 });
 
 afterAll(() => {
   delete process.env.JWT_SECRET;
+  delete process.env.GOOGLE_CLIENT_ID;
 });
 
 beforeEach(() => {
@@ -128,7 +128,6 @@ describe('validateToken', () => {
     );
     const body = res.json.mock.calls[0][0];
     expect(body.success).toBe(true);
-    expect(body.approved).toBe(true);
     expect(body.user).toEqual(
       expect.objectContaining({ id: 'db-id-1', email: 'Test@Example.com', tokenVersion: 3 })
     );
@@ -321,30 +320,6 @@ describe('refreshToken', () => {
     await refreshToken(makeReq({ user: { ...jwtUser, tokenVersion: undefined } }), res);
 
     expect(verifyJWT(res.json.mock.calls[0][0].token).tokenVersion).toBe(1);
-  });
-});
-
-describe('approveUser', () => {
-  it('marks the user approved', async () => {
-    mockedUser.findOneAndUpdate.mockResolvedValue(dbUser);
-    const res = makeRes();
-
-    await approveUser(makeReq({ body: { email: 'Test@Example.com' } }), res);
-
-    expect(mockedUser.findOneAndUpdate).toHaveBeenCalledWith(
-      { email: 'test@example.com' },
-      { $set: { isApproved: true } },
-      { new: true }
-    );
-    expect(res.json).toHaveBeenCalledWith({ success: true, user: dbUser });
-  });
-
-  it('throws NotFound for an unknown user', async () => {
-    mockedUser.findOneAndUpdate.mockResolvedValue(null);
-
-    await expect(
-      approveUser(makeReq({ body: { email: 'missing@example.com' } }), makeRes())
-    ).rejects.toThrow('User not found');
   });
 });
 

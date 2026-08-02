@@ -6,7 +6,6 @@ describe('User model', () => {
 
     expect(user.email).toBe('test@example.com'); // lowercased by the schema
     expect(user.roles).toEqual([]);
-    expect(user.isApproved).toBe(true);
     expect(user.tokenVersion).toBe(1);
   });
 

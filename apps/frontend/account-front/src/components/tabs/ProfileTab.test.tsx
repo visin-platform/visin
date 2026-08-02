@@ -6,7 +6,7 @@ vi.mock('../../services/authService', () => ({
   authService: { getProfile: vi.fn() },
 }));
 vi.mock('../../services/profileService', () => ({
-  profileService: { updateProfile: vi.fn() },
+  profileService: { updateProfile: vi.fn(), changePassword: vi.fn() },
 }));
 
 import { authService } from '../../services/authService';
@@ -14,6 +14,7 @@ import { profileService } from '../../services/profileService';
 
 const mockedGetProfile = authService.getProfile as ReturnType<typeof vi.fn>;
 const mockedUpdateProfile = profileService.updateProfile as ReturnType<typeof vi.fn>;
+const mockedChangePassword = profileService.changePassword as ReturnType<typeof vi.fn>;
 
 const user = { id: 'u1', email: 'test@example.com', firstName: 'Ada', lastName: 'Lovelace', name: 'Ada Lovelace' };
 
@@ -175,5 +176,40 @@ describe('ProfileTab', () => {
 
     await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
     expect(screen.getByLabelText('First Name')).toHaveValue('');
+  });
+});
+
+describe('ProfileTab password section', () => {
+  it('offers to set a password for a Google-created account', async () => {
+    mockedGetProfile.mockResolvedValue({ ...user, hasPassword: false });
+    render(<ProfileTab />);
+    await waitFor(() => screen.getByDisplayValue('Ada'));
+
+    expect(screen.getByRole('heading', { name: /set a password/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/current password/i)).not.toBeInTheDocument();
+  });
+
+  it('offers to change it for an account that already has one', async () => {
+    mockedGetProfile.mockResolvedValue({ ...user, hasPassword: true });
+    render(<ProfileTab />);
+    await waitFor(() => screen.getByDisplayValue('Ada'));
+
+    expect(screen.getByRole('heading', { name: /change password/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/current password/i)).toBeInTheDocument();
+  });
+
+  it('switches to the change form once a password has been set', async () => {
+    mockedGetProfile.mockResolvedValue({ ...user, hasPassword: false });
+    mockedChangePassword.mockResolvedValue('Password set');
+    render(<ProfileTab />);
+    await waitFor(() => screen.getByDisplayValue('Ada'));
+
+    fireEvent.change(screen.getByLabelText(/^new password$/i), { target: { value: 'a-strong-password' } });
+    fireEvent.change(screen.getByLabelText(/^confirm new password$/i), { target: { value: 'a-strong-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set password' }));
+
+    // The card reflects the new state without needing a page reload.
+    expect(await screen.findByRole('heading', { name: /change password/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/current password/i)).toBeInTheDocument();
   });
 });

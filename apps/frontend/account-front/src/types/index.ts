@@ -29,6 +29,8 @@ export interface User {
   name: string;
   picture?: string;
   username?: string;
+  /** False for a Google-created account that has not set a password yet. */
+  hasPassword?: boolean;
 }
 
 export interface AuthResponse {
