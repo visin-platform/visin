@@ -28,6 +28,38 @@ client shows that as the mapping table and posts back an `ImportMapping`
 so a conventional bundle needs no mapping at all. Both paths run through
 `utils/bundlePaths.ts`, the single definition of what a zip entry means.
 
+### The import queue
+
+`POST /api/bundles/:id/import` creates the `ImportJob` document and hands the id to a
+BullMQ queue backed by Redis (`REDIS_URL`); a worker in the same process picks it up
+(`src/queue/`). The ingest routinely runs for minutes, far past the HTTP response, so
+it cannot live in the request — and a redeploy mid-ingest has to leave the work
+somewhere durable rather than dropping it.
+
+- **Progress** still lands on the `ImportJob` the client polls. Nothing about the API
+  changed; only where the work runs.
+- **Retries**: three attempts with exponential backoff. Ingest is idempotent (already
+  imported paths are skipped), so an attempt resumes where the dead one stopped.
+  `runImport` therefore records a fatal error and rethrows rather than marking the job
+  failed — the worker owns that verdict, because flipping the document to `failed`
+  between attempts would tell the polling client the import is over when it isn't.
+  A structurally bad zip throws `NonRetryableIngestError`, which the worker turns into
+  BullMQ's `UnrecoverableError` so the budget isn't spent re-downloading it.
+- **Crashes**: BullMQ redelivers a job whose worker died (twice, then it fails for
+  good). The `updatedAt` heartbeat and the `IMPORT_STALE_MINUTES` window in
+  `bundleService` remain as the backstop for anything the queue loses.
+- **Cancellation**: superseding a stale import, deleting an import, and deleting a
+  bundle all call `removeQueuedImport`, so nothing gets picked up later and run
+  against a bundle that has moved on.
+- **Redis down**: `startImport` fails the `ImportJob` it just created and returns 502
+  rather than leaving it at `pending` with nothing to run it.
+
+Redis is shared infrastructure (`apps/infra/redis/`), deployed on its own from the
+"Deploy Infrastructure Service" workflow and reached over `visinnet`. It runs with
+`appendonly yes` and `maxmemory-policy noeviction` on purpose: a queued import lives
+only in Redis until a worker takes it, so an eviction or an unsaved restart would
+strand its `ImportJob` at `pending`.
+
 ## Changing a bundle
 
 `PATCH /api/bundles/:id` edits `name` / `description` only. Imported images are
@@ -48,3 +80,5 @@ npm test --workspace=label-service
 ```
 
 Copy `.env.example` to `.env` and fill in secrets (JWT secret must match auth-service).
+The import queue needs Redis: `docker compose -f docker-compose.dev.yml up -d` at the
+repo root starts it alongside MongoDB, matching the default `REDIS_URL`.

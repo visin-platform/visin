@@ -9,11 +9,24 @@ import { parseManifest } from '../utils/manifest';
 import * as files from '../clients/fileServiceClient';
 
 const MAX_ENTRY_BYTES = Number(process.env.INGEST_MAX_ENTRY_BYTES || 50 * 1024 * 1024);
-const MAX_ENTRIES = Number(process.env.INGEST_MAX_ENTRIES || 100_000);
+const maxEntries = (): number => Number(process.env.INGEST_MAX_ENTRIES || 100_000);
 const THUMBNAIL_WIDTH = 320;
 
 export const bundleFileId = (bundleId: string, relativePath: string): string =>
   `label-bundles/${bundleId}/${relativePath}`;
+
+/**
+ * A failure that re-running the import cannot fix (a structurally bad zip),
+ * as opposed to a transient one (a dependency restart, an aborted transfer).
+ * The queue worker turns this into a BullMQ `UnrecoverableError` so the attempt
+ * budget isn't spent re-downloading a zip that will fail identically.
+ */
+export class NonRetryableIngestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NonRetryableIngestError';
+  }
+}
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   '.png': 'image/png',
@@ -181,8 +194,29 @@ const finalizeBundle = async (bundleId: string, state: IngestState): Promise<voi
 };
 
 /**
- * Run one import end to end. Fire-and-forget from the controller — all progress
- * and errors land on the ImportJob document the client polls.
+ * Mark an import terminally failed. Called by the queue worker once the attempt
+ * budget is spent — `runImport` itself never decides this, because from inside
+ * one attempt a transient failure is indistinguishable from a final one.
+ */
+export const markImportFailed = async (importJobId: string, reason: string): Promise<void> => {
+  const importJob = await ImportJob.findById(importJobId);
+  if (!importJob) {
+    return;
+  }
+  importJob.status = 'failed';
+  importJob.fileErrors.push({ path: '(zip)', reason });
+  importJob.finishedAt = new Date();
+  await importJob.save();
+  await LabelBundle.updateOne({ _id: importJob.bundleId }, { $set: { status: 'failed' } });
+};
+
+/**
+ * Run one import attempt end to end. Invoked by the queue worker — all progress
+ * and per-file errors land on the ImportJob document the client polls.
+ *
+ * A fatal error is persisted and rethrown rather than marked failed here: the
+ * worker owns the retry decision, and flipping the document to `failed` between
+ * attempts would tell the polling client the import is over when it isn't.
  */
 export const runImport = async (importJobId: string): Promise<void> => {
   const importJob = await ImportJob.findById(importJobId);
@@ -209,12 +243,13 @@ export const runImport = async (importJobId: string): Promise<void> => {
     zipStream.on('error', (err) => parser.destroy(err));
     const entries = zipStream.pipe(parser);
 
+    const entryCap = maxEntries();
     let entryCount = 0;
     let lastFlush = Date.now();
     for await (const entry of entries as AsyncIterable<ZipEntry>) {
       entryCount += 1;
-      if (entryCount > MAX_ENTRIES) {
-        throw new Error(`Zip exceeds ${MAX_ENTRIES} entries`);
+      if (entryCount > entryCap) {
+        throw new NonRetryableIngestError(`Zip exceeds ${entryCap} entries`);
       }
       await handleEntry(bundleId, entry, classify, state);
       // Progress + heartbeat: `updatedAt` staleness is how a dead import is
@@ -232,13 +267,19 @@ export const runImport = async (importJobId: string): Promise<void> => {
     await finalizeBundle(bundleId, state);
 
     // Per-file problems are reported in `errors`, not fatal; only an empty result fails.
+    // An empty result is terminal on its own — nothing threw, so nothing retries.
     importJob.status = state.processed > 0 ? 'done' : 'failed';
     importJob.total = state.processed + state.errors.length;
   } catch (err) {
     state.errors.push({ path: '(zip)', reason: (err as Error).message });
-    importJob.status = 'failed';
-    await LabelBundle.updateOne({ _id: bundleId }, { $set: { status: 'failed' } });
-    logger.error('Bundle import failed', { bundleId, importJobId, error: (err as Error).message });
+    logger.error('Bundle import attempt failed', { bundleId, importJobId, error: (err as Error).message });
+    // Keep the partial progress (a resumed attempt skips what landed) but leave
+    // `status` and `finishedAt` alone — see markImportFailed above.
+    importJob.processed = state.processed;
+    importJob.skipped = state.skipped;
+    importJob.fileErrors = state.errors;
+    await importJob.save();
+    throw err;
   }
 
   importJob.processed = state.processed;

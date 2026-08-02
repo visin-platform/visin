@@ -24,7 +24,10 @@ jest.mock('../../services/previewService', () => ({
 }));
 jest.mock('../../services/ingestService', () => ({
   bundleFileId: jest.requireActual('../../services/ingestService').bundleFileId,
-  runImport: jest.fn(),
+}));
+jest.mock('../../queue/importQueue', () => ({
+  enqueueImport: jest.fn(),
+  removeQueuedImport: jest.fn(),
 }));
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),
@@ -38,9 +41,9 @@ import { LabelImage } from '../../models/LabelImage';
 import { LabelJob } from '../../models/LabelJob';
 import * as files from '../../clients/fileServiceClient';
 import * as groups from '../../clients/groupServiceClient';
-import { runImport } from '../../services/ingestService';
+import { enqueueImport, removeQueuedImport } from '../../queue/importQueue';
 import { previewZip } from '../../services/previewService';
-import { BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
+import { BadGatewayError, BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
 
 const mockedBundle = LabelBundle as unknown as Record<string, jest.Mock>;
 const mockedImport = ImportJob as unknown as Record<string, jest.Mock>;
@@ -48,7 +51,8 @@ const mockedImage = LabelImage as unknown as Record<string, jest.Mock>;
 const mockedJob = LabelJob as unknown as Record<string, jest.Mock>;
 const mockedFiles = files as unknown as Record<string, jest.Mock>;
 const mockedGroups = groups as unknown as Record<string, jest.Mock>;
-const mockedRunImport = runImport as jest.Mock;
+const mockedEnqueue = enqueueImport as jest.Mock;
+const mockedRemoveQueued = removeQueuedImport as jest.Mock;
 const mockedPreviewZip = previewZip as jest.Mock;
 
 const user = { id: 'u1', email: 'Admin@X.com', name: 'Admin' };
@@ -209,7 +213,7 @@ describe('startImport', () => {
     mockedImport.findOne.mockResolvedValue(null);
     mockedFiles.fileExists.mockResolvedValue(true);
     mockedImport.create.mockResolvedValue({ _id: { toString: () => 'i1' } });
-    mockedRunImport.mockResolvedValue(undefined);
+    mockedEnqueue.mockResolvedValue(undefined);
     const mapping = { frames: 'img', annotations: [{ path: 'seg', set: 'sam' }] };
 
     await svc.startImport('b1', zipFileId, mapping);
@@ -217,16 +221,16 @@ describe('startImport', () => {
     expect(mockedImport.create).toHaveBeenCalledWith({ bundleId: 'b1', zipFileId, status: 'pending', mapping });
   });
 
-  it('creates a pending ImportJob and kicks the ingest', async () => {
+  it('creates a pending ImportJob and queues the ingest', async () => {
     mockedImport.findOne.mockResolvedValue(null);
     mockedFiles.fileExists.mockResolvedValue(true);
     mockedImport.create.mockResolvedValue({ _id: { toString: () => 'i1' } });
-    mockedRunImport.mockResolvedValue(undefined);
+    mockedEnqueue.mockResolvedValue(undefined);
 
     const importJob = await svc.startImport('b1', zipFileId);
 
     expect(mockedImport.create).toHaveBeenCalledWith({ bundleId: 'b1', zipFileId, status: 'pending' });
-    expect(mockedRunImport).toHaveBeenCalledWith('i1');
+    expect(mockedEnqueue).toHaveBeenCalledWith({ importJobId: 'i1', bundleId: 'b1' });
     expect(importJob).toBeDefined();
   });
 
@@ -246,13 +250,15 @@ describe('startImport', () => {
     mockedImport.findOne.mockResolvedValue(dead);
     mockedFiles.fileExists.mockResolvedValue(true);
     mockedImport.create.mockResolvedValue({ _id: { toString: () => 'i2' } });
-    mockedRunImport.mockResolvedValue(undefined);
+    mockedEnqueue.mockResolvedValue(undefined);
 
     await svc.startImport('b1', zipFileId);
 
     expect(dead.status).toBe('failed');
     expect(dead.fileErrors[0].reason).toContain('stale');
     expect(dead.save).toHaveBeenCalled();
+    // A superseded import must not stay queued behind the retry.
+    expect(mockedRemoveQueued).toHaveBeenCalledWith('i1');
     expect(mockedImport.create).toHaveBeenCalled();
   });
 
@@ -263,14 +269,26 @@ describe('startImport', () => {
     await expect(svc.startImport('b1', zipFileId)).rejects.toThrow('upload it first');
   });
 
-  it('logs but does not throw when the fired ingest crashes', async () => {
+  it('fails the ImportJob and reports 502 when the queue is unreachable', async () => {
+    const created = {
+      _id: { toString: () => 'i1' },
+      status: 'pending',
+      fileErrors: [] as { path: string; reason: string }[],
+      finishedAt: undefined as Date | undefined,
+      save: jest.fn()
+    };
     mockedImport.findOne.mockResolvedValue(null);
     mockedFiles.fileExists.mockResolvedValue(true);
-    mockedImport.create.mockResolvedValue({ _id: { toString: () => 'i1' } });
-    mockedRunImport.mockRejectedValue(new Error('boom'));
+    mockedImport.create.mockResolvedValue(created);
+    mockedEnqueue.mockRejectedValue(new Error('ECONNREFUSED'));
 
-    await expect(svc.startImport('b1', zipFileId)).resolves.toBeDefined();
-    await new Promise((resolve) => setImmediate(resolve)); // let the rejection settle
+    await expect(svc.startImport('b1', zipFileId)).rejects.toThrow(BadGatewayError);
+
+    // Nothing will pick it up, so it must not be left polling as `pending`.
+    expect(created.status).toBe('failed');
+    expect(created.fileErrors[0].reason).toContain('ECONNREFUSED');
+    expect(created.finishedAt).toBeInstanceOf(Date);
+    expect(created.save).toHaveBeenCalled();
   });
 });
 
@@ -281,6 +299,7 @@ describe('deleteImport', () => {
     await svc.deleteImport('b1', 'i1');
 
     expect(mockedImport.deleteOne).toHaveBeenCalledWith({ _id: 'i1' });
+    expect(mockedRemoveQueued).toHaveBeenCalledWith('i1');
   });
 
   it('refuses a live running import', async () => {
@@ -297,6 +316,7 @@ describe('deleteImport', () => {
 
     expect(dead.status).toBe('failed');
     expect(dead.save).toHaveBeenCalled();
+    expect(mockedRemoveQueued).toHaveBeenCalledWith('i1');
     expect(mockedImport.deleteOne).not.toHaveBeenCalled();
   });
 });
@@ -334,6 +354,8 @@ describe('deleteBundle', () => {
 
     mockedImport.findOne.mockResolvedValue(staleImport());
     await expect(svc.deleteBundle('b1')).resolves.toBeUndefined();
+    // The abandoned import must not be re-run against a bundle that is gone.
+    expect(mockedRemoveQueued).toHaveBeenCalledWith('i1');
   });
 });
 

@@ -51,7 +51,8 @@ graph LR
 | `account-front`  | 3007 | Account settings                                  |
 | `vision-front`   | 3012 | Main application UI                               |
 
-Infrastructure in `apps/infra/`: Nginx reverse proxy, MongoDB, Cloudflare DDNS cron.
+Infrastructure in `apps/infra/`: Nginx reverse proxy, MongoDB, Redis (label-service's
+bundle-import queue), Cloudflare DDNS cron.
 
 ### Auth
 

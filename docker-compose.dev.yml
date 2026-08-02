@@ -6,6 +6,7 @@
 #
 # MongoDB runs without authentication, matching the default
 # MONGODB_URI=mongodb://localhost:27017/visin in the .env.example files.
+# Redis likewise matches REDIS_URL=redis://localhost:6379 in label-service.
 # Add `--profile tools` to also get a mongo-express UI on http://localhost:8081.
 
 services:
@@ -18,6 +19,22 @@ services:
       - mongodb_data:/data/db
     healthcheck:
       test: ['CMD-SHELL', 'mongosh --quiet --eval ''db.runCommand("ping").ok''']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backs label-service's bundle-import queue (BullMQ). Only label-service uses
+  # it; nothing else in the monorepo needs Redis to run.
+  redis:
+    image: redis:8.2-alpine
+    container_name: visin_dev_redis
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,3 +54,4 @@ services:
 
 volumes:
   mongodb_data:
+  redis_data:

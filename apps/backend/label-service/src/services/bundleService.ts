@@ -1,9 +1,10 @@
-import { BadRequestError, ConflictError, NotFoundError, UserPayload, logger } from '@visin/backend-core';
+import { BadGatewayError, BadRequestError, ConflictError, NotFoundError, UserPayload, logger } from '@visin/backend-core';
 import { LabelBundle, ILabelBundle } from '../models/LabelBundle';
 import { ImportJob, IImportJob } from '../models/ImportJob';
 import { LabelImage } from '../models/LabelImage';
 import { LabelJob } from '../models/LabelJob';
-import { runImport, bundleFileId } from './ingestService';
+import { bundleFileId } from './ingestService';
+import { enqueueImport, removeQueuedImport } from '../queue/importQueue';
 import { previewZip, ZipPreview } from './previewService';
 import { ImportMapping } from '../utils/bundlePaths';
 import * as files from '../clients/fileServiceClient';
@@ -200,6 +201,9 @@ export const startImport = async (
     running.fileErrors.push({ path: '(zip)', reason: 'Import went stale (process died?) — superseded by a retry' });
     running.finishedAt = new Date();
     await running.save();
+    // If it never left the queue (rather than dying mid-ingest), drop it, or a
+    // worker picks it up later and races the retry over the same zip.
+    await removeQueuedImport(running._id.toString());
   }
   if (!(await files.fileExists(zipFileId))) {
     throw new BadRequestError('Uploaded zip not found — upload it first');
@@ -207,10 +211,20 @@ export const startImport = async (
 
   const importJob = await ImportJob.create({ bundleId, zipFileId, status: 'pending', ...(mapping ? { mapping } : {}) });
 
-  // Fire and forget: progress and errors land on the ImportJob the client polls.
-  runImport(importJob._id.toString()).catch((err) =>
-    logger.error('Import crashed', { bundleId, importJobId: importJob._id.toString(), error: (err as Error).message })
-  );
+  // Handed to the queue rather than run in the request: the ingest outlives the
+  // HTTP response by minutes, and a redeploy mid-ingest must not lose it.
+  // Progress and errors land on the ImportJob the client polls, as before.
+  try {
+    await enqueueImport({ importJobId: importJob._id.toString(), bundleId });
+  } catch (err) {
+    // Nothing will ever pick this job up, so don't leave it polling as `pending`.
+    importJob.status = 'failed';
+    importJob.fileErrors.push({ path: '(zip)', reason: `Could not queue the import: ${(err as Error).message}` });
+    importJob.finishedAt = new Date();
+    await importJob.save();
+    logger.error('Could not enqueue import', { bundleId, importJobId: importJob._id.toString(), error: (err as Error).message });
+    throw new BadGatewayError('Import queue is unavailable — try again shortly');
+  }
 
   return importJob;
 };
@@ -232,6 +246,7 @@ export const deleteImport = async (bundleId: string, importId: string): Promise<
   const importJob = await getImport(bundleId, importId);
 
   if (importJob.status === 'done' || importJob.status === 'failed') {
+    await removeQueuedImport(importJob._id.toString());
     await ImportJob.deleteOne({ _id: importJob._id });
     return;
   }
@@ -242,6 +257,7 @@ export const deleteImport = async (bundleId: string, importId: string): Promise<
   importJob.fileErrors.push({ path: '(zip)', reason: 'Abandoned by admin after going stale' });
   importJob.finishedAt = new Date();
   await importJob.save();
+  await removeQueuedImport(importJob._id.toString());
 };
 
 /**
@@ -261,6 +277,9 @@ export const deleteBundle = async (bundleId: string): Promise<void> => {
     throw new ConflictError('An import is running for this bundle — wait for it to finish or go stale');
   }
 
+  if (running) {
+    await removeQueuedImport(running._id.toString());
+  }
   await files.deleteFolder(bundleFileId(bundleId, ''));
   await LabelImage.deleteMany({ bundleId });
   await ImportJob.deleteMany({ bundleId });

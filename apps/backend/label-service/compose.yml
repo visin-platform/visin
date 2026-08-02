@@ -17,6 +17,9 @@ services:
       - FILE_SERVICE_URL=${FILE_SERVICE_URL}
       - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}
       - CORS_ORIGIN=${CORS_ORIGIN}
+      # Bundle-import queue. Redis is a shared infra service (apps/infra/redis),
+      # deployed separately, and reached over visinnet — not a sidecar here.
+      - REDIS_URL=${REDIS_URL}
     init: true
     networks:
       - visinnet

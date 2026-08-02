@@ -36,7 +36,7 @@ jest.mock('@visin/backend-core', () => ({
 
 import sharp from 'sharp';
 import unzipper from 'unzipper';
-import { runImport, bundleFileId } from '../../services/ingestService';
+import { runImport, markImportFailed, bundleFileId, NonRetryableIngestError } from '../../services/ingestService';
 import { ImportJob } from '../../models/ImportJob';
 import { LabelBundle } from '../../models/LabelBundle';
 import { LabelImage } from '../../models/LabelImage';
@@ -286,25 +286,44 @@ describe('runImport', () => {
       pipe: jest.fn(() => parser),
     });
 
-    await expect(runImport('i1')).resolves.toBeUndefined();
+    await expect(runImport('i1')).rejects.toThrow(parserFailure.message);
 
     // …and the handler forwards it to the parser, which is what turns an
     // unhandled 'error' event into an ordinary failed import.
     expect(parser.destroy).toHaveBeenCalledWith(parserFailure);
-    expect(importJob.status).toBe('failed');
     expect(importJob.fileErrors).toContainEqual({ path: '(zip)', reason: parserFailure.message });
   });
 
-  it('fails the import and the bundle when the zip cannot be read', async () => {
+  it('records and rethrows a fatal error, leaving the verdict to the queue', async () => {
     const importJob = makeImportJob();
     mockedImport.findById.mockResolvedValue(importJob);
     mockedFiles.getFileStream.mockRejectedValue(new Error('zip gone'));
 
-    await runImport('i1');
+    await expect(runImport('i1')).rejects.toThrow('zip gone');
 
-    expect(importJob.status).toBe('failed');
     expect(importJob.fileErrors).toEqual([{ path: '(zip)', reason: 'zip gone' }]);
-    expect(mockedBundle.updateOne).toHaveBeenLastCalledWith({ _id: 'b1' }, { $set: { status: 'failed' } });
+    // Still `running`: another attempt may follow, and telling the polling
+    // client the import is over would be a lie until the retries are spent.
+    expect(importJob.status).toBe('running');
+    expect(importJob.finishedAt).toBeUndefined();
+    expect(mockedBundle.updateOne).toHaveBeenLastCalledWith({ _id: 'b1' }, { $set: { status: 'importing' } });
+  });
+
+  it('flags a zip over the entry cap as non-retryable', async () => {
+    const importJob = makeImportJob();
+    mockedImport.findById.mockResolvedValue(importJob);
+    process.env.INGEST_MAX_ENTRIES = '1';
+    stubZip([
+      { path: 'frames/a.png', type: 'File' },
+      { path: 'frames/b.png', type: 'File' },
+    ]);
+
+    try {
+      // Non-retryable: re-downloading the same zip cannot make it smaller.
+      await expect(runImport('i1')).rejects.toThrow(NonRetryableIngestError);
+    } finally {
+      delete process.env.INGEST_MAX_ENTRIES;
+    }
   });
 
   it('fails an import that ingested nothing', async () => {
@@ -337,5 +356,33 @@ describe('runImport', () => {
     mockedImport.findById.mockResolvedValue(null);
 
     await expect(runImport('missing')).rejects.toThrow('not found');
+  });
+});
+
+describe('markImportFailed', () => {
+  it('closes out the import and the bundle', async () => {
+    const importJob = makeImportJob({ status: 'running', fileErrors: [] });
+    mockedImport.findById.mockResolvedValue(importJob);
+
+    await markImportFailed('i1', 'out of attempts');
+
+    expect(importJob.status).toBe('failed');
+    expect(importJob.fileErrors).toContainEqual({ path: '(zip)', reason: 'out of attempts' });
+    expect(importJob.finishedAt).toBeInstanceOf(Date);
+    expect(importJob.save).toHaveBeenCalled();
+    expect(mockedBundle.updateOne).toHaveBeenCalledWith({ _id: { toString: expect.any(Function) } }, { $set: { status: 'failed' } });
+  });
+
+  it('is a no-op when the import record is already gone', async () => {
+    mockedImport.findById.mockResolvedValue(null);
+
+    await expect(markImportFailed('gone', 'whatever')).resolves.toBeUndefined();
+    expect(mockedBundle.updateOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('NonRetryableIngestError', () => {
+  it('is named so BullMQ-side checks can key on it', () => {
+    expect(new NonRetryableIngestError('nope').name).toBe('NonRetryableIngestError');
   });
 });
