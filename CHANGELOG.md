@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.140](https://github.com/visin-platform/visin-monorepo/compare/v0.0.139...v0.0.140) (2026-08-02)
+
+
+### Features
+
+* fix library versions ([9867912](https://github.com/visin-platform/visin-monorepo/commit/986791249b67f0f2f9160dd55d8f2dce5eb30de6))
+
 ### [0.0.139](https://github.com/visin-platform/visin-monorepo/compare/v0.0.138...v0.0.139) (2026-08-02)
 
 
