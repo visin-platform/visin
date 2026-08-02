@@ -5,6 +5,7 @@ jest.mock('../../services/bundleService', () => ({
   listBundlesForUser: jest.fn(),
   getBundle: jest.fn(),
   createUploadUrl: jest.fn(),
+  previewImport: jest.fn(),
   startImport: jest.fn(),
   getImport: jest.fn(),
   deleteImport: jest.fn(),
@@ -87,13 +88,26 @@ describe('upload/import flow', () => {
     expect(mockedSvc.createUploadUrl).toHaveBeenCalledWith('b1');
   });
 
-  it('startImport returns 202', async () => {
-    mockedSvc.startImport.mockResolvedValue({ _id: 'i1' });
+  it('previewImport requires admin and returns the zip shape', async () => {
+    mockedSvc.previewImport.mockResolvedValue({ folders: [] });
+    const req = makeReq({ params: { id: 'b1' }, body: { zipFileId: 'z' } });
     const res = makeRes();
 
-    await ctrl.startImport(makeReq({ params: { id: 'b1' }, body: { zipFileId: 'z' } }), res);
+    await ctrl.previewImport(req, res);
 
-    expect(mockedSvc.startImport).toHaveBeenCalledWith('b1', 'z');
+    expect(mockedAdmin).toHaveBeenCalledWith(req, 'g1');
+    expect(mockedSvc.previewImport).toHaveBeenCalledWith('b1', 'z');
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { folders: [] } });
+  });
+
+  it('startImport returns 202 and forwards the mapping', async () => {
+    mockedSvc.startImport.mockResolvedValue({ _id: 'i1' });
+    const res = makeRes();
+    const mapping = { frames: 'img' };
+
+    await ctrl.startImport(makeReq({ params: { id: 'b1' }, body: { zipFileId: 'z', mapping } }), res);
+
+    expect(mockedSvc.startImport).toHaveBeenCalledWith('b1', 'z', mapping);
     expect(res.status).toHaveBeenCalledWith(202);
   });
 

@@ -28,10 +28,17 @@ export const createUploadUrl = async (req: Request, res: Response): Promise<void
   res.json({ success: true, data });
 };
 
+export const previewImport = async (req: Request, res: Response): Promise<void> => {
+  const bundle = await svc.getBundle(req.params.id as string);
+  await assertAdmin(req, bundle.groupId);
+  const preview = await svc.previewImport(bundle._id.toString(), req.body.zipFileId);
+  res.json({ success: true, data: preview });
+};
+
 export const startImport = async (req: Request, res: Response): Promise<void> => {
   const bundle = await svc.getBundle(req.params.id as string);
   await assertAdmin(req, bundle.groupId);
-  const importJob = await svc.startImport(bundle._id.toString(), req.body.zipFileId);
+  const importJob = await svc.startImport(bundle._id.toString(), req.body.zipFileId, req.body.mapping);
   res.status(202).json({ success: true, data: importJob });
 };
 

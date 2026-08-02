@@ -18,6 +18,9 @@ jest.mock('../../clients/fileServiceClient', () => ({
 jest.mock('../../clients/groupServiceClient', () => ({
   getMyGroups: jest.fn(),
 }));
+jest.mock('../../services/previewService', () => ({
+  previewZip: jest.fn(),
+}));
 jest.mock('../../services/ingestService', () => ({
   bundleFileId: jest.requireActual('../../services/ingestService').bundleFileId,
   runImport: jest.fn(),
@@ -35,6 +38,7 @@ import { LabelJob } from '../../models/LabelJob';
 import * as files from '../../clients/fileServiceClient';
 import * as groups from '../../clients/groupServiceClient';
 import { runImport } from '../../services/ingestService';
+import { previewZip } from '../../services/previewService';
 import { BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
 
 const mockedBundle = LabelBundle as unknown as Record<string, jest.Mock>;
@@ -44,6 +48,7 @@ const mockedJob = LabelJob as unknown as Record<string, jest.Mock>;
 const mockedFiles = files as unknown as Record<string, jest.Mock>;
 const mockedGroups = groups as unknown as Record<string, jest.Mock>;
 const mockedRunImport = runImport as jest.Mock;
+const mockedPreviewZip = previewZip as jest.Mock;
 
 const user = { id: 'u1', email: 'Admin@X.com', name: 'Admin' };
 
@@ -112,8 +117,43 @@ describe('createUploadUrl', () => {
   });
 });
 
+describe('previewImport', () => {
+  const zipFileId = 'label-bundles/b1/upload-1.zip';
+
+  it('inspects an uploaded zip for the mapping step', async () => {
+    mockedFiles.fileExists.mockResolvedValue(true);
+    mockedPreviewZip.mockResolvedValue({ folders: [] });
+
+    await expect(svc.previewImport('b1', zipFileId)).resolves.toEqual({ folders: [] });
+    expect(mockedPreviewZip).toHaveBeenCalledWith(zipFileId);
+  });
+
+  it('rejects a zip belonging to another bundle', async () => {
+    await expect(svc.previewImport('b1', 'label-bundles/b2/upload-1.zip')).rejects.toThrow(BadRequestError);
+    expect(mockedPreviewZip).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the zip has not been uploaded', async () => {
+    mockedFiles.fileExists.mockResolvedValue(false);
+
+    await expect(svc.previewImport('b1', zipFileId)).rejects.toThrow('upload it first');
+  });
+});
+
 describe('startImport', () => {
   const zipFileId = 'label-bundles/b1/upload-1.zip';
+
+  it('stores the mapping on the import job when one is given', async () => {
+    mockedImport.findOne.mockResolvedValue(null);
+    mockedFiles.fileExists.mockResolvedValue(true);
+    mockedImport.create.mockResolvedValue({ _id: { toString: () => 'i1' } });
+    mockedRunImport.mockResolvedValue(undefined);
+    const mapping = { frames: 'img', annotations: [{ path: 'seg', set: 'sam' }] };
+
+    await svc.startImport('b1', zipFileId, mapping);
+
+    expect(mockedImport.create).toHaveBeenCalledWith({ bundleId: 'b1', zipFileId, status: 'pending', mapping });
+  });
 
   it('creates a pending ImportJob and kicks the ingest', async () => {
     mockedImport.findOne.mockResolvedValue(null);

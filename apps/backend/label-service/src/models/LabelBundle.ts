@@ -17,7 +17,7 @@ export interface ILabelBundle extends Document {
     email: string;
     name?: string;
   };
-  annotationSets: string[]; // discovered at ingest from ann/<set>/ folders
+  annotationSets: string[]; // discovered at ingest from annotations/<set>/ folders
   counts: { frames: number; layers: number };
   manifest?: IManifestRow[]; // parsed manifest.csv|jsonl from the zip, if present
   status: BundleStatus;

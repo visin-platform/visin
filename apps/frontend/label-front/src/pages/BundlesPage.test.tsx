@@ -11,9 +11,17 @@ vi.mock('../services/jobService', () => ({
 }));
 
 const uploadStart = vi.fn();
-let uploadState: Record<string, unknown> = { phase: 'idle', uploadFraction: 0, importJob: null, error: null };
+const uploadConfirm = vi.fn();
+const uploadCancel = vi.fn();
+const idleState = { phase: 'idle', uploadFraction: 0, preview: null, importJob: null, error: null };
+let uploadState: Record<string, unknown> = { ...idleState };
 vi.mock('../hooks/useBundleUpload', () => ({
-  useBundleUpload: () => ({ state: uploadState, start: uploadStart }),
+  useBundleUpload: () => ({
+    state: uploadState,
+    start: uploadStart,
+    confirm: uploadConfirm,
+    cancel: uploadCancel,
+  }),
 }));
 
 import { createBundle, deleteBundle, listBundles } from '../services/bundleService';
@@ -39,7 +47,7 @@ const bundle = (overrides: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  uploadState = { phase: 'idle', uploadFraction: 0, importJob: null, error: null };
+  uploadState = { ...idleState };
   mockedList.mockResolvedValue([bundle()]);
   mockedGroups.mockResolvedValue([
     { groupId: 'g1', name: 'Team', role: 'admin' },
@@ -83,6 +91,7 @@ describe('BundlesPage', () => {
 
   it('shows import progress and file errors', async () => {
     uploadState = {
+      ...idleState,
       phase: 'done',
       uploadFraction: 1,
       importJob: { processed: 99, skipped: 0, fileErrors: [{ path: 'frames/x.png', reason: 'Not a readable image' }] },
@@ -106,7 +115,7 @@ describe('BundlesPage', () => {
 
 describe('BundlesPage upload phases and dialog', () => {
   it('shows the uploading progress bar', async () => {
-    uploadState = { phase: 'uploading', uploadFraction: 0.42, importJob: null, error: null };
+    uploadState = { ...idleState, phase: 'uploading', uploadFraction: 0.42 };
     renderWithProviders(<BundlesPage />);
 
     expect(await screen.findByText(/Uploading zip… 42%/)).toBeInTheDocument();
@@ -115,6 +124,7 @@ describe('BundlesPage upload phases and dialog', () => {
 
   it('shows the importing counter', async () => {
     uploadState = {
+      ...idleState,
       phase: 'importing',
       uploadFraction: 1,
       importJob: { processed: 240, skipped: 12, fileErrors: [] },
@@ -126,7 +136,7 @@ describe('BundlesPage upload phases and dialog', () => {
   });
 
   it('shows failed uploads', async () => {
-    uploadState = { phase: 'failed', uploadFraction: 0, importJob: null, error: 'Zip upload cancelled' };
+    uploadState = { ...idleState, phase: 'failed', error: 'Zip upload cancelled' };
     renderWithProviders(<BundlesPage />);
 
     expect(await screen.findByText('Zip upload cancelled')).toBeInTheDocument();
@@ -138,6 +148,61 @@ describe('BundlesPage upload phases and dialog', () => {
 
     await screen.findByText('Paper set');
     await waitFor(() => expect(screen.getByRole('button', { name: 'New bundle' })).toBeDisabled());
+  });
+
+  it('shows the inspecting phase while the zip is being read', async () => {
+    uploadState = { ...idleState, phase: 'inspecting', uploadFraction: 1 };
+    renderWithProviders(<BundlesPage />);
+
+    expect(await screen.findByText('Reading the zip…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upload zip' })).toBeDisabled();
+  });
+
+  it('opens the mapping dialog and imports with the confirmed mapping', async () => {
+    uploadState = {
+      ...idleState,
+      phase: 'mapping',
+      uploadFraction: 1,
+      preview: {
+        entries: 3,
+        truncated: false,
+        folders: [
+          { path: 'img', files: 2, images: 2, idMaps: 0, maskFiles: 0, others: 0, samples: ['a.jpg'] },
+          { path: 'seg', files: 1, images: 0, idMaps: 1, maskFiles: 0, others: 0, samples: ['a.ids.png'] },
+        ],
+        manifestCandidates: [],
+        suggestion: { frames: 'img', annotations: [{ path: 'seg', set: 'seg' }] },
+      },
+    };
+    renderWithProviders(<BundlesPage />);
+
+    expect(await screen.findByText('Map the zip folders')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+    expect(uploadConfirm).toHaveBeenCalledWith({
+      frames: 'img',
+      annotations: [{ path: 'seg', set: 'seg' }],
+    });
+  });
+
+  it('cancelling the mapping dialog abandons the upload', async () => {
+    uploadState = {
+      ...idleState,
+      phase: 'mapping',
+      uploadFraction: 1,
+      preview: {
+        entries: 1,
+        truncated: false,
+        folders: [{ path: 'frames', files: 1, images: 1, idMaps: 0, maskFiles: 0, others: 0, samples: ['a.jpg'] }],
+        manifestCandidates: [],
+        suggestion: { frames: 'frames', annotations: [] },
+      },
+    };
+    renderWithProviders(<BundlesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    expect(uploadCancel).toHaveBeenCalled();
   });
 
   it('empty state renders when there are no bundles', async () => {

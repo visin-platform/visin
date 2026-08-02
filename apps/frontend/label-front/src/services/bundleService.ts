@@ -1,5 +1,5 @@
 import { labelApi } from './labelApiClient';
-import { ApiResponse, ImportJob, LabelBundle } from '../types';
+import { ApiResponse, ImportJob, ImportMapping, LabelBundle, ZipPreview } from '../types';
 
 export const listBundles = async (): Promise<LabelBundle[]> =>
   (await labelApi.get<ApiResponse<LabelBundle[]>>('/bundles')).data;
@@ -21,8 +21,19 @@ export const getUploadUrl = async (
     `/bundles/${bundleId}/upload-url`
   )).data;
 
-export const startImport = async (bundleId: string, zipFileId: string): Promise<ImportJob> =>
-  (await labelApi.post<ApiResponse<ImportJob>>(`/bundles/${bundleId}/import`, { zipFileId })).data;
+/** Zip shape + suggested mapping — the input to the mapping step. */
+export const previewImport = async (bundleId: string, zipFileId: string): Promise<ZipPreview> =>
+  (await labelApi.post<ApiResponse<ZipPreview>>(`/bundles/${bundleId}/import/preview`, { zipFileId })).data;
+
+export const startImport = async (
+  bundleId: string,
+  zipFileId: string,
+  mapping?: ImportMapping
+): Promise<ImportJob> =>
+  (await labelApi.post<ApiResponse<ImportJob>>(`/bundles/${bundleId}/import`, {
+    zipFileId,
+    ...(mapping ? { mapping } : {})
+  })).data;
 
 export const getImport = async (bundleId: string, importId: string): Promise<ImportJob> =>
   (await labelApi.get<ApiResponse<ImportJob>>(`/bundles/${bundleId}/import/${importId}`)).data;

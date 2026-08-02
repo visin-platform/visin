@@ -26,7 +26,7 @@ const mockedVerifyJWT = verifyJWT as jest.Mock;
 const mockedUser = User as unknown as Record<string, jest.Mock>;
 
 const decoded = { id: 'db-id-1', email: 'Test@Example.com', name: 'Test User', tokenVersion: 3 };
-const dbUser = { email: 'test@example.com', tokenVersion: 3, isApproved: true, roles: ['admin'] };
+const dbUser = { email: 'test@example.com', tokenVersion: 3, roles: ['admin'] };
 
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
   ({ cookies: {}, headers: {}, ...overrides } as unknown as Request);

@@ -4,7 +4,7 @@ import { logger } from '@visin/backend-core';
 import { ImportJob, IImportError } from '../models/ImportJob';
 import { LabelBundle } from '../models/LabelBundle';
 import { LabelImage, IMaskMeta, ImageKind } from '../models/LabelImage';
-import { classifyEntry } from '../utils/bundlePaths';
+import { EntryClassification, createEntryClassifier } from '../utils/bundlePaths';
 import { parseManifest } from '../utils/manifest';
 import * as files from '../clients/fileServiceClient';
 
@@ -39,7 +39,9 @@ interface IngestState {
   skipped: number;
   errors: IImportError[];
   manifest?: { stem: string; stratum?: string }[];
-  masks: Map<string, IMaskMeta[]>; // `${set}\0${stem}` → masks
+  // `${set}\0${stem}` → the parsed masks and the zip path they came from (kept
+  // for error reporting, since with a mapping the folder name is the user's).
+  masks: Map<string, { masks: IMaskMeta[]; path: string }>;
 }
 
 const storeImage = async (
@@ -95,13 +97,18 @@ const storeImage = async (
   state.processed += 1;
 };
 
-const handleEntry = async (bundleId: string, entry: ZipEntry, state: IngestState): Promise<void> => {
+const handleEntry = async (
+  bundleId: string,
+  entry: ZipEntry,
+  classify: (rawPath: string) => EntryClassification,
+  state: IngestState
+): Promise<void> => {
   if (entry.type === 'Directory') {
     await entry.autodrain().promise();
     return;
   }
 
-  const classified = classifyEntry(entry.path);
+  const classified = classify(entry.path);
 
   if (classified.type === 'ignored') {
     await entry.autodrain().promise();
@@ -129,7 +136,7 @@ const handleEntry = async (bundleId: string, entry: ZipEntry, state: IngestState
     try {
       const masks = JSON.parse(data.toString('utf8')) as IMaskMeta[];
       if (!Array.isArray(masks)) throw new Error('not an array');
-      state.masks.set(`${classified.set}\0${classified.stem}`, masks);
+      state.masks.set(`${classified.set}\0${classified.stem}`, { masks, path: classified.path });
       state.processed += 1;
     } catch {
       state.errors.push({ path: classified.path, reason: 'masks.json is not a JSON array' });
@@ -141,14 +148,14 @@ const handleEntry = async (bundleId: string, entry: ZipEntry, state: IngestState
 };
 
 const applyMaskMetadata = async (bundleId: string, state: IngestState): Promise<void> => {
-  for (const [key, masks] of state.masks) {
+  for (const [key, entry] of state.masks) {
     const [set, stem] = key.split('\0');
     const updated = await LabelImage.updateOne(
       { bundleId, kind: 'idmap', annotationSet: set, stem },
-      { $set: { 'metadata.masks': masks } }
+      { $set: { 'metadata.masks': entry.masks } }
     );
     if (updated.matchedCount === 0) {
-      state.errors.push({ path: `ann/${set}/${stem}.masks.json`, reason: 'No matching .ids.png in this set' });
+      state.errors.push({ path: entry.path, reason: 'No matching .ids.png in this set' });
     }
   }
 };
@@ -184,6 +191,8 @@ export const runImport = async (importJobId: string): Promise<void> => {
   }
   const bundleId = importJob.bundleId.toString();
   const state: IngestState = { processed: 0, skipped: 0, errors: [], masks: new Map() };
+  // No mapping on the job = the zip claims the default layout.
+  const classify = createEntryClassifier(importJob.mapping || undefined);
 
   importJob.status = 'running';
   importJob.startedAt = new Date();
@@ -201,7 +210,7 @@ export const runImport = async (importJobId: string): Promise<void> => {
       if (entryCount > MAX_ENTRIES) {
         throw new Error(`Zip exceeds ${MAX_ENTRIES} entries`);
       }
-      await handleEntry(bundleId, entry, state);
+      await handleEntry(bundleId, entry, classify, state);
       // Progress + heartbeat: `updatedAt` staleness is how a dead import is
       // detected (see bundleService), so flush on a time interval, not just count.
       if (state.processed % 25 === 0 || Date.now() - lastFlush > 5000) {

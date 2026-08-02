@@ -60,6 +60,34 @@ export interface ImportJob {
   skipped: number;
   total?: number;
   fileErrors: { path: string; reason: string }[];
+  mapping?: ImportMapping;
+}
+
+/** Which folder of the uploaded zip holds what. Mirrors label-service's `ImportMapping`. */
+export interface ImportMapping {
+  frames: string; // '' = the zip root
+  annotations?: { path: string; set: string }[];
+  manifest?: string;
+  idsSuffix?: string;
+  masksSuffix?: string;
+}
+
+export interface ZipFolderSummary {
+  path: string;
+  files: number;
+  images: number;
+  idMaps: number;
+  maskFiles: number;
+  others: number;
+  samples: string[];
+}
+
+export interface ZipPreview {
+  entries: number;
+  truncated: boolean;
+  folders: ZipFolderSummary[];
+  manifestCandidates: string[];
+  suggestion: ImportMapping;
 }
 
 export interface MaskMeta {

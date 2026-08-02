@@ -8,7 +8,7 @@ describe('toStem', () => {
   });
 
   it('strips the compound .ids.png and .masks.json suffixes', () => {
-    expect(toStem('ann/llava/frame_000012.ids.png')).toBe('frame_000012');
+    expect(toStem('annotations/llava/frame_000012.ids.png')).toBe('frame_000012');
     expect(toStem('frame_000012.masks.json')).toBe('frame_000012');
   });
 

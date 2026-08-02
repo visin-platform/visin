@@ -23,6 +23,8 @@ import { Loader } from '@visin/frontend-core';
 import { createBundle, deleteBundle, listBundles } from '../services/bundleService';
 import { getMyGroups } from '../services/jobService';
 import { useBundleUpload } from '../hooks/useBundleUpload';
+import BundleFormatHelp from '../components/BundleFormatHelp';
+import ImportMappingDialog from '../components/ImportMappingDialog';
 import { LabelBundle } from '../types';
 
 const STATUS_COLORS: Record<string, 'default' | 'success' | 'warning' | 'error'> = {
@@ -34,7 +36,7 @@ const STATUS_COLORS: Record<string, 'default' | 'success' | 'warning' | 'error'>
 
 const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ bundle, onChanged }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { state, start } = useBundleUpload(bundle._id, onChanged);
+  const { state, start, confirm, cancel } = useBundleUpload(bundle._id, onChanged);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const remove = useMutation({
     mutationFn: () => deleteBundle(bundle._id),
@@ -61,6 +63,12 @@ const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ 
           <Box sx={{ mt: 1.5 }}>
             <Typography variant="caption">Uploading zip… {(state.uploadFraction * 100).toFixed(0)}%</Typography>
             <LinearProgress variant="determinate" value={state.uploadFraction * 100} />
+          </Box>
+        )}
+        {state.phase === 'inspecting' && (
+          <Box sx={{ mt: 1.5 }}>
+            <Typography variant="caption">Reading the zip…</Typography>
+            <LinearProgress />
           </Box>
         )}
         {state.phase === 'importing' && (
@@ -104,7 +112,7 @@ const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ 
         <Button
           size="small"
           startIcon={<UploadFile />}
-          disabled={state.phase === 'uploading' || state.phase === 'importing'}
+          disabled={state.phase === 'uploading' || state.phase === 'inspecting' || state.phase === 'importing'}
           onClick={() => fileInputRef.current?.click()}
         >
           Upload zip
@@ -113,6 +121,17 @@ const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ 
           Delete
         </Button>
       </CardActions>
+
+      {state.phase === 'mapping' && state.preview && (
+        // Keyed on the zip's shape so a second upload starts from its own suggestion.
+        <ImportMappingDialog
+          key={JSON.stringify(state.preview.suggestion)}
+          open
+          preview={state.preview}
+          onCancel={cancel}
+          onConfirm={confirm}
+        />
+      )}
     </Card>
   );
 };
@@ -154,6 +173,8 @@ const BundlesPage: React.FC = () => {
         </Button>
       </Stack>
 
+      <BundleFormatHelp />
+
       {(!bundles || bundles.length === 0) && (
         <Box sx={{ textAlign: 'center', py: 6 }}>
           <Inventory2Outlined sx={{ fontSize: 48, color: 'text.secondary' }} />
@@ -161,7 +182,7 @@ const BundlesPage: React.FC = () => {
             No bundles yet
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Create one, then upload a bundle zip (frames/ + ann/&lt;set&gt;/ + manifest).
+            Create one, then upload a zip — see <strong>How to upload a bundle</strong> above for the layout.
           </Typography>
         </Box>
       )}

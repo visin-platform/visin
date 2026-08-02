@@ -12,6 +12,7 @@ import {
   getImport,
   getUploadUrl,
   listBundles,
+  previewImport,
   startImport,
   uploadZip,
 } from './bundleService';
@@ -42,8 +43,15 @@ describe('bundleService', () => {
     await getUploadUrl('b1');
     expect(mockedApi.post).toHaveBeenCalledWith('/bundles/b1/upload-url');
 
+    await previewImport('b1', 'zip-1');
+    expect(mockedApi.post).toHaveBeenCalledWith('/bundles/b1/import/preview', { zipFileId: 'zip-1' });
+
     await startImport('b1', 'zip-1');
     expect(mockedApi.post).toHaveBeenCalledWith('/bundles/b1/import', { zipFileId: 'zip-1' });
+
+    const mapping = { frames: 'img', annotations: [{ path: 'seg', set: 'sam' }] };
+    await startImport('b1', 'zip-1', mapping);
+    expect(mockedApi.post).toHaveBeenCalledWith('/bundles/b1/import', { zipFileId: 'zip-1', mapping });
 
     await getImport('b1', 'i1');
     expect(mockedApi.get).toHaveBeenCalledWith('/bundles/b1/import/i1');

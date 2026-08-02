@@ -45,7 +45,7 @@ describe('LabelImage model', () => {
 
     const layer = new LabelImage({
       bundleId: oid(),
-      path: 'ann/s/a.png',
+      path: 'annotations/s/a.png',
       stem: 'a',
       kind: 'layer',
       annotationSet: 's',

@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { asyncHandler, validateRequest } from '@visin/backend-core';
-import { createBundleBodySchema, startImportBodySchema } from '../validation/bundleSchemas';
+import {
+  createBundleBodySchema,
+  previewImportBodySchema,
+  startImportBodySchema
+} from '../validation/bundleSchemas';
 import * as ctrl from '../controllers/bundleController';
 
 const router = Router();
@@ -9,6 +13,8 @@ router.post('/', validateRequest({ body: createBundleBodySchema }), asyncHandler
 router.get('/', asyncHandler(ctrl.listBundles));
 router.get('/:id', asyncHandler(ctrl.getBundle));
 router.post('/:id/upload-url', asyncHandler(ctrl.createUploadUrl));
+// Preview first (the mapping step), then import with the mapping it produced.
+router.post('/:id/import/preview', validateRequest({ body: previewImportBodySchema }), asyncHandler(ctrl.previewImport));
 router.post('/:id/import', validateRequest({ body: startImportBodySchema }), asyncHandler(ctrl.startImport));
 router.get('/:id/import/:importId', asyncHandler(ctrl.getImport));
 router.delete('/:id/import/:importId', asyncHandler(ctrl.deleteImport));

@@ -4,6 +4,8 @@ import { ImportJob, IImportJob } from '../models/ImportJob';
 import { LabelImage } from '../models/LabelImage';
 import { LabelJob } from '../models/LabelJob';
 import { runImport, bundleFileId } from './ingestService';
+import { previewZip, ZipPreview } from './previewService';
+import { ImportMapping } from '../utils/bundlePaths';
 import * as files from '../clients/fileServiceClient';
 import * as groups from '../clients/groupServiceClient';
 
@@ -54,11 +56,31 @@ export const createUploadUrl = async (
   return { uploadUrl: signed.url, zipFileId, expiresMs: signed.expiresMs };
 };
 
-export const startImport = async (bundleId: string, zipFileId: string): Promise<IImportJob> => {
-  // Only zips uploaded for this bundle may be ingested into it.
+// Only zips uploaded for this bundle may be read or ingested for it.
+const assertOwnedZip = (bundleId: string, zipFileId: string): void => {
   if (!zipFileId.startsWith(bundleFileId(bundleId, '')) || zipFileId.includes('..')) {
     throw new BadRequestError('zipFileId does not belong to this bundle');
   }
+};
+
+/**
+ * Inspect an uploaded zip before importing it: the folder table and the
+ * suggested mapping the client's mapping step starts from.
+ */
+export const previewImport = async (bundleId: string, zipFileId: string): Promise<ZipPreview> => {
+  assertOwnedZip(bundleId, zipFileId);
+  if (!(await files.fileExists(zipFileId))) {
+    throw new BadRequestError('Uploaded zip not found — upload it first');
+  }
+  return previewZip(zipFileId);
+};
+
+export const startImport = async (
+  bundleId: string,
+  zipFileId: string,
+  mapping?: ImportMapping
+): Promise<IImportJob> => {
+  assertOwnedZip(bundleId, zipFileId);
   const running = await ImportJob.findOne({ bundleId, status: { $in: ['pending', 'running'] } });
   if (running) {
     // A crashed/redeployed process leaves its import in `running` forever.
@@ -76,7 +98,7 @@ export const startImport = async (bundleId: string, zipFileId: string): Promise<
     throw new BadRequestError('Uploaded zip not found — upload it first');
   }
 
-  const importJob = await ImportJob.create({ bundleId, zipFileId, status: 'pending' });
+  const importJob = await ImportJob.create({ bundleId, zipFileId, status: 'pending', ...(mapping ? { mapping } : {}) });
 
   // Fire and forget: progress and errors land on the ImportJob the client polls.
   runImport(importJob._id.toString()).catch((err) =>

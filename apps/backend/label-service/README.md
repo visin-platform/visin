@@ -11,6 +11,23 @@ jobs, tasks, answers, and export. Design and roadmap live in the repo root's
 - Storage: image/zip bytes live on disk behind file-service (internal API); this
   service stores metadata only.
 
+## Bundle import
+
+A bundle zip is uploaded (signed PUT to file-service), then imported in two calls:
+
+```
+POST /api/bundles/:id/import/preview  { zipFileId }        → folders + suggested mapping
+POST /api/bundles/:id/import          { zipFileId, mapping? } → ImportJob (poll for progress)
+```
+
+`preview` walks the zip without extracting it and reports what each folder holds; the
+client shows that as the mapping table and posts back an `ImportMapping`
+(`frames`, `annotations: [{ path, set }]`, `manifest`, and the `idsSuffix` /
+`masksSuffix` file-name patterns). Omitting `mapping` falls back to the default layout —
+`frames/`, `annotations/<set>/` (legacy `ann/` still accepted), `manifest.csv|jsonl` —
+so a conventional bundle needs no mapping at all. Both paths run through
+`utils/bundlePaths.ts`, the single definition of what a zip entry means.
+
 ## Develop
 
 ```sh
