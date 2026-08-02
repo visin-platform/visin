@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.144](https://github.com/visin-platform/visin-monorepo/compare/v0.0.143...v0.0.144) (2026-08-02)
+
+
+### Bug Fixes
+
+* add mandatory annotation  set ([a655038](https://github.com/visin-platform/visin-monorepo/commit/a6550385b7eee8769caae2423729668f85d96a31))
+
 ### [0.0.143](https://github.com/visin-platform/visin-monorepo/compare/v0.0.142...v0.0.143) (2026-08-02)
 
 
