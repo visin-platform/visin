@@ -1,4 +1,12 @@
 # Visin Changelog
+### [0.0.141](https://github.com/visin-platform/visin-monorepo/compare/v0.0.140...v0.0.141) (2026-08-02)
+
+
+### Features
+
+* release libraries ([78e9792](https://github.com/visin-platform/visin-monorepo/commit/78e979281ef8fc2f437bb674618b63a0ad9d3da5))
+* split upload and mapping steps ([4615f0d](https://github.com/visin-platform/visin-monorepo/commit/4615f0dc285584fbecf1e136fda0c7ac2c53d46b))
+
 ### [0.0.140](https://github.com/visin-platform/visin-monorepo/compare/v0.0.139...v0.0.140) (2026-08-02)
 
 
