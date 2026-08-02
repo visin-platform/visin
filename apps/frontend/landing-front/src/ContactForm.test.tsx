@@ -28,7 +28,7 @@ describe('ContactForm', () => {
     fillForm();
     fireEvent.click(screen.getByRole('button', { name: /send message/i }));
 
-    await waitFor(() => expect(screen.getByText('Thank you!')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Thank you')).toBeInTheDocument());
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://vision-api.test/api/contacts',
@@ -45,7 +45,7 @@ describe('ContactForm', () => {
     fillForm();
     fireEvent.click(screen.getByRole('button', { name: /send message/i }));
 
-    await waitFor(() => expect(screen.getByText('Thank you!')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Thank you')).toBeInTheDocument());
   });
 
   it('shows the server error message when the API reports failure', async () => {
@@ -95,6 +95,6 @@ describe('ContactForm', () => {
     expect(screen.getByRole('button', { name: /sending/i })).toBeDisabled();
 
     resolveFetch({ ok: true, json: async () => ({ success: true }) });
-    await waitFor(() => expect(screen.getByText('Thank you!')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Thank you')).toBeInTheDocument());
   });
 });

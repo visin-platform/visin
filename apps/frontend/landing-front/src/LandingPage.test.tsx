@@ -1,131 +1,165 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LandingPage from './LandingPage';
+import { FEATURES, STEPS, GITHUB_URL } from './content';
+
+const config: { VISION_FRONT_URL?: string } = { VISION_FRONT_URL: 'http://vision.test' };
 
 vi.mock('./config/ConfigProvider', () => ({
-  useConfig: () => ({ VISION_FRONT_URL: 'http://vision.test' }),
+  useConfig: () => config
 }));
 vi.mock('./ContactForm', () => ({ default: () => <div>contact-form</div> }));
 
-const setLocationHref = () => {
-  Object.defineProperty(window, 'location', {
-    value: { ...window.location, href: '' },
-    writable: true,
-  });
-};
-
 beforeEach(() => {
   vi.restoreAllMocks();
-  setLocationHref();
+  config.VISION_FRONT_URL = 'http://vision.test';
 });
 
-describe('LandingPage', () => {
-  it('renders the main sections', () => {
+describe('LandingPage structure', () => {
+  it('renders every section landmark', () => {
+    const { container } = render(<LandingPage />);
+
+    for (const id of ['top', 'how-it-works', 'features', 'open-source', 'contact']) {
+      expect(container.querySelector(`#${id}`)).toBeInTheDocument();
+    }
+    expect(container.querySelector('main#main')).toBeInTheDocument();
+    expect(container.querySelector('footer')).toBeInTheDocument();
+  });
+
+  it('leads with the headline and the product summary', () => {
     render(<LandingPage />);
 
-    expect(screen.getAllByText('Visin').length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: 'Features' })).toBeInTheDocument();
-    expect(screen.getByText('Free & Open Source')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 1, name: /workbench for your computer vision work/i })
+    ).toBeInTheDocument();
+  });
+
+  it('renders every workflow step and feature from the content module', () => {
+    render(<LandingPage />);
+
+    for (const step of STEPS) {
+      expect(screen.getByText(step.title)).toBeInTheDocument();
+    }
+    for (const feature of FEATURES) {
+      expect(screen.getByText(feature.title)).toBeInTheDocument();
+    }
+  });
+
+  it('mounts the contact form', () => {
+    render(<LandingPage />);
+
     expect(screen.getByText('contact-form')).toBeInTheDocument();
   });
 
-  it('links "Get Started" and the hero CTA to the configured Vision URL', () => {
+  it('offers a skip link before the navigation', () => {
     render(<LandingPage />);
 
-    const getStarted = screen.getByRole('link', { name: 'Get Started' });
-    expect(getStarted).toHaveAttribute('href', 'http://vision.test');
+    expect(screen.getByRole('link', { name: /skip to content/i })).toHaveAttribute('href', '#main');
+  });
+});
+
+describe('LandingPage calls to action', () => {
+  it('points every app link at the configured Vision URL', () => {
+    render(<LandingPage />);
+
+    const appLinks = screen.getAllByRole('link', { name: /open the app/i });
+    expect(appLinks.length).toBeGreaterThan(1);
+    for (const link of appLinks) {
+      expect(link).toHaveAttribute('href', 'http://vision.test');
+    }
   });
 
-  it('toggles the mobile nav menu open and closed', () => {
+  it('falls back to a harmless href when the app URL is unconfigured', () => {
+    config.VISION_FRONT_URL = undefined;
     render(<LandingPage />);
 
-    const nav = document.querySelector('.nav ul')!;
-    expect(nav.className).not.toContain('open');
-
-    fireEvent.click(screen.getByRole('button', { name: '☰' }));
-    expect(nav.className).toContain('open');
-
-    fireEvent.click(screen.getByRole('button', { name: '☰' }));
-    expect(nav.className).not.toContain('open');
+    expect(screen.getAllByRole('link', { name: /open the app/i })[0]).toHaveAttribute('href', '#');
   });
 
-  it('closes the menu when a nav link is clicked', () => {
+  it('opens GitHub links in a new tab with rel protection', () => {
     render(<LandingPage />);
-    const nav = document.querySelector('.nav ul')!;
-    fireEvent.click(screen.getByRole('button', { name: '☰' }));
-    expect(nav.className).toContain('open');
 
-    fireEvent.click(screen.getByRole('link', { name: 'Home' }));
+    const githubLinks = screen
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href')?.startsWith(GITHUB_URL));
 
-    expect(nav.className).not.toContain('open');
+    expect(githubLinks.length).toBeGreaterThan(0);
+    for (const link of githubLinks) {
+      expect(link).toHaveAttribute('target', '_blank');
+      // Without noopener the opened page can reach back through window.opener.
+      expect(link.getAttribute('rel')).toContain('noopener');
+    }
   });
 
-  it('closes the menu when the Features or Open Source nav links are clicked', () => {
+  it('anchors the nav to the sections on the page', () => {
     render(<LandingPage />);
-    const nav = document.querySelector('.nav ul')!;
 
-    fireEvent.click(screen.getByRole('button', { name: '☰' }));
-    fireEvent.click(screen.getAllByRole('link', { name: 'Features' })[0]);
-    expect(nav.className).not.toContain('open');
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(nav).getByRole('link', { name: 'Features' })).toHaveAttribute('href', '#features');
+    expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '#open-source');
+    expect(within(nav).getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '#contact');
+  });
+});
 
-    fireEvent.click(screen.getByRole('button', { name: '☰' }));
-    fireEvent.click(screen.getAllByRole('link', { name: 'Open Source' })[0]);
-    expect(nav.className).not.toContain('open');
+describe('LandingPage mobile menu', () => {
+  // The drawer unmounts after its close transition, so closure is awaited.
+  const expectDrawerClosed = () =>
+    waitFor(() => expect(screen.queryByRole('button', { name: /close menu/i })).not.toBeInTheDocument());
+
+  it('opens and closes the drawer', async () => {
+    render(<LandingPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    const drawer = screen.getByRole('presentation');
+    expect(within(drawer).getByRole('link', { name: 'Features' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /close menu/i }));
+    await expectDrawerClosed();
   });
 
-  it('smooth-scrolls to the contact section from the nav link', () => {
+  it('closes the drawer when a link inside it is followed', async () => {
     render(<LandingPage />);
-    const contactSection = document.getElementById('contact')!;
-    const scrollIntoView = vi.fn();
-    contactSection.scrollIntoView = scrollIntoView;
 
-    const navContactLink = screen.getAllByRole('link', { name: 'Contact' })[0];
-    fireEvent.click(navContactLink);
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    fireEvent.click(within(screen.getByRole('presentation')).getByRole('link', { name: 'Features' }));
 
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth' });
+    await expectDrawerClosed();
   });
 
-  it('smooth-scrolls to the contact section from the footer link', () => {
+  it('closes the drawer on Escape', async () => {
     render(<LandingPage />);
-    const contactSection = document.getElementById('contact')!;
-    const scrollIntoView = vi.fn();
-    contactSection.scrollIntoView = scrollIntoView;
 
-    const footerContactLink = screen.getAllByRole('link', { name: 'Contact' }).at(-1)!;
-    fireEvent.click(footerContactLink);
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    fireEvent.keyDown(screen.getByRole('presentation'), { key: 'Escape', code: 'Escape' });
 
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth' });
+    await expectDrawerClosed();
   });
 
-  it('navigates to the app URL when "Start Building" is clicked', () => {
+  it('closes the drawer when the app link inside it is followed', async () => {
     render(<LandingPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start Building' }));
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    const drawer = screen.getByRole('presentation');
+    fireEvent.click(within(drawer).getByRole('link', { name: /open the app/i }));
 
-    expect(window.location.href).toBe('http://vision.test');
+    await expectDrawerClosed();
+  });
+});
+
+describe('LandingPage claims', () => {
+  it('states the licence and the current year in the footer', () => {
+    render(<LandingPage />);
+
+    expect(screen.getByText(new RegExp(`${new Date().getFullYear()}.*MIT`))).toBeInTheDocument();
   });
 
-  it('navigates to the app URL when "Start Your Project" is clicked', () => {
-    render(<LandingPage />);
+  it('does not load imagery from a third-party host', () => {
+    const { container } = render(<LandingPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start Your Project' }));
-
-    expect(window.location.href).toBe('http://vision.test');
-  });
-
-  it('opens GitHub in a new tab when "View on GitHub" is clicked', () => {
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
-    render(<LandingPage />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'View on GitHub' }));
-
-    expect(openSpy).toHaveBeenCalledWith('https://github.com/visin-platform', '_blank');
-  });
-
-  it('links the GitHub icon to the org page', () => {
-    render(<LandingPage />);
-
-    const githubLink = screen.getByTitle('View on GitHub');
-    expect(githubLink).toHaveAttribute('href', 'https://github.com/visin-platform');
+    // The old page pulled feature photos from a stock-image CDN on every visit.
+    for (const img of Array.from(container.querySelectorAll('img'))) {
+      expect(img.getAttribute('src')).toMatch(/^\//);
+    }
+    expect(container.innerHTML).not.toContain('unsplash');
   });
 });
