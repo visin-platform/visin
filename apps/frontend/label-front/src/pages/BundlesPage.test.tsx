@@ -175,25 +175,43 @@ describe('BundlesPage', () => {
     expect(screen.getByText(/Upload another zip to add frames or annotation sets/)).toBeInTheDocument();
   });
 
-  it('re-imports a previous upload without re-sending the zip', async () => {
+  it('maps and imports the only upload without a menu, and without re-sending the zip', async () => {
     mockedUploads.mockResolvedValue([
       { zipFileId: 'label-bundles/b1/upload-2.zip', size: 731 * 1024 ** 2, uploadedAt: '2026-08-02T18:00:00.000Z' },
     ]);
     renderWithProviders(<BundlesPage />);
 
-    const button = await screen.findByRole('button', { name: /Re-import \(1\)/ });
+    const button = await screen.findByRole('button', { name: /Map & import/ });
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
-    fireEvent.click(await screen.findByRole('menuitem', { name: /731 MB/ }));
 
+    // One upload: straight to the mapping dialog, no menu of one to pick from.
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(uploadFromExisting).toHaveBeenCalledWith('label-bundles/b1/upload-2.zip');
     expect(uploadStart).not.toHaveBeenCalled();
   });
 
-  it('offers nothing to re-import before the first upload', async () => {
+  it('asks which upload when a bundle has several', async () => {
+    mockedUploads.mockResolvedValue([
+      { zipFileId: 'label-bundles/b1/upload-3.zip', size: 731 * 1024 ** 2, uploadedAt: '2026-08-02T18:30:00.000Z' },
+      { zipFileId: 'label-bundles/b1/upload-1.zip', size: 700 * 1024 ** 2, uploadedAt: '2026-08-02T17:00:00.000Z' },
+    ]);
     renderWithProviders(<BundlesPage />);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /Re-import/ })).toBeDisabled());
+    const button = await screen.findByRole('button', { name: /Map & import/ });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+
+    expect(await screen.findByText('Which upload?')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /latest/ }));
+
+    expect(uploadFromExisting).toHaveBeenCalledWith('label-bundles/b1/upload-3.zip');
+  });
+
+  it('has nothing to map before the first upload', async () => {
+    renderWithProviders(<BundlesPage />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Map & import/ })).toBeDisabled());
   });
 
   it('deletes a bundle and surfaces refusal errors', async () => {

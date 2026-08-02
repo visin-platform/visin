@@ -13,13 +13,15 @@ import {
   DialogContent,
   DialogTitle,
   LinearProgress,
+  ListSubheader,
   Menu,
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography
 } from '@mui/material';
-import { Inventory2Outlined, UploadFile, Delete, EditOutlined, ReplayOutlined } from '@mui/icons-material';
+import { Inventory2Outlined, UploadFile, Delete, EditOutlined, TuneOutlined } from '@mui/icons-material';
 import { Loader } from '@visin/frontend-core';
 import { createBundle, deleteBundle, listBundles, listUploads, updateBundle } from '../services/bundleService';
 import { getMyGroups } from '../services/jobService';
@@ -113,6 +115,7 @@ const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ 
     queryKey: ['bundle-uploads', bundle._id],
     queryFn: () => listUploads(bundle._id)
   });
+  const uploadList = uploads.data ?? [];
   const busy = state.phase === 'uploading' || state.phase === 'inspecting' || state.phase === 'importing';
   const remove = useMutation({
     mutationFn: () => deleteBundle(bundle._id),
@@ -198,20 +201,36 @@ const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ 
         >
           Upload zip
         </Button>
-        <Button
-          size="small"
-          startIcon={<ReplayOutlined />}
-          disabled={busy || (uploads.data?.length ?? 0) === 0}
-          onClick={(event) => setUploadsAnchor(event.currentTarget)}
+        <Tooltip
+          title={
+            uploadList.length === 0
+              ? 'Upload a zip first'
+              : 'Set which zip folders are frames and annotation sets, then import. The zip stays on the server, so this never re-uploads it.'
+          }
         >
-          Re-import{uploads.data && uploads.data.length > 0 ? ` (${uploads.data.length})` : ''}
-        </Button>
-        <Menu
-          anchorEl={uploadsAnchor}
-          open={Boolean(uploadsAnchor)}
-          onClose={() => setUploadsAnchor(null)}
-        >
-          {(uploads.data ?? []).map((upload) => (
+          {/* A disabled button swallows pointer events, so the tooltip needs a live wrapper. */}
+          <span>
+            <Button
+              size="small"
+              startIcon={<TuneOutlined />}
+              disabled={busy || uploadList.length === 0}
+              onClick={(event) => {
+                // One upload is the common case — go straight to mapping rather
+                // than making the user pick from a menu of one.
+                if (uploadList.length === 1) {
+                  startFromUpload(uploadList[0].zipFileId);
+                } else {
+                  setUploadsAnchor(event.currentTarget);
+                }
+              }}
+            >
+              Map &amp; import
+            </Button>
+          </span>
+        </Tooltip>
+        <Menu anchorEl={uploadsAnchor} open={Boolean(uploadsAnchor)} onClose={() => setUploadsAnchor(null)}>
+          <ListSubheader>Which upload?</ListSubheader>
+          {uploadList.map((upload, index) => (
             <MenuItem
               key={upload.zipFileId}
               onClick={() => {
@@ -220,6 +239,7 @@ const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ 
               }}
             >
               {new Date(upload.uploadedAt).toLocaleString()} · {(upload.size / 1024 ** 2).toFixed(0)} MB
+              {index === 0 ? ' (latest)' : ''}
             </MenuItem>
           ))}
         </Menu>
