@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.138](https://github.com/visin-platform/visin-monorepo/compare/v0.0.137...v0.0.138) (2026-08-02)
+
+
+### Bug Fixes
+
+* file upload unzip time out ([335f458](https://github.com/visin-platform/visin-monorepo/commit/335f4589025afb3b8dfc730489809109dfa936ce))
+
 ### [0.0.137](https://github.com/visin-platform/visin-monorepo/compare/v0.0.136...v0.0.137) (2026-08-02)
 
 
