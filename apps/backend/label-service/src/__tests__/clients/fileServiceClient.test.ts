@@ -1,5 +1,14 @@
 import { Readable } from 'stream';
-import { getUploadUrl, getDownloadUrl, putFile, getFileStream, fileExists, deleteFolder } from '../../clients/fileServiceClient';
+import {
+  getUploadUrl,
+  getDownloadUrl,
+  putFile,
+  getFileStream,
+  getFileSize,
+  getFileRange,
+  fileExists,
+  deleteFolder,
+} from '../../clients/fileServiceClient';
 
 const fetchMock = jest.fn();
 global.fetch = fetchMock as unknown as typeof fetch;
@@ -69,6 +78,48 @@ describe('putFile', () => {
     fetchMock.mockResolvedValue(jsonResponse({}, 500));
 
     await expect(putFile('a/b.png', Buffer.from('x'))).rejects.toThrow('put failed');
+  });
+});
+
+describe('ranged reads', () => {
+  it('reads the size from the HEAD content-length', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => '731000000' },
+    } as unknown as Response);
+
+    await expect(getFileSize('big.zip')).resolves.toBe(731000000);
+    expect(fetchMock.mock.calls[0][1].method).toBe('HEAD');
+  });
+
+  it('throws when the size is missing or the head fails', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, headers: { get: () => null } } as unknown as Response);
+    await expect(getFileSize('big.zip')).rejects.toThrow('no size');
+
+    fetchMock.mockResolvedValue({ ok: false, status: 404, headers: { get: () => null } } as unknown as Response);
+    await expect(getFileSize('big.zip')).rejects.toThrow('head failed');
+  });
+
+  it('asks for the byte range and streams the 206 body', async () => {
+    const webStream = Readable.toWeb(Readable.from([Buffer.from('tail')]));
+    fetchMock.mockResolvedValue({ ok: true, status: 206, body: webStream } as unknown as Response);
+
+    const stream = await getFileRange('big.zip', 900, 949);
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+
+    expect(Buffer.concat(chunks).toString()).toBe('tail');
+    expect(fetchMock.mock.calls[0][1].headers.Range).toBe('bytes=900-949');
+  });
+
+  it('refuses a server that ignores Range rather than streaming the whole file', async () => {
+    const webStream = Readable.toWeb(Readable.from([Buffer.from('everything')]));
+    fetchMock.mockResolvedValue({ ok: true, status: 200, body: webStream } as unknown as Response);
+
+    await expect(getFileRange('big.zip', 0, 10)).rejects.toThrow('ignored Range');
   });
 });
 

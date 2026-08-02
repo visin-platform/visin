@@ -1,36 +1,28 @@
-jest.mock('unzipper', () => ({ Parse: jest.fn(() => 'PARSER') }));
+jest.mock('unzipper', () => ({ Open: { custom: jest.fn() } }));
 jest.mock('../../clients/fileServiceClient', () => ({
-  getFileStream: jest.fn(),
+  getFileSize: jest.fn(),
+  getFileRange: jest.fn(),
 }));
 
+import { Readable } from 'stream';
+import unzipper from 'unzipper';
 import { previewZip, suggestMapping, ZipFolderSummary } from '../../services/previewService';
 import * as files from '../../clients/fileServiceClient';
 
 const mockedFiles = files as unknown as Record<string, jest.Mock>;
+const mockedOpen = (unzipper as unknown as { Open: { custom: jest.Mock } }).Open.custom;
 
 interface FakeEntry {
   path: string;
   type?: 'File' | 'Directory';
 }
 
-const zipStreamFor = (entries: FakeEntry[]): { pipe: jest.Mock } => {
-  const iterable = {
-    async *[Symbol.asyncIterator]() {
-      for (const entry of entries) {
-        yield {
-          path: entry.path,
-          type: entry.type ?? 'File',
-          autodrain: () => ({ promise: () => Promise.resolve() }),
-        };
-      }
-    },
-  };
-  return { pipe: jest.fn(() => iterable) };
-};
-
-/** `getFileStream(...).pipe(unzipper.Parse())` → an async-iterable of entries. */
+/** unzipper.Open.custom(...) resolves to the zip's central directory listing. */
 const stubZip = (entries: FakeEntry[]): void => {
-  mockedFiles.getFileStream.mockResolvedValue(zipStreamFor(entries));
+  mockedFiles.getFileSize.mockResolvedValue(1024);
+  mockedOpen.mockResolvedValue({
+    files: entries.map((entry) => ({ path: entry.path, type: entry.type ?? 'File' })),
+  });
 };
 
 const folder = (overrides: Partial<ZipFolderSummary> & { path: string }): ZipFolderSummary => ({
@@ -115,6 +107,38 @@ describe('previewZip', () => {
     expect(preview.truncated).toBe(true);
   });
 
+  it('reads the zip through byte ranges instead of downloading it', async () => {
+    stubZip([{ path: 'frames/a.jpg' }]);
+    mockedFiles.getFileRange.mockResolvedValue(Readable.from([Buffer.from('index-bytes')]));
+
+    await previewZip('label-bundles/b1/upload-1.zip');
+    const source = mockedOpen.mock.calls[0][0] as {
+      size: () => Promise<number>;
+      stream: (offset: number, length?: number) => Readable;
+    };
+
+    await expect(source.size()).resolves.toBe(1024);
+
+    // The zip index lives at the tail, which unzipper asks for as a negative offset.
+    const tail = source.stream(-100);
+    await new Promise((resolve) => tail.on('end', resolve).resume());
+    expect(mockedFiles.getFileRange).toHaveBeenCalledWith('label-bundles/b1/upload-1.zip', 924, 1023);
+
+    source.stream(10, 50).resume();
+    expect(mockedFiles.getFileRange).toHaveBeenLastCalledWith('label-bundles/b1/upload-1.zip', 10, 59);
+  });
+
+  it('surfaces a failed range read on the stream it handed unzipper', async () => {
+    stubZip([{ path: 'frames/a.jpg' }]);
+    mockedFiles.getFileRange.mockRejectedValue(new Error('file-service ignored Range'));
+
+    await previewZip('label-bundles/b1/upload-1.zip');
+    const source = mockedOpen.mock.calls[0][0] as { stream: (offset: number) => Readable };
+
+    const failure = await new Promise<Error>((resolve) => source.stream(0).on('error', resolve));
+    expect(failure.message).toBe('file-service ignored Range');
+  });
+
   it('throws when the zip has too many entries', async () => {
     const previousLimit = process.env.INGEST_MAX_ENTRIES;
     process.env.INGEST_MAX_ENTRIES = '2';
@@ -122,9 +146,11 @@ describe('previewZip', () => {
     // The cap is read at import time, so the reloaded module needs its own
     // (freshly mocked) file-service client stubbed too.
     const freshFiles = (await import('../../clients/fileServiceClient')) as unknown as Record<string, jest.Mock>;
-    freshFiles.getFileStream.mockResolvedValue(
-      zipStreamFor([{ path: 'a/1.png' }, { path: 'a/2.png' }, { path: 'a/3.png' }])
-    );
+    const freshUnzipper = (await import('unzipper')).default as unknown as { Open: { custom: jest.Mock } };
+    freshFiles.getFileSize.mockResolvedValue(1024);
+    freshUnzipper.Open.custom.mockResolvedValue({
+      files: [{ path: 'a/1.png', type: 'File' }, { path: 'a/2.png', type: 'File' }, { path: 'a/3.png', type: 'File' }],
+    });
     const { previewZip: freshPreviewZip } = await import('../../services/previewService');
 
     await expect(freshPreviewZip('label-bundles/b1/upload-1.zip')).rejects.toThrow('exceeds 2 entries');

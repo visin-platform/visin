@@ -64,7 +64,7 @@ const makeStreamReq = (fileId: string | string[]): Request & PassThrough => {
 };
 
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ params: {}, body: {}, query: {}, ...overrides } as unknown as Request);
+  ({ params: {}, body: {}, query: {}, headers: {}, ...overrides } as unknown as Request);
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -193,7 +193,37 @@ describe('internalDownload', () => {
 
     expect(res.setHeader).toHaveBeenCalledWith('Content-Length', 42);
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/octet-stream');
-    expect(mockedStorage.createReadStream).toHaveBeenCalledWith('grp/file.bin');
+    expect(mockedStorage.createReadStream).toHaveBeenCalledWith('grp/file.bin', undefined);
+    expect(res.setHeader).toHaveBeenCalledWith('Accept-Ranges', 'bytes');
+  });
+
+  it('serves a byte range as 206 so a zip index can be read without the whole file', () => {
+    mockedStorage.fileExists.mockReturnValue(true);
+    mockedStorage.getMetadata.mockReturnValue({ size: 1000, lastModified: new Date() });
+    mockedStorage.createReadStream.mockReturnValue(new PassThrough());
+    const res = makeRes();
+
+    internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=900-949' } }), res);
+
+    expect(mockedStorage.createReadStream).toHaveBeenCalledWith('big.zip', { start: 900, end: 949 });
+    expect(res.status).toHaveBeenCalledWith(206);
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Range', 'bytes 900-949/1000');
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Length', 50);
+  });
+
+  it('clamps an open-ended range and falls back to the whole file on a bad one', () => {
+    mockedStorage.fileExists.mockReturnValue(true);
+    mockedStorage.getMetadata.mockReturnValue({ size: 1000, lastModified: new Date() });
+    mockedStorage.createReadStream.mockReturnValue(new PassThrough());
+
+    internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=990-' } }), makeRes());
+    expect(mockedStorage.createReadStream).toHaveBeenLastCalledWith('big.zip', { start: 990, end: 999 });
+
+    internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=2000-3000' } }), makeRes());
+    expect(mockedStorage.createReadStream).toHaveBeenLastCalledWith('big.zip', undefined);
+
+    internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'rubbish' } }), makeRes());
+    expect(mockedStorage.createReadStream).toHaveBeenLastCalledWith('big.zip', undefined);
   });
 
   it('responds 500 when the read stream errors before headers are sent', async () => {

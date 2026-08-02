@@ -70,6 +70,43 @@ export const getFileStream = async (fileId: string): Promise<Readable> => {
   return Readable.fromWeb(response.body as import('stream/web').ReadableStream);
 };
 
+/** Stored size in bytes — the first thing a ranged zip reader needs. */
+export const getFileSize = async (fileId: string): Promise<number> => {
+  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
+    method: 'HEAD',
+    headers: apiKeyHeaders(),
+    serviceName: 'file-service'
+  });
+  if (!response.ok) {
+    throw new Error(`file-service head failed for ${fileId} (${response.status})`);
+  }
+  // A missing header would coerce to 0 and send the zip reader chasing
+  // offsets in an "empty" file, so treat it as an error rather than a size.
+  const header = response.headers.get('content-length');
+  const size = Number(header);
+  if (header === null || !Number.isFinite(size) || size <= 0) {
+    throw new Error(`file-service returned no size for ${fileId}`);
+  }
+  return size;
+};
+
+/**
+ * Byte-range read. Used to walk a zip's central directory without pulling the
+ * whole archive; a server that ignores `Range` would silently stream gigabytes,
+ * so a non-206 response is an error rather than a fallback.
+ */
+export const getFileRange = async (fileId: string, start: number, end: number): Promise<Readable> => {
+  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
+    headers: { ...apiKeyHeaders(), Range: `bytes=${start}-${end}` },
+    timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
+    serviceName: 'file-service'
+  });
+  if (response.status !== 206 || !response.body) {
+    throw new Error(`file-service ignored Range for ${fileId} (${response.status})`);
+  }
+  return Readable.fromWeb(response.body as import('stream/web').ReadableStream);
+};
+
 /** Whether a file already exists (idempotent re-import checks). */
 export const fileExists = async (fileId: string): Promise<boolean> => {
   const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {

@@ -62,9 +62,9 @@ export const readFile = (fileId: string): Buffer => {
 /**
  * Create a readable stream for a file.
  */
-export const createReadStream = (fileId: string): fs.ReadStream => {
+export const createReadStream = (fileId: string, range?: { start: number; end: number }): fs.ReadStream => {
   const filePath = resolvePath(fileId);
-  return fs.createReadStream(filePath);
+  return fs.createReadStream(filePath, range);
 };
 
 /**

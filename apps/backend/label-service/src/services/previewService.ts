@@ -1,4 +1,5 @@
 import path from 'path';
+import { PassThrough } from 'stream';
 import unzipper from 'unzipper';
 import {
   ANNOTATION_DIRS,
@@ -34,10 +35,9 @@ export interface ZipPreview {
   suggestion: ImportMapping;
 }
 
-interface ZipEntry {
+interface ZipDirectoryEntry {
   path: string;
   type: 'File' | 'Directory';
-  autodrain(): { promise(): Promise<void> };
 }
 
 const emptyFolder = (folderPath: string): ZipFolderSummary => ({
@@ -126,20 +126,33 @@ export const suggestMapping = (folders: ZipFolderSummary[], manifestCandidates: 
 };
 
 /**
- * Walk the uploaded zip without extracting anything and report its shape. This
- * is the "map your folders" step's input: the client shows these folders, edits
- * the suggested mapping, and posts the result back with the import.
+ * Read the uploaded zip's central directory — the index at the tail of the
+ * archive — rather than streaming its contents. Entry *names* are all the
+ * mapping step needs, and this keeps the request O(entries) instead of
+ * O(bytes): a 700 MB bundle answers in milliseconds, well inside any proxy's
+ * read timeout, and nothing is decompressed.
  */
 export const previewZip = async (zipFileId: string): Promise<ZipPreview> => {
-  const zipStream = await files.getFileStream(zipFileId);
-  const parsed = zipStream.pipe(unzipper.Parse({ forceStream: true }));
+  const size = await files.getFileSize(zipFileId);
+  const archive = await unzipper.Open.custom({
+    size: async () => size,
+    stream: (offset: number, length?: number) => {
+      const start = offset < 0 ? Math.max(size + offset, 0) : offset;
+      const end = length ? start + length - 1 : size - 1;
+      const passThrough = new PassThrough();
+      files
+        .getFileRange(zipFileId, start, end)
+        .then((stream) => stream.pipe(passThrough))
+        .catch((err) => passThrough.destroy(err as Error));
+      return passThrough;
+    }
+  });
 
   const folders = new Map<string, ZipFolderSummary>();
   const manifestCandidates: string[] = [];
   let entries = 0;
 
-  for await (const entry of parsed as AsyncIterable<ZipEntry>) {
-    await entry.autodrain().promise();
+  for (const entry of archive.files as ZipDirectoryEntry[]) {
     if (entry.type === 'Directory') {
       continue;
     }

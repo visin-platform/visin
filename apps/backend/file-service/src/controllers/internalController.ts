@@ -53,9 +53,24 @@ export const internalUpload = (req: Request, res: Response): void => {
   req.pipe(output);
 };
 
+/** `bytes=<start>-<end>`, end optional. Anything else is ignored (full body). */
+const parseRange = (header: string | undefined, size: number): { start: number; end: number } | null => {
+  const match = /^bytes=(\d+)-(\d*)$/.exec((header || '').trim());
+  if (!match) {
+    return null;
+  }
+  const start = Number(match[1]);
+  const end = match[2] === '' ? size - 1 : Math.min(Number(match[2]), size - 1);
+  return start > end || start >= size ? null : { start, end };
+};
+
 /**
  * GET /internal/files/:fileId
  * Server-to-server download – returns raw binary.
+ *
+ * Honours `Range`, which is what lets label-service read a bundle zip's central
+ * directory (a few hundred KB at the tail) instead of streaming the whole
+ * multi-hundred-MB archive just to list its entries.
  */
 export const internalDownload = (req: Request, res: Response): void => {
   const fileId = [req.params.fileId].flat().join('/');
@@ -65,10 +80,18 @@ export const internalDownload = (req: Request, res: Response): void => {
   }
 
   const meta = getMetadata(fileId);
-  const stream = createReadStream(fileId);
+  const range = parseRange(req.headers.range, meta.size);
+  const stream = createReadStream(fileId, range ?? undefined);
 
-  res.setHeader('Content-Length', meta.size);
+  res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', 'application/octet-stream');
+  if (range) {
+    res.status(206);
+    res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${meta.size}`);
+    res.setHeader('Content-Length', range.end - range.start + 1);
+  } else {
+    res.setHeader('Content-Length', meta.size);
+  }
 
   // Stream errors are event-driven, not thrown — Express can't forward these automatically.
   stream.on('error', (err) => {
