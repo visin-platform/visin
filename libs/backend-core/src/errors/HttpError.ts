@@ -57,6 +57,18 @@ export class TooManyRequestsError extends HttpError {
 }
 
 /**
+ * A downstream service answered, but not in a way this service can use — a
+ * wrong shape, a missing capability, an unexpected status. A 502 rather than a
+ * 500 so the message points at the dependency instead of reading as a bug
+ * here, and so the caller sees *which* upstream broke.
+ */
+export class BadGatewayError extends HttpError {
+  constructor(message = 'Upstream service returned an unusable response') {
+    super(502, message);
+  }
+}
+
+/**
  * A downstream service didn't answer within its deadline (see
  * `fetchWithTimeout`). A 504 rather than a 500 because the failure is the
  * upstream dependency's, not this service's — and it tells the caller a

@@ -5,7 +5,9 @@ import {
   ForbiddenError,
   NotFoundError,
   ConflictError,
-  TooManyRequestsError
+  TooManyRequestsError,
+  BadGatewayError,
+  GatewayTimeoutError
 } from '../../errors/HttpError';
 
 describe('HttpError', () => {
@@ -27,7 +29,9 @@ describe.each([
   [ForbiddenError, 403, 'Access denied'],
   [NotFoundError, 404, 'Not found'],
   [ConflictError, 409, 'Conflict'],
-  [TooManyRequestsError, 429, 'Too many requests']
+  [TooManyRequestsError, 429, 'Too many requests'],
+  [BadGatewayError, 502, 'Upstream service returned an unusable response'],
+  [GatewayTimeoutError, 504, 'Upstream service timed out']
 ] as const)('%p', (ErrorClass, expectedStatus, defaultMessage) => {
   it(`defaults to status ${expectedStatus} and a sensible message`, () => {
     const error = new ErrorClass();

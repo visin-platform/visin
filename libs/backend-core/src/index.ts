@@ -15,6 +15,7 @@ export {
   NotFoundError,
   ConflictError,
   TooManyRequestsError,
+  BadGatewayError,
   GatewayTimeoutError
 } from './errors/HttpError';
 

@@ -1,5 +1,5 @@
 import { Readable } from 'stream';
-import { requireEnv, fetchWithTimeout, TRANSFER_FETCH_TIMEOUT_MS } from '@visin/backend-core';
+import { requireEnv, fetchWithTimeout, BadGatewayError, TRANSFER_FETCH_TIMEOUT_MS } from '@visin/backend-core';
 
 export interface SignedUrl {
   url: string;
@@ -70,22 +70,25 @@ export const getFileStream = async (fileId: string): Promise<Readable> => {
   return Readable.fromWeb(response.body as import('stream/web').ReadableStream);
 };
 
-/** Stored size in bytes — the first thing a ranged zip reader needs. */
+/**
+ * Stored size in bytes — the first thing a ranged zip reader needs. Uses the
+ * metadata endpoint, not HEAD: `HEAD /internal/files/*` is an existence probe
+ * that answers `200` with no body and no `Content-Length`.
+ */
 export const getFileSize = async (fileId: string): Promise<number> => {
-  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
-    method: 'HEAD',
+  const response = await fetchWithTimeout(`${baseUrl()}/internal/meta/${fileId}`, {
     headers: apiKeyHeaders(),
     serviceName: 'file-service'
   });
   if (!response.ok) {
-    throw new Error(`file-service head failed for ${fileId} (${response.status})`);
+    throw new BadGatewayError(`file-service could not report the size of ${fileId} (${response.status})`);
   }
-  // A missing header would coerce to 0 and send the zip reader chasing
+  const body = (await response.json()) as { data?: { size?: unknown } };
+  const size = Number(body.data?.size);
+  // A missing size would coerce to 0/NaN and send the zip reader chasing
   // offsets in an "empty" file, so treat it as an error rather than a size.
-  const header = response.headers.get('content-length');
-  const size = Number(header);
-  if (header === null || !Number.isFinite(size) || size <= 0) {
-    throw new Error(`file-service returned no size for ${fileId}`);
+  if (!Number.isFinite(size) || size <= 0) {
+    throw new BadGatewayError(`file-service returned no size for ${fileId}`);
   }
   return size;
 };
@@ -102,7 +105,11 @@ export const getFileRange = async (fileId: string, start: number, end: number): 
     serviceName: 'file-service'
   });
   if (response.status !== 206 || !response.body) {
-    throw new Error(`file-service ignored Range for ${fileId} (${response.status})`);
+    // Almost always a file-service that predates Range support — a version
+    // skew, not a bug in the zip. Say so rather than 500ing.
+    throw new BadGatewayError(
+      `file-service ignored a Range request for ${fileId} (${response.status}) — it may need redeploying`
+    );
   }
   return Readable.fromWeb(response.body as import('stream/web').ReadableStream);
 };

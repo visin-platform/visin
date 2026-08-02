@@ -270,6 +270,19 @@ describe('internalExists', () => {
     expect(res.end).toHaveBeenCalled();
   });
 
+  // Callers needing a size must use /internal/meta — this probe deliberately
+  // sends no body and no Content-Length, and label-service once read it as a
+  // size, which broke bundle import with an opaque 500.
+  it('sends no Content-Length, so it cannot be used as a size probe', () => {
+    mockedStorage.fileExists.mockReturnValue(true);
+    const res = makeRes();
+
+    internalExists(makeReq({ params: { fileId: 'a.zip' } }), res);
+
+    expect(res.setHeader).not.toHaveBeenCalledWith('Content-Length', expect.anything());
+    expect(res.end).toHaveBeenCalled();
+  });
+
   it('returns 404 when it does not', () => {
     mockedStorage.fileExists.mockReturnValue(false);
     const res = makeRes();

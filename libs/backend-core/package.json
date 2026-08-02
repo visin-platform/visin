@@ -1,6 +1,6 @@
 {
   "name": "@visin/backend-core",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Shared backend functionality for Visin services",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

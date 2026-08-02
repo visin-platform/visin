@@ -82,23 +82,25 @@ describe('putFile', () => {
 });
 
 describe('ranged reads', () => {
-  it('reads the size from the HEAD content-length', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: { get: () => '731000000' },
-    } as unknown as Response);
+  // Shape is file-service's `internalMetadata` response, verbatim. HEAD on
+  // /internal/files/* is an existence probe with no Content-Length, so asking
+  // it for a size silently yielded nothing and 500'd the whole preview.
+  it('reads the size from the metadata endpoint', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ success: true, data: { size: 731000000, lastModified: new Date().toISOString() } })
+    );
 
     await expect(getFileSize('big.zip')).resolves.toBe(731000000);
-    expect(fetchMock.mock.calls[0][1].method).toBe('HEAD');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://files.test/internal/meta/big.zip');
+    expect(fetchMock.mock.calls[0][1].method).toBeUndefined(); // GET, not HEAD
   });
 
-  it('throws when the size is missing or the head fails', async () => {
-    fetchMock.mockResolvedValue({ ok: true, status: 200, headers: { get: () => null } } as unknown as Response);
-    await expect(getFileSize('big.zip')).rejects.toThrow('no size');
+  it('reports a 502 when file-service cannot give a usable size', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ success: true, data: {} }));
+    await expect(getFileSize('big.zip')).rejects.toMatchObject({ statusCode: 502, message: /no size/ });
 
-    fetchMock.mockResolvedValue({ ok: false, status: 404, headers: { get: () => null } } as unknown as Response);
-    await expect(getFileSize('big.zip')).rejects.toThrow('head failed');
+    fetchMock.mockResolvedValue(jsonResponse({ success: false }, 404));
+    await expect(getFileSize('big.zip')).rejects.toMatchObject({ statusCode: 502 });
   });
 
   it('asks for the byte range and streams the 206 body', async () => {
@@ -119,7 +121,12 @@ describe('ranged reads', () => {
     const webStream = Readable.toWeb(Readable.from([Buffer.from('everything')]));
     fetchMock.mockResolvedValue({ ok: true, status: 200, body: webStream } as unknown as Response);
 
-    await expect(getFileRange('big.zip', 0, 10)).rejects.toThrow('ignored Range');
+    // 502, not 500: an un-redeployed file-service is a version skew, and the
+    // message has to say so or the UI shows a bare "Something went wrong".
+    await expect(getFileRange('big.zip', 0, 10)).rejects.toMatchObject({
+      statusCode: 502,
+      message: /ignored a Range request/,
+    });
   });
 });
 
