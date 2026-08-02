@@ -117,6 +117,43 @@ describe('createUploadUrl', () => {
   });
 });
 
+describe('updateBundle', () => {
+  const doc = (overrides: Record<string, unknown> = {}) => ({
+    _id: 'b1',
+    name: 'Old',
+    description: 'was here',
+    save: jest.fn(),
+    ...overrides,
+  });
+
+  it('renames and re-describes without touching content', async () => {
+    const bundle = doc();
+    mockedBundle.findById.mockResolvedValue(bundle);
+
+    const updated = await svc.updateBundle('b1', { name: 'New', description: 'zod triage v2' });
+
+    expect(updated.name).toBe('New');
+    expect(updated.description).toBe('zod triage v2');
+    expect(bundle.save).toHaveBeenCalled();
+  });
+
+  it('leaves an omitted field alone and clears an emptied description', async () => {
+    const bundle = doc();
+    mockedBundle.findById.mockResolvedValue(bundle);
+
+    await svc.updateBundle('b1', { description: '' });
+
+    expect(bundle.name).toBe('Old');
+    expect(bundle.description).toBeUndefined();
+  });
+
+  it('404s on an unknown bundle', async () => {
+    mockedBundle.findById.mockResolvedValue(null);
+
+    await expect(svc.updateBundle('nope', { name: 'x' })).rejects.toThrow(NotFoundError);
+  });
+});
+
 describe('previewImport', () => {
   const zipFileId = 'label-bundles/b1/upload-1.zip';
 

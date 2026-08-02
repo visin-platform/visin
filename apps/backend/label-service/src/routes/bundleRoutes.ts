@@ -3,7 +3,8 @@ import { asyncHandler, validateRequest } from '@visin/backend-core';
 import {
   createBundleBodySchema,
   previewImportBodySchema,
-  startImportBodySchema
+  startImportBodySchema,
+  updateBundleBodySchema
 } from '../validation/bundleSchemas';
 import * as ctrl from '../controllers/bundleController';
 
@@ -12,6 +13,7 @@ const router = Router();
 router.post('/', validateRequest({ body: createBundleBodySchema }), asyncHandler(ctrl.createBundle));
 router.get('/', asyncHandler(ctrl.listBundles));
 router.get('/:id', asyncHandler(ctrl.getBundle));
+router.patch('/:id', validateRequest({ body: updateBundleBodySchema }), asyncHandler(ctrl.updateBundle));
 router.post('/:id/upload-url', asyncHandler(ctrl.createUploadUrl));
 // Preview first (the mapping step), then import with the mapping it produced.
 router.post('/:id/import/preview', validateRequest({ body: previewImportBodySchema }), asyncHandler(ctrl.previewImport));

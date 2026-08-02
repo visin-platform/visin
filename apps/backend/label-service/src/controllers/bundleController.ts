@@ -21,6 +21,13 @@ export const getBundle = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: bundle });
 };
 
+export const updateBundle = async (req: Request, res: Response): Promise<void> => {
+  const bundle = await svc.getBundle(req.params.id as string);
+  await assertAdmin(req, bundle.groupId);
+  const updated = await svc.updateBundle(bundle._id.toString(), req.body);
+  res.json({ success: true, data: updated });
+};
+
 export const createUploadUrl = async (req: Request, res: Response): Promise<void> => {
   const bundle = await svc.getBundle(req.params.id as string);
   await assertAdmin(req, bundle.groupId);

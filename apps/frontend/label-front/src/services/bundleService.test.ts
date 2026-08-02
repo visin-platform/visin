@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('./labelApiClient', () => ({
-  labelApi: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  labelApi: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
 import { labelApi } from './labelApiClient';
@@ -14,10 +14,16 @@ import {
   listBundles,
   previewImport,
   startImport,
+  updateBundle,
   uploadZip,
 } from './bundleService';
 
-const mockedApi = labelApi as unknown as { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+const mockedApi = labelApi as unknown as {
+  get: ReturnType<typeof vi.fn>;
+  post: ReturnType<typeof vi.fn>;
+  patch: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,6 +48,10 @@ describe('bundleService', () => {
 
     await getUploadUrl('b1');
     expect(mockedApi.post).toHaveBeenCalledWith('/bundles/b1/upload-url');
+
+    mockedApi.patch.mockResolvedValue({ success: true, data: {} });
+    await updateBundle('b1', { name: 'Renamed', description: 'notes' });
+    expect(mockedApi.patch).toHaveBeenCalledWith('/bundles/b1', { name: 'Renamed', description: 'notes' });
 
     await previewImport('b1', 'zip-1');
     expect(mockedApi.post).toHaveBeenCalledWith('/bundles/b1/import/preview', { zipFileId: 'zip-1' });

@@ -4,6 +4,7 @@ jest.mock('../../services/bundleService', () => ({
   createBundle: jest.fn(),
   listBundlesForUser: jest.fn(),
   getBundle: jest.fn(),
+  updateBundle: jest.fn(),
   createUploadUrl: jest.fn(),
   previewImport: jest.fn(),
   startImport: jest.fn(),
@@ -53,6 +54,20 @@ describe('createBundle', () => {
 
     expect(mockedAdmin).toHaveBeenCalledWith(req, 'g1');
     expect(res.status).toHaveBeenCalledWith(201);
+  });
+});
+
+describe('updateBundle', () => {
+  it('requires admin on the bundle group and delegates', async () => {
+    mockedSvc.updateBundle.mockResolvedValue({ _id: 'b1', name: 'New' });
+    const req = makeReq({ params: { id: 'b1' }, body: { name: 'New' } });
+    const res = makeRes();
+
+    await ctrl.updateBundle(req, res);
+
+    expect(mockedAdmin).toHaveBeenCalledWith(req, 'g1');
+    expect(mockedSvc.updateBundle).toHaveBeenCalledWith('b1', { name: 'New' });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { _id: 'b1', name: 'New' } });
   });
 });
 

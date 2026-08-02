@@ -155,8 +155,10 @@ const BundleFormatHelp: React.FC = () => (
           </Rule>
           <Rule>
             <strong>Re-uploading is additive.</strong> Paths already imported are skipped, so a second zip adds new
-            frames or a new annotation set without duplicating anything. To replace a file, delete the bundle and
-            re-upload.
+            frames or a new annotation set without duplicating anything. Imported images are never overwritten —
+            ship corrected annotations under a <em>new</em> set name (<Code>llava_34b_v2</Code>) so answers already
+            given still refer to what the labeller actually saw. Name and description stay editable via{' '}
+            <strong>Edit</strong>; deleting is refused while a non-archived job uses the bundle.
           </Rule>
           <Rule>
             <strong>Everything else is reported, not fatal.</strong> Files outside <Code>frames/</Code>,{' '}

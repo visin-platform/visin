@@ -2,8 +2,24 @@ import { z } from '@visin/backend-core';
 
 export const createBundleBodySchema = z.object({
   name: z.string().trim().min(1, 'name required').max(120),
+  description: z.string().trim().max(500).optional(),
   groupId: z.string().trim().min(1, 'groupId required')
 });
+
+/**
+ * Metadata only. A bundle's images are immutable once imported — jobs, tasks
+ * and answers already reference them — so content changes go through another
+ * (additive) upload, not through here. `groupId` is deliberately not editable:
+ * moving a bundle would change who can see every job drawing from it.
+ */
+export const updateBundleBodySchema = z
+  .object({
+    name: z.string().trim().min(1, 'name cannot be empty').max(120).optional(),
+    description: z.string().trim().max(500).optional()
+  })
+  .refine((body) => body.name !== undefined || body.description !== undefined, {
+    message: 'Nothing to update: provide name and/or description'
+  });
 
 export const previewImportBodySchema = z.object({
   zipFileId: z.string().trim().min(1, 'zipFileId required')

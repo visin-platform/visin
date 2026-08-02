@@ -7,8 +7,17 @@ export const listBundles = async (): Promise<LabelBundle[]> =>
 export const getBundle = async (bundleId: string): Promise<LabelBundle> =>
   (await labelApi.get<ApiResponse<LabelBundle>>(`/bundles/${bundleId}`)).data;
 
-export const createBundle = async (input: { name: string; groupId: string }): Promise<LabelBundle> =>
-  (await labelApi.post<ApiResponse<LabelBundle>>('/bundles', input)).data;
+export const createBundle = async (input: {
+  name: string;
+  groupId: string;
+  description?: string;
+}): Promise<LabelBundle> => (await labelApi.post<ApiResponse<LabelBundle>>('/bundles', input)).data;
+
+/** Metadata only — a bundle's images are immutable once imported. */
+export const updateBundle = async (
+  bundleId: string,
+  input: { name?: string; description?: string }
+): Promise<LabelBundle> => (await labelApi.patch<ApiResponse<LabelBundle>>(`/bundles/${bundleId}`, input)).data;
 
 export const deleteBundle = async (bundleId: string): Promise<void> => {
   await labelApi.delete(`/bundles/${bundleId}`);

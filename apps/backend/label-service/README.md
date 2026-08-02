@@ -28,6 +28,17 @@ client shows that as the mapping table and posts back an `ImportMapping`
 so a conventional bundle needs no mapping at all. Both paths run through
 `utils/bundlePaths.ts`, the single definition of what a zip entry means.
 
+## Changing a bundle
+
+`PATCH /api/bundles/:id` edits `name` / `description` only. Imported images are
+immutable by design: `LabelTask` rows point at `LabelImage` ids and answers point at
+tasks, so overwriting an image would silently change what an already-labelled task
+showed. Grow a bundle by uploading another zip (ingest skips paths already imported),
+ship corrected annotations as a *new* set name rather than replacing one, and delete a
+bundle only before any job uses it — `deleteBundle` refuses while a non-archived job
+references it. `groupId` is not editable; moving a bundle would change who can see
+every job drawing from it.
+
 ## Develop
 
 ```sh

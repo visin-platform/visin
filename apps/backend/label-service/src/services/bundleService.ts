@@ -19,7 +19,7 @@ const isStale = (importJob: IImportJob): boolean =>
 
 export const createBundle = async (
   user: UserPayload,
-  data: { name: string; groupId: string }
+  data: { name: string; groupId: string; description?: string }
 ): Promise<ILabelBundle> => {
   return LabelBundle.create({
     ...data,
@@ -44,6 +44,27 @@ export const getBundle = async (bundleId: string): Promise<ILabelBundle> => {
   if (!bundle) {
     throw new NotFoundError('Bundle not found');
   }
+  return bundle;
+};
+
+/**
+ * Rename / re-describe a bundle. Metadata only, on purpose: the images are
+ * referenced by existing tasks and answers, so changing what a bundle *is*
+ * means uploading another zip (additive) or creating a new bundle.
+ */
+export const updateBundle = async (
+  bundleId: string,
+  data: { name?: string; description?: string }
+): Promise<ILabelBundle> => {
+  const bundle = await getBundle(bundleId);
+  if (data.name !== undefined) {
+    bundle.name = data.name;
+  }
+  if (data.description !== undefined) {
+    // Empty string clears it rather than storing a blank.
+    bundle.description = data.description || undefined;
+  }
+  await bundle.save();
   return bundle;
 };
 

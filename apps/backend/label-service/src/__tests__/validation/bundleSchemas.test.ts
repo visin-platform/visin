@@ -2,6 +2,7 @@ import {
   createBundleBodySchema,
   importMappingSchema,
   previewImportBodySchema,
+  updateBundleBodySchema,
   startImportBodySchema,
 } from '../../validation/bundleSchemas';
 
@@ -13,9 +14,32 @@ describe('createBundleBodySchema', () => {
     });
   });
 
+  it('takes an optional description', () => {
+    expect(createBundleBodySchema.parse({ name: 'B', groupId: 'g1', description: ' from zod_temp ' })).toEqual({
+      name: 'B',
+      groupId: 'g1',
+      description: 'from zod_temp',
+    });
+  });
+
   it('rejects missing fields', () => {
     expect(createBundleBodySchema.safeParse({ name: 'x' }).success).toBe(false);
     expect(createBundleBodySchema.safeParse({ groupId: 'g1' }).success).toBe(false);
+  });
+});
+
+describe('updateBundleBodySchema', () => {
+  it('accepts either field alone and trims', () => {
+    expect(updateBundleBodySchema.parse({ name: ' Renamed ' })).toEqual({ name: 'Renamed' });
+    expect(updateBundleBodySchema.parse({ description: ' notes ' })).toEqual({ description: 'notes' });
+    expect(updateBundleBodySchema.parse({ description: '' })).toEqual({ description: '' }); // clears it
+  });
+
+  it('rejects an empty patch, a blank name, and over-long text', () => {
+    expect(updateBundleBodySchema.safeParse({}).success).toBe(false);
+    expect(updateBundleBodySchema.safeParse({ name: '   ' }).success).toBe(false);
+    expect(updateBundleBodySchema.safeParse({ name: 'x'.repeat(121) }).success).toBe(false);
+    expect(updateBundleBodySchema.safeParse({ description: 'x'.repeat(501) }).success).toBe(false);
   });
 });
 

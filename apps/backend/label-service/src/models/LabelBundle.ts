@@ -11,6 +11,7 @@ export interface IManifestRow {
 export interface ILabelBundle extends Document {
   _id: Types.ObjectId;
   name: string;
+  description?: string;
   groupId: string;
   createdBy: {
     userId: string;
@@ -28,6 +29,8 @@ export interface ILabelBundle extends Document {
 const LabelBundleSchema = new Schema<ILabelBundle>(
   {
     name: { type: String, required: true, trim: true, maxlength: 120 },
+    // Free-text provenance: where the zip came from, which run produced it.
+    description: { type: String, trim: true, maxlength: 500 },
     groupId: { type: String, required: true, index: true },
     createdBy: {
       userId: { type: String, required: true },

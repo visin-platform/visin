@@ -43,6 +43,7 @@ export interface LabelJob {
 export interface LabelBundle {
   _id: string;
   name: string;
+  description?: string;
   groupId: string;
   annotationSets: string[];
   counts: { frames: number; layers: number };

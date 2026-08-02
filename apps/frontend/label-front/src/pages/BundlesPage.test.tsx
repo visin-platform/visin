@@ -4,6 +4,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 vi.mock('../services/bundleService', () => ({
   listBundles: vi.fn(),
   createBundle: vi.fn(),
+  updateBundle: vi.fn(),
   deleteBundle: vi.fn(),
 }));
 vi.mock('../services/jobService', () => ({
@@ -24,13 +25,14 @@ vi.mock('../hooks/useBundleUpload', () => ({
   }),
 }));
 
-import { createBundle, deleteBundle, listBundles } from '../services/bundleService';
+import { createBundle, deleteBundle, listBundles, updateBundle } from '../services/bundleService';
 import { getMyGroups } from '../services/jobService';
 import BundlesPage from './BundlesPage';
 import { renderWithProviders } from '../test/renderWithProviders';
 
 const mockedList = listBundles as ReturnType<typeof vi.fn>;
 const mockedCreate = createBundle as ReturnType<typeof vi.fn>;
+const mockedUpdate = updateBundle as ReturnType<typeof vi.fn>;
 const mockedDelete = deleteBundle as ReturnType<typeof vi.fn>;
 const mockedGroups = getMyGroups as ReturnType<typeof vi.fn>;
 
@@ -78,6 +80,22 @@ describe('BundlesPage', () => {
     await waitFor(() => expect(mockedCreate).toHaveBeenCalledWith({ name: 'New set', groupId: 'g1' }));
   });
 
+  it('sends a description when the create dialog has one', async () => {
+    mockedCreate.mockResolvedValue(bundle());
+    renderWithProviders(<BundlesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'New bundle' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'New set' } });
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: ' 4135 ZOD frames ' } });
+    fireEvent.mouseDown(screen.getByLabelText('Group'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Team' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith({ name: 'New set', groupId: 'g1', description: '4135 ZOD frames' })
+    );
+  });
+
   it('starts a zip upload from the file input', async () => {
     renderWithProviders(<BundlesPage />);
     await screen.findByText('Paper set');
@@ -101,6 +119,55 @@ describe('BundlesPage', () => {
 
     expect(await screen.findByText(/1 file\(s\) had problems/)).toBeInTheDocument();
     expect(screen.getByText(/Not a readable image/)).toBeInTheDocument();
+  });
+
+  it('renames a bundle and saves the description', async () => {
+    mockedUpdate.mockResolvedValue(bundle({ name: 'Renamed' }));
+    renderWithProviders(<BundlesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Renamed' } });
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'zod triage v2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('b1', { name: 'Renamed', description: 'zod triage v2' })
+    );
+  });
+
+  it('keeps Save disabled until something actually changes', async () => {
+    renderWithProviders(<BundlesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '  ' } });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(); // blank name is not a rename
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Other' } });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
+  it('surfaces an edit failure without closing the dialog', async () => {
+    mockedUpdate.mockRejectedValue(new Error('Nothing to update'));
+    renderWithProviders(<BundlesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Other' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Nothing to update')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('shows a bundle description and explains that images are immutable', async () => {
+    mockedList.mockResolvedValue([bundle({ description: 'built by make_label_bundle.py' })]);
+    renderWithProviders(<BundlesPage />);
+
+    expect(await screen.findByText('built by make_label_bundle.py')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByText(/Upload another zip to add frames or annotation sets/)).toBeInTheDocument();
   });
 
   it('deletes a bundle and surfaces refusal errors', async () => {
