@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.145](https://github.com/visin-platform/visin-monorepo/compare/v0.0.144...v0.0.145) (2026-08-02)
+
+
+### Features
+
+* improve labeling tool ([4a81577](https://github.com/visin-platform/visin-monorepo/commit/4a815778586ada03da8393455b46fcbb9426f12b))
+
 ### [0.0.144](https://github.com/visin-platform/visin-monorepo/compare/v0.0.143...v0.0.144) (2026-08-02)
 
 
