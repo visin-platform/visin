@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.133](https://github.com/visin-platform/visin-monorepo/compare/v0.0.132...v0.0.133) (2026-08-02)
+
+
+### Features
+
+* add group management and unify side menu items ([88cc9c0](https://github.com/visin-platform/visin-monorepo/commit/88cc9c07914f8e77e2e3ac7711fb4820ccdc4853))
+
 ### [0.0.132](https://github.com/visin-platform/visin-monorepo/compare/v0.0.131...v0.0.132) (2026-07-30)
 
 
