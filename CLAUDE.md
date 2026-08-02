@@ -40,6 +40,15 @@ rebuilt (`npm run build` inside `libs/backend-core` or `libs/frontend-core`) aft
 consuming workspaces to see the change — they resolve each other via `dist/`, not source, per `package.json`
 `main`/`types`.
 
+Locally the libs are npm-workspace symlinks, but a **deployed image installs them from npm** (`npm i` inside each
+service's Dockerfile, which never sees the monorepo). So a new lib export only reaches a service after
+`npm run release` in the lib *and* that service's `package.json` naming the new version. Consumers therefore pin
+an **exact** version, never `*` or a caret: a range that doesn't change when the lib is published leaves Docker's
+cached `npm i` layer in place, and the build compiles fresh source against a months-old lib — surfacing as
+`has no exported member` for something that demonstrably exists on the registry. `npm run release` syncs every
+consumer automatically (`scripts/sync-lib-versions.mjs`); `npm run sync:libs` does it by hand and CI's
+`lib-versions` job fails on drift.
+
 Every workspace enforces a jest/vitest `coverageThreshold`/`thresholds` floor (see each `jest.config.ts` /
 `vite.config.ts`) — set just below current coverage so CI catches regressions. Ratchet the floor up when you add
 meaningful coverage; don't lower it to make a failing build pass.

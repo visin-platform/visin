@@ -93,6 +93,22 @@ jobs:
         id: set-e2e-matrix
         run: echo "workspaces=$(echo '${{ steps.filter.outputs.changes }}' | jq -c '[.[] | select(IN("account-front","auth-front","label-front","landing-front","vision-front"))]')" >> "$GITHUB_OUTPUT"
 
+  # Deployed images install the libs from npm, so a consumer left on an older
+  # pinned version silently compiles against stale typings inside Docker's
+  # cached npm-install layer. Catch that drift here, not in a failed deploy.
+  lib-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Check workspaces pin the current lib versions
+        run: npm run sync:libs:check
+
   lint:
     needs: changes
     if: needs.changes.outputs.workspaces != '[]'
