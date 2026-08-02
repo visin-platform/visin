@@ -12,11 +12,18 @@ describe('fileSchemas', () => {
     expect(deleteFolderBodySchema.safeParse({}).success).toBe(false);
   });
 
+  it('listFilesQuerySchema parses recursive as a boolean', () => {
+    expect(listFilesQuerySchema.parse({ recursive: 'false' }).recursive).toBe(false);
+    expect(listFilesQuerySchema.parse({ recursive: 'true' }).recursive).toBe(true);
+    expect(listFilesQuerySchema.safeParse({ recursive: 'maybe' }).success).toBe(false);
+  });
+
   it('listFilesQuerySchema coerces maxKeys and defaults it to 1000', () => {
-    expect(listFilesQuerySchema.parse({})).toEqual({ maxKeys: 1000 });
+    expect(listFilesQuerySchema.parse({})).toEqual({ maxKeys: 1000, recursive: true });
     expect(listFilesQuerySchema.parse({ prefix: 'a', maxKeys: '25' })).toEqual({
       prefix: 'a',
       maxKeys: 25,
+      recursive: true,
     });
     expect(listFilesQuerySchema.safeParse({ maxKeys: '-1' }).success).toBe(false);
   });

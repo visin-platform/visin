@@ -12,6 +12,7 @@ import {
   getImport,
   getUploadUrl,
   listBundles,
+  listUploads,
   previewImport,
   startImport,
   updateBundle,
@@ -52,6 +53,9 @@ describe('bundleService', () => {
     mockedApi.patch.mockResolvedValue({ success: true, data: {} });
     await updateBundle('b1', { name: 'Renamed', description: 'notes' });
     expect(mockedApi.patch).toHaveBeenCalledWith('/bundles/b1', { name: 'Renamed', description: 'notes' });
+
+    await listUploads('b1');
+    expect(mockedApi.get).toHaveBeenCalledWith('/bundles/b1/uploads');
 
     await previewImport('b1', 'zip-1');
     expect(mockedApi.post).toHaveBeenCalledWith('/bundles/b1/import/preview', { zipFileId: 'zip-1' });

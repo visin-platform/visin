@@ -83,6 +83,13 @@ export interface ZipFolderSummary {
   samples: string[];
 }
 
+/** A zip already uploaded for a bundle — importable without re-sending it. */
+export interface BundleUpload {
+  zipFileId: string;
+  size: number;
+  uploadedAt: string;
+}
+
 export interface ZipPreview {
   entries: number;
   truncated: boolean;

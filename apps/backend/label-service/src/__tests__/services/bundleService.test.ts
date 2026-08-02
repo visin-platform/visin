@@ -14,6 +14,7 @@ jest.mock('../../clients/fileServiceClient', () => ({
   getUploadUrl: jest.fn(),
   fileExists: jest.fn(),
   deleteFolder: jest.fn(),
+  listFiles: jest.fn(),
 }));
 jest.mock('../../clients/groupServiceClient', () => ({
   getMyGroups: jest.fn(),
@@ -151,6 +152,30 @@ describe('updateBundle', () => {
     mockedBundle.findById.mockResolvedValue(null);
 
     await expect(svc.updateBundle('nope', { name: 'x' })).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe('listUploads', () => {
+  it('lists this bundle\'s zips newest first, ignoring imported content', async () => {
+    mockedFiles.listFiles.mockResolvedValue([
+      { name: 'label-bundles/b1/upload-100.zip', size: 10, lastModified: '2026-08-01T00:00:00.000Z' },
+      { name: 'label-bundles/b1/upload-300.zip', size: 30, lastModified: '2026-08-03T00:00:00.000Z' },
+      { name: 'label-bundles/b1/frames/a.jpg', size: 1, lastModified: '2026-08-02T00:00:00.000Z' },
+    ]);
+
+    const uploads = await svc.listUploads('b1');
+
+    expect(mockedFiles.listFiles).toHaveBeenCalledWith('label-bundles/b1/');
+    expect(uploads).toEqual([
+      { zipFileId: 'label-bundles/b1/upload-300.zip', size: 30, uploadedAt: '2026-08-03T00:00:00.000Z' },
+      { zipFileId: 'label-bundles/b1/upload-100.zip', size: 10, uploadedAt: '2026-08-01T00:00:00.000Z' },
+    ]);
+  });
+
+  it('is empty when nothing has been uploaded yet', async () => {
+    mockedFiles.listFiles.mockResolvedValue([]);
+
+    await expect(svc.listUploads('b1')).resolves.toEqual([]);
   });
 });
 

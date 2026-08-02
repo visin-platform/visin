@@ -6,6 +6,7 @@ jest.mock('../../services/bundleService', () => ({
   getBundle: jest.fn(),
   updateBundle: jest.fn(),
   createUploadUrl: jest.fn(),
+  listUploads: jest.fn(),
   previewImport: jest.fn(),
   startImport: jest.fn(),
   getImport: jest.fn(),
@@ -101,6 +102,17 @@ describe('upload/import flow', () => {
 
     expect(mockedAdmin).toHaveBeenCalledWith(req, 'g1');
     expect(mockedSvc.createUploadUrl).toHaveBeenCalledWith('b1');
+  });
+
+  it('listUploads requires admin and returns the bundle\'s zips', async () => {
+    mockedSvc.listUploads.mockResolvedValue([{ zipFileId: 'z', size: 1, uploadedAt: 'now' }]);
+    const req = makeReq({ params: { id: 'b1' } });
+    const res = makeRes();
+
+    await ctrl.listUploads(req, res);
+
+    expect(mockedAdmin).toHaveBeenCalledWith(req, 'g1');
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ zipFileId: 'z', size: 1, uploadedAt: 'now' }] });
   });
 
   it('previewImport requires admin and returns the zip shape', async () => {

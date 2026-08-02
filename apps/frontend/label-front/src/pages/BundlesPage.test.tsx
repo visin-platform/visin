@@ -3,6 +3,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('../services/bundleService', () => ({
   listBundles: vi.fn(),
+  listUploads: vi.fn(),
   createBundle: vi.fn(),
   updateBundle: vi.fn(),
   deleteBundle: vi.fn(),
@@ -12,6 +13,7 @@ vi.mock('../services/jobService', () => ({
 }));
 
 const uploadStart = vi.fn();
+const uploadFromExisting = vi.fn();
 const uploadConfirm = vi.fn();
 const uploadCancel = vi.fn();
 const idleState = { phase: 'idle', uploadFraction: 0, preview: null, importJob: null, error: null };
@@ -20,12 +22,13 @@ vi.mock('../hooks/useBundleUpload', () => ({
   useBundleUpload: () => ({
     state: uploadState,
     start: uploadStart,
+    startFromUpload: uploadFromExisting,
     confirm: uploadConfirm,
     cancel: uploadCancel,
   }),
 }));
 
-import { createBundle, deleteBundle, listBundles, updateBundle } from '../services/bundleService';
+import { createBundle, deleteBundle, listBundles, listUploads, updateBundle } from '../services/bundleService';
 import { getMyGroups } from '../services/jobService';
 import BundlesPage from './BundlesPage';
 import { renderWithProviders } from '../test/renderWithProviders';
@@ -33,6 +36,7 @@ import { renderWithProviders } from '../test/renderWithProviders';
 const mockedList = listBundles as ReturnType<typeof vi.fn>;
 const mockedCreate = createBundle as ReturnType<typeof vi.fn>;
 const mockedUpdate = updateBundle as ReturnType<typeof vi.fn>;
+const mockedUploads = listUploads as ReturnType<typeof vi.fn>;
 const mockedDelete = deleteBundle as ReturnType<typeof vi.fn>;
 const mockedGroups = getMyGroups as ReturnType<typeof vi.fn>;
 
@@ -51,6 +55,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   uploadState = { ...idleState };
   mockedList.mockResolvedValue([bundle()]);
+  mockedUploads.mockResolvedValue([]);
   mockedGroups.mockResolvedValue([
     { groupId: 'g1', name: 'Team', role: 'admin' },
     { groupId: 'g2', name: 'Other', role: 'member' },
@@ -168,6 +173,27 @@ describe('BundlesPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     expect(screen.getByText(/Upload another zip to add frames or annotation sets/)).toBeInTheDocument();
+  });
+
+  it('re-imports a previous upload without re-sending the zip', async () => {
+    mockedUploads.mockResolvedValue([
+      { zipFileId: 'label-bundles/b1/upload-2.zip', size: 731 * 1024 ** 2, uploadedAt: '2026-08-02T18:00:00.000Z' },
+    ]);
+    renderWithProviders(<BundlesPage />);
+
+    const button = await screen.findByRole('button', { name: /Re-import \(1\)/ });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    fireEvent.click(await screen.findByRole('menuitem', { name: /731 MB/ }));
+
+    expect(uploadFromExisting).toHaveBeenCalledWith('label-bundles/b1/upload-2.zip');
+    expect(uploadStart).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing to re-import before the first upload', async () => {
+    renderWithProviders(<BundlesPage />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Re-import/ })).toBeDisabled());
   });
 
   it('deletes a bundle and surfaces refusal errors', async () => {

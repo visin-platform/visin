@@ -6,7 +6,12 @@ export const deleteFolderBodySchema = z.object({
 
 export const listFilesQuerySchema = z.object({
   prefix: z.string().optional(),
-  maxKeys: z.coerce.number().int().positive().default(1000)
+  maxKeys: z.coerce.number().int().positive().default(1000),
+  // 'false' lists only the files directly under `prefix`, not its subtrees.
+  recursive: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true')
 });
 
 export const generateUploadUrlBodySchema = z.object({

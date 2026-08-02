@@ -39,6 +39,17 @@ export const useBundleUpload = (bundleId: string, onFinished?: () => void) => {
 
   useEffect(() => stopPolling, [stopPolling]);
 
+  /** Inspect an uploaded zip and park on the mapping step. */
+  const inspect = useCallback(
+    async (zipFileId: string) => {
+      zipFileIdRef.current = zipFileId;
+      setState((previous) => ({ ...previous, phase: 'inspecting', error: null }));
+      const preview = await previewImport(bundleId, zipFileId);
+      setState((previous) => ({ ...previous, phase: 'mapping', preview }));
+    },
+    [bundleId]
+  );
+
   const start = useCallback(
     async (file: File) => {
       stopPolling();
@@ -48,16 +59,31 @@ export const useBundleUpload = (bundleId: string, onFinished?: () => void) => {
         await uploadZip(uploadUrl, file, (fraction) =>
           setState((previous) => ({ ...previous, uploadFraction: fraction }))
         );
-        zipFileIdRef.current = zipFileId;
-
-        setState((previous) => ({ ...previous, phase: 'inspecting' }));
-        const preview = await previewImport(bundleId, zipFileId);
-        setState((previous) => ({ ...previous, phase: 'mapping', preview }));
+        await inspect(zipFileId);
       } catch (err) {
         setState((previous) => ({ ...previous, phase: 'failed', error: (err as Error).message }));
       }
     },
-    [bundleId, stopPolling]
+    [bundleId, inspect, stopPolling]
+  );
+
+  /**
+   * Re-import a zip already on the server. Importing is where things go wrong
+   * (a mapping to correct, a dependency that hiccuped), and re-sending hundreds
+   * of megabytes to retry it is pure waste — so this picks the flow back up at
+   * the mapping step.
+   */
+  const startFromUpload = useCallback(
+    async (zipFileId: string) => {
+      stopPolling();
+      setState({ ...IDLE, uploadFraction: 1 });
+      try {
+        await inspect(zipFileId);
+      } catch (err) {
+        setState((previous) => ({ ...previous, phase: 'failed', error: (err as Error).message }));
+      }
+    },
+    [inspect, stopPolling]
   );
 
   /** Run the import with the mapping confirmed in the mapping step. */
@@ -104,5 +130,5 @@ export const useBundleUpload = (bundleId: string, onFinished?: () => void) => {
     setState(IDLE);
   }, [stopPolling]);
 
-  return { state, start, confirm, cancel };
+  return { state, start, startFromUpload, confirm, cancel };
 };

@@ -8,6 +8,7 @@ import {
   getFileRange,
   fileExists,
   deleteFolder,
+  listFiles,
 } from '../../clients/fileServiceClient';
 
 const fetchMock = jest.fn();
@@ -74,10 +75,11 @@ describe('putFile', () => {
     expect(Buffer.from(init.body)).toEqual(Buffer.from('data'));
   });
 
-  it('throws on failure', async () => {
+  it('fails immediately rather than retrying — a failed import resumes on re-import', async () => {
     fetchMock.mockResolvedValue(jsonResponse({}, 500));
 
     await expect(putFile('a/b.png', Buffer.from('x'))).rejects.toThrow('put failed');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -148,6 +150,25 @@ describe('getFileStream', () => {
     fetchMock.mockResolvedValue({ ok: false, status: 404, body: null } as unknown as Response);
 
     await expect(getFileStream('a.zip')).rejects.toThrow('get failed');
+  });
+});
+
+describe('listFiles', () => {
+  it('lists a folder shallowly, so a bundle\'s zips are not buried under its frames', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ success: true, data: [{ name: 'label-bundles/b1/upload-1.zip', size: 5, lastModified: 'now' }] })
+    );
+
+    await expect(listFiles('label-bundles/b1/')).resolves.toHaveLength(1);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://files.test/internal/files?prefix=label-bundles%2Fb1%2F&recursive=false'
+    );
+  });
+
+  it('reports a 502 when the listing fails', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}, 500));
+
+    await expect(listFiles('label-bundles/b1/')).rejects.toMatchObject({ statusCode: 502 });
   });
 });
 

@@ -37,7 +37,37 @@ export function createBaseApp(options: CreateBaseAppOptions = {}): Express {
   app.use(cookieParser());
   app.use(requestLogger);
 
-  app.use(rateLimit({ windowMs: 60_000, limit: 500, standardHeaders: true, legacyHeaders: false }));
+  // Two buckets, because browser traffic and machine traffic have nothing in
+  // common. A person clicking around makes a handful of requests a minute; one
+  // bundle import PUTs tens of thousands of files from a single container IP.
+  // Sharing the browser-sized bucket meant a large import 429'd itself partway
+  // through — and, worse, could have starved every other service's internal
+  // calls while it ran. `/internal/*` routes are credential-gated
+  // (`requireApiKey` / `requireInternalServiceToken`) by every service that
+  // mounts them, so this bucket exists to bound a runaway loop, not to
+  // authenticate.
+  const internalLimit = Number(process.env.INTERNAL_RATE_LIMIT_PER_MINUTE || 20_000);
+  const publicLimit = Number(process.env.RATE_LIMIT_PER_MINUTE || 500);
+  const isInternal = (path: string): boolean => path === '/internal' || path.startsWith('/internal/');
+
+  app.use(
+    rateLimit({
+      windowMs: 60_000,
+      limit: internalLimit,
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (req) => !isInternal(req.path)
+    })
+  );
+  app.use(
+    rateLimit({
+      windowMs: 60_000,
+      limit: publicLimit,
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (req) => isInternal(req.path)
+    })
+  );
 
   const allowedOrigins = options.corsOrigins ?? (process.env.CORS_ORIGIN ?? '').split(',').map(s => s.trim()).filter(Boolean);
   app.use(cors({

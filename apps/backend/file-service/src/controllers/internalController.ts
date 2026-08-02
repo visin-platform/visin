@@ -160,7 +160,11 @@ export const internalDeleteFolder = (req: Request, res: Response): void => {
  * List files.
  */
 export const internalList = (req: Request, res: Response): void => {
-  const { prefix, maxKeys } = req.query as unknown as { prefix?: string; maxKeys: number };
-  const files = listFiles(prefix, maxKeys);
+  const { prefix, maxKeys, recursive } = req.query as unknown as {
+    prefix?: string;
+    maxKeys: number;
+    recursive: boolean;
+  };
+  const files = listFiles(prefix, maxKeys, recursive);
   res.json({ success: true, data: files });
 };

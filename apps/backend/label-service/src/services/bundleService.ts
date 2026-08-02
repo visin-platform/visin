@@ -84,6 +84,33 @@ const assertOwnedZip = (bundleId: string, zipFileId: string): void => {
   }
 };
 
+export interface BundleUpload {
+  zipFileId: string;
+  size: number;
+  uploadedAt: string;
+}
+
+/**
+ * Zips already uploaded for this bundle, newest first.
+ *
+ * Upload and import are separate steps for a reason: a zip can be hundreds of
+ * megabytes, while importing it is where things realistically go wrong (a bad
+ * mapping, a dependency hiccup, a crashed process). Re-running the import must
+ * not mean re-sending the bytes, so the uploads stay listable until the bundle
+ * is deleted.
+ */
+export const listUploads = async (bundleId: string): Promise<BundleUpload[]> => {
+  const stored = await files.listFiles(bundleFileId(bundleId, ''));
+  return stored
+    .filter((file) => /\/upload-\d+\.zip$/.test(file.name))
+    .map((file) => ({
+      zipFileId: file.name,
+      size: file.size,
+      uploadedAt: file.lastModified
+    }))
+    .sort((a, b) => b.zipFileId.localeCompare(a.zipFileId));
+};
+
 /**
  * Inspect an uploaded zip before importing it: the folder table and the
  * suggested mapping the client's mapping step starts from.

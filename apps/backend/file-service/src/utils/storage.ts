@@ -146,10 +146,14 @@ export const deleteByPrefix = (prefix: string): number => {
 /**
  * List all files under an optional prefix, up to maxKeys.
  */
-export const listFiles = (prefix?: string, maxKeys = 1000): Array<{ name: string; size: number }> => {
+export const listFiles = (
+  prefix?: string,
+  maxKeys = 1000,
+  recursive = true
+): Array<{ name: string; size: number; lastModified: Date }> => {
   const baseDir = prefix ? resolveSafePath(prefix) : path.resolve(DATA_DIR());
 
-  const results: Array<{ name: string; size: number }> = [];
+  const results: Array<{ name: string; size: number; lastModified: Date }> = [];
 
   const walk = (dir: string): void => {
     if (results.length >= maxKeys || !fs.existsSync(dir)) return;
@@ -158,10 +162,16 @@ export const listFiles = (prefix?: string, maxKeys = 1000): Array<{ name: string
       if (results.length >= maxKeys) break;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        walk(full);
+        // Shallow listing exists so a caller can find the handful of files
+        // directly under a folder without paging past everything beneath it —
+        // a bundle's uploaded zips sit beside tens of thousands of imported
+        // frames, which would otherwise consume the whole maxKeys budget.
+        if (recursive) {
+          walk(full);
+        }
       } else {
-        const relative = path.relative(DATA_DIR(), full);
-        results.push({ name: relative, size: fs.statSync(full).size });
+        const stat = fs.statSync(full);
+        results.push({ name: path.relative(DATA_DIR(), full), size: stat.size, lastModified: stat.mtime });
       }
     }
   };

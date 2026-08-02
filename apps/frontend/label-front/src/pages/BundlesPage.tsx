@@ -13,14 +13,15 @@ import {
   DialogContent,
   DialogTitle,
   LinearProgress,
+  Menu,
   MenuItem,
   Stack,
   TextField,
   Typography
 } from '@mui/material';
-import { Inventory2Outlined, UploadFile, Delete, EditOutlined } from '@mui/icons-material';
+import { Inventory2Outlined, UploadFile, Delete, EditOutlined, ReplayOutlined } from '@mui/icons-material';
 import { Loader } from '@visin/frontend-core';
-import { createBundle, deleteBundle, listBundles, updateBundle } from '../services/bundleService';
+import { createBundle, deleteBundle, listBundles, listUploads, updateBundle } from '../services/bundleService';
 import { getMyGroups } from '../services/jobService';
 import { useBundleUpload } from '../hooks/useBundleUpload';
 import BundleFormatHelp from '../components/BundleFormatHelp';
@@ -103,9 +104,16 @@ const EditBundleDialog: React.FC<{ bundle: LabelBundle; onClose: () => void; onS
 
 const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ bundle, onChanged }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { state, start, confirm, cancel } = useBundleUpload(bundle._id, onChanged);
+  const { state, start, startFromUpload, confirm, cancel } = useBundleUpload(bundle._id, onChanged);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [uploadsAnchor, setUploadsAnchor] = useState<HTMLElement | null>(null);
+  // Uploaded zips survive a failed import, so re-importing never re-sends them.
+  const uploads = useQuery({
+    queryKey: ['bundle-uploads', bundle._id],
+    queryFn: () => listUploads(bundle._id)
+  });
+  const busy = state.phase === 'uploading' || state.phase === 'inspecting' || state.phase === 'importing';
   const remove = useMutation({
     mutationFn: () => deleteBundle(bundle._id),
     onSuccess: onChanged,
@@ -185,11 +193,36 @@ const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ 
         <Button
           size="small"
           startIcon={<UploadFile />}
-          disabled={state.phase === 'uploading' || state.phase === 'inspecting' || state.phase === 'importing'}
+          disabled={busy}
           onClick={() => fileInputRef.current?.click()}
         >
           Upload zip
         </Button>
+        <Button
+          size="small"
+          startIcon={<ReplayOutlined />}
+          disabled={busy || (uploads.data?.length ?? 0) === 0}
+          onClick={(event) => setUploadsAnchor(event.currentTarget)}
+        >
+          Re-import{uploads.data && uploads.data.length > 0 ? ` (${uploads.data.length})` : ''}
+        </Button>
+        <Menu
+          anchorEl={uploadsAnchor}
+          open={Boolean(uploadsAnchor)}
+          onClose={() => setUploadsAnchor(null)}
+        >
+          {(uploads.data ?? []).map((upload) => (
+            <MenuItem
+              key={upload.zipFileId}
+              onClick={() => {
+                setUploadsAnchor(null);
+                startFromUpload(upload.zipFileId);
+              }}
+            >
+              {new Date(upload.uploadedAt).toLocaleString()} · {(upload.size / 1024 ** 2).toFixed(0)} MB
+            </MenuItem>
+          ))}
+        </Menu>
         <Button size="small" startIcon={<EditOutlined />} onClick={() => setEditOpen(true)}>
           Edit
         </Button>

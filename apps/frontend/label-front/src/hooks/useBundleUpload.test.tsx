@@ -148,6 +148,31 @@ describe('useBundleUpload', () => {
     expect(mockedStartImport).not.toHaveBeenCalled();
   });
 
+  it('re-imports an existing upload without touching the upload path', async () => {
+    const { result } = renderHook(() => useBundleUpload('b1'));
+
+    await act(() => result.current.startFromUpload('label-bundles/b1/upload-9.zip'));
+
+    // No signed URL, no PUT — straight to inspecting the zip already on the server.
+    expect(mockedGetUploadUrl).not.toHaveBeenCalled();
+    expect(mockedUploadZip).not.toHaveBeenCalled();
+    expect(mockedPreview).toHaveBeenCalledWith('b1', 'label-bundles/b1/upload-9.zip');
+    expect(result.current.state.phase).toBe('mapping');
+
+    await act(() => result.current.confirm(mapping));
+    expect(mockedStartImport).toHaveBeenCalledWith('b1', 'label-bundles/b1/upload-9.zip', mapping);
+  });
+
+  it('surfaces a failure while re-inspecting an existing upload', async () => {
+    mockedPreview.mockRejectedValue(new Error('zip is gone'));
+    const { result } = renderHook(() => useBundleUpload('b1'));
+
+    await act(() => result.current.startFromUpload('label-bundles/b1/upload-9.zip'));
+
+    expect(result.current.state.phase).toBe('failed');
+    expect(result.current.state.error).toBe('zip is gone');
+  });
+
   it('fails when polling errors out', async () => {
     mockedGetImport.mockRejectedValue(new Error('poll boom'));
     const { result } = renderHook(() => useBundleUpload('b1'));

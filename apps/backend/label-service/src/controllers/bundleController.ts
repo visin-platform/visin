@@ -35,6 +35,13 @@ export const createUploadUrl = async (req: Request, res: Response): Promise<void
   res.json({ success: true, data });
 };
 
+export const listUploads = async (req: Request, res: Response): Promise<void> => {
+  const bundle = await svc.getBundle(req.params.id as string);
+  await assertAdmin(req, bundle.groupId);
+  const uploads = await svc.listUploads(bundle._id.toString());
+  res.json({ success: true, data: uploads });
+};
+
 export const previewImport = async (req: Request, res: Response): Promise<void> => {
   const bundle = await svc.getBundle(req.params.id as string);
   await assertAdmin(req, bundle.groupId);

@@ -314,6 +314,16 @@ describe('internalMetadata', () => {
   });
 });
 
+describe('internalList shallow mode', () => {
+  it('passes recursive=false through, so a caller can list just a folder\'s own files', () => {
+    mockedStorage.listFiles.mockReturnValue([]);
+
+    internalList(makeReq({ query: { prefix: 'label-bundles/b1', maxKeys: 1000, recursive: false } }), makeRes());
+
+    expect(mockedStorage.listFiles).toHaveBeenCalledWith('label-bundles/b1', 1000, false);
+  });
+});
+
 describe('internalDelete', () => {
   it('deletes the file and confirms', () => {
     const res = makeRes();
@@ -343,9 +353,9 @@ describe('internalList', () => {
     mockedStorage.listFiles.mockReturnValue(files);
     const res = makeRes();
 
-    internalList(makeReq({ query: { prefix: 'grp', maxKeys: 10 } }), res);
+    internalList(makeReq({ query: { prefix: 'grp', maxKeys: 10, recursive: true } }), res);
 
-    expect(mockedStorage.listFiles).toHaveBeenCalledWith('grp', 10);
+    expect(mockedStorage.listFiles).toHaveBeenCalledWith('grp', 10, true);
     expect(res.json).toHaveBeenCalledWith({ success: true, data: files });
   });
 });

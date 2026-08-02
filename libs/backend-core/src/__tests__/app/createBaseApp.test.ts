@@ -186,3 +186,44 @@ describe('createBaseApp JSON body parsing', () => {
     });
   });
 });
+
+describe('createBaseApp rate limiting', () => {
+  const hammer = async (baseUrl: string, path: string, times: number): Promise<number[]> => {
+    const statuses: number[] = [];
+    for (let i = 0; i < times; i++) {
+      statuses.push((await fetch(`${baseUrl}${path}`)).status);
+    }
+    return statuses;
+  };
+
+  it('gives internal service traffic its own, far larger bucket', async () => {
+    // A bundle import PUTs tens of thousands of files; the browser bucket
+    // (500/min) cut one off partway through with a 429.
+    process.env.RATE_LIMIT_PER_MINUTE = '3';
+    process.env.INTERNAL_RATE_LIMIT_PER_MINUTE = '50';
+
+    await withServer({}, async baseUrl => {
+      const internal = await hammer(baseUrl, '/internal/files/a.bin', 10);
+      expect(internal.every(status => status !== 429)).toBe(true);
+    });
+
+    delete process.env.RATE_LIMIT_PER_MINUTE;
+    delete process.env.INTERNAL_RATE_LIMIT_PER_MINUTE;
+  });
+
+  it('still limits public traffic, and internal requests do not consume that bucket', async () => {
+    process.env.RATE_LIMIT_PER_MINUTE = '3';
+    process.env.INTERNAL_RATE_LIMIT_PER_MINUTE = '50';
+
+    await withServer({}, async baseUrl => {
+      await hammer(baseUrl, '/internal/files/a.bin', 10); // must not count against /cookie-check
+      const publicStatuses = await hammer(baseUrl, '/cookie-check', 5);
+
+      expect(publicStatuses.slice(0, 3).every(status => status === 200)).toBe(true);
+      expect(publicStatuses.at(-1)).toBe(429);
+    });
+
+    delete process.env.RATE_LIMIT_PER_MINUTE;
+    delete process.env.INTERNAL_RATE_LIMIT_PER_MINUTE;
+  });
+});

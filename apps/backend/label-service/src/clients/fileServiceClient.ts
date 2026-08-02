@@ -40,7 +40,14 @@ export const getUploadUrl = (fileId: string, expiresInMinutes = 240, mimetype = 
 export const getDownloadUrl = (fileId: string, expiresInMinutes = 60): Promise<SignedUrl> =>
   signedUrl('download', fileId, expiresInMinutes);
 
-/** Server-to-server store of one file (ingest). */
+/**
+ * Server-to-server store of one file (ingest).
+ *
+ * Fails on the first refusal rather than retrying: ingest skips paths already
+ * imported, so re-running a failed import resumes where it stopped, and the
+ * uploaded zip is re-importable without re-sending it. A visible failure that
+ * costs one click to resume beats backoff logic quietly hiding a real problem.
+ */
 export const putFile = async (fileId: string, data: Buffer): Promise<void> => {
   const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
     method: 'PUT',
@@ -112,6 +119,30 @@ export const getFileRange = async (fileId: string, start: number, end: number): 
     );
   }
   return Readable.fromWeb(response.body as import('stream/web').ReadableStream);
+};
+
+export interface StoredFile {
+  name: string;
+  size: number;
+  lastModified: string;
+}
+
+/**
+ * Files stored directly under `prefix`. Shallow on purpose: a bundle folder
+ * holds tens of thousands of imported frames alongside its handful of uploaded
+ * zips, and a recursive listing would page through the former to find the latter.
+ */
+export const listFiles = async (prefix: string): Promise<StoredFile[]> => {
+  const query = new URLSearchParams({ prefix, recursive: 'false' });
+  const response = await fetchWithTimeout(`${baseUrl()}/internal/files?${query}`, {
+    headers: apiKeyHeaders(),
+    serviceName: 'file-service'
+  });
+  if (!response.ok) {
+    throw new BadGatewayError(`file-service could not list ${prefix} (${response.status})`);
+  }
+  const body = (await response.json()) as { data?: StoredFile[] };
+  return body.data ?? [];
 };
 
 /** Whether a file already exists (idempotent re-import checks). */

@@ -1,5 +1,5 @@
 import { labelApi } from './labelApiClient';
-import { ApiResponse, ImportJob, ImportMapping, LabelBundle, ZipPreview } from '../types';
+import { ApiResponse, BundleUpload, ImportJob, ImportMapping, LabelBundle, ZipPreview } from '../types';
 
 export const listBundles = async (): Promise<LabelBundle[]> =>
   (await labelApi.get<ApiResponse<LabelBundle[]>>('/bundles')).data;
@@ -29,6 +29,10 @@ export const getUploadUrl = async (
   (await labelApi.post<ApiResponse<{ uploadUrl: string; zipFileId: string; expiresMs: number }>>(
     `/bundles/${bundleId}/upload-url`
   )).data;
+
+/** Zips already uploaded for this bundle, newest first. */
+export const listUploads = async (bundleId: string): Promise<BundleUpload[]> =>
+  (await labelApi.get<ApiResponse<BundleUpload[]>>(`/bundles/${bundleId}/uploads`)).data;
 
 /** Zip shape + suggested mapping — the input to the mapping step. */
 export const previewImport = async (bundleId: string, zipFileId: string): Promise<ZipPreview> =>

@@ -22,12 +22,13 @@ describe('bundleRoutes', () => {
     expect(find('get', '/:id')).toBeDefined();
     expect(find('patch', '/:id')).toBeDefined();
     expect(find('post', '/:id/upload-url')).toBeDefined();
+    expect(find('get', '/:id/uploads')).toBeDefined();
     expect(find('post', '/:id/import')).toBeDefined();
     expect(find('post', '/:id/import/preview')).toBeDefined();
     expect(find('get', '/:id/import/:importId')).toBeDefined();
     expect(find('delete', '/:id/import/:importId')).toBeDefined();
     expect(find('delete', '/:id')).toBeDefined();
-    expect(routes).toHaveLength(10);
+    expect(routes).toHaveLength(11);
   });
 
   it('validates bodies on create and import', () => {
