@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.134](https://github.com/visin-platform/visin-monorepo/compare/v0.0.133...v0.0.134) (2026-08-02)
+
+
+### Features
+
+* redesign landing page ([7762908](https://github.com/visin-platform/visin-monorepo/commit/7762908126f61925e8c09ae4d9d51838cc827e74))
+
 ### [0.0.133](https://github.com/visin-platform/visin-monorepo/compare/v0.0.132...v0.0.133) (2026-08-02)
 
 
