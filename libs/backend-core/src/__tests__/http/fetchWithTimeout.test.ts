@@ -75,3 +75,35 @@ describe('fetchWithTimeout', () => {
     await expect(fetchWithTimeout('http://file-service/x')).rejects.toThrow('ECONNREFUSED');
   });
 });
+
+describe('fetchWithTimeout streamBody', () => {
+  it('stops the clock once headers arrive, so a slowly-read body is not aborted', async () => {
+    jest.useFakeTimers();
+    const abortSignals: AbortSignal[] = [];
+    global.fetch = jest.fn(async (_input, init?: RequestInit) => {
+      abortSignals.push(init!.signal as AbortSignal);
+      return { ok: true, status: 200 } as Response;
+    }) as unknown as typeof fetch;
+
+    await fetchWithTimeout('http://peer/big.zip', { timeoutMs: 100, streamBody: true });
+
+    // Ingest reads the zip for minutes after this point; the deadline must be
+    // disarmed or the abort lands as an 'error' on the body stream.
+    jest.advanceTimersByTime(10_000);
+    expect(abortSignals[0].aborted).toBe(false);
+    jest.useRealTimers();
+  });
+
+  it('still times out a peer that never sends headers', async () => {
+    global.fetch = jest.fn(
+      (_input, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          (init!.signal as AbortSignal).addEventListener('abort', () => reject(new Error('aborted')));
+        })
+    ) as unknown as typeof fetch;
+
+    await expect(
+      fetchWithTimeout('http://peer/big.zip', { timeoutMs: 10, streamBody: true, serviceName: 'file-service' })
+    ).rejects.toThrow('file-service did not respond within 10ms');
+  });
+});

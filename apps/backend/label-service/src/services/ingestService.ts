@@ -201,7 +201,13 @@ export const runImport = async (importJobId: string): Promise<void> => {
 
   try {
     const zipStream = await files.getFileStream(importJob.zipFileId);
-    const entries = zipStream.pipe(unzipper.Parse({ forceStream: true }));
+    const parser = unzipper.Parse({ forceStream: true });
+    // `pipe` does not forward source errors, so a failed read (peer restart,
+    // aborted transfer) would emit an unhandled 'error' and take the whole
+    // process down with it. Hand it to the parser instead: the `for await`
+    // below then rejects and this import fails on its own, like any other.
+    zipStream.on('error', (err) => parser.destroy(err));
+    const entries = zipStream.pipe(parser);
 
     let entryCount = 0;
     let lastFlush = Date.now();

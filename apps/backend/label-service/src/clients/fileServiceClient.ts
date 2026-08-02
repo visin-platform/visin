@@ -66,9 +66,12 @@ export const putFile = async (fileId: string, data: Buffer): Promise<void> => {
 export const getFileStream = async (fileId: string): Promise<Readable> => {
   const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
     headers: apiKeyHeaders(),
-    // The deadline covers reading the body too, so a multi-hundred-MB bundle
-    // zip needs the transfer budget rather than the control-plane one.
     timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
+    // Ingest consumes this zip entry by entry over many minutes — far longer
+    // than any transfer budget — so the deadline covers getting the response,
+    // not reading it. A read that then stalls is caught by the import's
+    // heartbeat going stale.
+    streamBody: true,
     serviceName: 'file-service'
   });
   if (!response.ok || !response.body) {
@@ -109,6 +112,7 @@ export const getFileRange = async (fileId: string, start: number, end: number): 
   const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
     headers: { ...apiKeyHeaders(), Range: `bytes=${start}-${end}` },
     timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
+    streamBody: true,
     serviceName: 'file-service'
   });
   if (response.status !== 206 || !response.body) {

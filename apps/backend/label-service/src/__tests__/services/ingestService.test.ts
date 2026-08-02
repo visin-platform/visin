@@ -35,6 +35,7 @@ jest.mock('@visin/backend-core', () => ({
 }));
 
 import sharp from 'sharp';
+import unzipper from 'unzipper';
 import { runImport, bundleFileId } from '../../services/ingestService';
 import { ImportJob } from '../../models/ImportJob';
 import { LabelBundle } from '../../models/LabelBundle';
@@ -66,7 +67,7 @@ const stubZip = (entries: FakeEntry[]) => {
       for (const entry of entries) yield makeEntry(entry);
     },
   };
-  mockedFiles.getFileStream.mockResolvedValue({ pipe: jest.fn(() => iterable) });
+  mockedFiles.getFileStream.mockResolvedValue({ on: jest.fn(), pipe: jest.fn(() => iterable) });
 };
 
 const makeImportJob = (overrides: Record<string, unknown> = {}) => {
@@ -255,6 +256,43 @@ describe('runImport', () => {
     expect(importJob.fileErrors).toEqual([
       { path: 'annotations/setA/a.masks.json', reason: 'No matching .ids.png in this set' },
     ]);
+  });
+
+  it('fails the import — not the process — when the zip stream errors mid-read', async () => {
+    const importJob = makeImportJob();
+    mockedImport.findById.mockResolvedValue(importJob);
+
+    // A read aborted partway (peer restart, expired deadline) emits 'error' on
+    // the source. `pipe` doesn't forward that, so without the handler it was an
+    // unhandled 'error' event and the whole service exited.
+    const handlers: Record<string, (err: Error) => void> = {};
+    const parserFailure = new Error('The operation was aborted due to timeout');
+    const parser = {
+      destroy: jest.fn((err: Error) => {
+        parser.destroyedWith = err;
+      }),
+      destroyedWith: undefined as Error | undefined,
+      async *[Symbol.asyncIterator]() {
+        yield makeEntry({ path: 'frames/a.png', type: 'File' });
+        handlers.error?.(parserFailure); // the source dies mid-iteration…
+        throw parser.destroyedWith ?? new Error('parser was never destroyed');
+      },
+    };
+    (unzipper.Parse as unknown as jest.Mock).mockReturnValue(parser);
+    mockedFiles.getFileStream.mockResolvedValue({
+      on: jest.fn((event: string, handler: (err: Error) => void) => {
+        handlers[event] = handler;
+      }),
+      pipe: jest.fn(() => parser),
+    });
+
+    await expect(runImport('i1')).resolves.toBeUndefined();
+
+    // …and the handler forwards it to the parser, which is what turns an
+    // unhandled 'error' event into an ordinary failed import.
+    expect(parser.destroy).toHaveBeenCalledWith(parserFailure);
+    expect(importJob.status).toBe('failed');
+    expect(importJob.fileErrors).toContainEqual({ path: '(zip)', reason: parserFailure.message });
   });
 
   it('fails the import and the bundle when the zip cannot be read', async () => {

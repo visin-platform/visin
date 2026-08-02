@@ -25,6 +25,18 @@ export interface FetchWithTimeoutInit extends RequestInit {
   timeoutMs?: number;
   /** Peer name used in the timeout message, e.g. `'file-service'`. */
   serviceName?: string;
+  /**
+   * Stop the clock once response headers arrive, instead of letting it run
+   * while the body is read.
+   *
+   * For a body the caller consumes at its own pace — ingest reads a bundle zip
+   * entry by entry, thumbnailing as it goes — a whole-response deadline is
+   * measuring the *consumer*, not the peer. It fires mid-read on a perfectly
+   * healthy transfer, and the abort lands as an `'error'` on the body stream.
+   * Only set this where a stalled read is caught some other way (ingest has a
+   * heartbeat that goes stale).
+   */
+  streamBody?: boolean;
 }
 
 /**
@@ -36,8 +48,13 @@ export interface FetchWithTimeoutInit extends RequestInit {
  * so whichever fires first aborts the request.
  */
 export async function fetchWithTimeout(input: string | URL, init: FetchWithTimeoutInit = {}): Promise<Response> {
-  const { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS, serviceName, signal, ...rest } = init;
-  const deadline = AbortSignal.timeout(timeoutMs);
+  const { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS, serviceName, streamBody, signal, ...rest } = init;
+
+  // `AbortSignal.timeout` can't be cancelled, so a streaming read needs a
+  // controller whose timer we can clear once the headers are in.
+  const controller = streamBody ? new AbortController() : undefined;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+  const deadline = controller ? controller.signal : AbortSignal.timeout(timeoutMs);
 
   try {
     return await fetch(input, { ...rest, signal: signal ? AbortSignal.any([signal, deadline]) : deadline });
@@ -49,5 +66,8 @@ export async function fetchWithTimeout(input: string | URL, init: FetchWithTimeo
       throw new GatewayTimeoutError(`${peer} did not respond within ${timeoutMs}ms`);
     }
     throw error;
+  } finally {
+    // Headers are in (or the request failed) — the body is the caller's problem now.
+    clearTimeout(timer);
   }
 }

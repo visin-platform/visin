@@ -139,6 +139,24 @@ describe('previewZip', () => {
     expect(failure.message).toBe('file-service ignored Range');
   });
 
+  it('forwards a read that dies mid-stream instead of leaving it unhandled', async () => {
+    stubZip([{ path: 'frames/a.jpg' }]);
+    // A source stream that errors *after* piping — `pipe` drops that, and an
+    // unhandled 'error' event takes the process down rather than the preview.
+    const dying = new Readable({ read() {} });
+    mockedFiles.getFileRange.mockResolvedValue(dying);
+
+    await previewZip('label-bundles/b1/upload-1.zip');
+    const source = mockedOpen.mock.calls[0][0] as { stream: (offset: number) => Readable };
+    const piped = source.stream(0);
+
+    const failure = new Promise<Error>((resolve) => piped.on('error', resolve));
+    await new Promise((resolve) => setImmediate(resolve)); // let the pipe wire up
+    dying.destroy(new Error('aborted due to timeout'));
+
+    await expect(failure).resolves.toMatchObject({ message: 'aborted due to timeout' });
+  });
+
   it('throws when the zip has too many entries', async () => {
     const previousLimit = process.env.INGEST_MAX_ENTRIES;
     process.env.INGEST_MAX_ENTRIES = '2';

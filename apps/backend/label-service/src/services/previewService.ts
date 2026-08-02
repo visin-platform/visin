@@ -142,7 +142,13 @@ export const previewZip = async (zipFileId: string): Promise<ZipPreview> => {
       const passThrough = new PassThrough();
       files
         .getFileRange(zipFileId, start, end)
-        .then((stream) => stream.pipe(passThrough))
+        .then((stream) => {
+          // Same reason as ingest: an unforwarded source error would be an
+          // unhandled 'error' event, i.e. a crashed process rather than a
+          // failed preview.
+          stream.on('error', (err) => passThrough.destroy(err));
+          stream.pipe(passThrough);
+        })
         .catch((err) => passThrough.destroy(err as Error));
       return passThrough;
     }
