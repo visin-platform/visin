@@ -149,6 +149,31 @@ export interface AnswerBody {
   elapsedMs?: number;
 }
 
+/**
+ * Narrows a mask_toggle job to part of its annotation set, so one full-corpus
+ * bundle can back several jobs. `perValue` caps each value across the whole
+ * bundle, not per frame.
+ */
+export interface MaskSelector {
+  field: string;
+  include?: string[];
+  perValue?: number;
+  seed?: number;
+}
+
 export type MaterializeBody =
-  | { kind: 'manifest'; content?: string; format?: 'csv' | 'jsonl' }
-  | { kind: 'filter'; sampleN?: number; seed?: number };
+  | { kind: 'manifest'; content?: string; format?: 'csv' | 'jsonl'; masks?: MaskSelector }
+  | { kind: 'filter'; sampleN?: number; seed?: number; masks?: MaskSelector };
+
+/** What materialization did: task count, unmatched manifest rows, masks per value. */
+export interface MaterializeResult {
+  tasks: number;
+  missing: string[];
+  masks?: Record<string, number>;
+}
+
+/** Groupable mask metadata in one annotation set, with a count per value. */
+export interface MaskField {
+  field: string;
+  values: { value: string; count: number }[];
+}

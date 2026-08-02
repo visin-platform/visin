@@ -3,6 +3,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('../services/bundleService', () => ({
   listBundles: vi.fn(),
+  getMaskFields: vi.fn(),
 }));
 vi.mock('../services/jobService', () => ({
   getMyGroups: vi.fn(),
@@ -16,12 +17,13 @@ vi.mock('react-router-dom', async (importOriginal) => ({
   useNavigate: () => navigate,
 }));
 
-import { listBundles } from '../services/bundleService';
+import { getMaskFields, listBundles } from '../services/bundleService';
 import { createJob, getMyGroups, materializeJob, transitionJob } from '../services/jobService';
 import NewJobPage from './NewJobPage';
 import { renderWithProviders } from '../test/renderWithProviders';
 
 const mockedBundles = listBundles as ReturnType<typeof vi.fn>;
+const mockedMaskFields = getMaskFields as ReturnType<typeof vi.fn>;
 const mockedGroups = getMyGroups as ReturnType<typeof vi.fn>;
 const mockedCreate = createJob as ReturnType<typeof vi.fn>;
 const mockedMaterialize = materializeJob as ReturnType<typeof vi.fn>;
@@ -29,6 +31,7 @@ const mockedTransition = transitionJob as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedMaskFields.mockResolvedValue([]);
   mockedGroups.mockResolvedValue([{ groupId: 'g1', name: 'Team', role: 'owner' }]);
   mockedBundles.mockResolvedValue([
     {
@@ -237,5 +240,59 @@ describe('NewJobPage single_choice extras', () => {
 
     expect(await screen.findByText('Bundle is not ready')).toBeInTheDocument();
     expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('mask subset selection', () => {
+  const strata = [
+    {
+      field: 'stratum',
+      values: [
+        { value: 'both', count: 8774 },
+        { value: 'qwen_only', count: 1104 },
+      ],
+    },
+  ];
+
+  it('caps a chosen field per value and reports what was selected', async () => {
+    mockedMaskFields.mockResolvedValue(strata);
+    mockedCreate.mockResolvedValue({ _id: 'j1' });
+    mockedMaterialize.mockResolvedValue({ tasks: 280, missing: [], masks: { qwen_only: 150 } });
+    renderWithProviders(<NewJobPage />);
+    await fillBasics();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(await screen.findByTestId('set-chip-llava'));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    // Fields are per annotation set, fetched once one is picked.
+    await waitFor(() => expect(mockedMaskFields).toHaveBeenCalledWith('b1', 'llava'));
+
+    fireEvent.mouseDown(await screen.findByLabelText('Group by'));
+    fireEvent.click(await screen.findByRole('option', { name: 'stratum' }));
+    fireEvent.click(await screen.findByText('qwen_only (1104)'));
+    fireEvent.change(screen.getByLabelText('Max per value (blank = all)'), { target: { value: '150' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft & materialize' }));
+
+    await waitFor(() =>
+      expect(mockedMaterialize).toHaveBeenCalledWith('j1', {
+        kind: 'manifest',
+        masks: { field: 'stratum', include: ['qwen_only'], perValue: 150, seed: 42 },
+      })
+    );
+    expect(await screen.findByText(/280 tasks created/)).toBeInTheDocument();
+    expect(screen.getByText(/150 qwen_only masks/)).toBeInTheDocument();
+  });
+
+  it('stays hidden when the set carries no groupable mask metadata', async () => {
+    mockedMaskFields.mockResolvedValue([]);
+    renderWithProviders(<NewJobPage />);
+    await fillBasics();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(await screen.findByTestId('set-chip-llava'));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(await screen.findByRole('button', { name: 'Create draft & materialize' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Group by')).not.toBeInTheDocument();
   });
 });

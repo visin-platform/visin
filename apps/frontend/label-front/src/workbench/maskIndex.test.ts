@@ -23,10 +23,27 @@ describe('maskIdAtPoint', () => {
     expect(maskIdAtPoint(index, 0, 0)).toBeNull();
   });
 
+  it('ignores masks outside the task scope', () => {
+    // The layer paints masks 0-2, but this job only asked about mask 1.
+    const scope = new Set([1]);
+    expect(maskIdAtPoint(index, 1, 0, scope)).toBeNull();
+    expect(maskIdAtPoint(index, 0, 1, scope)).toBe(1);
+  });
+
   it('returns null outside the image', () => {
     expect(maskIdAtPoint(index, -1, 0)).toBeNull();
     expect(maskIdAtPoint(index, 2, 0)).toBeNull();
     expect(maskIdAtPoint(index, 0, 5)).toBeNull();
+  });
+});
+
+describe('buildHighlightOverlay scope', () => {
+  it('dims masks the job did not select, ahead of rejection and focus tints', () => {
+    const overlay = buildHighlightOverlay(index, new Set([1]), 2, new Set([1]));
+
+    expect([...overlay.slice(4, 8)]).toEqual([18, 22, 30, 165]); // mask 0 out of scope → dimmed
+    expect([...overlay.slice(8, 12)]).toEqual([244, 32, 32, 140]); // mask 1 in scope, rejected
+    expect([...overlay.slice(12, 16)]).toEqual([18, 22, 30, 165]); // focus loses to scope
   });
 });
 

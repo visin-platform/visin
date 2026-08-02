@@ -5,7 +5,7 @@ jest.mock('../../models/ImportJob', () => ({
   ImportJob: { create: jest.fn(), findOne: jest.fn(), deleteOne: jest.fn(), deleteMany: jest.fn() },
 }));
 jest.mock('../../models/LabelImage', () => ({
-  LabelImage: { deleteMany: jest.fn() },
+  LabelImage: { deleteMany: jest.fn(), find: jest.fn() },
 }));
 jest.mock('../../models/LabelJob', () => ({
   LabelJob: { countDocuments: jest.fn() },
@@ -343,5 +343,42 @@ describe('getImport', () => {
 
     await expect(svc.getImport('b1', 'i1')).rejects.toThrow(NotFoundError);
     expect(mockedImport.findOne).toHaveBeenCalledWith({ _id: 'i1', bundleId: 'b1' });
+  });
+});
+
+describe('maskFields', () => {
+  const withMasks = (masks: Record<string, unknown>[]) => ({ metadata: { masks } });
+
+  it('tallies groupable scalar fields per value, newest-largest first', async () => {
+    mockedImage.find.mockResolvedValue([
+      withMasks([
+        { id: 1, class: 'sign', stratum: 'rare', bbox: [1, 2, 3, 4], score: null },
+        { id: 2, class: 'sign', stratum: 'common' },
+      ]),
+      withMasks([{ id: 1, class: 'vehicle', stratum: 'common' }]),
+    ]);
+
+    const fields = await svc.maskFields('b1', 'setA');
+
+    expect(mockedImage.find).toHaveBeenCalledWith(
+      { bundleId: 'b1', kind: 'idmap', annotationSet: 'setA' },
+      { 'metadata.masks': 1 }
+    );
+    expect(fields).toEqual([
+      { field: 'class', values: [{ value: 'sign', count: 2 }, { value: 'vehicle', count: 1 }] },
+      { field: 'stratum', values: [{ value: 'common', count: 2 }, { value: 'rare', count: 1 }] },
+    ]);
+  });
+
+  it('drops the per-mask id, arrays, and anything too high-cardinality to group by', async () => {
+    mockedImage.find.mockResolvedValue([
+      withMasks(
+        Array.from({ length: 60 }, (_, i) => ({ id: i, class: 'sign', pixel_count: 100 + i }))
+      ),
+    ]);
+
+    const fields = await svc.maskFields('b1', 'setA');
+
+    expect(fields.map((f) => f.field)).toEqual(['class']);
   });
 });

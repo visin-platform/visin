@@ -25,6 +25,10 @@ export const previewImportBodySchema = z.object({
   zipFileId: z.string().trim().min(1, 'zipFileId required')
 });
 
+export const maskFieldsQuerySchema = z.object({
+  set: z.string().trim().min(1, 'set required')
+});
+
 /**
  * Optional folder-by-folder wiring for zips that don't use the default layout.
  * Omit it and the defaults (`frames/`, `annotations/<set>/`, `manifest.*`) apply.

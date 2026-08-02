@@ -6,6 +6,7 @@ import {
   JobStats,
   LabelJob,
   MaterializeBody,
+  MaterializeResult,
   MyGroup,
   WorkItem
 } from '../types';
@@ -33,8 +34,8 @@ export const createJob = async (input: CreateJobInput): Promise<LabelJob> =>
 export const materializeJob = async (
   jobId: string,
   body: MaterializeBody
-): Promise<{ tasks: number; missing: string[] }> =>
-  (await labelApi.post<ApiResponse<{ tasks: number; missing: string[] }>>(`/jobs/${jobId}/materialize`, body)).data;
+): Promise<MaterializeResult> =>
+  (await labelApi.post<ApiResponse<MaterializeResult>>(`/jobs/${jobId}/materialize`, body)).data;
 
 export type JobAction = 'activate' | 'pause' | 'resume' | 'archive';
 

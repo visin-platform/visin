@@ -1,11 +1,26 @@
 import { labelApi } from './labelApiClient';
-import { ApiResponse, BundleUpload, ImportJob, ImportMapping, LabelBundle, ZipPreview } from '../types';
+import {
+  ApiResponse,
+  BundleUpload,
+  ImportJob,
+  ImportMapping,
+  LabelBundle,
+  MaskField,
+  ZipPreview
+} from '../types';
 
 export const listBundles = async (): Promise<LabelBundle[]> =>
   (await labelApi.get<ApiResponse<LabelBundle[]>>('/bundles')).data;
 
 export const getBundle = async (bundleId: string): Promise<LabelBundle> =>
   (await labelApi.get<ApiResponse<LabelBundle>>(`/bundles/${bundleId}`)).data;
+
+export const getMaskFields = async (bundleId: string, set: string): Promise<MaskField[]> =>
+  (
+    await labelApi.get<ApiResponse<MaskField[]>>(
+      `/bundles/${bundleId}/mask-fields?set=${encodeURIComponent(set)}`
+    )
+  ).data;
 
 export const createBundle = async (input: {
   name: string;

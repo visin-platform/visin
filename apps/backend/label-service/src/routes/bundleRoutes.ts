@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { asyncHandler, validateRequest } from '@visin/backend-core';
 import {
   createBundleBodySchema,
+  maskFieldsQuerySchema,
   previewImportBodySchema,
   startImportBodySchema,
   updateBundleBodySchema
@@ -14,6 +15,8 @@ router.post('/', validateRequest({ body: createBundleBodySchema }), asyncHandler
 router.get('/', asyncHandler(ctrl.listBundles));
 router.get('/:id', asyncHandler(ctrl.getBundle));
 router.patch('/:id', validateRequest({ body: updateBundleBodySchema }), asyncHandler(ctrl.updateBundle));
+// Groupable mask metadata in one annotation set — what a job wizard slices on.
+router.get('/:id/mask-fields', validateRequest({ query: maskFieldsQuerySchema }), asyncHandler(ctrl.maskFields));
 router.post('/:id/upload-url', asyncHandler(ctrl.createUploadUrl));
 // Uploaded zips outlive a failed import, so one can be re-imported without re-sending it.
 router.get('/:id/uploads', asyncHandler(ctrl.listUploads));

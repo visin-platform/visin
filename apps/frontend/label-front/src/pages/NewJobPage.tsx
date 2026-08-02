@@ -18,9 +18,9 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { listBundles } from '../services/bundleService';
+import { getMaskFields, listBundles } from '../services/bundleService';
 import { createJob, getMyGroups, materializeJob, transitionJob } from '../services/jobService';
-import { JobChoice, MaterializeBody, TaskType } from '../types';
+import { JobChoice, MaskSelector, MaterializeBody, MaterializeResult, TaskType } from '../types';
 
 const STEPS = ['Basics', 'Question', 'Tasks', 'Activate'];
 
@@ -57,13 +57,26 @@ const NewJobPage: React.FC = () => {
   const [manifestFormat, setManifestFormat] = useState<'csv' | 'jsonl'>('csv');
   const [sampleN, setSampleN] = useState<string>('');
   const [seed, setSeed] = useState<string>('42');
+  const [maskField, setMaskField] = useState<string>('');
+  const [maskValues, setMaskValues] = useState<string[]>([]);
+  const [maskPerValue, setMaskPerValue] = useState<string>('');
   const [jobId, setJobId] = useState<string | null>(null);
-  const [materialized, setMaterialized] = useState<{ tasks: number; missing: string[] } | null>(null);
+  const [materialized, setMaterialized] = useState<MaterializeResult | null>(null);
 
   const adminGroups = (groups || []).filter((group) => group.role === 'owner' || group.role === 'admin');
   const groupBundles = (bundles || []).filter((bundle) => bundle.groupId === groupId && bundle.status === 'ready');
   const bundle = useMemo(() => groupBundles.find((candidate) => candidate._id === bundleId), [groupBundles, bundleId]);
   const bundleSets = bundle?.annotationSets || [];
+
+  // Mask metadata is per annotation set, so the groupable fields only exist once
+  // a set is picked — one full-corpus bundle can then be sliced per job.
+  const maskSet = taskType === 'mask_toggle' ? annotationSets[0] : undefined;
+  const { data: maskFields } = useQuery({
+    queryKey: ['mask-fields', bundleId, maskSet],
+    queryFn: () => getMaskFields(bundleId, maskSet!),
+    enabled: Boolean(bundleId && maskSet)
+  });
+  const selectedField = (maskFields || []).find((entry) => entry.field === maskField);
 
   const toggleSet = (set: string) => {
     setAnnotationSets((previous) =>
@@ -107,10 +120,27 @@ const NewJobPage: React.FC = () => {
         id = job._id;
         setJobId(id);
       }
+      const masks: MaskSelector | undefined = maskField
+        ? {
+            field: maskField,
+            ...(maskValues.length ? { include: maskValues } : {}),
+            ...(maskPerValue ? { perValue: Number(maskPerValue) } : {}),
+            seed: Number(seed) || 42
+          }
+        : undefined;
       const body: MaterializeBody =
         selectionKind === 'manifest'
-          ? { kind: 'manifest', ...(manifestContent.trim() ? { content: manifestContent, format: manifestFormat } : {}) }
-          : { kind: 'filter', ...(sampleN ? { sampleN: Number(sampleN) } : {}), seed: Number(seed) || 42 };
+          ? {
+              kind: 'manifest',
+              ...(manifestContent.trim() ? { content: manifestContent, format: manifestFormat } : {}),
+              ...(masks ? { masks } : {})
+            }
+          : {
+              kind: 'filter',
+              ...(sampleN ? { sampleN: Number(sampleN) } : {}),
+              seed: Number(seed) || 42,
+              ...(masks ? { masks } : {})
+            };
       setMaterialized(await materializeJob(id, body));
     } catch (err) {
       setError((err as Error).message);
@@ -323,6 +353,68 @@ const NewJobPage: React.FC = () => {
             </Stack>
           )}
 
+          {maskSet && (maskFields || []).length > 0 && (
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Mask subset (optional)
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Label part of &quot;{maskSet}&quot; instead of every mask in it. The cap applies per value
+                across the whole bundle, so a group scattered one-per-frame still reaches its target;
+                frames left with no selected mask get no task.
+              </Typography>
+              <Stack direction="row" spacing={2} sx={{ mt: 2, flexWrap: 'wrap' }} useFlexGap>
+                <TextField
+                  select
+                  label="Group by"
+                  value={maskField}
+                  onChange={(event) => {
+                    setMaskField(event.target.value);
+                    setMaskValues([]);
+                  }}
+                  sx={{ width: 220 }}
+                >
+                  <MenuItem value="">All masks (no subset)</MenuItem>
+                  {(maskFields || []).map((entry) => (
+                    <MenuItem key={entry.field} value={entry.field}>
+                      {entry.field}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  label="Max per value (blank = all)"
+                  value={maskPerValue}
+                  onChange={(event) => setMaskPerValue(event.target.value.replace(/\D/g, ''))}
+                  disabled={!maskField}
+                  sx={{ width: 220 }}
+                />
+              </Stack>
+              {selectedField && (
+                <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }} useFlexGap>
+                  {selectedField.values.map((value) => {
+                    const on = maskValues.includes(value.value);
+                    return (
+                      <Chip
+                        key={value.value}
+                        label={`${value.value} (${value.count})`}
+                        color={on ? 'primary' : 'default'}
+                        variant={on ? 'filled' : 'outlined'}
+                        onClick={() =>
+                          setMaskValues((previous) =>
+                            on ? previous.filter((entry) => entry !== value.value) : [...previous, value.value]
+                          )
+                        }
+                      />
+                    );
+                  })}
+                  <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
+                    {maskValues.length ? `${maskValues.length} selected` : 'none selected = every value'}
+                  </Typography>
+                </Stack>
+              )}
+            </Paper>
+          )}
+
           <Box>
             <Button variant="contained" disabled={busy} onClick={createAndMaterialize}>
               {jobId ? 'Re-materialize tasks' : 'Create draft & materialize'}
@@ -332,6 +424,16 @@ const NewJobPage: React.FC = () => {
           {materialized && (
             <Alert severity={materialized.missing.length ? 'warning' : 'success'}>
               {materialized.tasks} tasks created
+              {materialized.masks && (
+                <>
+                  {' '}
+                  from{' '}
+                  {Object.entries(materialized.masks)
+                    .map(([value, count]) => `${count} ${value}`)
+                    .join(', ')}{' '}
+                  masks
+                </>
+              )}
               {materialized.missing.length > 0 && (
                 <> — {materialized.missing.length} manifest rows matched no frame (e.g. {materialized.missing[0]})</>
               )}

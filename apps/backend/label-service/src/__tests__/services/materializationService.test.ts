@@ -90,11 +90,11 @@ describe('materializeTasks guards', () => {
     ).rejects.toThrow('exactly one annotation set');
   });
 
-  it('requires an id map per frame for mask_toggle', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle());
+  it('requires an id map for every manifest-named frame in a mask_toggle job', async () => {
+    mockedBundle.findById.mockResolvedValue(readyBundle({ manifest: [{ stem: 'a' }, { stem: 'b' }] }));
     stubImages([frame('a'), frame('b')], [layer('setA', 'a'), idmap('setA', 'a')]);
 
-    await expect(materializeTasks(makeJob(), { kind: 'filter' })).rejects.toThrow('missing for: b');
+    await expect(materializeTasks(makeJob(), { kind: 'manifest' })).rejects.toThrow('missing for: b');
   });
 });
 
@@ -182,6 +182,110 @@ describe('filter path', () => {
 
     expect(firstPick).toHaveLength(2);
     expect(secondPick).toEqual(firstPick);
+  });
+
+  it('scopes a mask_toggle job to the frames its own set covers', async () => {
+    // One bundle, two sets painted on different frames — a job on setA gets
+    // setA's frames and ignores the ones only setB annotates.
+    mockedBundle.findById.mockResolvedValue(readyBundle());
+    stubImages(
+      [frame('a'), frame('b'), frame('c')],
+      [idmap('setA', 'a'), idmap('setB', 'b'), idmap('setB', 'c')]
+    );
+
+    const result = await materializeTasks(makeJob(), { kind: 'filter' });
+
+    expect(result.tasks).toBe(1);
+    expect(mockedTask.insertMany.mock.calls[0][0][0].labelImageId).toBe('frame-a');
+  });
+
+  it('fails when no frame carries the mask_toggle set', async () => {
+    mockedBundle.findById.mockResolvedValue(readyBundle());
+    stubImages([frame('a')], [idmap('setB', 'a')]);
+
+    await expect(materializeTasks(makeJob(), { kind: 'filter' })).rejects.toThrow(
+      'No frame in the bundle has an .ids.png in "setA"'
+    );
+  });
+
+  it('caps masks per field value across the whole bundle and drops emptied frames', async () => {
+    // Three frames, one 'rare' mask scattered one per frame plus 'common' ones:
+    // a per-frame cap could never reach a target count for 'rare', so the cap is
+    // global. Frame c contributes no selected mask and gets no task.
+    mockedBundle.findById.mockResolvedValue(readyBundle());
+    stubImages(
+      [frame('a'), frame('b'), frame('c')],
+      [
+        idmap('setA', 'a', [
+          { id: 1, class: 'sign', stratum: 'rare' },
+          { id: 2, class: 'sign', stratum: 'common' }
+        ]),
+        idmap('setA', 'b', [
+          { id: 1, class: 'sign', stratum: 'rare' },
+          { id: 2, class: 'sign', stratum: 'common' }
+        ]),
+        idmap('setA', 'c', [{ id: 1, class: 'sign', stratum: 'common' }])
+      ]
+    );
+    const job = makeJob();
+
+    const result = await materializeTasks(job, {
+      kind: 'filter',
+      masks: { field: 'stratum', include: ['rare'], perValue: 2, seed: 1 }
+    });
+
+    expect(result.tasks).toBe(2);
+    expect(result.masks).toEqual({ rare: 2 });
+    const tasks = mockedTask.insertMany.mock.calls[0][0];
+    expect(tasks.map((task: { labelImageId: string }) => task.labelImageId).sort()).toEqual([
+      'frame-a',
+      'frame-b'
+    ]);
+    // Only the selected masks reach the workbench, not every mask in the frame.
+    expect(tasks[0].payload.maskMap.masks).toEqual([{ id: 1, class: 'sign', stratum: 'rare' }]);
+    expect(job.selection).toMatchObject({
+      kind: 'filter',
+      spec: { masks: { field: 'stratum', perValue: 2, seed: 1, counts: { rare: 2 } } }
+    });
+  });
+
+  it('keeps every mask of a value when no cap is given, and splits per value', async () => {
+    mockedBundle.findById.mockResolvedValue(readyBundle());
+    stubImages(
+      [frame('a')],
+      [
+        idmap('setA', 'a', [
+          { id: 2, class: 'sign', stratum: 'rare' },
+          { id: 1, class: 'sign', stratum: 'common' }
+        ])
+      ]
+    );
+
+    const result = await materializeTasks(makeJob(), { kind: 'filter', masks: { field: 'stratum' } });
+
+    expect(result.masks).toEqual({ rare: 1, common: 1 });
+    // Sampling shuffles; the workbench still walks masks in bundle id order.
+    expect(mockedTask.insertMany.mock.calls[0][0][0].payload.maskMap.masks.map((m: { id: number }) => m.id)).toEqual([
+      1, 2
+    ]);
+  });
+
+  it('rejects a mask selection that matches nothing, or a job type without masks', async () => {
+    mockedBundle.findById.mockResolvedValue(readyBundle());
+    stubImages([frame('a')], [idmap('setA', 'a', [{ id: 1, class: 'sign', stratum: 'common' }])]);
+
+    await expect(
+      materializeTasks(makeJob(), { kind: 'filter', masks: { field: 'stratum', include: ['rare'] } })
+    ).rejects.toThrow('No mask matches the selection on "stratum"');
+
+    mockedBundle.findById.mockResolvedValue(readyBundle());
+    stubImages([frame('a')], []);
+    await expect(
+      materializeTasks(makeJob({ taskType: 'single_choice', annotationSets: [] }), {
+        kind: 'filter',
+        masks: { field: 'stratum' }
+      })
+    ).rejects.toThrow('only applies to mask_toggle');
   });
 
   it('fails on an empty bundle', async () => {

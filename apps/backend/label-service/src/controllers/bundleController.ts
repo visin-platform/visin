@@ -28,6 +28,13 @@ export const updateBundle = async (req: Request, res: Response): Promise<void> =
   res.json({ success: true, data: updated });
 };
 
+export const maskFields = async (req: Request, res: Response): Promise<void> => {
+  const bundle = await svc.getBundle(req.params.id as string);
+  await assertMember(req, bundle.groupId);
+  const fields = await svc.maskFields(bundle._id.toString(), req.query.set as string);
+  res.json({ success: true, data: fields });
+};
+
 export const createUploadUrl = async (req: Request, res: Response): Promise<void> => {
   const bundle = await svc.getBundle(req.params.id as string);
   await assertAdmin(req, bundle.groupId);

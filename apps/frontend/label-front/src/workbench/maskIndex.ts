@@ -21,32 +21,56 @@ export const buildMaskIndex = (rgba: Uint8ClampedArray, width: number, height: n
   return { width, height, maskIdAt };
 };
 
-/** maskId under an image-space coordinate, or null. */
-export const maskIdAtPoint = (index: MaskIndex, x: number, y: number): number | null => {
+/**
+ * maskId under an image-space coordinate, or null.
+ *
+ * `scope` is the task's own mask list, which can be a subset of what the id map
+ * paints: one full-corpus bundle backs several jobs, so a frame's layer may show
+ * masks this job never asked about. Those are out of scope — not clickable, and
+ * dimmed by the overlay below — so a judgement is only ever recorded for a mask
+ * the job actually selected.
+ */
+export const maskIdAtPoint = (
+  index: MaskIndex,
+  x: number,
+  y: number,
+  scope?: ReadonlySet<number> | null
+): number | null => {
   const xi = Math.floor(x);
   const yi = Math.floor(y);
   if (xi < 0 || yi < 0 || xi >= index.width || yi >= index.height) {
     return null;
   }
   const id = index.maskIdAt[yi * index.width + xi];
-  return id >= 0 ? id : null;
+  if (id < 0 || (scope && !scope.has(id))) {
+    return null;
+  }
+  return id;
 };
 
 /**
  * RGBA highlight overlay: rejected masks tinted red, the focused mask outlined
- * amber (drawn as a translucent fill — cheap and visible at any zoom).
+ * amber (drawn as a translucent fill — cheap and visible at any zoom), and
+ * anything outside the task's mask scope greyed back so the labeler can see at a
+ * glance which regions this job is asking about.
  */
 export const buildHighlightOverlay = (
   index: MaskIndex,
   rejected: ReadonlySet<number>,
-  focusedMaskId: number | null
+  focusedMaskId: number | null,
+  scope?: ReadonlySet<number> | null
 ): Uint8ClampedArray<ArrayBuffer> => {
   const out = new Uint8ClampedArray(index.width * index.height * 4);
   for (let i = 0; i < index.maskIdAt.length; i++) {
     const id = index.maskIdAt[i];
     if (id < 0) continue;
     const offset = i * 4;
-    if (rejected.has(id)) {
+    if (scope && !scope.has(id)) {
+      out[offset] = 18; // out of scope for this job — mute the layer's colour
+      out[offset + 1] = 22;
+      out[offset + 2] = 30;
+      out[offset + 3] = 165;
+    } else if (rejected.has(id)) {
       out[offset] = 244; // red fill for "marked incorrect"
       out[offset + 1] = 32;
       out[offset + 2] = 32;

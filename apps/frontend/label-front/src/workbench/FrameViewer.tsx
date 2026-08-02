@@ -7,6 +7,7 @@ import { Viewport, fitViewport, panBy, toImagePoint, zoomAt } from './viewport';
 export interface FrameViewerProps {
   images: TaskImages;
   maskIndex: MaskIndex | null; // mask_toggle only
+  maskScope?: ReadonlySet<number> | null; // task's own masks; null = every painted mask
   rejected: ReadonlySet<number>;
   focusedMaskId: number | null;
   layerVisibility: Record<string, boolean>;
@@ -26,6 +27,7 @@ const DRAG_CLICK_THRESHOLD_PX = 5;
 const FrameViewer: React.FC<FrameViewerProps> = ({
   images,
   maskIndex,
+  maskScope,
   rejected,
   focusedMaskId,
   layerVisibility,
@@ -65,9 +67,9 @@ const FrameViewer: React.FC<FrameViewerProps> = ({
     if (!canvas || !maskIndex) return;
     const context = canvas.getContext('2d');
     if (!context) return;
-    const overlay = buildHighlightOverlay(maskIndex, rejected, focusedMaskId);
+    const overlay = buildHighlightOverlay(maskIndex, rejected, focusedMaskId, maskScope);
     context.putImageData(new ImageData(overlay, maskIndex.width, maskIndex.height), 0, 0);
-  }, [maskIndex, rejected, focusedMaskId]);
+  }, [maskIndex, rejected, focusedMaskId, maskScope]);
 
   const handleWheel = useCallback(
     (event: React.WheelEvent) => {
@@ -108,12 +110,12 @@ const FrameViewer: React.FC<FrameViewerProps> = ({
       if (!viewport || !maskIndex || !onToggleMask) return;
       const bounds = containerRef.current!.getBoundingClientRect();
       const point = toImagePoint(viewport, event.clientX - bounds.left, event.clientY - bounds.top);
-      const maskId = maskIdAtPoint(maskIndex, point.x, point.y);
+      const maskId = maskIdAtPoint(maskIndex, point.x, point.y, maskScope);
       if (maskId !== null) {
         onToggleMask(maskId);
       }
     },
-    [viewport, maskIndex, onToggleMask]
+    [viewport, maskIndex, maskScope, onToggleMask]
   );
 
   const transform = viewport

@@ -8,6 +8,7 @@ jest.mock('../../services/bundleService', () => ({
   createUploadUrl: jest.fn(),
   listUploads: jest.fn(),
   previewImport: jest.fn(),
+  maskFields: jest.fn(),
   startImport: jest.fn(),
   getImport: jest.fn(),
   deleteImport: jest.fn(),
@@ -153,6 +154,20 @@ describe('upload/import flow', () => {
 
     expect(mockedAdmin).toHaveBeenCalledWith(req, 'g1');
     expect(mockedSvc.deleteImport).toHaveBeenCalledWith('b1', 'i1');
+  });
+});
+
+describe('maskFields', () => {
+  it('is member-visible and scoped to the requested set', async () => {
+    mockedSvc.getBundle.mockResolvedValue({ _id: 'b1', groupId: 'g1' });
+    mockedSvc.maskFields.mockResolvedValue([{ field: 'stratum', values: [] }]);
+    const res = makeRes();
+
+    await ctrl.maskFields(makeReq({ params: { id: 'b1' }, query: { set: 'discovery' } }), res);
+
+    expect(mockedMember).toHaveBeenCalled();
+    expect(mockedSvc.maskFields).toHaveBeenCalledWith('b1', 'discovery');
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ field: 'stratum', values: [] }] });
   });
 });
 

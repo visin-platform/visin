@@ -3,15 +3,70 @@ import { BadRequestError, ConflictError } from '@visin/backend-core';
 import { ILabelJob } from '../models/LabelJob';
 import { LabelBundle, IManifestRow } from '../models/LabelBundle';
 import { LabelImage, ILabelImage } from '../models/LabelImage';
+import { IMaskMeta } from '../models/LabelImage';
 import { LabelTask, ITaskLayer, ITaskMaskMap } from '../models/LabelTask';
 import { parseManifest } from '../utils/manifest';
 import { seededSample } from '../utils/seededRandom';
-import { MaterializeBody } from '../validation/jobSchemas';
+import { MaskSelector, MaterializeBody } from '../validation/jobSchemas';
 
 interface ResolvedRow {
   frame: ILabelImage;
   stratum?: string;
 }
+
+/** A mask's value for the selector's field, as the string the UI offers. */
+const fieldValue = (mask: IMaskMeta, field: string): string | undefined => {
+  const value = (mask as Record<string, unknown>)[field];
+  return value === undefined || value === null ? undefined : String(value);
+};
+
+/**
+ * Pick the masks a job asks for, out of every mask in its annotation set.
+ *
+ * The cap is global rather than per frame: a group like "only one of the two
+ * runs confirmed this candidate" has ~1,100 members spread one per frame across
+ * thousands of frames, so a per-frame cap could never reach a target count for
+ * it. Sampling is seeded, so the same (bundle, selector, seed) always yields the
+ * same task set.
+ */
+const selectMasks = (
+  rows: ResolvedRow[],
+  idmapsByKey: Map<string, ILabelImage>,
+  set: string,
+  selector: MaskSelector
+): { byStem: Map<string, IMaskMeta[]>; counts: Record<string, number> } => {
+  const include = selector.include ? new Set(selector.include) : undefined;
+  const byValue = new Map<string, { stem: string; mask: IMaskMeta }[]>();
+
+  for (const row of rows) {
+    const idmap = idmapsByKey.get(`${set} ${row.frame.stem}`);
+    for (const mask of idmap?.metadata?.masks || []) {
+      const value = fieldValue(mask, selector.field);
+      if (value === undefined || (include && !include.has(value))) {
+        continue;
+      }
+      byValue.set(value, [...(byValue.get(value) || []), { stem: row.frame.stem, mask }]);
+    }
+  }
+
+  const byStem = new Map<string, IMaskMeta[]>();
+  const counts: Record<string, number> = {};
+  for (const [value, entries] of byValue) {
+    const picked = selector.perValue
+      ? seededSample(entries, selector.perValue, selector.seed ?? 42)
+      : entries;
+    counts[value] = picked.length;
+    for (const entry of picked) {
+      byStem.set(entry.stem, [...(byStem.get(entry.stem) || []), entry.mask]);
+    }
+  }
+  // Sampling shuffles; restore the bundle's own mask order so the workbench
+  // walks masks in a stable, frame-local order.
+  for (const [stem, masks] of byStem) {
+    byStem.set(stem, [...masks].sort((a, b) => Number(a.id) - Number(b.id)));
+  }
+  return { byStem, counts };
+};
 
 const resolveRows = (
   rows: IManifestRow[],
@@ -34,7 +89,8 @@ const buildPayload = (
   job: ILabelJob,
   stem: string,
   layersByKey: Map<string, ILabelImage>,
-  idmapsByKey: Map<string, ILabelImage>
+  idmapsByKey: Map<string, ILabelImage>,
+  selectedMasks?: Map<string, IMaskMeta[]>
 ): { layers?: ITaskLayer[]; maskMap?: ITaskMaskMap } | undefined => {
   const layers: ITaskLayer[] = [];
   for (const set of job.annotationSets) {
@@ -49,7 +105,8 @@ const buildPayload = (
     const set = job.annotationSets[0];
     const idmap = idmapsByKey.get(`${set} ${stem}`);
     if (idmap) {
-      maskMap = { imageId: idmap._id, masks: idmap.metadata?.masks || [] };
+      const masks = selectedMasks ? selectedMasks.get(stem) || [] : idmap.metadata?.masks || [];
+      maskMap = { imageId: idmap._id, masks };
     }
   }
 
@@ -67,7 +124,7 @@ const buildPayload = (
 export const materializeTasks = async (
   job: ILabelJob,
   body: MaterializeBody
-): Promise<{ tasks: number; missing: string[] }> => {
+): Promise<{ tasks: number; missing: string[]; masks?: Record<string, number> }> => {
   if (job.status !== 'draft') {
     throw new ConflictError('Tasks can only be materialized while the job is a draft');
   }
@@ -117,10 +174,24 @@ export const materializeTasks = async (
       throw new BadRequestError('No manifest row matches a frame in the bundle');
     }
   } else {
-    const all: ResolvedRow[] = frames.map((frame) => ({ frame }));
+    // "All frames" means all frames this job's set actually covers. A bundle can
+    // carry several sets over different frames — one zip holding a mask-review
+    // set and a candidate-review set, each painted on the frames it applies to —
+    // and a mask_toggle job over one of them is not missing the other's frames,
+    // it simply doesn't include them. A named manifest is different: that lists
+    // frames on purpose, so a gap there stays an error below.
+    const covered =
+      job.taskType === 'mask_toggle'
+        ? frames.filter((frame) => idmapsByKey.has(`${job.annotationSets[0]} ${frame.stem}`))
+        : frames;
+    const all: ResolvedRow[] = covered.map((frame) => ({ frame }));
     rows = body.sampleN ? seededSample(all, body.sampleN, body.seed ?? 42) : all;
     if (rows.length === 0) {
-      throw new BadRequestError('Bundle has no frames');
+      throw new BadRequestError(
+        job.taskType === 'mask_toggle'
+          ? `No frame in the bundle has an .ids.png in "${job.annotationSets[0]}"`
+          : 'Bundle has no frames'
+      );
     }
   }
 
@@ -136,6 +207,27 @@ export const materializeTasks = async (
     }
   }
 
+  let selectedMasks: Map<string, IMaskMeta[]> | undefined;
+  let maskCounts: Record<string, number> | undefined;
+  if (body.masks) {
+    if (job.taskType !== 'mask_toggle') {
+      throw new BadRequestError('A mask selection only applies to mask_toggle jobs');
+    }
+    ({ byStem: selectedMasks, counts: maskCounts } = selectMasks(
+      rows,
+      idmapsByKey,
+      job.annotationSets[0],
+      body.masks
+    ));
+    // A frame none of whose masks were selected has nothing to ask about.
+    rows = rows.filter((row) => selectedMasks!.has(row.frame.stem));
+    if (rows.length === 0) {
+      throw new BadRequestError(
+        `No mask matches the selection on "${body.masks.field}" in "${job.annotationSets[0]}"`
+      );
+    }
+  }
+
   await LabelTask.deleteMany({ jobId: job._id });
 
   const tasks = rows.map((row, order) => ({
@@ -144,7 +236,7 @@ export const materializeTasks = async (
     order,
     ...(row.stratum ? { stratum: row.stratum } : {}),
     ...(() => {
-      const payload = buildPayload(job, row.frame.stem, layersByKey, idmapsByKey);
+      const payload = buildPayload(job, row.frame.stem, layersByKey, idmapsByKey, selectedMasks);
       return payload ? { payload } : {};
     })()
   }));
@@ -152,13 +244,15 @@ export const materializeTasks = async (
 
   job.selection = {
     kind: body.kind,
-    spec:
-      body.kind === 'manifest'
+    spec: {
+      ...(body.kind === 'manifest'
         ? { source: body.content ? 'inline' : 'bundle', rows: rows.length, missing: missing.length }
-        : { sampleN: body.sampleN ?? null, seed: body.seed ?? 42, rows: rows.length }
+        : { sampleN: body.sampleN ?? null, seed: body.seed ?? 42, rows: rows.length }),
+      ...(body.masks ? { masks: { ...body.masks, seed: body.masks.seed ?? 42, counts: maskCounts } } : {})
+    }
   };
   job.tasksCount = rows.length;
   await job.save();
 
-  return { tasks: rows.length, missing };
+  return { tasks: rows.length, missing, ...(maskCounts ? { masks: maskCounts } : {}) };
 };

@@ -43,6 +43,9 @@ const WorkbenchPage: React.FC = () => {
   const currentItem = queue.current;
   const task = currentItem?.task ?? null;
   const masks = useMemo(() => task?.payload?.maskMap?.masks ?? [], [task]);
+  // The layer paints every mask in the annotation set, but a job can be scoped to
+  // a subset of them — only these are clickable, the rest are dimmed.
+  const maskScope = useMemo(() => new Set(masks.map((mask) => mask.id)), [masks]);
   const isMaskToggle = job?.taskType === 'mask_toggle';
 
   // Reset per-task state and load the id map when the task changes.
@@ -208,6 +211,7 @@ const WorkbenchPage: React.FC = () => {
           <FrameViewer
             images={queue.current.images}
             maskIndex={isMaskToggle ? maskIndex : null}
+            maskScope={isMaskToggle ? maskScope : null}
             rejected={rejected}
             focusedMaskId={focusedIdx !== null ? masks[focusedIdx]?.id ?? null : null}
             layerVisibility={layerVisibility}

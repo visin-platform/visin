@@ -47,6 +47,65 @@ export const getBundle = async (bundleId: string): Promise<ILabelBundle> => {
   return bundle;
 };
 
+// A field with more distinct values than this is an id or a score, not a group
+// to slice a job by — offering it would flood the picker and select nothing
+// useful. Values themselves are capped per field for the same reason.
+const MAX_FIELD_VALUES = 40;
+
+export interface MaskField {
+  field: string;
+  values: { value: string; count: number }[];
+}
+
+/**
+ * The groupable mask fields in one annotation set, with a count per value.
+ *
+ * This is what lets one full-corpus bundle serve many jobs: the uploader ships
+ * every mask with whatever metadata it carries, and the job wizard slices on
+ * that metadata here rather than the uploader having to pre-cut a zip per job.
+ * Only low-cardinality scalar fields are returned — `bbox` is an array, `id` is
+ * unique per mask, and neither is something to group a job by.
+ */
+export const maskFields = async (bundleId: string, annotationSet: string): Promise<MaskField[]> => {
+  const idmaps = await LabelImage.find(
+    { bundleId, kind: 'idmap', annotationSet },
+    { 'metadata.masks': 1 }
+  );
+
+  const tally = new Map<string, Map<string, number>>();
+  const overflowed = new Set<string>();
+  for (const idmap of idmaps) {
+    for (const mask of idmap.metadata?.masks || []) {
+      for (const [field, raw] of Object.entries(mask)) {
+        if (field === 'id' || raw === null || raw === undefined || typeof raw === 'object') {
+          continue;
+        }
+        if (overflowed.has(field)) {
+          continue;
+        }
+        const counts = tally.get(field) || new Map<string, number>();
+        const value = String(raw);
+        counts.set(value, (counts.get(value) || 0) + 1);
+        if (counts.size > MAX_FIELD_VALUES) {
+          overflowed.add(field);
+          tally.delete(field);
+          continue;
+        }
+        tally.set(field, counts);
+      }
+    }
+  }
+
+  return [...tally]
+    .map(([field, counts]) => ({
+      field,
+      values: [...counts]
+        .map(([value, count]) => ({ value, count }))
+        .sort((a, b) => b.count - a.count)
+    }))
+    .sort((a, b) => a.field.localeCompare(b.field));
+};
+
 /**
  * Rename / re-describe a bundle. Metadata only, on purpose: the images are
  * referenced by existing tasks and answers, so changing what a bundle *is*
