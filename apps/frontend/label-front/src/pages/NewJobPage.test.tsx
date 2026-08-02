@@ -182,6 +182,17 @@ describe('NewJobPage single_choice extras', () => {
     expect(screen.getByTestId('set-chip-llava')).not.toHaveClass('MuiChip-colorPrimary');
   });
 
+  it('blocks single_choice with no set picked while the bundle has some', async () => {
+    await toQuestionStep();
+
+    expect(screen.getByText(/Pick a set/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('set-chip-llava'));
+    expect(screen.queryByText(/Pick a set/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+  });
+
   it('sends inline manifest content and supports Back', async () => {
     mockedCreate.mockResolvedValue({ _id: 'j1' });
     mockedMaterialize.mockResolvedValue({ tasks: 1, missing: ['ghost'] });

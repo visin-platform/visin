@@ -63,6 +63,7 @@ const NewJobPage: React.FC = () => {
   const adminGroups = (groups || []).filter((group) => group.role === 'owner' || group.role === 'admin');
   const groupBundles = (bundles || []).filter((bundle) => bundle.groupId === groupId && bundle.status === 'ready');
   const bundle = useMemo(() => groupBundles.find((candidate) => candidate._id === bundleId), [groupBundles, bundleId]);
+  const bundleSets = bundle?.annotationSets || [];
 
   const toggleSet = (set: string) => {
     setAnnotationSets((previous) =>
@@ -74,10 +75,14 @@ const NewJobPage: React.FC = () => {
     );
   };
 
+  // A bundle with sets but none picked materializes tasks with no payload — the
+  // workbench then shows the bare frame and there is nothing to judge, so block it.
   const stepValid = [
     Boolean(name.trim() && groupId && bundleId),
     Boolean(prompt.trim()) &&
-      (taskType === 'mask_toggle' ? annotationSets.length === 1 : choices.length >= 2) &&
+      (taskType === 'mask_toggle'
+        ? annotationSets.length === 1
+        : choices.length >= 2 && (bundleSets.length === 0 || annotationSets.length >= 1)) &&
       redundancy >= 1,
     Boolean(materialized),
     true
@@ -201,10 +206,10 @@ const NewJobPage: React.FC = () => {
           <TextField label="Prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
 
           <Typography variant="subtitle2">
-            Annotation set{taskType === 'mask_toggle' ? ' (exactly one)' : 's'}
+            Annotation set{taskType === 'mask_toggle' ? ' (exactly one)' : 's (at least one)'}
           </Typography>
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-            {(bundle?.annotationSets || []).map((set) => (
+            {bundleSets.map((set) => (
               <Chip
                 key={set}
                 label={set}
@@ -213,12 +218,18 @@ const NewJobPage: React.FC = () => {
                 data-testid={`set-chip-${set}`}
               />
             ))}
-            {(bundle?.annotationSets || []).length === 0 && (
+            {bundleSets.length === 0 && (
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                This bundle has no annotation sets — layers are optional for single choice.
+                This bundle has no annotation sets — tasks will show the bare frame.
               </Typography>
             )}
           </Stack>
+          {bundleSets.length > 0 && annotationSets.length === 0 && (
+            <Alert severity="info">
+              Pick a set — its layers are what the workbench draws over the frame. With none selected the labeler
+              sees the bare frame and has nothing to judge.
+            </Alert>
+          )}
 
           {taskType === 'single_choice' && (
             <Stack spacing={1}>
