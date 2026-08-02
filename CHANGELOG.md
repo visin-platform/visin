@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.142](https://github.com/visin-platform/visin-monorepo/compare/v0.0.141...v0.0.142) (2026-08-02)
+
+
+### Bug Fixes
+
+* rate limiter ([ee6f5c0](https://github.com/visin-platform/visin-monorepo/commit/ee6f5c0a787b006ec0b769799ece29ea5716e9e2))
+
 ### [0.0.141](https://github.com/visin-platform/visin-monorepo/compare/v0.0.140...v0.0.141) (2026-08-02)
 
 
