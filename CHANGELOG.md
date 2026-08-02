@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.135](https://github.com/visin-platform/visin-monorepo/compare/v0.0.134...v0.0.135) (2026-08-02)
+
+
+### Features
+
+* add username and password login ([0d168b1](https://github.com/visin-platform/visin-monorepo/commit/0d168b11f13d879f82d8976391cf7969c40e91a6))
+
 ### [0.0.134](https://github.com/visin-platform/visin-monorepo/compare/v0.0.133...v0.0.134) (2026-08-02)
 
 
