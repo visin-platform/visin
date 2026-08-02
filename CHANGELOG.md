@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.143](https://github.com/visin-platform/visin-monorepo/compare/v0.0.142...v0.0.143) (2026-08-02)
+
+
+### Bug Fixes
+
+* import time out ([774abd8](https://github.com/visin-platform/visin-monorepo/commit/774abd816cad22c4812152a449989ff10bb6b29d))
+
 ### [0.0.142](https://github.com/visin-platform/visin-monorepo/compare/v0.0.141...v0.0.142) (2026-08-02)
 
 
