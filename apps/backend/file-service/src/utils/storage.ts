@@ -52,6 +52,30 @@ export const createWriteStream = (fileId: string): fs.WriteStream => {
 };
 
 /**
+ * Create a writable stream positioned at `start`, leaving the bytes before it
+ * intact. The resumable-upload path writes every chunk at its own offset rather
+ * than appending blindly, so a chunk that gets re-sent after a network failure
+ * overwrites itself instead of being duplicated onto the end of the file.
+ *
+ * Uses 'r+' rather than 'a': append mode ignores `start` and always writes at
+ * the current end, which is exactly the duplication this avoids.
+ */
+export const createWriteStreamAt = (fileId: string, start: number): fs.WriteStream => {
+  const filePath = resolvePath(fileId);
+  ensureDir(filePath);
+  return fs.createWriteStream(filePath, { flags: 'r+', start });
+};
+
+/**
+ * Cut a file back to `size` bytes. Used to roll a partially written chunk back
+ * to the last offset the client and server agreed on.
+ */
+export const truncateFile = (fileId: string, size: number): void => {
+  fs.truncateSync(resolvePath(fileId), size);
+  logger.info('File truncated', { fileId, size });
+};
+
+/**
  * Read a file from disk and return a Buffer.
  */
 export const readFile = (fileId: string): Buffer => {

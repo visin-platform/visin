@@ -12,6 +12,8 @@ import {
   ensureDir,
   writeFile,
   createWriteStream,
+  createWriteStreamAt,
+  truncateFile,
   readFile,
   createReadStream,
   fileExists,
@@ -87,6 +89,46 @@ describe('write / read round-trip', () => {
     });
 
     expect(Buffer.concat(chunks).toString()).toBe('streamed');
+  });
+});
+
+describe('createWriteStreamAt / truncateFile', () => {
+  const writeAt = async (fileId: string, start: number, data: string): Promise<void> => {
+    const ws = createWriteStreamAt(fileId, start);
+    await new Promise<void>((resolve, reject) => {
+      ws.on('finish', resolve);
+      ws.on('error', reject);
+      ws.end(data);
+    });
+  };
+
+  it('appends a chunk without disturbing the bytes before it', async () => {
+    writeFile('chunked/out.bin', Buffer.from('first-'));
+
+    await writeAt('chunked/out.bin', 6, 'second');
+
+    expect(readFile('chunked/out.bin').toString()).toBe('first-second');
+  });
+
+  it('overwrites in place when the same chunk is re-sent', async () => {
+    writeFile('chunked/out.bin', Buffer.from('first-XXXXXX'));
+
+    await writeAt('chunked/out.bin', 6, 'second');
+
+    expect(readFile('chunked/out.bin').toString()).toBe('first-second');
+  });
+
+  it('fails rather than creating a file when the earlier chunks are missing', async () => {
+    await expect(writeAt('chunked/absent.bin', 10, 'orphan')).rejects.toThrow();
+    expect(fileExists('chunked/absent.bin')).toBe(false);
+  });
+
+  it('truncateFile cuts a file back to the given size', () => {
+    writeFile('chunked/trim.bin', Buffer.from('keep-drop'));
+
+    truncateFile('chunked/trim.bin', 4);
+
+    expect(readFile('chunked/trim.bin').toString()).toBe('keep');
   });
 });
 
