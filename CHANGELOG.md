@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.149](https://github.com/visin-platform/visin-monorepo/compare/v0.0.148...v0.0.149) (2026-08-03)
+
+
+### Bug Fixes
+
+* probe ([a4e977a](https://github.com/visin-platform/visin-monorepo/commit/a4e977adcbf2722b9dba45fd2d21871b9c09eec0))
+
 ### [0.0.148](https://github.com/visin-platform/visin-monorepo/compare/v0.0.147...v0.0.148) (2026-08-03)
 
 
