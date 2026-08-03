@@ -1,14 +1,14 @@
 jest.mock('../../models/LabelJob', () => ({
-  LabelJob: { create: jest.fn(), find: jest.fn(), findById: jest.fn() },
+  LabelJob: { create: jest.fn(), find: jest.fn(), findById: jest.fn(), deleteOne: jest.fn() },
 }));
 jest.mock('../../models/LabelBundle', () => ({
   LabelBundle: { findById: jest.fn() },
 }));
 jest.mock('../../models/LabelTask', () => ({
-  LabelTask: { countDocuments: jest.fn() },
+  LabelTask: { countDocuments: jest.fn(), deleteMany: jest.fn() },
 }));
 jest.mock('../../models/LabelAnswer', () => ({
-  LabelAnswer: { countDocuments: jest.fn() },
+  LabelAnswer: { countDocuments: jest.fn(), deleteMany: jest.fn() },
 }));
 jest.mock('../../clients/groupServiceClient', () => ({
   getMyGroups: jest.fn(),
@@ -162,5 +162,41 @@ describe('transitionJob', () => {
     mockedJob.findById.mockResolvedValue(null);
 
     await expect(svc.transitionJob('missing', 'activate')).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe('deleteJob', () => {
+  it('removes answers, then tasks, then the job itself', async () => {
+    const order: string[] = [];
+    mockedAnswer.deleteMany.mockImplementation(async () => {
+      order.push('answers');
+      return { deletedCount: 7 };
+    });
+    mockedTask.deleteMany.mockImplementation(async () => {
+      order.push('tasks');
+      return { deletedCount: 4135 };
+    });
+    mockedJob.deleteOne.mockImplementation(async () => {
+      order.push('job');
+      return {};
+    });
+
+    const result = await svc.deleteJob('j1');
+
+    expect(result).toEqual({ tasks: 4135, answers: 7 });
+    expect(mockedAnswer.deleteMany).toHaveBeenCalledWith({ jobId: 'j1' });
+    expect(mockedTask.deleteMany).toHaveBeenCalledWith({ jobId: 'j1' });
+    expect(mockedJob.deleteOne).toHaveBeenCalledWith({ _id: 'j1' });
+    // Answers first: a half-done delete must never leave an answer whose task is
+    // already gone, which no repeat call could then find.
+    expect(order).toEqual(['answers', 'tasks', 'job']);
+  });
+
+  it('reports zero when a driver omits deletedCount', async () => {
+    mockedAnswer.deleteMany.mockResolvedValue({});
+    mockedTask.deleteMany.mockResolvedValue({});
+    mockedJob.deleteOne.mockResolvedValue({});
+
+    expect(await svc.deleteJob('j1')).toEqual({ tasks: 0, answers: 0 });
   });
 });

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
@@ -18,7 +18,15 @@ import {
   Typography
 } from '@mui/material';
 import { Loader } from '@visin/frontend-core';
-import { JobAction, downloadExport, getJob, getJobStats, listJobs, transitionJob } from '../services/jobService';
+import {
+  JobAction,
+  deleteJob,
+  downloadExport,
+  getJob,
+  getJobStats,
+  listJobs,
+  transitionJob
+} from '../services/jobService';
 
 const STATUS_COLORS: Record<string, 'default' | 'success' | 'warning' | 'info'> = {
   draft: 'default',
@@ -30,6 +38,7 @@ const STATUS_COLORS: Record<string, 'default' | 'success' | 'warning' | 'info'> 
 
 const JobDetailPage: React.FC = () => {
   const { id: jobId = '' } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -44,6 +53,25 @@ const JobDetailPage: React.FC = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['job', jobId] }),
     onError: (err) => setActionError((err as Error).message)
   });
+
+  const remove = useMutation({
+    mutationFn: () => deleteJob(jobId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      navigate('/jobs');
+    },
+    onError: (err) => setActionError((err as Error).message)
+  });
+
+  // Nothing below this is recoverable, and the answers are the labeling effort
+  // itself — so the count goes in the prompt rather than a bare "are you sure".
+  const confirmDelete = (): void => {
+    const collected = job?.progress?.completed ?? 0;
+    const warning = collected > 0 ? ` and ${collected} collected answer(s)` : '';
+    if (window.confirm(`Delete "${job?.name}"? This removes the job, its tasks${warning}. Export first — this cannot be undone.`)) {
+      remove.mutate();
+    }
+  };
 
   if (isLoading || !job) {
     return <Loader message="Loading job..." />;
@@ -121,6 +149,9 @@ const JobDetailPage: React.FC = () => {
               </Button>
               <Button variant="text" onClick={() => downloadExport(jobId, 'csv').catch((err) => setActionError(err.message))}>
                 Export CSV
+              </Button>
+              <Button variant="text" color="error" disabled={remove.isPending} onClick={confirmDelete}>
+                Delete
               </Button>
             </>
           )}

@@ -75,6 +75,26 @@ const TRANSITIONS: Record<string, { from: JobStatus[]; to: JobStatus }> = {
 
 export type JobAction = keyof typeof TRANSITIONS;
 
+/**
+ * Hard-delete a job and everything hanging off it.
+ *
+ * `archive` is a status, not a removal: an archived job kept its whole task set,
+ * so three archived jobs over a 4k-frame bundle left 12,367 LabelTask documents
+ * behind — each carrying a copy of its frame's selected mask metadata — with no
+ * endpoint that could ever reach them. Deleting a job therefore deletes its
+ * answers and tasks too; there is no soft-delete tier below this.
+ *
+ * Answers go first: an interrupted delete that has removed tasks but not answers
+ * leaves answers pointing at nothing, while the reverse merely re-orphans tasks
+ * a repeat call cleans up.
+ */
+export const deleteJob = async (jobId: string): Promise<{ tasks: number; answers: number }> => {
+  const answers = await LabelAnswer.deleteMany({ jobId });
+  const tasks = await LabelTask.deleteMany({ jobId });
+  await LabelJob.deleteOne({ _id: jobId });
+  return { tasks: tasks.deletedCount || 0, answers: answers.deletedCount || 0 };
+};
+
 export const transitionJob = async (jobId: string, action: JobAction): Promise<ILabelJob> => {
   const job = await getJob(jobId);
   const transition = TRANSITIONS[action];

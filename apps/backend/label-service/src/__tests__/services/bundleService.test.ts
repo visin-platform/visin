@@ -8,7 +8,13 @@ jest.mock('../../models/LabelImage', () => ({
   LabelImage: { deleteMany: jest.fn(), find: jest.fn() },
 }));
 jest.mock('../../models/LabelJob', () => ({
-  LabelJob: { countDocuments: jest.fn() },
+  LabelJob: { countDocuments: jest.fn(), find: jest.fn(), deleteMany: jest.fn() },
+}));
+jest.mock('../../models/LabelTask', () => ({
+  LabelTask: { deleteMany: jest.fn() },
+}));
+jest.mock('../../models/LabelAnswer', () => ({
+  LabelAnswer: { deleteMany: jest.fn() },
 }));
 jest.mock('../../clients/fileServiceClient', () => ({
   getUploadUrl: jest.fn(),
@@ -39,6 +45,8 @@ import { LabelBundle } from '../../models/LabelBundle';
 import { ImportJob } from '../../models/ImportJob';
 import { LabelImage } from '../../models/LabelImage';
 import { LabelJob } from '../../models/LabelJob';
+import { LabelTask } from '../../models/LabelTask';
+import { LabelAnswer } from '../../models/LabelAnswer';
 import * as files from '../../clients/fileServiceClient';
 import * as groups from '../../clients/groupServiceClient';
 import { enqueueImport, removeQueuedImport } from '../../queue/importQueue';
@@ -49,6 +57,8 @@ const mockedBundle = LabelBundle as unknown as Record<string, jest.Mock>;
 const mockedImport = ImportJob as unknown as Record<string, jest.Mock>;
 const mockedImage = LabelImage as unknown as Record<string, jest.Mock>;
 const mockedJob = LabelJob as unknown as Record<string, jest.Mock>;
+const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
+const mockedAnswer = LabelAnswer as unknown as Record<string, jest.Mock>;
 const mockedFiles = files as unknown as Record<string, jest.Mock>;
 const mockedGroups = groups as unknown as Record<string, jest.Mock>;
 const mockedEnqueue = enqueueImport as jest.Mock;
@@ -323,7 +333,10 @@ describe('deleteImport', () => {
 
 describe('deleteBundle', () => {
   beforeEach(() => {
-    mockedJob.countDocuments.mockResolvedValue(0);
+    mockedJob.find.mockResolvedValue([]);
+    mockedJob.deleteMany.mockResolvedValue({});
+    mockedTask.deleteMany.mockResolvedValue({});
+    mockedAnswer.deleteMany.mockResolvedValue({});
     mockedImport.findOne.mockResolvedValue(null);
     mockedFiles.deleteFolder.mockResolvedValue(undefined);
     mockedImage.deleteMany.mockResolvedValue({});
@@ -334,18 +347,31 @@ describe('deleteBundle', () => {
   it('deletes files, image rows, import history, and the bundle', async () => {
     await svc.deleteBundle('b1');
 
-    expect(mockedJob.countDocuments).toHaveBeenCalledWith({ bundleId: 'b1', status: { $ne: 'archived' } });
     expect(mockedFiles.deleteFolder).toHaveBeenCalledWith('label-bundles/b1/');
     expect(mockedImage.deleteMany).toHaveBeenCalledWith({ bundleId: 'b1' });
     expect(mockedImport.deleteMany).toHaveBeenCalledWith({ bundleId: 'b1' });
     expect(mockedBundle.deleteOne).toHaveBeenCalledWith({ _id: 'b1' });
   });
 
-  it('refuses while non-archived jobs reference the bundle', async () => {
-    mockedJob.countDocuments.mockResolvedValue(2);
+  it('cascades through jobs to their tasks and answers, whatever their status', async () => {
+    mockedJob.find.mockResolvedValue([{ _id: 'j1' }, { _id: 'j2' }]);
 
-    await expect(svc.deleteBundle('b1')).rejects.toThrow('2 non-archived job(s)');
-    expect(mockedFiles.deleteFolder).not.toHaveBeenCalled();
+    await svc.deleteBundle('b1');
+
+    // Every job, not just archived ones — the old gate refused here, which left
+    // callers archiving instead and stranded the tasks.
+    expect(mockedJob.find).toHaveBeenCalledWith({ bundleId: 'b1' }, { _id: 1 });
+    expect(mockedAnswer.deleteMany).toHaveBeenCalledWith({ jobId: { $in: ['j1', 'j2'] } });
+    expect(mockedTask.deleteMany).toHaveBeenCalledWith({ jobId: { $in: ['j1', 'j2'] } });
+    expect(mockedJob.deleteMany).toHaveBeenCalledWith({ _id: { $in: ['j1', 'j2'] } });
+  });
+
+  it('skips the job cascade when the bundle has no jobs', async () => {
+    await svc.deleteBundle('b1');
+
+    expect(mockedAnswer.deleteMany).not.toHaveBeenCalled();
+    expect(mockedTask.deleteMany).not.toHaveBeenCalled();
+    expect(mockedJob.deleteMany).not.toHaveBeenCalled();
   });
 
   it('refuses while an import is live, allows when stale', async () => {

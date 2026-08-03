@@ -214,13 +214,29 @@ describe('BundlesPage', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /Map & import/ })).toBeDisabled());
   });
 
-  it('deletes a bundle and surfaces refusal errors', async () => {
-    mockedDelete.mockRejectedValue(new Error('2 non-archived job(s) reference this bundle'));
+  it('deletes a bundle and surfaces refusal errors, once confirmed', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mockedDelete.mockRejectedValue(new Error('An import is running for this bundle'));
     renderWithProviders(<BundlesPage />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
 
-    expect(await screen.findByText(/non-archived job\(s\)/)).toBeInTheDocument();
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(await screen.findByText(/An import is running/)).toBeInTheDocument();
+    confirmSpy.mockRestore();
+  });
+
+  // The delete now takes the bundle's jobs, tasks and answers with it, so a
+  // mis-click must not be enough to trigger it.
+  it('does not delete when the confirmation is declined', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderWithProviders(<BundlesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(mockedDelete).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 });
 

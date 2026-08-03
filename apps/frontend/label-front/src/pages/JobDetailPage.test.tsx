@@ -7,9 +7,10 @@ vi.mock('../services/jobService', () => ({
   listJobs: vi.fn(),
   transitionJob: vi.fn(),
   downloadExport: vi.fn(),
+  deleteJob: vi.fn(),
 }));
 
-import { downloadExport, getJob, getJobStats, listJobs, transitionJob } from '../services/jobService';
+import { deleteJob, downloadExport, getJob, getJobStats, listJobs, transitionJob } from '../services/jobService';
 import JobDetailPage from './JobDetailPage';
 import { renderWithProviders } from '../test/renderWithProviders';
 
@@ -18,6 +19,7 @@ const mockedStats = getJobStats as ReturnType<typeof vi.fn>;
 const mockedListJobs = listJobs as ReturnType<typeof vi.fn>;
 const mockedTransition = transitionJob as ReturnType<typeof vi.fn>;
 const mockedExport = downloadExport as ReturnType<typeof vi.fn>;
+const mockedDelete = deleteJob as ReturnType<typeof vi.fn>;
 
 const job = (overrides: Record<string, unknown> = {}) => ({
   _id: 'j1',
@@ -119,5 +121,30 @@ describe('JobDetailPage transitions', () => {
 
     expect(mockedExport).toHaveBeenCalledWith('j1', 'jsonl');
     expect(await screen.findByText('Export failed (500)')).toBeInTheDocument();
+  });
+  it('hard-deletes the job once confirmed and returns to the list', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
+    mockedDelete.mockResolvedValue({ tasks: 4135, answers: 7 });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('j1'));
+    // The 4 collected answers are named in the prompt: they are the labeling
+    // effort, and archiving used to be the only option that kept them.
+    expect(confirmSpy.mock.calls[0][0]).toContain('4 collected answer(s)');
+    confirmSpy.mockRestore();
+  });
+
+  it('does not delete when the confirmation is declined', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    expect(mockedDelete).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 });

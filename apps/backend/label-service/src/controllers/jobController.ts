@@ -39,6 +39,14 @@ export const pauseJob = transition('pause');
 export const resumeJob = transition('resume');
 export const archiveJob = transition('archive');
 
+/** Irreversible: the job, its tasks and every answer collected against it. */
+export const deleteJob = async (req: Request, res: Response): Promise<void> => {
+  const job = await svc.getJob(req.params.id as string);
+  await assertAdmin(req, job.groupId);
+  const removed = await svc.deleteJob(job._id.toString());
+  res.json({ success: true, data: removed });
+};
+
 export const materializeTasks = async (req: Request, res: Response): Promise<void> => {
   const job = await svc.getJob(req.params.id as string);
   await assertAdmin(req, job.groupId);

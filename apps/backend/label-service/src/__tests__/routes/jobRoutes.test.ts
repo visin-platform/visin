@@ -30,7 +30,8 @@ describe('jobRoutes', () => {
     expect(find('post', '/:id/next')).toBeDefined();
     expect(find('get', '/:id/export')).toBeDefined();
     expect(find('get', '/:id/stats')).toBeDefined();
-    expect(routes).toHaveLength(11);
+    expect(find('delete', '/:id')).toBeDefined();
+    expect(routes).toHaveLength(12);
   });
 
   it('validates bodies/queries where schemas exist', () => {

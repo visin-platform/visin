@@ -123,6 +123,19 @@ const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ 
     onError: (err) => setDeleteError((err as Error).message)
   });
 
+  // Deleting a bundle now takes its jobs, their tasks and every answer with it,
+  // rather than refusing until they were archived — so it needs asking first.
+  const confirmDelete = (): void => {
+    if (
+      window.confirm(
+        `Delete "${bundle.name}"? This removes its images and every job, task and answer built on it. ` +
+          'Export any labels first — this cannot be undone.'
+      )
+    ) {
+      remove.mutate();
+    }
+  };
+
   return (
     <Card variant="outlined" sx={{ borderRadius: 3 }}>
       <CardContent>
@@ -246,7 +259,7 @@ const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ 
         <Button size="small" startIcon={<EditOutlined />} onClick={() => setEditOpen(true)}>
           Edit
         </Button>
-        <Button size="small" color="error" startIcon={<Delete />} onClick={() => remove.mutate()}>
+        <Button size="small" color="error" startIcon={<Delete />} onClick={confirmDelete}>
           Delete
         </Button>
       </CardActions>

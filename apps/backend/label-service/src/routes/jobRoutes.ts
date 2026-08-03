@@ -10,6 +10,8 @@ const router = Router();
 router.post('/', validateRequest({ body: createJobBodySchema }), asyncHandler(ctrl.createJob));
 router.get('/', validateRequest({ query: listJobsQuerySchema }), asyncHandler(ctrl.listJobs));
 router.get('/:id', asyncHandler(ctrl.getJob));
+// Destructive: job + tasks + answers. `archive` only hides a job from workers.
+router.delete('/:id', asyncHandler(ctrl.deleteJob));
 router.post('/:id/materialize', validateRequest({ body: materializeBodySchema }), asyncHandler(ctrl.materializeTasks));
 router.post('/:id/activate', asyncHandler(ctrl.activateJob));
 router.post('/:id/pause', asyncHandler(ctrl.pauseJob));

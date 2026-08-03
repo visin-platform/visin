@@ -3,6 +3,8 @@ import { LabelBundle, ILabelBundle } from '../models/LabelBundle';
 import { ImportJob, IImportJob } from '../models/ImportJob';
 import { LabelImage } from '../models/LabelImage';
 import { LabelJob } from '../models/LabelJob';
+import { LabelTask } from '../models/LabelTask';
+import { LabelAnswer } from '../models/LabelAnswer';
 import { bundleFileId } from './ingestService';
 import { enqueueImport, removeQueuedImport } from '../queue/importQueue';
 import { previewZip, ZipPreview } from './previewService';
@@ -265,13 +267,18 @@ export const deleteImport = async (bundleId: string, importId: string): Promise<
  * file (frames, layers, thumbnails, uploaded zips). Refused while any job
  * references the bundle or an import is live.
  */
+/**
+ * Hard-delete a bundle and everything that hangs off it: its jobs, their tasks
+ * and answers, its images, its imports, and the uploaded zip plus extracted
+ * files on file-service.
+ *
+ * This used to refuse while any non-archived job referenced the bundle, which
+ * pushed callers into archiving instead — and archiving deletes nothing, so the
+ * tasks survived a bundle they could no longer resolve. Nothing here is
+ * recoverable and nothing is left behind; a caller that wants the labels must
+ * export before deleting.
+ */
 export const deleteBundle = async (bundleId: string): Promise<void> => {
-  // Archived jobs tolerate a deleted bundle (their exports degrade to missing
-  // image refs); anything else still needs the images.
-  const jobCount = await LabelJob.countDocuments({ bundleId, status: { $ne: 'archived' } });
-  if (jobCount > 0) {
-    throw new ConflictError(`${jobCount} non-archived job(s) reference this bundle — archive them first`);
-  }
   const running = await ImportJob.findOne({ bundleId, status: { $in: ['pending', 'running'] } });
   if (running && !isStale(running)) {
     throw new ConflictError('An import is running for this bundle — wait for it to finish or go stale');
@@ -280,6 +287,14 @@ export const deleteBundle = async (bundleId: string): Promise<void> => {
   if (running) {
     await removeQueuedImport(running._id.toString());
   }
+
+  const jobIds = (await LabelJob.find({ bundleId }, { _id: 1 })).map((job) => job._id);
+  if (jobIds.length > 0) {
+    await LabelAnswer.deleteMany({ jobId: { $in: jobIds } });
+    await LabelTask.deleteMany({ jobId: { $in: jobIds } });
+    await LabelJob.deleteMany({ _id: { $in: jobIds } });
+  }
+
   await files.deleteFolder(bundleFileId(bundleId, ''));
   await LabelImage.deleteMany({ bundleId });
   await ImportJob.deleteMany({ bundleId });
