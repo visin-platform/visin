@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.147](https://github.com/visin-platform/visin-monorepo/compare/v0.0.146...v0.0.147) (2026-08-03)
+
+
+### Features
+
+* delete labeling jobs ([e458727](https://github.com/visin-platform/visin-monorepo/commit/e45872739afc8eb4a86b6f99f893e76ff409f744))
+
 ### [0.0.146](https://github.com/visin-platform/visin-monorepo/compare/v0.0.145...v0.0.146) (2026-08-02)
 
 
