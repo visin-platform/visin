@@ -1,4 +1,16 @@
 # Visin Changelog
+### [0.0.148](https://github.com/visin-platform/visin-monorepo/compare/v0.0.147...v0.0.148) (2026-08-03)
+
+
+### Features
+
+* add probe server action ([8f44dd8](https://github.com/visin-platform/visin-monorepo/commit/8f44dd89005f0a94085b1beebc2841927f585701))
+
+
+### Bug Fixes
+
+* probe action ([a7f3140](https://github.com/visin-platform/visin-monorepo/commit/a7f3140a27ab1d2660763251b727bade14652602))
+
 ### [0.0.147](https://github.com/visin-platform/visin-monorepo/compare/v0.0.146...v0.0.147) (2026-08-03)
 
 
