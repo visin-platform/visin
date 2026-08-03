@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.146](https://github.com/visin-platform/visin-monorepo/compare/v0.0.145...v0.0.146) (2026-08-02)
+
+
+### Features
+
+* setup redis queue ([e6ac1c3](https://github.com/visin-platform/visin-monorepo/commit/e6ac1c359c72e533c7eb446d3e8e39f265b7c506))
+
 ### [0.0.145](https://github.com/visin-platform/visin-monorepo/compare/v0.0.144...v0.0.145) (2026-08-02)
 
 
