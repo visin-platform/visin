@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -16,7 +16,7 @@ import {
   Tooltip,
   Typography
 } from '@mui/material';
-import { ArrowBack, Undo, CheckCircleOutlined } from '@mui/icons-material';
+import { ArrowBack, Undo, CheckCircleOutlined, LinkOutlined } from '@mui/icons-material';
 import { Loader } from '@visin/frontend-core';
 import { getJob } from '../services/jobService';
 import { useWorkQueue } from '../workbench/useWorkQueue';
@@ -27,8 +27,13 @@ import FrameViewer from '../workbench/FrameViewer';
 
 const WorkbenchPage: React.FC = () => {
   const { id: jobId = '' } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const { data: job } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
-  const queue = useWorkQueue(jobId);
+  // Read once: the param is rewritten as the labeler advances, and re-reading it
+  // would restart the queue on every frame.
+  const [startTaskId] = useState(() => searchParams.get('task'));
+  const queue = useWorkQueue(jobId, startTaskId);
 
   const [rejected, setRejected] = useState<Set<number>>(new Set());
   const [focusedIdx, setFocusedIdx] = useState<number | null>(null);
@@ -37,6 +42,7 @@ const WorkbenchPage: React.FC = () => {
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({});
   const [layerOpacity, setLayerOpacity] = useState(0.6);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const startedAtRef = useRef<number>(Date.now());
   const viewerBoxRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +77,35 @@ const WorkbenchPage: React.FC = () => {
       cancelled = true;
     };
   }, [currentItem]);
+
+  // Keep the current frame in the URL, so a labeler with a question can copy the
+  // address bar and have it open on the same frame for whoever they ask.
+  // `replace` rather than push: Back should leave the workbench, not walk the
+  // queue backwards through frames that are no longer leased.
+  const currentTaskId = task?._id ?? null;
+  useEffect(() => {
+    if (!currentTaskId) return;
+    setLinkCopied(false);
+    setSearchParams(
+      (previous) => {
+        if (previous.get('task') === currentTaskId) return previous;
+        const next = new URLSearchParams(previous);
+        next.set('task', currentTaskId);
+        return next;
+      },
+      { replace: true }
+    );
+  }, [currentTaskId, setSearchParams]);
+
+  // Composed from the router's location rather than read off window.location, so
+  // the link is whatever the app actually routed to.
+  const copyFrameLink = useCallback(() => {
+    const url = `${window.location.origin}${location.pathname}${location.search}`;
+    navigator.clipboard
+      ?.writeText(url)
+      .then(() => setLinkCopied(true))
+      .catch(() => setActionError('Could not copy the link — copy it from the address bar instead.'));
+  }, [location.pathname, location.search]);
 
   const toggleMask = useCallback((maskId: number) => {
     setRejected((previous) => {
@@ -183,6 +218,18 @@ const WorkbenchPage: React.FC = () => {
           {job.name}
         </Typography>
         {queue.current.task.stratum && <Chip size="small" label={queue.current.task.stratum} />}
+        {queue.current.images.frame.stem && (
+          <Tooltip title={linkCopied ? 'Link copied' : 'Copy a link to this frame'}>
+            <Chip
+              size="small"
+              variant="outlined"
+              icon={<LinkOutlined />}
+              label={queue.current.images.frame.stem}
+              onClick={copyFrameLink}
+              color={linkCopied ? 'success' : 'default'}
+            />
+          </Tooltip>
+        )}
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           {myTotal}/{progressTotal} · session {queue.sessionAnswered}
         </Typography>

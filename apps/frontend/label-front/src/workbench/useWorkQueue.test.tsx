@@ -3,6 +3,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 
 vi.mock('../services/jobService', () => ({
   nextTask: vi.fn(),
+  getTask: vi.fn(),
   submitAnswer: vi.fn(),
   undoAnswer: vi.fn(),
 }));
@@ -10,12 +11,13 @@ vi.mock('./idmapLoader', () => ({
   preloadImages: vi.fn(),
 }));
 
-import { nextTask, submitAnswer, undoAnswer } from '../services/jobService';
+import { getTask, nextTask, submitAnswer, undoAnswer } from '../services/jobService';
 import { preloadImages } from './idmapLoader';
 import { useWorkQueue } from './useWorkQueue';
 import { WorkItem } from '../types';
 
 const mockedNext = nextTask as ReturnType<typeof vi.fn>;
+const mockedGetTask = getTask as ReturnType<typeof vi.fn>;
 const mockedSubmit = submitAnswer as ReturnType<typeof vi.fn>;
 const mockedUndo = undoAnswer as ReturnType<typeof vi.fn>;
 
@@ -26,6 +28,33 @@ const item = (id: string): WorkItem => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe('useWorkQueue with a shared task link', () => {
+  it('opens the named task first, then resumes the normal queue', async () => {
+    mockedGetTask.mockResolvedValue(item('t9'));
+    mockedNext.mockResolvedValue(item('t2'));
+
+    const { result } = renderHook(() => useWorkQueue('j1', 't9'));
+
+    await waitFor(() => expect(result.current.status).toBe('working'));
+    expect(mockedGetTask).toHaveBeenCalledWith('t9');
+    expect(result.current.current?.task._id).toBe('t9');
+    // Fetched, not pulled — the queue would never hand back a task this user
+    // already answered, which is exactly the link someone shares to ask about.
+    expect(mockedNext).toHaveBeenCalledTimes(1);
+    expect(mockedNext).toHaveBeenCalledWith('j1', ['t9']);
+    expect(preloadImages).toHaveBeenCalledWith(expect.arrayContaining(['frame-t9']));
+  });
+
+  it('surfaces a link to a task that no longer exists', async () => {
+    mockedGetTask.mockRejectedValue(new Error('Task not found'));
+
+    const { result } = renderHook(() => useWorkQueue('j1', 'gone'));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.error).toBe('Task not found');
+  });
 });
 
 describe('useWorkQueue', () => {

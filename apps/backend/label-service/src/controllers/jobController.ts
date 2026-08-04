@@ -15,7 +15,7 @@ export const createJob = async (req: Request, res: Response): Promise<void> => {
 export const listJobs = async (req: Request, res: Response): Promise<void> => {
   const user = requireUser(req);
   const role = (req.query.role as 'worker' | 'admin') || 'worker';
-  const jobs = await svc.listJobsForUser(user.email!.toLowerCase(), role);
+  const jobs = await svc.listJobsForUser(user.email!.toLowerCase(), role, user.id);
   res.json({ success: true, data: jobs });
 };
 

@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { BadRequestError, ConflictError, NotFoundError, UserPayload } from '@visin/backend-core';
 import { LabelJob, ILabelJob, JobStatus } from '../models/LabelJob';
 import { LabelBundle } from '../models/LabelBundle';
@@ -27,18 +28,32 @@ export const createJob = async (user: UserPayload, data: CreateJobBody): Promise
   });
 };
 
+export type JobWithProgress = Record<string, unknown> & { progress: JobProgress };
+
 /**
  * role=worker (default): active jobs in any of my groups — the workable list.
  * role=admin: every job (any status) in groups where I am owner/admin.
+ *
+ * Progress rides along so the list can show how far each job has got without a
+ * detail request per card.
  */
-export const listJobsForUser = async (userEmail: string, role: 'worker' | 'admin'): Promise<ILabelJob[]> => {
+export const listJobsForUser = async (
+  userEmail: string,
+  role: 'worker' | 'admin',
+  userId: string
+): Promise<JobWithProgress[]> => {
   const myGroups = await groups.getMyGroups(userEmail);
-  if (role === 'admin') {
-    const adminGroupIds = myGroups.filter((g) => g.role === 'owner' || g.role === 'admin').map((g) => g.groupId);
-    return LabelJob.find({ groupId: { $in: adminGroupIds } }).sort({ updatedAt: -1 });
-  }
-  const groupIds = myGroups.map((g) => g.groupId);
-  return LabelJob.find({ groupId: { $in: groupIds }, status: 'active' }).sort({ updatedAt: -1 });
+  const jobs =
+    role === 'admin'
+      ? await LabelJob.find({
+          groupId: { $in: myGroups.filter((g) => g.role === 'owner' || g.role === 'admin').map((g) => g.groupId) }
+        }).sort({ updatedAt: -1 })
+      : await LabelJob.find({ groupId: { $in: myGroups.map((g) => g.groupId) }, status: 'active' }).sort({
+          updatedAt: -1
+        });
+
+  const progress = await progressForJobs(jobs, userId);
+  return jobs.map((job) => ({ ...job.toObject(), progress: progress.get(job._id.toString())! }));
 };
 
 export const getJob = async (jobId: string): Promise<ILabelJob> => {
@@ -56,15 +71,66 @@ export interface JobProgress {
   myAnswers: number;
 }
 
-export const getJobProgress = async (job: ILabelJob, userId: string): Promise<JobProgress> => {
-  const [tasks, completed, answers, myAnswers] = await Promise.all([
-    LabelTask.countDocuments({ jobId: job._id }),
-    LabelTask.countDocuments({ jobId: job._id, answersCount: { $gte: job.redundancy } }),
-    LabelAnswer.countDocuments({ jobId: job._id }),
-    LabelAnswer.countDocuments({ jobId: job._id, userId })
+/**
+ * Progress for a whole list of jobs in two queries, whatever the list length.
+ *
+ * Tasks are grouped by `answersCount` rather than counted against each job's
+ * completion threshold in the query: redundancy is per job, so a `$gte` filter
+ * would need one query per job. The bucket count is bounded by the maximum
+ * redundancy (10), not by task count, so the threshold is cheap to apply here.
+ */
+export const progressForJobs = async (
+  jobs: Pick<ILabelJob, '_id' | 'redundancy'>[],
+  userId: string
+): Promise<Map<string, JobProgress>> => {
+  const byJob = new Map<string, JobProgress>(
+    jobs.map((job) => [job._id.toString(), { tasks: 0, completed: 0, answers: 0, myAnswers: 0 }])
+  );
+  if (byJob.size === 0) {
+    return byJob;
+  }
+
+  const jobIds = jobs.map((job) => job._id);
+  const [taskBuckets, answerRows] = await Promise.all([
+    LabelTask.aggregate<{ _id: { jobId: Types.ObjectId; answersCount: number }; count: number }>([
+      { $match: { jobId: { $in: jobIds } } },
+      { $group: { _id: { jobId: '$jobId', answersCount: '$answersCount' }, count: { $sum: 1 } } }
+    ]),
+    LabelAnswer.aggregate<{ _id: Types.ObjectId; answers: number; myAnswers: number }>([
+      { $match: { jobId: { $in: jobIds } } },
+      {
+        $group: {
+          _id: '$jobId',
+          answers: { $sum: 1 },
+          myAnswers: { $sum: { $cond: [{ $eq: ['$userId', userId] }, 1, 0] } }
+        }
+      }
+    ])
   ]);
-  return { tasks, completed, answers, myAnswers };
+
+  const redundancyByJob = new Map(jobs.map((job) => [job._id.toString(), job.redundancy]));
+  for (const bucket of taskBuckets) {
+    const progress = byJob.get(bucket._id.jobId.toString());
+    if (!progress) {
+      continue;
+    }
+    progress.tasks += bucket.count;
+    if (bucket._id.answersCount >= (redundancyByJob.get(bucket._id.jobId.toString()) ?? 1)) {
+      progress.completed += bucket.count;
+    }
+  }
+  for (const row of answerRows) {
+    const progress = byJob.get(row._id.toString());
+    if (progress) {
+      progress.answers = row.answers;
+      progress.myAnswers = row.myAnswers;
+    }
+  }
+  return byJob;
 };
+
+export const getJobProgress = async (job: ILabelJob, userId: string): Promise<JobProgress> =>
+  (await progressForJobs([job], userId)).get(job._id.toString())!;
 
 const TRANSITIONS: Record<string, { from: JobStatus[]; to: JobStatus }> = {
   activate: { from: ['draft', 'paused'], to: 'active' },

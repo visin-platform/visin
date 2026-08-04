@@ -46,6 +46,10 @@ export const transitionJob = async (jobId: string, action: JobAction): Promise<L
 export const deleteJob = async (jobId: string): Promise<{ tasks: number; answers: number }> =>
   (await labelApi.delete<ApiResponse<{ tasks: number; answers: number }>>(`/jobs/${jobId}`)).data;
 
+/** Open a specific task — what a shared `?task=` workbench link resolves to. */
+export const getTask = async (taskId: string): Promise<WorkItem> =>
+  (await labelApi.get<ApiResponse<WorkItem>>(`/tasks/${taskId}`)).data;
+
 export const nextTask = async (jobId: string, excludeTaskIds: string[] = []): Promise<WorkItem | null> =>
   (await labelApi.post<ApiResponse<WorkItem | null>>(`/jobs/${jobId}/next`, { excludeTaskIds })).data;
 

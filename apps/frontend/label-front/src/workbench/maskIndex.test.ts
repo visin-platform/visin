@@ -63,3 +63,24 @@ describe('buildHighlightOverlay', () => {
     expect([...overlay.slice(12, 16)]).toEqual([244, 32, 32, 140]);
   });
 });
+
+describe('buildHighlightOverlay hover', () => {
+  it('washes the mask under the cursor white so the click target is visible', () => {
+    const overlay = buildHighlightOverlay(index, new Set(), null, null, 0);
+
+    expect([...overlay.slice(4, 8)]).toEqual([255, 255, 255, 80]); // mask 0 hovered
+    expect(overlay.slice(8, 12)).toEqual(new Uint8ClampedArray([0, 0, 0, 0])); // mask 1 untouched
+  });
+
+  it('deepens rather than replaces a rejected or focused tint', () => {
+    expect([...buildHighlightOverlay(index, new Set([1]), null, null, 1).slice(8, 12)]).toEqual([244, 32, 32, 190]);
+    expect([...buildHighlightOverlay(index, new Set(), 2, null, 2).slice(12, 16)]).toEqual([255, 193, 7, 140]);
+  });
+
+  // Hover must never make an out-of-scope mask look clickable.
+  it('never lights a mask outside the job scope', () => {
+    const overlay = buildHighlightOverlay(index, new Set(), null, new Set([1]), 0);
+
+    expect([...overlay.slice(4, 8)]).toEqual([18, 22, 30, 165]);
+  });
+});

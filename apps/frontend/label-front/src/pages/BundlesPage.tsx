@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
@@ -13,6 +14,7 @@ import {
   DialogContent,
   DialogTitle,
   LinearProgress,
+  Link as MuiLink,
   ListSubheader,
   Menu,
   MenuItem,
@@ -24,11 +26,11 @@ import {
 import { Inventory2Outlined, UploadFile, Delete, EditOutlined, TuneOutlined } from '@mui/icons-material';
 import { Loader } from '@visin/frontend-core';
 import { createBundle, deleteBundle, listBundles, listUploads, updateBundle } from '../services/bundleService';
-import { getMyGroups } from '../services/jobService';
+import { getMyGroups, listJobs } from '../services/jobService';
 import { useBundleUpload } from '../hooks/useBundleUpload';
 import BundleFormatHelp from '../components/BundleFormatHelp';
 import ImportMappingDialog from '../components/ImportMappingDialog';
-import { LabelBundle } from '../types';
+import { LabelBundle, LabelJob } from '../types';
 
 const STATUS_COLORS: Record<string, 'default' | 'success' | 'warning' | 'error'> = {
   empty: 'default',
@@ -104,7 +106,46 @@ const EditBundleDialog: React.FC<{ bundle: LabelBundle; onClose: () => void; onS
   );
 };
 
-const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ bundle, onChanged }) => {
+/**
+ * The jobs built on this bundle, as links. A bundle is uploaded once and sliced
+ * into several differently-scoped jobs, so "which jobs draw from this?" is the
+ * question you have while looking at it — and the answer is what the delete
+ * confirmation is really warning about.
+ */
+const BundleJobs: React.FC<{ jobs: LabelJob[] }> = ({ jobs }) => {
+  if (jobs.length === 0) {
+    return (
+      <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+        No jobs yet — <MuiLink component={Link} to="/jobs/new">create one</MuiLink> to start labeling this bundle.
+      </Typography>
+    );
+  }
+
+  return (
+    <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap', alignItems: 'center' }} useFlexGap>
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        {jobs.length === 1 ? '1 job:' : `${jobs.length} jobs:`}
+      </Typography>
+      {jobs.map((job) => (
+        <Chip
+          key={job._id}
+          size="small"
+          variant="outlined"
+          clickable
+          component={Link}
+          to={`/jobs/${job._id}`}
+          label={`${job.name} · ${job.status}`}
+        />
+      ))}
+    </Stack>
+  );
+};
+
+const BundleCard: React.FC<{ bundle: LabelBundle; jobs: LabelJob[]; onChanged: () => void }> = ({
+  bundle,
+  jobs,
+  onChanged
+}) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { state, start, startFromUpload, confirm, cancel } = useBundleUpload(bundle._id, onChanged);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -155,6 +196,8 @@ const BundleCard: React.FC<{ bundle: LabelBundle; onChanged: () => void }> = ({ 
           {bundle.annotationSets.length > 0 && <> · sets: {bundle.annotationSets.join(', ')}</>}
           {bundle.manifest && <> · manifest ({bundle.manifest.length} rows)</>}
         </Typography>
+
+        <BundleJobs jobs={jobs} />
 
         {state.phase === 'uploading' && (
           <Box sx={{ mt: 1.5 }}>
@@ -284,6 +327,9 @@ const BundlesPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { data: bundles, isLoading } = useQuery({ queryKey: ['bundles'], queryFn: listBundles });
   const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups });
+  // Admin role: a bundle's jobs include drafts and paused ones, which the worker
+  // list omits — and those are exactly the ones you come here to find again.
+  const { data: jobs } = useQuery({ queryKey: ['jobs', 'admin'], queryFn: () => listJobs('admin') });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -291,6 +337,15 @@ const BundlesPage: React.FC = () => {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const adminGroups = (groups || []).filter((group) => group.role === 'owner' || group.role === 'admin');
+  const jobsByBundle = useMemo(() => {
+    const byBundle = new Map<string, LabelJob[]>();
+    for (const job of jobs || []) {
+      if (job.bundleId) {
+        byBundle.set(job.bundleId, [...(byBundle.get(job.bundleId) || []), job]);
+      }
+    }
+    return byBundle;
+  }, [jobs]);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['bundles'] });
 
   const create = useMutation({
@@ -334,7 +389,12 @@ const BundlesPage: React.FC = () => {
       )}
 
       {(bundles || []).map((bundle) => (
-        <BundleCard key={bundle._id} bundle={bundle} onChanged={refresh} />
+        <BundleCard
+          key={bundle._id}
+          bundle={bundle}
+          jobs={jobsByBundle.get(bundle._id) || []}
+          onChanged={refresh}
+        />
       ))}
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">

@@ -10,6 +10,7 @@ vi.mock('../services/bundleService', () => ({
 }));
 vi.mock('../services/jobService', () => ({
   getMyGroups: vi.fn(),
+  listJobs: vi.fn(),
 }));
 
 const uploadStart = vi.fn();
@@ -29,7 +30,7 @@ vi.mock('../hooks/useBundleUpload', () => ({
 }));
 
 import { createBundle, deleteBundle, listBundles, listUploads, updateBundle } from '../services/bundleService';
-import { getMyGroups } from '../services/jobService';
+import { getMyGroups, listJobs } from '../services/jobService';
 import BundlesPage from './BundlesPage';
 import { renderWithProviders } from '../test/renderWithProviders';
 
@@ -39,6 +40,7 @@ const mockedUpdate = updateBundle as ReturnType<typeof vi.fn>;
 const mockedUploads = listUploads as ReturnType<typeof vi.fn>;
 const mockedDelete = deleteBundle as ReturnType<typeof vi.fn>;
 const mockedGroups = getMyGroups as ReturnType<typeof vi.fn>;
+const mockedJobs = listJobs as ReturnType<typeof vi.fn>;
 
 const bundle = (overrides: Record<string, unknown> = {}) => ({
   _id: 'b1',
@@ -56,6 +58,7 @@ beforeEach(() => {
   uploadState = { ...idleState };
   mockedList.mockResolvedValue([bundle()]);
   mockedUploads.mockResolvedValue([]);
+  mockedJobs.mockResolvedValue([]);
   mockedGroups.mockResolvedValue([
     { groupId: 'g1', name: 'Team', role: 'admin' },
     { groupId: 'g2', name: 'Other', role: 'member' },
@@ -70,6 +73,31 @@ describe('BundlesPage', () => {
     expect(screen.getByText(/100 frames · 200 annotation images/)).toBeInTheDocument();
     expect(screen.getByText(/sets: llava/)).toBeInTheDocument();
     expect(screen.getByText(/manifest \(1 rows\)/)).toBeInTheDocument();
+  });
+
+  // One bundle backs several differently-scoped jobs, so "which jobs draw from
+  // this?" is the question you have while looking at it.
+  it('links each bundle to the jobs built on it', async () => {
+    mockedJobs.mockResolvedValue([
+      { _id: 'j1', name: 'Triage llava', bundleId: 'b1', status: 'active' },
+      { _id: 'j2', name: 'Discovery', bundleId: 'b1', status: 'draft' },
+      { _id: 'j3', name: 'Elsewhere', bundleId: 'other', status: 'active' },
+    ]);
+    renderWithProviders(<BundlesPage />);
+
+    expect(await screen.findByText('2 jobs:')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Triage llava · active' })).toHaveAttribute('href', '/jobs/j1');
+    // Drafts are the ones you come back here to find, so the admin list is used.
+    expect(screen.getByRole('link', { name: 'Discovery · draft' })).toHaveAttribute('href', '/jobs/j2');
+    expect(screen.queryByText(/Elsewhere/)).not.toBeInTheDocument();
+    expect(mockedJobs).toHaveBeenCalledWith('admin');
+  });
+
+  it('points an unused bundle at the job wizard', async () => {
+    renderWithProviders(<BundlesPage />);
+
+    expect(await screen.findByText(/No jobs yet/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'create one' })).toHaveAttribute('href', '/jobs/new');
   });
 
   it('creates a bundle in an admin group', async () => {

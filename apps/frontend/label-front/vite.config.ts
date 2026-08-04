@@ -33,10 +33,10 @@ export default defineConfig(() => ({
       // Floor set just below current coverage so CI catches regressions;
       // ratchet these up as more tests are added.
       thresholds: {
-        statements: 94,
-        branches: 84,
+        statements: 95,
+        branches: 87,
         functions: 90,
-        lines: 96,
+        lines: 97,
       },
     },
   },

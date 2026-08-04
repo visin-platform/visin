@@ -104,6 +104,46 @@ describe('nextTask', () => {
   });
 });
 
+describe('getTaskItem', () => {
+  it('serves a named task with signed images and the frame stem', async () => {
+    mockedTask.findById.mockResolvedValue(maskTask());
+    mockedImage.find.mockResolvedValue([
+      { _id: 'img-frame', fileId: 'f-frame', width: 100, height: 50, stem: 'frame_000012' },
+      { _id: 'img-layer', fileId: 'f-layer' },
+      { _id: 'img-idmap', fileId: 'f-idmap' },
+    ]);
+    mockedFiles.getDownloadUrl.mockImplementation(async (fileId: string) => ({ url: `signed:${fileId}` }));
+
+    const result = await svc.getTaskItem('t1');
+
+    expect(result.images.frame).toEqual({ url: 'signed:f-frame', width: 100, height: 50, stem: 'frame_000012' });
+    expect(result.images.idmap).toEqual({ url: 'signed:f-idmap' });
+  });
+
+  // A shared link is a look at a frame, not a claim on it — leasing here would
+  // take the task out of the queue for whoever was about to be handed it.
+  it('takes no lease', async () => {
+    mockedTask.findById.mockResolvedValue(maskTask());
+    mockedImage.find.mockResolvedValue([
+      { _id: 'img-frame', fileId: 'f' },
+      { _id: 'img-layer', fileId: 'f' },
+      { _id: 'img-idmap', fileId: 'f' },
+    ]);
+    mockedFiles.getDownloadUrl.mockResolvedValue({ url: 'signed' });
+
+    await svc.getTaskItem('t1');
+
+    expect(mockedTask.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(mockedTask.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('404s on a link to a task that no longer exists', async () => {
+    mockedTask.findById.mockResolvedValue(null);
+
+    await expect(svc.getTaskItem('gone')).rejects.toThrow(NotFoundError);
+  });
+});
+
 describe('getTaskWithJob', () => {
   it('throws NotFound for missing task or job', async () => {
     mockedTask.findById.mockResolvedValue(null);

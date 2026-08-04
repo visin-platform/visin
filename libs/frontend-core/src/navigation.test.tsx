@@ -8,7 +8,7 @@ describe('createVisinNavItems', () => {
 
     // Labeling's own sections stay in Labeling's sidebar, and vice versa.
     expect(fromVision.map(item => item.text)).toEqual(['Projects', 'Trainings', 'Datasets', 'Labeling']);
-    expect(fromLabel.map(item => item.text)).toEqual(['Jobs', 'New job', 'Bundles', 'Vision']);
+    expect(fromLabel.map(item => item.text)).toEqual(['Jobs', 'Bundles', 'Vision']);
   });
 
   it('keeps the current app sections as internal routes', () => {
@@ -50,11 +50,7 @@ describe('createVisinNavItems', () => {
       'Trainings',
       'Datasets'
     ]);
-    expect(createVisinNavItems('label', {}).map(item => item.text)).toEqual([
-      'Jobs',
-      'New job',
-      'Bundles'
-    ]);
+    expect(createVisinNavItems('label', {}).map(item => item.text)).toEqual(['Jobs', 'Bundles']);
   });
 
   it('ignores the current app own URL', () => {

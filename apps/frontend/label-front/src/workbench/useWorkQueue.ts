@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnswerBody, WorkItem } from '../types';
-import { nextTask, submitAnswer, undoAnswer } from '../services/jobService';
+import { getTask, nextTask, submitAnswer, undoAnswer } from '../services/jobService';
 import { preloadImages } from './idmapLoader';
 
 export interface WorkQueue {
@@ -23,8 +23,13 @@ const imageUrls = (item: WorkItem): string[] => [
  * The labeling loop: keeps the current task plus one prefetched task (both
  * leased to this user; leases are per-user so holding two is fine), advances
  * on answer, and supports undo of the last submitted answer.
+ *
+ * `startTaskId` opens a named task first — a link someone shared to ask about a
+ * particular frame. It is fetched rather than pulled, so it lands even if the
+ * queue would never have handed it to this user (already answered by them, or
+ * leased to someone else); answering it then falls back into the normal pull.
  */
-export const useWorkQueue = (jobId: string): WorkQueue => {
+export const useWorkQueue = (jobId: string, startTaskId?: string | null): WorkQueue => {
   const [current, setCurrent] = useState<WorkItem | null>(null);
   const [status, setStatus] = useState<WorkQueue['status']>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -57,11 +62,14 @@ export const useWorkQueue = (jobId: string): WorkQueue => {
 
     (async () => {
       try {
-        const first = await pull();
+        const first = startTaskId ? await getTask(startTaskId) : await pull();
         if (cancelled) return;
         if (!first) {
           setStatus('done');
           return;
+        }
+        if (startTaskId) {
+          preloadImages(imageUrls(first));
         }
         setCurrent(first);
         setStatus('working');
@@ -77,7 +85,7 @@ export const useWorkQueue = (jobId: string): WorkQueue => {
     return () => {
       cancelled = true;
     };
-  }, [jobId, pull]);
+  }, [jobId, startTaskId, pull]);
 
   const answer = useCallback(
     async (body: AnswerBody) => {

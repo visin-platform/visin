@@ -50,15 +50,21 @@ export const maskIdAtPoint = (
 
 /**
  * RGBA highlight overlay: rejected masks tinted red, the focused mask outlined
- * amber (drawn as a translucent fill — cheap and visible at any zoom), and
- * anything outside the task's mask scope greyed back so the labeler can see at a
- * glance which regions this job is asking about.
+ * amber (drawn as a translucent fill — cheap and visible at any zoom), the mask
+ * under the cursor lit white, and anything outside the task's mask scope greyed
+ * back so the labeler can see at a glance which regions this job is asking about.
+ *
+ * The hover tint is what makes a click land where the labeler intends: masks are
+ * often small, adjacent or nested, and a cursor alone does not say which one the
+ * pixel under it belongs to. Callers repaint only when the hovered id *changes*,
+ * not on every pointer move — this walks every pixel.
  */
 export const buildHighlightOverlay = (
   index: MaskIndex,
   rejected: ReadonlySet<number>,
   focusedMaskId: number | null,
-  scope?: ReadonlySet<number> | null
+  scope?: ReadonlySet<number> | null,
+  hoveredMaskId?: number | null
 ): Uint8ClampedArray<ArrayBuffer> => {
   const out = new Uint8ClampedArray(index.width * index.height * 4);
   for (let i = 0; i < index.maskIdAt.length; i++) {
@@ -75,11 +81,19 @@ export const buildHighlightOverlay = (
       out[offset + 1] = 32;
       out[offset + 2] = 32;
       out[offset + 3] = 140;
+      if (id === hoveredMaskId) {
+        out[offset + 3] = 190; // deepen, so un-marking is as targetable as marking
+      }
     } else if (id === focusedMaskId) {
       out[offset] = 255; // amber fill for the mask-walk focus
       out[offset + 1] = 193;
       out[offset + 2] = 7;
-      out[offset + 3] = 90;
+      out[offset + 3] = id === hoveredMaskId ? 140 : 90;
+    } else if (id === hoveredMaskId) {
+      out[offset] = 255; // white wash: "this is the mask you are about to click"
+      out[offset + 1] = 255;
+      out[offset + 2] = 255;
+      out[offset + 3] = 80;
     }
   }
   return out;

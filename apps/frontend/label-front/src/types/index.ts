@@ -37,7 +37,7 @@ export interface LabelJob {
   createdBy: { userId: string; email: string; name?: string };
   createdAt: string;
   updatedAt: string;
-  progress?: JobProgress; // present on the detail endpoint
+  progress?: JobProgress; // present on the list and detail endpoints
 }
 
 export interface LabelBundle {
@@ -118,7 +118,7 @@ export interface LabelTask {
 }
 
 export interface TaskImages {
-  frame: { url: string; width?: number; height?: number };
+  frame: { url: string; width?: number; height?: number; stem?: string };
   layers: { set: string; url: string }[];
   idmap?: { url: string };
 }

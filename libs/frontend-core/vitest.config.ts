@@ -16,7 +16,7 @@ export default defineConfig({
       // ratchet these up as more tests are added.
       thresholds: {
         statements: 98,
-        branches: 85,
+        branches: 89,
         functions: 94,
         lines: 98,
       },

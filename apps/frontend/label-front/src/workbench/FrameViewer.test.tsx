@@ -101,6 +101,40 @@ describe('FrameViewer', () => {
     expect(props.onToggleMask).not.toHaveBeenCalled();
   });
 
+  // Masks go down to a few pixels, so "which one am I about to click" has to be
+  // answered before the click, not after it.
+  it('lights the mask under the cursor and clears it on leave', () => {
+    render(<FrameViewer {...baseProps()} />);
+    const viewer = screen.getByTestId('frame-viewer');
+    const repaints = putImageData.mock.calls.length;
+
+    fireEvent.pointerMove(viewer, { clientX: 1.5, clientY: 0.5, pointerId: 1 });
+    expect(putImageData.mock.calls.length).toBeGreaterThan(repaints);
+
+    // Same mask under the cursor — no state change, so no repaint.
+    const afterHover = putImageData.mock.calls.length;
+    fireEvent.pointerMove(viewer, { clientX: 1.9, clientY: 0.9, pointerId: 1 });
+    expect(putImageData.mock.calls.length).toBe(afterHover);
+
+    fireEvent.pointerLeave(viewer);
+    expect(putImageData.mock.calls.length).toBeGreaterThan(afterHover);
+  });
+
+  it('uses a crosshair while picking masks and a hand while panning', () => {
+    const props = baseProps();
+    const { rerender } = render(<FrameViewer {...props} />);
+    const viewer = screen.getByTestId('frame-viewer');
+    expect(getComputedStyle(viewer).cursor).toBe('crosshair');
+
+    fireEvent.pointerDown(viewer, { clientX: 0, clientY: 0, pointerId: 1 });
+    expect(getComputedStyle(viewer).cursor).toBe('grabbing');
+    fireEvent.pointerUp(viewer, { clientX: 0, clientY: 0, pointerId: 1 });
+
+    // A job with nothing to click is pan-only, so the hand stays.
+    rerender(<FrameViewer {...props} onToggleMask={undefined} />);
+    expect(getComputedStyle(screen.getByTestId('frame-viewer')).cursor).toBe('grab');
+  });
+
   it('fits the viewport on first layout when none is set', () => {
     const props = baseProps();
     props.viewport = null;

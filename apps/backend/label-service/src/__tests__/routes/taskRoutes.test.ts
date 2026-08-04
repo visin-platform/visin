@@ -16,10 +16,11 @@ const find = (method: string, path: string) =>
   routes.find((r) => r.path === path && r.methods.includes(method));
 
 describe('taskRoutes', () => {
-  it('registers answer submit + undo', () => {
+  it('registers task fetch, answer submit + undo', () => {
+    expect(find('get', '/:id')).toBeDefined();
     expect(find('post', '/:id/answer')).toBeDefined();
     expect(find('delete', '/:id/answer')).toBeDefined();
-    expect(routes).toHaveLength(2);
+    expect(routes).toHaveLength(3);
   });
 
   it('validates the answer body', () => {

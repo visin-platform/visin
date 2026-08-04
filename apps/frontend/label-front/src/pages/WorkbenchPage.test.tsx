@@ -22,7 +22,7 @@ const queueState: {
   undoLast: vi.fn(),
 };
 vi.mock('../workbench/useWorkQueue', () => ({
-  useWorkQueue: () => queueState,
+  useWorkQueue: vi.fn(() => queueState),
 }));
 vi.mock('../workbench/idmapLoader', () => ({
   loadMaskIndex: vi.fn(),
@@ -36,6 +36,7 @@ vi.mock('../workbench/FrameViewer', () => ({
 }));
 
 import { getJob } from '../services/jobService';
+import { useWorkQueue } from '../workbench/useWorkQueue';
 import { loadMaskIndex } from '../workbench/idmapLoader';
 import WorkbenchPage from './WorkbenchPage';
 import { renderWithProviders } from '../test/renderWithProviders';
@@ -68,7 +69,7 @@ const workItem = {
     },
   },
   images: {
-    frame: { url: 'frame.png', width: 100, height: 100 },
+    frame: { url: 'frame.png', width: 100, height: 100, stem: 'frame_000012' },
     layers: [{ set: 'llava', url: 'layer.png' }],
     idmap: { url: 'idmap.png' },
   },
@@ -203,6 +204,25 @@ describe('WorkbenchPage controls', () => {
     await waitFor(() =>
       expect(queueState.answer).toHaveBeenCalledWith(expect.objectContaining({ rejectedMaskIds: [2] }))
     );
+  });
+
+  // A labeler with a question needs to hand someone the exact frame they are on.
+  it('names the frame and copies a link to it', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    renderPage();
+
+    fireEvent.click(await screen.findByText('frame_000012'));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('/jobs/j1/work?task=t1')));
+    expect(await screen.findByLabelText('Link copied')).toBeInTheDocument();
+  });
+
+  it('opens the task named in the URL instead of pulling the next one', async () => {
+    renderWithProviders(<WorkbenchPage />, { route: '/jobs/j1/work?task=t9', path: '/jobs/:id/work' });
+
+    expect(await screen.findByText('Mask check')).toBeInTheDocument();
+    expect(useWorkQueue).toHaveBeenCalledWith('j1', 't9');
   });
 
   it('surfaces id map load failures', async () => {

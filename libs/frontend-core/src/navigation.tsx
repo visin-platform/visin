@@ -1,13 +1,4 @@
-import {
-  Folder,
-  ModelTraining,
-  Storage,
-  Assignment,
-  AddBox,
-  Inventory2,
-  Image,
-  Visibility
-} from '@mui/icons-material';
+import { Folder, ModelTraining, Storage, Assignment, Inventory2, Image, Visibility } from '@mui/icons-material';
 import type { AppLayoutNavItem } from './components/AppLayout';
 
 /** The fronts that share a navigation menu. */
@@ -38,9 +29,11 @@ const APP_SECTIONS: Record<VisinApp, NavSection[]> = {
     { text: 'Trainings', icon: <ModelTraining />, path: '/trainings' },
     { text: 'Datasets', icon: <Storage />, path: '/datasets' }
   ],
+  // "New job" is deliberately not here: it is an action on the Jobs list, not a
+  // section of the app, and a nav entry for it made the menu read as three
+  // destinations when there are two.
   label: [
     { text: 'Jobs', icon: <Assignment />, path: '/jobs' },
-    { text: 'New job', icon: <AddBox />, path: '/jobs/new' },
     { text: 'Bundles', icon: <Inventory2 />, path: '/bundles' }
   ]
 };

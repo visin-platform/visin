@@ -15,6 +15,13 @@ export const nextTask = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: next }); // null → nothing left for this user
 };
 
+/** Open one task by id — the target of a copied workbench link. */
+export const getTask = async (req: Request, res: Response): Promise<void> => {
+  const { job } = await tasks.getTaskWithJob(req.params.id as string);
+  await assertMember(req, job.groupId);
+  res.json({ success: true, data: await tasks.getTaskItem(req.params.id as string) });
+};
+
 export const submitAnswer = async (req: Request, res: Response): Promise<void> => {
   const user = requireUser(req);
   const { task, job } = await tasks.getTaskWithJob(req.params.id as string);

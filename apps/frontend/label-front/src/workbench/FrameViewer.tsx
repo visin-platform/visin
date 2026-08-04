@@ -40,6 +40,8 @@ const FrameViewer: React.FC<FrameViewerProps> = ({
   const highlightRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ startX: number; startY: number; lastX: number; lastY: number; moved: number } | null>(null);
   const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
+  const [hoveredMaskId, setHoveredMaskId] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   const imageWidth = images.frame.width || maskIndex?.width || 1;
   const imageHeight = images.frame.height || maskIndex?.height || 1;
@@ -61,15 +63,17 @@ const FrameViewer: React.FC<FrameViewerProps> = ({
     }
   }, [viewport, containerSize, imageWidth, imageHeight, onViewportChange]);
 
-  // Redraw the highlight overlay whenever the selection or focus changes.
+  // Redraw the highlight overlay whenever the selection, focus or hover changes.
+  // Hover is state rather than a ref precisely so this runs on a mask change and
+  // not on every pointer move — the rebuild walks every pixel of the id map.
   useEffect(() => {
     const canvas = highlightRef.current;
     if (!canvas || !maskIndex) return;
     const context = canvas.getContext('2d');
     if (!context) return;
-    const overlay = buildHighlightOverlay(maskIndex, rejected, focusedMaskId, maskScope);
+    const overlay = buildHighlightOverlay(maskIndex, rejected, focusedMaskId, maskScope, hoveredMaskId);
     context.putImageData(new ImageData(overlay, maskIndex.width, maskIndex.height), 0, 0);
-  }, [maskIndex, rejected, focusedMaskId, maskScope]);
+  }, [maskIndex, rejected, focusedMaskId, maskScope, hoveredMaskId]);
 
   const handleWheel = useCallback(
     (event: React.WheelEvent) => {
@@ -83,13 +87,26 @@ const FrameViewer: React.FC<FrameViewerProps> = ({
 
   const handlePointerDown = useCallback((event: React.PointerEvent) => {
     (event.target as Element).setPointerCapture?.(event.pointerId);
+    setDragging(true);
     dragRef.current = { startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: 0 };
   }, []);
 
   const handlePointerMove = useCallback(
     (event: React.PointerEvent) => {
+      if (!viewport) return;
       const drag = dragRef.current;
-      if (!drag || !viewport) return;
+
+      if (!drag) {
+        // Not dragging: track which mask is under the cursor so the labeler can
+        // see the click target before committing to it. React bails out when the
+        // id is unchanged, so this only repaints on crossing a mask boundary.
+        if (!maskIndex || !onToggleMask) return;
+        const bounds = containerRef.current!.getBoundingClientRect();
+        const point = toImagePoint(viewport, event.clientX - bounds.left, event.clientY - bounds.top);
+        setHoveredMaskId(maskIdAtPoint(maskIndex, point.x, point.y, maskScope));
+        return;
+      }
+
       const dx = event.clientX - drag.lastX;
       const dy = event.clientY - drag.lastY;
       drag.lastX = event.clientX;
@@ -99,13 +116,14 @@ const FrameViewer: React.FC<FrameViewerProps> = ({
         onViewportChange(panBy(viewport, dx, dy));
       }
     },
-    [viewport, onViewportChange]
+    [viewport, onViewportChange, maskIndex, maskScope, onToggleMask]
   );
 
   const handlePointerUp = useCallback(
     (event: React.PointerEvent) => {
       const drag = dragRef.current;
       dragRef.current = null;
+      setDragging(false);
       if (!drag || drag.moved > DRAG_CLICK_THRESHOLD_PX) return; // it was a pan
       if (!viewport || !maskIndex || !onToggleMask) return;
       const bounds = containerRef.current!.getBoundingClientRect();
@@ -130,13 +148,17 @@ const FrameViewer: React.FC<FrameViewerProps> = ({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerLeave={() => setHoveredMaskId(null)}
       sx={{
         position: 'relative',
         overflow: 'hidden',
         width: '100%',
         height: '100%',
         bgcolor: '#0b0f19',
-        cursor: 'grab',
+        // A grab hand hides the pixel it is over, which is the one being judged:
+        // masks here go down to a few pixels. Crosshair while picking, hand only
+        // while actually panning.
+        cursor: dragging ? 'grabbing' : onToggleMask ? 'crosshair' : 'grab',
         touchAction: 'none',
         userSelect: 'none'
       }}

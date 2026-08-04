@@ -10,7 +10,9 @@ import { AnswerBody } from '../validation/taskSchemas';
 const LEASE_MINUTES = Number(process.env.TASK_LEASE_MINUTES || 5);
 
 export interface TaskImages {
-  frame: { url: string; width?: number; height?: number };
+  // `stem` is the frame's filename in the bundle — the name a labeler quotes
+  // when asking a question about what they are looking at.
+  frame: { url: string; width?: number; height?: number; stem?: string };
   layers: { set: string; url: string }[];
   idmap?: { url: string };
 }
@@ -34,7 +36,12 @@ const buildTaskImages = async (task: ILabelTask): Promise<TaskImages> => {
 
   const frame = byId.get(task.labelImageId.toString());
   return {
-    frame: { url: await signFor(task.labelImageId), width: frame?.width, height: frame?.height },
+    frame: {
+      url: await signFor(task.labelImageId),
+      width: frame?.width,
+      height: frame?.height,
+      stem: frame?.stem
+    },
     layers: await Promise.all(
       (task.payload?.layers || []).map(async (layer) => ({ set: layer.set, url: await signFor(layer.imageId) }))
     ),
@@ -70,6 +77,21 @@ export const nextTask = async (
 
   if (!task) {
     return null;
+  }
+  return { task, images: await buildTaskImages(task) };
+};
+
+/**
+ * One named task, images and all — what a shared workbench URL resolves to.
+ *
+ * Deliberately does not take a lease: opening someone else's link is a look at
+ * a specific frame, not a claim on it, and leasing here would pull the task out
+ * of the queue for whoever was about to be handed it.
+ */
+export const getTaskItem = async (taskId: string): Promise<{ task: ILabelTask; images: TaskImages }> => {
+  const task = await LabelTask.findById(taskId);
+  if (!task) {
+    throw new NotFoundError('Task not found');
   }
   return { task, images: await buildTaskImages(task) };
 };

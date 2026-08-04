@@ -5,10 +5,10 @@ jest.mock('../../models/LabelBundle', () => ({
   LabelBundle: { findById: jest.fn() },
 }));
 jest.mock('../../models/LabelTask', () => ({
-  LabelTask: { countDocuments: jest.fn(), deleteMany: jest.fn() },
+  LabelTask: { countDocuments: jest.fn(), deleteMany: jest.fn(), aggregate: jest.fn() },
 }));
 jest.mock('../../models/LabelAnswer', () => ({
-  LabelAnswer: { countDocuments: jest.fn(), deleteMany: jest.fn() },
+  LabelAnswer: { countDocuments: jest.fn(), deleteMany: jest.fn(), aggregate: jest.fn() },
 }));
 jest.mock('../../clients/groupServiceClient', () => ({
   getMyGroups: jest.fn(),
@@ -68,12 +68,17 @@ describe('listJobsForUser', () => {
     { groupId: 'g2', role: 'member' },
   ];
 
+  beforeEach(() => {
+    mockedTask.aggregate.mockResolvedValue([]);
+    mockedAnswer.aggregate.mockResolvedValue([]);
+  });
+
   it('worker: active jobs across all my groups', async () => {
     mockedGroups.getMyGroups.mockResolvedValue(myGroups);
     const sort = jest.fn().mockResolvedValue([]);
     mockedJob.find.mockReturnValue({ sort });
 
-    await svc.listJobsForUser('user@x.com', 'worker');
+    await svc.listJobsForUser('user@x.com', 'worker', 'u1');
 
     expect(mockedJob.find).toHaveBeenCalledWith({ groupId: { $in: ['g1', 'g2'] }, status: 'active' });
   });
@@ -83,22 +88,58 @@ describe('listJobsForUser', () => {
     const sort = jest.fn().mockResolvedValue([]);
     mockedJob.find.mockReturnValue({ sort });
 
-    await svc.listJobsForUser('user@x.com', 'admin');
+    await svc.listJobsForUser('user@x.com', 'admin', 'u1');
 
     expect(mockedJob.find).toHaveBeenCalledWith({ groupId: { $in: ['g1'] } });
   });
+
+  it('attaches each job its own progress', async () => {
+    mockedGroups.getMyGroups.mockResolvedValue(myGroups);
+    const jobs = [
+      { _id: 'j1', redundancy: 1, toObject: () => ({ _id: 'j1', name: 'A' }) },
+      { _id: 'j2', redundancy: 1, toObject: () => ({ _id: 'j2', name: 'B' }) },
+    ];
+    mockedJob.find.mockReturnValue({ sort: jest.fn().mockResolvedValue(jobs) });
+    mockedTask.aggregate.mockResolvedValue([
+      { _id: { jobId: 'j1', answersCount: 0 }, count: 3 },
+      { _id: { jobId: 'j1', answersCount: 1 }, count: 7 },
+      { _id: { jobId: 'j2', answersCount: 2 }, count: 5 },
+    ]);
+    mockedAnswer.aggregate.mockResolvedValue([{ _id: 'j1', answers: 7, myAnswers: 2 }]);
+
+    const listed = await svc.listJobsForUser('user@x.com', 'worker', 'u1');
+
+    expect(listed[0]).toEqual({ _id: 'j1', name: 'A', progress: { tasks: 10, completed: 7, answers: 7, myAnswers: 2 } });
+    // A job with no answers still gets a zeroed progress rather than none.
+    expect(listed[1].progress).toEqual({ tasks: 5, completed: 5, answers: 0, myAnswers: 0 });
+  });
 });
 
-describe('getJobProgress', () => {
-  it('counts tasks, completion, and per-user answers', async () => {
-    mockedTask.countDocuments.mockResolvedValueOnce(10).mockResolvedValueOnce(4);
-    mockedAnswer.countDocuments.mockResolvedValueOnce(13).mockResolvedValueOnce(6);
+describe('progress', () => {
+  it('counts a task as done only once it reaches the job redundancy', async () => {
+    mockedTask.aggregate.mockResolvedValue([
+      { _id: { jobId: 'j1', answersCount: 1 }, count: 6 }, // answered once — not done at K=2
+      { _id: { jobId: 'j1', answersCount: 2 }, count: 4 },
+    ]);
+    mockedAnswer.aggregate.mockResolvedValue([{ _id: 'j1', answers: 14, myAnswers: 6 }]);
     const job = { _id: 'j1', redundancy: 2 } as never;
 
-    const progress = await svc.getJobProgress(job, 'u1');
+    expect(await svc.getJobProgress(job, 'u1')).toEqual({ tasks: 10, completed: 4, answers: 14, myAnswers: 6 });
+  });
 
-    expect(progress).toEqual({ tasks: 10, completed: 4, answers: 13, myAnswers: 6 });
-    expect(mockedTask.countDocuments).toHaveBeenCalledWith({ jobId: 'j1', answersCount: { $gte: 2 } });
+  it('does not query at all for an empty job list', async () => {
+    expect(await svc.progressForJobs([], 'u1')).toEqual(new Map());
+    expect(mockedTask.aggregate).not.toHaveBeenCalled();
+    expect(mockedAnswer.aggregate).not.toHaveBeenCalled();
+  });
+
+  it('ignores rows for jobs outside the requested set', async () => {
+    mockedTask.aggregate.mockResolvedValue([{ _id: { jobId: 'other', answersCount: 1 }, count: 9 }]);
+    mockedAnswer.aggregate.mockResolvedValue([{ _id: 'other', answers: 9, myAnswers: 9 }]);
+
+    const progress = await svc.progressForJobs([{ _id: 'j1', redundancy: 1 } as never], 'u1');
+
+    expect(progress.get('j1')).toEqual({ tasks: 0, completed: 0, answers: 0, myAnswers: 0 });
   });
 });
 
