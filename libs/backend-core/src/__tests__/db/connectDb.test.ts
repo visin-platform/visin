@@ -123,4 +123,50 @@ describe('connectDb', () => {
     const events = mongooseMock.connection.on.mock.calls.map((call) => call[0]);
     expect(events).toEqual(expect.arrayContaining(['error', 'disconnected', 'reconnected']));
   });
+
+  /**
+   * The listeners only report state — the driver handles the reconnect itself —
+   * so what matters is that a drop is audible at all, tagged with the service
+   * that dropped it. Without these the only symptom is the health endpoint
+   * flipping to "disconnected" with nothing in the log to explain it.
+   */
+  describe('connection listeners', () => {
+    function connectAndGetHandlers(serviceName: string) {
+      const { connectDb, mongooseMock, loggerMock } = loadFresh();
+      return connectDb({ uri: 'mongodb://host/db', serviceName }).then(() => {
+        const handlers = Object.fromEntries(mongooseMock.connection.on.mock.calls) as Record<
+          string,
+          (arg?: unknown) => void
+        >;
+        return { handlers, loggerMock };
+      });
+    }
+
+    it('logs the service name and message on a connection error', async () => {
+      const { handlers, loggerMock } = await connectAndGetHandlers('auth-service');
+
+      handlers.error(new Error('socket hang up'));
+
+      expect(loggerMock.error).toHaveBeenCalledWith('[auth-service] MongoDB connection error', {
+        error: 'socket hang up'
+      });
+    });
+
+    it('warns rather than errors on a disconnect, since the driver retries', async () => {
+      const { handlers, loggerMock } = await connectAndGetHandlers('vision-service');
+
+      handlers.disconnected();
+
+      expect(loggerMock.warn).toHaveBeenCalledWith('[vision-service] MongoDB disconnected');
+      expect(loggerMock.error).not.toHaveBeenCalled();
+    });
+
+    it('logs a reconnect', async () => {
+      const { handlers, loggerMock } = await connectAndGetHandlers('label-service');
+
+      handlers.reconnected();
+
+      expect(loggerMock.info).toHaveBeenCalledWith('[label-service] MongoDB reconnected');
+    });
+  });
 });
