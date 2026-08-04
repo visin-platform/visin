@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@visin/backend-core": "0.1.17",
+    "@visin/backend-core": "0.1.18",
     "express": "^5.2.1"
   },
   "devDependencies": {
