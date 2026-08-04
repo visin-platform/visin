@@ -1,4 +1,12 @@
 # Visin Changelog
+### [0.0.150](https://github.com/visin-platform/visin-monorepo/compare/v0.0.149...v0.0.150) (2026-08-03)
+
+
+### Features
+
+* add chunking to file upload ([35f2552](https://github.com/visin-platform/visin-monorepo/commit/35f25523fe23aa46b3622befca27463a9afec565))
+* setup github self hosted runners ([fe66f9e](https://github.com/visin-platform/visin-monorepo/commit/fe66f9eb1fd7743de28c1f9baee08726988ced96))
+
 ### [0.0.149](https://github.com/visin-platform/visin-monorepo/compare/v0.0.148...v0.0.149) (2026-08-03)
 
 
