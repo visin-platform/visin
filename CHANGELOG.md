@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.153](https://github.com/visin-platform/visin-monorepo/compare/v0.0.152...v0.0.153) (2026-08-04)
+
+
+### Features
+
+* improve export for labeling ([d47679e](https://github.com/visin-platform/visin-monorepo/commit/d47679e51bf02b5ee223f8ce3afdf19d03385b8c))
+
 ### [0.0.152](https://github.com/visin-platform/visin-monorepo/compare/v0.0.151...v0.0.152) (2026-08-04)
 
 
