@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.154](https://github.com/visin-platform/visin-monorepo/compare/v0.0.153...v0.0.154) (2026-08-04)
+
+
+### Features
+
+* improve labeling ux ([2e8b628](https://github.com/visin-platform/visin-monorepo/commit/2e8b62889b87855a9bfff45d22bb3fd836168c3d))
+
 ### [0.0.153](https://github.com/visin-platform/visin-monorepo/compare/v0.0.152...v0.0.153) (2026-08-04)
 
 
