@@ -150,6 +150,14 @@ const JobDetailPage: React.FC = () => {
               <Button variant="text" onClick={() => downloadExport(jobId, 'csv').catch((err) => setActionError(err.message))}>
                 Export CSV
               </Button>
+              {/* Sampling spec, redundancy and per-value inclusion counts — what
+                  a rate measured on this job needs to scale back to the bundle. */}
+              <Button
+                variant="text"
+                onClick={() => downloadExport(jobId, 'manifest').catch((err) => setActionError(err.message))}
+              >
+                Export manifest
+              </Button>
               <Button variant="text" color="error" disabled={remove.isPending} onClick={confirmDelete}>
                 Delete
               </Button>

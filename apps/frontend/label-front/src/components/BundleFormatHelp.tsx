@@ -154,6 +154,14 @@ const BundleFormatHelp: React.FC = () => (
             per line. Bare basenames and full bundle paths both work.
           </Rule>
           <Rule>
+            <strong>Mask metadata is yours, and it comes back.</strong> Beyond <Code>id</Code> and{' '}
+            <Code>class</Code>, put anything scalar in <Code>.masks.json</Code> — which pipeline run produced a
+            mask, what an automated agent decided about it, which stratum it belongs to. Low-cardinality fields
+            become <em>Group by</em> options when scoping a job, and every field comes back out in the export as a{' '}
+            <Code>mask_&lt;field&gt;</Code> column, so a verdict can be joined to its provenance without keeping
+            the original zip alongside.
+          </Rule>
+          <Rule>
             <strong>Re-uploading is additive.</strong> Paths already imported are skipped, so a second zip adds new
             frames or a new annotation set without duplicating anything. Imported images are never overwritten —
             ship corrected annotations under a <em>new</em> set name (<Code>llava_34b_v2</Code>) so answers already

@@ -84,6 +84,9 @@ describe('JobDetailPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
     expect(mockedExport).toHaveBeenCalledWith('j1', 'csv');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export manifest' }));
+    expect(mockedExport).toHaveBeenCalledWith('j1', 'manifest');
   });
 
   it('lets an admin activate a draft and surfaces transition errors', async () => {

@@ -64,8 +64,17 @@ export const undoAnswer = async (taskId: string): Promise<void> => {
 export const getJobStats = async (jobId: string): Promise<JobStats> =>
   (await labelApi.get<ApiResponse<JobStats>>(`/jobs/${jobId}/stats`)).data;
 
+export type ExportFormat = 'jsonl' | 'csv' | 'manifest';
+
+/** The manifest is a JSON document, not a row format, so it downloads as .json. */
+const EXPORT_EXTENSIONS: Record<ExportFormat, string> = {
+  jsonl: 'jsonl',
+  csv: 'csv',
+  manifest: 'manifest.json'
+};
+
 /** Fetch an export and hand it to the browser as a download. */
-export const downloadExport = async (jobId: string, format: 'jsonl' | 'csv'): Promise<void> => {
+export const downloadExport = async (jobId: string, format: ExportFormat): Promise<void> => {
   const base = getGlobalConfig().LABEL_SERVICE_URL || '';
   const response = await fetch(`${base}/api/jobs/${jobId}/export?format=${format}`, {
     credentials: 'include'
@@ -77,7 +86,7 @@ export const downloadExport = async (jobId: string, format: 'jsonl' | 'csv'): Pr
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `job-${jobId}.${format}`;
+  anchor.download = `job-${jobId}.${EXPORT_EXTENSIONS[format]}`;
   anchor.click();
   URL.revokeObjectURL(url);
 };

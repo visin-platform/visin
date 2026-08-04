@@ -104,6 +104,22 @@ describe('downloadExport', () => {
     vi.unstubAllGlobals();
   });
 
+  it('downloads the manifest as .manifest.json rather than .manifest', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['{}']) }));
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
+    const names: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      names.push(this.download);
+    });
+
+    await downloadExport('j1', 'manifest');
+
+    expect(names).toEqual(['job-j1.manifest.json']);
+
+    click.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
   it('throws on a failed export', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 }));
 

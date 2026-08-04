@@ -7,16 +7,26 @@ jest.mock('../../models/LabelAnswer', () => ({
 jest.mock('../../models/LabelImage', () => ({
   LabelImage: { find: jest.fn() },
 }));
+jest.mock('../../models/LabelBundle', () => ({
+  LabelBundle: { findById: jest.fn() },
+}));
+jest.mock('../../services/bundleService', () => ({
+  maskFields: jest.fn(),
+}));
 
-import { exportRows, exportCsv, jobStats } from '../../services/exportService';
+import { exportRows, exportCsv, exportManifest, jobStats } from '../../services/exportService';
 import { LabelTask } from '../../models/LabelTask';
 import { LabelAnswer } from '../../models/LabelAnswer';
 import { LabelImage } from '../../models/LabelImage';
+import { LabelBundle } from '../../models/LabelBundle';
+import { maskFields } from '../../services/bundleService';
 import type { ILabelJob } from '../../models/LabelJob';
 
 const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
 const mockedAnswer = LabelAnswer as unknown as Record<string, jest.Mock>;
 const mockedImage = LabelImage as unknown as Record<string, jest.Mock>;
+const mockedBundle = LabelBundle as unknown as Record<string, jest.Mock>;
+const mockedMaskFields = maskFields as unknown as jest.Mock;
 
 const singleChoiceJob = { _id: 'j1', taskType: 'single_choice', redundancy: 2 } as unknown as ILabelJob;
 const maskJob = { _id: 'j1', taskType: 'mask_toggle', redundancy: 2 } as unknown as ILabelJob;
@@ -38,12 +48,19 @@ const answer = (taskId: string, userId: string, overrides: Record<string, unknow
 });
 
 const stubData = (tasks: unknown[], answers: unknown[], frames?: unknown[]) => {
-  mockedTask.find.mockReturnValue({ sort: jest.fn().mockResolvedValue(tasks) });
+  // A thenable that also has `.sort()`: loadJobData sorts, exportManifest awaits
+  // the projected query directly, and both go through this one mock.
+  mockedTask.find.mockReturnValue({
+    sort: jest.fn().mockResolvedValue(tasks),
+    then: (resolve: (value: unknown) => unknown) => resolve(tasks),
+  });
   mockedAnswer.find.mockResolvedValue(answers);
   mockedImage.find.mockResolvedValue(
     frames ?? (tasks as { _id: string }[]).map((t) => ({ _id: `img-${t._id}`, path: `frames/${t._id}.png` }))
   );
 };
+
+const csvRows = (csv: string) => csv.trim().split('\n');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -110,6 +127,32 @@ describe('exportRows mask_toggle', () => {
     });
     expect(rows[1]).toMatchObject({ maskId: 2, consensus: null }); // u1 incorrect vs u2 correct → tie
   });
+
+  it('nests the bundle mask metadata and stamps each verdict with its timing', async () => {
+    stubData(
+      [
+        task('t1', {
+          stratum: 'task-level',
+          payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'vehicle', stratum: 'both', kind: 'fringe' }] } },
+        }),
+      ],
+      [answer('t1', 'u1', { rejectedMaskIds: [1], elapsedMs: 12, createdAt: new Date('2026-08-04T10:00:00Z') })]
+    );
+
+    const [row] = await exportRows(maskJob);
+
+    expect(row.stratum).toBe('task-level');
+    expect(row.mask).toEqual({ id: 1, class: 'vehicle', stratum: 'both', kind: 'fringe' });
+    expect(row.verdicts).toEqual([
+      {
+        userEmail: 'u1@x.com',
+        userName: 'U1',
+        verdict: 'incorrect',
+        elapsedMs: 12,
+        answeredAt: '2026-08-04T10:00:00.000Z',
+      },
+    ]);
+  });
 });
 
 describe('exportCsv', () => {
@@ -119,25 +162,153 @@ describe('exportCsv', () => {
       [answer('t1', 'u1', { choiceKey: 'good', elapsedMs: 3 })]
     );
 
-    const csv = await exportCsv(singleChoiceJob);
+    expect(csvRows(await exportCsv(singleChoiceJob))).toEqual([
+      'taskId,frame,stratum,userEmail,choiceKey,elapsedMs,answeredAt,userName',
+      't1,frames/t1.png,"a,b",u1@x.com,good,3,,U1',
+    ]);
+  });
 
-    expect(csv).toBe(
-      'taskId,frame,stratum,userEmail,choiceKey,elapsedMs\n' + 't1,frames/t1.png,"a,b",u1@x.com,good,3\n'
-    );
+  it('keeps an unanswered single_choice task in the table', async () => {
+    stubData([task('t1'), task('t2')], [answer('t1', 'u1', { choiceKey: 'good' })]);
+
+    const rows = csvRows(await exportCsv(singleChoiceJob));
+
+    expect(rows).toHaveLength(3);
+    expect(rows[2]).toBe('t2,frames/t2.png,,,,,,');
   });
 
   it('emits one row per user-mask verdict for mask_toggle', async () => {
     stubData(
       [task('t1', { payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'vehicle' }] } } })],
+      [answer('t1', 'u1', { rejectedMaskIds: [1], elapsedMs: 40, createdAt: new Date('2026-08-04T10:00:00Z') })]
+    );
+
+    expect(csvRows(await exportCsv(maskJob))).toEqual([
+      'taskId,frame,stratum,maskId,class,userEmail,verdict,elapsedMs,answeredAt,userName',
+      't1,frames/t1.png,,1,vehicle,u1@x.com,incorrect,40,2026-08-04T10:00:00.000Z,U1',
+    ]);
+  });
+
+  it('carries every bundle mask field as a mask_ column without shadowing the task stratum', async () => {
+    stubData(
+      [
+        task('t1', {
+          stratum: 'task-level',
+          payload: {
+            maskMap: {
+              imageId: 'i',
+              // `stratum` here is the bundle's own mask field, a different thing
+              // from the task's; both have to survive the export.
+              masks: [{ id: 1, class: 'vehicle', stratum: 'both', triage_llava: 'accept', bbox: [1, 2, 3, 4] }],
+            },
+          },
+        }),
+      ],
+      [answer('t1', 'u1', { rejectedMaskIds: [] })]
+    );
+
+    const [header, row] = csvRows(await exportCsv(maskJob));
+
+    expect(header.split(',')).toEqual([
+      'taskId',
+      'frame',
+      'stratum',
+      'maskId',
+      'class',
+      'userEmail',
+      'verdict',
+      'elapsedMs',
+      'answeredAt',
+      'mask_bbox',
+      'mask_stratum',
+      'mask_triage_llava',
+      'userName',
+    ]);
+    expect(row).toContain('task-level'); // the task's stratum column
+    expect(row).toContain('"[1,2,3,4]"'); // bbox survives as JSON, not "1,2,3,4"
+    expect(row).toContain('both');
+    expect(row).toContain('accept');
+  });
+
+  it('emits a row for a task nobody has answered, so the denominator survives', async () => {
+    stubData(
+      [
+        task('t1', { payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'vehicle' }] } } }),
+        task('t2', { payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'sign' }] } } }),
+      ],
       [answer('t1', 'u1', { rejectedMaskIds: [1] })]
     );
 
-    const csv = await exportCsv(maskJob);
+    const rows = csvRows(await exportCsv(maskJob));
 
-    expect(csv.trim().split('\n')).toEqual([
-      'taskId,frame,stratum,maskId,class,userEmail,verdict',
-      't1,frames/t1.png,,1,vehicle,u1@x.com,incorrect',
+    expect(rows).toHaveLength(3); // header + one answered + one unanswered
+    expect(rows[2]).toBe('t2,frames/t2.png,,1,sign,,,,,');
+  });
+});
+
+describe('exportManifest', () => {
+  const bundledJob = {
+    _id: 'j1',
+    name: 'Verify',
+    taskType: 'mask_toggle',
+    redundancy: 2,
+    bundleId: 'b1',
+    annotationSets: ['verify'],
+    question: { prompt: 'Mark all incorrect masks' },
+    status: 'active',
+    tasksCount: 2,
+    selection: { kind: 'filter', spec: { sampleN: null, seed: 42, rows: 2 } },
+  } as unknown as ILabelJob;
+
+  it('pairs each value with what the bundle holds and what the job asks about', async () => {
+    stubData(
+      [
+        task('t1', {
+          answersCount: 1,
+          payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'vehicle', stratum: 'both' }] } },
+        }),
+        task('t2', {
+          payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'sign', stratum: 'neither' }] } },
+        }),
+      ],
+      [answer('t1', 'u1', { rejectedMaskIds: [] })]
+    );
+    mockedBundle.findById.mockResolvedValue({ _id: 'b1', name: 'corpus', annotationSets: ['verify'], counts: { frames: 9, layers: 9 } });
+    mockedMaskFields.mockResolvedValue([
+      {
+        field: 'stratum',
+        values: [
+          { value: 'both', count: 100 },
+          { value: 'neither', count: 40 },
+          { value: 'llava_only', count: 7 },
+        ],
+      },
     ]);
+
+    const manifest = await exportManifest(bundledJob);
+
+    expect(manifest.masks?.stratum).toEqual({
+      both: { bundle: 100, job: 1 },
+      neither: { bundle: 40, job: 1 },
+      // In the bundle, in no task — inclusion zero, which is the whole point of
+      // reporting the pair rather than either number alone.
+      llava_only: { bundle: 7, job: 0 },
+    });
+    expect(manifest.selection).toEqual({ kind: 'filter', spec: { sampleN: null, seed: 42, rows: 2 } });
+    expect(manifest.progress).toEqual({ tasks: 2, completed: 0, answers: 1 });
+    expect(manifest.bundle).toMatchObject({ id: 'b1', name: 'corpus' });
+    expect(manifest.job).toMatchObject({ redundancy: 2, tasksCount: 2, taskType: 'mask_toggle' });
+  });
+
+  it('omits inclusion counts for a single_choice job, which has no masks to weight', async () => {
+    stubData([task('t1')], []);
+    mockedBundle.findById.mockResolvedValue(null);
+
+    const manifest = await exportManifest({ ...bundledJob, taskType: 'single_choice' } as unknown as ILabelJob);
+
+    expect(manifest.masks).toBeUndefined();
+    expect(mockedMaskFields).not.toHaveBeenCalled();
+    expect(manifest.bundle).toBeNull();
   });
 });
 

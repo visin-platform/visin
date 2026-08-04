@@ -66,6 +66,17 @@ export const exportJob = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
+  // How the rows came to be, rather than the rows themselves: sampling spec,
+  // redundancy, and per-value inclusion counts, so a rate measured on this job
+  // scales back to the bundle without the analyst reconstructing the scoping.
+  if (req.query.format === 'manifest') {
+    const manifest = await exportSvc.exportManifest(job);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="job-${job._id}.manifest.json"`);
+    res.send(JSON.stringify(manifest, null, 2));
+    return;
+  }
+
   const rows = await exportSvc.exportRows(job);
   res.setHeader('Content-Type', 'application/x-ndjson');
   res.setHeader('Content-Disposition', `attachment; filename="job-${job._id}.jsonl"`);

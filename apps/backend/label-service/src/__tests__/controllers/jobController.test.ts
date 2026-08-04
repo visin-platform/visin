@@ -13,6 +13,7 @@ jest.mock('../../services/materializationService', () => ({
 jest.mock('../../services/exportService', () => ({
   exportRows: jest.fn(),
   exportCsv: jest.fn(),
+  exportManifest: jest.fn(),
   jobStats: jest.fn(),
 }));
 jest.mock('../../services/groupAccessService', () => ({
@@ -154,6 +155,21 @@ describe('exportJob', () => {
 
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
     expect(res.send).toHaveBeenCalledWith('h\nrow\n');
+    expect(mockedExport.exportRows).not.toHaveBeenCalled();
+  });
+
+  it('serves the manifest as pretty JSON under its own filename', async () => {
+    mockedExport.exportManifest.mockResolvedValue({ job: { id: 'j1' } });
+    const res = makeRes();
+
+    await ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'manifest' } }), res);
+
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      'attachment; filename="job-j1.manifest.json"'
+    );
+    expect(res.send).toHaveBeenCalledWith(JSON.stringify({ job: { id: 'j1' } }, null, 2));
     expect(mockedExport.exportRows).not.toHaveBeenCalled();
   });
 });
