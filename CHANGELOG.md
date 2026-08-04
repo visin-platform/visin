@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.157](https://github.com/visin-platform/visin-monorepo/compare/v0.0.156...v0.0.157) (2026-08-04)
+
+
+### Bug Fixes
+
+* failing test ([c18be32](https://github.com/visin-platform/visin-monorepo/commit/c18be32db5516e7b8e3bf5d8e5f02a4aeed12598))
+
 ### [0.0.156](https://github.com/visin-platform/visin-monorepo/compare/v0.0.155...v0.0.156) (2026-08-04)
 
 
