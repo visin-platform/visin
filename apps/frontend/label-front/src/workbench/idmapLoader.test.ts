@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { loadMaskIndex, preloadImages } from './idmapLoader';
+import { loadLayerPixels, loadMaskIndex, preloadImages } from './idmapLoader';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -35,6 +35,30 @@ describe('loadMaskIndex', () => {
     vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 1, height: 1 }));
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
     await expect(loadMaskIndex('u')).rejects.toThrow('Canvas 2D not available');
+  });
+});
+
+describe('loadLayerPixels', () => {
+  it('returns the layer as raw RGBA, for cutting marked masks out of', async () => {
+    const rgba = new Uint8ClampedArray([255, 0, 0, 255, 0, 255, 0, 255]);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob() }));
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 2, height: 1 }));
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: vi.fn(),
+      getImageData: vi.fn(() => ({ data: rgba, width: 2, height: 1 })),
+    } as unknown as CanvasRenderingContext2D);
+
+    await expect(loadLayerPixels('http://signed/layer.png')).resolves.toEqual({
+      width: 2,
+      height: 1,
+      rgba,
+    });
+  });
+
+  it('names the layer in its error, so a failure is not mistaken for the id map', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+
+    await expect(loadLayerPixels('u')).rejects.toThrow('Failed to load annotation layer (404)');
   });
 });
 

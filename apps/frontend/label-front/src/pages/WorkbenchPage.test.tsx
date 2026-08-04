@@ -26,6 +26,7 @@ vi.mock('../workbench/useWorkQueue', () => ({
 }));
 vi.mock('../workbench/idmapLoader', () => ({
   loadMaskIndex: vi.fn(),
+  loadLayerPixels: vi.fn(() => Promise.resolve({ width: 2, height: 2, rgba: new Uint8ClampedArray(16) })),
 }));
 vi.mock('../workbench/FrameViewer', () => ({
   default: (props: { onToggleMask?: (id: number) => void }) => (
@@ -138,6 +139,28 @@ describe('WorkbenchPage', () => {
     await waitFor(() => expect(queueState.undoLast).toHaveBeenCalled());
   });
 
+  // Zooming into a mask and then wanting the whole frame back is the common
+  // move; f clears the framing so the viewer re-fits whatever it has room for.
+  it('re-fits the frame via the f key after a mask-walk zoom', async () => {
+    renderPage();
+    await screen.findByText('Mask check');
+
+    fireEvent.keyDown(window, { key: 'Tab' }); // zooms to the focused mask's bbox
+    fireEvent.keyDown(window, { key: 'f' });
+
+    expect(screen.getByTestId('viewer')).toBeInTheDocument();
+  });
+
+  // The frame gets whatever the shell leaves it, measured rather than assumed.
+  it('sizes itself to the space below the app chrome, and again on resize', async () => {
+    renderPage();
+    await screen.findByText('Mask check');
+
+    fireEvent(window, new Event('resize'));
+
+    expect(screen.getByTestId('viewer')).toBeInTheDocument();
+  });
+
   it('renders choice buttons and hotkeys for single_choice jobs', async () => {
     mockedGetJob.mockResolvedValue(
       maskJob({
@@ -184,7 +207,7 @@ describe('WorkbenchPage controls', () => {
     fireEvent.click(screen.getByText('fake-toggle-mask-1'));
     expect(screen.getByRole('button', { name: /Submit \(1 incorrect\)/ })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear marks' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show all again' }));
     expect(screen.getByRole('button', { name: /Submit \(0 incorrect\)/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'undo last answer' }));

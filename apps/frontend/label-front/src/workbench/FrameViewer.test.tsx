@@ -142,4 +142,46 @@ describe('FrameViewer', () => {
 
     expect(props.onViewportChange).toHaveBeenCalled(); // fit computed from container
   });
+
+  // Whoever framed the image last owns the framing: the viewer re-fits a window
+  // resize it fitted itself, and leaves a zoom the labeler chose alone.
+  it('re-fits after a resize, but never over a viewport the labeler set', () => {
+    const props = baseProps();
+    props.viewport = null;
+    const { rerender } = render(<FrameViewer {...props} />);
+
+    const fitted = (props.onViewportChange as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    (props.onViewportChange as ReturnType<typeof vi.fn>).mockClear();
+
+    // Same container size, viewport already fitted → nothing to do.
+    rerender(<FrameViewer {...props} viewport={fitted} />);
+    expect(props.onViewportChange).not.toHaveBeenCalled();
+
+    // A viewport the labeler zoomed to is not the fitted one, so it survives a
+    // re-render that would otherwise re-fit.
+    rerender(<FrameViewer {...props} viewport={{ scale: 9, offsetX: 3, offsetY: 4 }} />);
+    expect(props.onViewportChange).not.toHaveBeenCalled();
+  });
+
+  it('draws the mask layer through a canvas so marked masks can be cut out', () => {
+    const props = baseProps();
+    props.layerPixels = { width: 2, height: 2, rgba: new Uint8ClampedArray(16).fill(255) };
+    const { rerender } = render(<FrameViewer {...props} />);
+
+    // Layer 'a' owns the id map, so it becomes a canvas; 'b' stays an image.
+    expect(screen.getByTestId('layer-canvas')).toBeInTheDocument();
+    expect(screen.queryByAltText('layer a')).not.toBeInTheDocument();
+    expect(screen.getByAltText('layer b')).toBeInTheDocument();
+
+    const before = putImageData.mock.calls.length;
+    rerender(<FrameViewer {...props} rejected={new Set([1])} />);
+    expect(putImageData.mock.calls.length).toBeGreaterThan(before); // layer repainted
+  });
+
+  it('leaves the layer as a plain image when its pixels are unavailable', () => {
+    render(<FrameViewer {...baseProps()} layerPixels={null} />);
+
+    expect(screen.queryByTestId('layer-canvas')).not.toBeInTheDocument();
+    expect(screen.getByAltText('layer a')).toBeInTheDocument();
+  });
 });

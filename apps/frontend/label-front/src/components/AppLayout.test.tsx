@@ -72,6 +72,19 @@ describe('AppLayout', () => {
     expect(mockLogout).toHaveBeenCalledTimes(1);
   });
 
+  // The workbench is a viewer, not a document: the shell's title band and its
+  // reading-width cap both come out of the frame's space, which on that page is
+  // the whole point of the page.
+  it('drops the page header on the workbench and keeps it everywhere else', () => {
+    const { unmount } = renderAt('/jobs/j1/work');
+    expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
+    expect(screen.getByText('page content')).toBeInTheDocument();
+    unmount();
+
+    renderAt('/jobs/j1');
+    expect(screen.getByRole('heading', { level: 4 })).toBeInTheDocument();
+  });
+
   it('toggles the mobile drawer', () => {
     renderAt('/jobs');
 

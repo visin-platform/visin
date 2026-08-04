@@ -49,19 +49,24 @@ export const maskIdAtPoint = (
 };
 
 /**
- * RGBA highlight overlay: rejected masks tinted red, the focused mask outlined
- * amber (drawn as a translucent fill — cheap and visible at any zoom), the mask
- * under the cursor lit white, and anything outside the task's mask scope greyed
- * back so the labeler can see at a glance which regions this job is asking about.
+ * RGBA highlight overlay: the focused mask filled amber (cheap and visible at
+ * any zoom), the mask under the cursor lit white, and anything outside the
+ * task's mask scope greyed back so the labeler can see at a glance which regions
+ * this job is asking about.
+ *
+ * Marking a mask incorrect is *not* drawn here — `applyMaskCutout` removes that
+ * mask's paint instead, so the answer to "which ones did I mark" is the absence
+ * of colour rather than more of it.
  *
  * The hover tint is what makes a click land where the labeler intends: masks are
  * often small, adjacent or nested, and a cursor alone does not say which one the
- * pixel under it belongs to. Callers repaint only when the hovered id *changes*,
- * not on every pointer move — this walks every pixel.
+ * pixel under it belongs to. It applies to hidden masks too — a hidden mask is
+ * still a click target, and the wash is the only thing that says so. Callers
+ * repaint only when the hovered id *changes*, not on every pointer move — this
+ * walks every pixel.
  */
 export const buildHighlightOverlay = (
   index: MaskIndex,
-  rejected: ReadonlySet<number>,
   focusedMaskId: number | null,
   scope?: ReadonlySet<number> | null,
   hoveredMaskId?: number | null
@@ -76,14 +81,6 @@ export const buildHighlightOverlay = (
       out[offset + 1] = 22;
       out[offset + 2] = 30;
       out[offset + 3] = 165;
-    } else if (rejected.has(id)) {
-      out[offset] = 244; // red fill for "marked incorrect"
-      out[offset + 1] = 32;
-      out[offset + 2] = 32;
-      out[offset + 3] = 140;
-      if (id === hoveredMaskId) {
-        out[offset + 3] = 190; // deepen, so un-marking is as targetable as marking
-      }
     } else if (id === focusedMaskId) {
       out[offset] = 255; // amber fill for the mask-walk focus
       out[offset + 1] = 193;
@@ -94,6 +91,35 @@ export const buildHighlightOverlay = (
       out[offset + 1] = 255;
       out[offset + 2] = 255;
       out[offset + 3] = 80;
+    }
+  }
+  return out;
+};
+
+/**
+ * The annotation layer with `hidden` masks erased — a copy of its pixels with
+ * the alpha zeroed wherever the id map says a hidden mask is painted.
+ *
+ * This is what a click does. Tinting a mask to say "marked" covers the very
+ * pixels the labeler needs to look at to decide whether marking it was right,
+ * and on a frame with 40 overlapping regions a second colour on top of the class
+ * colours is one more thing to read. Taking the paint away instead leaves the
+ * image underneath visible, and the mask stays clickable through the id map, so
+ * clicking the same spot paints it back.
+ */
+export const applyMaskCutout = (
+  index: MaskIndex,
+  layer: Uint8ClampedArray,
+  hidden: ReadonlySet<number>
+): Uint8ClampedArray<ArrayBuffer> => {
+  const out = new Uint8ClampedArray(layer);
+  if (hidden.size === 0) {
+    return out;
+  }
+  for (let i = 0; i < index.maskIdAt.length; i++) {
+    const id = index.maskIdAt[i];
+    if (id >= 0 && hidden.has(id)) {
+      out[i * 4 + 3] = 0;
     }
   }
   return out;

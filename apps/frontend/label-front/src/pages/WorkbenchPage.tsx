@@ -20,10 +20,13 @@ import { ArrowBack, Undo, CheckCircleOutlined, LinkOutlined } from '@mui/icons-m
 import { Loader } from '@visin/frontend-core';
 import { getJob } from '../services/jobService';
 import { useWorkQueue } from '../workbench/useWorkQueue';
-import { loadMaskIndex } from '../workbench/idmapLoader';
+import { DecodedImage, loadLayerPixels, loadMaskIndex } from '../workbench/idmapLoader';
 import { MaskIndex } from '../workbench/maskIndex';
 import { Viewport, focusBbox } from '../workbench/viewport';
 import FrameViewer from '../workbench/FrameViewer';
+
+/** Gap left under the viewer so the page itself never scrolls. */
+const BOTTOM_GUTTER_PX = 8;
 
 const WorkbenchPage: React.FC = () => {
   const { id: jobId = '' } = useParams();
@@ -38,6 +41,7 @@ const WorkbenchPage: React.FC = () => {
   const [rejected, setRejected] = useState<Set<number>>(new Set());
   const [focusedIdx, setFocusedIdx] = useState<number | null>(null);
   const [maskIndex, setMaskIndex] = useState<MaskIndex | null>(null);
+  const [layerPixels, setLayerPixels] = useState<DecodedImage | null>(null);
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({});
   const [layerOpacity, setLayerOpacity] = useState(0.6);
@@ -45,6 +49,26 @@ const WorkbenchPage: React.FC = () => {
   const [linkCopied, setLinkCopied] = useState(false);
   const startedAtRef = useRef<number>(Date.now());
   const viewerBoxRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [availableHeight, setAvailableHeight] = useState<number | null>(null);
+
+  // Take whatever vertical space is actually left below the app chrome, rather
+  // than subtracting a guessed constant from 100vh. The shell's header and
+  // padding differ by breakpoint, and a guess that is too small leaves the frame
+  // in a short box with the rest of a tall screen unused.
+  useEffect(() => {
+    const measure = () => {
+      const element = rootRef.current;
+      if (!element) return;
+      const top = element.getBoundingClientRect().top;
+      const main = element.closest('main');
+      const padding = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+      setAvailableHeight(Math.max(480, window.innerHeight - top - padding - BOTTOM_GUTTER_PX));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 
   const currentItem = queue.current;
   const task = currentItem?.task ?? null;
@@ -54,12 +78,15 @@ const WorkbenchPage: React.FC = () => {
   const maskScope = useMemo(() => new Set(masks.map((mask) => mask.id)), [masks]);
   const isMaskToggle = job?.taskType === 'mask_toggle';
 
-  // Reset per-task state and load the id map when the task changes.
+  // Reset per-task state and decode the id map and layer when the task changes.
+  // Both are needed to hide a marked mask: the id map says which pixels are the
+  // mask, the layer supplies the pixels being erased.
   useEffect(() => {
     setRejected(new Set());
     setFocusedIdx(null);
     setViewport(null);
     setMaskIndex(null);
+    setLayerPixels(null);
     setActionError(null);
     startedAtRef.current = Date.now();
 
@@ -73,6 +100,17 @@ const WorkbenchPage: React.FC = () => {
       .catch((err) => {
         if (!cancelled) setActionError(`Id map failed to load: ${(err as Error).message}`);
       });
+
+    const layerUrl = currentItem?.images.layers[0]?.url;
+    if (layerUrl) {
+      loadLayerPixels(layerUrl)
+        .then((pixels) => {
+          if (!cancelled) setLayerPixels(pixels);
+        })
+        // Not fatal: the layer still renders as a plain image, marking still
+        // records, it just cannot be hidden. Better than blocking the frame.
+        .catch(() => undefined);
+    }
     return () => {
       cancelled = true;
     };
@@ -155,6 +193,14 @@ const WorkbenchPage: React.FC = () => {
         return;
       }
 
+      // Clearing the viewport re-fits: the viewer treats null as "no framing of
+      // mine yet" and fits the frame to whatever the container is now.
+      if (event.key === 'f') {
+        event.preventDefault();
+        setViewport(null);
+        return;
+      }
+
       if (isMaskToggle) {
         if (event.key === 'Tab') {
           event.preventDefault();
@@ -208,7 +254,15 @@ const WorkbenchPage: React.FC = () => {
   const myTotal = (job.progress?.myAnswers ?? 0) + queue.sessionAnswered;
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: 480 }}>
+    <Box
+      ref={rootRef}
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: availableHeight ?? 'calc(100vh - 120px)',
+        minHeight: 480
+      }}
+    >
       {/* Progress header */}
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
         <IconButton component={Link} to={`/jobs/${jobId}`} aria-label="back to job">
@@ -258,6 +312,7 @@ const WorkbenchPage: React.FC = () => {
           <FrameViewer
             images={queue.current.images}
             maskIndex={isMaskToggle ? maskIndex : null}
+            layerPixels={isMaskToggle ? layerPixels : null}
             maskScope={isMaskToggle ? maskScope : null}
             rejected={rejected}
             focusedMaskId={focusedIdx !== null ? masks[focusedIdx]?.id ?? null : null}
@@ -313,8 +368,11 @@ const WorkbenchPage: React.FC = () => {
           {isMaskToggle ? (
             <>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Click a mask to mark it incorrect ({rejected.size}/{masks.length} marked). Tab walks masks, Space
-                toggles, Enter submits.
+                Click a mask to mark it incorrect — its colour disappears so you can see the pixels underneath.
+                Click the same spot again to bring it back. {rejected.size}/{masks.length} marked.
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Tab walks masks, Space toggles, Enter submits, F fits the frame.
               </Typography>
               <Button
                 variant="contained"
@@ -324,7 +382,7 @@ const WorkbenchPage: React.FC = () => {
                 Submit ({rejected.size} incorrect)
               </Button>
               <Button variant="text" disabled={rejected.size === 0} onClick={() => setRejected(new Set())}>
-                Clear marks
+                Show all again
               </Button>
             </>
           ) : (
