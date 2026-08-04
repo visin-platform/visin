@@ -12,8 +12,6 @@ const app = createBaseApp({
   corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id']
 });
 
-connectDb({ serviceName: 'group-service' }).catch(err => logger.error('MongoDB connection error', { error: err.message }));
-
 // Health check endpoint
 app.get('/health', createHealthCheckHandler({
   serviceName: 'group-service',
@@ -31,4 +29,16 @@ app.use('/api/groups', groupRoutes);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5006;
-app.listen(PORT, () => logger.info('Group service started successfully', { port: PORT }));
+
+// Connect before binding the port: every route needs Mongo, so a service that
+// can't reach it has nothing to serve, and listening anyway would pass the
+// health check while failing every request. Exiting hands recovery to the
+// container restart policy.
+connectDb({ serviceName: 'group-service' })
+  .then(() => {
+    app.listen(PORT, () => logger.info('Group service started successfully', { port: PORT }));
+  })
+  .catch((err: Error) => {
+    logger.error('Failed to start group-service', { error: err.message, stack: err.stack });
+    process.exit(1);
+  });

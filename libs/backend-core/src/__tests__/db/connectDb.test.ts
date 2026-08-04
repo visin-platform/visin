@@ -77,80 +77,42 @@ describe('connectDb', () => {
     mongooseMock.connect.mockRejectedValueOnce(new Error('connection refused'));
 
     await expect(
-      connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service', maxAttempts: 1 })
+      connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service' })
     ).rejects.toThrow('connection refused');
 
     await connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service' });
     expect(mongooseMock.connect).toHaveBeenCalledTimes(2);
   });
 
-  it('retries a failing connection until it succeeds', async () => {
-    const { connectDb, mongooseMock, loggerMock } = loadFresh();
-    mongooseMock.connect
-      .mockRejectedValueOnce(new Error('getaddrinfo EAI_AGAIN'))
-      .mockRejectedValueOnce(new Error('getaddrinfo EAI_AGAIN'))
-      .mockResolvedValueOnce(undefined);
-
-    await connectDb({
-      uri: 'mongodb://host/db',
-      serviceName: 'group-service',
-      initialDelayMs: 0
-    });
-
-    expect(mongooseMock.connect).toHaveBeenCalledTimes(3);
-    expect(loggerMock.warn).toHaveBeenCalledTimes(2);
-    expect(loggerMock.info).toHaveBeenCalledWith('[group-service] MongoDB connected');
-  });
-
-  it('gives up after maxAttempts and rethrows the last error', async () => {
+  /**
+   * The driver retries internally for serverSelectionTimeoutMS, so anything that
+   * reaches us is a real fault: one failure is one rejection. Callers exit
+   * non-zero and the container restart policy takes it from there.
+   */
+  it('does not retry a failing connection', async () => {
     const { connectDb, mongooseMock, loggerMock } = loadFresh();
     mongooseMock.connect.mockRejectedValue(new Error('auth failed'));
 
     await expect(
-      connectDb({
-        uri: 'mongodb://host/db',
-        serviceName: 'label-service',
-        maxAttempts: 3,
-        initialDelayMs: 0
-      })
+      connectDb({ uri: 'mongodb://host/db', serviceName: 'label-service' })
     ).rejects.toThrow('auth failed');
 
-    expect(mongooseMock.connect).toHaveBeenCalledTimes(3);
+    expect(mongooseMock.connect).toHaveBeenCalledTimes(1);
     expect(loggerMock.error).toHaveBeenCalledWith(
-      '[label-service] MongoDB connection failed, giving up',
-      expect.objectContaining({ attempt: 3 })
+      '[label-service] MongoDB connection failed',
+      expect.objectContaining({ error: 'auth failed' })
     );
   });
 
-  it('caps the backoff delay at maxDelayMs', async () => {
-    const { connectDb, mongooseMock, loggerMock } = loadFresh();
-    mongooseMock.connect
-      .mockRejectedValueOnce(new Error('down'))
-      .mockRejectedValueOnce(new Error('down'))
-      .mockRejectedValueOnce(new Error('down'))
-      .mockResolvedValueOnce(undefined);
-
-    await connectDb({
-      uri: 'mongodb://host/db',
-      serviceName: 'vision-service',
-      initialDelayMs: 1,
-      maxDelayMs: 2
-    });
-
-    const delays = loggerMock.warn.mock.calls.map((call) => (call[1] as { delayMs: number }).delayMs);
-    expect(delays).toEqual([1, 2, 2]);
-  });
-
-  it('lets concurrent callers share one retry loop', async () => {
+  it('lets concurrent callers share one connection attempt', async () => {
     const { connectDb, mongooseMock } = loadFresh();
-    mongooseMock.connect.mockRejectedValueOnce(new Error('not ready')).mockResolvedValueOnce(undefined);
 
     await Promise.all([
-      connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service', initialDelayMs: 0 }),
-      connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service', initialDelayMs: 0 })
+      connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service' }),
+      connectDb({ uri: 'mongodb://host/db', serviceName: 'auth-service' })
     ]);
 
-    expect(mongooseMock.connect).toHaveBeenCalledTimes(2);
+    expect(mongooseMock.connect).toHaveBeenCalledTimes(1);
   });
 
   it('registers reconnection listeners once connected', async () => {

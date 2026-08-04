@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     image: toomastahves/vision-service:latest
     restart: unless-stopped
+    stop_grace_period: 15s
     ports:
       - "4010:4010"
     environment:

@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     image: toomastahves/auth-service:latest
     restart: unless-stopped
+    stop_grace_period: 15s
     ports:
       - '5001:5001'
     environment:

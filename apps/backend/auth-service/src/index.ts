@@ -57,17 +57,17 @@ app.get('/health', createHealthCheckHandler({
 // Must be mounted last, after all routes
 app.use(errorHandler);
 
-// Listen first, connect in the background: connectDb retries indefinitely, so
-// gating listen() on it meant a Mongo outage at boot left nothing bound to the
-// port at all — the proxy returned 502 with no way to see why. Serving /health
-// immediately reports "mongodb: disconnected" instead, and routes recover on
-// their own once the retry loop succeeds.
-app.listen(PORT, () => logger.info('Auth service started successfully', { port: PORT }));
-
-connectDb({ serviceName: 'auth-service' }).catch((err) => {
-  // Only non-retryable config errors (a missing MONGODB_URI) land here.
-  logger.error('Failed to start auth-service', { error: err.message, stack: err.stack });
-  process.exit(1);
-});
+// Connect before binding the port: every route needs Mongo, so a service that
+// can't reach it has nothing to serve, and listening anyway would pass the
+// health check while failing every request. Exiting hands recovery to the
+// container restart policy.
+connectDb({ serviceName: 'auth-service' })
+  .then(() => {
+    app.listen(PORT, () => logger.info('Auth service started successfully', { port: PORT }));
+  })
+  .catch((err: Error) => {
+    logger.error('Failed to start auth-service', { error: err.message, stack: err.stack });
+    process.exit(1);
+  });
 
 export default app;

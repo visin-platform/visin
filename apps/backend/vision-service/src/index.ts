@@ -20,12 +20,6 @@ import { apiTokenMiddleware } from './middleware/apiTokenMiddleware';
 // dataset-image/visualization storage call.
 assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'FILE_SERVICE_API_KEY']);
 
-// Connect to MongoDB
-connectDb({ serviceName: 'vision-service' }).catch((err) => {
-  logger.error('MongoDB connection error', { error: err.message });
-  process.exit(1);
-});
-
 const PORT = process.env.PORT || 4010;
 
 const app = createBaseApp({
@@ -69,7 +63,17 @@ app.get('/health', createHealthCheckHandler({ serviceName: 'vision-service' }));
 // Must be mounted last, after all routes
 app.use(errorHandler);
 
-// Start the server
-app.listen(PORT, () => logger.info(`Vision service started successfully on port ${PORT}`));
+// Connect before binding the port: every route needs Mongo, so a service that
+// can't reach it has nothing to serve, and listening anyway would pass the
+// health check while failing every request. Exiting hands recovery to the
+// container restart policy.
+connectDb({ serviceName: 'vision-service' })
+  .then(() => {
+    app.listen(PORT, () => logger.info(`Vision service started successfully on port ${PORT}`));
+  })
+  .catch((err: Error) => {
+    logger.error('Failed to start vision-service', { error: err.message, stack: err.stack });
+    process.exit(1);
+  });
 
 export default app;

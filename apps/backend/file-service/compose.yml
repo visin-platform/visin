@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     image: toomastahves/file-service:latest
     restart: unless-stopped
+    stop_grace_period: 15s
     ports:
       - '5002:5002'
     environment:
