@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.152](https://github.com/visin-platform/visin-monorepo/compare/v0.0.151...v0.0.152) (2026-08-04)
+
+
+### Features
+
+* release libraries ([62edb57](https://github.com/visin-platform/visin-monorepo/commit/62edb57edaf724225cc60ae7109f6a686efa9206))
+
 ### [0.0.151](https://github.com/visin-platform/visin-monorepo/compare/v0.0.150...v0.0.151) (2026-08-04)
 
 
