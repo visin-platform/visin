@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.156](https://github.com/visin-platform/visin-monorepo/compare/v0.0.155...v0.0.156) (2026-08-04)
+
+
+### Bug Fixes
+
+* db connection retries ([faf1ae4](https://github.com/visin-platform/visin-monorepo/commit/faf1ae40a15620b48b3305dc8687805050637459))
+
 ### [0.0.155](https://github.com/visin-platform/visin-monorepo/compare/v0.0.154...v0.0.155) (2026-08-04)
 
 
