@@ -1,0 +1,12 @@
+# https://visin.eu/robots.txt
+#
+# Without this file nginx's SPA fallback answered /robots.txt with index.html,
+# so crawlers fetched a full HTML document where a plain-text policy was
+# expected. Cloudflare prepends its own managed directives to this response;
+# those allow search crawlers and only block AI-training bots, so the two are
+# compatible.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://visin.eu/sitemap.xml

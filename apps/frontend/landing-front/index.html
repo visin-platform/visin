@@ -6,24 +6,52 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-  
+
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" href="/favicon.svg" />
-  
+
+    <!-- Search -->
+    <title>Visin — the workbench for your computer vision work</title>
     <meta
       name="description"
-      content="Visin is an open-source, self-hosted workbench for computer vision: datasets, collaborative labeling, training runs, and side-by-side benchmark comparisons you can export to LaTeX."
+      content="Open-source, self-hosted platform for computer vision research: datasets, collaborative labeling, training runs, and side-by-side benchmark comparisons you can export to LaTeX or CSV."
     />
+    <link rel="canonical" href="https://visin.eu/" />
     <meta name="theme-color" content="#111827" />
+    <meta name="color-scheme" content="light" />
 
+    <!-- Open Graph: what a shared link looks like in Slack, Discord, LinkedIn -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Visin" />
+    <meta property="og:url" content="https://visin.eu/" />
+    <meta property="og:locale" content="en" />
     <meta property="og:title" content="Visin — the workbench for your computer vision work" />
     <meta
       property="og:description"
       content="Datasets, labeling jobs, training runs, and benchmarks in one place. Open source, MIT licensed, self-hosted."
     />
+    <meta property="og:image" content="https://visin.eu/og-image.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Visin — datasets, labeling jobs, training runs and benchmarks in one place"
+    />
+
+    <!-- Twitter/X -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Visin — the workbench for your computer vision work" />
+    <meta
+      name="twitter:description"
+      content="Datasets, labeling jobs, training runs, and benchmarks in one place. Open source, MIT licensed, self-hosted."
+    />
+    <meta name="twitter:image" content="https://visin.eu/og-image.jpg" />
+    <meta
+      name="twitter:image:alt"
+      content="Visin — datasets, labeling jobs, training runs and benchmarks in one place"
+    />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -31,10 +59,44 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     />
-    <title>Visin</title>
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      The landing page renders client-side, so the initial HTML body is
+      otherwise empty. Googlebot executes JS and sees the real page, but
+      crawlers and link-preview bots that don't execute JS need something to read. Kept
+      outside #root so React never has to clear it and users never see a flash.
+      Copy mirrors src/content.ts — keep the two in step.
+    -->
+    <noscript>
+      <h1>Visin — the workbench for your computer vision work</h1>
+      <p>
+        Visin keeps datasets, labeling jobs, training runs, and benchmarks in one place, so
+        comparing two experiments takes a click instead of an afternoon of spreadsheets. Open
+        source, MIT licensed, and run on your own machines.
+      </p>
+      <h2>How it works</h2>
+      <ol>
+        <li><strong>Organise</strong> — group images into datasets and projects with categories and per-image metadata.</li>
+        <li><strong>Label</strong> — bundle images into labeling jobs and split the work across your team.</li>
+        <li><strong>Train and record</strong> — push runs, per-epoch metrics and configs from your own scripts via a project-scoped API token.</li>
+        <li><strong>Compare and publish</strong> — put runs, datasets and benchmarks side by side, then export as LaTeX or CSV.</li>
+      </ol>
+      <h2>Features</h2>
+      <ul>
+        <li>Datasets and projects, public or private to your group</li>
+        <li>Collaborative labeling with per-worker progress</li>
+        <li>Training runs with per-epoch metrics and visualisations</li>
+        <li>Comparisons and benchmarks, exportable to LaTeX or CSV</li>
+        <li>Groups and roles: owner, admin, member</li>
+        <li>Project-scoped API tokens for training loops and CI</li>
+      </ul>
+      <p>
+        No model zoo, no AutoML, no hosted GPUs — Visin handles the bookkeeping around your
+        experiments so your training code stays yours. JavaScript is required to use the app.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
