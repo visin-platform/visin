@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.159](https://github.com/visin-platform/visin-monorepo/compare/v0.0.158...v0.0.159) (2026-08-12)
+
+
+### Features
+
+* make labeling tool public ([0ef805a](https://github.com/visin-platform/visin-monorepo/commit/0ef805a89441ccd943e18a6debb8d822bda1809e))
+
 ### [0.0.158](https://github.com/visin-platform/visin-monorepo/compare/v0.0.157...v0.0.158) (2026-08-08)
 
 
