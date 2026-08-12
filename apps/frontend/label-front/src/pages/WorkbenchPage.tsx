@@ -16,8 +16,18 @@ import {
   Tooltip,
   Typography
 } from '@mui/material';
-import { ArrowBack, Undo, CheckCircleOutlined, LinkOutlined } from '@mui/icons-material';
+import {
+  ArrowBack,
+  Undo,
+  CheckCircleOutlined,
+  LinkOutlined,
+  NavigateBefore,
+  NavigateNext,
+  PlaylistPlay,
+  Login
+} from '@mui/icons-material';
 import { Loader } from '@visin/frontend-core';
+import { useAuth } from '../contexts/AuthContext';
 import { getJob } from '../services/jobService';
 import { useWorkQueue } from '../workbench/useWorkQueue';
 import { DecodedImage, loadLayerPixels, loadMaskIndex } from '../workbench/idmapLoader';
@@ -32,11 +42,25 @@ const WorkbenchPage: React.FC = () => {
   const { id: jobId = '' } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const { isAuthenticated, isLoading: authLoading, login } = useAuth();
   const { data: job } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
   // Read once: the param is rewritten as the labeler advances, and re-reading it
   // would restart the queue on every frame.
   const [startTaskId] = useState(() => searchParams.get('task'));
-  const queue = useWorkQueue(jobId, startTaskId);
+  // Read once for the same reason: the queue must not restart when the flag is
+  // dropped from the URL on the first frame change.
+  const [startBrowsing] = useState(() => searchParams.get('browse') === '1');
+  // Pulling takes a lease, which needs a signed-in labeler and a job that is
+  // actually taking answers; anyone else opens straight into browse mode.
+  const canPull = isAuthenticated && job?.status === 'active';
+  // A completed job stopped handing out work, but its answers stay correctable.
+  const canLabel = isAuthenticated && (job?.status === 'active' || job?.status === 'completed');
+  const queue = useWorkQueue(jobId, {
+    startTaskId,
+    canPull,
+    startBrowsing,
+    enabled: Boolean(job) && !authLoading
+  });
 
   const [rejected, setRejected] = useState<Set<number>>(new Set());
   const [focusedIdx, setFocusedIdx] = useState<number | null>(null);
@@ -78,19 +102,46 @@ const WorkbenchPage: React.FC = () => {
   const maskScope = useMemo(() => new Set(masks.map((mask) => mask.id)), [masks]);
   const isMaskToggle = job?.taskType === 'mask_toggle';
 
-  // Reset per-task state and decode the id map and layer when the task changes.
-  // Both are needed to hide a marked mask: the id map says which pixels are the
-  // mask, the layer supplies the pixels being erased.
+  // A frame that was already labeled opens showing what was decided, not a
+  // blank slate: your own verdict when you have one, otherwise the most recent
+  // one from anyone, so stepping back to a frame shows the masks as they were
+  // left and marking one more is an edit rather than a re-do from scratch.
+  const savedRejected = currentItem?.answer.mine?.rejectedMaskIds ?? null;
+  const existingChoiceKey = currentItem?.answer.mine?.choiceKey ?? currentItem?.answer.latest?.choiceKey ?? null;
+  const answeredByMe = Boolean(currentItem?.answer.mine);
+  const answeredByAnyone = (currentItem?.answer.count ?? 0) > 0;
+  // Whether what is on screen still differs from what is stored — what turns the
+  // submit button from "Save changes" into an already-saved, inert one.
+  const dirty =
+    !answeredByMe ||
+    rejected.size !== (savedRejected?.length ?? 0) ||
+    (savedRejected ?? []).some((id) => !rejected.has(id));
+
+  // Seed the marks from whatever verdict the frame already carries, and reset
+  // the rest of the per-frame state. Keyed on the task rather than the item, so
+  // saving an answer — which rewrites the item in place — does not wipe the
+  // marks the labeler is still working on.
+  const taskId = currentItem?.task._id ?? null;
+  const initialRejected = currentItem?.answer.mine?.rejectedMaskIds ?? currentItem?.answer.latest?.rejectedMaskIds;
   useEffect(() => {
-    setRejected(new Set());
+    setRejected(new Set(initialRejected ?? []));
     setFocusedIdx(null);
     setViewport(null);
-    setMaskIndex(null);
-    setLayerPixels(null);
     setActionError(null);
     startedAtRef.current = Date.now();
+    // `initialRejected` is a property of the task being opened, read once here
+    // rather than tracked — re-running on it would undo the labeler's edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]);
 
-    const idmapUrl = currentItem?.images.idmap?.url;
+  // Decode the id map and layer for the frame. Both are needed to hide a marked
+  // mask: the id map says which pixels are the mask, the layer supplies the
+  // pixels being erased. Keyed on the URLs, which change only with the frame.
+  const idmapUrl = currentItem?.images.idmap?.url;
+  const layerUrl = currentItem?.images.layers[0]?.url;
+  useEffect(() => {
+    setMaskIndex(null);
+    setLayerPixels(null);
     if (!idmapUrl) return;
     let cancelled = false;
     loadMaskIndex(idmapUrl)
@@ -101,7 +152,6 @@ const WorkbenchPage: React.FC = () => {
         if (!cancelled) setActionError(`Id map failed to load: ${(err as Error).message}`);
       });
 
-    const layerUrl = currentItem?.images.layers[0]?.url;
     if (layerUrl) {
       loadLayerPixels(layerUrl)
         .then((pixels) => {
@@ -114,7 +164,7 @@ const WorkbenchPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentItem]);
+  }, [idmapUrl, layerUrl]);
 
   // Keep the current frame in the URL, so a labeler with a question can copy the
   // address bar and have it open on the same frame for whoever they ask.
@@ -160,12 +210,24 @@ const WorkbenchPage: React.FC = () => {
   const submit = useCallback(
     async (body: { choiceKey?: string; rejectedMaskIds?: number[] }) => {
       try {
+        setActionError(null);
         await queue.answer({ ...body, elapsedMs: Date.now() - startedAtRef.current });
       } catch (err) {
         setActionError((err as Error).message);
       }
     },
     [queue]
+  );
+
+  const position = currentItem?.position ?? null;
+  const step = useCallback(
+    (delta: number) => {
+      if (!position) return;
+      const target = position.index + delta;
+      if (target < 0 || target >= position.total) return;
+      queue.goTo(target).catch((err) => setActionError((err as Error).message));
+    },
+    [position, queue]
   );
 
   const walkTo = useCallback(
@@ -182,10 +244,17 @@ const WorkbenchPage: React.FC = () => {
     [masks]
   );
 
-  // Keyboard: mask-walk (Tab/Space/Enter), choice hotkeys, undo.
+  // Keyboard: frame stepping (arrows), mask-walk (Tab/Space/Enter), choice
+  // hotkeys, undo.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!task || (event.target as HTMLElement)?.tagName === 'INPUT') return;
+
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        step(event.key === 'ArrowLeft' ? -1 : 1);
+        return;
+      }
 
       if (event.key === 'u' && queue.canUndo) {
         event.preventDefault();
@@ -200,6 +269,8 @@ const WorkbenchPage: React.FC = () => {
         setViewport(null);
         return;
       }
+
+      if (!canLabel) return;
 
       if (isMaskToggle) {
         if (event.key === 'Tab') {
@@ -223,7 +294,7 @@ const WorkbenchPage: React.FC = () => {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [task, isMaskToggle, focusedIdx, masks, rejected, job, queue, submit, toggleMask, walkTo]);
+  }, [task, isMaskToggle, canLabel, focusedIdx, masks, rejected, job, queue, step, submit, toggleMask, walkTo]);
 
   if (!job || queue.status === 'loading') {
     return <Loader message="Loading workbench..." />;
@@ -234,18 +305,35 @@ const WorkbenchPage: React.FC = () => {
   }
 
   if (queue.status === 'done' || !queue.current) {
+    const hasFrames = (job.tasksCount || 0) > 0;
     return (
       <Box sx={{ textAlign: 'center', py: 8 }}>
         <CheckCircleOutlined sx={{ fontSize: 56, color: 'success.main' }} />
         <Typography variant="h5" sx={{ fontWeight: 700, mt: 1 }}>
-          All done
+          {hasFrames ? 'All done' : 'No frames yet'}
         </Typography>
         <Typography sx={{ color: 'text.secondary', mb: 3 }}>
-          No tasks left for you in this job. You answered {queue.sessionAnswered} this session.
+          {hasFrames
+            ? `No tasks left for you in this job. You answered ${queue.sessionAnswered} this session.`
+            : 'This job has no frames materialized yet.'}
         </Typography>
-        <Button component={Link} to={`/jobs/${jobId}`} variant="contained">
-          Back to job
-        </Button>
+        <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
+          {/* The queue being empty doesn't mean there's nothing to look at: the
+              frames are all still there, already labeled, and reviewing them is
+              exactly what someone does next. */}
+          {hasFrames && (
+            <Button
+              variant="outlined"
+              startIcon={<NavigateBefore />}
+              onClick={() => queue.goTo(0).catch((err) => setActionError((err as Error).message))}
+            >
+              Review labeled frames
+            </Button>
+          )}
+          <Button component={Link} to={`/jobs/${jobId}`} variant="contained">
+            Back to job
+          </Button>
+        </Stack>
       </Box>
     );
   }
@@ -284,10 +372,56 @@ const WorkbenchPage: React.FC = () => {
             />
           </Tooltip>
         )}
+        {/* Stepping through the job's frames in order — the way back to a frame
+            that was labeled earlier, and forward again afterwards. */}
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+          <Tooltip title="Previous frame (←)">
+            <span>
+              <IconButton
+                aria-label="previous frame"
+                size="small"
+                disabled={queue.navigating || position === null || position.index === 0}
+                onClick={() => step(-1)}
+              >
+                <NavigateBefore />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 92, textAlign: 'center' }}>
+            {position ? `${position.index + 1} / ${position.total}` : '—'}
+          </Typography>
+          <Tooltip title="Next frame (→)">
+            <span>
+              <IconButton
+                aria-label="next frame"
+                size="small"
+                disabled={queue.navigating || position === null || position.index + 1 >= position.total}
+                onClick={() => step(1)}
+              >
+                <NavigateNext />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
+        <Chip
+          size="small"
+          variant={answeredByAnyone ? 'filled' : 'outlined'}
+          color={answeredByMe ? 'success' : answeredByAnyone ? 'info' : 'default'}
+          label={answeredByMe ? 'labeled by you' : answeredByAnyone ? `${queue.current.answer.count} labels` : 'unlabeled'}
+        />
+        {queue.browsing && canPull && (
+          <Tooltip title="Stop browsing and take the next unlabeled frame">
+            <span>
+              <IconButton aria-label="resume queue" size="small" disabled={queue.navigating} onClick={() => queue.resumeQueue().catch((err) => setActionError((err as Error).message))}>
+                <PlaylistPlay />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           {myTotal}/{progressTotal} · session {queue.sessionAnswered}
         </Typography>
-        <Tooltip title="Undo last answer (u)">
+        <Tooltip title={queue.browsing ? 'Remove your answer on this frame (u)' : 'Undo last answer (u)'}>
           <span>
             <IconButton
               aria-label="undo last answer"
@@ -365,6 +499,14 @@ const WorkbenchPage: React.FC = () => {
             </>
           )}
 
+          {/* A frame someone else already labeled opens with their verdict on
+              screen, so say whose it is — otherwise the marks read as your own. */}
+          {!answeredByMe && answeredByAnyone && (
+            <Alert severity="info" sx={{ py: 0.5 }}>
+              Showing an existing label for this frame.
+            </Alert>
+          )}
+
           {isMaskToggle ? (
             <>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -372,28 +514,55 @@ const WorkbenchPage: React.FC = () => {
                 Click the same spot again to bring it back. {rejected.size}/{masks.length} marked.
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                Tab walks masks, Space toggles, Enter submits, F fits the frame.
+                ← → step frames, Tab walks masks, Space toggles{canLabel ? ', Enter submits' : ''}, F fits the frame.
               </Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => submit({ rejectedMaskIds: [...rejected].sort((a, b) => a - b) })}
-              >
-                Submit ({rejected.size} incorrect)
-              </Button>
-              <Button variant="text" disabled={rejected.size === 0} onClick={() => setRejected(new Set())}>
-                Show all again
-              </Button>
+              {canLabel && (
+                <>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    disabled={answeredByMe && !dirty}
+                    onClick={() => submit({ rejectedMaskIds: [...rejected].sort((a, b) => a - b) })}
+                  >
+                    {answeredByMe ? (dirty ? 'Save changes' : 'Saved') : `Submit (${rejected.size} incorrect)`}
+                  </Button>
+                  <Button variant="text" disabled={rejected.size === 0} onClick={() => setRejected(new Set())}>
+                    Show all again
+                  </Button>
+                </>
+              )}
             </>
           ) : (
             <Stack spacing={1}>
-              {(job.question.choices || []).map((choice) => (
-                <Button key={choice.key} variant="outlined" onClick={() => submit({ choiceKey: choice.key })}>
-                  {choice.label}
-                  {choice.hotkey ? ` (${choice.hotkey})` : ''}
-                </Button>
-              ))}
+              {(job.question.choices || []).map((choice) => {
+                const chosen = existingChoiceKey === choice.key;
+                return (
+                  <Button
+                    key={choice.key}
+                    variant={chosen ? 'contained' : 'outlined'}
+                    color={chosen && answeredByMe ? 'success' : 'primary'}
+                    disabled={!canLabel}
+                    onClick={() => submit({ choiceKey: choice.key })}
+                  >
+                    {choice.label}
+                    {choice.hotkey ? ` (${choice.hotkey})` : ''}
+                  </Button>
+                );
+              })}
             </Stack>
+          )}
+
+          {/* Signed out: everything above is still explorable — masks toggle,
+              layers fade, frames step — only saving needs an account. */}
+          {!isAuthenticated && (
+            <Button variant="contained" startIcon={<Login />} onClick={login}>
+              Sign in to label
+            </Button>
+          )}
+          {isAuthenticated && !canLabel && (
+            <Alert severity="info" sx={{ py: 0.5 }}>
+              This job is {job.status} — read only.
+            </Alert>
           )}
         </Box>
       </Box>

@@ -50,6 +50,14 @@ export const deleteJob = async (jobId: string): Promise<{ tasks: number; answers
 export const getTask = async (taskId: string): Promise<WorkItem> =>
   (await labelApi.get<ApiResponse<WorkItem>>(`/tasks/${taskId}`)).data;
 
+/**
+ * The frame at a 0-based position in the job — how the workbench steps back and
+ * forward through frames. `null` means the position is past the last frame, so
+ * a caller can walk forwards without first knowing how many there are.
+ */
+export const getTaskAt = async (jobId: string, index: number): Promise<WorkItem | null> =>
+  (await labelApi.get<ApiResponse<WorkItem | null>>(`/jobs/${jobId}/tasks/at/${index}`)).data;
+
 export const nextTask = async (jobId: string, excludeTaskIds: string[] = []): Promise<WorkItem | null> =>
   (await labelApi.post<ApiResponse<WorkItem | null>>(`/jobs/${jobId}/next`, { excludeTaskIds })).data;
 

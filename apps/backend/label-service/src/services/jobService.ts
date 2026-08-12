@@ -56,6 +56,35 @@ export const listJobsForUser = async (
   return jobs.map((job) => ({ ...job.toObject(), progress: progress.get(job._id.toString())! }));
 };
 
+/**
+ * A job as an anonymous visitor may see it: everything except who set it up.
+ *
+ * `createdBy` carries an email address, and the same reasoning applies to it as
+ * to the per-labeler stats breakdown — the progress is what is being shared, not
+ * the identities of the people behind it.
+ */
+export const withoutCreatorIdentity = (job: ILabelJob): Record<string, unknown> => {
+  const { createdBy: _createdBy, ...rest } = job.toObject();
+  return rest;
+};
+
+/**
+ * What an anonymous visitor sees: every active job, whatever group owns it.
+ *
+ * Active is the whole filter on purpose — a job is only active because someone
+ * deliberately activated it, and drafts/paused/archived ones are work in a state
+ * nobody chose to show. `myAnswers` is 0 for a caller with no identity, which is
+ * exactly what the empty userId yields.
+ */
+export const listPublicJobs = async (): Promise<JobWithProgress[]> => {
+  const jobs = await LabelJob.find({ status: 'active' }).sort({ updatedAt: -1 });
+  const progress = await progressForJobs(jobs, '');
+  return jobs.map((job) => ({
+    ...withoutCreatorIdentity(job),
+    progress: progress.get(job._id.toString())!
+  }));
+};
+
 export const getJob = async (jobId: string): Promise<ILabelJob> => {
   const job = await LabelJob.findById(jobId);
   if (!job) {

@@ -10,10 +10,13 @@ vi.mock('../config/ConfigProvider', () => ({
 import { labelApi } from './labelApiClient';
 import {
   createJob,
+  deleteJob,
   downloadExport,
   getJob,
   getJobStats,
   getMyGroups,
+  getTask,
+  getTaskAt,
   listJobs,
   materializeJob,
   nextTask,
@@ -125,5 +128,34 @@ describe('downloadExport', () => {
 
     await expect(downloadExport('j1', 'jsonl')).rejects.toThrow('Export failed (403)');
     vi.unstubAllGlobals();
+  });
+
+  it('opens a task by id', async () => {
+    mockedApi.get.mockResolvedValue({ success: true, data: { task: { _id: 't1' } } });
+
+    expect(await getTask('t1')).toEqual({ task: { _id: 't1' } });
+    expect(mockedApi.get).toHaveBeenCalledWith('/tasks/t1');
+  });
+
+  it('opens the frame at a position', async () => {
+    mockedApi.get.mockResolvedValue({ success: true, data: { task: { _id: 't7' } } });
+
+    expect(await getTaskAt('j1', 6)).toEqual({ task: { _id: 't7' } });
+    expect(mockedApi.get).toHaveBeenCalledWith('/jobs/j1/tasks/at/6');
+  });
+
+  // Past the last frame the service answers with data:null, so a caller can walk
+  // forwards without first knowing how many frames there are.
+  it('passes a null frame through rather than treating it as an error', async () => {
+    mockedApi.get.mockResolvedValue({ success: true, data: null });
+
+    expect(await getTaskAt('j1', 999)).toBeNull();
+  });
+
+  it('deletes a job', async () => {
+    mockedApi.delete.mockResolvedValue({ success: true, data: { tasks: 3, answers: 4 } });
+
+    expect(await deleteJob('j1')).toEqual({ tasks: 3, answers: 4 });
+    expect(mockedApi.delete).toHaveBeenCalledWith('/jobs/j1');
   });
 });

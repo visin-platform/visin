@@ -12,10 +12,14 @@ const AppRoutes = () => {
     <Routes>
       <Route path="" element={<Navigate to="jobs" replace />} />
       <Route path="login" element={<LoginRedirect />} />
-      <Route path="jobs" element={<ProtectedRoute><JobsPage /></ProtectedRoute>} />
+      {/* Looking at a job — its progress and its frames — needs no account, so
+          a job in flight can be shared with a link. Creating one, and anything
+          under bundles, still does. Answering is gated inside the workbench
+          rather than at the route, since the frames themselves are public. */}
+      <Route path="jobs" element={<JobsPage />} />
       <Route path="jobs/new" element={<ProtectedRoute><NewJobPage /></ProtectedRoute>} />
-      <Route path="jobs/:id" element={<ProtectedRoute><JobDetailPage /></ProtectedRoute>} />
-      <Route path="jobs/:id/work" element={<ProtectedRoute><WorkbenchPage /></ProtectedRoute>} />
+      <Route path="jobs/:id" element={<JobDetailPage />} />
+      <Route path="jobs/:id/work" element={<WorkbenchPage />} />
       <Route path="bundles" element={<ProtectedRoute><BundlesPage /></ProtectedRoute>} />
     </Routes>
   );

@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { AssignmentOutlined } from '@mui/icons-material';
 import { Loader } from '@visin/frontend-core';
+import { useAuth } from '../contexts/AuthContext';
 import { getMyGroups, listJobs } from '../services/jobService';
 import { LabelJob } from '../types';
 
@@ -55,8 +56,11 @@ const JobProgressBar: React.FC<{ job: LabelJob }> = ({ job }) => {
 };
 
 const JobsPage: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const { data: jobs, isLoading, error } = useQuery({ queryKey: ['jobs', 'worker'], queryFn: () => listJobs('worker') });
-  const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups });
+  // "My groups" is a question only a signed-in caller can ask; asking it
+  // anonymously would just be a 401 rendered as a broken page.
+  const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups, enabled: isAuthenticated });
 
   // Creating a job needs a group you administer; without one the wizard's group
   // picker would be empty, so offer the button only where it can be finished.
@@ -82,7 +86,7 @@ const JobsPage: React.FC = () => {
           No labeling jobs yet
         </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          Active jobs shared with your groups will appear here.
+          {isAuthenticated ? 'Active jobs shared with your groups will appear here.' : 'Active jobs will appear here.'}
         </Typography>
         {canCreate && <Box sx={{ mt: 2 }}>{newJobButton}</Box>}
       </Box>
@@ -93,7 +97,8 @@ const JobsPage: React.FC = () => {
     <Stack spacing={2}>
       <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-          Active jobs in your groups. Progress counts frames finished by everyone, not just you.
+          {isAuthenticated ? 'Active jobs in your groups.' : 'Active labeling jobs.'} Progress counts frames finished by
+          everyone, not just you.
         </Typography>
         {canCreate && newJobButton}
       </Stack>
@@ -115,7 +120,7 @@ const JobsPage: React.FC = () => {
           </CardContent>
           <CardActions>
             <Button component={Link} to={`/jobs/${job._id}/work`} variant="contained" size="small">
-              Start labeling
+              {isAuthenticated ? 'Start labeling' : 'View frames'}
             </Button>
             <Button component={Link} to={`/jobs/${job._id}`} size="small">
               Details

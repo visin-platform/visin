@@ -1,4 +1,4 @@
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, authenticateToken, assertRequiredEnv } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, authenticateToken, optionalAuth, assertRequiredEnv } from '@visin/backend-core';
 import jobRoutes from './routes/jobRoutes';
 import bundleRoutes from './routes/bundleRoutes';
 import taskRoutes from './routes/taskRoutes';
@@ -21,12 +21,17 @@ app.get('/health', createHealthCheckHandler({
   checkMongo: true
 }));
 
-// No anonymous access anywhere: every /api route requires a signed-in user.
-app.use('/api', authenticateToken);
-app.use('/api/bundles', bundleRoutes);
+// Reading a job — its definition, its progress, its frames — is anonymous, so a
+// link to a job in flight can be shared with someone who has no account. Writing
+// never is. `optionalAuth` only attaches `req.user` when a valid cookie is
+// there; the routers that must have one apply `authenticateToken` themselves,
+// per-route in jobs/tasks (mixed) and wholesale here for bundles and /me, which
+// have no public surface at all.
+app.use('/api', optionalAuth);
+app.use('/api/bundles', authenticateToken, bundleRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/tasks', taskRoutes);
-app.use('/api/me', meRoutes);
+app.use('/api/me', authenticateToken, meRoutes);
 
 // Must be mounted last, after all routes
 app.use(errorHandler);

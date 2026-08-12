@@ -1,7 +1,7 @@
 import router from '../../routes/taskRoutes';
 
 type Layer = {
-  route?: { path: string; methods: Record<string, boolean>; stack: unknown[] };
+  route?: { path: string; methods: Record<string, boolean>; stack: { name?: string }[] };
 };
 
 const routes = (router.stack as Layer[])
@@ -10,6 +10,9 @@ const routes = (router.stack as Layer[])
     path: layer.route!.path,
     methods: Object.keys(layer.route!.methods),
     handlerCount: layer.route!.stack.length,
+    // The service mounts `optionalAuth` globally, so a route demands a signed-in
+    // caller only by naming `authenticateToken` in its own stack.
+    requiresAuth: layer.route!.stack.some((handler) => handler.name === 'authenticateToken'),
   }));
 
 const find = (method: string, path: string) =>
@@ -24,6 +27,13 @@ describe('taskRoutes', () => {
   });
 
   it('validates the answer body', () => {
-    expect(find('post', '/:id/answer')!.handlerCount).toBe(2);
+    // authenticateToken + validateRequest + controller
+    expect(find('post', '/:id/answer')!.handlerCount).toBe(3);
+  });
+
+  it('leaves reading a frame public and gates both writes', () => {
+    expect(find('get', '/:id')!.requiresAuth).toBe(false);
+    expect(find('post', '/:id/answer')!.requiresAuth).toBe(true);
+    expect(find('delete', '/:id/answer')!.requiresAuth).toBe(true);
   });
 });

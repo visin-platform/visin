@@ -24,7 +24,7 @@ const READING_WIDTH = 1400;
 const FULL_BLEED = 100000;
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
-  const { user, logout } = useAuth();
+  const { user, isAuthenticated, login, logout } = useAuth();
   const config = getGlobalConfig();
   const workbench = useMatch('/jobs/:id/work');
 
@@ -38,6 +38,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       subtitle="Label images and review annotation quality."
       navItems={navItems}
       user={user}
+      // Jobs and the workbench serve anonymous visitors now, so the drawer has
+      // to offer a way in rather than assuming there is already a session.
+      isAuthenticated={isAuthenticated}
+      onLogin={login}
       onLogout={logout}
       accountUrl={config.ACCOUNT_FRONT_URL}
       collapsible

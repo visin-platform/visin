@@ -18,6 +18,7 @@ import {
   Typography
 } from '@mui/material';
 import { Loader } from '@visin/frontend-core';
+import { useAuth } from '../contexts/AuthContext';
 import {
   JobAction,
   deleteJob,
@@ -38,6 +39,7 @@ const STATUS_COLORS: Record<string, 'default' | 'success' | 'warning' | 'info'> 
 
 const JobDetailPage: React.FC = () => {
   const { id: jobId = '' } = useParams();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<string | null>(null);
@@ -117,9 +119,20 @@ const JobDetailPage: React.FC = () => {
         )}
 
         <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
-          {job.status === 'active' && (
+          {job.status === 'active' && isAuthenticated && (
             <Button component={Link} to={`/jobs/${jobId}/work`} variant="contained">
               Start labeling
+            </Button>
+          )}
+          {/* Reviewing what has been labeled so far is the point of a shared
+              link, so it stands on its own rather than behind "start labeling". */}
+          {job.tasksCount > 0 && (
+            <Button
+              component={Link}
+              to={`/jobs/${jobId}/work?browse=1`}
+              variant={job.status === 'active' && isAuthenticated ? 'outlined' : 'contained'}
+            >
+              Browse frames
             </Button>
           )}
           {isAdmin && job.status === 'draft' && (
@@ -179,32 +192,42 @@ const JobDetailPage: React.FC = () => {
           )}
 
           <Divider sx={{ my: 2 }} />
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Per labeler
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {stats.completed}/{stats.tasks} frames complete · {stats.answers} labels collected
           </Typography>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Labeler</TableCell>
-                <TableCell align="right">Answered</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {stats.perUser.map((user) => (
-                <TableRow key={user.userEmail}>
-                  <TableCell>{user.userName || user.userEmail}</TableCell>
-                  <TableCell align="right">{user.answered}</TableCell>
-                </TableRow>
-              ))}
-              {stats.perUser.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={2} sx={{ color: 'text.secondary' }}>
-                    No answers yet
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+
+          {/* Absent, rather than empty, for an anonymous viewer: the breakdown
+              is a list of labelers' email addresses. */}
+          {stats.perUser && (
+            <>
+              <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
+                Per labeler
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Labeler</TableCell>
+                    <TableCell align="right">Answered</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {stats.perUser.map((user) => (
+                    <TableRow key={user.userEmail}>
+                      <TableCell>{user.userName || user.userEmail}</TableCell>
+                      <TableCell align="right">{user.answered}</TableCell>
+                    </TableRow>
+                  ))}
+                  {stats.perUser.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={2} sx={{ color: 'text.secondary' }}>
+                        No answers yet
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </>
+          )}
 
           {stats.perStratum.length > 1 && (
             <>

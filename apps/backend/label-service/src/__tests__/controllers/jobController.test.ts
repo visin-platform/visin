@@ -3,7 +3,13 @@ import type { Request, Response } from 'express';
 jest.mock('../../services/jobService', () => ({
   createJob: jest.fn(),
   listJobsForUser: jest.fn(),
+  listPublicJobs: jest.fn(),
+  withoutCreatorIdentity: jest.fn((job: { toObject: () => Record<string, unknown> }) => {
+    const { createdBy: _createdBy, ...rest } = job.toObject();
+    return rest;
+  }),
   getJob: jest.fn(),
+  deleteJob: jest.fn(),
   getJobProgress: jest.fn(),
   transitionJob: jest.fn(),
 }));
@@ -45,7 +51,11 @@ const makeRes = (): MockRes => {
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
   ({ body: {}, query: {}, params: {}, user: { id: 'u1', email: 'user@x.com' }, ...overrides } as unknown as Request);
 
-const job = { _id: 'j1', groupId: 'g1', toObject: () => ({ _id: 'j1', groupId: 'g1' }) };
+const job = {
+  _id: 'j1',
+  groupId: 'g1',
+  toObject: () => ({ _id: 'j1', groupId: 'g1', createdBy: { email: 'owner@x.com' } }),
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -89,21 +99,78 @@ describe('listJobs', () => {
 
     expect(mockedSvc.listJobsForUser).toHaveBeenCalledWith('user@x.com', 'admin', 'u1');
   });
+
+  it('gives an anonymous caller the public listing', async () => {
+    mockedSvc.listPublicJobs.mockResolvedValue([{ _id: 'j1' }]);
+    const res = makeRes();
+
+    await ctrl.listJobs(makeReq({ user: undefined }), res);
+
+    expect(mockedSvc.listJobsForUser).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ _id: 'j1' }] });
+  });
+
+  // role=admin asks which groups the caller administers — nothing, with no caller.
+  it('gives an anonymous caller nothing for the admin role', async () => {
+    const res = makeRes();
+
+    await ctrl.listJobs(makeReq({ user: undefined, query: { role: 'admin' } }), res);
+
+    expect(mockedSvc.listPublicJobs).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: [] });
+  });
 });
 
 describe('getJob', () => {
-  it('checks membership and attaches progress', async () => {
+  it('attaches progress scoped to the caller', async () => {
     mockedSvc.getJobProgress.mockResolvedValue({ tasks: 3 });
     const req = makeReq({ params: { id: 'j1' } });
     const res = makeRes();
 
     await ctrl.getJob(req, res);
 
-    expect(mockedMember).toHaveBeenCalledWith(req, 'g1');
+    expect(mockedSvc.getJobProgress).toHaveBeenCalledWith(job, 'u1');
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { _id: 'j1', groupId: 'g1', progress: { tasks: 3 } },
+      data: { _id: 'j1', groupId: 'g1', createdBy: { email: 'owner@x.com' }, progress: { tasks: 3 } },
     });
+  });
+
+  // A shared link resolves without an account; "answers by me" is simply zero.
+  // `createdBy` is dropped for the same reason the per-labeler stats are: it is
+  // an email address, and the progress is the thing being shared.
+  it('serves an anonymous caller without the creator identity or a membership check', async () => {
+    mockedSvc.getJobProgress.mockResolvedValue({ tasks: 3, myAnswers: 0 });
+    const res = makeRes();
+
+    await ctrl.getJob(makeReq({ params: { id: 'j1' }, user: undefined }), res);
+
+    expect(mockedSvc.getJobProgress).toHaveBeenCalledWith(job, '');
+    expect(mockedMember).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { _id: 'j1', groupId: 'g1', progress: { tasks: 3, myAnswers: 0 } },
+    });
+  });
+});
+
+describe('deleteJob', () => {
+  it('requires admin, then reports what was removed', async () => {
+    mockedSvc.deleteJob.mockResolvedValue({ tasks: 10, answers: 12 });
+    const req = makeReq({ params: { id: 'j1' } });
+    const res = makeRes();
+
+    await ctrl.deleteJob(req, res);
+
+    expect(mockedAdmin).toHaveBeenCalledWith(req, 'g1');
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { tasks: 10, answers: 12 } });
+  });
+
+  it('propagates access denial before removing anything', async () => {
+    mockedAdmin.mockRejectedValueOnce(new Error('forbidden'));
+
+    await expect(ctrl.deleteJob(makeReq({ params: { id: 'j1' } }), makeRes())).rejects.toThrow('forbidden');
+    expect(mockedSvc.deleteJob).not.toHaveBeenCalled();
   });
 });
 
@@ -175,14 +242,30 @@ describe('exportJob', () => {
 });
 
 describe('jobStats', () => {
-  it('is member-visible', async () => {
-    mockedExport.jobStats.mockResolvedValue({ tasks: 1 });
-    const req = makeReq({ params: { id: 'j1' } });
+  it('gives a signed-in caller the per-labeler breakdown', async () => {
+    mockedExport.jobStats.mockResolvedValue({ tasks: 1, perUser: [{ userEmail: 'w@x.com', answered: 1 }] });
     const res = makeRes();
 
-    await ctrl.jobStats(req, res);
+    await ctrl.jobStats(makeReq({ params: { id: 'j1' } }), res);
 
-    expect(mockedMember).toHaveBeenCalledWith(req, 'g1');
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: { tasks: 1 } });
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: { tasks: 1, perUser: [{ userEmail: 'w@x.com', answered: 1 }] },
+    });
+  });
+
+  // Progress is the thing being shared; the breakdown is a list of email addresses.
+  it('drops the per-labeler breakdown for an anonymous caller', async () => {
+    mockedExport.jobStats.mockResolvedValue({
+      tasks: 1,
+      perStratum: [],
+      perUser: [{ userEmail: 'w@x.com', answered: 1 }],
+    });
+    const res = makeRes();
+
+    await ctrl.jobStats(makeReq({ params: { id: 'j1' }, user: undefined }), res);
+
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { tasks: 1, perStratum: [] } });
+    expect(mockedMember).not.toHaveBeenCalled();
   });
 });

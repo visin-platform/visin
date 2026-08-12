@@ -6,6 +6,12 @@ vi.mock('../services/jobService', () => ({
   getMyGroups: vi.fn(),
 }));
 
+// Signed in unless a test says otherwise — anonymous is the exception here.
+const authState = { isAuthenticated: true, isLoading: false, user: { email: 'w@x.com' }, login: vi.fn(), logout: vi.fn() };
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: () => authState,
+}));
+
 import { getMyGroups, listJobs } from '../services/jobService';
 import JobsPage from './JobsPage';
 import { renderWithProviders } from '../test/renderWithProviders';

@@ -6,6 +6,7 @@ jest.mock('../../services/jobService', () => ({
 jest.mock('../../services/taskService', () => ({
   nextTask: jest.fn(),
   getTaskItem: jest.fn(),
+  getTaskItemAtIndex: jest.fn(),
   getTaskWithJob: jest.fn(),
   submitAnswer: jest.fn(),
   undoAnswer: jest.fn(),
@@ -43,38 +44,61 @@ beforeEach(() => {
 });
 
 describe('getTask', () => {
-  it('serves one task by id to a group member', async () => {
-    mockedTasks.getTaskWithJob.mockResolvedValue({ task: { _id: 't1' }, job: activeJob });
+  it('serves one task by id, scoped to the caller when there is one', async () => {
     mockedTasks.getTaskItem.mockResolvedValue({ task: { _id: 't1' }, images: { frame: { stem: 'frame_000012' } } });
     const req = makeReq({ params: { id: 't1' } });
     const res = makeRes();
 
     await ctrl.getTask(req, res);
 
-    expect(mockedMember).toHaveBeenCalledWith(req, 'g1');
+    // The caller's id decides which answer comes back as `mine`.
+    expect(mockedTasks.getTaskItem).toHaveBeenCalledWith('t1', 'u1');
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       data: { task: { _id: 't1' }, images: { frame: { stem: 'frame_000012' } } },
     });
   });
 
-  it('refuses a non-member before loading images', async () => {
-    mockedTasks.getTaskWithJob.mockResolvedValue({ task: { _id: 't1' }, job: activeJob });
-    mockedMember.mockRejectedValueOnce(new Error('forbidden'));
+  // The link is the point: someone without an account has to be able to follow it.
+  it('serves an anonymous caller with no membership check', async () => {
+    mockedTasks.getTaskItem.mockResolvedValue({ task: { _id: 't1' }, images: {} });
 
-    await expect(ctrl.getTask(makeReq({ params: { id: 't1' } }), makeRes())).rejects.toThrow('forbidden');
-    expect(mockedTasks.getTaskItem).not.toHaveBeenCalled();
+    await ctrl.getTask(makeReq({ params: { id: 't1' }, user: undefined }), makeRes());
+
+    expect(mockedTasks.getTaskItem).toHaveBeenCalledWith('t1', undefined);
+    expect(mockedMember).not.toHaveBeenCalled();
   });
 
   // A shared link is a look, not a claim: leasing here would take the frame out
   // of the queue for whoever was about to be handed it.
   it('does not lease the task it serves', async () => {
-    mockedTasks.getTaskWithJob.mockResolvedValue({ task: { _id: 't1' }, job: activeJob });
     mockedTasks.getTaskItem.mockResolvedValue({ task: { _id: 't1' }, images: {} });
 
     await ctrl.getTask(makeReq({ params: { id: 't1' } }), makeRes());
 
     expect(mockedTasks.nextTask).not.toHaveBeenCalled();
+  });
+});
+
+describe('getTaskAtIndex', () => {
+  it('serves the frame at a position', async () => {
+    mockedTasks.getTaskItemAtIndex.mockResolvedValue({ task: { _id: 't7' }, images: {} });
+    const res = makeRes();
+
+    await ctrl.getTaskAtIndex(makeReq({ params: { id: 'j1', index: '6' } }), res);
+
+    expect(mockedTasks.getTaskItemAtIndex).toHaveBeenCalledWith('j1', 6, 'u1');
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { task: { _id: 't7' }, images: {} } });
+  });
+
+  // Walking forwards is how a reader finds the end; a 404 would read as a bug.
+  it('answers null past the last frame rather than erroring', async () => {
+    mockedTasks.getTaskItemAtIndex.mockResolvedValue(null);
+    const res = makeRes();
+
+    await ctrl.getTaskAtIndex(makeReq({ params: { id: 'j1', index: '999' } }), res);
+
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: null });
   });
 });
 

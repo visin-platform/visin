@@ -123,16 +123,40 @@ export interface TaskImages {
   idmap?: { url: string };
 }
 
+/** One verdict on a frame, carrying no trace of who gave it. */
+export interface AnswerSnapshot {
+  choiceKey?: string;
+  rejectedMaskIds?: number[];
+  updatedAt: string;
+}
+
+export interface TaskAnswerState {
+  count: number;
+  /** Your own answer, when you have one — what the workbench prefills. */
+  mine: AnswerSnapshot | null;
+  /** The most recent answer from anyone, shown to a viewer with none of their own. */
+  latest: AnswerSnapshot | null;
+}
+
+/** Where a frame sits in the job's frame order — `index` is 0-based. */
+export interface TaskPosition {
+  index: number;
+  total: number;
+}
+
 export interface WorkItem {
   task: LabelTask;
   images: TaskImages;
+  position: TaskPosition;
+  answer: TaskAnswerState;
 }
 
 export interface JobStats {
   tasks: number;
   completed: number;
   answers: number;
-  perUser: { userEmail: string; userName?: string; answered: number }[];
+  /** Omitted for anonymous viewers — it is a list of labelers' email addresses. */
+  perUser?: { userEmail: string; userName?: string; answered: number }[];
   perStratum: { stratum: string; tasks: number; completed: number }[];
   agreement: number | null;
 }

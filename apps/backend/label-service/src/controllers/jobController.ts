@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import * as svc from '../services/jobService';
 import * as materialization from '../services/materializationService';
 import * as exportSvc from '../services/exportService';
-import { assertAdmin, assertMember, requireUser } from '../services/groupAccessService';
+import { assertAdmin, requireUser } from '../services/groupAccessService';
 import { JobAction } from '../services/jobService';
 
 export const createJob = async (req: Request, res: Response): Promise<void> => {
@@ -12,19 +12,29 @@ export const createJob = async (req: Request, res: Response): Promise<void> => {
   res.status(201).json({ success: true, data: job });
 };
 
+/**
+ * Anonymous callers get the public listing — every active job — so progress can
+ * be shared without an account. `role=admin` is a question about groups the
+ * caller administers, which is nothing when there is no caller, so it answers
+ * with an empty list rather than the public one.
+ */
 export const listJobs = async (req: Request, res: Response): Promise<void> => {
-  const user = requireUser(req);
   const role = (req.query.role as 'worker' | 'admin') || 'worker';
+  if (!req.user?.id) {
+    res.json({ success: true, data: role === 'admin' ? [] : await svc.listPublicJobs() });
+    return;
+  }
+  const user = requireUser(req);
   const jobs = await svc.listJobsForUser(user.email!.toLowerCase(), role, user.id);
   res.json({ success: true, data: jobs });
 };
 
+/** Public: a job's definition and progress are what a shared link shows. */
 export const getJob = async (req: Request, res: Response): Promise<void> => {
-  const user = requireUser(req);
   const job = await svc.getJob(req.params.id as string);
-  await assertMember(req, job.groupId);
-  const progress = await svc.getJobProgress(job, user.id);
-  res.json({ success: true, data: { ...job.toObject(), progress } });
+  const progress = await svc.getJobProgress(job, req.user?.id || '');
+  const body = req.user?.id ? job.toObject() : svc.withoutCreatorIdentity(job);
+  res.json({ success: true, data: { ...body, progress } });
 };
 
 const transition = (action: JobAction) => async (req: Request, res: Response): Promise<void> => {
@@ -83,9 +93,18 @@ export const exportJob = async (req: Request, res: Response): Promise<void> => {
   res.send(rows.map((row) => JSON.stringify(row)).join('\n') + '\n');
 };
 
+/**
+ * Public, minus the names: totals, agreement and per-stratum breakdown are the
+ * progress this is shared to show, but `perUser` is a list of labelers' email
+ * addresses and is dropped for a caller with no identity of their own.
+ */
 export const jobStats = async (req: Request, res: Response): Promise<void> => {
   const job = await svc.getJob(req.params.id as string);
-  await assertMember(req, job.groupId);
   const stats = await exportSvc.jobStats(job);
+  if (!req.user?.id) {
+    const { perUser: _perUser, ...publicStats } = stats;
+    res.json({ success: true, data: publicStats });
+    return;
+  }
   res.json({ success: true, data: stats });
 };
