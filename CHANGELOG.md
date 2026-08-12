@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.158](https://github.com/visin-platform/visin-monorepo/compare/v0.0.157...v0.0.158) (2026-08-08)
+
+
+### Features
+
+* setup search engine discovery ([dd10c15](https://github.com/visin-platform/visin-monorepo/commit/dd10c151e08f13d3bcc64247766f963e1f03a027))
+
 ### [0.0.157](https://github.com/visin-platform/visin-monorepo/compare/v0.0.156...v0.0.157) (2026-08-04)
 
 
