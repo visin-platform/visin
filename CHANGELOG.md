@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.163](https://github.com/visin-platform/visin-monorepo/compare/v0.0.162...v0.0.163) (2026-08-19)
+
+
+### Features
+
+* add status to upload ([2cec4a8](https://github.com/visin-platform/visin-monorepo/commit/2cec4a85dd57feb09afe6d3a9fe27eb8a8da2123))
+
 ### [0.0.162](https://github.com/visin-platform/visin-monorepo/compare/v0.0.161...v0.0.162) (2026-08-19)
 
 
