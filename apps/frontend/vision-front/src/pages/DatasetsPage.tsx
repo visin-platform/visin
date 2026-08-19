@@ -30,6 +30,7 @@ export const DatasetsPage: React.FC = () => {
   const [selectedAnalysisIds, setSelectedAnalysisIds] = useState<Set<string>>(new Set());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const handleRefresh = () => {
     setRefreshKey((prev) => prev + 1);
@@ -64,9 +65,11 @@ export const DatasetsPage: React.FC = () => {
   const handleCreateAnalysis = async (datasetName: string, file?: File) => {
     try {
       setCreating(true);
+      // null when there is no file, so the bar only appears for a real upload.
+      setUploadProgress(file ? 0 : null);
       setError(null);
 
-      const newAnalysis = await createAnalysis(datasetName, file);
+      const newAnalysis = await createAnalysis(datasetName, file, setUploadProgress);
 
       setShowCreateModal(false);
       // Navigate to the detail page
@@ -75,6 +78,7 @@ export const DatasetsPage: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Failed to create dataset');
     } finally {
       setCreating(false);
+      setUploadProgress(null);
     }
   };
 
@@ -154,6 +158,7 @@ export const DatasetsPage: React.FC = () => {
       <DatasetUploadDialog
         open={showCreateModal}
         loading={creating}
+        uploadProgress={uploadProgress}
         title="Upload Dataset"
         submitLabel="Upload"
         fileRequired

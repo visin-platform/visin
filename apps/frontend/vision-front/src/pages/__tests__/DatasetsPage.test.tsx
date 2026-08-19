@@ -75,7 +75,7 @@ describe('DatasetsPage', () => {
     fireEvent.click(screen.getByText('submit-create'));
 
     await screen.findByTestId('datasets-table');
-    expect(createAnalysisMock).toHaveBeenCalledWith('my-dataset', uploadedFile);
+    expect(createAnalysisMock).toHaveBeenCalledWith('my-dataset', uploadedFile, expect.any(Function));
     expect(navigateMock).toHaveBeenCalledWith('/datasets/new-id-1');
   });
 

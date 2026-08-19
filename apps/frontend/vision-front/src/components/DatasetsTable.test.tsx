@@ -163,7 +163,7 @@ describe('AnalysisTable (DatasetsTable)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() => {
-      expect(mockedEditAnalysis).toHaveBeenCalledWith('a1', 'Dataset Renamed', undefined);
+      expect(mockedEditAnalysis).toHaveBeenCalledWith('a1', 'Dataset Renamed', undefined, expect.any(Function));
     });
   });
 

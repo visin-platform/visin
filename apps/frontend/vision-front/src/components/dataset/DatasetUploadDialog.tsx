@@ -7,6 +7,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  LinearProgress,
   TextField,
   Typography
 } from '@mui/material';
@@ -21,6 +22,12 @@ interface DatasetUploadDialogProps {
   initialName?: string;
   /** Creating a dataset needs a file; replacing the archive of one is optional. */
   fileRequired?: boolean;
+  /**
+   * Archive upload progress as a 0–1 fraction, or null when no upload is in
+   * flight. Multi-GB dataset zips go up in chunks over several minutes, so a
+   * bare spinner leaves no way to tell a slow upload from a stalled one.
+   */
+  uploadProgress?: number | null;
   onCancel: () => void;
   onSubmit: (datasetName: string, file?: File) => void;
 }
@@ -46,6 +53,7 @@ const DatasetUploadDialog: React.FC<DatasetUploadDialogProps> = ({
   submitLabel,
   initialName = '',
   fileRequired = false,
+  uploadProgress = null,
   onCancel,
   onSubmit
 }) => {
@@ -94,6 +102,11 @@ const DatasetUploadDialog: React.FC<DatasetUploadDialogProps> = ({
     onSubmit(name, file || undefined);
   };
 
+  // A finished upload (fraction 1) is no longer "uploading" — the request to
+  // create the record is still outstanding, which the indeterminate bar covers.
+  const uploadingBytes = uploadProgress !== null && uploadProgress < 1;
+  const percent = Math.round((uploadProgress ?? 0) * 100);
+
   const handleCancel = () => {
     if (!loading) {
       onCancel();
@@ -135,6 +148,27 @@ const DatasetUploadDialog: React.FC<DatasetUploadDialogProps> = ({
               </Typography>
             )}
           </Box>
+          {loading && file && (
+            <Box sx={{ mb: 2 }} data-testid="upload-progress">
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  {uploadingBytes ? 'Uploading archive…' : 'Creating dataset…'}
+                </Typography>
+                {uploadingBytes && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {percent}% of {formatFileSize(file.size)}
+                  </Typography>
+                )}
+              </Box>
+              {/* Indeterminate once the bytes are up: the backend is still
+                  unpacking the archive, and there is nothing left to count. */}
+              <LinearProgress
+                variant={uploadingBytes ? 'determinate' : 'indeterminate'}
+                value={uploadingBytes ? percent : undefined}
+                sx={{ borderRadius: 1, height: 6 }}
+              />
+            </Box>
+          )}
           <TextField
             fullWidth
             label="Dataset Name"

@@ -1,5 +1,64 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CHUNK_BYTES, uploadFileInChunks } from './chunkedUpload';
+import { CHUNK_BYTES, uploadToSignedUrl } from './chunkedUpload';
+
+interface FakeXhr {
+  open: ReturnType<typeof vi.fn>;
+  setRequestHeader: ReturnType<typeof vi.fn>;
+  send: ReturnType<typeof vi.fn>;
+  upload: { onprogress?: (e: { lengthComputable: boolean; loaded: number }) => void };
+  onload?: () => void;
+  onerror?: () => void;
+  onabort?: () => void;
+  status: number;
+  responseText: string;
+}
+
+const makeXhr = (): FakeXhr => ({
+  open: vi.fn(),
+  setRequestHeader: vi.fn(),
+  send: vi.fn(),
+  upload: {},
+  status: 200,
+  responseText: ''
+});
+
+/** Collects every XHR the code under test constructs, so each can be answered. */
+const stubXhrQueue = (): FakeXhr[] => {
+  const created: FakeXhr[] = [];
+  vi.stubGlobal(
+    'XMLHttpRequest',
+    function XMLHttpRequestStub(this: unknown) {
+      const xhr = makeXhr();
+      created.push(xhr);
+      return xhr;
+    } as unknown as typeof XMLHttpRequest
+  );
+  return created;
+};
+
+/**
+ * Wait for request #index to be opened. Bounded: an unbounded microtask spin
+ * would hang the run rather than fail it if the request never arrives.
+ */
+const waitFor = async (created: FakeXhr[], index: number): Promise<FakeXhr> => {
+  for (let tick = 0; created.length <= index && tick < 100; tick += 1) {
+    await Promise.resolve();
+  }
+  if (created.length <= index) {
+    throw new Error(`request ${index} was never opened`);
+  }
+  return created[index];
+};
+
+/** Wait for the Nth request, then complete it with a status + body. */
+const answer = async (created: FakeXhr[], index: number, status: number, body?: object): Promise<FakeXhr> => {
+  const xhr = await waitFor(created, index);
+  xhr.status = status;
+  xhr.responseText = body === undefined ? '' : JSON.stringify(body);
+  xhr.onload!();
+  await Promise.resolve();
+  return xhr;
+};
 
 /**
  * jsdom's File keeps the whole body in memory, so multi-chunk cases fake the
@@ -12,121 +71,155 @@ const makeFile = (size: number, type = 'application/zip'): File => {
   return file;
 };
 
-const reply = (status: number, size?: number): Response =>
-  ({ status, json: async () => (size === undefined ? {} : { size }) }) as Response;
+const rangeOf = (xhr: FakeXhr): string | undefined =>
+  xhr.setRequestHeader.mock.calls.find((c) => c[0] === 'Content-Range')?.[1];
 
-const rangesOf = (fetchMock: ReturnType<typeof vi.fn>): string[] =>
-  fetchMock.mock.calls.map((call) => (call[1] as RequestInit).headers as Record<string, string>).map((h) => h['Content-Range']);
-
-describe('uploadFileInChunks', () => {
+describe('uploadToSignedUrl', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.unstubAllGlobals());
 
+  it('sends a small file as one un-ranged PUT', async () => {
+    const created = stubXhrQueue();
+    const promise = uploadToSignedUrl('http://upload', makeFile(1024));
+    const xhr = await answer(created, 0, 200, { size: 1024 });
+    await promise;
+
+    expect(created).toHaveLength(1);
+    expect(xhr.open).toHaveBeenCalledWith('PUT', 'http://upload');
+    expect(rangeOf(xhr)).toBeUndefined();
+  });
+
   it('sends one Content-Range chunk per CHUNK_BYTES slice, in order', async () => {
+    const created = stubXhrQueue();
     const total = CHUNK_BYTES * 2 + 100;
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(reply(200, CHUNK_BYTES))
-      .mockResolvedValueOnce(reply(200, CHUNK_BYTES * 2))
-      .mockResolvedValueOnce(reply(200, total));
-    vi.stubGlobal('fetch', fetchMock);
+    const promise = uploadToSignedUrl('http://upload', makeFile(total));
 
-    await uploadFileInChunks('http://upload', makeFile(total));
+    const first = await answer(created, 0, 200, { size: CHUNK_BYTES });
+    const second = await answer(created, 1, 200, { size: CHUNK_BYTES * 2 });
+    const third = await answer(created, 2, 200, { size: total });
+    await promise;
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(rangesOf(fetchMock)).toEqual([
+    expect(created).toHaveLength(3);
+    expect([rangeOf(first), rangeOf(second), rangeOf(third)]).toEqual([
       `bytes 0-${CHUNK_BYTES - 1}/${total}`,
       `bytes ${CHUNK_BYTES}-${CHUNK_BYTES * 2 - 1}/${total}`,
       `bytes ${CHUNK_BYTES * 2}-${total - 1}/${total}`
     ]);
   });
 
-  it('resumes from the offset the server reports on a 409', async () => {
+  it('reports progress across the whole file, not per chunk', async () => {
+    const created = stubXhrQueue();
     const total = CHUNK_BYTES * 2;
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(reply(409, CHUNK_BYTES))
-      .mockResolvedValueOnce(reply(200, total));
-    vi.stubGlobal('fetch', fetchMock);
+    const onProgress = vi.fn();
+    const promise = uploadToSignedUrl('http://upload', makeFile(total), onProgress);
 
-    await uploadFileInChunks('http://upload', makeFile(total));
+    // Half of the first chunk is a quarter of the file.
+    (await waitFor(created, 0)).upload.onprogress!({ lengthComputable: true, loaded: CHUNK_BYTES / 2 });
+    expect(onProgress).toHaveBeenLastCalledWith(0.25);
 
-    expect(rangesOf(fetchMock)).toEqual([
-      `bytes 0-${CHUNK_BYTES - 1}/${total}`,
-      `bytes ${CHUNK_BYTES}-${total - 1}/${total}`
-    ]);
+    await answer(created, 0, 200, { size: CHUNK_BYTES });
+    expect(onProgress).toHaveBeenLastCalledWith(0.5);
+    await answer(created, 1, 200, { size: total });
+    await promise;
+
+    expect(onProgress).toHaveBeenLastCalledWith(1);
+  });
+
+  it('never reports progress above 1 when a chunk over-reports bytes', async () => {
+    const created = stubXhrQueue();
+    const onProgress = vi.fn();
+    const promise = uploadToSignedUrl('http://upload', makeFile(1000), onProgress);
+
+    (await waitFor(created, 0)).upload.onprogress!({ lengthComputable: true, loaded: 1200 });
+    await answer(created, 0, 200, { size: 1000 });
+    await promise;
+
+    expect(Math.max(...onProgress.mock.calls.map((c) => c[0] as number))).toBe(1);
+  });
+
+  it('resumes from the offset the server reports on a 409', async () => {
+    const created = stubXhrQueue();
+    const total = CHUNK_BYTES * 2;
+    const promise = uploadToSignedUrl('http://upload', makeFile(total));
+
+    await answer(created, 0, 409, { size: CHUNK_BYTES });
+    const second = await answer(created, 1, 200, { size: total });
+    await promise;
+
+    expect(rangeOf(second)).toBe(`bytes ${CHUNK_BYTES}-${total - 1}/${total}`);
   });
 
   it('retries a 5xx chunk and succeeds when it lands', async () => {
+    const created = stubXhrQueue();
     const total = CHUNK_BYTES + 1;
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(reply(500))
-      .mockResolvedValueOnce(reply(200, CHUNK_BYTES))
-      .mockResolvedValueOnce(reply(200, total));
-    vi.stubGlobal('fetch', fetchMock);
+    const promise = uploadToSignedUrl('http://upload', makeFile(total));
 
-    await expect(uploadFileInChunks('http://upload', makeFile(total))).resolves.toBeUndefined();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await answer(created, 0, 500);
+    await answer(created, 1, 200, { size: CHUNK_BYTES });
+    await answer(created, 2, 200, { size: total });
+    await promise;
+
+    expect(created).toHaveLength(3);
   });
 
   it('gives up immediately on a 4xx, which will never be accepted', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reply(400)));
+    const created = stubXhrQueue();
+    const promise = uploadToSignedUrl('http://upload', makeFile(CHUNK_BYTES * 2));
+    await answer(created, 0, 400);
 
-    await expect(uploadFileInChunks('http://upload', makeFile(CHUNK_BYTES * 2))).rejects.toThrow(
-      'Failed to upload dataset file (400)'
-    );
+    await expect(promise).rejects.toThrow('Failed to upload dataset file (400)');
+    expect(created).toHaveLength(1);
+  });
+
+  it('surfaces a failed single-shot upload with its status', async () => {
+    const created = stubXhrQueue();
+    const promise = uploadToSignedUrl('http://upload', makeFile(1024));
+    await answer(created, 0, 403);
+
+    await expect(promise).rejects.toThrow('Failed to upload dataset file (403)');
   });
 
   it('gives up after repeated network failures on one chunk', async () => {
-    const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
-    vi.stubGlobal('fetch', fetchMock);
+    const created = stubXhrQueue();
+    const promise = uploadToSignedUrl('http://upload', makeFile(CHUNK_BYTES * 2));
 
-    await expect(uploadFileInChunks('http://upload', makeFile(CHUNK_BYTES * 2))).rejects.toThrow('network down');
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    for (let i = 0; i < 4; i++) {
+      (await waitFor(created, i)).onerror!();
+      await Promise.resolve();
+    }
+
+    await expect(promise).rejects.toThrow('network');
+    expect(created).toHaveLength(4);
   });
 
   it('gives up when the server keeps resynchronising to a different offset', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reply(409, 0)));
+    const created = stubXhrQueue();
+    const promise = uploadToSignedUrl('http://upload', makeFile(CHUNK_BYTES * 2));
+    for (let i = 0; i < 4; i++) {
+      await answer(created, i, 409, { size: 0 });
+    }
 
-    await expect(uploadFileInChunks('http://upload', makeFile(CHUNK_BYTES * 2))).rejects.toThrow(
-      'could not resynchronise with the server'
-    );
+    await expect(promise).rejects.toThrow('could not resynchronise with the server');
   });
 
   it('falls back to the chunk end when the reply carries no size', async () => {
+    const created = stubXhrQueue();
     const total = CHUNK_BYTES + 10;
-    const fetchMock = vi.fn().mockResolvedValueOnce(reply(200)).mockResolvedValueOnce(reply(200));
-    vi.stubGlobal('fetch', fetchMock);
+    const promise = uploadToSignedUrl('http://upload', makeFile(total));
 
-    await uploadFileInChunks('http://upload', makeFile(total));
+    await answer(created, 0, 200);
+    const second = await answer(created, 1, 200);
+    await promise;
 
-    expect(rangesOf(fetchMock)).toEqual([
-      `bytes 0-${CHUNK_BYTES - 1}/${total}`,
-      `bytes ${CHUNK_BYTES}-${total - 1}/${total}`
-    ]);
-  });
-
-  it('reports progress as each chunk lands', async () => {
-    const total = CHUNK_BYTES * 2;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce(reply(200, CHUNK_BYTES)).mockResolvedValueOnce(reply(200, total))
-    );
-    const onProgress = vi.fn();
-
-    await uploadFileInChunks('http://upload', makeFile(total), onProgress);
-
-    expect(onProgress.mock.calls).toEqual([[0.5], [1]]);
+    expect(rangeOf(second)).toBe(`bytes ${CHUNK_BYTES}-${total - 1}/${total}`);
   });
 
   it('defaults the content type when the file has none', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(reply(200, CHUNK_BYTES * 2));
-    vi.stubGlobal('fetch', fetchMock);
+    const created = stubXhrQueue();
+    const promise = uploadToSignedUrl('http://upload', makeFile(1024, ''));
+    const xhr = await answer(created, 0, 200, { size: 1024 });
+    await promise;
 
-    await uploadFileInChunks('http://upload', makeFile(CHUNK_BYTES * 2, ''));
-
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
-    expect(headers['Content-Type']).toBe('application/octet-stream');
+    expect(xhr.setRequestHeader).toHaveBeenCalledWith('Content-Type', 'application/octet-stream');
   });
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import DatasetUploadDialog from './DatasetUploadDialog';
 
 const renderDialog = (props: Partial<React.ComponentProps<typeof DatasetUploadDialog>> = {}) => {
@@ -92,5 +92,61 @@ describe('DatasetUploadDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
 
     expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  describe('upload progress', () => {
+    /** The bar only renders once a file is chosen and an upload is in flight. */
+    const renderUploading = (uploadProgress: number | null) => {
+      const utils = renderDialog({ fileRequired: true });
+      pickFile();
+      utils.rerender(
+        <DatasetUploadDialog
+          open
+          loading
+          uploadProgress={uploadProgress}
+          title="Upload Dataset"
+          submitLabel="Upload"
+          fileRequired
+          onCancel={vi.fn()}
+          onSubmit={vi.fn()}
+        />
+      );
+      return utils;
+    };
+
+    it('stays hidden while the dialog is idle', () => {
+      renderDialog({ fileRequired: true });
+      pickFile();
+      expect(screen.queryByTestId('upload-progress')).not.toBeInTheDocument();
+    });
+
+    it('shows a determinate bar with the percentage while bytes are moving', () => {
+      renderUploading(0.42);
+
+      expect(screen.getByTestId('upload-progress')).toBeInTheDocument();
+      expect(screen.getByText(/uploading archive/i)).toBeInTheDocument();
+      expect(screen.getByText(/42%/)).toBeInTheDocument();
+
+      // Scoped: the submit button's spinner is a progressbar too.
+      const bar = within(screen.getByTestId('upload-progress')).getByRole('progressbar');
+      expect(bar).toHaveAttribute('aria-valuenow', '42');
+    });
+
+    it('switches to an indeterminate bar once every byte is up', () => {
+      renderUploading(1);
+
+      expect(screen.getByText(/creating dataset/i)).toBeInTheDocument();
+      // No aria-valuenow: there is nothing left to count while the backend works.
+      expect(
+        within(screen.getByTestId('upload-progress')).getByRole('progressbar')
+      ).not.toHaveAttribute('aria-valuenow');
+    });
+
+    it('shows the indeterminate bar when no upload is tracked, e.g. a plain rename', () => {
+      renderUploading(null);
+
+      expect(screen.getByText(/creating dataset/i)).toBeInTheDocument();
+      expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+    });
   });
 });

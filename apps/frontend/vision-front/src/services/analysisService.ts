@@ -1,5 +1,5 @@
 import { visionApi } from '../config/visionApi';
-import { CHUNK_BYTES, uploadFileInChunks } from '../utils/chunkedUpload';
+import { uploadToSignedUrl } from '../utils/chunkedUpload';
 import { ApiResponse } from '../types';
 
 export interface AnalysisResponse {
@@ -25,6 +25,9 @@ export interface DatasetAnalysis {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Upload progress as a 0–1 fraction of the whole archive. */
+export type UploadProgress = (fraction: number) => void;
 
 export interface AnalysisUploadUrl {
   uploadUrl: string;
@@ -71,39 +74,19 @@ const getAnalysisUploadUrl = async (file: File): Promise<AnalysisUploadUrl> => {
 };
 
 /**
- * Upload the archive to the signed URL.
+ * Upload the archive to the signed URL, reporting progress as a 0–1 fraction.
  *
- * Deliberately raw `fetch`, not `visionApi`: the signed URL points at
- * file-service directly, so it needs neither the `/api` base URL nor the
- * shared auth cookie (the signature in the URL itself is the credential).
+ * Deliberately bypasses `visionApi`: the signed URL points at file-service
+ * directly, so it needs neither the `/api` base URL nor the shared auth cookie
+ * (the signature in the URL itself is the credential). Large archives are sent
+ * as resumable `Content-Range` chunks — a whole-body PUT of a multi-GB dataset
+ * zip is rejected by Cloudflare at the edge, which file-service never sees.
  *
- * Anything over CHUNK_BYTES goes up as resumable `Content-Range` chunks: a
- * whole-body PUT of a multi-GB dataset zip is rejected by Cloudflare at the
- * edge, which surfaced as a 413 that file-service never saw. Smaller archives
- * stay a single request — fewer round trips, and it exercises the same
- * un-chunked server path that non-browser clients use.
+ * Returns the `fileId` the backend records against the dataset.
  */
-const uploadDatasetFile = async (uploadUrl: string, file: File): Promise<void> => {
-  if (file.size > CHUNK_BYTES) {
-    await uploadFileInChunks(uploadUrl, file);
-    return;
-  }
-
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    body: file,
-    headers: { 'Content-Type': file.type || 'application/octet-stream' }
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to upload dataset file');
-  }
-};
-
-/** Store the archive and return the `fileId` the backend records against it. */
-export const uploadDatasetArchive = async (file: File): Promise<string> => {
+export const uploadDatasetArchive = async (file: File, onProgress?: UploadProgress): Promise<string> => {
   const upload = await getAnalysisUploadUrl(file);
-  await uploadDatasetFile(upload.uploadUrl, file);
+  await uploadToSignedUrl(upload.uploadUrl, file, onProgress);
   return upload.fileId;
 };
 
@@ -112,8 +95,12 @@ export const uploadDatasetArchive = async (file: File): Promise<string> => {
  *
  * Size is read off the stored file by the backend, so it is never passed here.
  */
-export const createAnalysis = async (datasetName: string, file?: File): Promise<DatasetAnalysis> => {
-  const fileId = file ? await uploadDatasetArchive(file) : undefined;
+export const createAnalysis = async (
+  datasetName: string,
+  file?: File,
+  onProgress?: UploadProgress
+): Promise<DatasetAnalysis> => {
+  const fileId = file ? await uploadDatasetArchive(file, onProgress) : undefined;
 
   const response = await visionApi.post('/analysis/upload', { dataset: datasetName, fileId });
   return (response.data as ApiResponse<DatasetAnalysis>).data;
@@ -171,8 +158,13 @@ export const updateAnalysis = async (
 /**
  * Rename a dataset and optionally replace its archive
  */
-export const editAnalysis = async (id: string, datasetName: string, file?: File): Promise<DatasetAnalysis> => {
-  const fileId = file ? await uploadDatasetArchive(file) : undefined;
+export const editAnalysis = async (
+  id: string,
+  datasetName: string,
+  file?: File,
+  onProgress?: UploadProgress
+): Promise<DatasetAnalysis> => {
+  const fileId = file ? await uploadDatasetArchive(file, onProgress) : undefined;
 
   return updateAnalysis(id, { dataset: datasetName, fileId });
 };

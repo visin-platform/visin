@@ -21,6 +21,52 @@ import { CHUNK_BYTES } from '../utils/chunkedUpload';
 
 const mockedApi = vi.mocked(visionApi);
 
+/**
+ * Minimal XMLHttpRequest stand-in: the archive upload uses XHR (not fetch) so
+ * it can report `upload.onprogress` to the progress bar.
+ */
+interface FakeXhr {
+  open: ReturnType<typeof vi.fn>;
+  send: ReturnType<typeof vi.fn>;
+  setRequestHeader: ReturnType<typeof vi.fn>;
+  upload: { onprogress: ((e: { lengthComputable: boolean; loaded: number }) => void) | null };
+  onload: (() => void) | null;
+  onerror: (() => void) | null;
+  onabort: (() => void) | null;
+  status: number;
+  responseText: string;
+}
+
+/** Answers every upload request with `status`, reporting `size` bytes stored. */
+const stubXhr = (status = 200, size?: number): FakeXhr[] => {
+  const created: FakeXhr[] = [];
+  vi.stubGlobal(
+    'XMLHttpRequest',
+    function XMLHttpRequestStub(this: unknown) {
+      const xhr: FakeXhr = {
+        open: vi.fn(),
+        setRequestHeader: vi.fn(),
+        upload: { onprogress: null },
+        onload: null,
+        onerror: null,
+        onabort: null,
+        status,
+        responseText: size === undefined ? '' : JSON.stringify({ size }),
+        // Reply on send, so the uploader's await resolves without the test
+        // having to drive each request by hand.
+        send: vi.fn(() => queueMicrotask(() => xhr.onload?.()))
+      };
+      created.push(xhr);
+      return xhr;
+    } as unknown as typeof XMLHttpRequest
+  );
+  return created;
+};
+
+const headerOf = (xhr: FakeXhr, name: string): string | undefined =>
+  xhr.setRequestHeader.mock.calls.find((c) => c[0] === name)?.[1];
+
+
 describe('analysisService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -37,8 +83,7 @@ describe('analysisService', () => {
     mockedApi.post
       .mockResolvedValueOnce({ data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/f.zip' } } })
       .mockResolvedValueOnce({ data: { data: { _id: '1' } } });
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
+    const created = stubXhr(200, 1);
 
     const file = new File(['x'], 'my-dataset.zip', { type: 'application/zip' });
     await createAnalysis('my-dataset', file);
@@ -47,7 +92,10 @@ describe('analysisService', () => {
       filename: 'my-dataset.zip',
       mimetype: 'application/zip'
     });
-    expect(fetchMock).toHaveBeenCalledWith('http://upload', expect.objectContaining({ method: 'PUT' }));
+    expect(created).toHaveLength(1);
+    expect(created[0].open).toHaveBeenCalledWith('PUT', 'http://upload');
+    // Small enough for one request, so no resumable-chunk header.
+    expect(headerOf(created[0], 'Content-Range')).toBeUndefined();
     expect(mockedApi.post).toHaveBeenNthCalledWith(2, '/analysis/upload', {
       dataset: 'my-dataset',
       fileId: 'datasets/uuid/f.zip'
@@ -65,13 +113,11 @@ describe('analysisService', () => {
     Object.defineProperty(file, 'size', { value: total });
     file.slice = vi.fn(() => new Blob(['chunk'])) as unknown as File['slice'];
 
-    const fetchMock = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ size: total }) });
-    vi.stubGlobal('fetch', fetchMock);
+    const created = stubXhr(200, total);
 
     await createAnalysis('big', file);
 
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
-    expect(headers['Content-Range']).toBe(`bytes 0-${CHUNK_BYTES - 1}/${total}`);
+    expect(headerOf(created[0], 'Content-Range')).toBe(`bytes 0-${CHUNK_BYTES - 1}/${total}`);
     expect(mockedApi.post).toHaveBeenNthCalledWith(2, '/analysis/upload', {
       dataset: 'big',
       fileId: 'datasets/uuid/big.zip'
@@ -87,10 +133,10 @@ describe('analysisService', () => {
 
   it('createAnalysis surfaces a failed archive upload instead of creating a record', async () => {
     mockedApi.post.mockResolvedValueOnce({ data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/f.zip' } } });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    stubXhr(500);
 
     const file = new File(['x'], 'my-dataset.zip', { type: 'application/zip' });
-    await expect(createAnalysis('my-dataset', file)).rejects.toThrow('Failed to upload dataset file');
+    await expect(createAnalysis('my-dataset', file)).rejects.toThrow('Failed to upload dataset file (500)');
     expect(mockedApi.post).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
@@ -104,7 +150,7 @@ describe('analysisService', () => {
   it('editAnalysis uploads a replacement archive and sends its fileId', async () => {
     mockedApi.post.mockResolvedValue({ data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/new.zip' } } });
     mockedApi.put.mockResolvedValue({ data: { data: { _id: '1' } } });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    stubXhr(200, 1);
 
     await editAnalysis('1', 'renamed', new File(['x'], 'new.zip', { type: 'application/zip' }));
 

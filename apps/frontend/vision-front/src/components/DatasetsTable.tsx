@@ -81,10 +81,15 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   });
   const deleteLoading = deleteMutation.isPending;
 
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
   const updateMutation = useMutation({
     mutationFn: ({ datasetName, file }: { datasetName: string; file?: File }) => {
       if (!selectedAnalysis) throw new Error('No analysis selected');
-      return editAnalysis(selectedAnalysis._id, datasetName, file);
+      // null when the archive is not being replaced, so the bar stays hidden
+      // for a plain rename.
+      setUploadProgress(file ? 0 : null);
+      return editAnalysis(selectedAnalysis._id, datasetName, file, setUploadProgress);
     },
     onSuccess: () => {
       invalidateAnalyses();
@@ -93,7 +98,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : 'Failed to update dataset');
-    }
+    },
+    onSettled: () => setUploadProgress(null)
   });
   const editLoading = updateMutation.isPending;
 
@@ -300,6 +306,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
       <DatasetUploadDialog
         open={editDialogOpen}
         loading={editLoading}
+        uploadProgress={uploadProgress}
         title="Edit Dataset"
         submitLabel="Save"
         initialName={selectedAnalysis?.dataset || ''}
