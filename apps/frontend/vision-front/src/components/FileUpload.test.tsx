@@ -116,7 +116,7 @@ describe('FileUpload', () => {
 
     const onUploadComplete = vi.fn();
     const onClose = vi.fn();
-    renderComponent({ onUploadComplete, onClose });
+    renderComponent({ onUploadComplete, onClose, categoryId: 'cat1' });
 
     const file = new File(['content'], 'test.jpg', { type: 'image/jpeg' });
     const input = document.querySelector('#file-input') as HTMLInputElement;
@@ -127,6 +127,10 @@ describe('FileUpload', () => {
     await waitFor(() => {
       expect(mockedCreateDatasetImage).toHaveBeenCalled();
     });
+    expect(mockedGetUploadSignedUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ datasetId: 'd1', categoryId: 'cat1' })
+    );
+    expect(mockedCreateDatasetImage).toHaveBeenCalledWith(expect.objectContaining({ categoryId: 'cat1' }));
     await waitFor(() => {
       expect(onUploadComplete).toHaveBeenCalled();
     });
@@ -136,7 +140,7 @@ describe('FileUpload', () => {
   it('shows an error message when upload fails', async () => {
     mockedGetUploadSignedUrl.mockRejectedValue(new Error('signed url failed'));
 
-    renderComponent();
+    renderComponent({ categoryId: 'cat1' });
     const file = new File(['content'], 'test.jpg', { type: 'image/jpeg' });
     const input = document.querySelector('#file-input') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
@@ -166,5 +170,18 @@ describe('FileUpload', () => {
 
     expect(screen.getByText('Selected Files (1)')).toBeInTheDocument();
     expect(screen.getByText('dropped.jpg')).toBeInTheDocument();
+  });
+
+  it('cannot upload until a category is chosen, since every image needs one', async () => {
+    renderComponent();
+
+    const file = new File(['content'], 'test.jpg', { type: 'image/jpeg' });
+    const input = document.querySelector('#file-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(screen.getByRole('button', { name: /upload 1 image/i })).toBeDisabled();
+    expect(
+      screen.getByText(/This dataset has no categories yet/)
+    ).toBeInTheDocument();
   });
 });

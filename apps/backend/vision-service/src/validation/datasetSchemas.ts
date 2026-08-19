@@ -24,7 +24,3 @@ export const createDatasetBodySchema = z.object({
   metadata: z.unknown().optional(),
   downloadUrl: z.string().optional()
 });
-
-export const getSignedUrlForPathQuerySchema = z.object({
-  path: z.string().min(1, 'File path is required')
-});

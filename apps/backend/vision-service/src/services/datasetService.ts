@@ -105,16 +105,3 @@ export const getDatasetDownload = async (uuid: string) => {
     expiresAt: new Date(Date.now() + 60 * 60 * 1000)
   };
 };
-
-export const getSignedUrlForPath = async (path: string) => {
-  const signedUrlData = await getSignedUrl(path, 60);
-
-  if (!signedUrlData) {
-    throw new NotFoundError('Could not generate signed URL for the specified path');
-  }
-
-  return {
-    signedUrl: signedUrlData.signedUrl,
-    expiresAt: signedUrlData.expiresAt
-  };
-};

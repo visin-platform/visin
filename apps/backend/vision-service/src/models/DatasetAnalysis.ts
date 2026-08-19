@@ -2,7 +2,8 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IDatasetAnalysis extends Document {
   dataset: string; // 'waymo', 'zod', etc.
-  size?: string; // Human-readable size (e.g., "1.2 GB", "500 MB")
+  fileId?: string; // file-service path of the uploaded dataset archive
+  size?: string; // Human-readable size, derived from the uploaded file
   data: Record<string, unknown>; // Dynamic JSON structure
   createdAt: Date;
   updatedAt: Date;
@@ -15,6 +16,12 @@ const DatasetAnalysisSchema: Schema = new Schema(
       required: true,
       trim: true,
       index: true
+    },
+    // Always a `datasets/<uuid>/<filename>` path handed out by
+    // POST /analysis/upload-url — see `assertDatasetFileId`.
+    fileId: {
+      type: String,
+      trim: true
     },
     size: {
       type: String,

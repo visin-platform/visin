@@ -1,5 +1,7 @@
 import express from 'express';
 import {
+  createUploadUrl,
+  downloadAnalysis,
   uploadAnalysis,
   getAllAnalyses,
   getAnalysisById,
@@ -11,6 +13,7 @@ import {
 import { authMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '@visin/backend-core';
 import {
+  analysisUploadUrlBodySchema,
   uploadAnalysisBodySchema,
   updateAnalysisBodySchema,
   getAllAnalysesQuerySchema,
@@ -20,7 +23,10 @@ import {
 
 const router = express.Router();
 
-// POST /analysis/upload - Upload analysis JSON
+// POST /analysis/upload-url - Signed URL for uploading a dataset archive
+router.post('/upload-url', authMiddleware, validateRequest({ body: analysisUploadUrlBodySchema }), createUploadUrl);
+
+// POST /analysis/upload - Create/upload a dataset analysis
 router.post('/upload', authMiddleware, validateRequest({ body: uploadAnalysisBodySchema }), uploadAnalysis);
 
 // GET /analysis - Get all analyses with optional filtering
@@ -28,6 +34,9 @@ router.get('/', validateRequest({ query: getAllAnalysesQuerySchema }), getAllAna
 
 // GET /analysis/dataset/:name - Get analyses by dataset name
 router.get('/dataset/:name', validateRequest({ query: getAnalysisByDatasetQuerySchema }), getAnalysisByDataset);
+
+// GET /analysis/:id/download - Download URL for the dataset archive
+router.get('/:id/download', downloadAnalysis);
 
 // GET /analysis/:id - Get analysis by ID
 router.get('/:id', getAnalysisById);

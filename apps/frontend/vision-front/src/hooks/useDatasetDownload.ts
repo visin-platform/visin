@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { datasetService, Dataset } from '../services/datasetService';
-import { DatasetAnalysis } from '../services/analysisService';
+import { DatasetAnalysis, getAnalysisDownloadUrl } from '../services/analysisService';
 
 function triggerDownload(url: string, filename: string) {
   const link = document.createElement('a');
@@ -17,40 +16,10 @@ export function useDatasetDownload(onError: (message: string) => void) {
   const download = async (analysis: DatasetAnalysis) => {
     try {
       setDownloadingId(analysis._id);
-      const filename = `${analysis.dataset}.zip`;
-
-      if (analysis.downloadUrl) {
-        // A `datasets/` value is a file-service storage path, not a URL, so it
-        // has to be exchanged for a signed URL first.
-        if (analysis.downloadUrl.startsWith('datasets/')) {
-          try {
-            const signedUrlData = await datasetService.getSignedUrl(analysis.downloadUrl);
-            triggerDownload(signedUrlData.signedUrl, filename);
-          } catch {
-            onError('Failed to generate download URL for storage path');
-          }
-          return;
-        }
-
-        triggerDownload(analysis.downloadUrl, filename);
-        return;
-      }
-
-      // Otherwise, fall back to dataset lookup
-      const datasets = await datasetService.getDatasets({ search: analysis.dataset, limit: 1 });
-      const dataset = datasets.data.datasets.find((d: Dataset) => d.name === analysis.dataset);
-
-      if (!dataset?.uuid) {
-        onError('Dataset not found or missing UUID');
-        return;
-      }
-
-      const downloadData = await datasetService.downloadDataset(dataset.uuid);
-      if (downloadData.downloadUrl) {
-        triggerDownload(downloadData.downloadUrl, filename);
-      } else {
-        onError('No download URL available');
-      }
+      // vision-service resolves the stored file to a signed URL — the browser
+      // never has to know whether the record holds a path or an external link.
+      const { downloadUrl } = await getAnalysisDownloadUrl(analysis._id);
+      triggerDownload(downloadUrl, `${analysis.dataset}.zip`);
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Failed to download dataset');
     } finally {

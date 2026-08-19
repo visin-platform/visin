@@ -59,6 +59,9 @@ jest.mock('../../services/datasetImageService', () => ({
 }));
 jest.mock('../../services/fileServiceClient', () => ({
   getSignedUrl: jest.fn(),
+  getUploadSignedUrl: jest.fn(),
+  getFileMetadata: jest.fn(),
+  deleteFile: jest.fn(),
 }));
 jest.mock('../../services/projectAccessService', () => ({
   isProjectOwner: jest.fn(),
@@ -82,7 +85,7 @@ import DatasetImage from '../../models/DatasetImage';
 import ApiToken from '../../models/ApiToken';
 import Training from '../../models/Training';
 import { getLabelingStats } from '../../services/datasetImageService';
-import { getSignedUrl } from '../../services/fileServiceClient';
+import { getSignedUrl, getUploadSignedUrl, getFileMetadata, deleteFile } from '../../services/fileServiceClient';
 import { isProjectOwner } from '../../services/projectAccessService';
 
 const mockedAnalysis = DatasetAnalysis as unknown as jest.Mock & Record<string, jest.Mock>;
@@ -94,6 +97,10 @@ const mockedApiToken = ApiToken as unknown as jest.Mock & Record<string, jest.Mo
 const mockedTraining = Training as unknown as Record<string, jest.Mock>;
 const mockedLabelingStats = getLabelingStats as jest.Mock;
 const mockedGetSignedUrl = getSignedUrl as jest.Mock;
+const mockedGetUploadUrl = getUploadSignedUrl as jest.Mock;
+const mockedGetFileMetadata = getFileMetadata as jest.Mock;
+const mockedDeleteFile = deleteFile as jest.Mock;
+const FILE_ID = 'datasets/11111111-2222-4333-8444-555555555555/ds.zip';
 const mockedIsOwner = isProjectOwner as jest.Mock;
 
 type AnyDoc = Record<string, unknown>;
@@ -138,17 +145,43 @@ beforeEach(() => {
 });
 
 describe('analysisController', () => {
-  it('uploadAnalysis stores data with downloadUrl folded in', async () => {
-    mockedAnalysis.mockImplementation((d: AnyDoc) => withToObject({ ...d, _id: 'a1' }));
+  it('createUploadUrl issues a signed URL under a datasets/ path', async () => {
+    mockedGetUploadUrl.mockResolvedValue('http://upload');
     const res = makeRes();
 
-    await analysisCtrl.uploadAnalysis(
-      makeReq({ body: { dataset: 'waymo', size: '1GB', data: { k: 1 }, downloadUrl: 'http://dl' } }),
-      res
-    );
+    await analysisCtrl.createUploadUrl(makeReq({ body: { filename: 'my ds.zip', mimetype: 'application/zip' } }), res);
 
-    expect(mockedAnalysis.mock.calls[0][0].data).toEqual({ k: 1, downloadUrl: 'http://dl' });
+    const [fileId, mimetype] = mockedGetUploadUrl.mock.calls[0];
+    expect(fileId).toMatch(/^datasets\/[0-9a-f-]{36}\/my_ds\.zip$/);
+    expect(mimetype).toBe('application/zip');
+    expect(res.json.mock.calls[0][0].data.uploadUrl).toBe('http://upload');
+  });
+
+  it('createUploadUrl strips directory traversal out of the filename', async () => {
+    mockedGetUploadUrl.mockResolvedValue('http://upload');
+
+    await analysisCtrl.createUploadUrl(makeReq({ body: { filename: '../../etc/passwd', mimetype: 'text/plain' } }), makeRes());
+
+    expect(mockedGetUploadUrl.mock.calls[0][0]).toMatch(/^datasets\/[0-9a-f-]{36}\/passwd$/);
+  });
+
+  it('uploadAnalysis records the fileId and derives size from the stored file', async () => {
+    mockedAnalysis.mockImplementation((d: AnyDoc) => withToObject({ ...d, _id: 'a1' }));
+    mockedGetFileMetadata.mockResolvedValue({ size: 2621440 });
+    const res = makeRes();
+
+    await analysisCtrl.uploadAnalysis(makeReq({ body: { dataset: 'waymo', fileId: FILE_ID } }), res);
+
+    expect(mockedAnalysis.mock.calls[0][0]).toMatchObject({ dataset: 'waymo', fileId: FILE_ID, size: '2.5 MB' });
     expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json.mock.calls[0][0].data.downloadUrl).toBe(FILE_ID);
+  });
+
+  it('uploadAnalysis rejects a fileId this service never issued', async () => {
+    await expect(
+      analysisCtrl.uploadAnalysis(makeReq({ body: { dataset: 'waymo', fileId: 'u1/album/original.png' } }), makeRes())
+    ).rejects.toThrow('Invalid fileId');
+    expect(mockedAnalysis).not.toHaveBeenCalled();
   });
 
   it('getAllAnalyses lists with dataset filter, pagination, and top-level downloadUrl', async () => {
@@ -176,21 +209,63 @@ describe('analysisController', () => {
     expect(res.json.mock.calls[0][0].data.downloadUrl).toBeUndefined();
   });
 
-  it('updateAnalysis 404s or updates', async () => {
-    mockedAnalysis.findByIdAndUpdate.mockResolvedValue(null);
+  it('updateAnalysis 404s for an unknown id', async () => {
+    mockedAnalysis.findById.mockResolvedValue(null);
     await expect(analysisCtrl.updateAnalysis(makeReq({ params: { id: 'x' } }), makeRes())).rejects.toThrow(
       'Analysis not found'
     );
+  });
 
-    mockedAnalysis.findByIdAndUpdate.mockResolvedValue(
-      withToObject({ _id: 'a1', dataset: 'zod', data: { downloadUrl: 'u' } })
+  it('updateAnalysis renames without touching the stored analysis JSON', async () => {
+    const doc = withToObject({ _id: 'a1', dataset: 'zod', fileId: FILE_ID, data: { k: 1 }, markModified: jest.fn() });
+    mockedAnalysis.findById.mockResolvedValue(doc);
+    const res = makeRes();
+
+    await analysisCtrl.updateAnalysis(makeReq({ params: { id: 'a1' }, body: { dataset: 'renamed' } }), res);
+
+    expect(doc.dataset).toBe('renamed');
+    expect(doc.data).toEqual({ k: 1 });
+    expect(res.json.mock.calls[0][0].data.downloadUrl).toBe(FILE_ID);
+  });
+
+  it('updateAnalysis re-reads size and drops the replaced archive when the file changes', async () => {
+    const newFileId = 'datasets/99999999-2222-4333-8444-555555555555/new.zip';
+    const doc = withToObject({ _id: 'a1', dataset: 'zod', fileId: FILE_ID, data: {}, markModified: jest.fn() });
+    mockedAnalysis.findById.mockResolvedValue(doc);
+    mockedGetFileMetadata.mockResolvedValue({ size: 1024 });
+
+    await analysisCtrl.updateAnalysis(makeReq({ params: { id: 'a1' }, body: { fileId: newFileId } }), makeRes());
+
+    expect(doc.fileId).toBe(newFileId);
+    expect(doc.size).toBe('1.0 KB');
+    expect(mockedDeleteFile).toHaveBeenCalledWith(FILE_ID);
+  });
+
+  it('downloadAnalysis signs the stored file and 404s when there is none', async () => {
+    mockedAnalysis.findById.mockResolvedValue(withToObject({ _id: 'a1', fileId: FILE_ID, data: {} }));
+    mockedGetSignedUrl.mockResolvedValue({ signedUrl: 'http://signed', expiresAt: 'later' });
+    const res = makeRes();
+
+    await analysisCtrl.downloadAnalysis(makeReq({ params: { id: 'a1' } }), res);
+    expect(mockedGetSignedUrl).toHaveBeenCalledWith(FILE_ID, 60);
+    expect(res.json.mock.calls[0][0].data.downloadUrl).toBe('http://signed');
+
+    mockedAnalysis.findById.mockResolvedValue(withToObject({ _id: 'a1', data: {} }));
+    await expect(analysisCtrl.downloadAnalysis(makeReq({ params: { id: 'a1' } }), makeRes())).rejects.toThrow(
+      'no file to download'
+    );
+  });
+
+  it('downloadAnalysis passes through a legacy external URL untouched', async () => {
+    mockedAnalysis.findById.mockResolvedValue(
+      withToObject({ _id: 'a1', data: { downloadUrl: 'https://cdn.example/ds.zip' } })
     );
     const res = makeRes();
-    await analysisCtrl.updateAnalysis(
-      makeReq({ params: { id: 'a1' }, body: { dataset: 'zod', data: {} } }),
-      res
-    );
-    expect(res.json.mock.calls[0][0].data.downloadUrl).toBe('u');
+
+    await analysisCtrl.downloadAnalysis(makeReq({ params: { id: 'a1' } }), res);
+
+    expect(mockedGetSignedUrl).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].data.downloadUrl).toBe('https://cdn.example/ds.zip');
   });
 
   it('getAnalysisByDataset pages results for one dataset', async () => {
@@ -213,10 +288,11 @@ describe('analysisController', () => {
       'Analysis not found'
     );
 
-    mockedAnalysis.findByIdAndDelete.mockResolvedValue({ _id: 'a1' });
+    mockedAnalysis.findByIdAndDelete.mockResolvedValue({ _id: 'a1', fileId: FILE_ID });
     const res = makeRes();
     await analysisCtrl.deleteAnalysis(makeReq({ params: { id: 'a1' } }), res);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(mockedDeleteFile).toHaveBeenCalledWith(FILE_ID);
   });
 
   it('compareAnalyses shapes comparison data and summary', async () => {
@@ -399,18 +475,6 @@ describe('datasetController', () => {
     mockedGetSignedUrl.mockResolvedValue(null);
     await expect(
       datasetCtrl.downloadDataset(makeReq({ params: { uuid: 'u' } }), makeRes())
-    ).rejects.toThrow('Could not generate signed URL');
-  });
-
-  it('getSignedUrlForPath signs arbitrary paths or 404s', async () => {
-    mockedGetSignedUrl.mockResolvedValue({ signedUrl: 'http://s', expiresAt: 'later' });
-    const res = makeRes();
-    await datasetCtrl.getSignedUrlForPath(makeReq({ query: { path: 'a/b' } }), res);
-    expect(res.json.mock.calls[0][0].data.signedUrl).toBe('http://s');
-
-    mockedGetSignedUrl.mockResolvedValue(null);
-    await expect(
-      datasetCtrl.getSignedUrlForPath(makeReq({ query: { path: 'a/b' } }), makeRes())
     ).rejects.toThrow('Could not generate signed URL');
   });
 });

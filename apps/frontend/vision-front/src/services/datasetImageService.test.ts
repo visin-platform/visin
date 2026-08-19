@@ -78,6 +78,7 @@ describe('datasetImageService', () => {
       originalName: 'f.png',
       fileId: 'm1',
       datasetId: 'ds1',
+      categoryId: 'cat1',
       mimetype: 'image/png',
       size: 100
     });

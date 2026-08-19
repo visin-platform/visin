@@ -10,10 +10,10 @@ import {
   alpha
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { Refresh as RefreshIcon, Add as AddIcon } from '@mui/icons-material';
+import { Refresh as RefreshIcon, CloudUpload as UploadIcon } from '@mui/icons-material';
 import { createAnalysis } from '../services/analysisService';
 import DatasetsTable from '../components/DatasetsTable';
-import CreateAnalysisModal from '../components/CreateAnalysisModal';
+import DatasetUploadDialog from '../components/dataset/DatasetUploadDialog';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
@@ -60,21 +60,21 @@ export const DatasetsPage: React.FC = () => {
     }
   };
 
-  // Handle create new analysis
-  const handleCreateAnalysis = async (datasetName: string, downloadUrl?: string, size?: string) => {
+  // Handle create new dataset
+  const handleCreateAnalysis = async (datasetName: string, file?: File) => {
     try {
       setCreating(true);
       setError(null);
 
-      const newAnalysis = await createAnalysis(datasetName, downloadUrl, size);
+      const newAnalysis = await createAnalysis(datasetName, file);
 
+      setShowCreateModal(false);
       // Navigate to the detail page
       navigate(`/datasets/${newAnalysis._id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create analysis');
+      setError(err instanceof Error ? err.message : 'Failed to create dataset');
     } finally {
       setCreating(false);
-      setShowCreateModal(false);
     }
   };
 
@@ -108,7 +108,7 @@ export const DatasetsPage: React.FC = () => {
           {isAuthenticated && (
             <Button
               variant="contained"
-              startIcon={<AddIcon />}
+              startIcon={<UploadIcon />}
               onClick={() => setShowCreateModal(true)}
               disabled={creating}
               sx={{
@@ -118,7 +118,7 @@ export const DatasetsPage: React.FC = () => {
                 boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
               }}
             >
-              Create Dataset
+              Upload Dataset
             </Button>
           )}
           <IconButton
@@ -150,12 +150,15 @@ export const DatasetsPage: React.FC = () => {
           onCompareSelected={handleCompareSelected}
         />
       </Box>
-      {/* Create Analysis Modal */}
-      <CreateAnalysisModal
+      {/* Upload Dataset Modal */}
+      <DatasetUploadDialog
         open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onCreate={handleCreateAnalysis}
         loading={creating}
+        title="Upload Dataset"
+        submitLabel="Upload"
+        fileRequired
+        onCancel={() => setShowCreateModal(false)}
+        onSubmit={handleCreateAnalysis}
       />
     </Container>
   );

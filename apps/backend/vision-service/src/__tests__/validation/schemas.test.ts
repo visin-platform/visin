@@ -1,5 +1,6 @@
 import { paginationSchema, sortOrderSchema, looseStringParam } from '../../validation/common';
 import {
+  analysisUploadUrlBodySchema,
   uploadAnalysisBodySchema,
   updateAnalysisBodySchema,
   getAllAnalysesQuerySchema,
@@ -34,7 +35,6 @@ import {
 import {
   getDatasetsQuerySchema,
   createDatasetBodySchema,
-  getSignedUrlForPathQuerySchema,
 } from '../../validation/datasetSchemas';
 import {
   getEpochsByTrainingQuerySchema,
@@ -101,13 +101,26 @@ describe('common', () => {
 });
 
 describe('analysisSchemas', () => {
-  it('uploadAnalysisBodySchema requires dataset', () => {
+  it('uploadAnalysisBodySchema requires dataset and drops client-set size/downloadUrl', () => {
     expect(uploadAnalysisBodySchema.safeParse({ dataset: 'waymo' }).success).toBe(true);
     expect(uploadAnalysisBodySchema.safeParse({}).success).toBe(false);
+    expect(uploadAnalysisBodySchema.parse({ dataset: 'waymo', size: '9 TB', downloadUrl: 'http://x' })).toEqual({
+      dataset: 'waymo'
+    });
   });
 
-  it('updateAnalysisBodySchema defaults data to an empty object', () => {
-    expect(updateAnalysisBodySchema.parse({ dataset: 'zod' }).data).toEqual({});
+  it('updateAnalysisBodySchema leaves omitted fields out so a rename cannot wipe data', () => {
+    expect(updateAnalysisBodySchema.parse({ dataset: 'zod' })).toEqual({ dataset: 'zod' });
+    expect(updateAnalysisBodySchema.parse({ data: { a: 1 } })).toEqual({ data: { a: 1 } });
+    expect(updateAnalysisBodySchema.safeParse({ dataset: '' }).success).toBe(false);
+  });
+
+  it('analysisUploadUrlBodySchema requires a filename and defaults the mimetype', () => {
+    expect(analysisUploadUrlBodySchema.parse({ filename: 'ds.zip' })).toEqual({
+      filename: 'ds.zip',
+      mimetype: 'application/octet-stream'
+    });
+    expect(analysisUploadUrlBodySchema.safeParse({}).success).toBe(false);
   });
 
   it('query schemas default limit/skip', () => {
@@ -267,11 +280,6 @@ describe('datasetSchemas', () => {
   it('createDatasetBodySchema requires a name', () => {
     expect(createDatasetBodySchema.safeParse({ name: ' D ' }).success).toBe(true);
     expect(createDatasetBodySchema.safeParse({ name: '  ' }).success).toBe(false);
-  });
-
-  it('getSignedUrlForPathQuerySchema requires a path', () => {
-    expect(getSignedUrlForPathQuerySchema.safeParse({ path: 'a/b' }).success).toBe(true);
-    expect(getSignedUrlForPathQuerySchema.safeParse({}).success).toBe(false);
   });
 });
 

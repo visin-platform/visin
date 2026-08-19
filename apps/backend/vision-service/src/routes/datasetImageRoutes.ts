@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+  getUploadUrl,
   createDatasetImage,
   getAllImages,
   getImagesByDataset,
@@ -11,6 +12,7 @@ import {
 import { authMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '@visin/backend-core';
 import {
+  getUploadUrlBodySchema,
   getAllImagesQuerySchema,
   getImagesByDatasetQuerySchema,
   createDatasetImageBodySchema,
@@ -25,6 +27,7 @@ const router = express.Router();
 router.get('/', validateRequest({ query: getAllImagesQuerySchema }), getAllImages);
 router.get('/dataset/:datasetId', validateRequest({ query: getImagesByDatasetQuerySchema }), getImagesByDataset);
 router.get('/:id', getImageById);
+router.post('/upload-url', authMiddleware, validateRequest({ body: getUploadUrlBodySchema }), getUploadUrl);
 router.post('/', authMiddleware, validateRequest({ body: createDatasetImageBodySchema }), createDatasetImage);
 router.put('/:id', authMiddleware, validateRequest({ body: updateImageBodySchema }), updateImage);
 router.delete('/:id', authMiddleware, deleteImage);

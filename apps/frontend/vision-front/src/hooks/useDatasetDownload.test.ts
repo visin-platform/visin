@@ -1,18 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 
-vi.mock('../services/datasetService', () => ({
-  datasetService: {
-    getSignedUrl: vi.fn(),
-    getDatasets: vi.fn(),
-    downloadDataset: vi.fn()
-  }
+vi.mock('../services/analysisService', () => ({
+  getAnalysisDownloadUrl: vi.fn()
 }));
 
-import { datasetService } from '../services/datasetService';
+import { getAnalysisDownloadUrl } from '../services/analysisService';
 import { useDatasetDownload } from './useDatasetDownload';
 
-const mockedService = vi.mocked(datasetService);
+const mockedGetDownloadUrl = vi.mocked(getAnalysisDownloadUrl);
 
 describe('useDatasetDownload', () => {
   let clickSpy: ReturnType<typeof vi.spyOn>;
@@ -26,107 +22,48 @@ describe('useDatasetDownload', () => {
     clickSpy.mockRestore();
   });
 
-  it('downloads directly using an absolute downloadUrl', async () => {
+  it('resolves the download URL through the analysis endpoint', async () => {
+    mockedGetDownloadUrl.mockResolvedValue({ downloadUrl: 'http://signed.example/file.zip' });
     const onError = vi.fn();
     const { result } = renderHook(() => useDatasetDownload(onError));
 
     await act(async () => {
-      await result.current.download({ _id: 'a1', dataset: 'my-ds', downloadUrl: 'http://direct.example/file.zip' } as any);
+      await result.current.download({ _id: 'a1', dataset: 'my-ds' } as never);
     });
 
-    expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(onError).not.toHaveBeenCalled();
-    expect(mockedService.getSignedUrl).not.toHaveBeenCalled();
-  });
-
-  it('resolves a datasets/-prefixed downloadUrl through getSignedUrl', async () => {
-    mockedService.getSignedUrl.mockResolvedValue({ signedUrl: 'http://signed.example/file.zip', expiresAt: 'later' });
-    const onError = vi.fn();
-    const { result } = renderHook(() => useDatasetDownload(onError));
-
-    await act(async () => {
-      await result.current.download({ _id: 'a1', dataset: 'my-ds', downloadUrl: 'datasets/my-ds.zip' } as any);
-    });
-
-    expect(mockedService.getSignedUrl).toHaveBeenCalledWith('datasets/my-ds.zip');
+    expect(mockedGetDownloadUrl).toHaveBeenCalledWith('a1');
     expect(clickSpy).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('reports an error when getSignedUrl fails for a storage path', async () => {
-    mockedService.getSignedUrl.mockRejectedValue(new Error('boom'));
+  it('reports the error message when no download URL can be resolved', async () => {
+    mockedGetDownloadUrl.mockRejectedValue(new Error('This dataset has no file to download'));
     const onError = vi.fn();
     const { result } = renderHook(() => useDatasetDownload(onError));
 
     await act(async () => {
-      await result.current.download({ _id: 'a1', dataset: 'my-ds', downloadUrl: 'datasets/my-ds.zip' } as any);
+      await result.current.download({ _id: 'a1', dataset: 'my-ds' } as never);
     });
 
-    expect(onError).toHaveBeenCalledWith('Failed to generate download URL for storage path');
-  });
-
-  it('falls back to a dataset lookup when there is no downloadUrl', async () => {
-    mockedService.getDatasets.mockResolvedValue({
-      success: true,
-      data: { datasets: [{ name: 'my-ds', uuid: 'uuid-1' }] as any, pagination: {} as any }
-    });
-    mockedService.downloadDataset.mockResolvedValue({ downloadUrl: 'http://fallback.example/file.zip' });
-    const onError = vi.fn();
-    const { result } = renderHook(() => useDatasetDownload(onError));
-
-    await act(async () => {
-      await result.current.download({ _id: 'a1', dataset: 'my-ds' } as any);
-    });
-
-    expect(mockedService.getDatasets).toHaveBeenCalledWith({ search: 'my-ds', limit: 1 });
-    expect(mockedService.downloadDataset).toHaveBeenCalledWith('uuid-1');
-    expect(clickSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('errors when the fallback dataset lookup finds no matching dataset', async () => {
-    mockedService.getDatasets.mockResolvedValue({ success: true, data: { datasets: [], pagination: {} as any } });
-    const onError = vi.fn();
-    const { result } = renderHook(() => useDatasetDownload(onError));
-
-    await act(async () => {
-      await result.current.download({ _id: 'a1', dataset: 'missing-ds' } as any);
-    });
-
-    expect(onError).toHaveBeenCalledWith('Dataset not found or missing UUID');
-    expect(mockedService.downloadDataset).not.toHaveBeenCalled();
-  });
-
-  it('errors when the fallback download has no downloadUrl', async () => {
-    mockedService.getDatasets.mockResolvedValue({
-      success: true,
-      data: { datasets: [{ name: 'my-ds', uuid: 'uuid-1' }] as any, pagination: {} as any }
-    });
-    mockedService.downloadDataset.mockResolvedValue({ downloadUrl: '' });
-    const onError = vi.fn();
-    const { result } = renderHook(() => useDatasetDownload(onError));
-
-    await act(async () => {
-      await result.current.download({ _id: 'a1', dataset: 'my-ds' } as any);
-    });
-
-    expect(onError).toHaveBeenCalledWith('No download URL available');
+    expect(onError).toHaveBeenCalledWith('This dataset has no file to download');
+    expect(clickSpy).not.toHaveBeenCalled();
   });
 
   it('sets downloadingId while downloading and clears it afterwards', async () => {
-    let resolveGet: (v: any) => void = () => {};
-    mockedService.getSignedUrl.mockImplementation(() => new Promise((resolve) => { resolveGet = resolve; }));
+    let resolveGet: (v: { downloadUrl: string }) => void = () => {};
+    mockedGetDownloadUrl.mockImplementation(() => new Promise((resolve) => { resolveGet = resolve; }));
     const onError = vi.fn();
     const { result } = renderHook(() => useDatasetDownload(onError));
 
     let downloadPromise!: Promise<void>;
     act(() => {
-      downloadPromise = result.current.download({ _id: 'a1', dataset: 'my-ds', downloadUrl: 'datasets/my-ds.zip' } as any);
+      downloadPromise = result.current.download({ _id: 'a1', dataset: 'my-ds' } as never);
     });
 
     await waitFor(() => expect(result.current.downloadingId).toBe('a1'));
 
     await act(async () => {
-      resolveGet({ signedUrl: 'http://x', expiresAt: 'later' });
+      resolveGet({ downloadUrl: 'http://x' });
       await downloadPromise;
     });
 

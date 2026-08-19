@@ -29,6 +29,16 @@ export const getImagesByDatasetQuerySchema = z.object({
 });
 export type GetImagesByDatasetQuery = z.infer<typeof getImagesByDatasetQuerySchema>;
 
+const UPLOAD_URL_REQUIRED_MSG = 'Missing required fields: filename, mimetype, datasetId';
+
+export const getUploadUrlBodySchema = z.object({
+  filename: z.string().min(1, UPLOAD_URL_REQUIRED_MSG),
+  mimetype: z.string().min(1, UPLOAD_URL_REQUIRED_MSG),
+  datasetId: z.string().min(1, UPLOAD_URL_REQUIRED_MSG),
+  categoryId: z.string().min(1).optional()
+});
+export type GetUploadUrlBody = z.infer<typeof getUploadUrlBodySchema>;
+
 const REQUIRED_FIELDS_MSG =
   'Missing required fields: filename, originalName, fileId, datasetId, categoryId, mimetype, size';
 

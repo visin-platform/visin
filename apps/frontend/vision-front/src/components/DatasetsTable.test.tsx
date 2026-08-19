@@ -4,13 +4,13 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { AnalysisTable } from './DatasetsTable';
-import { getAllAnalyses, deleteAnalysis, updateAnalysis, DatasetAnalysis } from '../services/analysisService';
+import { getAllAnalyses, deleteAnalysis, editAnalysis, DatasetAnalysis } from '../services/analysisService';
 import { useAuth } from '../contexts/AuthContext';
 
 vi.mock('../services/analysisService', () => ({
   getAllAnalyses: vi.fn(),
   deleteAnalysis: vi.fn(),
-  updateAnalysis: vi.fn()
+  editAnalysis: vi.fn()
 }));
 
 vi.mock('../contexts/AuthContext', () => ({
@@ -23,7 +23,7 @@ vi.mock('../hooks/useDatasetDownload', () => ({
 
 const mockedGetAllAnalyses = vi.mocked(getAllAnalyses);
 const mockedDeleteAnalysis = vi.mocked(deleteAnalysis);
-const mockedUpdateAnalysis = vi.mocked(updateAnalysis);
+const mockedEditAnalysis = vi.mocked(editAnalysis);
 const mockedUseAuth = vi.mocked(useAuth);
 
 const analysis1: DatasetAnalysis = {
@@ -141,12 +141,12 @@ describe('AnalysisTable (DatasetsTable)', () => {
     expect(onCompareSelected).toHaveBeenCalled();
   });
 
-  it('opens the edit dialog, edits and confirms an update', async () => {
+  it('opens the edit dialog pre-filled with the name and saves a rename', async () => {
     mockedGetAllAnalyses.mockResolvedValue({
       data: [analysis1],
       pagination: { total: 1, limit: 100, skip: 0 }
     } as any);
-    mockedUpdateAnalysis.mockResolvedValue(analysis1 as any);
+    mockedEditAnalysis.mockResolvedValue(analysis1 as any);
     renderTable();
 
     await waitFor(() => {
@@ -154,13 +154,34 @@ describe('AnalysisTable (DatasetsTable)', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /edit dataset/i }));
-    expect(screen.getByText('Edit Dataset Name')).toBeInTheDocument();
+    expect(screen.getByText('Edit Dataset')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /^update$/i }));
+    const nameField = screen.getByRole('textbox', { name: /dataset name/i });
+    expect(nameField).toHaveValue('Dataset Alpha');
+    fireEvent.change(nameField, { target: { value: 'Dataset Renamed' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() => {
-      expect(mockedUpdateAnalysis).toHaveBeenCalledWith('a1', expect.objectContaining({ dataset: 'Dataset Alpha' }));
+      expect(mockedEditAnalysis).toHaveBeenCalledWith('a1', 'Dataset Renamed', undefined);
     });
+  });
+
+  it('does not offer size or download URL fields when editing', async () => {
+    mockedGetAllAnalyses.mockResolvedValue({
+      data: [analysis1],
+      pagination: { total: 1, limit: 100, skip: 0 }
+    } as any);
+    renderTable();
+
+    await waitFor(() => {
+      expect(screen.getByText('Dataset Alpha')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /edit dataset/i }));
+
+    expect(screen.queryByRole('textbox', { name: /size/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: /download url/i })).not.toBeInTheDocument();
   });
 
   it('opens the delete dialog and confirms deletion', async () => {

@@ -13,13 +13,22 @@ export interface AnalysisResponse {
 export interface DatasetAnalysis {
   _id: string;
   dataset: string;
+  // Both derived from the uploaded archive by vision-service — never set by
+  // the client, which is why neither is editable in the UI.
   size?: string;
+  fileId?: string;
   // Optional to reflect legacy records predating the `data` wrapper, where
   // the JSON payload lived at the document's top level instead.
   data?: Record<string, unknown>;
   downloadUrl?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AnalysisUploadUrl {
+  uploadUrl: string;
+  fileId: string;
+  expiresInMinutes: number;
 }
 
 export interface AnalysisComparisonResponse {
@@ -50,18 +59,51 @@ export const uploadAnalysis = async (analysisData: Record<string, unknown>): Pro
 };
 
 /**
- * Create new dataset analysis (without data initially)
+ * Get a signed URL for uploading a dataset archive straight to file-service
  */
-export const createAnalysis = async (datasetName: string, downloadUrl?: string, size?: string): Promise<DatasetAnalysis> => {
-  const body: { dataset: string; downloadUrl?: string; size?: string } = { dataset: datasetName };
-  if (downloadUrl) {
-    body.downloadUrl = downloadUrl;
-  }
-  if (size) {
-    body.size = size;
-  }
+const getAnalysisUploadUrl = async (file: File): Promise<AnalysisUploadUrl> => {
+  const response = await visionApi.post('/analysis/upload-url', {
+    filename: file.name,
+    mimetype: file.type || 'application/octet-stream'
+  });
+  return (response.data as ApiResponse<AnalysisUploadUrl>).data;
+};
 
-  const response = await visionApi.post('/analysis/upload', body);
+/**
+ * Upload the archive to the signed URL.
+ *
+ * Deliberately raw `fetch`, not `visionApi`: the signed URL points at
+ * file-service directly, so it needs neither the `/api` base URL nor the
+ * shared auth cookie (the signature in the URL itself is the credential).
+ */
+const uploadDatasetFile = async (uploadUrl: string, file: File): Promise<void> => {
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': file.type || 'application/octet-stream' }
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to upload dataset file');
+  }
+};
+
+/** Store the archive and return the `fileId` the backend records against it. */
+export const uploadDatasetArchive = async (file: File): Promise<string> => {
+  const upload = await getAnalysisUploadUrl(file);
+  await uploadDatasetFile(upload.uploadUrl, file);
+  return upload.fileId;
+};
+
+/**
+ * Create a new dataset from an uploaded archive.
+ *
+ * Size is read off the stored file by the backend, so it is never passed here.
+ */
+export const createAnalysis = async (datasetName: string, file?: File): Promise<DatasetAnalysis> => {
+  const fileId = file ? await uploadDatasetArchive(file) : undefined;
+
+  const response = await visionApi.post('/analysis/upload', { dataset: datasetName, fileId });
   return (response.data as ApiResponse<DatasetAnalysis>).data;
 };
 
@@ -103,11 +145,32 @@ export const getAnalysisById = async (id: string): Promise<DatasetAnalysis> => {
 };
 
 /**
- * Update analysis by ID
+ * Update analysis by ID. Only the fields passed are written — omitting `data`
+ * leaves the stored analysis JSON untouched.
  */
-export const updateAnalysis = async (id: string, analysisData: Record<string, unknown>): Promise<DatasetAnalysis> => {
+export const updateAnalysis = async (
+  id: string,
+  analysisData: { dataset?: string; fileId?: string; data?: Record<string, unknown> }
+): Promise<DatasetAnalysis> => {
   const response = await visionApi.put(`/analysis/${id}`, analysisData);
   return (response.data as ApiResponse<DatasetAnalysis>).data;
+};
+
+/**
+ * Rename a dataset and optionally replace its archive
+ */
+export const editAnalysis = async (id: string, datasetName: string, file?: File): Promise<DatasetAnalysis> => {
+  const fileId = file ? await uploadDatasetArchive(file) : undefined;
+
+  return updateAnalysis(id, { dataset: datasetName, fileId });
+};
+
+/**
+ * Get a download URL for an analysis' dataset archive
+ */
+export const getAnalysisDownloadUrl = async (id: string): Promise<{ downloadUrl: string; expiresAt?: string }> => {
+  const response = await visionApi.get(`/analysis/${id}/download`);
+  return (response.data as ApiResponse<{ downloadUrl: string; expiresAt?: string }>).data;
 };
 
 /**

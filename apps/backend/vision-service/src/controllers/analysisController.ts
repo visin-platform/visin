@@ -1,6 +1,24 @@
 import { Request, Response } from 'express';
 import * as analysisService from '../services/analysisService';
-import type { GetAllAnalysesQuery, GetAnalysisByDatasetQuery } from '../validation/analysisSchemas';
+import type {
+  AnalysisUploadUrlBody,
+  GetAllAnalysesQuery,
+  GetAnalysisByDatasetQuery
+} from '../validation/analysisSchemas';
+
+/**
+ * Issue a signed URL the browser uploads the dataset archive to directly
+ * POST /analysis/upload-url
+ */
+export const createUploadUrl = async (req: Request, res: Response): Promise<void> => {
+  const { filename, mimetype } = req.body as AnalysisUploadUrlBody;
+  const data = await analysisService.createUploadUrl({ filename, mimetype });
+
+  res.status(201).json({
+    success: true,
+    data
+  });
+};
 
 /**
  * Upload dataset analysis JSON
@@ -87,6 +105,20 @@ export const deleteAnalysis = async (req: Request, res: Response): Promise<void>
   res.json({
     success: true,
     message: 'Analysis deleted successfully'
+  });
+};
+
+/**
+ * Get a download URL for the dataset archive
+ * GET /analysis/:id/download
+ */
+export const downloadAnalysis = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params as { id: string };
+  const data = await analysisService.getAnalysisDownload(id);
+
+  res.json({
+    success: true,
+    data
   });
 };
 

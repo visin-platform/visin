@@ -16,6 +16,7 @@ import {
   ListItemSecondaryAction,
   Alert,
   FormControl,
+  FormHelperText,
   InputLabel,
   Select,
   MenuItem
@@ -106,27 +107,22 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
             filename: file.name,
             mimetype: file.type,
             datasetId,
-            ...(selectedCategory && { categoryId: selectedCategory })
+            categoryId: selectedCategory
           });
 
           // Upload the file straight to file-service using the signed URL
           await uploadFileToSignedUrl(signedUrlResponse.uploadUrl, file);
 
           // Create dataset image record in vision service with fileId
-          const imageData: Parameters<typeof createDatasetImage>[0] = {
+          await createDatasetImage({
             filename: file.name,
             originalName: file.name,
             fileId: signedUrlResponse.fileId,
             datasetId: datasetId,
+            categoryId: selectedCategory,
             mimetype: file.type,
             size: file.size
-          };
-
-          if (selectedCategory) {
-            imageData.categoryId = selectedCategory;
-          }
-
-          await createDatasetImage(imageData);
+          });
 
           completed++;
           setUploadProgress((completed / filesToUpload.length) * 100);
@@ -193,16 +189,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>Upload Example Images</DialogTitle>
       <DialogContent>
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Category (Optional)</InputLabel>
+        <FormControl fullWidth sx={{ mb: 2 }} required>
+          <InputLabel>Category</InputLabel>
           <Select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            label="Category (Optional)"
+            label="Category"
           >
-            <MenuItem value="">
-              <em>No Category</em>
-            </MenuItem>
             {categories.map((category) => (
               <MenuItem key={category._id} value={category._id}>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -220,6 +213,11 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
               </MenuItem>
             ))}
           </Select>
+          <FormHelperText>
+            {categories.length === 0
+              ? 'This dataset has no categories yet — add one on the Categories tab first.'
+              : 'Every image belongs to a category.'}
+          </FormHelperText>
         </FormControl>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -319,7 +317,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
         <Button
           onClick={uploadFiles}
           variant="contained"
-          disabled={files.length === 0 || uploading}
+          disabled={files.length === 0 || !selectedCategory || uploading}
           startIcon={<CloudUploadIcon />}
         >
           Upload {files.length} {files.length === 1 ? 'Image' : 'Images'}

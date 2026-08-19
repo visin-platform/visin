@@ -8,9 +8,32 @@ import {
   getImageById as getImageByIdService,
   updateImage as updateImageService,
   deleteImage as deleteImageService,
-  exportImageNames as exportImageNamesService
+  exportImageNames as exportImageNamesService,
+  getUploadSignedUrlRequest
 } from '../services/datasetImageService';
-import type { GetAllImagesQuery, GetImagesByDatasetQuery } from '../validation/datasetImageSchemas';
+import type {
+  GetAllImagesQuery,
+  GetImagesByDatasetQuery,
+  GetUploadUrlBody
+} from '../validation/datasetImageSchemas';
+
+// Signed URL for uploading a dataset image straight to file-service
+export const getUploadUrl = async (req: Request, res: Response): Promise<void> => {
+  const { filename, mimetype, datasetId, categoryId } = req.body as GetUploadUrlBody;
+
+  const data = await getUploadSignedUrlRequest({
+    filename,
+    mimetype,
+    datasetId,
+    categoryId,
+    userId: req.user?.id as string
+  });
+
+  res.json({
+    success: true,
+    data
+  });
+};
 
 // Get all images
 export const getAllImages = async (req: Request, res: Response): Promise<void> => {

@@ -71,6 +71,16 @@ components:
       required:
         - success
 
+    PaginatedResponse:
+      type: object
+      properties:
+        visualizations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Visualization'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
     PaginationMeta:
       type: object
       properties:
@@ -379,6 +389,15 @@ components:
           type: string
         dataset:
           type: string
+        fileId:
+          type: string
+          description: file-service path of the uploaded dataset archive
+        size:
+          type: string
+          description: Human-readable archive size, derived from the stored file
+        downloadUrl:
+          type: string
+          description: Alias of fileId, kept for existing clients
         data:
           type: object
         createdAt:
@@ -449,6 +468,28 @@ components:
       in: header
       name: x-api-token
       description: API token for authentication
+
+  # Referenced throughout `paths` — every error goes through the shared
+  # errorHandler, so they all share the Error shape.
+  responses:
+    BadRequest:
+      description: The request was rejected by validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The requested resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
 
 paths:
   # Datasets
@@ -677,11 +718,15 @@ paths:
           application/json:
             schema:
               type: object
+              required: [filename, originalName, fileId, datasetId, categoryId, mimetype, size]
               properties:
                 filename:
                   type: string
                 originalName:
                   type: string
+                fileId:
+                  type: string
+                  description: A fileId issued by POST /dataset-images/upload-url
                 datasetId:
                   type: string
                 categoryId:
@@ -724,6 +769,58 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/DatasetImage'
+
+  /dataset-images/upload-url:
+    post:
+      tags: [Dataset Images]
+      summary: Get a signed URL for uploading a dataset image
+      description: >
+        Returns a short-lived URL the client PUTs the image to directly, plus the
+        `fileId` to post back to POST /dataset-images.
+      security:
+        - ApiToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, mimetype, datasetId]
+              properties:
+                filename:
+                  type: string
+                mimetype:
+                  type: string
+                datasetId:
+                  type: string
+                categoryId:
+                  type: string
+      responses:
+        '200':
+          description: Upload URL created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      uploadUrl:
+                        type: string
+                      fileId:
+                        type: string
+                      datasetId:
+                        type: string
+                      categoryId:
+                        type: string
+                      expiresInMinutes:
+                        type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /dataset-images/dataset/{datasetId}:
     get:
@@ -2887,7 +2984,13 @@ paths:
           application/json:
             schema:
               type: object
+              description: Only the fields sent are written; omitting `data` leaves the stored analysis JSON untouched.
               properties:
+                dataset:
+                  type: string
+                fileId:
+                  type: string
+                  description: A fileId issued by POST /analysis/upload-url
                 data:
                   type: object
       responses:
@@ -2922,6 +3025,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/Success'
 
+  /analysis/{id}/download:
+    get:
+      tags: [Analysis]
+      summary: Get a download URL for the dataset archive
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Download URL created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      downloadUrl:
+                        type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /analysis/compare:
     post:
       tags: [Analysis]
@@ -2953,10 +3088,13 @@ paths:
                   data:
                     type: object
 
-  /analysis/upload:
+  /analysis/upload-url:
     post:
       tags: [Analysis]
-      summary: Upload analysis data
+      summary: Get a signed URL for uploading a dataset archive
+      description: >
+        Returns a short-lived URL the client PUTs the archive to directly, plus the
+        `fileId` to post back to /analysis/upload (or PUT /analysis/{id}).
       security:
         - ApiToken: []
       requestBody:
@@ -2965,9 +3103,55 @@ paths:
           application/json:
             schema:
               type: object
+              required: [filename]
+              properties:
+                filename:
+                  type: string
+                mimetype:
+                  type: string
+                  default: application/octet-stream
+      responses:
+        '201':
+          description: Upload URL created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      uploadUrl:
+                        type: string
+                      fileId:
+                        type: string
+                      expiresInMinutes:
+                        type: integer
+
+  /analysis/upload:
+    post:
+      tags: [Analysis]
+      summary: Upload analysis data
+      description: >
+        `size` is derived from the stored file, never taken from the request.
+      security:
+        - ApiToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dataset]
               properties:
                 dataset:
                   type: string
+                fileId:
+                  type: string
+                  description: A fileId issued by POST /analysis/upload-url
                 data:
                   type: object
       responses:

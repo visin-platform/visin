@@ -85,14 +85,5 @@ export const datasetService = {
   async downloadDataset(uuid: string): Promise<{ downloadUrl: string; expiresAt?: string }> {
     const response = await visionApi.get(`/datasets/download/${uuid}`);
     return (response.data as ApiResponse<{ downloadUrl: string; expiresAt?: string }>).data;
-  },
-
-  // Get signed URL for a specific storage path
-  async getSignedUrl(storagePath: string): Promise<{ signedUrl: string; expiresAt: string }> {
-    // For now, we'll use the existing download endpoint with a special parameter
-    const response = await visionApi.get(`/datasets/signed-url`, {
-      params: { path: storagePath }
-    });
-    return (response.data as ApiResponse<{ signedUrl: string; expiresAt: string }>).data;
   }
 };

@@ -28,13 +28,14 @@ vi.mock('../../components/DatasetsTable', () => ({
   )
 }));
 
-vi.mock('../../components/CreateAnalysisModal', () => ({
+const uploadedFile = new File(['x'], 'my-dataset.zip', { type: 'application/zip' });
+vi.mock('../../components/dataset/DatasetUploadDialog', () => ({
   default: (props: any) =>
     props.open ? (
-      <div data-testid="create-modal">
+      <div data-testid="upload-modal">
         <span data-testid="modal-loading">{String(props.loading)}</span>
-        <button onClick={() => props.onCreate('my-dataset', 'http://x', '10MB')}>submit-create</button>
-        <button onClick={() => props.onClose()}>close-modal</button>
+        <button onClick={() => props.onSubmit('my-dataset', uploadedFile)}>submit-create</button>
+        <button onClick={() => props.onCancel()}>close-modal</button>
       </div>
     ) : null
 }));
@@ -51,30 +52,30 @@ describe('DatasetsPage', () => {
     useAuthMock.mockReturnValue({ isAuthenticated: false });
   });
 
-  it('hides the Create Dataset button when unauthenticated', () => {
+  it('hides the Upload Dataset button when unauthenticated', () => {
     render(<DatasetsPage />);
-    expect(screen.queryByText('Create Dataset')).not.toBeInTheDocument();
+    expect(screen.queryByText('Upload Dataset')).not.toBeInTheDocument();
     expect(screen.getByTestId('datasets-table')).toBeInTheDocument();
   });
 
-  it('shows the Create Dataset button and opens the modal when authenticated', () => {
+  it('shows the Upload Dataset button and opens the modal when authenticated', () => {
     useAuthMock.mockReturnValue({ isAuthenticated: true });
     render(<DatasetsPage />);
-    const createBtn = screen.getByText('Create Dataset');
+    const createBtn = screen.getByText('Upload Dataset');
     expect(createBtn).toBeInTheDocument();
     fireEvent.click(createBtn);
-    expect(screen.getByTestId('create-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('upload-modal')).toBeInTheDocument();
   });
 
   it('creates an analysis and navigates to its detail page on success', async () => {
     useAuthMock.mockReturnValue({ isAuthenticated: true });
     createAnalysisMock.mockResolvedValue({ _id: 'new-id-1' });
     render(<DatasetsPage />);
-    fireEvent.click(screen.getByText('Create Dataset'));
+    fireEvent.click(screen.getByText('Upload Dataset'));
     fireEvent.click(screen.getByText('submit-create'));
 
     await screen.findByTestId('datasets-table');
-    expect(createAnalysisMock).toHaveBeenCalledWith('my-dataset', 'http://x', '10MB');
+    expect(createAnalysisMock).toHaveBeenCalledWith('my-dataset', uploadedFile);
     expect(navigateMock).toHaveBeenCalledWith('/datasets/new-id-1');
   });
 
@@ -82,7 +83,7 @@ describe('DatasetsPage', () => {
     useAuthMock.mockReturnValue({ isAuthenticated: true });
     createAnalysisMock.mockRejectedValue(new Error('boom'));
     render(<DatasetsPage />);
-    fireEvent.click(screen.getByText('Create Dataset'));
+    fireEvent.click(screen.getByText('Upload Dataset'));
     fireEvent.click(screen.getByText('submit-create'));
 
     expect(await screen.findByText('boom')).toBeInTheDocument();

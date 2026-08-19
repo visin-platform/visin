@@ -121,7 +121,8 @@ export const createDatasetImage = async (imageData: {
   originalName: string;
   fileId: string;
   datasetId: string;
-  categoryId?: string;
+  // Required: every image record belongs to a category (enforced by the model).
+  categoryId: string;
   title?: string;
   description?: string;
   mimetype: string;

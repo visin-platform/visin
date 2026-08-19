@@ -1,17 +1,27 @@
 import { z } from '@visin/backend-core';
 
+// `size` and the download location are never client-supplied: the first is
+// derived from the stored file's metadata, the second is the `fileId` issued by
+// POST /analysis/upload-url.
 export const uploadAnalysisBodySchema = z.object({
   dataset: z.string().min(1, 'Missing required field: dataset'),
-  size: z.unknown().optional(),
-  data: z.record(z.string(), z.unknown()).optional(),
-  downloadUrl: z.string().optional()
+  fileId: z.string().min(1).optional(),
+  data: z.record(z.string(), z.unknown()).optional()
 });
 
+// Every field is optional so a rename doesn't have to round-trip (and risk
+// clobbering) the analysis JSON; only what's sent is written.
 export const updateAnalysisBodySchema = z.object({
-  dataset: z.string().min(1, 'Missing required field: dataset'),
-  size: z.unknown().optional(),
-  data: z.record(z.string(), z.unknown()).default({})
+  dataset: z.string().min(1, 'Dataset name cannot be empty').optional(),
+  fileId: z.string().min(1).optional(),
+  data: z.record(z.string(), z.unknown()).optional()
 });
+
+export const analysisUploadUrlBodySchema = z.object({
+  filename: z.string().min(1, 'Missing required field: filename'),
+  mimetype: z.string().min(1).default('application/octet-stream')
+});
+export type AnalysisUploadUrlBody = z.infer<typeof analysisUploadUrlBodySchema>;
 
 export const getAllAnalysesQuerySchema = z.object({
   dataset: z.string().optional(),

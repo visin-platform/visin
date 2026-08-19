@@ -8,6 +8,8 @@ import { visionApi } from '../config/visionApi';
 import {
   uploadAnalysis,
   createAnalysis,
+  editAnalysis,
+  getAnalysisDownloadUrl,
   getAllAnalyses,
   getAnalysesByDataset,
   getAnalysisById,
@@ -30,20 +32,66 @@ describe('analysisService', () => {
     expect(result).toEqual({ _id: '1', dataset: 'd' });
   });
 
-  it('createAnalysis includes downloadUrl and size when provided', async () => {
-    mockedApi.post.mockResolvedValue({ data: { data: { _id: '1' } } });
-    await createAnalysis('my-dataset', 'http://x', '10MB');
-    expect(mockedApi.post).toHaveBeenCalledWith('/analysis/upload', {
-      dataset: 'my-dataset',
-      downloadUrl: 'http://x',
-      size: '10MB'
+  it('createAnalysis uploads the archive first and posts the returned fileId', async () => {
+    mockedApi.post
+      .mockResolvedValueOnce({ data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/f.zip' } } })
+      .mockResolvedValueOnce({ data: { data: { _id: '1' } } });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const file = new File(['x'], 'my-dataset.zip', { type: 'application/zip' });
+    await createAnalysis('my-dataset', file);
+
+    expect(mockedApi.post).toHaveBeenNthCalledWith(1, '/analysis/upload-url', {
+      filename: 'my-dataset.zip',
+      mimetype: 'application/zip'
     });
+    expect(fetchMock).toHaveBeenCalledWith('http://upload', expect.objectContaining({ method: 'PUT' }));
+    expect(mockedApi.post).toHaveBeenNthCalledWith(2, '/analysis/upload', {
+      dataset: 'my-dataset',
+      fileId: 'datasets/uuid/f.zip'
+    });
+    vi.unstubAllGlobals();
   });
 
-  it('createAnalysis omits downloadUrl/size when not provided', async () => {
+  it('createAnalysis leaves fileId undefined when no file is chosen', async () => {
     mockedApi.post.mockResolvedValue({ data: { data: { _id: '1' } } });
     await createAnalysis('my-dataset');
-    expect(mockedApi.post).toHaveBeenCalledWith('/analysis/upload', { dataset: 'my-dataset' });
+    expect(mockedApi.post).toHaveBeenCalledWith('/analysis/upload', { dataset: 'my-dataset', fileId: undefined });
+  });
+
+  it('createAnalysis surfaces a failed archive upload instead of creating a record', async () => {
+    mockedApi.post.mockResolvedValueOnce({ data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/f.zip' } } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+
+    const file = new File(['x'], 'my-dataset.zip', { type: 'application/zip' });
+    await expect(createAnalysis('my-dataset', file)).rejects.toThrow('Failed to upload dataset file');
+    expect(mockedApi.post).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('editAnalysis renames without touching the analysis JSON', async () => {
+    mockedApi.put.mockResolvedValue({ data: { data: { _id: '1' } } });
+    await editAnalysis('1', 'renamed');
+    expect(mockedApi.put).toHaveBeenCalledWith('/analysis/1', { dataset: 'renamed', fileId: undefined });
+  });
+
+  it('editAnalysis uploads a replacement archive and sends its fileId', async () => {
+    mockedApi.post.mockResolvedValue({ data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/new.zip' } } });
+    mockedApi.put.mockResolvedValue({ data: { data: { _id: '1' } } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+
+    await editAnalysis('1', 'renamed', new File(['x'], 'new.zip', { type: 'application/zip' }));
+
+    expect(mockedApi.put).toHaveBeenCalledWith('/analysis/1', { dataset: 'renamed', fileId: 'datasets/uuid/new.zip' });
+    vi.unstubAllGlobals();
+  });
+
+  it('getAnalysisDownloadUrl reads the download endpoint', async () => {
+    mockedApi.get.mockResolvedValue({ data: { data: { downloadUrl: 'http://signed' } } });
+    const result = await getAnalysisDownloadUrl('1');
+    expect(mockedApi.get).toHaveBeenCalledWith('/analysis/1/download');
+    expect(result).toEqual({ downloadUrl: 'http://signed' });
   });
 
   it('getAllAnalyses defaults limit/skip and omits dataset when absent', async () => {

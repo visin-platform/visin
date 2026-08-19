@@ -5,12 +5,11 @@ import {
   getDatasetByUuid,
   createDataset,
   getLabelingStats,
-  downloadDataset,
-  getSignedUrlForPath
+  downloadDataset
 } from '../controllers/datasetController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '@visin/backend-core';
-import { getDatasetsQuerySchema, createDatasetBodySchema, getSignedUrlForPathQuerySchema } from '../validation/datasetSchemas';
+import { getDatasetsQuerySchema, createDatasetBodySchema } from '../validation/datasetSchemas';
 
 const router = express.Router();
 
@@ -18,7 +17,6 @@ const router = express.Router();
 // public; writes require a logged-in user.
 router.get('/', validateRequest({ query: getDatasetsQuerySchema }), getDatasets);
 router.get('/labeling-stats', getLabelingStats);
-router.get('/signed-url', validateRequest({ query: getSignedUrlForPathQuerySchema }), getSignedUrlForPath);
 router.get('/:id', getDatasetById);
 router.get('/uuid/:uuid', getDatasetByUuid);
 router.post('/', authMiddleware, validateRequest({ body: createDatasetBodySchema }), createDataset);

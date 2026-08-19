@@ -22,13 +22,13 @@ import {
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
-import { getAllAnalyses, DatasetAnalysis, deleteAnalysis, updateAnalysis } from '../services/analysisService';
+import { getAllAnalyses, DatasetAnalysis, deleteAnalysis, editAnalysis } from '../services/analysisService';
 import { useAuth } from '../contexts/AuthContext';
 import { isGroupAdmin } from '../utils/permissions';
 import { useDatasetDownload } from '../hooks/useDatasetDownload';
 import AnalysisTableRow from './dataset/AnalysisTableRow';
 import DeleteAnalysisDialog from './dataset/DeleteAnalysisDialog';
-import EditAnalysisDialog from './dataset/EditAnalysisDialog';
+import DatasetUploadDialog from './dataset/DatasetUploadDialog';
 
 interface AnalysisTableProps {
   selectedAnalysisIds?: Set<string>;
@@ -49,9 +49,6 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   const [selectedAnalysis, setSelectedAnalysis] = useState<DatasetAnalysis | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [newDatasetName, setNewDatasetName] = useState('');
-  const [newDownloadUrl, setNewDownloadUrl] = useState('');
-  const [newDatasetSize, setNewDatasetSize] = useState('');
   const [sortField, setSortField] = useState<'dataset' | 'createdAt' | 'updatedAt'>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const queryClient = useQueryClient();
@@ -85,27 +82,17 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   const deleteLoading = deleteMutation.isPending;
 
   const updateMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: ({ datasetName, file }: { datasetName: string; file?: File }) => {
       if (!selectedAnalysis) throw new Error('No analysis selected');
-      return updateAnalysis(selectedAnalysis._id, {
-        dataset: newDatasetName.trim(),
-        size: newDatasetSize.trim() || undefined,
-        data: {
-          ...selectedAnalysis.data,
-          downloadUrl: newDownloadUrl.trim() || undefined
-        }
-      });
+      return editAnalysis(selectedAnalysis._id, datasetName, file);
     },
     onSuccess: () => {
       invalidateAnalyses();
       setEditDialogOpen(false);
       setSelectedAnalysis(null);
-      setNewDatasetName('');
-      setNewDownloadUrl('');
-      setNewDatasetSize('');
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : 'Failed to update analysis');
+      setError(err instanceof Error ? err.message : 'Failed to update dataset');
     }
   });
   const editLoading = updateMutation.isPending;
@@ -126,23 +113,17 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
 
   const handleEditClick = (analysis: DatasetAnalysis) => {
     setSelectedAnalysis(analysis);
-    setNewDatasetName(analysis.dataset);
-    setNewDownloadUrl(analysis.downloadUrl || '');
-    setNewDatasetSize(analysis.size || '');
     setEditDialogOpen(true);
   };
 
-  const handleEditConfirm = () => {
-    if (!selectedAnalysis || !newDatasetName.trim()) return;
-    updateMutation.mutate();
+  const handleEditConfirm = (datasetName: string, file?: File) => {
+    if (!selectedAnalysis) return;
+    updateMutation.mutate({ datasetName, file });
   };
 
   const handleEditCancel = () => {
     setEditDialogOpen(false);
     setSelectedAnalysis(null);
-    setNewDatasetName('');
-    setNewDownloadUrl('');
-    setNewDatasetSize('');
   };
 
   const handleSort = (field: 'dataset' | 'createdAt' | 'updatedAt') => {
@@ -316,17 +297,14 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
         onCancel={() => setDeleteConfirmOpen(false)}
         onConfirm={handleConfirmDelete}
       />
-      <EditAnalysisDialog
+      <DatasetUploadDialog
         open={editDialogOpen}
         loading={editLoading}
-        datasetName={newDatasetName}
-        onDatasetNameChange={setNewDatasetName}
-        datasetSize={newDatasetSize}
-        onDatasetSizeChange={setNewDatasetSize}
-        downloadUrl={newDownloadUrl}
-        onDownloadUrlChange={setNewDownloadUrl}
+        title="Edit Dataset"
+        submitLabel="Save"
+        initialName={selectedAnalysis?.dataset || ''}
         onCancel={handleEditCancel}
-        onConfirm={handleEditConfirm}
+        onSubmit={handleEditConfirm}
       />
     </Box>
   );
