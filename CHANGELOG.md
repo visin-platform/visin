@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.161](https://github.com/visin-platform/visin-monorepo/compare/v0.0.160...v0.0.161) (2026-08-19)
+
+
+### Features
+
+* add upload chunking ([f3b74fe](https://github.com/visin-platform/visin-monorepo/commit/f3b74fe4c3ff9cc1ed566fe37fa7cad298254625))
+
 ### [0.0.160](https://github.com/visin-platform/visin-monorepo/compare/v0.0.159...v0.0.160) (2026-08-19)
 
 
