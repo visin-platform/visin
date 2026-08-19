@@ -17,6 +17,7 @@ import {
   deleteAnalysis,
   compareAnalyses
 } from './analysisService';
+import { CHUNK_BYTES } from '../utils/chunkedUpload';
 
 const mockedApi = vi.mocked(visionApi);
 
@@ -50,6 +51,30 @@ describe('analysisService', () => {
     expect(mockedApi.post).toHaveBeenNthCalledWith(2, '/analysis/upload', {
       dataset: 'my-dataset',
       fileId: 'datasets/uuid/f.zip'
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('createAnalysis chunks an archive too large for a single proxied PUT', async () => {
+    mockedApi.post
+      .mockResolvedValueOnce({ data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/big.zip' } } })
+      .mockResolvedValueOnce({ data: { data: { _id: '1' } } });
+
+    const file = new File(['x'], 'big.zip', { type: 'application/zip' });
+    const total = CHUNK_BYTES + 1;
+    Object.defineProperty(file, 'size', { value: total });
+    file.slice = vi.fn(() => new Blob(['chunk'])) as unknown as File['slice'];
+
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, json: async () => ({ size: total }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createAnalysis('big', file);
+
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    expect(headers['Content-Range']).toBe(`bytes 0-${CHUNK_BYTES - 1}/${total}`);
+    expect(mockedApi.post).toHaveBeenNthCalledWith(2, '/analysis/upload', {
+      dataset: 'big',
+      fileId: 'datasets/uuid/big.zip'
     });
     vi.unstubAllGlobals();
   });

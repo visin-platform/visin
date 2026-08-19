@@ -1,4 +1,5 @@
 import { visionApi } from '../config/visionApi';
+import { CHUNK_BYTES, uploadFileInChunks } from '../utils/chunkedUpload';
 import { ApiResponse } from '../types';
 
 export interface AnalysisResponse {
@@ -75,8 +76,19 @@ const getAnalysisUploadUrl = async (file: File): Promise<AnalysisUploadUrl> => {
  * Deliberately raw `fetch`, not `visionApi`: the signed URL points at
  * file-service directly, so it needs neither the `/api` base URL nor the
  * shared auth cookie (the signature in the URL itself is the credential).
+ *
+ * Anything over CHUNK_BYTES goes up as resumable `Content-Range` chunks: a
+ * whole-body PUT of a multi-GB dataset zip is rejected by Cloudflare at the
+ * edge, which surfaced as a 413 that file-service never saw. Smaller archives
+ * stay a single request — fewer round trips, and it exercises the same
+ * un-chunked server path that non-browser clients use.
  */
 const uploadDatasetFile = async (uploadUrl: string, file: File): Promise<void> => {
+  if (file.size > CHUNK_BYTES) {
+    await uploadFileInChunks(uploadUrl, file);
+    return;
+  }
+
   const response = await fetch(uploadUrl, {
     method: 'PUT',
     body: file,
