@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.160](https://github.com/visin-platform/visin-monorepo/compare/v0.0.159...v0.0.160) (2026-08-19)
+
+
+### Features
+
+* simplify dataset upload ([716f935](https://github.com/visin-platform/visin-monorepo/commit/716f935d3b8d58f663ba7a5ac6af8845366383bb))
+
 ### [0.0.159](https://github.com/visin-platform/visin-monorepo/compare/v0.0.158...v0.0.159) (2026-08-12)
 
 
