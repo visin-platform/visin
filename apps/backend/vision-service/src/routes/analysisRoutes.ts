@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   createUploadUrl,
+  completeAnalysis,
   downloadAnalysis,
   uploadAnalysis,
   getAllAnalyses,
@@ -28,6 +29,9 @@ router.post('/upload-url', authMiddleware, validateRequest({ body: analysisUploa
 
 // POST /analysis/upload - Create/upload a dataset analysis
 router.post('/upload', authMiddleware, validateRequest({ body: uploadAnalysisBodySchema }), uploadAnalysis);
+
+// POST /analysis/:id/complete - Mark a reserved analysis's upload finished
+router.post('/:id/complete', authMiddleware, completeAnalysis);
 
 // GET /analysis - Get all analyses with optional filtering
 router.get('/', validateRequest({ query: getAllAnalysesQuerySchema }), getAllAnalyses);

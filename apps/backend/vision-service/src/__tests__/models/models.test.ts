@@ -224,9 +224,31 @@ describe('Config / DatasetAnalysis', () => {
     expect(error?.errors.config_data).toBeDefined();
   });
 
-  it('DatasetAnalysis requires dataset and data', () => {
+  it('DatasetAnalysis requires a dataset name', () => {
     const error = new DatasetAnalysis({}).validateSync();
     expect(error?.errors.dataset).toBeDefined();
-    expect(error?.errors.data).toBeDefined();
+  });
+
+  it('DatasetAnalysis accepts an empty analysis payload', () => {
+    // `data` was once required, which made a record with no JSON attached
+    // unsaveable — including every record reserved before its archive uploads.
+    const error = new DatasetAnalysis({ dataset: 'waymo' }).validateSync();
+    expect(error?.errors.data).toBeUndefined();
+  });
+
+  it('DatasetAnalysis keeps an empty `data` object instead of minimizing it away', () => {
+    // With Mongoose's default `minimize: true`, `data: {}` is stripped on write
+    // and the field comes back missing — which then failed the old `required`
+    // validator on the next save (rename included). Nested empties inside a
+    // stored analysis payload were being dropped the same way.
+    const doc = new DatasetAnalysis({ dataset: 'waymo', data: { nested: {} } });
+    expect(doc.toObject().data).toEqual({ nested: {} });
+
+    const empty = new DatasetAnalysis({ dataset: 'waymo', data: {} });
+    expect(empty.toObject().data).toEqual({});
+  });
+
+  it('DatasetAnalysis defaults status to ready so legacy records stay visible', () => {
+    expect(new DatasetAnalysis({ dataset: 'waymo' }).status).toBe('ready');
   });
 });

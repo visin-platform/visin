@@ -94,11 +94,70 @@ const toAnalysisResponse = (analysis: IDatasetAnalysis) => {
 const storedFileId = (analysis: IDatasetAnalysis): string | undefined =>
   analysis.fileId || (analysis.data?.downloadUrl as string | undefined);
 
-export const createUploadUrl = async ({ filename, mimetype }: { filename: string; mimetype: string }) => {
+/**
+ * Mint a signed upload URL, and — when a `dataset` name is supplied — reserve
+ * the record for it up front in `pending` state.
+ *
+ * Reserving first is what makes a rejected create fail in milliseconds: every
+ * database-level objection (a duplicate key, a validation error, a stale index)
+ * is raised here, before the browser sends a single byte. Writing the record
+ * last meant a multi-GB archive had to finish uploading before the insert could
+ * be attempted at all.
+ *
+ * `dataset` is omitted when replacing an existing analysis's archive: that
+ * record already exists, so there is nothing to reserve.
+ */
+export const createUploadUrl = async ({
+  filename,
+  mimetype,
+  dataset
+}: {
+  filename: string;
+  mimetype: string;
+  dataset?: string;
+}) => {
   const fileId = `${DATASET_FILE_PREFIX}${randomUUID()}/${sanitizeFilename(filename)}`;
+
+  // Before the signed URL: a failed reservation must not leave a live upload
+  // URL pointing at a file nothing will ever claim.
+  let analysisId: string | undefined;
+  if (dataset) {
+    const reserved = await DatasetAnalysis.create({ dataset, fileId, status: 'pending', data: {} });
+    analysisId = String(reserved._id);
+    logger.info('Dataset analysis reserved', { dataset, id: analysisId, fileId });
+  }
+
   const uploadUrl = await getUploadSignedUrl(fileId, mimetype, UPLOAD_URL_EXPIRY_MINUTES);
 
-  return { uploadUrl, fileId, expiresInMinutes: UPLOAD_URL_EXPIRY_MINUTES };
+  return { uploadUrl, fileId, expiresInMinutes: UPLOAD_URL_EXPIRY_MINUTES, analysisId };
+};
+
+/**
+ * Mark a reserved analysis complete once its archive has finished uploading.
+ *
+ * Takes no `fileId`: the reservation already recorded the one this service
+ * issued, so a client cannot swap in a different file at the finish line.
+ * Idempotent — completing an already-ready record just returns it, so a
+ * retried request after a dropped response is harmless.
+ */
+export const completeAnalysis = async (id: string) => {
+  const analysis = await findAnalysisOrThrow(id);
+
+  if (analysis.status !== 'pending') {
+    return toAnalysisResponse(analysis);
+  }
+
+  if (!analysis.fileId) {
+    throw new BadRequestError('Analysis has no uploaded archive to complete');
+  }
+
+  analysis.size = await readSize(analysis.fileId);
+  analysis.status = 'ready';
+  await analysis.save();
+
+  logger.info('Dataset analysis completed', { dataset: analysis.dataset, id: analysis._id });
+
+  return toAnalysisResponse(analysis);
 };
 
 export const uploadAnalysis = async (analysisData: UploadAnalysisData) => {
@@ -121,7 +180,9 @@ export const uploadAnalysis = async (analysisData: UploadAnalysisData) => {
 };
 
 export const getAllAnalyses = async ({ dataset, limit, skip }: GetAnalysesOptions) => {
-  const query: QueryFilter<IDatasetAnalysis> = {};
+  // `$ne: 'pending'` rather than `status: 'ready'`: records predating the field
+  // carry no value and must still be listed.
+  const query: QueryFilter<IDatasetAnalysis> = { status: { $ne: 'pending' } };
   if (dataset) {
     query.dataset = dataset;
   }
@@ -183,8 +244,10 @@ export const updateAnalysis = async (id: string, updateData: UpdateAnalysisData)
 };
 
 export const getAnalysisByDataset = async (dataset: string, { limit, skip }: Omit<GetAnalysesOptions, 'dataset'>) => {
-  const total = await DatasetAnalysis.countDocuments({ dataset });
-  const analyses = await DatasetAnalysis.find({ dataset })
+  // Reserved-but-not-yet-uploaded records stay hidden — see getAllAnalyses.
+  const query: QueryFilter<IDatasetAnalysis> = { dataset, status: { $ne: 'pending' } };
+  const total = await DatasetAnalysis.countDocuments(query);
+  const analyses = await DatasetAnalysis.find(query)
     .sort({ timestamp: -1 })
     .limit(limit)
     .skip(skip);

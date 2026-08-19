@@ -4,6 +4,7 @@
  */
 jest.mock('../../models/DatasetAnalysis', () => {
   const ctor = Object.assign(jest.fn(), {
+    create: jest.fn(),
     find: jest.fn(),
     findById: jest.fn(),
     findByIdAndUpdate: jest.fn(),
@@ -165,6 +166,81 @@ describe('analysisController', () => {
     expect(mockedGetUploadUrl.mock.calls[0][0]).toMatch(/^datasets\/[0-9a-f-]{36}\/passwd$/);
   });
 
+  it('createUploadUrl reserves a pending record when a dataset name is given', async () => {
+    mockedGetUploadUrl.mockResolvedValue('http://upload');
+    mockedAnalysis.create.mockResolvedValue({ _id: 'a1' });
+    const res = makeRes();
+
+    await analysisCtrl.createUploadUrl(
+      makeReq({ body: { filename: 'ds.zip', mimetype: 'application/zip', dataset: 'waymo' } }),
+      res
+    );
+
+    expect(mockedAnalysis.create).toHaveBeenCalledWith(
+      expect.objectContaining({ dataset: 'waymo', status: 'pending' })
+    );
+    expect(res.json.mock.calls[0][0].data.analysisId).toBe('a1');
+  });
+
+  it('createUploadUrl reserves nothing when replacing an existing archive', async () => {
+    mockedGetUploadUrl.mockResolvedValue('http://upload');
+    const res = makeRes();
+
+    await analysisCtrl.createUploadUrl(makeReq({ body: { filename: 'ds.zip', mimetype: 'application/zip' } }), res);
+
+    expect(mockedAnalysis.create).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].data.analysisId).toBeUndefined();
+  });
+
+  it('createUploadUrl issues no upload URL when the reservation is rejected', async () => {
+    // The whole point of reserving first: a rejected create must fail before
+    // the client can start sending bytes to a file nothing will claim.
+    mockedAnalysis.create.mockRejectedValue(new Error('E11000 duplicate key error'));
+
+    await expect(
+      analysisCtrl.createUploadUrl(makeReq({ body: { filename: 'ds.zip', mimetype: 'application/zip', dataset: 'waymo' } }), makeRes())
+    ).rejects.toThrow('E11000');
+    expect(mockedGetUploadUrl).not.toHaveBeenCalled();
+  });
+
+  it('completeAnalysis flips a reserved record to ready and derives its size', async () => {
+    const doc = withToObject({ _id: 'a1', dataset: 'waymo', fileId: FILE_ID, status: 'pending', data: {} });
+    mockedAnalysis.findById.mockResolvedValue(doc);
+    mockedGetFileMetadata.mockResolvedValue({ size: 3221225472 });
+    const res = makeRes();
+
+    await analysisCtrl.completeAnalysis(makeReq({ params: { id: 'a1' } }), res);
+
+    expect(doc.status).toBe('ready');
+    expect(doc.size).toBe('3.0 GB');
+    expect(doc.save).toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].data.downloadUrl).toBe(FILE_ID);
+  });
+
+  it('completeAnalysis is idempotent for an already-ready record', async () => {
+    const doc = withToObject({ _id: 'a1', dataset: 'waymo', fileId: FILE_ID, status: 'ready', size: '1.0 KB', data: {} });
+    mockedAnalysis.findById.mockResolvedValue(doc);
+
+    await analysisCtrl.completeAnalysis(makeReq({ params: { id: 'a1' } }), makeRes());
+
+    expect(doc.save).not.toHaveBeenCalled();
+    expect(doc.size).toBe('1.0 KB');
+  });
+
+  it('completeAnalysis 404s for an unknown id', async () => {
+    mockedAnalysis.findById.mockResolvedValue(null);
+    await expect(analysisCtrl.completeAnalysis(makeReq({ params: { id: 'x' } }), makeRes())).rejects.toThrow(
+      'Analysis not found'
+    );
+  });
+
+  it('completeAnalysis rejects a reservation that has no archive', async () => {
+    mockedAnalysis.findById.mockResolvedValue(withToObject({ _id: 'a1', status: 'pending', data: {} }));
+    await expect(analysisCtrl.completeAnalysis(makeReq({ params: { id: 'a1' } }), makeRes())).rejects.toThrow(
+      'no uploaded archive'
+    );
+  });
+
   it('uploadAnalysis records the fileId and derives size from the stored file', async () => {
     mockedAnalysis.mockImplementation((d: AnyDoc) => withToObject({ ...d, _id: 'a1' }));
     mockedGetFileMetadata.mockResolvedValue({ size: 2621440 });
@@ -191,7 +267,7 @@ describe('analysisController', () => {
 
     await analysisCtrl.getAllAnalyses(makeReq({ query: { dataset: 'waymo', limit: 5, skip: 0 } }), res);
 
-    expect(mockedAnalysis.find).toHaveBeenCalledWith({ dataset: 'waymo' });
+    expect(mockedAnalysis.find).toHaveBeenCalledWith({ dataset: 'waymo', status: { $ne: 'pending' } });
     const body = res.json.mock.calls[0][0];
     expect(body.data[0].downloadUrl).toBe('http://dl');
     expect(body.pagination.total).toBe(1);
@@ -278,7 +354,7 @@ describe('analysisController', () => {
       res
     );
 
-    expect(mockedAnalysis.find).toHaveBeenCalledWith({ dataset: 'waymo' });
+    expect(mockedAnalysis.find).toHaveBeenCalledWith({ dataset: 'waymo', status: { $ne: 'pending' } });
     expect(res.json.mock.calls[0][0].pagination.total).toBe(2);
   });
 

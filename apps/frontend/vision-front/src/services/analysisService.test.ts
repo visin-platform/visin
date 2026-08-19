@@ -79,33 +79,60 @@ describe('analysisService', () => {
     expect(result).toEqual({ _id: '1', dataset: 'd' });
   });
 
-  it('createAnalysis uploads the archive first and posts the returned fileId', async () => {
+  it('createAnalysis reserves the record, uploads, then completes it', async () => {
     mockedApi.post
-      .mockResolvedValueOnce({ data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/f.zip' } } })
-      .mockResolvedValueOnce({ data: { data: { _id: '1' } } });
+      .mockResolvedValueOnce({
+        data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/f.zip', analysisId: 'a1' } }
+      })
+      .mockResolvedValueOnce({ data: { data: { _id: 'a1' } } });
     const created = stubXhr(200, 1);
 
     const file = new File(['x'], 'my-dataset.zip', { type: 'application/zip' });
     await createAnalysis('my-dataset', file);
 
+    // The dataset name goes up front — that reservation is what fails fast.
     expect(mockedApi.post).toHaveBeenNthCalledWith(1, '/analysis/upload-url', {
       filename: 'my-dataset.zip',
-      mimetype: 'application/zip'
+      mimetype: 'application/zip',
+      dataset: 'my-dataset'
     });
     expect(created).toHaveLength(1);
     expect(created[0].open).toHaveBeenCalledWith('PUT', 'http://upload');
     // Small enough for one request, so no resumable-chunk header.
     expect(headerOf(created[0], 'Content-Range')).toBeUndefined();
-    expect(mockedApi.post).toHaveBeenNthCalledWith(2, '/analysis/upload', {
-      dataset: 'my-dataset',
-      fileId: 'datasets/uuid/f.zip'
+    expect(mockedApi.post).toHaveBeenNthCalledWith(2, '/analysis/a1/complete');
+    vi.unstubAllGlobals();
+  });
+
+  it('createAnalysis uploads nothing when the reservation is rejected', async () => {
+    mockedApi.post.mockRejectedValueOnce(new Error('E11000 duplicate key error'));
+    const created = stubXhr(200, 1);
+
+    const file = new File(['x'], 'my-dataset.zip', { type: 'application/zip' });
+    await expect(createAnalysis('my-dataset', file)).rejects.toThrow('E11000');
+
+    expect(created).toHaveLength(0);
+    expect(mockedApi.post).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('createAnalysis refuses to upload when the server reserved nothing', async () => {
+    mockedApi.post.mockResolvedValueOnce({
+      data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/f.zip' } }
     });
+    const created = stubXhr(200, 1);
+
+    const file = new File(['x'], 'my-dataset.zip', { type: 'application/zip' });
+    await expect(createAnalysis('my-dataset', file)).rejects.toThrow('did not reserve');
+    expect(created).toHaveLength(0);
     vi.unstubAllGlobals();
   });
 
   it('createAnalysis chunks an archive too large for a single proxied PUT', async () => {
     mockedApi.post
-      .mockResolvedValueOnce({ data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/big.zip' } } })
+      .mockResolvedValueOnce({
+        data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/big.zip', analysisId: 'a1' } }
+      })
       .mockResolvedValueOnce({ data: { data: { _id: '1' } } });
 
     const file = new File(['x'], 'big.zip', { type: 'application/zip' });
@@ -118,25 +145,25 @@ describe('analysisService', () => {
     await createAnalysis('big', file);
 
     expect(headerOf(created[0], 'Content-Range')).toBe(`bytes 0-${CHUNK_BYTES - 1}/${total}`);
-    expect(mockedApi.post).toHaveBeenNthCalledWith(2, '/analysis/upload', {
-      dataset: 'big',
-      fileId: 'datasets/uuid/big.zip'
-    });
+    expect(mockedApi.post).toHaveBeenNthCalledWith(2, '/analysis/a1/complete');
     vi.unstubAllGlobals();
   });
 
   it('createAnalysis leaves fileId undefined when no file is chosen', async () => {
     mockedApi.post.mockResolvedValue({ data: { data: { _id: '1' } } });
     await createAnalysis('my-dataset');
-    expect(mockedApi.post).toHaveBeenCalledWith('/analysis/upload', { dataset: 'my-dataset', fileId: undefined });
+    expect(mockedApi.post).toHaveBeenCalledWith('/analysis/upload', { dataset: 'my-dataset' });
   });
 
-  it('createAnalysis surfaces a failed archive upload instead of creating a record', async () => {
-    mockedApi.post.mockResolvedValueOnce({ data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/f.zip' } } });
+  it('createAnalysis leaves the reservation uncompleted when the upload fails', async () => {
+    mockedApi.post.mockResolvedValueOnce({
+      data: { data: { uploadUrl: 'http://upload', fileId: 'datasets/uuid/f.zip', analysisId: 'a1' } }
+    });
     stubXhr(500);
 
     const file = new File(['x'], 'my-dataset.zip', { type: 'application/zip' });
     await expect(createAnalysis('my-dataset', file)).rejects.toThrow('Failed to upload dataset file (500)');
+    // Reservation only — never completed, so the record stays pending and hidden.
     expect(mockedApi.post).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
@@ -154,6 +181,11 @@ describe('analysisService', () => {
 
     await editAnalysis('1', 'renamed', new File(['x'], 'new.zip', { type: 'application/zip' }));
 
+    // No `dataset` in the body: replacing an archive must not reserve a second record.
+    expect(mockedApi.post).toHaveBeenCalledWith('/analysis/upload-url', {
+      filename: 'new.zip',
+      mimetype: 'application/zip'
+    });
     expect(mockedApi.put).toHaveBeenCalledWith('/analysis/1', { dataset: 'renamed', fileId: 'datasets/uuid/new.zip' });
     vi.unstubAllGlobals();
   });

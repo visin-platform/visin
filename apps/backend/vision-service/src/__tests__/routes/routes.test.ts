@@ -34,7 +34,7 @@ const describeRouter = (router: Router) => {
 
 describe('vision-service routers', () => {
   const routers: Array<[string, Router, number]> = [
-    ['analysisRoutes', analysisRoutes, 9],
+    ['analysisRoutes', analysisRoutes, 10],
     ['apiTokenRoutes', apiTokenRoutes, 3],
     ['benchmarkRoutes', benchmarkRoutes, 7],
     ['comparisonRoutes', comparisonRoutes, 7],

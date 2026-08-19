@@ -17,9 +17,13 @@ export const updateAnalysisBodySchema = z.object({
   data: z.record(z.string(), z.unknown()).optional()
 });
 
+// `dataset` present means "reserve the record for this new dataset now, before
+// the upload starts"; absent means the URL is for replacing an existing
+// analysis's archive, which needs no reservation.
 export const analysisUploadUrlBodySchema = z.object({
   filename: z.string().min(1, 'Missing required field: filename'),
-  mimetype: z.string().min(1).default('application/octet-stream')
+  mimetype: z.string().min(1).default('application/octet-stream'),
+  dataset: z.string().min(1, 'Dataset name cannot be empty').optional()
 });
 export type AnalysisUploadUrlBody = z.infer<typeof analysisUploadUrlBodySchema>;
 

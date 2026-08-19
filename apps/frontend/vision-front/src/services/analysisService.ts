@@ -33,6 +33,8 @@ export interface AnalysisUploadUrl {
   uploadUrl: string;
   fileId: string;
   expiresInMinutes: number;
+  /** Present only when a `dataset` name was sent, i.e. creating a new dataset. */
+  analysisId?: string;
 }
 
 export interface AnalysisComparisonResponse {
@@ -63,12 +65,17 @@ export const uploadAnalysis = async (analysisData: Record<string, unknown>): Pro
 };
 
 /**
- * Get a signed URL for uploading a dataset archive straight to file-service
+ * Get a signed URL for uploading a dataset archive straight to file-service.
+ *
+ * Passing `dataset` also reserves the record server-side before any bytes move,
+ * so a rejected create fails in milliseconds rather than after a multi-GB
+ * upload. Omit it when replacing an existing analysis's archive.
  */
-const getAnalysisUploadUrl = async (file: File): Promise<AnalysisUploadUrl> => {
+const getAnalysisUploadUrl = async (file: File, dataset?: string): Promise<AnalysisUploadUrl> => {
   const response = await visionApi.post('/analysis/upload-url', {
     filename: file.name,
-    mimetype: file.type || 'application/octet-stream'
+    mimetype: file.type || 'application/octet-stream',
+    ...(dataset ? { dataset } : {})
   });
   return (response.data as ApiResponse<AnalysisUploadUrl>).data;
 };
@@ -90,8 +97,19 @@ export const uploadDatasetArchive = async (file: File, onProgress?: UploadProgre
   return upload.fileId;
 };
 
+/** Flip a reserved analysis to ready once its archive has finished uploading. */
+const completeAnalysis = async (analysisId: string): Promise<DatasetAnalysis> => {
+  const response = await visionApi.post(`/analysis/${analysisId}/complete`);
+  return (response.data as ApiResponse<DatasetAnalysis>).data;
+};
+
 /**
  * Create a new dataset from an uploaded archive.
+ *
+ * Three steps, in this order deliberately: reserve the record, upload, then
+ * mark it complete. Reserving first means anything the server will reject
+ * (duplicate name, validation, a database constraint) is raised before the
+ * upload starts, instead of stranding a finished multi-GB transfer.
  *
  * Size is read off the stored file by the backend, so it is never passed here.
  */
@@ -100,10 +118,19 @@ export const createAnalysis = async (
   file?: File,
   onProgress?: UploadProgress
 ): Promise<DatasetAnalysis> => {
-  const fileId = file ? await uploadDatasetArchive(file, onProgress) : undefined;
+  // No archive: nothing to reserve against, so the record is written directly.
+  if (!file) {
+    const response = await visionApi.post('/analysis/upload', { dataset: datasetName });
+    return (response.data as ApiResponse<DatasetAnalysis>).data;
+  }
 
-  const response = await visionApi.post('/analysis/upload', { dataset: datasetName, fileId });
-  return (response.data as ApiResponse<DatasetAnalysis>).data;
+  const upload = await getAnalysisUploadUrl(file, datasetName);
+  if (!upload.analysisId) {
+    throw new Error('Server did not reserve a dataset record for this upload');
+  }
+
+  await uploadToSignedUrl(upload.uploadUrl, file, onProgress);
+  return completeAnalysis(upload.analysisId);
 };
 
 /**

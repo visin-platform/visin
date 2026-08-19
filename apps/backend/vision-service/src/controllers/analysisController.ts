@@ -11,8 +11,8 @@ import type {
  * POST /analysis/upload-url
  */
 export const createUploadUrl = async (req: Request, res: Response): Promise<void> => {
-  const { filename, mimetype } = req.body as AnalysisUploadUrlBody;
-  const data = await analysisService.createUploadUrl({ filename, mimetype });
+  const { filename, mimetype, dataset } = req.body as AnalysisUploadUrlBody;
+  const data = await analysisService.createUploadUrl({ filename, mimetype, dataset });
 
   res.status(201).json({
     success: true,
@@ -30,6 +30,21 @@ export const uploadAnalysis = async (req: Request, res: Response): Promise<void>
   res.status(201).json({
     success: true,
     message: 'Analysis uploaded successfully',
+    data: analysis
+  });
+};
+
+/**
+ * Mark a reserved analysis complete once its archive has finished uploading
+ * POST /analysis/:id/complete
+ */
+export const completeAnalysis = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params as { id: string };
+  const analysis = await analysisService.completeAnalysis(id);
+
+  res.json({
+    success: true,
+    message: 'Analysis completed successfully',
     data: analysis
   });
 };
