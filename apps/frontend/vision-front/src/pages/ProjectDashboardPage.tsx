@@ -9,7 +9,7 @@ import {
   Button
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { projectService } from '../services/projectService';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,6 +48,7 @@ const indexToTabName: Record<number, string> = {
 const ProjectDashboardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -132,6 +133,8 @@ const ProjectDashboardPage: React.FC = () => {
     },
     onSuccess: () => {
       setDeleteDialogOpen(false);
+      queryClient.removeQueries({ queryKey: ['project', id] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       navigate('/projects');
     },
     onError: (error) => {

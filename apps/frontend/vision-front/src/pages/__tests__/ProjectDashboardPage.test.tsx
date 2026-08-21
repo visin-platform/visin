@@ -107,7 +107,7 @@ const baseHookReturn = (overrides: Record<string, unknown> = {}) => ({
 
 const renderPage = (path = '/projects/p1') => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
@@ -117,6 +117,7 @@ const renderPage = (path = '/projects/p1') => {
       </MemoryRouter>
     </QueryClientProvider>
   );
+  return qc;
 };
 
 describe('ProjectDashboardPage', () => {
@@ -180,6 +181,22 @@ describe('ProjectDashboardPage', () => {
 
     fireEvent.click(screen.getByText('confirm-delete-project'));
     await waitFor(() => expect(deleteProjectMock).toHaveBeenCalledWith('p1'));
+    await waitFor(() => expect(screen.getByText('projects list')).toBeInTheDocument());
+  });
+
+  it('drops the cached project and marks the projects list stale after deleting', async () => {
+    deleteProjectMock.mockResolvedValue({});
+    const qc = renderPage();
+    qc.setQueryData(['project', 'p1'], { data: { _id: 'p1' } });
+    qc.setQueryData(['projects', 'u1', 'createdAt', 'desc'], { data: [{ _id: 'p1' }] });
+
+    fireEvent.click(screen.getByText('open-delete'));
+    fireEvent.click(screen.getByText('confirm-delete-project'));
+
+    await waitFor(() => expect(qc.getQueryData(['project', 'p1'])).toBeUndefined());
+    await waitFor(() =>
+      expect(qc.getQueryState(['projects', 'u1', 'createdAt', 'desc'])?.isInvalidated).toBe(true)
+    );
   });
 
   it('changes tabs and updates the tab value passed to ProjectTabs', () => {
