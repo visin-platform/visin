@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.164](https://github.com/visin-platform/visin-monorepo/compare/v0.0.163...v0.0.164) (2026-08-21)
+
+
+### Bug Fixes
+
+* deleted project not disappearing from list ([42ff3c3](https://github.com/visin-platform/visin-monorepo/commit/42ff3c3ff9152adad7140e70a04ce770cec33b92))
+
 ### [0.0.163](https://github.com/visin-platform/visin-monorepo/compare/v0.0.162...v0.0.163) (2026-08-19)
 
 
