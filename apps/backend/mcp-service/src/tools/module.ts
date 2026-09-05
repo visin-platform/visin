@@ -208,16 +208,62 @@ export const duration = (seconds: number): string => {
 export const day = (value: string | undefined): string => (value ? value.slice(0, 10) : 'unknown');
 
 /**
- * The numeric entries of an epoch's `results`, in a stable order.
+ * Subtrees that are machine telemetry rather than anything the model trained.
  *
- * What a run records per epoch depends on the model and the config, so nothing
- * here names a metric. Non-numeric values are dropped: they are almost always
- * nested diagnostics, and rendering one costs far more than it explains.
+ * `system_info` carries CPU percent, memory and GPU load. Real data, wrong
+ * question: nobody reads a loss curve to find out what the fans were doing.
  */
-export const numericResults = (results: Record<string, unknown>): Array<[string, number]> =>
-  Object.entries(results)
-    .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
-    .sort(([a], [b]) => a.localeCompare(b));
+const NOT_METRICS = new Set(['system_info']);
+
+interface Leaf {
+  path: string;
+  value: number;
+  depth: number;
+}
+
+/** Every numeric leaf in an epoch's results, with the path that reached it. */
+function numericLeaves(results: Record<string, unknown>, prefix = '', depth = 1): Leaf[] {
+  return Object.entries(results).flatMap(([key, value]) => {
+    if (depth === 1 && NOT_METRICS.has(key)) return [];
+
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (typeof value === 'number') return [{ path, value, depth }];
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return numericLeaves(value as Record<string, unknown>, path, depth + 1);
+    }
+    return [];
+  });
+}
+
+/** No curve should hand back more numbers than a person would read per point. */
+const MAX_METRICS_PER_EPOCH = 12;
+
+/**
+ * The metrics of one epoch, in a stable order.
+ *
+ * What a run records is its own business, and the shapes differ: some write
+ * `{ loss, mAP }` flat, others nest `{ train: { loss, mean_iou, vehicle: {...} } }`.
+ * Reading only the top level meant a run of the second kind reported "no
+ * metrics recorded" for every single epoch — the curve tool returned nothing at
+ * all, and said so confidently.
+ *
+ * So the tree is walked, and then only the *shallowest* leaves are kept. That
+ * is what separates a summary from a breakdown without knowing either schema:
+ * `train.loss` sits above `train.vehicle.iou`, and it is the one a curve is
+ * asking about. The per-class detail is what `get_test_results` is for.
+ */
+export const numericResults = (results: Record<string, unknown>): Array<[string, number]> => {
+  const leaves = numericLeaves(results);
+  if (leaves.length === 0) return [];
+
+  const shallowest = Math.min(...leaves.map((leaf) => leaf.depth));
+
+  return leaves
+    .filter((leaf) => leaf.depth === shallowest)
+    .sort((a, b) => a.path.localeCompare(b.path))
+    .slice(0, MAX_METRICS_PER_EPOCH)
+    .map((leaf): [string, number] => [leaf.path, leaf.value]);
+};
 
 /**
  * Take about `n` evenly spaced items, always keeping the first and last.

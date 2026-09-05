@@ -3,6 +3,7 @@ jest.mock('../../vision', () => ({
     listProjects: jest.fn(),
     getProject: jest.fn(),
     getDashboardStats: jest.fn(),
+    getTraining: jest.fn(),
     createProject: jest.fn(),
     updateProject: jest.fn(),
     listTrainings: jest.fn(),
@@ -62,7 +63,12 @@ const epochs = (n: number) =>
     timestamp: '2026-09-01T00:00:00.000Z'
   }));
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  // Most tools take a training id and resolve it to the uuid the results
+  // endpoints filter on, so a run has to be resolvable by default.
+  mocked.getTraining.mockResolvedValue(training({ uuid: 'the-uuid' }));
+});
 
 describe('list_projects', () => {
   it('names each project with the slug the other tools take', async () => {
@@ -348,6 +354,63 @@ describe('compare_trainings', () => {
   });
 });
 
+/**
+ * These two endpoints filter on the training's `uuid`; every tool here takes
+ * its `_id`. Zod drops an unknown query key silently, so passing the id
+ * filtered nothing and returned every run's results as though they belonged to
+ * the one asked about — a wrong answer that looked entirely right.
+ */
+describe('scoping results to one run', () => {
+  it('resolves an id to the uuid the endpoint actually filters on', async () => {
+    mocked.getTraining.mockResolvedValue(training({ uuid: 'the-uuid' }));
+    mocked.listTestResults.mockResolvedValue({ testResults: [] });
+
+    await call('get_test_results', { training: 't1' });
+
+    expect(mocked.getTraining).toHaveBeenCalledWith('vsn_live_abc', 't1');
+    expect(mocked.listTestResults.mock.calls[0][1]).toMatchObject({ training_uuid: 'the-uuid' });
+  });
+
+  it('does the same for benchmarks', async () => {
+    mocked.getTraining.mockResolvedValue(training({ uuid: 'the-uuid' }));
+    mocked.listBenchmarks.mockResolvedValue({ benchmarks: [] });
+
+    await call('get_benchmarks', { training: 't1' });
+
+    expect(mocked.listBenchmarks.mock.calls[0][1]).toMatchObject({ training_uuid: 'the-uuid' });
+  });
+
+  it('passes a uuid straight through rather than looking it up', async () => {
+    mocked.listTestResults.mockResolvedValue({ testResults: [] });
+
+    await call('get_test_results', { training: '3205072b-d453-4480-bb0b-bbf7564a6435' });
+
+    expect(mocked.getTraining).not.toHaveBeenCalled();
+    expect(mocked.listTestResults.mock.calls[0][1]).toMatchObject({
+      training_uuid: '3205072b-d453-4480-bb0b-bbf7564a6435'
+    });
+  });
+
+  it('sends no filter at all when no run was named', async () => {
+    mocked.listTestResults.mockResolvedValue({ testResults: [] });
+
+    await call('get_test_results', {});
+
+    expect(mocked.getTraining).not.toHaveBeenCalled();
+    expect(mocked.listTestResults.mock.calls[0][1].training_uuid).toBeUndefined();
+  });
+
+  it('says so rather than filtering on nothing when a run has no uuid', async () => {
+    mocked.getTraining.mockResolvedValue(training({ uuid: undefined }));
+
+    const { text, isError } = await call('get_test_results', { training: 't1' });
+
+    expect(isError).toBe(true);
+    expect(text).toContain('no uuid recorded');
+    expect(mocked.listTestResults).not.toHaveBeenCalled();
+  });
+});
+
 describe('get_test_results', () => {
   it('renders per-class scores as a table rather than nested JSON', async () => {
     mocked.listTestResults.mockResolvedValue({
@@ -412,7 +475,7 @@ describe('get_benchmarks', () => {
       ]
     });
 
-    const { text } = await call('get_benchmarks', { training: 't1' });
+    const { text } = await call('get_benchmarks', { training: '3205072b-d453-4480-bb0b-bbf7564a6435' });
 
     expect(text).toContain('Benchmark 2026-09-01, epoch 40 on RTX 4090');
     expect(text).toContain('yolov8: 25.4M params, 78.9 GFLOPs, 91.2 fps, 10.9 ms/frame');

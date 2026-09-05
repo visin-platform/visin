@@ -28,6 +28,33 @@ import {
 /** How many epochs a curve is sampled down to. */
 const CURVE_POINTS = 12;
 
+/** A Mongo ObjectId is 24 hex characters; a UUID is 8-4-4-4-12. Unambiguous. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Turn whatever identifier the model has into the one the endpoint filters on.
+ *
+ * `list_trainings` hands out `_id`, and every tool here takes that — but
+ * `/test-results` and `/benchmarks` filter on `training_uuid`, a different
+ * field. Passing the id filtered nothing at all: zod drops an unknown query key
+ * silently, so the call succeeded and returned every run's results as though
+ * they were the one asked for. One extra lookup is worth not answering the
+ * wrong question.
+ */
+async function resolveTrainingUuid(apiKey: string, training: string): Promise<string> {
+  if (UUID.test(training)) return training;
+
+  const run = await vision.getTraining(apiKey, training);
+  if (!run.uuid) {
+    // Deliberately not a VisinError: `explain` would dress a 404 up with a note
+    // about private projects, and this is neither missing nor forbidden.
+    throw new Error(
+      `Training ${training} has no uuid recorded, so results cannot be scoped to it.`
+    );
+  }
+  return run.uuid;
+}
+
 const describeTraining = (training: Training): string => {
   const parts = [`- ${training.name} [${training.status}]`];
   if (training.metrics?.epochCount) {
@@ -445,7 +472,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     async ({ training, epoch, limit }) => {
       try {
         const { testResults } = await vision.listTestResults(key, {
-          trainingId: training,
+          training_uuid: training ? await resolveTrainingUuid(key, training) : undefined,
           epoch,
           limit: limit ?? 5
         });
@@ -479,7 +506,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     async ({ training, limit }) => {
       try {
         const { benchmarks } = await vision.listBenchmarks(key, {
-          training_id: training,
+          training_uuid: training ? await resolveTrainingUuid(key, training) : undefined,
           limit: limit ?? 5
         });
 

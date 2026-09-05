@@ -140,17 +140,73 @@ describe('day', () => {
 });
 
 describe('numericResults', () => {
-  it('keeps the numbers, in a stable order', () => {
+  it('reads a flat results object', () => {
     expect(numericResults({ loss: 0.4, mAP: 0.8, epoch_note: 'ok' })).toEqual([
       ['loss', 0.4],
       ['mAP', 0.8]
     ]);
   });
 
-  it('drops nested diagnostics rather than rendering them', () => {
-    // These cost far more than they explain, and every one is re-sent on every
-    // later turn of the conversation.
-    expect(numericResults({ per_class: { car: 1 }, loss: 0.2, ok: true })).toEqual([['loss', 0.2]]);
+  it('walks a nested tree, which is what real runs actually record', () => {
+    // The bug this fixes: CLFTv2 records { train: { loss, ... }, val: {...} }
+    // and reading only the top level reported "no metrics recorded" for every
+    // epoch of every run — the curve tool returned nothing, confidently.
+    const results = {
+      train: { loss: 0.98, mean_iou: 0.085 },
+      val: { loss: 0.65, mean_iou: 0.163 }
+    };
+
+    expect(numericResults(results)).toEqual([
+      ['train.loss', 0.98],
+      ['train.mean_iou', 0.085],
+      ['val.loss', 0.65],
+      ['val.mean_iou', 0.163]
+    ]);
+  });
+
+  it('keeps the summary and drops the per-class breakdown beneath it', () => {
+    // `train.loss` is what a curve is asking about; `train.vehicle.iou` is what
+    // get_test_results is for. Shallowest-wins separates them without either
+    // schema being known in advance.
+    const results = {
+      train: {
+        loss: 0.07,
+        mean_iou: 0.52,
+        vehicle: { iou: 0.65, precision: 0.66, recall: 0.98, f1: 0.79 },
+        sign: { iou: 0.12, precision: 0.14, recall: 0.4, f1: 0.2 }
+      }
+    };
+
+    expect(numericResults(results).map(([path]) => path)).toEqual(['train.loss', 'train.mean_iou']);
+  });
+
+  it('ignores machine telemetry', () => {
+    // Real data, wrong question: nobody reads a loss curve to find out what the
+    // fans were doing.
+    const results = {
+      train: { loss: 0.07 },
+      system_info: { cpu_percent: 44.1, memory_used_gb: 12.5 }
+    };
+
+    expect(numericResults(results).map(([path]) => path)).toEqual(['train.loss']);
+  });
+
+  it('bounds how many metrics one epoch contributes', () => {
+    const wide = Object.fromEntries(
+      Array.from({ length: 40 }, (_, i) => [`metric_${String(i).padStart(2, '0')}`, i])
+    );
+
+    expect(numericResults(wide)).toHaveLength(12);
+  });
+
+  it('drops nested diagnostics that hold no numbers at all', () => {
+    expect(numericResults({ loss: 0.2, ok: true, note: 'fine', tags: [1, 2] })).toEqual([
+      ['loss', 0.2]
+    ]);
+  });
+
+  it('answers nothing for an epoch that recorded nothing numeric', () => {
+    expect(numericResults({ note: 'crashed', detail: { why: 'oom' } })).toEqual([]);
   });
 });
 

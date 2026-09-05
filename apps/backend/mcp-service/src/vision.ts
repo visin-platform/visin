@@ -95,9 +95,12 @@ export const vision = {
     apiKey: string,
     id: string
   ): Promise<{ training: Training; epochs: Epoch[] }> =>
+    // `order` is an enum on vision-service (`sortOrderSchema`), not a Mongo
+    // sort direction. Sending 1 was a 400 on every call, which took out
+    // get_training and get_training_curve together.
     get(trainingWithEpochsSchema, apiKey, `/trainings/${encodeURIComponent(id)}/epochs`, {
       sortBy: 'epoch',
-      order: 1
+      order: 'asc'
     }),
 
   updateTraining: async (
@@ -126,6 +129,12 @@ export const vision = {
    * asking for five. Every other list endpoint honours `limit` on its own, so
    * the pairing is sent everywhere rather than only here: the contract has
    * surprised us once already.
+   *
+   * The filter key is `training_uuid` — see `getTestResultsQuerySchema`. Zod
+   * strips a key it does not define rather than rejecting it, so the earlier
+   * `trainingId` was accepted, ignored, and returned every run's results as
+   * though they belonged to the one asked about. Silence is the danger here:
+   * a wrong answer that looks right.
    */
   listTestResults: (
     apiKey: string,

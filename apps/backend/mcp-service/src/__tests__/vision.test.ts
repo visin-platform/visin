@@ -46,14 +46,17 @@ describe('routing', () => {
     expect(lastCall().path).toBe('/projects/road%2Fside');
   });
 
-  it('asks for epochs in epoch order, which is what a curve needs', async () => {
+  it('asks for epochs in epoch order, as a word not a number', async () => {
+    // `order` is an enum on vision-service, not a Mongo sort direction. Sending
+    // 1 was a 400 on every call, which took out get_training and
+    // get_training_curve together.
     called.mockResolvedValue({ training: { _id: 't1', name: 'x' }, epochs: [] });
 
     await vision.getTrainingWithEpochs('k', 't1');
 
     expect(lastCall()).toMatchObject({
       path: '/trainings/t1/epochs',
-      query: { sortBy: 'epoch', order: 1 }
+      query: { sortBy: 'epoch', order: 'asc' }
     });
   });
 
@@ -132,15 +135,15 @@ describe('routing', () => {
     ],
     [
       'listTestResults',
-      () => vision.listTestResults('k', { trainingId: 't1' }),
+      () => vision.listTestResults('k', { training_uuid: 'u1' }),
       { testResults: [] },
-      { method: 'GET', path: '/test-results', query: { trainingId: 't1' } }
+      { method: 'GET', path: '/test-results', query: { training_uuid: 'u1' } }
     ],
     [
       'listBenchmarks',
-      () => vision.listBenchmarks('k', { training_id: 't1' }),
+      () => vision.listBenchmarks('k', { training_uuid: 'u1' }),
       { benchmarks: [] },
-      { method: 'GET', path: '/benchmarks', query: { training_id: 't1' } }
+      { method: 'GET', path: '/benchmarks', query: { training_uuid: 'u1' } }
     ],
     [
       'listDatasets',
@@ -171,6 +174,40 @@ describe('routing', () => {
       () => vision.getVisualization('k', 'v1'),
       { visualization_uuid: 'v1', type: 'overlay' },
       { method: 'GET', path: '/visualizations/v1' }
+    ],
+    [
+      'listFindings',
+      () => vision.listFindings('k', { project: 'p1' }),
+      [],
+      { method: 'GET', path: '/findings', query: { project: 'p1' } }
+    ],
+    [
+      'getFinding',
+      () => vision.getFinding('k', 'f1'),
+      {
+        _id: 'f1',
+        projectId: 'p1',
+        title: 'T',
+        body: 'B',
+        trainingIds: [],
+        authorKind: 'assistant',
+        authorLabel: 'Claude'
+      },
+      { method: 'GET', path: '/findings/f1' }
+    ],
+    [
+      'createFinding',
+      () => vision.createFinding('k', { project: 'p1', title: 'T', body: 'B' }),
+      {
+        _id: 'f1',
+        projectId: 'p1',
+        title: 'T',
+        body: 'B',
+        trainingIds: [],
+        authorKind: 'assistant',
+        authorLabel: 'Claude'
+      },
+      { method: 'POST', path: '/findings', body: { project: 'p1', title: 'T', body: 'B' } }
     ],
     [
       'createProject',
