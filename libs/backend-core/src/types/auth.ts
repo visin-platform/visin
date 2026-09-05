@@ -1,3 +1,5 @@
+import type { ApiKeyContext } from '../apiKeys/middleware';
+
 export interface UserPayload {
   id: string;
   email?: string;
@@ -25,12 +27,18 @@ export interface UserPayload {
  * `apiTokenMiddleware`) when the request authenticated via a project-scoped
  * token rather than a user JWT — write handlers must treat it as the
  * authoritative project, not a client-supplied `req.body.projectId`.
+ *
+ * `apiKey` is set by `apiKeyAuth` when the request arrived on a user API key
+ * rather than a session. `user` is populated in that case too, so a handler
+ * that only cares who is calling needs no change; `apiKey` being present is how
+ * a handler tells that software is acting rather than a person.
  */
 declare global {
   namespace Express {
     interface Request {
       user?: UserPayload;
       projectId?: string;
+      apiKey?: ApiKeyContext;
     }
   }
 }

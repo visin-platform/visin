@@ -1,0 +1,34 @@
+services:
+  mcp-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: toomastahves/mcp-service:latest
+    restart: unless-stopped
+    stop_grace_period: 15s
+    ports:
+      - '5009:5009'
+    environment:
+      - PORT=5009
+      - NODE_ENV=production
+      # Verifying a presented API key is the only thing this service needs the
+      # database for; every read and write goes over HTTP to vision-service.
+      # It never mints a credential, so API_KEY_ENCRYPTION_SECRET is absent by
+      # design — and it never verifies a user session, so JWT_SECRET is too.
+      - MONGODB_URI=${MONGODB_URI}
+      # Container-network address first, so a tool call never leaves the host;
+      # the public URL is the fallback for a split deployment.
+      - VISION_INTERNAL_URL=${VISION_INTERNAL_URL}
+      - VISION_SERVICE_URL=${VISION_SERVICE_URL}
+      # The canonical URL clients are told to authenticate against.
+      - MCP_PUBLIC_URL=${MCP_PUBLIC_URL}
+      # Named in the protected-resource metadata, so a client knows where a
+      # token will come from once OAuth exists.
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+    init: true
+    networks:
+      - visinnet
+
+networks:
+  visinnet:
+    external: true

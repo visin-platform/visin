@@ -1,12 +1,14 @@
 import { ReactNode } from 'react';
-import { Person, Groups, ArrowBack } from '@mui/icons-material';
+import { Person, Groups, Key, Link as LinkIcon, ArrowBack } from '@mui/icons-material';
 import { AppLayout as SharedAppLayout, type AppLayoutNavItem } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { getGlobalConfig } from '../config/ConfigProvider';
 
 const navItems: AppLayoutNavItem[] = [
   { text: 'Profile', icon: <Person />, path: '/account/profile' },
-  { text: 'Groups', icon: <Groups />, path: '/account/groups' }
+  { text: 'Groups', icon: <Groups />, path: '/account/groups' },
+  { text: 'API keys', icon: <Key />, path: '/account/api-keys' },
+  { text: 'Connected apps', icon: <LinkIcon />, path: '/account/connections' }
 ];
 
 interface AppLayoutProps {

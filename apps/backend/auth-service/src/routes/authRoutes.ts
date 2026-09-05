@@ -12,9 +12,10 @@ import {
   listUsers
 } from '../controllers/authController';
 import { getProfile, updateProfile, changePassword } from '../controllers/profileController';
+import { createKey, listKeys, revealKey, revokeKey, removeKey } from '../controllers/apiKeyController';
 import { authenticateToken, requireRole } from '../middleware/authMiddleware';
 import { requireInternalServiceToken } from '../middleware/internalServiceAuth';
-import { validateRequest } from '@visin/backend-core';
+import { createRateLimiter, validateRequest } from '@visin/backend-core';
 import {
   validateTokenBodySchema,
   invalidateUserTokensBodySchema,
@@ -22,10 +23,21 @@ import {
   changePasswordBodySchema,
   setupBodySchema,
   registerBodySchema,
-  loginBodySchema
+  loginBodySchema,
+  createApiKeyBodySchema
 } from '../validation/authSchemas';
 
 const router = Router();
+
+/**
+ * A budget of its own for minting and revealing credentials.
+ *
+ * Deliberately not the shared `strictRateLimiter`: that export is a single
+ * instance, so every route using it draws on one counter, and someone hammering
+ * the login endpoint would lock an unrelated user out of their API keys. These
+ * two things have nothing to do with each other.
+ */
+const keyLimiter = createRateLimiter({ max: 30 });
 
 // Login route (public) – must remain public so user can obtain token
 router.post('/validate', validateRequest({ body: validateTokenBodySchema }), validateToken);
@@ -55,6 +67,36 @@ router.post(
 
 // Verify route now fully protected
 router.get('/verify', authenticateToken, verifyAuth);
+
+/**
+ * API keys — the credential a non-browser client acts with.
+ *
+ * Every route is the caller's own keys: the owner is taken from the session and
+ * used to scope the query, never read from the path, so there is no route here
+ * that can reach someone else's key.
+ *
+ * `authenticateToken` is auth-service's own, which re-checks `tokenVersion`
+ * against the database — so a session invalidated by a password change cannot
+ * still be used to mint a long-lived credential.
+ *
+ * Deliberately not reachable with an API key. `apiKeyAuth` is not mounted in
+ * this service at all, so a key cannot be used to issue, reveal or revoke
+ * another: escalating one credential into a fresh one with wider scopes would
+ * make every scope on every key advisory.
+ */
+router.post(
+  '/api-keys',
+  keyLimiter,
+  authenticateToken,
+  validateRequest({ body: createApiKeyBodySchema }),
+  createKey
+);
+router.get('/api-keys', authenticateToken, listKeys);
+// POST, not GET: it mutates (reveals are counted), and a URL that returns a
+// live credential ends up in browser history, referrer headers and access logs.
+router.post('/api-keys/:id/reveal', keyLimiter, authenticateToken, revealKey);
+router.post('/api-keys/:id/revoke', authenticateToken, revokeKey);
+router.delete('/api-keys/:id', authenticateToken, removeKey);
 
 // Internal service endpoints for token management
 router.post(

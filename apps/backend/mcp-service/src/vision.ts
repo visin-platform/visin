@@ -1,0 +1,137 @@
+import { callService, serviceUrl, type Query } from './http';
+import {
+  benchmarksResponseSchema,
+  comparisonResponseSchema,
+  dashboardStatsSchema,
+  datasetSchema,
+  datasetsResponseSchema,
+  imageCategoriesResponseSchema,
+  parseResponse,
+  projectSchema,
+  projectsResponseSchema,
+  testResultsResponseSchema,
+  trainingSchema,
+  trainingWithEpochsSchema,
+  trainingsResponseSchema,
+  type Benchmark,
+  type ComparisonEntry,
+  type DashboardStats,
+  type Dataset,
+  type Epoch,
+  type ImageCategory,
+  type Project,
+  type TestResult,
+  type Training
+} from './schemas';
+
+/**
+ * The vision-service client.
+ *
+ * Every method parses at the boundary — see `schemas.ts` — so a tool never
+ * builds an answer out of fields that silently arrived as `undefined`. The
+ * base URL is resolved per call rather than at import, so a test can point the
+ * client somewhere without re-importing the module.
+ */
+
+const base = (): string => serviceUrl('VISION');
+
+const get = async <T>(
+  schema: Parameters<typeof parseResponse<T>>[0],
+  apiKey: string,
+  path: string,
+  query?: Query
+): Promise<T> => parseResponse(schema, path, await callService(base(), apiKey, 'GET', path, undefined, query));
+
+const post = async <T>(
+  schema: Parameters<typeof parseResponse<T>>[0],
+  apiKey: string,
+  path: string,
+  body: unknown
+): Promise<T> => parseResponse(schema, path, await callService(base(), apiKey, 'POST', path, body));
+
+export const vision = {
+  listProjects: (apiKey: string, search?: string): Promise<Project[]> =>
+    get(projectsResponseSchema, apiKey, '/projects', { search }),
+
+  getProject: (apiKey: string, identifier: string): Promise<Project> =>
+    get(projectSchema, apiKey, `/projects/${encodeURIComponent(identifier)}`),
+
+  getDashboardStats: (apiKey: string, identifier: string): Promise<DashboardStats> =>
+    get(dashboardStatsSchema, apiKey, `/projects/${encodeURIComponent(identifier)}/dashboard-stats`),
+
+  createProject: (
+    apiKey: string,
+    body: { name: string; description?: string; isPublic?: boolean }
+  ): Promise<Project> => post(projectSchema, apiKey, '/projects', body),
+
+  updateProject: async (
+    apiKey: string,
+    id: string,
+    body: { name?: string; description?: string; isPublic?: boolean }
+  ): Promise<Project> =>
+    parseResponse(
+      projectSchema,
+      `/projects/${id}`,
+      await callService(base(), apiKey, 'PUT', `/projects/${encodeURIComponent(id)}`, body)
+    ),
+
+  listTrainings: (
+    apiKey: string,
+    query: Query
+  ): Promise<{ trainings: Training[]; pagination?: { total?: number } }> =>
+    get(trainingsResponseSchema, apiKey, '/trainings', query),
+
+  getTraining: (apiKey: string, id: string): Promise<Training> =>
+    get(trainingSchema, apiKey, `/trainings/${encodeURIComponent(id)}`),
+
+  getTrainingWithEpochs: (
+    apiKey: string,
+    id: string
+  ): Promise<{ training: Training; epochs: Epoch[] }> =>
+    get(trainingWithEpochsSchema, apiKey, `/trainings/${encodeURIComponent(id)}/epochs`, {
+      sortBy: 'epoch',
+      order: 1
+    }),
+
+  updateTraining: async (
+    apiKey: string,
+    id: string,
+    body: { name?: string; description?: string; status?: string; tags?: string[] }
+  ): Promise<Training> =>
+    parseResponse(
+      trainingSchema,
+      `/trainings/${id}`,
+      await callService(base(), apiKey, 'PUT', `/trainings/${encodeURIComponent(id)}`, body)
+    ),
+
+  compareTrainings: (
+    apiKey: string,
+    trainingIds: string[]
+  ): Promise<{ comparison: ComparisonEntry[] }> =>
+    post(comparisonResponseSchema, apiKey, '/trainings/compare', { trainingIds }),
+
+  listTestResults: (
+    apiKey: string,
+    query: Query
+  ): Promise<{ testResults: TestResult[]; total?: number }> =>
+    get(testResultsResponseSchema, apiKey, '/test-results', query),
+
+  listBenchmarks: (apiKey: string, query: Query): Promise<{ benchmarks: Benchmark[] }> =>
+    get(benchmarksResponseSchema, apiKey, '/benchmarks', query),
+
+  listDatasets: (
+    apiKey: string,
+    query: Query
+  ): Promise<{ datasets: Dataset[]; pagination?: { total?: number } }> =>
+    get(datasetsResponseSchema, apiKey, '/datasets', query),
+
+  getDataset: (apiKey: string, id: string): Promise<Dataset> =>
+    get(datasetSchema, apiKey, `/datasets/${encodeURIComponent(id)}`),
+
+  listImageCategories: (apiKey: string, datasetId: string): Promise<ImageCategory[]> =>
+    get(
+      imageCategoriesResponseSchema,
+      apiKey,
+      `/image-categories/dataset/${encodeURIComponent(datasetId)}`
+    )
+};

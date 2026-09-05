@@ -1,4 +1,4 @@
-import { z } from '@visin/backend-core';
+import { z, API_KEY_SCOPES } from '@visin/backend-core';
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '../services/passwordService';
 
 const email = z.string().trim().toLowerCase().email('A valid email is required');
@@ -33,4 +33,21 @@ export const invalidateUserTokensBodySchema = z.object({
 export const updateProfileBodySchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional()
+});
+
+/**
+ * Issuing an API key.
+ *
+ * `scopes` is validated against the shared list rather than accepting any
+ * string: a typo'd scope would be stored, shown in the UI as granted, and then
+ * silently match nothing at the middleware — a permission that looks present
+ * and is not.
+ */
+export const createApiKeyBodySchema = z.object({
+  name: z.string().trim().min(1, 'Give the key a name').max(60),
+  scopes: z.array(z.enum(API_KEY_SCOPES)).max(API_KEY_SCOPES.length),
+  // Capped at a year. A key that never expires is a credential nobody ever
+  // revisits; an explicit `undefined` still means "no expiry", which is a
+  // choice someone made rather than a default they inherited.
+  expiresInDays: z.number().int().min(1).max(365).optional()
 });

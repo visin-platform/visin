@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'path';
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, apiKeyAuth } from '@visin/backend-core';
 import datasetRoutes from './routes/datasetRoutes';
 import trainingRoutes from './routes/trainingRoutes';
 import epochRoutes from './routes/epochRoutes';
@@ -39,20 +39,41 @@ app.use((req, res, next) => {
 // Global Middleware
 app.use(apiTokenMiddleware);
 
-// Routes
-app.use('/api/datasets', datasetRoutes);
-app.use('/api/trainings', trainingRoutes);
-app.use('/api/epochs', epochRoutes);
-app.use('/api/configs', configRoutes);
-app.use('/api/analysis', analysisRoutes);
-app.use('/api/dataset-images', datasetImageRoutes);
-app.use('/api/test-results', testResultRoutes);
-app.use('/api/visualizations', visualizationRoutes);
-app.use('/api/benchmarks', benchmarkRoutes);
-app.use('/api/comparisons', comparisonRoutes);
-app.use('/api/projects', projectRoutes);
+/**
+ * User API keys (`vsn_live_…`), for non-browser callers like the MCP server.
+ *
+ * Mounted per route group rather than once globally, for two reasons. This
+ * service answers for two scope domains — `vision` for runs and their results,
+ * `dataset` for the data they were trained on — so there is no single domain a
+ * global mount could name. And forgetting the guard on a route group added
+ * later fails *closed*: keys simply don't authenticate there and the JWT
+ * middleware answers 401, rather than the group silently accepting any key.
+ *
+ * `apiKeyAuth` runs ahead of each route's own authMiddleware/optionalAuthMiddleware
+ * and cooperates with them through the `if (req.user) return next()` guard both
+ * begin with. Read vs. write is derived from the HTTP method; the `readPaths`
+ * entries are the comparison endpoints, which are POSTs that read two runs and
+ * write nothing.
+ */
+const COMPARE_IS_A_READ = { readPaths: [/^\/compare(\/|$)/] };
+
+app.use('/api/datasets', apiKeyAuth('dataset'), datasetRoutes);
+app.use('/api/trainings', apiKeyAuth('vision', COMPARE_IS_A_READ), trainingRoutes);
+app.use('/api/epochs', apiKeyAuth('vision'), epochRoutes);
+app.use('/api/configs', apiKeyAuth('vision'), configRoutes);
+app.use('/api/analysis', apiKeyAuth('dataset', COMPARE_IS_A_READ), analysisRoutes);
+app.use('/api/dataset-images', apiKeyAuth('dataset'), datasetImageRoutes);
+app.use('/api/test-results', apiKeyAuth('vision', COMPARE_IS_A_READ), testResultRoutes);
+app.use('/api/visualizations', apiKeyAuth('vision'), visualizationRoutes);
+app.use('/api/benchmarks', apiKeyAuth('vision'), benchmarkRoutes);
+app.use('/api/comparisons', apiKeyAuth('vision'), comparisonRoutes);
+app.use('/api/projects', apiKeyAuth('vision'), projectRoutes);
+// Deliberately no apiKeyAuth: this route group mints and revokes the
+// project-scoped tokens the training pipeline authenticates with. Issuing a
+// credential is a thing a person does while signed in, never something one
+// credential should be able to do on behalf of another.
 app.use('/api/api-tokens', apiTokenRoutes);
-app.use('/api/image-categories', imageCategoryRoutes);
+app.use('/api/image-categories', apiKeyAuth('dataset'), imageCategoryRoutes);
 
 // Serve OpenAPI docs as static files
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));

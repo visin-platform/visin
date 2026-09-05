@@ -1,0 +1,41 @@
+{
+  "name": "mcp-service",
+  "version": "1.0.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/visin-platform/visin-monorepo.git",
+    "directory": "apps/backend/mcp-service"
+  },
+  "author": "Toomas Tahves",
+  "license": "MIT",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "dev": "nodemon --exec \"node --env-file-if-exists=.env -r ts-node/register\" src/index.ts",
+    "build": "tsc",
+    "test": "jest --passWithNoTests",
+    "test:coverage": "jest --coverage --passWithNoTests",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@visin/backend-core": "0.1.22",
+    "express": "^5.2.1",
+    "mongoose": "^9.7.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.0",
+    "eslint": "^10.6.0",
+    "jest": "^30.4.2",
+    "nodemon": "^3.1.14",
+    "ts-jest": "^29.4.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.1"
+  }
+}

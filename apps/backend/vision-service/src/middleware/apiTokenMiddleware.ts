@@ -2,7 +2,7 @@ import { Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import ApiToken from '../models/ApiToken';
 import { AuthRequest } from './authMiddleware';
-import { logger } from '@visin/backend-core';
+import { logger, looksLikeApiKey } from '@visin/backend-core';
 
 // How stale lastUsedAt must be before we bother writing an update — this
 // middleware runs on every authenticated request, so writing unconditionally
@@ -21,7 +21,14 @@ export const apiTokenMiddleware = async (req: AuthRequest, res: Response, next: 
     const token = authHeader.split(' ')[1];
     
     // Simple heuristic: JWTs have 2 dots. API tokens (hex) don't.
-    if (!token.includes('.')) {
+    //
+    // A user API key (`vsn_live_…`, backend-core) has no dot either, so the
+    // heuristic alone would send one down this path to be hashed and looked up
+    // — a guaranteed miss, and a wasted indexed query on every request an
+    // assistant makes. Worse, it would leave the only thing distinguishing two
+    // credential types being which lookup happens to fail first. `apiKeyAuth`
+    // owns that credential; skip it explicitly.
+    if (!token.includes('.') && !looksLikeApiKey(token)) {
       try {
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
         const apiToken = await ApiToken.findOne({ tokenHash, isActive: true });

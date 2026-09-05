@@ -30,7 +30,29 @@ describe('authRoutes', () => {
     expect(find('get', '/verify')).toBeDefined();
     expect(find('post', '/internal/invalidate-tokens')).toBeDefined();
     expect(find('get', '/admin/users')).toBeDefined();
-    expect(routes).toHaveLength(13);
+    expect(find('post', '/api-keys')).toBeDefined();
+    expect(find('get', '/api-keys')).toBeDefined();
+    expect(find('post', '/api-keys/:id/reveal')).toBeDefined();
+    expect(find('post', '/api-keys/:id/revoke')).toBeDefined();
+    expect(find('delete', '/api-keys/:id')).toBeDefined();
+    expect(routes).toHaveLength(18);
+  });
+
+  it('lets nobody reach an API key without a session', () => {
+    // Every one of these mints, reveals or destroys a credential; none has a
+    // public path. The owner is taken from the session and used to scope the
+    // query, so there is no route here that can reach someone else's key.
+    expect(find('post', '/api-keys')!.handlerCount).toBe(4); // limiter + auth + validation + controller
+    expect(find('get', '/api-keys')!.handlerCount).toBe(2);
+    expect(find('post', '/api-keys/:id/reveal')!.handlerCount).toBe(3); // limiter + auth + controller
+    expect(find('post', '/api-keys/:id/revoke')!.handlerCount).toBe(2);
+    expect(find('delete', '/api-keys/:id')!.handlerCount).toBe(2);
+  });
+
+  it('reveals a key over POST, never GET', () => {
+    // It mutates (reveals are counted), and a URL that returns a live
+    // credential ends up in browser history, referrer headers and access logs.
+    expect(find('get', '/api-keys/:id/reveal')).toBeUndefined();
   });
 
   it('keeps /validate public (validation + controller only, no auth middleware)', () => {

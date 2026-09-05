@@ -58,6 +58,9 @@ jobs:
             label-service:
               - *backend-shared
               - 'apps/backend/label-service/**'
+            mcp-service:
+              - *backend-shared
+              - 'apps/backend/mcp-service/**'
             vision-service:
               - *backend-shared
               - 'apps/backend/vision-service/**'

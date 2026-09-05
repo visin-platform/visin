@@ -74,6 +74,21 @@ describe('apiTokenMiddleware', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it('ignores a user API key, which is dot-free but not one of these', async () => {
+    // `vsn_live_…` keys (backend-core's apiKeyAuth) contain no dot either, so
+    // the dots heuristic alone would send one here to be hashed and looked up:
+    // a guaranteed miss, and a wasted indexed query on every assistant request.
+    const req = makeReq({
+      headers: { authorization: 'Bearer vsn_live_0123456789ab_a-secret-value-long-enough' },
+    });
+
+    await apiTokenMiddleware(req, makeRes(), next as unknown as NextFunction);
+
+    expect(mockedApiToken.findOne).not.toHaveBeenCalled();
+    expect(req.user).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it('looks up the sha256 hash and attaches user + project scope', async () => {
     const token = activeToken();
     mockedApiToken.findOne.mockResolvedValue(token);

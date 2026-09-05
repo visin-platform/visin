@@ -18,6 +18,18 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
       - COOKIE_DOMAIN=${COOKIE_DOMAIN}
+      # Encrypts the recoverable copy of a user API key. Only this service needs
+      # it — it is the one that issues and reveals keys; every other service
+      # verifies against a digest and never touches the encrypted copy. Leave it
+      # unset to run with API keys disabled; /auth/api-keys then answers 501.
+      - API_KEY_ENCRYPTION_SECRET=${API_KEY_ENCRYPTION_SECRET}
+      # OAuth 2.1, for assistants connecting over MCP. The issuer named in the
+      # metadata, where to send someone who needs to sign in first, and the one
+      # resource this server issues access tokens for — a token is bound to it
+      # (RFC 8707) and will not work anywhere else.
+      - AUTH_SERVICE_PUBLIC_URL=${AUTH_SERVICE_PUBLIC_URL}
+      - AUTH_FRONT_URL=${AUTH_FRONT_URL}
+      - MCP_PUBLIC_URL=${MCP_PUBLIC_URL}
     init: true
     networks:
       - visinnet
