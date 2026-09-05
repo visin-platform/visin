@@ -114,6 +114,16 @@ describe('verifyAccessToken', () => {
     expect(verifyAccessToken(noSubject, RESOURCE)).toEqual({ ok: false, rejection: 'malformed' });
   });
 
+  it('surfaces a missing JWT_SECRET as a config fault, not a bad signature', () => {
+    // The failure this cost an afternoon: mcp-service was deployed without the
+    // secret, requireEnv threw inside the try, and every OAuth-connected
+    // assistant was told its perfectly good token had a bad signature.
+    const token = mint().accessToken;
+    delete process.env.JWT_SECRET;
+
+    expect(() => verifyAccessToken(token, RESOURCE)).toThrow(/JWT_SECRET/);
+  });
+
   it('refuses gibberish', () => {
     expect(verifyAccessToken('not-a-token', RESOURCE).ok).toBe(false);
   });

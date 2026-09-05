@@ -13,9 +13,11 @@ services:
       - NODE_ENV=production
       # Verifying a presented API key is the only thing this service needs the
       # database for; every read and write goes over HTTP to vision-service.
-      # It never mints a credential, so API_KEY_ENCRYPTION_SECRET is absent by
-      # design — and it never verifies a user session, so JWT_SECRET is too.
       - MONGODB_URI=${MONGODB_URI}
+      # Verifies the signature on an OAuth access token. Not needed for API keys
+      # (those are digest-checked in Mongo), but without it every OAuth-connected
+      # assistant authenticates and then sees no tools at all.
+      - JWT_SECRET=${JWT_SECRET}
       # The container-network address, so a tool call never leaves the host.
       # Literal rather than a deploy variable: it is a fixed name on visinnet,
       # not a per-environment secret, and one less thing to configure wrong.

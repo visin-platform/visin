@@ -112,13 +112,16 @@ export const verifyAccessToken = (
   token: string,
   expectedAudience: string
 ): AccessTokenVerification => {
+  // Read outside the try. A missing JWT_SECRET is a deployment fault, not a bad
+  // token, and swallowing it into `bad-signature` sends whoever is debugging at
+  // the signing key while the real answer is an absent env var.
+  const secret = requireEnv('JWT_SECRET');
+
   let claims: AccessTokenClaims;
   try {
     // `audience` is checked below rather than here so a mismatch is reported as
     // itself instead of collapsing into a generic bad-signature.
-    claims = jwt.verify(token, requireEnv('JWT_SECRET'), {
-      audience: undefined
-    }) as AccessTokenClaims;
+    claims = jwt.verify(token, secret) as AccessTokenClaims;
   } catch (error) {
     const expired = (error as Error)?.name === 'TokenExpiredError';
     return { ok: false, rejection: expired ? 'expired' : 'bad-signature' };

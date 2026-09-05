@@ -13,7 +13,7 @@ import app from './app';
  * config mistake into what looks like an outage. `VISION_INTERNAL_URL` is
  * optional — it is the in-network shortcut, and the public URL works without it.
  */
-assertRequiredEnv(['MONGODB_URI', 'VISION_SERVICE_URL', 'MCP_PUBLIC_URL']);
+assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'VISION_SERVICE_URL', 'MCP_PUBLIC_URL']);
 
 const PORT = process.env.PORT || 5009;
 
