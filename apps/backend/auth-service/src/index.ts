@@ -33,6 +33,20 @@ const PORT = process.env.PORT || 5001;
 const app = createBaseApp({
   corsMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id'],
+  // The three OAuth endpoints an unknown client has to reach before it has any
+  // relationship with us: discovery, registration, and token exchange. They
+  // cannot sit behind the origin allowlist — the client is by definition one we
+  // have not enumerated, which is the whole premise of dynamic registration.
+  //
+  // `/oauth/authorize` is deliberately absent. Its GET is a top-level browser
+  // navigation, which CORS does not govern, and its POST is the consent
+  // decision — cookie-authenticated and CSRF-protected by the consent token, so
+  // it must keep the allowlist.
+  publicCorsPaths: [
+    '/.well-known/oauth-authorization-server',
+    '/oauth/register',
+    '/oauth/token'
+  ],
   corsExposedHeaders: ['Content-Type', 'Content-Length', 'ETag', 'Cache-Control']
 });
 

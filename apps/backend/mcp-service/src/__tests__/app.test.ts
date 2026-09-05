@@ -250,3 +250,67 @@ describe('the protocol', () => {
     expect(body.result[field]).toEqual([]);
   });
 });
+
+/**
+ * An MCP server is called by assistants nobody enumerated in advance, and a
+ * browser-based one gets nowhere without these.
+ */
+describe('cross-origin access', () => {
+  it('lets any origin call the MCP endpoint', async () => {
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Origin: 'https://claude.ai',
+        Authorization: `Bearer ${KEY}`
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
+    });
+
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+  });
+
+  it('exposes WWW-Authenticate, without which OAuth discovery cannot start', async () => {
+    // Browser JavaScript cannot read that header on the 401 unless it is
+    // exposed — so the client never finds the protected-resource metadata it
+    // points at, and has no way to learn where to authenticate.
+    const { response } = await rpc('tools/list', {}, null);
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('www-authenticate')).toContain('resource_metadata');
+    expect(response.headers.get('access-control-expose-headers')).toContain('WWW-Authenticate');
+  });
+
+  it('answers a preflight rather than letting it fall through to the 404', async () => {
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://claude.ai',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type, authorization'
+      }
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('access-control-allow-headers')).toContain('Authorization');
+    // The transport's own header, or a browser client cannot hold a session.
+    expect(response.headers.get('access-control-allow-headers')).toContain('Mcp-Session-Id');
+  });
+
+  it('serves the protected-resource metadata cross-origin', async () => {
+    const response = await fetch(`${baseUrl}/.well-known/oauth-protected-resource`, {
+      headers: { Origin: 'https://claude.ai' }
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+  });
+
+  it('never allows credentials, which is what keeps the wildcard legal', async () => {
+    const response = await fetch(baseUrl, { headers: { Origin: 'https://claude.ai' } });
+
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(response.headers.get('access-control-allow-credentials')).toBeNull();
+  });
+});

@@ -12,6 +12,15 @@ export interface CreateBaseAppOptions {
   corsMethods?: string[];
   corsAllowedHeaders?: string[];
   corsExposedHeaders?: string[];
+  /**
+   * Paths served with `Access-Control-Allow-Origin: *` and no credentials,
+   * bypassing the origin allowlist — for endpoints any unknown client must be
+   * able to reach, such as OAuth discovery, registration and token exchange.
+   * A string matches that exact path and anything beneath it. See the note at
+   * the call site before adding one: anything cookie-authenticated must not go
+   * here.
+   */
+  publicCorsPaths?: (string | RegExp)[];
   /** Pass false to skip the global express.json() call, e.g. for services that parse JSON per-route or stream raw bodies. */
   json?: false | Parameters<typeof express.json>[0];
 }
@@ -70,7 +79,8 @@ export function createBaseApp(options: CreateBaseAppOptions = {}): Express {
   );
 
   const allowedOrigins = options.corsOrigins ?? (process.env.CORS_ORIGIN ?? '').split(',').map(s => s.trim()).filter(Boolean);
-  app.use(cors({
+
+  const restrictedCors = cors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
@@ -91,7 +101,48 @@ export function createBaseApp(options: CreateBaseAppOptions = {}): Express {
     ...(options.corsMethods ? { methods: options.corsMethods } : {}),
     ...(options.corsAllowedHeaders ? { allowedHeaders: options.corsAllowedHeaders } : {}),
     ...(options.corsExposedHeaders ? { exposedHeaders: options.corsExposedHeaders } : {})
-  }));
+  });
+
+  /**
+   * Endpoints that must be readable cross-origin by *any* client, bypassing the
+   * allowlist.
+   *
+   * An origin allowlist assumes you know who calls you. That holds for the
+   * fronts; it cannot hold for OAuth discovery, dynamic client registration and
+   * token exchange, where the entire point is that a client you have never seen
+   * can connect. Adding an assistant's origin to CORS_ORIGIN works for exactly
+   * the one you added and fails for the next — the failure this exists to fix.
+   *
+   * Safe because none of these authenticates with a cookie: metadata is public,
+   * registration grants nothing on its own, and the token endpoint is
+   * authenticated by the authorization code plus the PKCE verifier. Credentials
+   * are switched off accordingly, which is also what permits `*` at all — the
+   * spec forbids pairing a wildcard with credentials. Any endpoint that *does*
+   * rely on the session cookie must stay on the allowlist: `/oauth/authorize`
+   * is the one to keep off this list, since its POST is cookie-authenticated.
+   */
+  const publicPaths = options.publicCorsPaths ?? [];
+  if (publicPaths.length === 0) {
+    app.use(restrictedCors);
+  } else {
+    const isPublic = (path: string): boolean =>
+      publicPaths.some(entry =>
+        typeof entry === 'string' ? path === entry || path.startsWith(`${entry}/`) : entry.test(path)
+      );
+    const publicCors = cors({
+      origin: '*',
+      credentials: false,
+      ...(options.corsMethods ? { methods: options.corsMethods } : {}),
+      ...(options.corsAllowedHeaders ? { allowedHeaders: options.corsAllowedHeaders } : {}),
+      ...(options.corsExposedHeaders ? { exposedHeaders: options.corsExposedHeaders } : {})
+    });
+
+    // One or the other, never both: the allowlist would otherwise reject the
+    // same request a moment after the permissive headers were set.
+    app.use((req, res, next) =>
+      isPublic(req.path) ? publicCors(req, res, next) : restrictedCors(req, res, next)
+    );
+  }
 
   if (options.json !== false) {
     app.use(express.json(options.json === undefined ? undefined : options.json));

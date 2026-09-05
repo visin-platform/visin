@@ -16,6 +16,16 @@ async function withServer(
   app.post('/echo', (req, res) => {
     res.json({ body: req.body ?? null });
   });
+  // Stand-ins for the public OAuth surface, for the publicCorsPaths tests.
+  app.get('/.well-known/oauth-authorization-server', (_req, res) => {
+    res.json({ issuer: 'https://auth-api.example' });
+  });
+  app.post('/oauth/token', (_req, res) => {
+    res.json({ access_token: 'x' });
+  });
+  app.post('/oauth/authorize', (_req, res) => {
+    res.json({ ok: true });
+  });
   app.use(errorHandler);
 
   const server = createServer(app);
@@ -225,5 +235,141 @@ describe('createBaseApp rate limiting', () => {
 
     delete process.env.RATE_LIMIT_PER_MINUTE;
     delete process.env.INTERNAL_RATE_LIMIT_PER_MINUTE;
+  });
+});
+
+/**
+ * The origin allowlist assumes you know who calls you. OAuth discovery,
+ * dynamic client registration and token exchange break that assumption by
+ * design — the connecting client is one nobody enumerated — so those paths
+ * have to sit outside it.
+ */
+describe('createBaseApp publicCorsPaths', () => {
+  const withOauth = {
+    corsOrigins: ['https://allowed.example'],
+    publicCorsPaths: [
+      '/.well-known/oauth-authorization-server',
+      '/oauth/register',
+      '/oauth/token'
+    ]
+  };
+
+  it('lets an origin nobody allowlisted read OAuth discovery', async () => {
+    await withServer(withOauth, async baseUrl => {
+      const res = await fetch(`${baseUrl}/.well-known/oauth-authorization-server`, {
+        headers: { Origin: 'https://claude.ai' }
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    });
+  });
+
+  it('never pairs the wildcard with credentials, which the spec forbids', async () => {
+    await withServer(withOauth, async baseUrl => {
+      const res = await fetch(`${baseUrl}/oauth/token`, {
+        method: 'POST',
+        headers: { Origin: 'https://claude.ai', 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+
+      expect(res.headers.get('access-control-allow-origin')).toBe('*');
+      expect(res.headers.get('access-control-allow-credentials')).toBeNull();
+    });
+  });
+
+  it('answers the preflight an unknown client sends before registering', async () => {
+    // This is the request that actually failed in production: a 403 here and
+    // the real POST is never even attempted.
+    await withServer(withOauth, async baseUrl => {
+      const res = await fetch(`${baseUrl}/oauth/register`, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://claude.ai',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'content-type'
+        }
+      });
+
+      expect(res.status).toBeLessThan(300);
+      expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    });
+  });
+
+  it('still refuses an unknown origin everywhere else', async () => {
+    // The exemption is per-path, not a global loosening.
+    await withServer(withOauth, async baseUrl => {
+      const res = await fetch(`${baseUrl}/cookie-check`, {
+        headers: { Origin: 'https://claude.ai' }
+      });
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  it('keeps the cookie-authenticated consent POST on the allowlist', async () => {
+    // /oauth/authorize is the one OAuth path that must NOT be public: its POST
+    // carries the session cookie and is CSRF-protected by the consent token.
+    await withServer(withOauth, async baseUrl => {
+      const res = await fetch(`${baseUrl}/oauth/authorize`, {
+        method: 'POST',
+        headers: { Origin: 'https://claude.ai', 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  it('still serves an allowlisted origin with credentials on ordinary routes', async () => {
+    await withServer(withOauth, async baseUrl => {
+      const res = await fetch(`${baseUrl}/cookie-check`, {
+        headers: { Origin: 'https://allowed.example' }
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('access-control-allow-origin')).toBe('https://allowed.example');
+      expect(res.headers.get('access-control-allow-credentials')).toBe('true');
+    });
+  });
+
+  it('matches a path prefix, so sub-paths of a public endpoint are public too', async () => {
+    await withServer(
+      { corsOrigins: ['https://allowed.example'], publicCorsPaths: ['/oauth'] },
+      async baseUrl => {
+        const res = await fetch(`${baseUrl}/oauth/token`, {
+          method: 'POST',
+          headers: { Origin: 'https://anywhere.example', 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+
+        expect(res.headers.get('access-control-allow-origin')).toBe('*');
+      }
+    );
+  });
+
+  it('accepts a RegExp for a path that cannot be expressed as a prefix', async () => {
+    await withServer(
+      { corsOrigins: ['https://allowed.example'], publicCorsPaths: [/^\/\.well-known\//] },
+      async baseUrl => {
+        const res = await fetch(`${baseUrl}/.well-known/oauth-authorization-server`, {
+          headers: { Origin: 'https://anywhere.example' }
+        });
+
+        expect(res.headers.get('access-control-allow-origin')).toBe('*');
+      }
+    );
+  });
+
+  it('behaves exactly as before when no public paths are given', async () => {
+    await withServer(['https://allowed.example'], async baseUrl => {
+      const blocked = await fetch(`${baseUrl}/oauth/token`, {
+        method: 'POST',
+        headers: { Origin: 'https://claude.ai', 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+
+      expect(blocked.status).toBe(403);
+    });
   });
 });
