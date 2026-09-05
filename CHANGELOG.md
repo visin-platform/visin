@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.172](https://github.com/visin-platform/visin-monorepo/compare/v0.0.171...v0.0.172) (2026-09-05)
+
+
+### Bug Fixes
+
+* mcp tool issues ([072a8ab](https://github.com/visin-platform/visin-monorepo/commit/072a8ab39a1ce523521aa4744bba82f794ec2a95))
+
 ### [0.0.171](https://github.com/visin-platform/visin-monorepo/compare/v0.0.170...v0.0.171) (2026-09-05)
 
 
