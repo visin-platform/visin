@@ -39,9 +39,9 @@ function LandingPage() {
 
       <Box component="main" id="main">
         <Hero appUrl={appUrl} />
+        <Assistant />
         <Workflow />
         <Features />
-        <Assistant />
         <OpenSource />
         <Contact />
       </Box>

@@ -57,7 +57,21 @@ describe('registerTools', () => {
 
   it('reports how many modules applied', () => {
     const { server } = makeServer();
-    expect(registerTools(server, caller, ['vision:read', 'dataset:read'])).toBe(2);
+    // visualization tools declare vision:read too, so that scope brings two modules.
+    expect(registerTools(server, caller, ['vision:read', 'dataset:read'])).toBe(3);
+  });
+
+  it('grants analysis independently of vision, which is the point of the split', () => {
+    // "read my experiments and record what you conclude" must not also mean
+    // "rename my projects".
+    const { server, registered } = makeServer();
+
+    registerTools(server, caller, ['vision:read', 'analysis:read', 'analysis:write']);
+
+    expect(registered).toContain('record_finding');
+    expect(registered).toContain('list_findings');
+    expect(registered).not.toContain('update_project');
+    expect(registered).not.toContain('update_training');
   });
 
   it('registers every tool exactly once for a fully-scoped key', () => {
@@ -73,7 +87,13 @@ describe('SERVED_SCOPES', () => {
   it('is derived from the modules, so it cannot advertise a scope with nothing behind it', () => {
     // What a client reads from the protected-resource metadata and asks a user
     // to approve. A hand-written list drifts the moment a module moves.
-    expect([...SERVED_SCOPES].sort()).toEqual(['dataset:read', 'vision:read', 'vision:write']);
+    expect([...SERVED_SCOPES].sort()).toEqual([
+      'analysis:read',
+      'analysis:write',
+      'dataset:read',
+      'vision:read',
+      'vision:write'
+    ]);
   });
 
   it('lists no scope twice, however many modules share one', () => {
@@ -100,9 +120,15 @@ describe('measurement is not opt-in', () => {
       }
     } as unknown as McpServer;
 
-    const count = registerTools(server, caller, ['vision:read', 'vision:write', 'dataset:read']);
+    const count = registerTools(server, caller, [
+      'vision:read',
+      'vision:write',
+      'dataset:read',
+      'analysis:read',
+      'analysis:write'
+    ]);
 
-    expect(count).toBe(3);
+    expect(count).toBe(6);
     expect(seen.length).toBeGreaterThan(10);
   });
 });

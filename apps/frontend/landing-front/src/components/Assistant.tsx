@@ -28,22 +28,22 @@ export default function Assistant() {
       <Container maxWidth="lg">
         <Box sx={{ maxWidth: 720, mb: { xs: 5, md: 8 } }}>
           <Typography variant="overline" sx={{ color: 'primary.light', fontWeight: 700, letterSpacing: 1.2 }}>
-            Assistant
+            Training analysis
           </Typography>
           <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, mt: 1, mb: 2 }}>
-            Ask your experiments a question
+            An analyst for your training data
           </Typography>
           <Typography sx={{ color: 'rgba(255,255,255,0.75)', fontSize: '1.075rem' }}>
-            Visin runs an MCP server, so an AI assistant can read your projects, runs, curves, test
-            results and benchmarks directly. No exporting a CSV first, and no pasting numbers into a
-            chat window — it reads the record itself and answers from it.
+            Every run you record leaves a trail: epoch curves, per-class scores, benchmarks, rendered
+            frames. Visin speaks MCP, so Claude reads all of it directly and tells you what it means.
+            Then it writes the answer onto the project. Three months later that note is still there.
           </Typography>
         </Box>
 
         <Grid container spacing={{ xs: 4, md: 6 }}>
           <Grid size={{ xs: 12, md: 7 }}>
             <Typography variant="h6" sx={{ mb: 2.5 }}>
-              Things it can answer
+              Things people actually ask it
             </Typography>
             <Stack spacing={2}>
               {ASK_EXAMPLES.map((example) => (
@@ -70,7 +70,7 @@ export default function Assistant() {
 
           <Grid size={{ xs: 12, md: 5 }}>
             <Typography variant="h6" sx={{ mb: 2.5 }}>
-              Connecting one
+              Getting it connected
             </Typography>
 
             <Box
@@ -122,7 +122,7 @@ export default function Assistant() {
             >
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
                 <InfoOutlined sx={{ color: 'rgba(255,255,255,0.6)', fontSize: 18 }} />
-                <Typography sx={{ fontWeight: 600, fontSize: '0.95rem' }}>What it will not do</Typography>
+                <Typography sx={{ fontWeight: 600, fontSize: '0.95rem' }}>Where it stops</Typography>
               </Stack>
               <Stack spacing={1.25} component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }}>
                 {ASSISTANT_LIMITS.map((limit) => (
@@ -140,7 +140,14 @@ export default function Assistant() {
         </Grid>
 
         <Stack direction="row" spacing={1} sx={{ mt: { xs: 5, md: 7 }, flexWrap: 'wrap', gap: 1 }}>
-          {['Model Context Protocol', 'OAuth or API key', 'Read-only by default', 'Every call recorded'].map(
+          {[
+            'Reads epochs and curves',
+            'Reads per-class scores',
+            'Looks at rendered frames',
+            'Writes findings back',
+            'Connects in one click',
+            'Every call logged'
+          ].map(
             (badge) => (
               <Chip
                 key={badge}

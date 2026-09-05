@@ -155,6 +155,24 @@ describe('routing', () => {
       { method: 'GET', path: '/datasets/d1' }
     ],
     [
+      'listVisualizations',
+      () => vision.listVisualizations('k', { training_uuid: 't-uuid', limit: 20 }),
+      { visualizations: [] },
+      { method: 'GET', path: '/visualizations/training', query: { page: 1, training_uuid: 't-uuid', limit: 20 } }
+    ],
+    [
+      'listVisualizationTypes',
+      () => vision.listVisualizationTypes('k', 't-uuid'),
+      { types: ['overlay'] },
+      { method: 'GET', path: '/visualizations/types', query: { training_uuid: 't-uuid' } }
+    ],
+    [
+      'getVisualization',
+      () => vision.getVisualization('k', 'v1'),
+      { visualization_uuid: 'v1', type: 'overlay' },
+      { method: 'GET', path: '/visualizations/v1' }
+    ],
+    [
       'createProject',
       () => vision.createProject('k', { name: 'Roadside' }),
       { _id: 'p1', name: 'Roadside' },

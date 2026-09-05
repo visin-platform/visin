@@ -2,6 +2,9 @@
  * Landing copy lives here so every claim is in one place and can be checked
  * against what the platform actually does. Nothing here describes a capability
  * the services don't implement.
+ *
+ * Kept short on purpose. A visitor scans; they do not read. Anything that needs
+ * a paragraph to explain belongs in the docs, not on the way in.
  */
 
 export const GITHUB_URL = 'https://github.com/visin-platform';
@@ -12,26 +15,11 @@ export interface Step {
 }
 
 export const STEPS: Step[] = [
-  {
-    title: 'Organise',
-    body: 'Group images into datasets and projects, with categories and per-image metadata. Projects are private by default, or public when you want to share results.'
-  },
-  {
-    title: 'Label',
-    body: 'Bundle images into labeling jobs and hand them to your team. Workers mark good and bad frames and toggle masks; admins track progress per job.'
-  },
-  {
-    title: 'Train & record',
-    body: 'Push training runs, per-epoch metrics, configs, and visualisations from your own scripts through a project-scoped API token.'
-  },
-  {
-    title: 'Compare & publish',
-    body: 'Put runs, datasets, test results, and benchmarks side by side, then export the comparison as LaTeX or CSV for your paper.'
-  },
-  {
-    title: 'Ask',
-    body: 'Connect an AI assistant over MCP and ask about your runs in plain language — which epoch was best, what changed between two experiments, how big the model is.'
-  }
+  { title: 'Organise', body: 'Datasets, projects, categories. Private unless you say otherwise.' },
+  { title: 'Label', body: 'Hand a bundle to your team and watch the progress.' },
+  { title: 'Train', body: 'Your script posts epochs, configs and renders as it goes.' },
+  { title: 'Compare', body: 'Runs side by side. Export the table as LaTeX.' },
+  { title: 'Ask', body: 'Connect Claude. It reads the runs and writes down what it finds.' }
 ];
 
 export interface Feature {
@@ -43,39 +31,34 @@ export interface Feature {
 
 export const FEATURES: Feature[] = [
   {
-    icon: 'datasets',
-    title: 'Datasets & projects',
-    body: 'Upload images, sort them into categories, and keep every experiment attached to the project it belongs to. Public projects are readable by anyone; private ones stay with your group.'
-  },
-  {
-    icon: 'labeling',
-    title: 'Collaborative labeling',
-    body: 'A dedicated labeling app: upload a zip bundle, create a job, and split the work across your team. Full-frame mask toggling and good/bad review, with per-worker progress.'
+    icon: 'assistant',
+    title: 'An assistant that reads the record',
+    body: 'Claude connects over MCP and pulls the runs, curves, per-class scores and benchmarks itself. It opens the rendered frames and looks at them, then writes its conclusion onto the project.'
   },
   {
     icon: 'training',
-    title: 'Training runs & epochs',
-    body: 'Record runs with their configs, per-epoch metrics, and generated visualisations. Chart accuracy and loss across epochs without wiring up a spreadsheet.'
+    title: 'Runs & epochs',
+    body: 'Config, per-epoch metrics and renders, kept with the run. Curves plot themselves.'
   },
   {
     icon: 'compare',
-    title: 'Comparisons & benchmarks',
-    body: 'Line up several trainings, datasets, test results, or benchmark runs in one view — then export the table as LaTeX or CSV and paste it straight into a paper.'
+    title: 'Comparisons',
+    body: 'Pick several runs, datasets or benchmarks. One table, exportable as LaTeX or CSV.'
   },
   {
-    icon: 'teams',
-    title: 'Groups & roles',
-    body: 'Invite people to a group as owner, admin, or member. Membership drives who can administer labeling jobs and who can see private work.'
+    icon: 'datasets',
+    title: 'Datasets & projects',
+    body: 'Images, categories, metadata. Public to everyone or private to your group.'
   },
   {
-    icon: 'assistant',
-    title: 'Ask an assistant',
-    body: 'Visin runs an MCP server, so Claude — or any client that speaks the protocol — can read your projects, runs, curves, and benchmarks and answer questions about them. Connect it in a click; it sees only what you can see.'
+    icon: 'labeling',
+    title: 'Labeling',
+    body: 'Upload a zip, split the job across your team, track it per worker.'
   },
   {
     icon: 'api',
-    title: 'API tokens for your scripts',
-    body: 'Issue a project-scoped token and post results from a training loop or CI job. The token can only touch the project it was issued for.'
+    title: 'Tokens for scripts',
+    body: 'Scoped to one project. A CI job cannot touch anything else.'
   }
 ];
 
@@ -87,25 +70,24 @@ export interface OpenSourcePoint {
 export const OPEN_SOURCE_POINTS: OpenSourcePoint[] = [
   {
     title: 'Runs on your hardware',
-    body: 'Five small Node services, five React apps, and MongoDB. Each ships its own Dockerfile and compose file, so you can run the lot or just the parts you need.'
+    body: 'Node services, React apps, MongoDB. Each ships a Dockerfile. Run the lot or two parts.'
   },
   {
     title: 'Your images stay yours',
-    body: 'Files are stored on disk by the file service on machines you control. Nothing is sent to a third party, and there is no hosted tier to migrate off later.'
+    body: 'Files sit on disk, on machines you control. No third party. No hosted tier to leave later.'
   },
   {
     title: 'MIT licensed',
-    body: 'Read it, fork it, run it in a lab or a company. No seats, no quota, no licence key.'
+    body: 'No seats. No quota. No licence key.'
   }
 ];
 
 /**
  * The MCP section.
  *
- * Every example below is a question the shipped tools can actually answer, and
- * every limit named is a real one. The section says what the assistant cannot
- * do as plainly as what it can: someone who connects it expecting to show it an
- * image finds out here rather than after wiring it up.
+ * Every example is a question the shipped tools can actually answer, and every
+ * limit named is a real one. Someone who connects an assistant expecting to
+ * show it a dataset image finds out here rather than after wiring it up.
  */
 export const MCP_ENDPOINT = 'https://mcp.visin.eu/mcp';
 
@@ -117,20 +99,20 @@ export interface AskExample {
 
 export const ASK_EXAMPLES: AskExample[] = [
   {
-    question: '"Did the loss on the CLFTv2 run plateau, or is it still coming down?"',
-    via: 'reads the epoch curve, sampled down so a 300-epoch run stays readable'
+    question: '"Has the loss plateaued, or is it still coming down?"',
+    via: 'reads the epoch curve'
   },
   {
-    question: '"Which of these three runs is best, and what did each cost to train?"',
-    via: 'compares runs side by side — epochs, GPU hours, final metrics, benchmarks'
+    question: '"Of these three, which is best and what did each cost?"',
+    via: 'epochs, GPU hours, final metrics and benchmarks, side by side'
   },
   {
-    question: '"Which classes is the night-time model worst at?"',
-    via: 'reads per-class IoU, precision, recall, F1 and AP from the test results'
+    question: '"Show me where the night model gets it wrong."',
+    via: 'opens the rendered frames and looks at the predictions'
   },
   {
-    question: '"How fast is this model, and will it fit on the box we have?"',
-    via: 'reads the benchmark: parameters, FLOPs, frames per second, peak GPU memory'
+    question: '"Write up what the window ablation shows."',
+    via: 'saves it on the project, citing the runs behind it'
   }
 ];
 
@@ -142,15 +124,15 @@ export interface ConnectStep {
 export const CONNECT_STEPS: ConnectStep[] = [
   {
     title: 'One click, no key',
-    body: 'Point your assistant at the MCP endpoint and it walks you through a consent screen. Tick the permissions it gets — read-only by default — and it is connected. Disconnect it from your account page whenever you like.'
+    body: 'Point your assistant at the endpoint, tick what it may do, done. Read-only unless you say otherwise.'
   },
   {
-    title: 'Or paste a key',
-    body: 'For a script, a CI job, or a client without OAuth: issue an API key from your account page, scoped to reading or writing, and send it as a bearer token.'
+    title: 'Reading and writing are separate',
+    body: 'An assistant that writes up results does not need to rename anything. So do not grant it.'
   },
   {
-    title: 'You can see what it did',
-    body: 'Every tool call is recorded with what it cost — which tool, how long, how many tokens came back, and whether it failed. Your account page shows the totals per tool.'
+    title: 'You see what it did',
+    body: 'Every call logged: which tool, how long, how many tokens, whether it failed.'
   }
 ];
 
@@ -159,7 +141,7 @@ export interface AssistantLimit {
 }
 
 export const ASSISTANT_LIMITS: AssistantLimit[] = [
-  { body: 'It reads measurements; it does not make them. Epochs, test results, and benchmarks still come from your training pipeline.' },
-  { body: 'It cannot look at an image. Datasets and visualisations are files; the tools return text.' },
-  { body: 'It reaches only what your account already reaches. A private project belonging to someone else stays invisible to it.' }
+  { body: 'It reads measurements. It does not make them.' },
+  { body: 'It sees the frames a run rendered. Not your raw dataset images.' },
+  { body: 'It reaches exactly what your account reaches, and nothing else.' }
 ];

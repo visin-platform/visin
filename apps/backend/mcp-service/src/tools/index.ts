@@ -4,6 +4,8 @@ import { auditTools } from '../audit';
 import { Caller, ToolModule } from './module';
 import { datasetRead } from './dataset';
 import { visionRead, visionWrite } from './vision';
+import { visualizationRead } from './visualization';
+import { analysisRead, analysisWrite } from './analysis';
 
 export type { Caller, ToolModule } from './module';
 
@@ -14,7 +16,14 @@ export type { Caller, ToolModule } from './module';
  * declares its own scopes. Nothing in the transport, the auth, or this registry
  * needs to change, and a key never granted that scope will not see the tools.
  */
-export const MODULES: ToolModule[] = [visionRead, visionWrite, datasetRead];
+export const MODULES: ToolModule[] = [
+  visionRead,
+  visionWrite,
+  visualizationRead,
+  datasetRead,
+  analysisRead,
+  analysisWrite
+];
 
 /**
  * Register the tools a key is actually entitled to use.

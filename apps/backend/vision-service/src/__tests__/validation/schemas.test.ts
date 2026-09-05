@@ -9,6 +9,10 @@ import {
 } from '../../validation/analysisSchemas';
 import { createTokenBodySchema } from '../../validation/apiTokenSchemas';
 import {
+  createFindingBodySchema,
+  listFindingsQuerySchema,
+} from '../../validation/findingSchemas';
+import {
   getBenchmarksQuerySchema,
   getBenchmarkStatsQuerySchema,
   createBenchmarkBodySchema,
@@ -451,5 +455,47 @@ describe('visualizationSchemas', () => {
       includeUrls: 'true',
     });
     expect(getVisualizationTypesQuerySchema.parse({ training_uuid: 'u' }).training_uuid).toBe('u');
+  });
+});
+
+
+describe('findingSchemas', () => {
+  it('coerces a limit arriving as a query string', () => {
+    expect(listFindingsQuerySchema.parse({ limit: '25' })).toEqual({ limit: 25 });
+  });
+
+  it('accepts an empty filter', () => {
+    expect(listFindingsQuerySchema.parse({})).toEqual({});
+  });
+
+  it('requires a project, a title and a body', () => {
+    expect(createFindingBodySchema.safeParse({}).success).toBe(false);
+    expect(createFindingBodySchema.safeParse({ project: 'p1', title: 'T' }).success).toBe(false);
+    expect(createFindingBodySchema.safeParse({ project: 'p1', title: 'T', body: 'B' }).success).toBe(
+      true
+    );
+  });
+
+  it('refuses an empty title and one that is only whitespace', () => {
+    expect(createFindingBodySchema.safeParse({ project: 'p1', title: '', body: 'B' }).success).toBe(false);
+    expect(createFindingBodySchema.safeParse({ project: 'p1', title: '   ', body: 'B' }).success).toBe(false);
+  });
+
+  it('caps the body, so one bad prompt cannot store an essay forever', () => {
+    const tooLong = { project: 'p1', title: 'T', body: 'x'.repeat(20_001) };
+
+    expect(createFindingBodySchema.safeParse(tooLong).success).toBe(false);
+  });
+
+  it('caps how many runs one finding may cite', () => {
+    const cites = (n: number) => ({
+      project: 'p1',
+      title: 'T',
+      body: 'B',
+      trainingIds: Array.from({ length: n }, (_, i) => `t${i}`),
+    });
+
+    expect(createFindingBodySchema.safeParse(cites(50)).success).toBe(true);
+    expect(createFindingBodySchema.safeParse(cites(51)).success).toBe(false);
   });
 });

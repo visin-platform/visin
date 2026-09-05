@@ -111,6 +111,8 @@ describe('the pages that are not the protocol', () => {
       bearer_methods_supported: ['header']
     });
     expect([...body.scopes_supported].sort()).toEqual([
+      'analysis:read',
+      'analysis:write',
       'dataset:read',
       'vision:read',
       'vision:write'
@@ -202,7 +204,10 @@ describe('the protocol', () => {
     // The limits are the part worth stating: a model that does not know one
     // will look for a way around it.
     expect(body.result.instructions).toContain('does not make them');
-    expect(body.result.instructions).toContain('no way to look at an image');
+    // Frames are reachable now; dataset images still are not, and saying which
+    // is which is the whole point of the sentence.
+    expect(body.result.instructions).toContain('Dataset images and labelled frames are still not');
+    expect(body.result.instructions).toContain('Record what you found, not what');
   });
 
   it('builds the tool surface from the key, so a read-only key sees no write tool', async () => {

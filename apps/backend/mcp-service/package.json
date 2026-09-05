@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "@visin/backend-core": "0.1.26",
+    "@visin/backend-core": "0.1.27",
     "express": "^5.2.1",
     "mongoose": "^9.7.3",
     "zod": "^4.4.3"

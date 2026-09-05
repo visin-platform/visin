@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { requireEnv } from '../config/env';
 import { UserPayload } from '../types/auth';
+import { isAccessTokenClaims } from '../oauth/tokens';
 
 /**
  * Cookie first: browser requests carry the shared `access_token` SSO cookie
@@ -36,7 +37,22 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
   }
 
   try {
-    req.user = jwt.verify(token, requireEnv('JWT_SECRET')) as UserPayload;
+    const claims = jwt.verify(token, requireEnv('JWT_SECRET'));
+
+    // An OAuth access token is signed with the same secret and arrives in the
+    // same header, but it is not a session: it names the user in `sub`, not
+    // `id`, so casting one to UserPayload leaves `req.user.id` undefined and
+    // every owner-scoped query silently unbounded. `apiKeyAuth` owns that
+    // credential and applies its scopes; anywhere it is not mounted, refuse.
+    if (isAccessTokenClaims(claims)) {
+      res.status(401).json({
+        success: false,
+        message: 'This endpoint does not accept an MCP access token'
+      });
+      return;
+    }
+
+    req.user = claims as UserPayload;
     next();
   } catch {
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
@@ -60,7 +76,12 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
   }
 
   try {
-    req.user = jwt.verify(token, requireEnv('JWT_SECRET')) as UserPayload;
+    const claims = jwt.verify(token, requireEnv('JWT_SECRET'));
+    // Same reasoning as authenticateToken: an access token is not a session.
+    // Proceeding anonymously is this route's way of refusing.
+    if (!isAccessTokenClaims(claims)) {
+      req.user = claims as UserPayload;
+    }
   } catch {
     // Invalid/expired token on an optional-auth route: proceed anonymously
     // rather than rejecting, same as a missing token.

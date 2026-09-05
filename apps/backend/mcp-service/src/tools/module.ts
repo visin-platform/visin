@@ -40,6 +40,45 @@ export interface Caller {
   };
 }
 
+/**
+ * The most image data one call may carry, in bytes before base64.
+ *
+ * A cap on transport, not on context: an image's token cost scales with its
+ * dimensions, not its file size, so a 300 KB 480x320 overlay is a couple of
+ * hundred tokens however heavy the PNG. What this guards against is a single
+ * response too large for the transport to carry at all.
+ */
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** How many frames one call may return before it is doing too much at once. */
+export const MAX_IMAGES = 4;
+
+export interface ToolImage {
+  /** raw bytes; base64 encoding happens here so callers never think about it */
+  data: Buffer;
+  mimeType: string;
+}
+
+/**
+ * A result carrying frames for the model to actually look at.
+ *
+ * Kept separate from `ok` because the two are capped on different things: text
+ * is capped because it crowds out the conversation, images because the
+ * transport has a size beyond which nothing arrives. Running images through
+ * `ok`'s character ceiling would measure base64 against a budget meant for
+ * prose and reject a perfectly cheap picture.
+ */
+export const okWithImages = (text: string, images: ToolImage[]) => ({
+  content: [
+    { type: 'text' as const, text },
+    ...images.slice(0, MAX_IMAGES).map((image) => ({
+      type: 'image' as const,
+      data: image.data.toString('base64'),
+      mimeType: image.mimeType
+    }))
+  ]
+});
+
 /** Everything the model gets back is text it can act on. */
 export const fail = (message: string) => ({
   isError: true as const,

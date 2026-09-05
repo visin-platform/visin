@@ -8,6 +8,7 @@ vi.mock('./ProjectTestsTab', () => ({ default: () => <div>tests-tab</div> }));
 vi.mock('./ProjectVisualizationsTab', () => ({ default: () => <div>visualizations-tab</div> }));
 vi.mock('./ProjectBenchmarksTab', () => ({ default: () => <div>benchmarks-tab</div> }));
 vi.mock('./ProjectComparisonsTab', () => ({ default: () => <div>comparisons-tab</div> }));
+vi.mock('../analysis/FindingsPanel', () => ({ default: () => <div>analysis-tab</div> }));
 vi.mock('../ProjectSettings', () => ({ default: () => <div>settings-tab</div> }));
 
 const baseProps = {
@@ -83,8 +84,16 @@ describe('ProjectTabs', () => {
     expect(screen.queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument();
   });
 
+  it('shows the Analysis tab, which every viewer gets', () => {
+    render(<ProjectTabs {...baseProps} tabValue={6} />);
+
+    expect(screen.getByRole('tab', { name: 'Analysis' })).toBeInTheDocument();
+    expect(screen.getByText('analysis-tab')).toBeInTheDocument();
+  });
+
   it('shows the Settings tab and its content when the caller is the owner', () => {
-    render(<ProjectTabs {...baseProps} isOwner tabValue={6} />);
+    // Settings sits after Analysis, so it is index 7.
+    render(<ProjectTabs {...baseProps} isOwner tabValue={7} />);
 
     expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.getByText('settings-tab')).toBeInTheDocument();

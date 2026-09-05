@@ -196,15 +196,32 @@ const consentTokenValid = (
 };
 
 /** What a scope means, in the terms someone approving it would think in. */
-const scopeLabel = (scope: string): string => {
-  const [area, access] = scope.split(':');
-  const areas: Record<string, string> = {
-    vision: 'your projects and training runs',
-    dataset: 'your datasets',
-    label: 'your labelling jobs'
-  };
-  return `${access === 'write' ? 'Change' : 'Read'} ${areas[area] ?? area}`;
+/**
+ * What a scope means, in the terms someone approving it would think in.
+ *
+ * Phrased per scope rather than assembled from "Read"/"Change" plus an area
+ * name: `analysis:write` came out as "Change analysis", which reads as editing
+ * existing notes when it means writing new ones. A consent screen is the one
+ * place the wording has to be right, since it is what the person is agreeing to.
+ *
+ * Typed against `ApiKeyScope`, so adding a scope to backend-core and forgetting
+ * to phrase it here is a compile error rather than a blank line on the screen.
+ * That is why there is no runtime fallback: `parseScopes` has already dropped
+ * anything undefined by the time a scope reaches here, so a fallback could only
+ * ever be dead code.
+ */
+const SCOPE_LABELS: Record<ApiKeyScope, string> = {
+  'vision:read': 'Read your projects and training runs',
+  'vision:write': 'Create projects, and rename or retag runs',
+  'dataset:read': 'Read your datasets',
+  'dataset:write': 'Change your datasets',
+  'label:read': 'Read your labelling jobs',
+  'label:write': 'Change your labelling jobs',
+  'analysis:read': 'Read analysis recorded about your work',
+  'analysis:write': 'Record analysis on your projects'
 };
+
+const scopeLabel = (scope: ApiKeyScope): string => SCOPE_LABELS[scope];
 
 const escapeHtml = (value: string): string =>
   value.replace(

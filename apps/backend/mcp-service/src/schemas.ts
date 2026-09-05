@@ -233,6 +233,52 @@ export const datasetsResponseSchema = z
   })
   .loose();
 
+/**
+ * One rendered frame: a prediction overlay, a ground-truth comparison, a
+ * segmentation map. The signed URL comes back on the listing itself, already
+ * scoped by the project-access check that produced it.
+ */
+export const visualizationSchema = z
+  .object({
+    visualization_uuid: z.string(),
+    epoch_uuid: z.string().optional(),
+    training_uuid: z.string().optional(),
+    epoch: z.number().optional(),
+    filename: z.string().optional(),
+    type: z.string().catch('unknown'),
+    signedUrl: z.string().optional(),
+    uploadedAt: z.string().optional()
+  })
+  .loose();
+
+export const visualizationsResponseSchema = z
+  .object({
+    visualizations: z.array(visualizationSchema),
+    total: z.number().optional(),
+    pagination: pagination.optional()
+  })
+  .loose();
+
+export const visualizationTypesResponseSchema = z
+  .object({ types: z.array(z.string()).catch([]) })
+  .loose();
+
+export const findingSchema = z
+  .object({
+    _id: z.string(),
+    projectId: z.string(),
+    trainingId: z.string().optional(),
+    title: z.string(),
+    body: z.string(),
+    trainingIds: z.array(z.string()).catch([]),
+    authorKind: z.enum(['person', 'assistant']).catch('person'),
+    authorLabel: z.string().catch(''),
+    createdAt: z.string().optional()
+  })
+  .loose();
+
+export const findingsResponseSchema = z.array(findingSchema);
+
 export const imageCategorySchema = z
   .object({
     _id: z.string(),
@@ -300,6 +346,8 @@ export type TestResult = z.infer<typeof testResultSchema>;
 export type Benchmark = z.infer<typeof benchmarkSchema>;
 export type Dataset = z.infer<typeof datasetSchema>;
 export type ImageCategory = z.infer<typeof imageCategorySchema>;
+export type Visualization = z.infer<typeof visualizationSchema>;
+export type Finding = z.infer<typeof findingSchema>;
 export type ComparisonEntry = z.infer<typeof comparisonEntrySchema>;
 
 /**

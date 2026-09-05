@@ -13,8 +13,7 @@ export default function Workflow() {
             From raw images to a table in your paper
           </Typography>
           <Typography sx={{ color: 'text.secondary', fontSize: '1.075rem' }}>
-            Five stages, each backed by its own part of the platform. Start anywhere — nothing forces you to use the
-            whole pipeline.
+            Start wherever you like. Nothing makes you use the whole thing.
           </Typography>
         </Box>
 

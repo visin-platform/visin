@@ -24,6 +24,14 @@ export interface ToolCall {
    * expensive one — is never close enough for the difference to matter.
    */
   tokens: number;
+  /**
+   * Frames handed back for the model to look at.
+   *
+   * Counted rather than sized: an image costs by its dimensions, not its bytes,
+   * so its base64 length says nothing useful. Absent on the calls that return
+   * only text, which is nearly all of them.
+   */
+  images?: number;
   /** the call came back as an error, so the size is a message rather than data */
   failed?: boolean;
 }
@@ -59,6 +67,7 @@ const ToolCallSchema = new Schema<ToolCall>(
     ms: { type: Number, required: true },
     chars: { type: Number, required: true },
     tokens: { type: Number, required: true },
+    images: { type: Number },
     failed: { type: Boolean }
   },
   { _id: false }

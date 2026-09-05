@@ -10,7 +10,7 @@ describe('API_KEY_SCOPES', () => {
   it('pairs a read and a write scope for every domain', () => {
     // The interesting key is the read-only one; a domain with only a write
     // scope would have no way to express "answer questions, change nothing".
-    const domains: ApiKeyDomain[] = ['vision', 'dataset', 'label'];
+    const domains: ApiKeyDomain[] = ['vision', 'dataset', 'label', 'analysis'];
 
     for (const domain of domains) {
       expect(API_KEY_SCOPES).toContain(readScope(domain));

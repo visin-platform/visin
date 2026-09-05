@@ -30,11 +30,11 @@ export default function Features() {
             Features
           </Typography>
           <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, mt: 1, mb: 2 }}>
-            Everything the work actually needs
+            The boring parts, handled
           </Typography>
           <Typography sx={{ color: 'text.secondary', fontSize: '1.075rem' }}>
-            No model zoo, no AutoML, no hosted GPUs. Visin handles the bookkeeping around your experiments so your
-            training code stays yours.
+            No model zoo. No AutoML. No hosted GPUs. Visin does the bookkeeping and leaves your training
+            code alone.
           </Typography>
         </Box>
 

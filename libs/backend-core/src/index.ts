@@ -111,6 +111,7 @@ export {
   verifyAccessToken,
   parseScopes,
   isAccessTokenClaims,
+  looksLikeAccessToken,
   ACCESS_TOKEN_TYPE
 } from './oauth/tokens';
 export type {

@@ -14,13 +14,23 @@ export interface ApiKey {
   revokedAt: string | null;
 }
 
+/**
+ * Mirrors `API_KEY_SCOPES` in @visin/backend-core.
+ *
+ * Duplicated rather than imported because the fronts do not depend on the
+ * backend lib. Adding a scope there means adding it here, or the key dialog
+ * silently stops offering it — which is exactly how `analysis` was missing for
+ * a release.
+ */
 export const API_KEY_SCOPES = [
   'vision:read',
   'vision:write',
   'dataset:read',
   'dataset:write',
   'label:read',
-  'label:write'
+  'label:write',
+  'analysis:read',
+  'analysis:write'
 ] as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
@@ -51,7 +61,15 @@ export const SCOPE_DESCRIPTIONS: Record<ApiKeyScope, { label: string; detail: st
     detail: 'Create and edit datasets, images and categories.'
   },
   'label:read': { label: 'Read labelling jobs', detail: 'Labelling jobs, tasks and progress.' },
-  'label:write': { label: 'Change labelling jobs', detail: 'Create and edit labelling jobs.' }
+  'label:write': { label: 'Change labelling jobs', detail: 'Create and edit labelling jobs.' },
+  'analysis:read': {
+    label: 'Read recorded analysis',
+    detail: 'Conclusions already written about your projects and runs.'
+  },
+  'analysis:write': {
+    label: 'Record analysis',
+    detail: 'Write conclusions onto your own projects. Cannot rename a project or change a run — that is a separate permission.'
+  }
 };
 
 /** A key's state, which is not a stored field — it is derived from two dates. */

@@ -9,13 +9,25 @@ const CHARS_PER_TOKEN = 4;
 
 /** What a tool handler answers with, as much of it as measuring needs. */
 interface ToolResult {
-  content?: Array<{ type: string; text?: string }>;
+  content?: Array<{ type: string; text?: string; data?: string }>;
   isError?: boolean;
 }
 
-/** Everything the model was handed, as one length. */
+/**
+ * Everything the model was handed, as one length.
+ *
+ * Base64 image data is deliberately not counted as characters. An image costs
+ * by its dimensions, not its file size — a 300 KB overlay is a couple of
+ * hundred tokens — so adding 400,000 base64 characters to the tally would make
+ * every frame look like the most expensive call in the trail and send someone
+ * optimising the one thing that is already cheap.
+ */
 const textLength = (result: ToolResult | undefined): number =>
   (result?.content ?? []).reduce((total, part) => total + (part.text?.length ?? 0), 0);
+
+/** Frames returned alongside the text, counted so the trail shows they happened. */
+const imageCount = (result: ToolResult | undefined): number =>
+  (result?.content ?? []).filter((part) => part.type === 'image').length;
 
 /**
  * Record one call, guarding the whole body.
@@ -28,6 +40,7 @@ const textLength = (result: ToolResult | undefined): number =>
 function record(caller: Caller, name: string, ms: number, result: ToolResult | undefined): void {
   try {
     const chars = textLength(result);
+    const images = imageCount(result);
     const actor = caller.actor;
     if (!actor) return;
 
@@ -42,6 +55,7 @@ function record(caller: Caller, name: string, ms: number, result: ToolResult | u
         ms,
         chars,
         tokens: Math.round(chars / CHARS_PER_TOKEN),
+        ...(images > 0 ? { images } : {}),
         // `undefined` means the handler threw, so nothing reached the model —
         // still a failure, and still worth the row.
         ...(result?.isError === true || result === undefined ? { failed: true } : {})

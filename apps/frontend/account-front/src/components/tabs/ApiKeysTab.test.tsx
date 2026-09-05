@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ApiKeysTab from './ApiKeysTab';
-import { ApiKey } from '../../types/apiKey';
+import { API_KEY_SCOPES, ApiKey } from '../../types/apiKey';
 
 // vi.mock factories are hoisted above module scope, so the mock object has to
 // be created inside vi.hoisted to exist by the time the factory runs.
@@ -136,6 +136,25 @@ describe('creating a key', () => {
     expect(screen.getByLabelText('dataset:read')).toBeChecked();
     expect(screen.getByLabelText('vision:write')).not.toBeChecked();
     expect(screen.getByLabelText('label:write')).not.toBeChecked();
+  });
+
+  it('offers every scope the backend defines, including analysis', async () => {
+    // This list is a copy of backend-core's. When it drifts, the dialog quietly
+    // stops offering a scope and nobody can issue a key that carries it.
+    renderTab();
+    await openCreateDialog();
+
+    for (const scope of API_KEY_SCOPES) {
+      expect(screen.getByLabelText(scope)).toBeInTheDocument();
+    }
+  });
+
+  it('explains that recording analysis is not permission to change a run', async () => {
+    // The distinction is the whole reason analysis has its own scope.
+    renderTab();
+    await openCreateDialog();
+
+    expect(screen.getByText(/Cannot rename a project or change a run/)).toBeInTheDocument();
   });
 
   it('will not submit without a name', async () => {

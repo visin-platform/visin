@@ -10,6 +10,7 @@ import TrainingConfigTab from '../components/TrainingConfigTab';
 import TrainingVisualizationsTab from '../components/TrainingVisualizationsTab';
 import TrainingSystemInfoTab from '../components/TrainingSystemInfoTab';
 import TrainingBenchmarksTab from '../components/TrainingBenchmarksTab';
+import FindingsPanel from '../components/analysis/FindingsPanel';
 import TrainingFormDialog from '../components/TrainingFormDialog';
 import UploadResultsDialog from '../components/training/UploadResultsDialog';
 import LatexExportDialog from '../components/training/LatexExportDialog';
@@ -29,10 +30,10 @@ const TrainingDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   // Tab mapping
-  const tabNames = ['overview', 'epochs', 'test-results', 'visualizations', 'system-info', 'config', 'benchmarks'];
+  const tabNames = ['overview', 'epochs', 'test-results', 'visualizations', 'system-info', 'config', 'benchmarks', 'analysis'];
   const getTabIndex = (tabName: string) => tabNames.indexOf(tabName);
   const getTabName = (index: number) => tabNames[index] || 'overview';
 
@@ -247,6 +248,15 @@ const TrainingDetailPage: React.FC = () => {
         <TrainingBenchmarksTab
           training_uuid={training.uuid}
           isAuthenticated={isAuthenticated}
+        />
+      )}
+      {/* Conclusions about this run, and comparative ones that cite it. Needs
+          the project, since findings hang off one and access follows it. */}
+      {detailTab === 7 && project && (
+        <FindingsPanel
+          projectId={project._id}
+          trainingId={training._id}
+          isOwner={user?.id === project.ownerId}
         />
       )}
       {/* Dialogs */}

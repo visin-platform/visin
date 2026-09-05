@@ -14,6 +14,7 @@ import comparisonRoutes from './routes/comparisonRoutes';
 import projectRoutes from './routes/projectRoutes';
 import apiTokenRoutes from './routes/apiTokenRoutes';
 import imageCategoryRoutes from './routes/imageCategoryRoutes';
+import findingRoutes from './routes/findingRoutes';
 import { apiTokenMiddleware } from './middleware/apiTokenMiddleware';
 
 // JWT_SECRET verifies user sessions; FILE_SERVICE_API_KEY authenticates every
@@ -43,9 +44,9 @@ app.use(apiTokenMiddleware);
  * User API keys (`vsn_live_…`), for non-browser callers like the MCP server.
  *
  * Mounted per route group rather than once globally, for two reasons. This
- * service answers for two scope domains — `vision` for runs and their results,
- * `dataset` for the data they were trained on — so there is no single domain a
- * global mount could name. And forgetting the guard on a route group added
+ * service answers for three scope domains — `vision` for runs and their
+ * results, `dataset` for the data they were trained on, `analysis` for written
+ * conclusions — so there is no single domain a global mount could name. And forgetting the guard on a route group added
  * later fails *closed*: keys simply don't authenticate there and the JWT
  * middleware answers 401, rather than the group silently accepting any key.
  *
@@ -74,6 +75,10 @@ app.use('/api/projects', apiKeyAuth('vision'), projectRoutes);
 // credential should be able to do on behalf of another.
 app.use('/api/api-tokens', apiTokenRoutes);
 app.use('/api/image-categories', apiKeyAuth('dataset'), imageCategoryRoutes);
+// Written conclusions. Its own scope domain, so an assistant can be granted
+// "read my experiments and record what you conclude" without also being able to
+// rename projects or retag runs.
+app.use('/api/findings', apiKeyAuth('analysis'), findingRoutes);
 
 // Serve OpenAPI docs as static files
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));

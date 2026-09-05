@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import {
   ACCESS_TOKEN_TYPE,
+  looksLikeAccessToken,
   isAccessTokenClaims,
   mintAccessToken,
   parseScopes,
@@ -171,5 +172,34 @@ describe('parseScopes', () => {
     ['an empty string', '']
   ])('returns nothing for %s', (_label, value) => {
     expect(parseScopes(value)).toEqual([]);
+  });
+});
+
+
+describe('looksLikeAccessToken', () => {
+  it('recognises one of ours without needing the secret', () => {
+    // It only routes a bearer token to the right verifier; the signature is
+    // still checked afterwards, so decoding here is not trusting anything.
+    const token = mint().accessToken;
+    delete process.env.JWT_SECRET;
+
+    expect(looksLikeAccessToken(token)).toBe(true);
+  });
+
+  it.each([
+    ['a session JWT', jwt.sign({ id: 'u1' }, 'whatever')],
+    ['an API key', 'vsn_live_0123456789ab_secret'],
+    ['gibberish', 'not-a-token'],
+    ['an empty string', '']
+  ])('does not claim %s', (_label, token) => {
+    expect(looksLikeAccessToken(token)).toBe(false);
+  });
+
+  it('survives a token whose payload is not an object', () => {
+    // jwt.decode hands back a bare string for some malformed inputs; the guard
+    // must not throw on the way to saying "not mine".
+    const odd = `${Buffer.from('{"alg":"none"}').toString('base64url')}.${Buffer.from('"a string"').toString('base64url')}.x`;
+
+    expect(looksLikeAccessToken(odd)).toBe(false);
   });
 });

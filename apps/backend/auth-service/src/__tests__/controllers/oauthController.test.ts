@@ -262,7 +262,23 @@ describe('authorize', () => {
     );
   });
 
-  it('renders a scope it has no wording for rather than dropping it', async () => {
+  it('phrases recording analysis as recording, not as changing', async () => {
+    // "Change analysis" reads as editing existing notes; the scope means
+    // writing new ones, and a consent screen is where that has to be right.
+    const res = makeRes();
+
+    await authorize(
+      makeReq({ query: authorizeQuery({ scope: 'analysis:write analysis:read' }), user }),
+      res
+    );
+
+    const html = res.send.mock.calls[0][0];
+    expect(html).toContain('Record analysis on your projects');
+    expect(html).toContain('Read analysis recorded about your work');
+    expect(html).not.toContain('Change analysis');
+  });
+
+  it('phrases every scope it offers, none of them raw', async () => {
     // A scope can be added to the shared list before this file learns to phrase
     // it; showing the raw name is worse than a sentence but far better than
     // asking someone to approve a permission that is invisible on the screen.

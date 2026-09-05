@@ -21,7 +21,14 @@ import {
   type ImageCategory,
   type Project,
   type TestResult,
-  type Training
+  type Training,
+  type Visualization,
+  type Finding,
+  findingSchema,
+  findingsResponseSchema,
+  visualizationSchema,
+  visualizationTypesResponseSchema,
+  visualizationsResponseSchema
 } from './schemas';
 
 /**
@@ -137,6 +144,31 @@ export const vision = {
 
   getDataset: (apiKey: string, id: string): Promise<Dataset> =>
     get(datasetSchema, apiKey, `/datasets/${encodeURIComponent(id)}`),
+
+  listVisualizations: (
+    apiKey: string,
+    query: Query
+  ): Promise<{ visualizations: Visualization[]; total?: number }> =>
+    get(visualizationsResponseSchema, apiKey, '/visualizations/training', { page: 1, ...query }),
+
+  listVisualizationTypes: (apiKey: string, trainingUuid: string): Promise<{ types: string[] }> =>
+    get(visualizationTypesResponseSchema, apiKey, '/visualizations/types', {
+      training_uuid: trainingUuid
+    }),
+
+  getVisualization: (apiKey: string, uuid: string): Promise<Visualization> =>
+    get(visualizationSchema, apiKey, `/visualizations/${encodeURIComponent(uuid)}`),
+
+  listFindings: (apiKey: string, query: Query): Promise<Finding[]> =>
+    get(findingsResponseSchema, apiKey, '/findings', query),
+
+  getFinding: (apiKey: string, id: string): Promise<Finding> =>
+    get(findingSchema, apiKey, `/findings/${encodeURIComponent(id)}`),
+
+  createFinding: (
+    apiKey: string,
+    body: { project: string; training?: string; title: string; body: string; trainingIds?: string[] }
+  ): Promise<Finding> => post(findingSchema, apiKey, '/findings', body),
 
   listImageCategories: (apiKey: string, datasetId: string): Promise<ImageCategory[]> =>
     get(

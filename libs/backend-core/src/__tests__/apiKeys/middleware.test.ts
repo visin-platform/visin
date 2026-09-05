@@ -4,6 +4,8 @@ import type { NextFunction, Request, Response } from 'express';
 import { apiKeyAuth } from '../../apiKeys/middleware';
 import { verifyApiKey } from '../../apiKeys/service';
 import type { ApiKeyVerification } from '../../apiKeys/types';
+import jwt from 'jsonwebtoken';
+import { mintAccessToken } from '../../oauth/tokens';
 
 const verify = verifyApiKey as unknown as jest.Mock;
 
@@ -159,7 +161,7 @@ describe('apiKeyAuth — scope gating', () => {
       success: false,
       // Named precisely: the fix is a new key, not a retry, and a caller told
       // only "forbidden" will retry.
-      message: 'This API key does not carry the "vision:write" scope.'
+      message: 'This credential does not carry the "vision:write" scope.'
     });
     expect(next).not.toHaveBeenCalled();
   });
@@ -194,5 +196,119 @@ describe('apiKeyAuth — scope gating', () => {
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+
+/**
+ * The bug this suite exists to prevent recurring.
+ *
+ * mcp-service forwards an OAuth access token to vision-service verbatim. Read
+ * as a session JWT it verifies — same secret — but names the user in `sub`,
+ * not `id`, so `req.user.id` landed undefined and an assistant connected
+ * through OAuth saw only public projects while its owner's private ones stayed
+ * invisible. It also carried no scopes, so a read-only grant would have been
+ * gated on nothing.
+ */
+describe('apiKeyAuth — OAuth access tokens', () => {
+  const RESOURCE = 'https://mcp.visin.eu';
+
+  const accessToken = (scopes: Parameters<typeof mintAccessToken>[0]['scopes'], resource = RESOURCE) =>
+    mintAccessToken({
+      userId: 'u1',
+      email: 'a@b.com',
+      name: 'A B',
+      resource,
+      issuer: 'https://auth-api.visin.eu',
+      scopes,
+      clientId: 'vsn-client-abc',
+      clientName: 'Claude'
+    }).accessToken;
+
+  beforeEach(() => {
+    process.env.JWT_SECRET = 'test-secret';
+    process.env.MCP_PUBLIC_URL = RESOURCE;
+  });
+
+  afterAll(() => {
+    delete process.env.JWT_SECRET;
+    delete process.env.MCP_PUBLIC_URL;
+  });
+
+  it('names the user from `sub`, so owner-scoped queries are actually scoped', async () => {
+    const req = makeReq({ headers: { authorization: `Bearer ${accessToken(['vision:read'])}` } });
+
+    await apiKeyAuth('vision')(req, makeRes(), next);
+
+    expect(req.user).toEqual({ id: 'u1', email: 'a@b.com', name: 'A B' });
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('applies the grant\'s scopes, so a read-only connection cannot write', async () => {
+    const res = makeRes();
+    const req = makeReq({
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${accessToken(['vision:read'])}` }
+    });
+
+    await apiKeyAuth('vision')(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('lets a write-scoped grant write', async () => {
+    const req = makeReq({
+      method: 'POST',
+      headers: { authorization: `Bearer ${accessToken(['vision:read', 'vision:write'])}` }
+    });
+
+    await apiKeyAuth('vision')(req, makeRes(), next);
+
+    expect(req.apiKey?.required).toBe('vision:write');
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('records the client id, not the rotating jti', async () => {
+    const req = makeReq({ headers: { authorization: `Bearer ${accessToken(['vision:read'])}` } });
+
+    await apiKeyAuth('vision')(req, makeRes(), next);
+
+    expect(req.apiKey?.keyId).toBe('vsn-client-abc');
+    expect(req.apiKey?.label).toBe('Claude');
+  });
+
+  it('refuses a token minted for another resource', async () => {
+    const res = makeRes();
+    const req = makeReq({
+      headers: { authorization: `Bearer ${accessToken(['vision:read'], 'https://mcp.example.com')}` }
+    });
+
+    await apiKeyAuth('vision')(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('leaves an ordinary session JWT to the session middleware', async () => {
+    const session = jwt.sign({ id: 'u9', email: 'x@y.com' }, 'test-secret');
+    const res = makeRes();
+    const req = makeReq({ headers: { authorization: `Bearer ${session}` } });
+
+    await apiKeyAuth('vision')(req, res, next);
+
+    expect(req.user).toBeUndefined();
+    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('never touches the database for a JWT', async () => {
+    await apiKeyAuth('vision')(
+      makeReq({ headers: { authorization: `Bearer ${accessToken(['vision:read'])}` } }),
+      makeRes(),
+      next
+    );
+
+    expect(verify).not.toHaveBeenCalled();
   });
 });

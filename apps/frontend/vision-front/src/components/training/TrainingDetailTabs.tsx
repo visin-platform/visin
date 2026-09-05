@@ -53,6 +53,7 @@ const TrainingDetailTabs: React.FC<TrainingDetailTabsProps> = ({ value, onChange
       <Tab label="System Info" />
       <Tab label="Config" />
       <Tab label="Benchmarks" />
+      <Tab label="Analysis" />
     </Tabs>
   </Paper>
 );

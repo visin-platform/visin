@@ -14,6 +14,7 @@ import ProjectTestsTab from './ProjectTestsTab';
 import ProjectVisualizationsTab, { type VisualizationsGroupedResult } from './ProjectVisualizationsTab';
 import ProjectBenchmarksTab from './ProjectBenchmarksTab';
 import ProjectComparisonsTab from './ProjectComparisonsTab';
+import FindingsPanel from '../analysis/FindingsPanel';
 import ProjectSettings from '../ProjectSettings';
 import { Training, TestResultsPaginatedResponse, BenchmarksPaginatedResponse } from '../../types';
 import { Project } from '../../types/Project';
@@ -157,6 +158,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
           <Tab label="Visualizations" />
           <Tab label="Benchmarks" />
           <Tab label="Comparisons" />
+          <Tab label="Analysis" />
           {isOwner && <Tab label="Settings" />}
         </Tabs>
       </Box>
@@ -229,9 +231,14 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
         <ProjectComparisonsTab projectId={project._id} />
       </TabPanel>
 
+      {/* Analysis Tab — written conclusions, from the app or from an assistant */}
+      <TabPanel value={tabValue} index={6}>
+        <FindingsPanel projectId={project._id} isOwner={isOwner} />
+      </TabPanel>
+
       {/* Settings Tab */}
       {isOwner && (
-        <TabPanel value={tabValue} index={6}>
+        <TabPanel value={tabValue} index={7}>
           <Box sx={{ px: 3 }}>
             <ProjectSettings project={project} />
           </Box>

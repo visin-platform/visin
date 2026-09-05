@@ -2,6 +2,7 @@ import { NextFunction, Request, RequestHandler, Response } from 'express';
 import { logger } from '../logging/logger';
 import { looksLikeApiKey } from './crypto';
 import { verifyApiKey } from './service';
+import { looksLikeAccessToken, verifyAccessToken } from '../oauth/tokens';
 import { readScope, writeScope, type ApiKeyDomain, type ApiKeyScope } from './types';
 
 /**
@@ -23,6 +24,11 @@ export interface ApiKeyContext {
 
 export interface ApiKeyAuthOptions {
   /**
+   * The MCP resource an OAuth access token must be bound to (RFC 8707).
+   * Defaults to `MCP_PUBLIC_URL`; a token minted for anything else is refused.
+   */
+  audience?: string;
+  /**
    * Sub-paths that are reads despite arriving as a POST.
    *
    * Matched against `req.path`, which is relative to where the middleware is
@@ -32,6 +38,39 @@ export interface ApiKeyAuthOptions {
    */
   readPaths?: RegExp[];
 }
+
+/** What both verifiers answer with, so the handler treats them identically. */
+interface Verified {
+  ok: boolean;
+  rejection?: string;
+  userId?: string;
+  userEmail?: string;
+  userName?: string;
+  keyId?: string;
+  label?: string;
+  scopes?: ApiKeyScope[];
+}
+
+const verifiedAccessToken = (token: string, audience?: string): Verified => {
+  const expected = (audience || process.env.MCP_PUBLIC_URL || 'https://mcp.visin.eu').replace(
+    /\/$/,
+    ''
+  );
+  const result = verifyAccessToken(token, expected);
+
+  return {
+    ok: result.ok,
+    rejection: result.rejection,
+    userId: result.userId,
+    userEmail: result.email,
+    userName: result.name,
+    // The client id, not the token's `jti`: that rotates hourly and would make
+    // one connection look like a new actor on every refresh.
+    keyId: result.clientId,
+    label: result.clientName,
+    scopes: result.scopes
+  };
+};
 
 /** Reads, by method. Everything else is treated as a write. */
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -73,18 +112,40 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
     // make it usable in a cross-site request.
     const token = req.headers.authorization?.replace('Bearer ', '');
 
-    // Not one of ours: a JWT, or vision-service's project-scoped API token.
-    // Leave it to whichever middleware owns it.
-    if (!looksLikeApiKey(token)) {
+    // Several credentials arrive in this header and only two are ours: a
+    // `vsn_live_` key and an OAuth access token. Session JWTs and, on
+    // vision-service, project-scoped API tokens belong to other middleware —
+    // route on shape and leave those alone.
+    const isKey = looksLikeApiKey(token);
+    const isOAuth = !isKey && typeof token === 'string' && looksLikeAccessToken(token);
+
+    if (!isKey && !isOAuth) {
       next();
       return;
     }
 
-    const verification = await verifyApiKey(token);
+    /**
+     * Both credentials collapse to the same facts: a user, a set of scopes, and
+     * a name for the log.
+     *
+     * An OAuth token is verified here rather than trusted because mcp-service
+     * forwarded it — the audience binding still has to hold, or a token minted
+     * for another resource would work against this one. Verifying it here is
+     * also what applies its scopes: read as a plain session JWT it carries
+     * none, `req.user.id` lands undefined, and a read-only grant would slip
+     * past the gate below entirely.
+     */
+    const verification = isKey
+      ? await verifyApiKey(token)
+      : verifiedAccessToken(token as string, options.audience);
+
     if (!verification.ok) {
       // The client is told one thing; the log gets the real reason, which is
       // the difference between "someone is guessing" and "this expired".
-      logger.warn('API key rejected', { rejection: verification.rejection });
+      logger.warn('Credential rejected', {
+        kind: isKey ? 'api_key' : 'oauth',
+        rejection: verification.rejection
+      });
       res.status(401).json({ success: false, message: 'Invalid or expired credentials' });
       return;
     }
@@ -95,7 +156,7 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
 
     const scopes = verification.scopes ?? [];
     if (!scopes.includes(required)) {
-      logger.warn('API key missing required scope', {
+      logger.warn('Credential missing required scope', {
         keyId: verification.keyId,
         required,
         held: scopes
@@ -104,7 +165,7 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
         success: false,
         // Named precisely, because the fix is a new key rather than a retry —
         // and a caller told only "forbidden" will retry.
-        message: `This API key does not carry the "${required}" scope.`
+        message: `This credential does not carry the "${required}" scope.`
       });
       return;
     }

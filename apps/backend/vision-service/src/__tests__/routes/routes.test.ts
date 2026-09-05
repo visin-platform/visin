@@ -7,6 +7,7 @@ import configRoutes from '../../routes/configRoutes';
 import datasetImageRoutes from '../../routes/datasetImageRoutes';
 import datasetRoutes from '../../routes/datasetRoutes';
 import epochRoutes from '../../routes/epochRoutes';
+import findingRoutes from '../../routes/findingRoutes';
 import imageCategoryRoutes from '../../routes/imageCategoryRoutes';
 import projectRoutes from '../../routes/projectRoutes';
 import testResultRoutes from '../../routes/testResultRoutes';
@@ -75,5 +76,32 @@ describe('vision-service routers', () => {
     expect(del.handlerCount).toBe(2);
     // optionalAuth + validate + controller
     expect(list.handlerCount).toBe(3);
+  });
+});
+
+
+describe('findingRoutes', () => {
+  const { routes } = describeRouter(findingRoutes);
+  const find = (method: string, path: string) =>
+    routes.find((r) => r.path === path && r.methods.includes(method));
+
+  it('registers the whole surface and nothing else', () => {
+    expect(find('get', '/')).toBeDefined();
+    expect(find('get', '/:id')).toBeDefined();
+    expect(find('post', '/')).toBeDefined();
+    expect(find('delete', '/:id')).toBeDefined();
+    expect(routes).toHaveLength(4);
+  });
+
+  it('lets reads follow the project rather than requiring a session', () => {
+    // A finding on a public project is public; one on a private project is
+    // invisible. optionalAuth + validation + controller, and + controller.
+    expect(find('get', '/')!.handlerCount).toBe(3);
+    expect(find('get', '/:id')!.handlerCount).toBe(2);
+  });
+
+  it('requires a signed-in caller to write or delete one', () => {
+    expect(find('post', '/')!.handlerCount).toBe(3);
+    expect(find('delete', '/:id')!.handlerCount).toBe(2);
   });
 });

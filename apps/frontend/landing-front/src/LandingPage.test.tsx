@@ -26,11 +26,20 @@ describe('LandingPage structure', () => {
     expect(container.querySelector('footer')).toBeInTheDocument();
   });
 
+  it('puts the analysis section first, right after the hero', () => {
+    // It is what the page is selling; burying it under the feature grid was
+    // the old order.
+    const { container } = render(<LandingPage />);
+
+    const sections = [...container.querySelectorAll('main section')].map(s => s.id);
+    expect(sections).toEqual(['top', 'assistant', 'how-it-works', 'features', 'open-source', 'contact']);
+  });
+
   it('leads with the headline and the product summary', () => {
     render(<LandingPage />);
 
     expect(
-      screen.getByRole('heading', { level: 1, name: /assistant that can read it/i })
+      screen.getByRole('heading', { level: 1, name: /ask your training runs what actually happened/i })
     ).toBeInTheDocument();
   });
 
@@ -70,8 +79,11 @@ describe('LandingPage structure', () => {
     // here rather than after wiring it up.
     render(<LandingPage />);
 
-    expect(screen.getByText(/what it will not do/i)).toBeInTheDocument();
-    expect(screen.getByText(/cannot look at an image/i)).toBeInTheDocument();
+    expect(screen.getByText(/where it stops/i)).toBeInTheDocument();
+    // It can see rendered frames; raw dataset images it still cannot, and
+    // saying which is which is the point of the section.
+    expect(screen.getByText(/not your raw dataset images/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not make them/i)).toBeInTheDocument();
   });
 
   it('sends the hero call-to-action to the assistant section', () => {
@@ -134,7 +146,7 @@ describe('LandingPage calls to action', () => {
 
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(within(nav).getByRole('link', { name: 'Features' })).toHaveAttribute('href', '#features');
-    expect(within(nav).getByRole('link', { name: 'Assistant' })).toHaveAttribute('href', '#assistant');
+    expect(within(nav).getByRole('link', { name: 'Analysis' })).toHaveAttribute('href', '#assistant');
     expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '#open-source');
     expect(within(nav).getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '#contact');
   });

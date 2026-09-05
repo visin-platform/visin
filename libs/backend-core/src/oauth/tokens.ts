@@ -156,6 +156,20 @@ export const isAccessTokenClaims = (claims: unknown): claims is AccessTokenClaim
   claims !== null &&
   (claims as AccessTokenClaims).typ === ACCESS_TOKEN_TYPE;
 
+/**
+ * Whether a token even claims to be one of ours, without verifying it.
+ *
+ * Used only to decide which verifier owns a bearer token — an OAuth access
+ * token and a session JWT are signed with the same secret and arrive in the
+ * same header, so something has to route between them before either is
+ * trusted. Decoding is not verification and nothing here is acted on: the
+ * signature is still checked by `verifyAccessToken` afterwards.
+ */
+// `jwt.decode` answers null for anything it cannot read rather than throwing,
+// which `isAccessTokenClaims` already handles — so there is no catch here.
+export const looksLikeAccessToken = (token: string): boolean =>
+  isAccessTokenClaims(jwt.decode(token));
+
 /** Parse a space-separated `scope` parameter, dropping anything we do not define. */
 export const parseScopes = (scope: unknown): ApiKeyScope[] =>
   typeof scope === 'string' ? scope.split(/\s+/).filter(isApiKeyScope) : [];

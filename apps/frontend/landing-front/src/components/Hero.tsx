@@ -5,7 +5,7 @@ import ProductVisual from './ProductVisual';
 import { GITHUB_URL } from '../content';
 import { INK } from '../theme';
 
-const BADGES = ['MCP server built in', 'Open source, MIT', 'Self-hosted'];
+const BADGES = ['Analyses your runs with Claude', 'Open source, MIT', 'Self-hosted'];
 
 interface HeroProps {
   appUrl: string;
@@ -47,13 +47,13 @@ export default function Hero({ appUrl }: HeroProps) {
             </Stack>
 
             <Typography variant="h1" sx={{ fontSize: { xs: '2.5rem', sm: '3.25rem', md: '3.75rem' }, lineHeight: 1.05, mb: 3 }}>
-              Your computer vision work, and an assistant that can read it
+              Ask your training runs what actually happened
             </Typography>
 
             <Typography sx={{ fontSize: { xs: '1.05rem', md: '1.2rem' }, color: 'rgba(255,255,255,0.75)', mb: 4, maxWidth: 560 }}>
-              Visin keeps datasets, labeling jobs, training runs and benchmarks in one place — then serves them
-              over MCP, so you can ask an AI assistant which run was better instead of building the comparison by
-              hand. Run the whole thing on your own machines.
+              Visin records every epoch, score and rendered frame your training produces, then lets an AI
+              assistant analyse the lot. It answers from the data, not from what you pasted into a chat.
+              Runs on your own machines.
             </Typography>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>

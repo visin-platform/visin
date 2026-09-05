@@ -29,7 +29,18 @@ export const API_KEY_SCOPES = [
   'dataset:write',
   /** labelling bundles, jobs, tasks */
   'label:read',
-  'label:write'
+  'label:write',
+  /**
+   * Written analysis attached to a project or a run.
+   *
+   * Separate from `vision:write` on purpose. The grant most people want for an
+   * assistant is "read my experiments, record what you conclude" — and folding
+   * that into `vision:write` would hand the same assistant the ability to
+   * rename projects and retag runs, which is a different and larger thing to
+   * agree to.
+   */
+  'analysis:read',
+  'analysis:write'
 ] as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
@@ -43,7 +54,7 @@ export const isApiKeyScope = (value: unknown): value is ApiKeyScope =>
  * The domain is what a service declares when it mounts `apiKeyAuth`; the
  * required scope for a given request is derived from it and the HTTP method.
  */
-export type ApiKeyDomain = 'vision' | 'dataset' | 'label';
+export type ApiKeyDomain = 'vision' | 'dataset' | 'label' | 'analysis';
 
 export const readScope = (domain: ApiKeyDomain): ApiKeyScope => `${domain}:read`;
 export const writeScope = (domain: ApiKeyDomain): ApiKeyScope => `${domain}:write`;
