@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.169](https://github.com/visin-platform/visin-monorepo/compare/v0.0.168...v0.0.169) (2026-09-05)
+
+
+### Bug Fixes
+
+* add missing jwt secret to mcp service ([815de52](https://github.com/visin-platform/visin-monorepo/commit/815de5253f7481074fdba2b1023e381651e62ab2))
+
 ### [0.0.168](https://github.com/visin-platform/visin-monorepo/compare/v0.0.167...v0.0.168) (2026-09-05)
 
 
