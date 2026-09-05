@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.165](https://github.com/visin-platform/visin-monorepo/compare/v0.0.164...v0.0.165) (2026-09-05)
+
+
+### Features
+
+* setup mcp service ([e9b58b2](https://github.com/visin-platform/visin-monorepo/commit/e9b58b2536b6bc897fde9eae2b2ee82272b7b75c))
+
 ### [0.0.164](https://github.com/visin-platform/visin-monorepo/compare/v0.0.163...v0.0.164) (2026-08-21)
 
 
