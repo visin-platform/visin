@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.168](https://github.com/visin-platform/visin-monorepo/compare/v0.0.167...v0.0.168) (2026-09-05)
+
+
+### Bug Fixes
+
+* add authorize endpoint to public cors paths ([29d010f](https://github.com/visin-platform/visin-monorepo/commit/29d010f599044db8654e04f07136bc68bcb0251a))
+
 ### [0.0.167](https://github.com/visin-platform/visin-monorepo/compare/v0.0.166...v0.0.167) (2026-09-05)
 
 
