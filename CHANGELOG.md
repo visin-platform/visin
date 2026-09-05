@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.170](https://github.com/visin-platform/visin-monorepo/compare/v0.0.169...v0.0.170) (2026-09-05)
+
+
+### Features
+
+* add agent auditing ([54ddaad](https://github.com/visin-platform/visin-monorepo/commit/54ddaad58bf6c8939ced041448972409e239b98f))
+
 ### [0.0.169](https://github.com/visin-platform/visin-monorepo/compare/v0.0.168...v0.0.169) (2026-09-05)
 
 
