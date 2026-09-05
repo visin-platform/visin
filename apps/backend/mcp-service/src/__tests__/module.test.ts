@@ -20,6 +20,45 @@ describe('ok / fail', () => {
   });
 });
 
+describe('ok — the ceiling on a single result', () => {
+  it('passes a normal answer through untouched', () => {
+    expect(ok('a training run')).toEqual({ content: [{ type: 'text', text: 'a training run' }] });
+  });
+
+  it('truncates an answer that would crowd out the conversation', () => {
+    // Measured against production: get_test_results returned 658,000 characters
+    // — 164,000 tokens, a whole context window — because an endpoint ignored
+    // its `limit`. That bug is fixed; this makes the class of it survivable.
+    const huge = Array.from({ length: 5000 }, (_, i) => `- epoch ${i}: loss 0.1234`).join('\n');
+
+    const text = ok(huge).content[0].text;
+
+    expect(huge.length).toBeGreaterThan(100_000);
+    expect(text.length).toBeLessThan(21_000);
+  });
+
+  it('says it truncated, and that what is left is a beginning not a summary', () => {
+    // A model told nothing would report the fragment as the complete answer.
+    const text = ok('x'.repeat(50_000)).content[0].text;
+
+    expect(text).toContain('Truncated');
+    expect(text).toContain('not a summary');
+    expect(text).toContain('Narrow the request');
+  });
+
+  it('cuts at a line boundary, never mid-number', () => {
+    // A figure cut in half is worse than a long answer: the model cannot tell a
+    // truncated number from a real one, and would quote it.
+    const rows = Array.from({ length: 4000 }, (_, i) => `- mAP 0.${i}00000`).join('\n');
+
+    const [body] = ok(rows).content[0].text.split('\n\n[Truncated');
+
+    for (const line of body.split('\n')) {
+      expect(rows.split('\n')).toContain(line);
+    }
+  });
+});
+
 describe('explain', () => {
   it('tells the model not to retry a 403, and why', () => {
     const result = explain(new VisinError('Access denied to project', 403));

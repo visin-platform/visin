@@ -57,6 +57,25 @@ describe('routing', () => {
     });
   });
 
+  it('sends page alongside limit, or the endpoint ignores the limit entirely', async () => {
+    // testResultService only paginates when it has both. Given `limit` alone it
+    // returned all 989 rows — 3 MB, 164,000 tokens — for a request asking for
+    // five. The pairing is sent on every list call, not just this one.
+    called.mockResolvedValue({ testResults: [] });
+
+    await vision.listTestResults('k', { limit: 5 });
+
+    expect(lastCall().query).toMatchObject({ page: 1, limit: 5 });
+  });
+
+  it('lets a caller override the page rather than pinning it to the first', async () => {
+    called.mockResolvedValue({ testResults: [] });
+
+    await vision.listTestResults('k', { page: 3, limit: 5 });
+
+    expect(lastCall().query).toMatchObject({ page: 3 });
+  });
+
   it('posts a comparison as a body, not a query string', async () => {
     called.mockResolvedValue({ comparison: [] });
 

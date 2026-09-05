@@ -13,14 +13,14 @@ export default function Workflow() {
             From raw images to a table in your paper
           </Typography>
           <Typography sx={{ color: 'text.secondary', fontSize: '1.075rem' }}>
-            Four stages, each backed by its own part of the platform. Start anywhere — nothing forces you to use the
+            Five stages, each backed by its own part of the platform. Start anywhere — nothing forces you to use the
             whole pipeline.
           </Typography>
         </Box>
 
         <Grid container spacing={{ xs: 3, md: 4 }}>
           {STEPS.map((step, index) => (
-            <Grid size={{ xs: 12, sm: 6, md: 3 }} key={step.title}>
+            <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2.4 }} key={step.title}>
               <Box
                 sx={{
                   height: '100%',

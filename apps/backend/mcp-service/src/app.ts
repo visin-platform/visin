@@ -105,6 +105,13 @@ interface Authenticated {
   label?: string;
   /** an API key was pasted into a config, rather than granted through consent */
   isApiKey?: boolean;
+  /**
+   * Which credential, stably — a key's document id, or an OAuth client id.
+   *
+   * Never the access token's `jti`: that rotates hourly, so a trail keyed on it
+   * would show a different actor every time the assistant refreshed.
+   */
+  credentialId?: string;
 }
 
 /**
@@ -121,7 +128,7 @@ interface Authenticated {
 async function authenticate(token: string): Promise<Authenticated> {
   if (looksLikeApiKey(token)) {
     const result = await verifyApiKey(token);
-    return { ...result, isApiKey: true };
+    return { ...result, isApiKey: true, credentialId: result.keyId };
   }
 
   const result = verifyAccessToken(token, canonicalUrl());
@@ -131,7 +138,8 @@ async function authenticate(token: string): Promise<Authenticated> {
     userId: result.userId,
     scopes: result.scopes,
     label: result.clientName,
-    isApiKey: false
+    isApiKey: false,
+    credentialId: result.clientId
   };
 }
 
@@ -255,7 +263,20 @@ export function createApp() {
     // is never shown a tool that would 403 on it.
     const modules = registerTools(
       server,
-      { token, label: verification.label },
+      {
+        token,
+        label: verification.label,
+        // Named the way the account page names it, so a row reads "Claude
+        // called get_training_curve" rather than naming a credential id.
+        actor: verification.userId
+          ? {
+              kind: verification.isApiKey ? 'api_key' : 'oauth',
+              userId: verification.userId,
+              label: verification.label || verification.userId,
+              credentialId: verification.credentialId
+            }
+          : undefined
+      },
       verification.scopes ?? []
     );
     if (modules === 0) {

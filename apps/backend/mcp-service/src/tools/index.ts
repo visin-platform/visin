@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ApiKeyScope } from '@visin/backend-core';
+import { auditTools } from '../audit';
 import { Caller, ToolModule } from './module';
 import { datasetRead } from './dataset';
 import { visionRead, visionWrite } from './vision';
@@ -35,8 +36,11 @@ export function registerTools(
   const granted = new Set(scopes);
   const applicable = MODULES.filter((module) => module.scopes.every((scope) => granted.has(scope)));
 
+  // Every module registers against the timed server, so a tool added later is
+  // measured without its author having to ask for it.
+  const measured = auditTools(server, caller);
   for (const module of applicable) {
-    module.register(server, caller);
+    module.register(measured, caller);
   }
 
   return applicable.length;

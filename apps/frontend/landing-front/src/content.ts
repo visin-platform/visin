@@ -27,12 +27,16 @@ export const STEPS: Step[] = [
   {
     title: 'Compare & publish',
     body: 'Put runs, datasets, test results, and benchmarks side by side, then export the comparison as LaTeX or CSV for your paper.'
+  },
+  {
+    title: 'Ask',
+    body: 'Connect an AI assistant over MCP and ask about your runs in plain language — which epoch was best, what changed between two experiments, how big the model is.'
   }
 ];
 
 export interface Feature {
   /** Key into the icon map in Features.tsx. */
-  icon: 'datasets' | 'labeling' | 'training' | 'compare' | 'teams' | 'api';
+  icon: 'datasets' | 'labeling' | 'training' | 'compare' | 'teams' | 'api' | 'assistant';
   title: string;
   body: string;
 }
@@ -64,6 +68,11 @@ export const FEATURES: Feature[] = [
     body: 'Invite people to a group as owner, admin, or member. Membership drives who can administer labeling jobs and who can see private work.'
   },
   {
+    icon: 'assistant',
+    title: 'Ask an assistant',
+    body: 'Visin runs an MCP server, so Claude — or any client that speaks the protocol — can read your projects, runs, curves, and benchmarks and answer questions about them. Connect it in a click; it sees only what you can see.'
+  },
+  {
     icon: 'api',
     title: 'API tokens for your scripts',
     body: 'Issue a project-scoped token and post results from a training loop or CI job. The token can only touch the project it was issued for.'
@@ -88,4 +97,69 @@ export const OPEN_SOURCE_POINTS: OpenSourcePoint[] = [
     title: 'MIT licensed',
     body: 'Read it, fork it, run it in a lab or a company. No seats, no quota, no licence key.'
   }
+];
+
+/**
+ * The MCP section.
+ *
+ * Every example below is a question the shipped tools can actually answer, and
+ * every limit named is a real one. The section says what the assistant cannot
+ * do as plainly as what it can: someone who connects it expecting to show it an
+ * image finds out here rather than after wiring it up.
+ */
+export const MCP_ENDPOINT = 'https://mcp.visin.eu/mcp';
+
+export interface AskExample {
+  question: string;
+  /** what the assistant reaches for — named so the claim stays checkable */
+  via: string;
+}
+
+export const ASK_EXAMPLES: AskExample[] = [
+  {
+    question: '"Did the loss on the CLFTv2 run plateau, or is it still coming down?"',
+    via: 'reads the epoch curve, sampled down so a 300-epoch run stays readable'
+  },
+  {
+    question: '"Which of these three runs is best, and what did each cost to train?"',
+    via: 'compares runs side by side — epochs, GPU hours, final metrics, benchmarks'
+  },
+  {
+    question: '"Which classes is the night-time model worst at?"',
+    via: 'reads per-class IoU, precision, recall, F1 and AP from the test results'
+  },
+  {
+    question: '"How fast is this model, and will it fit on the box we have?"',
+    via: 'reads the benchmark: parameters, FLOPs, frames per second, peak GPU memory'
+  }
+];
+
+export interface ConnectStep {
+  title: string;
+  body: string;
+}
+
+export const CONNECT_STEPS: ConnectStep[] = [
+  {
+    title: 'One click, no key',
+    body: 'Point your assistant at the MCP endpoint and it walks you through a consent screen. Tick the permissions it gets — read-only by default — and it is connected. Disconnect it from your account page whenever you like.'
+  },
+  {
+    title: 'Or paste a key',
+    body: 'For a script, a CI job, or a client without OAuth: issue an API key from your account page, scoped to reading or writing, and send it as a bearer token.'
+  },
+  {
+    title: 'You can see what it did',
+    body: 'Every tool call is recorded with what it cost — which tool, how long, how many tokens came back, and whether it failed. Your account page shows the totals per tool.'
+  }
+];
+
+export interface AssistantLimit {
+  body: string;
+}
+
+export const ASSISTANT_LIMITS: AssistantLimit[] = [
+  { body: 'It reads measurements; it does not make them. Epochs, test results, and benchmarks still come from your training pipeline.' },
+  { body: 'It cannot look at an image. Datasets and visualisations are files; the tools return text.' },
+  { body: 'It reaches only what your account already reaches. A private project belonging to someone else stays invisible to it.' }
 ];

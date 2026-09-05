@@ -79,7 +79,7 @@ export const vision = {
     apiKey: string,
     query: Query
   ): Promise<{ trainings: Training[]; pagination?: { total?: number } }> =>
-    get(trainingsResponseSchema, apiKey, '/trainings', query),
+    get(trainingsResponseSchema, apiKey, '/trainings', { page: 1, ...query }),
 
   getTraining: (apiKey: string, id: string): Promise<Training> =>
     get(trainingSchema, apiKey, `/trainings/${encodeURIComponent(id)}`),
@@ -110,20 +110,30 @@ export const vision = {
   ): Promise<{ comparison: ComparisonEntry[] }> =>
     post(comparisonResponseSchema, apiKey, '/trainings/compare', { trainingIds }),
 
+  /**
+   * `page` is sent alongside `limit`, and must be.
+   *
+   * testResultService only paginates when it has both — given `limit` alone it
+   * silently returns every row. That is not a small overshoot: it fetched all
+   * 989 results, 3 MB of JSON that rendered to 164,000 tokens, from a call
+   * asking for five. Every other list endpoint honours `limit` on its own, so
+   * the pairing is sent everywhere rather than only here: the contract has
+   * surprised us once already.
+   */
   listTestResults: (
     apiKey: string,
     query: Query
   ): Promise<{ testResults: TestResult[]; total?: number }> =>
-    get(testResultsResponseSchema, apiKey, '/test-results', query),
+    get(testResultsResponseSchema, apiKey, '/test-results', { page: 1, ...query }),
 
   listBenchmarks: (apiKey: string, query: Query): Promise<{ benchmarks: Benchmark[] }> =>
-    get(benchmarksResponseSchema, apiKey, '/benchmarks', query),
+    get(benchmarksResponseSchema, apiKey, '/benchmarks', { page: 1, ...query }),
 
   listDatasets: (
     apiKey: string,
     query: Query
   ): Promise<{ datasets: Dataset[]; pagination?: { total?: number } }> =>
-    get(datasetsResponseSchema, apiKey, '/datasets', query),
+    get(datasetsResponseSchema, apiKey, '/datasets', { page: 1, ...query }),
 
   getDataset: (apiKey: string, id: string): Promise<Dataset> =>
     get(datasetSchema, apiKey, `/datasets/${encodeURIComponent(id)}`),

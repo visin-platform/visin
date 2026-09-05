@@ -6,7 +6,8 @@ import {
   ModelTraining,
   CompareArrows,
   Groups,
-  Key
+  Key,
+  AutoAwesome
 } from '@mui/icons-material';
 import { FEATURES, type Feature } from '../content';
 
@@ -16,7 +17,8 @@ const ICONS: Record<Feature['icon'], ReactNode> = {
   training: <ModelTraining />,
   compare: <CompareArrows />,
   teams: <Groups />,
-  api: <Key />
+  api: <Key />,
+  assistant: <AutoAwesome />
 };
 
 export default function Features() {

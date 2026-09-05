@@ -13,6 +13,7 @@ import {
 } from '../controllers/authController';
 import { getProfile, updateProfile, changePassword } from '../controllers/profileController';
 import { createKey, listKeys, revealKey, revokeKey, removeKey } from '../controllers/apiKeyController';
+import { getToolCalls, getToolUsage } from '../controllers/auditController';
 import { authenticateToken, requireRole } from '../middleware/authMiddleware';
 import { requireInternalServiceToken } from '../middleware/internalServiceAuth';
 import { createRateLimiter, validateRequest } from '@visin/backend-core';
@@ -105,6 +106,11 @@ router.post(
   validateRequest({ body: invalidateUserTokensBodySchema }),
   invalidateUserTokens
 );
+
+// What a connected assistant has done, and what it cost. Session-scoped, like
+// the keys and connections it sits beside.
+router.get('/tool-usage', authenticateToken, getToolUsage);
+router.get('/tool-calls', authenticateToken, getToolCalls);
 
 // List users (admin)
 router.get('/admin/users', authenticateToken, requireRole('admin'), listUsers);

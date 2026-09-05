@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LandingPage from './LandingPage';
-import { FEATURES, STEPS, GITHUB_URL } from './content';
+import { ASK_EXAMPLES, ASSISTANT_LIMITS, CONNECT_STEPS, FEATURES, MCP_ENDPOINT, STEPS, GITHUB_URL } from './content';
 
 const config: { VISION_FRONT_URL?: string } = { VISION_FRONT_URL: 'http://vision.test' };
 
@@ -19,7 +19,7 @@ describe('LandingPage structure', () => {
   it('renders every section landmark', () => {
     const { container } = render(<LandingPage />);
 
-    for (const id of ['top', 'how-it-works', 'features', 'open-source', 'contact']) {
+    for (const id of ['top', 'how-it-works', 'features', 'assistant', 'open-source', 'contact']) {
       expect(container.querySelector(`#${id}`)).toBeInTheDocument();
     }
     expect(container.querySelector('main#main')).toBeInTheDocument();
@@ -30,7 +30,7 @@ describe('LandingPage structure', () => {
     render(<LandingPage />);
 
     expect(
-      screen.getByRole('heading', { level: 1, name: /workbench for your computer vision work/i })
+      screen.getByRole('heading', { level: 1, name: /assistant that can read it/i })
     ).toBeInTheDocument();
   });
 
@@ -43,6 +43,44 @@ describe('LandingPage structure', () => {
     for (const feature of FEATURES) {
       expect(screen.getByText(feature.title)).toBeInTheDocument();
     }
+  });
+
+  it('renders the assistant section from the content module', () => {
+    render(<LandingPage />);
+
+    for (const example of ASK_EXAMPLES) {
+      expect(screen.getByText(example.question)).toBeInTheDocument();
+    }
+    for (const step of CONNECT_STEPS) {
+      expect(screen.getByText(step.title)).toBeInTheDocument();
+    }
+    for (const limit of ASSISTANT_LIMITS) {
+      expect(screen.getByText(limit.body)).toBeInTheDocument();
+    }
+  });
+
+  it('shows the endpoint someone actually has to paste', () => {
+    render(<LandingPage />);
+
+    expect(screen.getByText(MCP_ENDPOINT)).toBeInTheDocument();
+  });
+
+  it('says what the assistant cannot do, not only what it can', () => {
+    // Someone who connects one expecting to show it an image should find out
+    // here rather than after wiring it up.
+    render(<LandingPage />);
+
+    expect(screen.getByText(/what it will not do/i)).toBeInTheDocument();
+    expect(screen.getByText(/cannot look at an image/i)).toBeInTheDocument();
+  });
+
+  it('sends the hero call-to-action to the assistant section', () => {
+    render(<LandingPage />);
+
+    expect(screen.getByRole('link', { name: /connect an assistant/i })).toHaveAttribute(
+      'href',
+      '#assistant'
+    );
   });
 
   it('mounts the contact form', () => {
@@ -96,6 +134,7 @@ describe('LandingPage calls to action', () => {
 
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(within(nav).getByRole('link', { name: 'Features' })).toHaveAttribute('href', '#features');
+    expect(within(nav).getByRole('link', { name: 'Assistant' })).toHaveAttribute('href', '#assistant');
     expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '#open-source');
     expect(within(nav).getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '#contact');
   });

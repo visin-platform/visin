@@ -35,7 +35,9 @@ describe('authRoutes', () => {
     expect(find('post', '/api-keys/:id/reveal')).toBeDefined();
     expect(find('post', '/api-keys/:id/revoke')).toBeDefined();
     expect(find('delete', '/api-keys/:id')).toBeDefined();
-    expect(routes).toHaveLength(18);
+    expect(find('get', '/tool-usage')).toBeDefined();
+    expect(find('get', '/tool-calls')).toBeDefined();
+    expect(routes).toHaveLength(20);
   });
 
   it('lets nobody reach an API key without a session', () => {
@@ -47,6 +49,12 @@ describe('authRoutes', () => {
     expect(find('post', '/api-keys/:id/reveal')!.handlerCount).toBe(3); // limiter + auth + controller
     expect(find('post', '/api-keys/:id/revoke')!.handlerCount).toBe(2);
     expect(find('delete', '/api-keys/:id')!.handlerCount).toBe(2);
+  });
+
+  it('keeps the audit trail behind a session', () => {
+    // It names what an assistant did on one account; there is no public read.
+    expect(find('get', '/tool-usage')!.handlerCount).toBe(2);
+    expect(find('get', '/tool-calls')!.handlerCount).toBe(2);
   });
 
   it('reveals a key over POST, never GET', () => {

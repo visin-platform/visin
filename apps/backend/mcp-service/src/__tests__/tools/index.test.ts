@@ -86,3 +86,23 @@ describe('SERVED_SCOPES', () => {
     }
   });
 });
+
+describe('measurement is not opt-in', () => {
+  it('wraps every registered tool, so a tool added later is measured too', () => {
+    // The failure this guards: a module author who does not know audit.ts
+    // exists adds a tool, and it is the one nobody can see the cost of.
+    const seen: string[] = [];
+    const server = {
+      registerTool: (name: string, _config: unknown, handler: unknown) => {
+        seen.push(name);
+        // The proxy must hand the SDK a wrapper, not the original handler.
+        expect(typeof handler).toBe('function');
+      }
+    } as unknown as McpServer;
+
+    const count = registerTools(server, caller, ['vision:read', 'vision:write', 'dataset:read']);
+
+    expect(count).toBe(3);
+    expect(seen.length).toBeGreaterThan(10);
+  });
+});

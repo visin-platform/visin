@@ -5,6 +5,7 @@ import Nav from './components/Nav';
 import Hero from './components/Hero';
 import Workflow from './components/Workflow';
 import Features from './components/Features';
+import Assistant from './components/Assistant';
 import OpenSource from './components/OpenSource';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
@@ -40,6 +41,7 @@ function LandingPage() {
         <Hero appUrl={appUrl} />
         <Workflow />
         <Features />
+        <Assistant />
         <OpenSource />
         <Contact />
       </Box>

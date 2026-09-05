@@ -120,6 +120,13 @@ export type {
   AccessTokenVerification
 } from './oauth/tokens';
 
+// Audit trail — what an assistant called, and what the answer cost. A tool
+// result is re-sent on every later turn, so its size is worth a row.
+export { AuditEvent } from './audit/AuditEvent';
+export type { IAuditEvent, ToolCall, ActorKind } from './audit/AuditEvent';
+export { recordToolCall, listToolCalls, summariseToolUsage } from './audit/service';
+export type { RecordToolCallInput, ToolCallRow, ToolUsage } from './audit/service';
+
 // Database
 export { connectDb } from './db/connectDb';
 export type { ConnectDbOptions } from './db/connectDb';

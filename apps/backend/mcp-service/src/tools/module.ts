@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ApiKeyScope } from '@visin/backend-core';
+import type { ActorKind, ApiKeyScope } from '@visin/backend-core';
 import { VisinError } from '../http';
 import { ShapeError } from '../schemas';
 
@@ -23,6 +23,21 @@ export interface Caller {
   token: string;
   /** what the credential is called, for a log line naming the actor */
   label?: string;
+  /**
+   * Who to attribute a tool call to in the audit trail.
+   *
+   * Separate from the token because the token is a secret to forward and this
+   * is a name to write down. Optional so a test can build a caller without
+   * inventing an identity — a call with no actor is timed and logged, just not
+   * filed under anyone.
+   */
+  actor?: {
+    kind: ActorKind;
+    userId: string;
+    /** the key's name or the connected app's, as its owner would recognise it */
+    label: string;
+    credentialId?: string;
+  };
 }
 
 /** Everything the model gets back is text it can act on. */
@@ -31,7 +46,52 @@ export const fail = (message: string) => ({
   content: [{ type: 'text' as const, text: message }]
 });
 
-export const ok = (text: string) => ({ content: [{ type: 'text' as const, text }] });
+/**
+ * The most any one tool result may hand back, in characters.
+ *
+ * About 5,000 tokens. Generous next to what these tools actually return — the
+ * heaviest legitimate answer measured was a fifth of this — and far below the
+ * point where one call crowds out the conversation it is part of.
+ */
+const MAX_RESULT_CHARS = 20_000;
+
+/**
+ * Everything a tool answers with goes through here, and nothing may exceed the
+ * ceiling.
+ *
+ * A per-tool cap is the kind of thing an author forgets, and the one that gets
+ * forgotten is the one that hurts: `get_test_results` was measured returning
+ * 658,000 characters — 164,000 tokens, a whole context window — because an
+ * endpoint quietly ignored its `limit`. That specific bug is fixed, but the
+ * failure mode is not specific to it, so the ceiling lives at the single funnel
+ * every tool already uses rather than in each of them.
+ *
+ * Truncation stops at a line boundary and says what happened. A result cut
+ * mid-number would be worse than a large one: the model cannot tell a truncated
+ * figure from a real one, and would quote it.
+ */
+export const ok = (text: string) => {
+  if (text.length <= MAX_RESULT_CHARS) {
+    return { content: [{ type: 'text' as const, text }] };
+  }
+
+  const clipped = text.slice(0, MAX_RESULT_CHARS);
+  const atLineBreak = clipped.slice(0, clipped.lastIndexOf('\n'));
+
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text:
+          `${atLineBreak || clipped}\n\n` +
+          `[Truncated: this answer was ${count(text.length)} characters, over the ` +
+          `${count(MAX_RESULT_CHARS)} a single tool result may return. What you have above is ` +
+          'the beginning of it, not a summary. Narrow the request — fewer results, one training, ' +
+          'one epoch — rather than treating this as the whole answer.]'
+      }
+    ]
+  };
+};
 
 /**
  * Turn any failure into a sentence.

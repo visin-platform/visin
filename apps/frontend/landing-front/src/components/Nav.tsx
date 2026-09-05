@@ -22,6 +22,7 @@ import { INK } from '../theme';
 const LINKS = [
   { label: 'How it works', href: '#how-it-works' },
   { label: 'Features', href: '#features' },
+  { label: 'Assistant', href: '#assistant' },
   { label: 'Self-hosting', href: '#open-source' },
   { label: 'Contact', href: '#contact' }
 ];
