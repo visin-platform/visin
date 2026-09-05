@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.171](https://github.com/visin-platform/visin-monorepo/compare/v0.0.170...v0.0.171) (2026-09-05)
+
+
+### Features
+
+* add claude analysis tools ([f1d1897](https://github.com/visin-platform/visin-monorepo/commit/f1d1897376700e62b0aa6fa300accb81e4896544))
+
 ### [0.0.170](https://github.com/visin-platform/visin-monorepo/compare/v0.0.169...v0.0.170) (2026-09-05)
 
 
