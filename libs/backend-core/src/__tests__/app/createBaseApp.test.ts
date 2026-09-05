@@ -26,6 +26,9 @@ async function withServer(
   app.post('/oauth/authorize', (_req, res) => {
     res.json({ ok: true });
   });
+  app.get('/oauth/connections', (_req, res) => {
+    res.json({ connections: [] });
+  });
   app.use(errorHandler);
 
   const server = createServer(app);
@@ -307,14 +310,44 @@ describe('createBaseApp publicCorsPaths', () => {
     });
   });
 
-  it('keeps the cookie-authenticated consent POST on the allowlist', async () => {
-    // /oauth/authorize is the one OAuth path that must NOT be public: its POST
-    // carries the session cookie and is CSRF-protected by the consent token.
+  it('accepts an opaque `Origin: null`, which a form navigation routinely sends', async () => {
+    // The failure this fixes. A consent form rendered in a sandboxed frame, or
+    // reached through a cross-origin redirect, posts back with a literal
+    // "null" origin — which is neither absent nor allowlisted, so the
+    // allowlist 403'd a submission the browser had every right to send.
+    await withServer(
+      { ...withOauth, publicCorsPaths: [...withOauth.publicCorsPaths, '/oauth/authorize'] },
+      async baseUrl => {
+        const res = await fetch(`${baseUrl}/oauth/authorize`, {
+          method: 'POST',
+          headers: { Origin: 'null', 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+
+        expect(res.status).toBe(200);
+      }
+    );
+  });
+
+  it('leaves a sibling under the same parent on the allowlist, with credentials', async () => {
+    // /oauth/connections is script-fetched by account-front and carries the
+    // session cookie, so it must keep credentialed CORS. Broadening this list
+    // to a bare '/oauth' prefix would silently strip that and break the tab.
     await withServer(withOauth, async baseUrl => {
-      const res = await fetch(`${baseUrl}/oauth/authorize`, {
-        method: 'POST',
-        headers: { Origin: 'https://claude.ai', 'Content-Type': 'application/json' },
-        body: '{}'
+      const res = await fetch(`${baseUrl}/oauth/connections`, {
+        headers: { Origin: 'https://allowed.example' }
+      });
+
+      expect(res.headers.get('access-control-allow-origin')).toBe('https://allowed.example');
+      expect(res.headers.get('access-control-allow-credentials')).toBe('true');
+    });
+  });
+
+  it('still rejects `Origin: null` on a route that was not made public', async () => {
+    // The exemption is per-path. An opaque origin is not blanket-trusted.
+    await withServer(withOauth, async baseUrl => {
+      const res = await fetch(`${baseUrl}/cookie-check`, {
+        headers: { Origin: 'null' }
       });
 
       expect(res.status).toBe(403);

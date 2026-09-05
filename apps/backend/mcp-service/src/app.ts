@@ -155,18 +155,10 @@ function unauthorized(res: Response, detail: string): void {
 }
 
 /**
- * Cross-origin access for browser-based MCP clients.
- *
- * Wide open, and it has to be: an MCP server is called by assistants nobody
- * enumerated in advance, and every request carries its own bearer credential
- * rather than a cookie — so there is no ambient authority for a hostile page to
- * borrow. Credentials are deliberately not allowed, which is what makes `*`
- * legal and keeps it that way.
- *
- * `WWW-Authenticate` must be exposed or the whole OAuth flow cannot start:
- * browser JavaScript cannot read that header on the 401 without it, so the
- * client never discovers the protected-resource metadata it points at and has
- * no way to learn where to authenticate.
+ * Wide open by necessity: MCP clients are not enumerable, and every request
+ * carries its own bearer token rather than a cookie, so there is no ambient
+ * authority to borrow. WWW-Authenticate must be exposed or a browser client
+ * cannot read the 401 that starts OAuth discovery.
  */
 function crossOrigin(_req: Request, res: Response, next: () => void): void {
   res.set({
@@ -184,8 +176,7 @@ export function createApp() {
   const app = express();
 
   app.use(crossOrigin);
-  // Answered here rather than falling through to the 404 handler, which would
-  // fail the preflight and take the real request with it.
+  // Or the preflight falls through to the 404 and takes the real request with it.
   app.options(/.*/, (_req: Request, res: Response) => {
     res.sendStatus(204);
   });

@@ -20,7 +20,7 @@
     "export:legacy-labels": "node --env-file-if-exists=.env -r ts-node/register scripts/exportLegacyLabels.ts"
   },
   "dependencies": {
-    "@visin/backend-core": "0.1.23",
+    "@visin/backend-core": "0.1.24",
     "bullmq": "^6.0.5",
     "express": "^5.2.1",
     "ioredis": "^6.0.0",
