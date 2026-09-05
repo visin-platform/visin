@@ -1,5 +1,6 @@
 jest.mock('../../vision', () => ({
   vision: {
+    getTraining: jest.fn(),
     listVisualizations: jest.fn(),
     listVisualizationTypes: jest.fn(),
     getVisualization: jest.fn()
@@ -58,6 +59,7 @@ const png = (bytes = 1024) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mocked.getTraining.mockResolvedValue({ uuid: 't-uuid' });
   mocked.listVisualizationTypes.mockResolvedValue({ types: ['overlay', 'compare'] });
 });
 
@@ -78,10 +80,8 @@ describe('list_visualizations', () => {
 
     await call('list_visualizations', { training: 't-uuid', type: 'compare', epoch: 40, limit: 5 });
 
-    expect(mocked.listVisualizations).toHaveBeenCalledWith('vsn_live_abc', {
-      training_uuid: 't-uuid',
+    expect(mocked.listVisualizations).toHaveBeenCalledWith('vsn_live_abc', 't-uuid', {
       type: 'compare',
-      epoch: 40,
       limit: 5
     });
   });
@@ -138,7 +138,7 @@ describe('list_visualizations — edges', () => {
 
     await call('list_visualizations', { training: 't-uuid' });
 
-    expect(mocked.listVisualizations.mock.calls[0][1].limit).toBe(20);
+    expect(mocked.listVisualizations.mock.calls[0][2].limit).toBe(20);
   });
 });
 

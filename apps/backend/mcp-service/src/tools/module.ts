@@ -181,6 +181,33 @@ export function explain(error: unknown): ReturnType<typeof fail> {
  * exists to answer in prose instead.
  */
 
+/** A Mongo ObjectId is 24 hex characters; a UUID is 8-4-4-4-12. Unambiguous. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Turn whatever identifier the model has into the one the endpoint wants.
+ *
+ * `list_trainings` hands out `_id` and every tool takes that, but the results,
+ * benchmark and visualization endpoints key on the run's `uuid` instead.
+ * Passing the id there filtered nothing at all — zod drops an unknown query key
+ * silently, so the call succeeded and answered about every run. One extra
+ * lookup is worth not answering the wrong question.
+ */
+export async function resolveTrainingUuid(
+  fetchTraining: (id: string) => Promise<{ uuid?: string }>,
+  training: string
+): Promise<string> {
+  if (UUID.test(training)) return training;
+
+  const run = await fetchTraining(training);
+  if (!run.uuid) {
+    // Deliberately not a VisinError: `explain` would dress a 404 up with a note
+    // about private projects, and this is neither missing nor forbidden.
+    throw new Error(`Training ${training} has no uuid recorded, so it cannot be scoped to.`);
+  }
+  return run.uuid;
+}
+
 /** A count with separators: "7484 epochs" is a number to decode, not to read. */
 export const count = (value: number): string => value.toLocaleString('en-US');
 

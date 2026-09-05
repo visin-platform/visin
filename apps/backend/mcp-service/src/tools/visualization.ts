@@ -12,6 +12,7 @@ import {
   capped,
   count,
   explain,
+  resolveTrainingUuid,
   ok,
   okWithImages
 } from './module';
@@ -80,25 +81,21 @@ function registerTools(server: McpServer, caller: Caller): void {
         'comparisons, segmentation maps — with the id needed to actually view one. Use to find ' +
         'something worth looking at before calling view_visualizations.',
       inputSchema: {
-        training: z.string().describe('The training UUID (not the id) — from get_training'),
+        training: z.string().describe('Training id or uuid, from list_trainings'),
         type: z
           .string()
           .optional()
           .describe('Only this kind of frame, e.g. "overlay" or "compare". Omit to see all kinds.'),
-        epoch: z.number().int().optional().describe('Only frames from this epoch'),
         limit: z.number().int().min(1).max(50).optional().describe('How many to list (default 20)')
       }
     },
-    async ({ training, type, epoch, limit }) => {
+    async ({ training, type, limit }) => {
       try {
+        const uuid = await resolveTrainingUuid((id) => vision.getTraining(key, id), training);
+
         const [{ visualizations, total }, { types }] = await Promise.all([
-          vision.listVisualizations(key, {
-            training_uuid: training,
-            type,
-            epoch,
-            limit: limit ?? 20
-          }),
-          vision.listVisualizationTypes(key, training)
+          vision.listVisualizations(key, uuid, { type, limit: limit ?? 20 }),
+          vision.listVisualizationTypes(key, uuid)
         ]);
 
         if (visualizations.length === 0) {

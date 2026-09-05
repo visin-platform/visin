@@ -5,6 +5,7 @@ import type { Benchmark, ComparisonEntry, Epoch, TestResult, Training } from '..
 import {
   Caller,
   ToolModule,
+  resolveTrainingUuid,
   capped,
   count,
   day,
@@ -27,33 +28,6 @@ import {
 
 /** How many epochs a curve is sampled down to. */
 const CURVE_POINTS = 12;
-
-/** A Mongo ObjectId is 24 hex characters; a UUID is 8-4-4-4-12. Unambiguous. */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Turn whatever identifier the model has into the one the endpoint filters on.
- *
- * `list_trainings` hands out `_id`, and every tool here takes that — but
- * `/test-results` and `/benchmarks` filter on `training_uuid`, a different
- * field. Passing the id filtered nothing at all: zod drops an unknown query key
- * silently, so the call succeeded and returned every run's results as though
- * they were the one asked for. One extra lookup is worth not answering the
- * wrong question.
- */
-async function resolveTrainingUuid(apiKey: string, training: string): Promise<string> {
-  if (UUID.test(training)) return training;
-
-  const run = await vision.getTraining(apiKey, training);
-  if (!run.uuid) {
-    // Deliberately not a VisinError: `explain` would dress a 404 up with a note
-    // about private projects, and this is neither missing nor forbidden.
-    throw new Error(
-      `Training ${training} has no uuid recorded, so results cannot be scoped to it.`
-    );
-  }
-  return run.uuid;
-}
 
 const describeTraining = (training: Training): string => {
   const parts = [`- ${training.name} [${training.status}]`];
@@ -102,24 +76,64 @@ function extremes(epochs: Epoch[]): string[] {
   );
 }
 
-/** A test result's per-class scores, as a table rather than nested JSON. */
+/** The five named scores, when a class records them. */
+const SCORE_FIELDS: Array<[string, string]> = [
+  ['iou', 'IoU'],
+  ['precision', 'P'],
+  ['recall', 'R'],
+  ['f1_score', 'F1'],
+  ['ap', 'AP']
+];
+
+/**
+ * One class's line.
+ *
+ * Falls back to whatever numbers it does carry when none of the five named
+ * scores are there — a per-condition `overall` records mIoU_foreground and
+ * fw_iou instead, and printing an empty line for it would be worse than
+ * printing the numbers under their own names. Arrays are skipped: a confusion
+ * matrix is real data and the wrong thing to spend a tool result on.
+ */
+function describeClass(scores: Record<string, unknown>): string {
+  const named = SCORE_FIELDS.filter(([key]) => typeof scores[key] === 'number').map(
+    ([key, label]) => `${label} ${metric(scores[key] as number)}`
+  );
+  if (named.length > 0) return named.join('  ');
+
+  return (
+    Object.entries(scores)
+      .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+      .slice(0, 6)
+      .map(([key, value]) => `${key} ${metric(value)}`)
+      .join('  ') || 'no scores recorded'
+  );
+}
+
+/**
+ * A test result as a table rather than nested JSON.
+ *
+ * A condition is not one shape: the weather conditions break down by class,
+ * while the top-level `overall` is a flat set of summary numbers. Both are
+ * rendered, the scalars gathered onto one line so a summary does not sprawl
+ * into six.
+ */
 function describeTestResult(result: TestResult): string[] {
   const lines: string[] = [];
   const label = result.training?.name ? `${result.training.name}, ` : '';
   lines.push(`${label}epoch ${result.epoch ?? '?'} (${day(result.timestamp)}):`);
 
-  for (const [condition, classes] of Object.entries(result.test_results)) {
+  for (const [condition, entries] of Object.entries(result.test_results)) {
     lines.push(`  ${condition}:`);
-    for (const [className, scores] of Object.entries(classes)) {
-      const parts = [
-        scores.iou !== undefined ? `IoU ${metric(scores.iou)}` : '',
-        scores.precision !== undefined ? `P ${metric(scores.precision)}` : '',
-        scores.recall !== undefined ? `R ${metric(scores.recall)}` : '',
-        scores.f1_score !== undefined ? `F1 ${metric(scores.f1_score)}` : '',
-        scores.ap !== undefined ? `AP ${metric(scores.ap)}` : ''
-      ].filter(Boolean);
-      lines.push(`    ${className}: ${parts.join('  ')}`);
+
+    const scalars: string[] = [];
+    for (const [name, value] of Object.entries(entries)) {
+      if (typeof value === 'number') {
+        scalars.push(`${name} ${metric(value)}`);
+        continue;
+      }
+      lines.push(`    ${name}: ${describeClass(value)}`);
     }
+    if (scalars.length > 0) lines.push(`    ${scalars.join('  ')}`);
   }
   return lines;
 }
@@ -472,7 +486,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     async ({ training, epoch, limit }) => {
       try {
         const { testResults } = await vision.listTestResults(key, {
-          training_uuid: training ? await resolveTrainingUuid(key, training) : undefined,
+          training_uuid: training ? await resolveTrainingUuid((id) => vision.getTraining(key, id), training) : undefined,
           epoch,
           limit: limit ?? 5
         });
@@ -506,7 +520,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     async ({ training, limit }) => {
       try {
         const { benchmarks } = await vision.listBenchmarks(key, {
-          training_uuid: training ? await resolveTrainingUuid(key, training) : undefined,
+          training_uuid: training ? await resolveTrainingUuid((id) => vision.getTraining(key, id), training) : undefined,
           limit: limit ?? 5
         });
 

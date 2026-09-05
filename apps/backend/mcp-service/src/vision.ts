@@ -154,11 +154,25 @@ export const vision = {
   getDataset: (apiKey: string, id: string): Promise<Dataset> =>
     get(datasetSchema, apiKey, `/datasets/${encodeURIComponent(id)}`),
 
+  /**
+   * The run is a path segment, not a query parameter.
+   *
+   * `/visualizations/training` without one is a real route that deliberately
+   * returns every visualization there is — so sending `training_uuid` in the
+   * query string was not a no-op filter, it was a request for all 8,000 frames
+   * dressed up as a request for one run's 44.
+   */
   listVisualizations: (
     apiKey: string,
+    trainingUuid: string,
     query: Query
   ): Promise<{ visualizations: Visualization[]; total?: number }> =>
-    get(visualizationsResponseSchema, apiKey, '/visualizations/training', { page: 1, ...query }),
+    get(
+      visualizationsResponseSchema,
+      apiKey,
+      `/visualizations/training/${encodeURIComponent(trainingUuid)}`,
+      { page: 1, ...query }
+    ),
 
   listVisualizationTypes: (apiKey: string, trainingUuid: string): Promise<{ types: string[] }> =>
     get(visualizationTypesResponseSchema, apiKey, '/visualizations/types', {

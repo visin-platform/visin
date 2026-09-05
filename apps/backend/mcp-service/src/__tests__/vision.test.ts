@@ -159,9 +159,13 @@ describe('routing', () => {
     ],
     [
       'listVisualizations',
-      () => vision.listVisualizations('k', { training_uuid: 't-uuid', limit: 20 }),
+      () => vision.listVisualizations('k', 't-uuid', { limit: 20 }),
       { visualizations: [] },
-      { method: 'GET', path: '/visualizations/training', query: { page: 1, training_uuid: 't-uuid', limit: 20 } }
+      {
+        method: 'GET',
+        path: '/visualizations/training/t-uuid',
+        query: { page: 1, limit: 20 }
+      }
     ],
     [
       'listVisualizationTypes',

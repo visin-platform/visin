@@ -98,6 +98,52 @@ describe('tolerating what the API actually sends', () => {
     expect(unpaged.total).toBe(0);
   });
 
+  it('parses a condition that is summary scalars rather than per-class objects', () => {
+    // Real shape: the weather conditions break down by class, but the
+    // top-level `overall` maps straight to numbers. Demanding objects
+    // everywhere failed the whole parse on that one key — and the `.catch({})`
+    // that used to sit here turned the failure into an empty result, so the
+    // tool printed a header with no rows and looked uninteresting, not broken.
+    const parsed = parseResponse(testResultsResponseSchema, '/test-results', {
+      testResults: [
+        {
+          _id: 'tr1',
+          epoch: 99,
+          test_results: {
+            day_fair: {
+              vehicle: { iou: 0.65, precision: 0.66, recall: 0.98, f1_score: 0.79, ap: 0.88 },
+              overall: { mIoU_foreground: 0.57, fw_iou: 0.64, confusion_matrix: [[1, 2], [3, 4]] }
+            },
+            overall: { mIoU_foreground: 0.55, mean_accuracy: 0.93 }
+          }
+        }
+      ]
+    });
+
+    const conditions = parsed.testResults[0].test_results;
+    expect(Object.keys(conditions)).toEqual(['day_fair', 'overall']);
+    expect(conditions.overall.mIoU_foreground).toBe(0.55);
+    expect(conditions.day_fair.vehicle).toMatchObject({ iou: 0.65 });
+  });
+
+  it('raises rather than emptying when test_results is genuinely the wrong shape', () => {
+    // No `.catch` here on purpose: a schema this permissive failing means the
+    // contract really moved, and that should be a named error, not silence.
+    expect(() =>
+      parseResponse(testResultsResponseSchema, '/test-results', {
+        testResults: [{ _id: 'tr1', test_results: 'not an object at all' }]
+      })
+    ).toThrow(ShapeError);
+  });
+
+  it('defaults a row that carries no test_results at all', () => {
+    const parsed = parseResponse(testResultsResponseSchema, '/test-results', {
+      testResults: [{ _id: 'tr1', epoch: 1 }]
+    });
+
+    expect(parsed.testResults[0].test_results).toEqual({});
+  });
+
   it('parses a nested per-class test result', () => {
     const parsed = parseResponse(testResultsResponseSchema, '/test-results', {
       testResults: [
@@ -109,7 +155,9 @@ describe('tolerating what the API actually sends', () => {
       ]
     });
 
-    expect(parsed.testResults[0].test_results.night.car.iou).toBe(0.81);
+    // The union means a caller narrows before reading a score, exactly as the
+    // renderer does — a condition entry may be a number.
+    expect(parsed.testResults[0].test_results.night.car).toMatchObject({ iou: 0.81 });
   });
 
   it('parses dashboard stats, defaulting a total the aggregation left out', () => {

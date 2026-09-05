@@ -128,7 +128,7 @@ export const trainingWithEpochsSchema = z
   })
   .loose();
 
-/** Per-class scores, keyed by condition and then by class name. */
+/** One class's scores under one condition. `.loose()` — runs record extras. */
 const classScoresSchema = z
   .object({
     iou: z.number().optional(),
@@ -139,6 +139,18 @@ const classScoresSchema = z
   })
   .loose();
 
+/**
+ * What sits under a condition, which is not one shape.
+ *
+ * A weather condition maps to per-class score objects; the top-level `overall`
+ * maps straight to summary scalars (`mIoU_foreground`, `fw_iou`, ...). Demanding
+ * objects everywhere failed the whole parse on that one key, and the `.catch({})`
+ * that used to sit here turned the failure into an empty result — so the tool
+ * printed a header with no rows under it and looked merely uninteresting rather
+ * than broken.
+ */
+const conditionEntrySchema = z.union([classScoresSchema, z.number()]);
+
 export const testResultSchema = z
   .object({
     _id: z.string(),
@@ -146,7 +158,10 @@ export const testResultSchema = z
     test_uuid: z.string().optional(),
     epoch_uuid: z.string().optional(),
     timestamp: z.string().optional(),
-    test_results: z.record(z.string(), z.record(z.string(), classScoresSchema)).catch({}),
+    // `.default({})` for a row that has none, but deliberately no `.catch`:
+    // a shape this permissive failing means the contract really has moved, and
+    // that should surface as a named ShapeError rather than as empty output.
+    test_results: z.record(z.string(), z.record(z.string(), conditionEntrySchema)).default({}),
     training: z
       .object({ _id: z.string(), name: z.string(), uuid: z.string().optional() })
       .loose()
