@@ -16,14 +16,20 @@ services:
       # It never mints a credential, so API_KEY_ENCRYPTION_SECRET is absent by
       # design — and it never verifies a user session, so JWT_SECRET is too.
       - MONGODB_URI=${MONGODB_URI}
-      # Container-network address first, so a tool call never leaves the host;
-      # the public URL is the fallback for a split deployment.
-      - VISION_INTERNAL_URL=${VISION_INTERNAL_URL}
-      - VISION_SERVICE_URL=${VISION_SERVICE_URL}
-      # The canonical URL clients are told to authenticate against.
+      # The container-network address, so a tool call never leaves the host.
+      # Literal rather than a deploy variable: it is a fixed name on visinnet,
+      # not a per-environment secret, and one less thing to configure wrong.
+      - VISION_INTERNAL_URL=http://vision-service:4010
+      # The public fallback, used only if the internal name cannot be resolved.
+      # Reuses the VISION_API_URL the deploy already writes, rather than asking
+      # for a second variable meaning the same thing.
+      - VISION_SERVICE_URL=${VISION_API_URL}
+      # The canonical URL clients authenticate against, and the audience every
+      # OAuth access token is bound to (RFC 8707). Must match what auth-service
+      # mints for, or every token is refused here.
       - MCP_PUBLIC_URL=${MCP_PUBLIC_URL}
-      # Named in the protected-resource metadata, so a client knows where a
-      # token will come from once OAuth exists.
+      # Named in the protected-resource metadata, so a client discovers where to
+      # obtain a token.
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
     init: true
     networks:
