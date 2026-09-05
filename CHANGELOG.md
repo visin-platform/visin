@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.167](https://github.com/visin-platform/visin-monorepo/compare/v0.0.166...v0.0.167) (2026-09-05)
+
+
+### Features
+
+* add public cors rules for mcp clients ([dfa81cd](https://github.com/visin-platform/visin-monorepo/commit/dfa81cd590de198c3037cbaa343a885cf9a26d17))
+
 ### [0.0.166](https://github.com/visin-platform/visin-monorepo/compare/v0.0.165...v0.0.166) (2026-09-05)
 
 
