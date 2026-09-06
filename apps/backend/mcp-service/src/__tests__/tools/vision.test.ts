@@ -295,6 +295,11 @@ describe('compare_trainings', () => {
       cost: { totalHours: 10, totalCost: 2.06 }
     },
     lastEpoch: { epoch: 300, results: { mAP: 0.81 } },
+    epochs: [
+      { epoch: 0, results: { mAP: 0.11 } },
+      { epoch: 150, results: { mAP: 0.94 } },
+      { epoch: 300, results: { mAP: 0.81 } }
+    ],
     testResultsCount: 4,
     benchmarks: [{ _id: 'b1', results: [{ total_parameters_m: 25.4, fps: 91 }] }],
     ...over
@@ -302,7 +307,8 @@ describe('compare_trainings', () => {
 
   it('puts the runs side by side without the full epoch series', async () => {
     // compareTrainings returns every epoch of every run; rendering them would
-    // be the single most expensive thing this server could hand back.
+    // be the single most expensive thing this server could hand back. The
+    // series is read, not printed.
     mocked.compareTrainings.mockResolvedValue({
       comparison: [entry(), entry({ training: { _id: 't2', name: 'ablation', status: 'completed' } })]
     });
@@ -314,7 +320,65 @@ describe('compare_trainings', () => {
     expect(text).toContain('final (epoch 300): mAP 0.81');
     expect(text).toContain('4 test results');
     expect(text).toContain('25.4M params, 91 fps');
-    expect(text).not.toContain('epoch 150');
+    expect(text).not.toContain('- epoch 150');
+  });
+
+  it('reports where each metric peaked, not only where the run stopped', async () => {
+    // The whole point. This run ends on mAP 0.81 having reached 0.94 at epoch
+    // 150; judged on its last epoch it loses a comparison it should win. A real
+    // run on this platform ends at val.loss 1.0479 and reached 0.2402 at epoch
+    // 13 — a four-fold gap between the answer and the wrong answer.
+    mocked.compareTrainings.mockResolvedValue({ comparison: [entry()] });
+
+    const { text } = await call('compare_trainings', { trainings: ['t1', 't2'] });
+
+    expect(text).toContain('best and worst across all 3 epochs:');
+    expect(text).toContain('mAP: 0.11 at epoch 0, 0.94 at epoch 150');
+    expect(text).toContain('final epoch is not its result');
+  });
+
+  /** A run recording `n` metrics, so the shared line budget can be observed. */
+  const withMetrics = (n: number, over: Record<string, unknown> = {}) =>
+    entry({
+      epochs: [
+        {
+          epoch: 1,
+          results: Object.fromEntries(
+            Array.from({ length: n }, (_, i) => [`metric_${String(i).padStart(2, '0')}`, i / 10])
+          )
+        }
+      ],
+      ...over
+    });
+
+  it('spells out every metric when few enough runs share the budget', async () => {
+    // The fixed per-run cap this replaced dropped `val.mean_iou` from a
+    // ten-metric segmentation run — alphabetically last, and the only number
+    // anyone was going to read.
+    mocked.compareTrainings.mockResolvedValue({ comparison: [withMetrics(10)] });
+
+    const { text } = await call('compare_trainings', { trainings: ['t1', 't2'] });
+
+    expect(text).toContain('metric_09: 0.9 at epoch 1');
+    expect(text).not.toContain('further metrics not shown');
+  });
+
+  it('narrows what each run spells out as more runs share the result', async () => {
+    // Thirty runs times a dozen metrics is four hundred lines, past the ceiling
+    // in `ok` — the result would arrive truncated mid-run rather than short.
+    mocked.compareTrainings.mockResolvedValue({
+      comparison: Array.from({ length: 30 }, (_, i) =>
+        withMetrics(10, { training: { _id: `t${i}`, name: `run ${i}`, status: 'completed' } })
+      )
+    });
+
+    const { text } = await call('compare_trainings', { trainings: Array.from({ length: 30 }, (_, i) => `t${i}`) });
+
+    expect(text).toContain('metric_02: 0.2 at epoch 1');
+    expect(text).not.toContain('metric_03');
+    expect(text).toContain('7 further metrics not shown');
+    // Short of the ceiling, so nothing is cut mid-run.
+    expect(text).not.toContain('[Truncated');
   });
 
   it('says when some of the runs asked for were not visible', async () => {
@@ -340,6 +404,7 @@ describe('compare_trainings', () => {
       comparison: [
         entry({
           lastEpoch: null,
+          epochs: [],
           benchmarks: [],
           testResultsCount: 0,
           metrics: { totalEpochs: 0, totalTime: 0, avgEpochTime: 0 }

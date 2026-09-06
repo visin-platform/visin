@@ -8,6 +8,7 @@ import {
   explain,
   fail,
   metric,
+  metricRanges,
   numericResults,
   ok,
   sample
@@ -244,5 +245,45 @@ describe('capped', () => {
 
     expect(shown).toHaveLength(50);
     expect(note).toContain('first 50 of 120 projects');
+  });
+});
+
+describe('metricRanges', () => {
+  const epochs = [
+    { epoch: 0, results: { train: { loss: 1.4021, mean_iou: 0.0121 } } },
+    { epoch: 13, results: { train: { loss: 0.2402, mean_iou: 0.3 } } },
+    { epoch: 199, results: { train: { loss: 1.0479, mean_iou: 0.4569 } } }
+  ];
+
+  it('finds both ends of each metric and the epoch each happened at', () => {
+    // The measured case this exists for: a run whose loss ends at 1.0479 having
+    // reached 0.2402 at epoch 13. Reported on its final epoch it looks four
+    // times worse than it is.
+    expect(metricRanges(epochs)).toEqual([
+      { key: 'train.loss', low: 0.2402, lowEpoch: 13, high: 1.4021, highEpoch: 0 },
+      { key: 'train.mean_iou', low: 0.0121, lowEpoch: 0, high: 0.4569, highEpoch: 199 }
+    ]);
+  });
+
+  it('does not decide which end is the good one', () => {
+    // Deliberately: a run records whatever it chose to, and inferring direction
+    // from a name would be wrong on exactly the custom metrics that matter.
+    const [loss] = metricRanges(epochs);
+
+    expect(loss).not.toHaveProperty('best');
+  });
+
+  it('keeps a metric that only some epochs recorded', () => {
+    const ranges = metricRanges([
+      { epoch: 1, results: { loss: 0.5 } },
+      { epoch: 2, results: { loss: 0.4, extra: 9 } }
+    ]);
+
+    expect(ranges.map((range) => range.key)).toEqual(['extra', 'loss']);
+    expect(ranges[0]).toMatchObject({ low: 9, high: 9, lowEpoch: 2 });
+  });
+
+  it('returns nothing for a run with no epochs', () => {
+    expect(metricRanges([])).toEqual([]);
   });
 });

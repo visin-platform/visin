@@ -293,6 +293,57 @@ export const numericResults = (results: Record<string, unknown>): Array<[string,
 };
 
 /**
+ * The span one metric covered over a run, and where each end happened.
+ *
+ * Reported without judging direction, because this server cannot know it: a run
+ * records whatever it chose to, and guessing "loss is minimised, mAP maximised"
+ * from the name would be wrong on exactly the custom metrics whoever defined
+ * them cares most about. Both ends are given and the reading is left to the
+ * model.
+ */
+export interface MetricRange {
+  key: string;
+  low: number;
+  lowEpoch: number;
+  high: number;
+  highEpoch: number;
+}
+
+/**
+ * What each metric ranged over, across every epoch of a run.
+ *
+ * Worth having because the last epoch is routinely not the run's result. A
+ * measured example from this platform: a run's `val.loss` reads 1.0479 at its
+ * final epoch and 0.2402 at epoch 13 — a four-fold difference between what it
+ * ended at and what it achieved. A comparison quoting only the final epoch says
+ * that run is far worse than it is, which is the wrong answer to the only
+ * question anyone asks a comparison.
+ */
+export function metricRanges(epochs: Array<{ epoch: number; results: Record<string, unknown> }>): MetricRange[] {
+  const seen = new Map<string, MetricRange>();
+
+  for (const epoch of epochs) {
+    for (const [key, value] of numericResults(epoch.results)) {
+      const current = seen.get(key);
+      if (!current) {
+        seen.set(key, { key, low: value, lowEpoch: epoch.epoch, high: value, highEpoch: epoch.epoch });
+        continue;
+      }
+      if (value < current.low) {
+        current.low = value;
+        current.lowEpoch = epoch.epoch;
+      }
+      if (value > current.high) {
+        current.high = value;
+        current.highEpoch = epoch.epoch;
+      }
+    }
+  }
+
+  return [...seen.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/**
  * Take about `n` evenly spaced items, always keeping the first and last.
  *
  * The reason `get_training_curve` exists in this shape. A 300-epoch run with a

@@ -333,6 +333,16 @@ export const comparisonEntrySchema = z
       .loose()
       .nullable()
       .optional(),
+    /**
+     * Every epoch of the run, which this endpoint has always sent and this
+     * client used to drop on the floor.
+     *
+     * None of it is rendered — a 200-epoch series per run is the single most
+     * expensive thing this server could hand back. It is parsed so the tool can
+     * say where each metric peaked, which is what makes a comparison answerable:
+     * `lastEpoch` alone reports a run at whatever it happened to end on.
+     */
+    epochs: z.array(epochSchema).catch([]),
     testResultsCount: z.number().catch(0),
     benchmarks: z.array(benchmarkSchema).catch([])
   })

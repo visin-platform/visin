@@ -12,6 +12,7 @@ import {
   duration,
   explain,
   metric,
+  metricRanges,
   numericResults,
   ok,
   sample
@@ -28,6 +29,29 @@ import {
 
 /** How many epochs a curve is sampled down to. */
 const CURVE_POINTS = 12;
+
+/**
+ * How many metric ranges a whole comparison may spell out, across every run.
+ *
+ * Shared rather than fixed per run, because the constraint is the result
+ * ceiling in `ok` and that is spent by all the runs together. Thirty runs times
+ * a dozen metrics is four hundred lines, well past it, and the result would
+ * arrive truncated mid-run rather than short.
+ *
+ * A fixed per-run cap was the first attempt and picked the wrong metrics: these
+ * are ordered alphabetically, so capping a ten-metric run at eight dropped
+ * `val.mean_iou` and `val.pixel_accuracy` — on a segmentation run, the headline
+ * number and nothing else. Two runs can afford the lot; thirty cannot, and only
+ * then is anything dropped.
+ */
+const RANGE_LINE_BUDGET = 40;
+
+/** Never fewer than this, or the block says nothing; never more than one epoch records. */
+const MIN_RANGES_PER_RUN = 3;
+const MAX_RANGES_PER_RUN = 12;
+
+const rangesPerRun = (runs: number): number =>
+  Math.min(MAX_RANGES_PER_RUN, Math.max(MIN_RANGES_PER_RUN, Math.ceil(RANGE_LINE_BUDGET / runs)));
 
 const describeTraining = (training: Training): string => {
   const parts = [`- ${training.name} [${training.status}]`];
@@ -48,33 +72,17 @@ const describeEpoch = (epoch: Epoch): string => {
 };
 
 /**
- * The best value each metric reached, and where.
+ * Where each metric got to, spelled out.
  *
- * Reported without judging direction: this server cannot know whether a metric
- * is one to maximise (mAP) or minimise (loss), and guessing from the name would
- * be wrong on exactly the custom metrics that matter most to whoever defined
- * them. Both ends are given, and the model can say which is better.
+ * Both ends, because this server cannot know which of them is the good one —
+ * see `metricRanges`, which does the walking.
  */
-function extremes(epochs: Epoch[]): string[] {
-  const seen = new Map<string, { min: [number, number]; max: [number, number] }>();
-
-  for (const epoch of epochs) {
-    for (const [key, value] of numericResults(epoch.results)) {
-      const current = seen.get(key);
-      if (!current) {
-        seen.set(key, { min: [value, epoch.epoch], max: [value, epoch.epoch] });
-        continue;
-      }
-      if (value < current.min[0]) current.min = [value, epoch.epoch];
-      if (value > current.max[0]) current.max = [value, epoch.epoch];
-    }
-  }
-
-  return [...seen.entries()].map(
-    ([key, { min, max }]) =>
-      `- ${key}: lowest ${metric(min[0])} at epoch ${min[1]}, highest ${metric(max[0])} at epoch ${max[1]}`
+const describeRanges = (epochs: Epoch[]): string[] =>
+  metricRanges(epochs).map(
+    (range) =>
+      `- ${range.key}: lowest ${metric(range.low)} at epoch ${range.lowEpoch}, ` +
+      `highest ${metric(range.high)} at epoch ${range.highEpoch}`
   );
-}
 
 /** The five named scores, when a class records them. */
 const SCORE_FIELDS: Array<[string, string]> = [
@@ -165,7 +173,7 @@ function describeBenchmark(benchmark: Benchmark): string[] {
 }
 
 /** One training's row in a comparison. */
-function describeComparisonEntry(entry: ComparisonEntry): string[] {
+function describeComparisonEntry(entry: ComparisonEntry, maxRanges: number): string[] {
   const lines = [`${entry.training.name} [${entry.training.status ?? 'unknown'}]`];
   lines.push(
     `  ${count(entry.metrics.totalEpochs)} epochs over ${duration(entry.metrics.totalTime)}` +
@@ -177,6 +185,26 @@ function describeComparisonEntry(entry: ComparisonEntry): string[] {
       .map(([key, value]) => `${key} ${metric(value)}`)
       .join(', ');
     lines.push(`  final (epoch ${entry.lastEpoch.epoch}): ${values || 'no metrics recorded'}`);
+  }
+
+  // The line that makes a comparison answerable. Without it a run is judged on
+  // whatever epoch it happened to stop at, which for anything trained past its
+  // best is a number nobody would report.
+  const ranges = metricRanges(entry.epochs);
+  if (ranges.length > 0) {
+    lines.push(`  best and worst across all ${count(entry.epochs.length)} epochs:`);
+    for (const range of ranges.slice(0, maxRanges)) {
+      lines.push(
+        `    ${range.key}: ${metric(range.low)} at epoch ${range.lowEpoch}, ` +
+          `${metric(range.high)} at epoch ${range.highEpoch}`
+      );
+    }
+    if (ranges.length > maxRanges) {
+      lines.push(
+        `    (${count(ranges.length - maxRanges)} further metrics not shown; ` +
+          'get_training has the rest for one run.)'
+      );
+    }
   }
 
   if (entry.testResultsCount > 0) {
@@ -366,7 +394,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
         const last = epochs[epochs.length - 1];
         lines.push('', 'Final epoch:', describeEpoch(last));
 
-        const best = extremes(epochs);
+        const best = describeRanges(epochs);
         if (best.length > 0) {
           lines.push(
             '',
@@ -431,8 +459,11 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     {
       title: 'Compare training runs',
       description:
-        'Two or more runs side by side: epochs, time, compute cost, final metrics and headline ' +
-        'benchmark figures. Use for "which of these is better", "what changed between X and Y".',
+        'Two or more runs side by side: epochs, time, compute cost, headline benchmark figures, ' +
+        'and for each metric both its final value and the best and worst it reached, with the ' +
+        'epoch each happened at. Use for "which of these is better", "what changed between X ' +
+        'and Y". Judge on the range, not the final epoch — a run trained past its peak ends on ' +
+        'a number nobody would report.',
       inputSchema: {
         trainings: z
           .array(z.string())
@@ -460,9 +491,17 @@ function registerReadTools(server: McpServer, caller: Caller): void {
           );
         }
 
+        const maxRanges = rangesPerRun(comparison.length);
         for (const entry of comparison) {
-          lines.push(...describeComparisonEntry(entry), '');
+          lines.push(...describeComparisonEntry(entry, maxRanges), '');
         }
+
+        lines.push(
+          'A run\'s final epoch is not its result: training past the point of best validation is',
+          'normal, and the checkpoint anyone would actually ship is the best one, not the last.',
+          'Where a metric ends far from its best end, say so — that gap is the finding.'
+        );
+
         return ok(lines.join('\n').trimEnd());
       } catch (error) {
         return explain(error);

@@ -202,5 +202,29 @@ describe('tolerating what the API actually sends', () => {
     });
 
     expect(parsed.comparison[0].lastEpoch).toBeNull();
+    expect(parsed.comparison[0].epochs).toEqual([]);
+  });
+
+  it('keeps the epoch series a comparison entry carries', () => {
+    // Always sent by /trainings/compare and previously dropped here, which left
+    // the tool judging each run on whatever epoch it stopped at.
+    const parsed = parseResponse(comparisonResponseSchema, '/trainings/compare', {
+      comparison: [
+        {
+          training: { _id: 't1', name: 'run', status: 'completed' },
+          metrics: { totalEpochs: 2, totalTime: 10, avgEpochTime: 5 },
+          lastEpoch: { epoch: 1, results: { loss: 0.9 } },
+          epochs: [
+            { epoch: 0, results: { loss: 0.2 } },
+            { epoch: 1, results: { loss: 0.9 } }
+          ],
+          testResultsCount: 0,
+          benchmarks: []
+        }
+      ]
+    });
+
+    expect(parsed.comparison[0].epochs).toHaveLength(2);
+    expect(parsed.comparison[0].epochs[0].results).toEqual({ loss: 0.2 });
   });
 });
