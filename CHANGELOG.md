@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.174](https://github.com/visin-platform/visin-monorepo/compare/v0.0.173...v0.0.174) (2026-09-06)
+
+
+### Features
+
+* let ai analyze data based on best epoch ([2f9f1e6](https://github.com/visin-platform/visin-monorepo/commit/2f9f1e67b3a7cead1aabadba66072cf8c4ba673d))
+
 ### [0.0.173](https://github.com/visin-platform/visin-monorepo/compare/v0.0.172...v0.0.173) (2026-09-05)
 
 
