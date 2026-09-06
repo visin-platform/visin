@@ -6,7 +6,10 @@ import { INK } from '../theme';
 
 export default function OpenSource() {
   return (
-    <Box component="section" id="open-source" sx={{ py: { xs: 8, md: 12 } }}>
+    // Tinted so it separates from the white flow above it. The feature grid
+    // used to be the band between the two; with it gone, the two sections ran
+    // together as one long white stretch.
+    <Box component="section" id="open-source" sx={{ py: { xs: 8, md: 12 }, bgcolor: '#f8fafc' }}>
       <Container maxWidth="lg">
         <Grid container spacing={{ xs: 5, md: 8 }}>
           <Grid size={{ xs: 12, md: 5 }}>

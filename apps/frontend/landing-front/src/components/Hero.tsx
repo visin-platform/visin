@@ -51,9 +51,9 @@ export default function Hero({ appUrl }: HeroProps) {
             </Typography>
 
             <Typography sx={{ fontSize: { xs: '1.05rem', md: '1.2rem' }, color: 'rgba(255,255,255,0.75)', mb: 4, maxWidth: 560 }}>
-              Visin records every epoch, score and rendered frame your training produces, then lets an AI
-              assistant analyse the lot. It answers from the data, not from what you pasted into a chat.
-              Runs on your own machines.
+              Visin records every epoch, score and rendered frame your training produces. Connect Claude
+              and it reads them — not your summary of them — then drafts the paper section, table
+              included. Runs on your own machines.
             </Typography>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>

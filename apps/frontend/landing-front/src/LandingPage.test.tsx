@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LandingPage from './LandingPage';
-import { ASK_EXAMPLES, ASSISTANT_LIMITS, CONNECT_STEPS, FEATURES, MCP_ENDPOINT, STEPS, GITHUB_URL } from './content';
+import { ASK_CONVERSATION, ASSISTANT_LIMITS, CONNECT_STEPS, MCP_ENDPOINT, STEPS, GITHUB_URL } from './content';
 
 const config: { VISION_FRONT_URL?: string } = { VISION_FRONT_URL: 'http://vision.test' };
 
@@ -19,7 +19,7 @@ describe('LandingPage structure', () => {
   it('renders every section landmark', () => {
     const { container } = render(<LandingPage />);
 
-    for (const id of ['top', 'how-it-works', 'features', 'assistant', 'open-source', 'contact']) {
+    for (const id of ['top', 'how-it-works', 'assistant', 'open-source', 'contact']) {
       expect(container.querySelector(`#${id}`)).toBeInTheDocument();
     }
     expect(container.querySelector('main#main')).toBeInTheDocument();
@@ -32,7 +32,7 @@ describe('LandingPage structure', () => {
     const { container } = render(<LandingPage />);
 
     const sections = [...container.querySelectorAll('main section')].map(s => s.id);
-    expect(sections).toEqual(['top', 'assistant', 'how-it-works', 'features', 'open-source', 'contact']);
+    expect(sections).toEqual(['top', 'assistant', 'how-it-works', 'open-source', 'contact']);
   });
 
   it('leads with the headline and the product summary', () => {
@@ -43,28 +43,54 @@ describe('LandingPage structure', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders every workflow step and feature from the content module', () => {
+  it('renders every workflow step from the content module', () => {
     render(<LandingPage />);
 
     for (const step of STEPS) {
       expect(screen.getByText(step.title)).toBeInTheDocument();
-    }
-    for (const feature of FEATURES) {
-      expect(screen.getByText(feature.title)).toBeInTheDocument();
+      expect(screen.getByText(step.body)).toBeInTheDocument();
     }
   });
 
   it('renders the assistant section from the content module', () => {
     render(<LandingPage />);
 
-    for (const example of ASK_EXAMPLES) {
-      expect(screen.getByText(example.question)).toBeInTheDocument();
+    for (const turn of ASK_CONVERSATION) {
+      expect(screen.getByText(turn.text)).toBeInTheDocument();
     }
     for (const step of CONNECT_STEPS) {
       expect(screen.getByText(step.title)).toBeInTheDocument();
     }
     for (const limit of ASSISTANT_LIMITS) {
       expect(screen.getByText(limit.body)).toBeInTheDocument();
+    }
+  });
+
+  it('reads as a conversation, with both sides present and in order', () => {
+    // The section's whole claim is that the assistant answers from the record,
+    // so a transcript missing either half of it is missing the point.
+    render(<LandingPage />);
+
+    const asked = ASK_CONVERSATION.filter((turn) => turn.from === 'you');
+    const answered = ASK_CONVERSATION.filter((turn) => turn.from === 'visin');
+
+    expect(asked.length).toBeGreaterThan(0);
+    expect(answered.length).toBe(asked.length);
+
+    const body = document.body.textContent ?? '';
+    let cursor = -1;
+    for (const turn of ASK_CONVERSATION) {
+      const at = body.indexOf(turn.text);
+      expect(at).toBeGreaterThan(cursor);
+      cursor = at;
+    }
+  });
+
+  it('shows what the assistant read to answer, not only what it said', () => {
+    render(<LandingPage />);
+
+    for (const turn of ASK_CONVERSATION) {
+      if (turn.via) expect(screen.getByText(turn.via)).toBeInTheDocument();
     }
   });
 
@@ -145,10 +171,12 @@ describe('LandingPage calls to action', () => {
     render(<LandingPage />);
 
     const nav = screen.getByRole('navigation', { name: 'Main' });
-    expect(within(nav).getByRole('link', { name: 'Features' })).toHaveAttribute('href', '#features');
     expect(within(nav).getByRole('link', { name: 'Analysis' })).toHaveAttribute('href', '#assistant');
+    expect(within(nav).getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '#how-it-works');
     expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '#open-source');
     expect(within(nav).getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '#contact');
+    // The feature grid is gone; nothing may still point at where it was.
+    expect(within(nav).queryByRole('link', { name: 'Features' })).not.toBeInTheDocument();
   });
 });
 
@@ -162,7 +190,7 @@ describe('LandingPage mobile menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
     const drawer = screen.getByRole('presentation');
-    expect(within(drawer).getByRole('link', { name: 'Features' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'How it works' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /close menu/i }));
     await expectDrawerClosed();
@@ -172,7 +200,7 @@ describe('LandingPage mobile menu', () => {
     render(<LandingPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-    fireEvent.click(within(screen.getByRole('presentation')).getByRole('link', { name: 'Features' }));
+    fireEvent.click(within(screen.getByRole('presentation')).getByRole('link', { name: 'How it works' }));
 
     await expectDrawerClosed();
   });

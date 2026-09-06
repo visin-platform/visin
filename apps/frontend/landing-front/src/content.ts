@@ -10,56 +10,25 @@
 export const GITHUB_URL = 'https://github.com/visin-platform';
 
 export interface Step {
+  /** Key into the icon map in Workflow.tsx. */
+  icon: 'upload' | 'label' | 'train' | 'compare' | 'write';
   title: string;
   body: string;
 }
 
+/**
+ * The pipeline, as a flow.
+ *
+ * A line each, because the point of the diagram is the shape of the path — raw
+ * images in one end, a paper table out the other. A sentence per node stops it
+ * being a diagram and makes it a list with decoration.
+ */
 export const STEPS: Step[] = [
-  { title: 'Organise', body: 'Datasets, projects, categories. Private unless you say otherwise.' },
-  { title: 'Label', body: 'Hand a bundle to your team and watch the progress.' },
-  { title: 'Train', body: 'Your script posts epochs, configs and renders as it goes.' },
-  { title: 'Compare', body: 'Runs side by side. Export the table as LaTeX.' },
-  { title: 'Ask', body: 'Connect Claude. It reads the runs and writes down what it finds.' }
-];
-
-export interface Feature {
-  /** Key into the icon map in Features.tsx. */
-  icon: 'datasets' | 'labeling' | 'training' | 'compare' | 'teams' | 'api' | 'assistant';
-  title: string;
-  body: string;
-}
-
-export const FEATURES: Feature[] = [
-  {
-    icon: 'assistant',
-    title: 'An assistant that reads the record',
-    body: 'Claude connects over MCP and pulls the runs, curves, per-class scores and benchmarks itself. It opens the rendered frames and looks at them, then writes its conclusion onto the project.'
-  },
-  {
-    icon: 'training',
-    title: 'Runs & epochs',
-    body: 'Config, per-epoch metrics and renders, kept with the run. Curves plot themselves.'
-  },
-  {
-    icon: 'compare',
-    title: 'Comparisons',
-    body: 'Pick several runs, datasets or benchmarks. One table, exportable as LaTeX or CSV.'
-  },
-  {
-    icon: 'datasets',
-    title: 'Datasets & projects',
-    body: 'Images, categories, metadata. Public to everyone or private to your group.'
-  },
-  {
-    icon: 'labeling',
-    title: 'Labeling',
-    body: 'Upload a zip, split the job across your team, track it per worker.'
-  },
-  {
-    icon: 'api',
-    title: 'Tokens for scripts',
-    body: 'Scoped to one project. A CI job cannot touch anything else.'
-  }
+  { icon: 'upload', title: 'Upload', body: 'Images and metadata. Private unless you say so.' },
+  { icon: 'label', title: 'Label', body: 'Split the job across your team.' },
+  { icon: 'train', title: 'Train', body: 'Your script posts epochs and renders.' },
+  { icon: 'compare', title: 'Compare', body: 'Runs side by side, at their best epoch.' },
+  { icon: 'write', title: 'Write up', body: 'Claude drafts the paper section.' }
 ];
 
 export interface OpenSourcePoint {
@@ -91,28 +60,59 @@ export const OPEN_SOURCE_POINTS: OpenSourcePoint[] = [
  */
 export const MCP_ENDPOINT = 'https://mcp.visin.eu/mcp';
 
-export interface AskExample {
-  question: string;
-  /** what the assistant reaches for — named so the claim stays checkable */
-  via: string;
+/**
+ * One exchange in the sample conversation.
+ *
+ * A transcript rather than a list of questions because the questions were never
+ * the interesting part — what the thing answers with is. It reads as one
+ * session, not four disconnected prompts, since that is how the work actually
+ * goes: ask, doubt the answer, decide what to run next, write it up.
+ *
+ * The numbers are illustrative. They are shaped like real ablation output and
+ * the behaviour they describe is real, but no unpublished result belongs on a
+ * public page.
+ */
+export interface ChatTurn {
+  from: 'you' | 'visin';
+  text: string;
+  /** what it read to answer, shown under the reply the way a tool call would be */
+  via?: string;
+  /** something it produced, shown as code */
+  code?: string;
 }
 
-export const ASK_EXAMPLES: AskExample[] = [
+export const ASK_CONVERSATION: ChatTurn[] = [
+  { from: 'you', text: 'Which of the window ablations won?' },
   {
-    question: '"Has the loss plateaued, or is it still coming down?"',
-    via: 'reads the epoch curve'
+    from: 'visin',
+    text: 'window16, by 0.004 mIoU — 0.451 at epoch 185 against 0.447 at 195. Neither ended at its best; both are past their peak well before epoch 200.',
+    via: 'read 2 runs, 400 epochs'
   },
+  { from: 'you', text: 'Is that gap real?' },
   {
-    question: '"Of these three, which is best and what did each cost?"',
-    via: 'epochs, GPU hours, final metrics and benchmarks, side by side'
+    from: 'visin',
+    text: 'One seed each, so I would not report it as one. Validation loss bottoms out around epoch 13 and roughly quadruples by the end — both runs overfit long before they stop.',
+    via: 'read the epoch curves'
   },
+  { from: 'you', text: 'What should I change for the next run?' },
   {
-    question: '"Show me where the night model gets it wrong."',
-    via: 'opens the rendered frames and looks at the predictions'
+    from: 'visin',
+    text: 'Stop around epoch 30, where validation loss turns. window16 is 15% slower per frame for that 0.004, so keep window8 as the baseline and rerun both on three seeds.',
+    via: 'read the config both runs launched with'
   },
+  { from: 'you', text: 'Write it up.' },
   {
-    question: '"Write up what the window ablation shows."',
-    via: 'saves it on the project, citing the runs behind it'
+    from: 'visin',
+    text: 'Saved to the project, and here it is as a section. The table is built from the recorded epochs, not retyped.',
+    via: 'exported as LaTeX',
+    code: [
+      '\\subsection{Window size past 16}',
+      '\\begin{table}[htbp]',
+      '\\toprule',
+      'Run & Epoch & val.mean\\_iou \\\\',
+      '\\midrule',
+      'window16 & 185 & 0.4510 \\\\'
+    ].join('\n')
   }
 ];
 

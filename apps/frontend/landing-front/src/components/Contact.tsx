@@ -3,7 +3,7 @@ import ContactForm from '../ContactForm';
 
 export default function Contact() {
   return (
-    <Box component="section" id="contact" sx={{ py: { xs: 8, md: 12 }, bgcolor: '#f8fafc' }}>
+    <Box component="section" id="contact" sx={{ py: { xs: 8, md: 12 } }}>
       <Container maxWidth="lg">
         <Grid container spacing={{ xs: 4, md: 8 }} sx={{ alignItems: 'flex-start' }}>
           <Grid size={{ xs: 12, md: 5 }}>
