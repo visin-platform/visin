@@ -54,9 +54,9 @@ export const getTrainingByUuid = async (req: AuthRequest, res: Response): Promis
 export const getTrainingWithEpochs = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params;
   const userId = req.user?.id;
-  const { sortBy, order } = req.query as unknown as GetTrainingWithEpochsQuery;
+  const { sortBy, order, sample } = req.query as unknown as GetTrainingWithEpochsQuery;
 
-  const result = await trainingService.getTrainingWithEpochs(id as string, userId, sortBy, order);
+  const result = await trainingService.getTrainingWithEpochs(id as string, userId, sortBy, order, sample);
 
   res.json({
     success: true,

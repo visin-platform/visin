@@ -92,33 +92,22 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     'get_finding',
     {
       title: 'Read one analysis',
-      description: 'The full text of a recorded conclusion, with the runs it draws on.',
+      description:
+        'The full text of a recorded conclusion, with the runs it draws on. With format:"latex", ' +
+        'a paper section whose results table is generated from those runs\' recorded epochs — ' +
+        'hand it over as-is rather than retyping any of it.',
       inputSchema: {
         finding: z.string().describe('The finding id, from list_findings'),
         format: z
           .enum(['text', 'latex'])
           .optional()
-          .describe(
-            'Use "latex" to get the finding as a paper section — a \\subsection with the prose ' +
-              'and a booktabs results table built from the cited runs\' recorded epochs. Hand it ' +
-              'to the user to paste into a paper; do not retype the numbers yourself.'
-          ),
+          .describe('"latex" returns it as a paper section with a generated results table'),
         selectBy: z
           .string()
           .optional()
-          .describe(
-            'latex only: the metric deciding which epoch each run is reported at, e.g. ' +
-              '"val.mean_iou". Omit to report each run at its final epoch.'
-          ),
-        direction: z
-          .enum(['max', 'min'])
-          .optional()
-          .describe('latex only: whether the best value of selectBy is its highest or lowest'),
-        metrics: z
-          .array(z.string())
-          .max(6)
-          .optional()
-          .describe('latex only: which metrics become table columns, in order')
+          .describe('latex: metric choosing each run\'s epoch, e.g. "val.mean_iou". Default: last epoch'),
+        direction: z.enum(['max', 'min']).optional().describe('latex: is selectBy better high or low'),
+        metrics: z.array(z.string()).max(6).optional().describe('latex: table columns, in order')
       }
     },
     async ({ finding, format, selectBy, direction, metrics }) => {
@@ -176,15 +165,10 @@ function registerWriteTools(server: McpServer, caller: Caller): void {
     {
       title: 'Record an analysis',
       description:
-        'Write a conclusion onto a project so it survives this conversation. Use when you have ' +
-        'worked something out worth keeping — which configuration wins and under what conditions, ' +
-        'why a run failed, what an ablation shows. Cite the runs you drew on: a conclusion whose ' +
-        'evidence cannot be checked is worth much less than one whose can. Say what you found, ' +
-        'not what you assume — and do not record a guess as a result. ' +
-        'Write it short. A finding is read later by someone deciding what to do next, and by ' +
-        'get_finding(format:"latex") which turns it into a paper section — both want the result ' +
-        'and the number behind it, not the reasoning that reached them. No preamble, no restating ' +
-        'the question, no summary of what you did. Three short paragraphs is a lot.',
+        'Write a conclusion onto a project so it survives this conversation — which configuration ' +
+        'wins and under what conditions, why a run failed, what an ablation shows. Cite the runs ' +
+        'it draws on. Record what you found, never a guess. Keep it short: the result and the ' +
+        'numbers behind it, no preamble.',
       inputSchema: {
         project: z.string().describe('Project slug or id, from list_projects'),
         title: z.string().min(1).max(200).describe('One line naming the conclusion'),
@@ -193,20 +177,16 @@ function registerWriteTools(server: McpServer, caller: Caller): void {
           .min(1)
           .max(20_000)
           .describe(
-            'The analysis itself, in markdown, kept tight — state the result and the numbers ' +
-              'behind it and stop. Do not build a results table by hand: the LaTeX export ' +
-              'generates one from the cited runs\' recorded epochs, so a table typed here is ' +
-              'both duplicated and, being retyped, the one place a wrong number can enter.'
+            'The analysis, in markdown. No hand-written results table — the LaTeX export builds ' +
+              'one from the recorded epochs, and retyping is where a wrong number gets in.'
           ),
         recommendations: z
           .string()
           .max(5_000)
           .optional()
           .describe(
-            'What to change for the next run, if the result suggests something concrete — a ' +
-              'setting and the value to try, not a direction to think in. Name current values ' +
-              'from get_training rather than guessing at them. Kept out of the paper section: ' +
-              'the export writes it as a comment, since a reviewer should never read it.'
+            'What to change next run: a setting and the value to try. Take current values from ' +
+              'get_training. Kept out of the paper section.'
           ),
         training: z.string().optional().describe('The run it is about, if it is about one'),
         trainingIds: z

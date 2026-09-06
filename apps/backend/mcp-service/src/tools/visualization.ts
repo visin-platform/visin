@@ -30,11 +30,41 @@ import {
 /** What a signed URL is allowed to hand back before we stop reading it. */
 const IMAGE_MIME = /^image\/(png|jpeg|jpg|webp|gif)$/i;
 
-const describe = (visualization: Visualization): string => {
-  const epoch = visualization.epoch !== undefined ? `epoch ${visualization.epoch}` : 'epoch ?';
-  const frame = visualization.filename ? ` — ${visualization.filename}` : '';
-  return `- [${visualization.type}] ${epoch}${frame}  [${visualization.visualization_uuid}]`;
-};
+/**
+ * The listing, grouped by the frame rather than by the render.
+ *
+ * A run renders the same frame several ways — overlay, compare, segment,
+ * correct_only — and a flat list repeats the filename once per render. These
+ * filenames are not short: a real one measured 79 characters, so twenty rows
+ * spent about a third of the answer restating five of them.
+ *
+ * Grouping also matches how the frames are actually used. "Show me the overlay
+ * and the ground truth for that frame" is one question about one scene, and the
+ * ids to answer it now sit on one line instead of scattered down a list.
+ */
+function describeFrames(visualizations: Visualization[]): string[] {
+  const groups = new Map<string, Visualization[]>();
+
+  for (const visualization of visualizations) {
+    const key = `${visualization.epoch ?? '?'}\u0000${visualization.filename ?? ''}`;
+    const bucket = groups.get(key) ?? [];
+    bucket.push(visualization);
+    groups.set(key, bucket);
+  }
+
+  return [...groups.values()].flatMap((frames) => {
+    const [first] = frames;
+    const epoch = first.epoch !== undefined ? `epoch ${first.epoch}` : 'epoch ?';
+    const header = `- ${epoch}${first.filename ? ` — ${first.filename}` : ''}`;
+
+    const renders = [...frames]
+      .sort((a, b) => a.type.localeCompare(b.type))
+      .map((frame) => `${frame.type} [${frame.visualization_uuid}]`)
+      .join(' · ');
+
+    return [header, `    ${renders}`];
+  });
+}
 
 /**
  * Fetch one frame from the signed URL the listing came with.
@@ -115,7 +145,7 @@ function registerTools(server: McpServer, caller: Caller): void {
         return ok(
           [
             `${header} (kinds available: ${types.join(', ') || 'unknown'}):`,
-            ...shown.map(describe),
+            ...describeFrames(shown),
             '',
             'Pass one or more of these ids to view_visualizations to look at them.'
           ].join('\n') + note

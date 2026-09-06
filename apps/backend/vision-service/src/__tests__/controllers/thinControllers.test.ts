@@ -132,7 +132,15 @@ describe('trainingController', () => {
       makeReq({ params: { id: 'i1' }, query: { sortBy: 'epoch', order: 1 } }),
       makeRes()
     );
-    expect(mockedTrainingSvc.getTrainingWithEpochs).toHaveBeenCalledWith('i1', 'u1', 'epoch', 1);
+    expect(mockedTrainingSvc.getTrainingWithEpochs).toHaveBeenCalledWith('i1', 'u1', 'epoch', 1, undefined);
+
+    // `sample` reaches the service, so a caller plotting a curve is not sent
+    // every epoch of the run to throw most of away.
+    await trainingCtrl.getTrainingWithEpochs(
+      makeReq({ params: { id: 'i1' }, query: { sortBy: 'epoch', order: 1, sample: 12 } }),
+      makeRes()
+    );
+    expect(mockedTrainingSvc.getTrainingWithEpochs).toHaveBeenCalledWith('i1', 'u1', 'epoch', 1, 12);
   });
 
   it('createTraining prefers the API-token project scope over the body', async () => {

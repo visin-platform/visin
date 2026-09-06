@@ -308,6 +308,78 @@ describe('the settings a run was launched with', () => {
   });
 });
 
+describe('get_training', () => {
+  it('never asks for a sampled series', async () => {
+    // It reports where every metric peaked. Given a dozen sampled epochs it
+    // would answer that question about the wrong epoch, confidently.
+    mocked.getTrainingWithEpochs.mockResolvedValue({ training: training(), epochs: epochs(300) });
+
+    await call('get_training', { training: 't1' });
+
+    expect(mocked.getTrainingWithEpochs).toHaveBeenCalledWith('vsn_live_abc', 't1');
+  });
+});
+
+describe('not saying the same thing twice', () => {
+  it('drops tags the run name already contains', async () => {
+    // Real runs are named after what distinguishes them and then tagged with
+    // the same words, so a listing spent about a third of every row restating
+    // the row's own first half.
+    mocked.listTrainings.mockResolvedValue({
+      trainings: [
+        training({
+          name: 'WAYMO CLFTv2-Base Fusion (window16 ablation)',
+          tags: ['WAYMO', 'CLFTv2', 'Base', 'Fusion', 'Ablation']
+        })
+      ]
+    });
+
+    const { text } = await call('list_trainings', {});
+
+    expect(text).toContain('WAYMO CLFTv2-Base Fusion (window16 ablation) [completed]');
+    expect(text).not.toContain('· WAYMO, CLFTv2');
+  });
+
+  it('keeps a tag that adds something the name does not say', async () => {
+    mocked.listTrainings.mockResolvedValue({
+      trainings: [training({ name: 'window16 ablation', tags: ['WAYMO', 'window16'] })]
+    });
+
+    expect((await call('list_trainings', {})).text).toContain('· WAYMO');
+  });
+
+  it('drops config entries that repeat the run record', async () => {
+    // Pipelines write a `Summary` holding the run's own name and a `tags`
+    // array holding its own tags. Matched by value, not by key name, so it
+    // keeps working whatever a given pipeline called them.
+    mocked.getTrainingWithEpochs.mockResolvedValue({
+      training: training({ name: 'window16 ablation', tags: ['ZOD'] }),
+      epochs: []
+    });
+    mocked.getTrainingConfigs.mockResolvedValue([
+      {
+        summary: '',
+        config_data: { Summary: 'window16 ablation', tags: ['ZOD'], lr: 0.0001 }
+      }
+    ]);
+
+    const { text } = await call('get_training', { training: 't1' });
+
+    expect(text).toContain('lr = 0.0001');
+    expect(text).not.toContain('Summary =');
+    expect(text).not.toContain('tags =');
+  });
+
+  it('still shows the run its own tags once', async () => {
+    mocked.getTrainingWithEpochs.mockResolvedValue({
+      training: training({ name: 'run', tags: ['ZOD', 'Ablation'] }),
+      epochs: []
+    });
+
+    expect((await call('get_training', { training: 't1' })).text).toContain('Tags: ZOD, Ablation.');
+  });
+});
+
 describe('get_training_curve', () => {
   it('samples a long run down and says that it did', async () => {
     // The whole reason this tool exists: 300 epochs is thousands of numbers
@@ -320,10 +392,16 @@ describe('get_training_curve', () => {
     const { text } = await call('get_training_curve', { training: 't1' });
 
     expect(text).toContain('300 epochs, showing 12 of them');
-    expect(text).toContain('epoch 1:');
-    expect(text).toContain('epoch 300:');
     expect(text).toContain('Sampled evenly');
-    expect(text.split('\n').filter((line) => line.startsWith('- epoch'))).toHaveLength(12);
+
+    // Transposed: the epochs are named once and each metric is a line of
+    // values in that order. Naming them per line spent two thirds of a real
+    // curve restating `train.loss` and friends.
+    const epochLine = text.split('\n').find((line) => line.startsWith('epochs: '))!;
+    expect(epochLine.split(', ')).toHaveLength(12);
+    expect(epochLine).toContain('epochs: 1,');
+    expect(epochLine.endsWith('300')).toBe(true);
+    expect(text).toMatch(/^loss: [\d.,\s]+$/m);
   });
 
   it('honours a raised point count', async () => {
@@ -331,7 +409,78 @@ describe('get_training_curve', () => {
 
     const { text } = await call('get_training_curve', { training: 't1', points: 30 });
 
-    expect(text.split('\n').filter((line) => line.startsWith('- epoch'))).toHaveLength(30);
+    const epochLine = text.split('\n').find((line) => line.startsWith('epochs: '))!;
+    expect(epochLine.split(', ')).toHaveLength(30);
+  });
+
+  it('asks vision-service to sample, rather than shipping the whole series', async () => {
+    // A 100-epoch run answers /epochs with 196 KB. Sampling on this side means
+    // having already paid to ship and parse all of it.
+    mocked.getTrainingWithEpochs.mockResolvedValue({
+      training: training(),
+      epochs: epochs(12),
+      totalEpochs: 300
+    });
+
+    await call('get_training_curve', { training: 't1', points: 20 });
+
+    expect(mocked.getTrainingWithEpochs).toHaveBeenCalledWith('vsn_live_abc', 't1', 20);
+  });
+
+  it('reports the run\'s real length, not the number of points it was sent', async () => {
+    mocked.getTrainingWithEpochs.mockResolvedValue({
+      training: training(),
+      epochs: epochs(12),
+      totalEpochs: 300
+    });
+
+    const { text } = await call('get_training_curve', { training: 't1' });
+
+    expect(text).toContain('300 epochs, showing 12 of them');
+    expect(text).toContain('Sampled evenly from 300 epochs');
+  });
+
+  it('still samples locally when the service answered in full', async () => {
+    // An older vision-service ignores the parameter. Sampling an already
+    // sampled series is a no-op, so this costs nothing when it does honour it.
+    mocked.getTrainingWithEpochs.mockResolvedValue({ training: training(), epochs: epochs(300) });
+
+    const { text } = await call('get_training_curve', { training: 't1' });
+
+    expect(text.split('\n').find((l) => l.startsWith('epochs: '))!.split(', ')).toHaveLength(12);
+    expect(text).toContain('300 epochs, showing 12 of them');
+  });
+
+  it('gives every metric one line, whatever the run recorded', async () => {
+    mocked.getTrainingWithEpochs.mockResolvedValue({
+      training: training(),
+      epochs: [
+        { epoch: 1, results: { val: { loss: 0.9, mean_iou: 0.1 } } },
+        { epoch: 2, results: { val: { loss: 0.4, mean_iou: 0.3 } } }
+      ]
+    });
+
+    const { text } = await call('get_training_curve', { training: 't1' });
+
+    expect(text).toContain('epochs: 1, 2');
+    expect(text).toContain('val.loss: 0.9, 0.4');
+    expect(text).toContain('val.mean_iou: 0.1, 0.3');
+  });
+
+  it('marks an epoch that did not record a metric the others did', async () => {
+    // Otherwise the values shift left and every later number is read against
+    // the wrong epoch — the one way a transposed layout can lie.
+    mocked.getTrainingWithEpochs.mockResolvedValue({
+      training: training(),
+      epochs: [
+        { epoch: 1, results: { loss: 0.9, extra: 5 } },
+        { epoch: 2, results: { loss: 0.4 } }
+      ]
+    });
+
+    const { text } = await call('get_training_curve', { training: 't1' });
+
+    expect(text).toContain('extra: 5, -');
   });
 
   it('shows a short run whole, with no note about sampling', async () => {

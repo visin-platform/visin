@@ -124,7 +124,13 @@ export const epochSchema = z
 export const trainingWithEpochsSchema = z
   .object({
     training: trainingSchema,
-    epochs: z.array(epochSchema).catch([])
+    epochs: z.array(epochSchema).catch([]),
+    /**
+     * How many epochs the run actually has, which is not `epochs.length` when
+     * the response was sampled. Optional so a vision-service that predates the
+     * `sample` parameter still parses; the caller falls back to counting.
+     */
+    totalEpochs: z.number().optional()
   })
   .loose();
 

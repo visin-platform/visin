@@ -71,8 +71,28 @@ describe('list_visualizations', () => {
 
     expect(text).toContain('1 of 2,000 frames');
     expect(text).toContain('kinds available: overlay, compare');
-    expect(text).toContain('[overlay] epoch 99 — frame_0092.png  [v1]');
+    expect(text).toContain('- epoch 99 — frame_0092.png');
+    expect(text).toContain('overlay [v1]');
     expect(text).toContain('view_visualizations');
+  });
+
+  it('groups the renders of one frame rather than repeating its filename', async () => {
+    // A run renders the same scene four ways, and these filenames are long —
+    // a real one measured 79 characters, so a flat list spent about a third of
+    // the answer restating five of them.
+    mocked.listVisualizations.mockResolvedValue({
+      visualizations: [
+        frame({ visualization_uuid: 'v1', type: 'overlay' }),
+        frame({ visualization_uuid: 'v2', type: 'compare' }),
+        frame({ visualization_uuid: 'v3', type: 'segment', epoch: 50 })
+      ]
+    });
+
+    const { text } = await call('list_visualizations', { training: 't-uuid' });
+
+    expect(text).toContain('compare [v2] · overlay [v1]');
+    expect(text.match(/frame_0092\.png/g)).toHaveLength(2); // epoch 99 and epoch 50
+    expect(text).toContain('- epoch 50 — frame_0092.png');
   });
 
   it('passes the filters through, with a page so the limit is honoured', async () => {

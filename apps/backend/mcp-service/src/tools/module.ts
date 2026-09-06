@@ -344,6 +344,52 @@ export function metricRanges(epochs: Array<{ epoch: number; results: Record<stri
 }
 
 /**
+ * A sampled curve, one line per metric rather than one line per epoch.
+ *
+ * The obvious layout — an epoch per line with its metrics named — repeats every
+ * metric name on every line. Measured on a real run: a twelve-point curve over
+ * ten metrics spent 2,160 of its 3,141 characters restating
+ * `train.dice_score`, `train.loss` and friends, over and over.
+ *
+ * Transposing costs nothing and reads better for the question the tool exists
+ * to answer. "Is the loss still coming down" is a question about one metric
+ * across time, and that is now one line you read left to right, instead of a
+ * number to pick out of twelve separate rows.
+ */
+export function describeCurve(
+  epochs: Array<{ epoch: number; results: Record<string, unknown> }>
+): string[] {
+  const series = new Map<string, Map<number, number>>();
+
+  for (const epoch of epochs) {
+    for (const [key, value] of numericResults(epoch.results)) {
+      let points = series.get(key);
+      if (!points) {
+        points = new Map();
+        series.set(key, points);
+      }
+      points.set(epoch.epoch, value);
+    }
+  }
+
+  if (series.size === 0) return ['No metrics were recorded for these epochs.'];
+
+  const numbers = epochs.map((epoch) => epoch.epoch);
+  return [
+    `epochs: ${numbers.join(', ')}`,
+    // Named so a reader never has to infer that the nth value belongs to the
+    // nth epoch — the one thing a transposed layout could be misread on.
+    '(each line below gives that metric at those epochs, in the same order)',
+    ...[...series.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(
+        ([key, points]) =>
+          `${key}: ${numbers.map((n) => (points.has(n) ? metric(points.get(n)!) : '-')).join(', ')}`
+      )
+  ];
+}
+
+/**
  * Take about `n` evenly spaced items, always keeping the first and last.
  *
  * The reason `get_training_curve` exists in this shape. A 300-epoch run with a
@@ -358,6 +404,39 @@ export function sample<T>(items: T[], n: number): T[] {
   const picked: T[] = [];
   for (let i = 0; i < n; i += 1) picked.push(items[Math.round(i * step)]);
   return picked;
+}
+
+/** Past this an inlined list has stopped being a setting and become a payload. */
+const MAX_INLINE_LIST = 60;
+
+/**
+ * A config list, short enough to read.
+ *
+ * Inlining whatever JSON happened to be there was fine for `[128,256,512,1024]`
+ * and ruinous for a class table: one real `train_classes` entry — four objects
+ * carrying weights, colours and dataset mappings — rendered as a single
+ * 320-character line, longer than a dozen actual settings put together.
+ *
+ * A list of named objects keeps its names, because "which classes did it train
+ * on" is a question worth answering and the names are the part that answers it.
+ * Everything else it was carrying is a structure, and a config listing is not
+ * where anyone reads a structure.
+ */
+function describeList(value: unknown[]): string {
+  const named = value
+    .map((item) =>
+      item && typeof item === 'object' && typeof (item as { name?: unknown }).name === 'string'
+        ? (item as { name: string }).name
+        : null
+    )
+    .filter((name): name is string => name !== null);
+
+  if (named.length === value.length && named.length > 0) {
+    return `${value.length}: ${named.join(', ')}`;
+  }
+
+  const inline = JSON.stringify(value);
+  return inline.length <= MAX_INLINE_LIST ? inline : `[${value.length} items]`;
 }
 
 /**
@@ -376,10 +455,10 @@ export function flattenConfig(
   return Object.entries(data).flatMap(([key, value]): Array<[string, string]> => {
     const path = prefix ? `${prefix}.${key}` : key;
 
-    if (value === null || value === undefined) return [];
-    if (Array.isArray(value)) {
-      return [[path, value.length > 8 ? `[${value.length} items]` : JSON.stringify(value)]];
-    }
+    // An unset path or an empty override tells a reader nothing, and a config
+    // carries plenty of them.
+    if (value === null || value === undefined || value === '') return [];
+    if (Array.isArray(value)) return [[path, describeList(value)]];
     if (typeof value === 'object') {
       // Four levels is already deeper than any hyperparameter anyone tunes;
       // past it the thing being printed is state, not configuration.

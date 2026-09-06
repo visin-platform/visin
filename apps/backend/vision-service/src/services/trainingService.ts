@@ -64,6 +64,21 @@ interface UpdateTrainingData {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * About `n` items, evenly spaced, always keeping the first and the last.
+ *
+ * The ends are kept because they are the two points a question about a curve is
+ * usually actually about — where it started and where it got to.
+ */
+function evenlySpaced<T>(items: T[], n: number): T[] {
+  if (items.length <= n || n < 2) return items;
+
+  const step = (items.length - 1) / (n - 1);
+  const picked: T[] = [];
+  for (let i = 0; i < n; i += 1) picked.push(items[Math.round(i * step)]);
+  return picked;
+}
+
 export const trainingService = {
   checkProjectAccess,
 
@@ -250,7 +265,13 @@ export const trainingService = {
     return training;
   },
 
-  async getTrainingWithEpochs(id: string, userId: string | undefined, sortBy: string, order: 1 | -1) {
+  async getTrainingWithEpochs(
+    id: string,
+    userId: string | undefined,
+    sortBy: string,
+    order: 1 | -1,
+    sample?: number
+  ) {
     const training = await Training.findOne({ _id: id, deletedAt: null });
 
     if (!training) {
@@ -263,13 +284,24 @@ export const trainingService = {
       throw new ForbiddenError();
     }
 
-    const epochs = await Epoch.find({ trainingId: id, deletedAt: null })
-      .sort({ [sortBy]: order });
+    const query = { trainingId: id, deletedAt: null };
+    const sort = { [sortBy]: order } as Record<string, 1 | -1>;
 
-    return {
-      training,
-      epochs
-    };
+    if (sample === undefined) {
+      const epochs = await Epoch.find(query).sort(sort);
+      return { training, epochs, totalEpochs: epochs.length };
+    }
+
+    // Ids first, then only the documents actually wanted. Slicing a full read
+    // would save the caller the transfer but not this service the work of
+    // loading and serializing every epoch, which is the larger half of it.
+    // Keyed on `_id` rather than epoch number so it stays correct whatever the
+    // rows are sorted by.
+    const ids = await Epoch.find(query).select('_id').sort(sort);
+    const picked = evenlySpaced(ids, sample).map(row => row._id);
+
+    const epochs = await Epoch.find({ ...query, _id: { $in: picked } }).sort(sort);
+    return { training, epochs, totalEpochs: ids.length };
   },
 
   async createTraining(userId: string, data: CreateTrainingData) {

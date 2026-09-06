@@ -299,10 +299,29 @@ describe('flattenConfig', () => {
   });
 
   it('renders a short list inline and summarises a long one', () => {
-    expect(flattenConfig({ classes: ['a', 'b'] })).toEqual([['classes', '["a","b"]']]);
-    expect(flattenConfig({ seeds: Array.from({ length: 20 }, (_, i) => i) })).toEqual([
-      ['seeds', '[20 items]']
+    expect(flattenConfig({ dims: [128, 256] })).toEqual([['dims', '[128,256]']]);
+    expect(flattenConfig({ seeds: Array.from({ length: 40 }, (_, i) => i) })).toEqual([
+      ['seeds', '[40 items]']
     ]);
+  });
+
+  it('keeps the names of a list of named objects and drops the rest', () => {
+    // A real `train_classes` — four objects with weights, colours and dataset
+    // mappings — inlined as one 320-character line, longer than a dozen actual
+    // settings put together. The names answer "what did it train on"; the
+    // structure around them is not what a config listing is for.
+    expect(
+      flattenConfig({
+        train_classes: [
+          { name: 'background', index: 0, weight: 0.5, color: [0, 0, 0] },
+          { name: 'vehicle', index: 1, weight: 4, color: [128, 0, 128] }
+        ]
+      })
+    ).toEqual([['train_classes', '2: background, vehicle']]);
+  });
+
+  it('drops a setting left as an empty string', () => {
+    expect(flattenConfig({ model_path: '', lr: 0.1 })).toEqual([['lr', '0.1']]);
   });
 
   it('stops descending once it is printing state rather than settings', () => {

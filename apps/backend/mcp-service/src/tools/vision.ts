@@ -10,6 +10,7 @@ import {
   count,
   day,
   duration,
+  describeCurve,
   explain,
   flattenConfig,
   metric,
@@ -63,13 +64,33 @@ const MAX_RANGES_PER_RUN = 12;
 const rangesPerRun = (runs: number): number =>
   Math.min(MAX_RANGES_PER_RUN, Math.max(MIN_RANGES_PER_RUN, Math.ceil(RANGE_LINE_BUDGET / runs)));
 
+/**
+ * Tags that are not already words in the run's own name.
+ *
+ * Runs here are named after what distinguishes them, and then tagged with the
+ * same words: "WAYMO CLFTv2-Base Fusion (window16 ablation)" carries the tags
+ * WAYMO, CLFTv2, Base, Fusion and Ablation. Printing both spent about a third
+ * of every row in a listing restating the row's own first half.
+ *
+ * Dropped only when the name already contains the tag, so a tag that genuinely
+ * adds something still shows. Nothing is lost for filtering either: those words
+ * are visible in the name, and `list_trainings` still takes them as `tags`.
+ */
+const informativeTags = (training: Training): string[] => {
+  const name = training.name.toLowerCase();
+  return training.tags.filter((tag) => !name.includes(tag.toLowerCase()));
+};
+
 const describeTraining = (training: Training): string => {
   const parts = [`- ${training.name} [${training.status}]`];
   if (training.metrics?.epochCount) {
     parts.push(`${count(training.metrics.epochCount)} epochs`);
   }
   if (training.metrics?.totalTime) parts.push(duration(training.metrics.totalTime));
-  if (training.tags.length > 0) parts.push(training.tags.join(', '));
+
+  const tags = informativeTags(training);
+  if (tags.length > 0) parts.push(tags.join(', '));
+
   return `${parts.join(' · ')}  [id ${training._id}]`;
 };
 
@@ -369,11 +390,9 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     {
       title: 'One training run',
       description:
-        'A run: its status, how long it took, the hyperparameters it was launched with, what ' +
-        'the last epoch measured, and where every metric peaked. Use for "how did run X go" and ' +
-        'for "what was it set to" — the configuration is here, so a recommendation about what to ' +
-        'change next can name the current value rather than guessing at it. For the shape of the ' +
-        'curve rather than its endpoint, use get_training_curve.',
+        'One run: status, duration, the hyperparameters it was launched with, its final epoch, ' +
+        'and where every metric peaked. Answers "how did X go" and "what was it set to". For the ' +
+        'shape of the curve rather than its ends, use get_training_curve.',
       inputSchema: { training: z.string().describe('The training id, from list_trainings') }
     },
     async ({ training }) => {
@@ -401,7 +420,14 @@ function registerReadTools(server: McpServer, caller: Caller): void {
         // Before the early return below, not after: a run that has not started
         // yet is exactly when "what is this set to" is the question being
         // asked, and it is the one run with no epochs to describe instead.
-        const settings = configs.flatMap((config) => flattenConfig(config.config_data));
+        // A config routinely repeats what the run record already says — a
+        // `Summary` holding the run's own name, a `tags` array holding its own
+        // tags. Filtered by value rather than by key name, so it keeps working
+        // whatever a given pipeline chose to call them.
+        const alreadySaid = new Set([details.name, JSON.stringify(details.tags)]);
+        const settings = configs
+          .flatMap((config) => flattenConfig(config.config_data))
+          .filter(([, value]) => !alreadySaid.has(value));
         if (settings.length > 0) {
           const shown = settings.slice(0, MAX_CONFIG_KEYS);
           lines.push(
@@ -451,10 +477,9 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     {
       title: 'How a run progressed',
       description:
-        'The metric curve of a run, sampled down to about a dozen evenly spaced epochs plus the ' +
-        'first and last. Use for "is the loss still coming down", "did it plateau", "when did it ' +
-        'stop improving". Deliberately not every epoch: the full series is thousands of numbers ' +
-        'and answers the question no better.',
+        'A run\'s metrics over time, one line per metric, sampled to about a dozen epochs plus ' +
+        'the first and last. Use for "is the loss still coming down", "did it plateau". Not every ' +
+        'epoch on purpose: the full series is thousands of numbers and answers no better.',
       inputSchema: {
         training: z.string().describe('The training id, from list_trainings'),
         points: z
@@ -467,19 +492,30 @@ function registerReadTools(server: McpServer, caller: Caller): void {
       }
     },
     async ({ training, points }) => {
+      const wanted = points ?? CURVE_POINTS;
+
       try {
-        const { training: details, epochs } = await vision.getTrainingWithEpochs(key, training);
+        // Sampled by vision-service, so the 196 KB a long run would otherwise
+        // serialize and ship is never built. It still samples here as well: an
+        // older vision-service ignores the parameter and answers in full, and
+        // sampling an already-sampled series is a no-op.
+        const { training: details, epochs, totalEpochs } = await vision.getTrainingWithEpochs(
+          key,
+          training,
+          wanted
+        );
         if (epochs.length === 0) return ok(`${details.name} has recorded no epochs yet.`);
 
-        const picked = sample(epochs, points ?? CURVE_POINTS);
+        const picked = sample(epochs, wanted);
+        const total = totalEpochs ?? epochs.length;
         const lines = [
-          `${details.name} [${details.status}] — ${count(epochs.length)} epochs, ` +
+          `${details.name} [${details.status}] — ${count(total)} epochs, ` +
             `showing ${count(picked.length)} of them:`,
-          ...picked.map(describeEpoch)
+          ...describeCurve(picked)
         ];
 
-        if (picked.length < epochs.length) {
-          lines.push('', `(Sampled evenly from ${count(epochs.length)} epochs; the first and last are always included.)`);
+        if (picked.length < total) {
+          lines.push('', `(Sampled evenly from ${count(total)} epochs; the first and last are always included.)`);
         }
 
         return ok(lines.join('\n'));
@@ -494,11 +530,9 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     {
       title: 'Compare training runs',
       description:
-        'Two or more runs side by side: epochs, time, compute cost, headline benchmark figures, ' +
-        'and for each metric both its final value and the best and worst it reached, with the ' +
-        'epoch each happened at. Use for "which of these is better", "what changed between X ' +
-        'and Y". Judge on the range, not the final epoch — a run trained past its peak ends on ' +
-        'a number nobody would report.',
+        'Runs side by side: epochs, time, cost, benchmarks, and each metric\'s final value plus the ' +
+        'best and worst it reached and where. Judge on the range, not the final epoch — a run ' +
+        'trained past its peak ends on a number nobody would report.',
       inputSchema: {
         trainings: z
           .array(z.string())

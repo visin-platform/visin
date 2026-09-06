@@ -268,7 +268,59 @@ describe('getTrainingById / getTrainingByUuid / getTrainingWithEpochs', () => {
 
     expect(mockedEpoch.find).toHaveBeenCalledWith({ trainingId: VALID_ID, deletedAt: null });
     expect(sort).toHaveBeenCalledWith({ epoch: 1 });
-    expect(result).toEqual({ training: doc, epochs });
+    expect(result).toEqual({ training: doc, epochs, totalEpochs: 1 });
+  });
+
+  it('samples evenly when asked, keeping the first and last epoch', async () => {
+    // A 100-epoch run serializes to 196 KB. A caller plotting a dozen points
+    // should not pay for the other 88, and slicing a full read afterwards
+    // would save it the transfer but not this service the work.
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
+    mockedCheckAccess.mockResolvedValue(true);
+
+    const ids = Array.from({ length: 100 }, (_, i) => ({ _id: `e${i}` }));
+    const select = jest.fn().mockReturnValue({ sort: jest.fn().mockResolvedValue(ids) });
+    const fetched = [{ epoch: 0 }, { epoch: 99 }];
+    mockedEpoch.find
+      .mockReturnValueOnce({ select })
+      .mockReturnValueOnce({ sort: jest.fn().mockResolvedValue(fetched) });
+
+    const result = await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1, 5);
+
+    // Only the five wanted documents are read, and the ends are among them.
+    const second = mockedEpoch.find.mock.calls[1][0];
+    expect(second._id.$in).toEqual(['e0', 'e25', 'e50', 'e74', 'e99']);
+    expect(result.epochs).toBe(fetched);
+    // The real length survives sampling, or the caller reports the run as
+    // twelve epochs long.
+    expect(result.totalEpochs).toBe(100);
+  });
+
+  it('returns every epoch, and its true count, when no sample is asked for', async () => {
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
+    mockedCheckAccess.mockResolvedValue(true);
+
+    const epochs = [{ epoch: 1 }, { epoch: 2 }];
+    mockedEpoch.find.mockReturnValue({ sort: jest.fn().mockResolvedValue(epochs) });
+
+    const result = await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1);
+
+    expect(result.epochs).toBe(epochs);
+    expect(result.totalEpochs).toBe(2);
+  });
+
+  it('does not sample a run that is already shorter than the request', async () => {
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
+    mockedCheckAccess.mockResolvedValue(true);
+
+    const ids = [{ _id: 'e0' }, { _id: 'e1' }];
+    mockedEpoch.find
+      .mockReturnValueOnce({ select: jest.fn().mockReturnValue({ sort: jest.fn().mockResolvedValue(ids) }) })
+      .mockReturnValueOnce({ sort: jest.fn().mockResolvedValue(ids) });
+
+    await trainingService.getTrainingWithEpochs(VALID_ID, 'u1', 'epoch', 1, 12);
+
+    expect(mockedEpoch.find.mock.calls[1][0]._id.$in).toEqual(['e0', 'e1']);
   });
 });
 

@@ -38,7 +38,17 @@ export type GetTrainingStatsQuery = z.infer<typeof getTrainingStatsQuerySchema>;
 
 export const getTrainingWithEpochsQuerySchema = z.object({
   sortBy: z.enum(EPOCH_SORT_FIELDS).default('epoch'),
-  order: sortOrderSchema('asc')
+  order: sortOrderSchema('asc'),
+  /**
+   * Return about this many evenly spaced epochs instead of every one.
+   *
+   * For callers that plot or summarise a curve rather than read it: a
+   * 100-epoch run answers this endpoint with 196 KB, and a client sampling it
+   * down to a dozen points afterwards has already paid to serialize, ship and
+   * parse all of it. The ends are always kept, since they are the two points a
+   * question about a curve is usually actually about.
+   */
+  sample: z.coerce.number().int().min(2).max(500).optional()
 });
 export type GetTrainingWithEpochsQuery = z.infer<typeof getTrainingWithEpochsQuerySchema>;
 

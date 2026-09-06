@@ -107,16 +107,27 @@ export const vision = {
       (response) => response.configs
     ),
 
+  /**
+   * A run and its epochs, optionally sampled by the service rather than here.
+   *
+   * `sample` exists because a 100-epoch run answers this endpoint with 196 KB,
+   * and sampling it down to a dozen points on this side means having already
+   * paid to ship and parse all of it. Only callers that plot a curve pass it —
+   * anything computing a best or worst epoch needs the whole series, and
+   * asking for a sample there would quietly answer about the wrong epoch.
+   */
   getTrainingWithEpochs: (
     apiKey: string,
-    id: string
-  ): Promise<{ training: Training; epochs: Epoch[] }> =>
+    id: string,
+    sample?: number
+  ): Promise<{ training: Training; epochs: Epoch[]; totalEpochs?: number }> =>
     // `order` is an enum on vision-service (`sortOrderSchema`), not a Mongo
     // sort direction. Sending 1 was a 400 on every call, which took out
     // get_training and get_training_curve together.
     get(trainingWithEpochsSchema, apiKey, `/trainings/${encodeURIComponent(id)}/epochs`, {
       sortBy: 'epoch',
-      order: 'asc'
+      order: 'asc',
+      sample
     }),
 
   updateTraining: async (
