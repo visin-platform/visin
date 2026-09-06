@@ -8,6 +8,7 @@ jest.mock('../../vision', () => ({
     updateProject: jest.fn(),
     listTrainings: jest.fn(),
     getTrainingWithEpochs: jest.fn(),
+    getTrainingConfigs: jest.fn(),
     updateTraining: jest.fn(),
     compareTrainings: jest.fn(),
     listTestResults: jest.fn(),
@@ -68,6 +69,9 @@ beforeEach(() => {
   // Most tools take a training id and resolve it to the uuid the results
   // endpoints filter on, so a run has to be resolvable by default.
   mocked.getTraining.mockResolvedValue(training({ uuid: 'the-uuid' }));
+  // get_training reads a run's settings alongside its epochs; most runs here
+  // have none recorded, which is a real state and the quieter default.
+  mocked.getTrainingConfigs.mockResolvedValue([]);
 });
 
 describe('list_projects', () => {
@@ -240,6 +244,67 @@ describe('get_training', () => {
     });
 
     expect((await call('get_training', { training: 't1' })).text).toContain('no metrics recorded');
+  });
+});
+
+describe('the settings a run was launched with', () => {
+  it('prints the config flat, so a recommendation can name the current value', async () => {
+    // Before this, config was not exposed at all: an assistant asked what to
+    // change for the next run could describe outcomes and had to guess at
+    // causes, because it could not see what anything was set to.
+    mocked.getTrainingWithEpochs.mockResolvedValue({ training: training(), epochs: [] });
+    mocked.getTrainingConfigs.mockResolvedValue([
+      {
+        config_name: 'clftv2-base',
+        summary: '',
+        config_data: {
+          model: { window_size: 16, backbone: 'swin-b' },
+          optimizer: { lr: 0.0001 },
+          classes: ['vehicle', 'human']
+        }
+      }
+    ]);
+
+    const { text } = await call('get_training', { training: 't1' });
+
+    expect(text).toContain('Configuration (clftv2-base):');
+    expect(text).toContain('model.window_size = 16');
+    expect(text).toContain('optimizer.lr = 0.0001');
+    expect(text).toContain('classes = ["vehicle","human"]');
+  });
+
+  it('still answers about the run when the config cannot be read', async () => {
+    // The settings are context for the numbers, not the answer. A run whose
+    // config was deleted still has results worth reading.
+    mocked.getTrainingWithEpochs.mockResolvedValue({
+      training: training(),
+      epochs: [{ epoch: 1, results: { loss: 0.5 } }]
+    });
+    mocked.getTrainingConfigs.mockRejectedValue(new VisinError('Training not found', 404));
+
+    const { text, isError } = await call('get_training', { training: 't1' });
+
+    expect(isError).toBe(false);
+    expect(text).toContain('loss 0.5');
+    expect(text).not.toContain('Configuration');
+  });
+
+  it('caps a config with hundreds of keys', async () => {
+    mocked.getTrainingWithEpochs.mockResolvedValue({ training: training(), epochs: [] });
+    mocked.getTrainingConfigs.mockResolvedValue([
+      {
+        summary: '',
+        config_data: Object.fromEntries(
+          Array.from({ length: 50 }, (_, i) => [`k${String(i).padStart(2, '0')}`, i])
+        )
+      }
+    ]);
+
+    const { text } = await call('get_training', { training: 't1' });
+
+    expect(text).toContain('k39 = 39');
+    expect(text).not.toContain('k40 = 40');
+    expect(text).toContain('10 further settings not shown');
   });
 });
 

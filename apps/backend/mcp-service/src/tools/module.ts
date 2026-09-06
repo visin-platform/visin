@@ -360,6 +360,36 @@ export function sample<T>(items: T[], n: number): T[] {
   return picked;
 }
 
+/**
+ * A config dict as flat `key.path = value` lines.
+ *
+ * Flattened rather than pretty-printed as JSON: the nesting carries no meaning
+ * a reader needs, and braces and quotes are most of the characters in a
+ * printed dict. A list is rendered inline; anything deeper than that is a
+ * structure, not a setting.
+ */
+export function flattenConfig(
+  data: Record<string, unknown>,
+  prefix = '',
+  depth = 1
+): Array<[string, string]> {
+  return Object.entries(data).flatMap(([key, value]): Array<[string, string]> => {
+    const path = prefix ? `${prefix}.${key}` : key;
+
+    if (value === null || value === undefined) return [];
+    if (Array.isArray(value)) {
+      return [[path, value.length > 8 ? `[${value.length} items]` : JSON.stringify(value)]];
+    }
+    if (typeof value === 'object') {
+      // Four levels is already deeper than any hyperparameter anyone tunes;
+      // past it the thing being printed is state, not configuration.
+      if (depth >= 4) return [[path, '{...}']];
+      return flattenConfig(value as Record<string, unknown>, path, depth + 1);
+    }
+    return [[path, String(value)]];
+  });
+}
+
 /** Cap a list, saying what was left out rather than truncating in silence. */
 export function capped<T>(items: T[], limit: number, noun: string): { shown: T[]; note: string } {
   if (items.length <= limit) return { shown: items, note: '' };

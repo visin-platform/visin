@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { UnauthorizedError } from '@visin/backend-core';
 import * as findingService from '../services/findingService';
 import { AuthRequest } from '../middleware/authMiddleware';
-import type { ListFindingsQuery } from '../validation/findingSchemas';
+import type { ExportFindingQuery, ListFindingsQuery } from '../validation/findingSchemas';
 
 /**
  * Who is writing, as the record should name them.
@@ -30,6 +30,26 @@ export const getFindingById = async (req: AuthRequest, res: Response): Promise<v
   const { id } = req.params as { id: string };
 
   res.json({ success: true, data: await findingService.getFinding(id, req.user?.id) });
+};
+
+/**
+ * The finding as a `.tex` section.
+ *
+ * Answers with the source rather than a file download so the same endpoint
+ * serves the app's download button and an assistant asking for it over MCP —
+ * one of those needs a Blob and the other needs a string.
+ */
+export const exportFinding = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params as { id: string };
+  const { selectBy, direction, metrics } = req.query as unknown as ExportFindingQuery;
+
+  const exported = await findingService.exportFindingAsLatex(id, req.user?.id, {
+    selectBy,
+    direction,
+    metrics
+  });
+
+  res.json({ success: true, data: exported });
 };
 
 export const createFinding = async (req: AuthRequest, res: Response): Promise<void> => {

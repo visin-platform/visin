@@ -7,6 +7,7 @@ import {
   duration,
   explain,
   fail,
+  flattenConfig,
   metric,
   metricRanges,
   numericResults,
@@ -285,5 +286,32 @@ describe('metricRanges', () => {
 
   it('returns nothing for a run with no epochs', () => {
     expect(metricRanges([])).toEqual([]);
+  });
+});
+
+describe('flattenConfig', () => {
+  it('flattens nested settings to dotted paths', () => {
+    expect(flattenConfig({ model: { window: 16, backbone: 'swin' }, lr: 1e-4 })).toEqual([
+      ['model.window', '16'],
+      ['model.backbone', 'swin'],
+      ['lr', '0.0001']
+    ]);
+  });
+
+  it('renders a short list inline and summarises a long one', () => {
+    expect(flattenConfig({ classes: ['a', 'b'] })).toEqual([['classes', '["a","b"]']]);
+    expect(flattenConfig({ seeds: Array.from({ length: 20 }, (_, i) => i) })).toEqual([
+      ['seeds', '[20 items]']
+    ]);
+  });
+
+  it('stops descending once it is printing state rather than settings', () => {
+    const deep = { a: { b: { c: { d: { e: 1 } } } } };
+
+    expect(flattenConfig(deep)).toEqual([['a.b.c.d', '{...}']]);
+  });
+
+  it('drops a setting that was left null', () => {
+    expect(flattenConfig({ resume_from: null, lr: 0.1 })).toEqual([['lr', '0.1']]);
   });
 });

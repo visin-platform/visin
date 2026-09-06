@@ -278,6 +278,40 @@ export const visualizationTypesResponseSchema = z
   .object({ types: z.array(z.string()).catch([]) })
   .loose();
 
+/**
+ * A cited run, named by vision-service.
+ *
+ * Without this a finding read back was a title and a list of ObjectIds, which
+ * tells the next session nothing about which runs the conclusion rests on —
+ * the one thing a citation exists to say.
+ */
+const citedTrainingSchema = z
+  .object({ _id: z.string(), name: z.string(), status: z.string().catch('unknown') })
+  .loose();
+
+/**
+ * A run's hyperparameters.
+ *
+ * `config_data` is whatever the pipeline wrote — a nested dict of whatever that
+ * model takes — so it stays open and the renderer flattens it. Exposed because
+ * an assistant asked "what should I change for the next run" cannot answer
+ * without seeing what the last one was set to; before this it could only
+ * describe outcomes and guess at causes.
+ */
+export const configSchema = z
+  .object({
+    _id: z.string().optional(),
+    config_uuid: z.string().optional(),
+    config_name: z.string().optional(),
+    summary: z.string().catch(''),
+    config_data: z.record(z.string(), z.unknown()).catch({})
+  })
+  .loose();
+
+export const trainingConfigsResponseSchema = z
+  .object({ configs: z.array(configSchema).catch([]), total: z.number().optional() })
+  .loose();
+
 export const findingSchema = z
   .object({
     _id: z.string(),
@@ -285,7 +319,13 @@ export const findingSchema = z
     trainingId: z.string().optional(),
     title: z.string(),
     body: z.string(),
+    /** What to change next time; kept out of the body because a paper never wants it */
+    recommendations: z.string().optional(),
     trainingIds: z.array(z.string()).catch([]),
+    // `.catch([])` rather than required: mcp-service and vision-service deploy
+    // separately, so this must not turn into a ShapeError on every finding for
+    // the length of a rolling deploy.
+    citedTrainings: z.array(citedTrainingSchema).catch([]),
     authorKind: z.enum(['person', 'assistant']).catch('person'),
     authorLabel: z.string().catch(''),
     createdAt: z.string().optional()
@@ -374,6 +414,12 @@ export type ImageCategory = z.infer<typeof imageCategorySchema>;
 export type Visualization = z.infer<typeof visualizationSchema>;
 export type Finding = z.infer<typeof findingSchema>;
 export type ComparisonEntry = z.infer<typeof comparisonEntrySchema>;
+export type Config = z.infer<typeof configSchema>;
+
+/** A finding rendered as a LaTeX section, with its table built from recorded epochs. */
+export const findingExportSchema = z
+  .object({ filename: z.string(), tex: z.string() })
+  .loose();
 
 /**
  * A response that did not look the way this client expects.

@@ -16,9 +16,10 @@ import {
   Tooltip,
   Typography
 } from '@mui/material';
-import { AutoAwesome, Delete, Person, PostAdd } from '@mui/icons-material';
-import { useCreateFinding, useDeleteFinding, useFindings } from '../../hooks/useFindings';
-import { Finding } from '../../types/finding';
+import { Article, AutoAwesome, Check, ContentCopy, Delete, Person, PostAdd, Science } from '@mui/icons-material';
+import { Link as RouterLink } from 'react-router-dom';
+import { useCreateFinding, useDeleteFinding, useExportFinding, useFindings } from '../../hooks/useFindings';
+import { Finding, FindingExport } from '../../types/finding';
 
 interface FindingsPanelProps {
   /** Always required: findings hang off a project, and access follows it. */
@@ -47,7 +48,20 @@ const FindingCard: React.FC<{
   finding: Finding;
   canDelete: boolean;
   onDelete: () => void;
-}> = ({ finding, canDelete, onDelete }) => (
+  onExport: () => void;
+  exporting: boolean;
+}> = ({ finding, canDelete, onDelete, onExport, exporting }) => {
+  // Cited but unnamed means the run sits in a project this reader cannot see —
+  // or, briefly after a front-first deploy, that the API is not sending names
+  // yet. Said plainly rather than dropped: a card silently listing two of three
+  // runs misrepresents how much evidence the conclusion rests on.
+  const cited = finding.citedTrainings ?? [];
+  // Only claimed when something else did resolve. With no names at all the
+  // cause is more likely an API that predates them than a whole citation list
+  // the reader cannot see, and the card falls back to the bare count.
+  const hiddenCitations = cited.length > 0 ? finding.trainingIds.length - cited.length : 0;
+
+  return (
   <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 3 }, borderRadius: 2 }}>
     <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
       <Box sx={{ minWidth: 0 }}>
@@ -67,13 +81,27 @@ const FindingCard: React.FC<{
         </Stack>
       </Box>
 
-      {canDelete && (
-        <Tooltip title="Delete">
-          <IconButton size="small" onClick={onDelete} aria-label={`Delete ${finding.title}`}>
-            <Delete fontSize="small" />
-          </IconButton>
+      <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+        <Tooltip title="Show as a LaTeX section, with a results table built from the cited runs">
+          <span>
+            <IconButton
+              size="small"
+              onClick={onExport}
+              disabled={exporting}
+              aria-label={`Export ${finding.title} as LaTeX`}
+            >
+              <Article fontSize="small" />
+            </IconButton>
+          </span>
         </Tooltip>
-      )}
+        {canDelete && (
+          <Tooltip title="Delete">
+            <IconButton size="small" onClick={onDelete} aria-label={`Delete ${finding.title}`}>
+              <Delete fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Stack>
     </Box>
 
     <Typography
@@ -83,30 +111,152 @@ const FindingCard: React.FC<{
       {finding.body}
     </Typography>
 
+    {finding.recommendations && (
+      <Box
+        sx={{
+          mt: 2.5,
+          p: 2,
+          borderRadius: 1.5,
+          bgcolor: 'action.hover',
+          borderLeft: 3,
+          borderColor: 'primary.main'
+        }}
+      >
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.75 }}>
+          <Science fontSize="small" sx={{ color: 'primary.main' }} />
+          <Typography variant="caption" sx={{ fontWeight: 600, letterSpacing: 0.3 }}>
+            SUGGESTED NEXT RUN
+          </Typography>
+        </Stack>
+        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
+          {finding.recommendations}
+        </Typography>
+      </Box>
+    )}
+
     {finding.trainingIds.length > 0 && (
-      <Typography variant="caption" sx={{ color: 'text.secondary', mt: 2, display: 'block' }}>
-        Draws on {finding.trainingIds.length} run{finding.trainingIds.length === 1 ? '' : 's'}
-      </Typography>
+      <Box sx={{ mt: 2.5 }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+          Draws on {finding.trainingIds.length} run{finding.trainingIds.length === 1 ? '' : 's'}
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+          {cited.map(run => (
+            <Chip
+              key={run._id}
+              size="small"
+              label={run.name}
+              component={RouterLink}
+              to={`/trainings/${run._id}`}
+              clickable
+              variant="outlined"
+            />
+          ))}
+          {hiddenCitations > 0 && (
+            <Tooltip title="These runs are in a project you cannot see">
+              <Chip
+                size="small"
+                label={`${hiddenCitations} not visible to you`}
+                variant="outlined"
+                sx={{ color: 'text.secondary' }}
+              />
+            </Tooltip>
+          )}
+        </Stack>
+      </Box>
     )}
   </Paper>
-);
+  );
+};
+
+/**
+ * The generated LaTeX, to copy.
+ *
+ * Shown rather than downloaded because what people do with this is paste it
+ * into a paper that is already open; a file in ~/Downloads is a detour on the
+ * way there. It stays selectable text so copying by hand still works when the
+ * clipboard API is unavailable — over plain HTTP, or with permission refused.
+ */
+const LatexDialog: React.FC<{ exported: FindingExport | null; onClose: () => void }> = ({
+  exported,
+  onClose
+}) => {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    if (!exported) return;
+    try {
+      await navigator.clipboard.writeText(exported.tex);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Nothing to report: the text is on screen and selectable, which is the
+      // fallback. An error alert here would be louder than the problem.
+    }
+  };
+
+  return (
+    <Dialog open={exported !== null} onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle sx={{ pb: 1 }}>
+        Paper section
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+          A <code>\subsection</code> with the analysis and a results table. Every number in the
+          table is read from the cited runs&apos; recorded epochs. Needs{' '}
+          <code>\usepackage&#123;booktabs&#125;</code>.
+        </Typography>
+      </DialogTitle>
+      <DialogContent>
+        <Box
+          component="pre"
+          sx={{
+            m: 0,
+            p: 2,
+            borderRadius: 1.5,
+            bgcolor: 'action.hover',
+            fontFamily: 'monospace',
+            fontSize: 13,
+            lineHeight: 1.6,
+            overflowX: 'auto',
+            whiteSpace: 'pre',
+            maxHeight: '55vh'
+          }}
+        >
+          {exported?.tex}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+        <Button
+          variant="contained"
+          startIcon={copied ? <Check /> : <ContentCopy />}
+          onClick={copy}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
 
 const FindingsPanel: React.FC<FindingsPanelProps> = ({ projectId, trainingId, isOwner }) => {
   const [composing, setComposing] = useState(false);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [recommendations, setRecommendations] = useState('');
+  const [exported, setExported] = useState<FindingExport | null>(null);
 
   const findings = useFindings(trainingId ? { training: trainingId } : { project: projectId });
   const createFinding = useCreateFinding();
   const deleteFinding = useDeleteFinding();
+  const exportFinding = useExportFinding();
 
   const busy = createFinding.isPending || deleteFinding.isPending;
-  const mutationError = createFinding.error ?? deleteFinding.error;
+  const mutationError = createFinding.error ?? deleteFinding.error ?? exportFinding.error;
 
   const close = () => {
     setComposing(false);
     setTitle('');
     setBody('');
+    setRecommendations('');
   };
 
   const submit = (event: React.FormEvent) => {
@@ -114,7 +264,13 @@ const FindingsPanel: React.FC<FindingsPanelProps> = ({ projectId, trainingId, is
     if (!title.trim() || !body.trim()) return;
 
     createFinding.mutate(
-      { project: projectId, training: trainingId, title: title.trim(), body: body.trim() },
+      {
+        project: projectId,
+        training: trainingId,
+        title: title.trim(),
+        body: body.trim(),
+        recommendations: recommendations.trim() || undefined
+      },
       { onSuccess: close }
     );
   };
@@ -172,10 +328,14 @@ const FindingsPanel: React.FC<FindingsPanelProps> = ({ projectId, trainingId, is
               finding={finding}
               canDelete={isOwner && !busy}
               onDelete={() => deleteFinding.mutate(finding._id)}
+              onExport={() => exportFinding.mutate({ id: finding._id }, { onSuccess: setExported })}
+              exporting={exportFinding.isPending}
             />
           ))}
         </Stack>
       )}
+
+      <LatexDialog exported={exported} onClose={() => setExported(null)} />
 
       <Dialog open={composing} onClose={close} fullWidth maxWidth="sm">
         <form onSubmit={submit}>
@@ -202,6 +362,19 @@ const FindingsPanel: React.FC<FindingsPanelProps> = ({ projectId, trainingId, is
               value={body}
               disabled={createFinding.isPending}
               onChange={event => setBody(event.target.value)}
+            />
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              size="small"
+              label="Suggested next run (optional)"
+              placeholder="A setting and the value to try."
+              helperText="Kept out of the paper export — it is written there as a comment."
+              value={recommendations}
+              disabled={createFinding.isPending}
+              onChange={event => setRecommendations(event.target.value)}
+              sx={{ mt: 2 }}
             />
           </DialogContent>
           <DialogActions>

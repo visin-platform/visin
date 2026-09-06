@@ -29,6 +29,15 @@ export interface IFinding extends Document {
   /** markdown; rendered in the app, handed to the model as-is */
   body: string;
   /**
+   * What to change on the next run, if the finding suggests anything.
+   *
+   * Kept apart from `body` rather than written into it because the two have
+   * different readers. The body is the result and can go into a paper; this is
+   * a note to whoever launches the next run, and a reviewer should never see
+   * it. The LaTeX export writes it out commented for exactly that reason.
+   */
+  recommendations?: string;
+  /**
    * Which runs the conclusion draws on.
    *
    * Recorded so a reader can check the work, and so a finding can be found
@@ -54,6 +63,7 @@ const FindingSchema = new Schema<IFinding>(
     // produce an essay, and an unbounded field is one bad prompt from a
     // document nobody will read stored forever.
     body: { type: String, required: true, maxlength: 20_000 },
+    recommendations: { type: String, maxlength: 5_000 },
     trainingIds: { type: [String], default: [] },
     authorKind: { type: String, required: true, enum: ['person', 'assistant'] },
     authorLabel: { type: String, required: true },

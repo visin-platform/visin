@@ -1,8 +1,10 @@
 import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Finding, { IFinding } from '../models/Finding';
 import Training from '../models/Training';
+import Epoch from '../models/Epoch';
 import Project from '../models/Project';
-import { checkProjectAccess } from './projectAccessService';
+import { ExportOptions, ExportRun, findingToLatex } from './latexExport';
+import { checkProjectAccess, createProjectAccessChecker } from './projectAccessService';
 
 /**
  * Written conclusions about a project or a run.
@@ -24,6 +26,74 @@ async function resolveProjectId(identifier: string): Promise<string> {
   throw new NotFoundError('Project not found');
 }
 
+/**
+ * A cited run, named.
+ *
+ * The reason this exists: a finding stored `trainingIds` and nothing else, so
+ * the app could say "draws on 2 runs" and an assistant reading one back got a
+ * pair of ObjectIds. Neither tells the reader *which* runs — which is the whole
+ * point of citing them, since a conclusion whose evidence cannot be identified
+ * is one nobody can check.
+ */
+export interface CitedTraining {
+  _id: string;
+  name: string;
+  status: string;
+}
+
+export type FindingWithCitations = ReturnType<typeof toPlain> & {
+  citedTrainings: CitedTraining[];
+};
+
+const toPlain = (finding: IFinding) => finding.toObject() as Record<string, unknown>;
+
+/**
+ * Name the runs a set of findings cite, in one query for the whole page.
+ *
+ * Resolved here rather than by the caller because it is one lookup for every
+ * finding in the listing — doing it per row would be an N+1 on a panel that
+ * routinely shows a dozen.
+ *
+ * Cited runs are filtered by project visibility, which is not redundant with
+ * the check on the finding itself: nothing stops a finding on a public project
+ * citing a run in a private one, and the run's *name* would then be readable by
+ * someone who cannot see the run. A run the reader may not see is left out of
+ * the names but still counted in `trainingIds`, so the citation count stays
+ * honest rather than quietly shrinking.
+ */
+async function attachCitations(
+  findings: IFinding[],
+  userId: string | undefined
+): Promise<FindingWithCitations[]> {
+  const cited = [...new Set(findings.flatMap((finding) => finding.trainingIds))];
+  if (cited.length === 0) {
+    return findings.map((finding) => ({ ...toPlain(finding), citedTrainings: [] }));
+  }
+
+  const runs = await Training.find({ _id: { $in: cited }, deletedAt: null }).select(
+    'name status projectId'
+  );
+
+  const hasProjectAccess = createProjectAccessChecker(userId);
+  const byId = new Map<string, CitedTraining>();
+  for (const run of runs) {
+    if (await hasProjectAccess(run.projectId)) {
+      byId.set(run._id.toString(), {
+        _id: run._id.toString(),
+        name: run.name,
+        status: run.status
+      });
+    }
+  }
+
+  return findings.map((finding) => ({
+    ...toPlain(finding),
+    citedTrainings: finding.trainingIds
+      .map((id) => byId.get(id))
+      .filter((run): run is CitedTraining => run !== undefined)
+  }));
+}
+
 export interface ListFindingsFilters {
   project?: string;
   training?: string;
@@ -33,7 +103,7 @@ export interface ListFindingsFilters {
 export const listFindings = async (
   userId: string | undefined,
   filters: ListFindingsFilters
-): Promise<IFinding[]> => {
+): Promise<FindingWithCitations[]> => {
   const query: Record<string, unknown> = { deletedAt: null };
 
   if (filters.project) {
@@ -52,7 +122,7 @@ export const listFindings = async (
     .sort({ createdAt: -1 })
     .limit(Math.min(filters.limit ?? 50, 200));
 
-  if (filters.project) return findings;
+  if (filters.project) return attachCitations(findings, userId);
 
   // No project filter: the query could not be scoped up front, so every row is
   // checked before it is returned. Same rule as the rest of the service — an
@@ -61,14 +131,19 @@ export const listFindings = async (
   for (const finding of findings) {
     if (await checkProjectAccess(userId, finding.projectId)) visible.push(finding);
   }
-  return visible;
+  return attachCitations(visible, userId);
 };
 
-export const getFinding = async (id: string, userId: string | undefined): Promise<IFinding> => {
+export const getFinding = async (
+  id: string,
+  userId: string | undefined
+): Promise<FindingWithCitations> => {
   const finding = await Finding.findOne({ _id: id, deletedAt: null });
   if (!finding) throw new NotFoundError('Finding not found');
   if (!(await checkProjectAccess(userId, finding.projectId))) throw new ForbiddenError();
-  return finding;
+
+  const [withCitations] = await attachCitations([finding], userId);
+  return withCitations;
 };
 
 export interface CreateFindingInput {
@@ -76,6 +151,7 @@ export interface CreateFindingInput {
   training?: string;
   title: string;
   body: string;
+  recommendations?: string;
   trainingIds?: string[];
 }
 
@@ -88,7 +164,7 @@ export interface Author {
 export const createFinding = async (
   input: CreateFindingInput,
   author: Author
-): Promise<IFinding> => {
+): Promise<FindingWithCitations> => {
   const projectId = await resolveProjectId(input.project);
   if (!(await checkProjectAccess(author.userId, projectId))) throw new ForbiddenError();
 
@@ -99,7 +175,14 @@ export const createFinding = async (
     throw new ForbiddenError('Only the project owner can record findings on it');
   }
 
-  const cited = input.trainingIds ?? (input.training ? [input.training] : []);
+  // The subject run is always among the citations, never only `trainingId`.
+  // `trainingIds ?? [training]` dropped it whenever both were given — so a
+  // finding about t1 citing t2 and t3 named every run it compared against and
+  // not the one it was about, which is the first thing a reader looks for.
+  // Subject first, because that is the run the conclusion is nominally about.
+  const cited = [
+    ...new Set([...(input.training ? [input.training] : []), ...(input.trainingIds ?? [])])
+  ];
   if (cited.length > 0) {
     // A citation naming a run that does not exist makes the finding unverifiable
     // by exactly the reader who would want to check it.
@@ -109,17 +192,86 @@ export const createFinding = async (
     }
   }
 
-  return Finding.create({
+  const finding = await Finding.create({
     projectId,
     trainingId: input.training,
     title: input.title,
     body: input.body,
+    recommendations: input.recommendations,
     trainingIds: cited,
     authorKind: author.kind,
     authorLabel: author.label,
     authorUserId: author.userId
   });
+
+  // Named here too, so `citedTrainings` is present on every finding this
+  // service hands back rather than on two endpoints out of three.
+  const [withCitations] = await attachCitations([finding], author.userId);
+  return withCitations;
 };
+
+/**
+ * A finding as a LaTeX section, with its results table built from the runs it
+ * cites.
+ *
+ * The epochs are loaded here and the numbers formatted in `latexExport`, so
+ * nothing in the table has passed through prose on its way to the page. Only
+ * runs the caller may see contribute rows — the same rule the citation names
+ * follow, for the same reason.
+ */
+export const exportFindingAsLatex = async (
+  id: string,
+  userId: string | undefined,
+  options: ExportOptions = {}
+): Promise<{ filename: string; tex: string }> => {
+  const finding = await getFinding(id, userId);
+
+  const visibleIds = finding.citedTrainings.map((run) => run._id);
+  const epochs =
+    visibleIds.length > 0
+      ? await Epoch.find({ trainingId: { $in: visibleIds }, deletedAt: null })
+          .select('trainingId epoch results')
+          .sort({ trainingId: 1, epoch: 1 })
+      : [];
+
+  const byTraining = new Map<string, ExportRun['epochs']>();
+  for (const epoch of epochs) {
+    const bucket = byTraining.get(epoch.trainingId) ?? [];
+    bucket.push({ epoch: epoch.epoch, results: epoch.results });
+    byTraining.set(epoch.trainingId, bucket);
+  }
+
+  const runs: ExportRun[] = finding.citedTrainings.map((run) => ({
+    _id: run._id,
+    name: run.name,
+    epochs: byTraining.get(run._id) ?? []
+  }));
+
+  return {
+    filename: `${slugForFile(finding.title as string)}.tex`,
+    tex: findingToLatex(
+      {
+        _id: String(finding._id),
+        title: finding.title as string,
+        body: finding.body as string,
+        recommendations: finding.recommendations as string | undefined,
+        authorKind: finding.authorKind as 'person' | 'assistant',
+        authorLabel: finding.authorLabel as string,
+        createdAt: finding.createdAt as Date
+      },
+      runs,
+      options
+    )
+  };
+};
+
+/** A filename from a title: lowercase words, nothing a shell or a filesystem minds. */
+const slugForFile = (title: string): string =>
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'finding';
 
 export const deleteFinding = async (id: string, userId: string | undefined): Promise<void> => {
   const finding = await Finding.findOne({ _id: id, deletedAt: null });

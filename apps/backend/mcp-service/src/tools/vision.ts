@@ -11,6 +11,7 @@ import {
   day,
   duration,
   explain,
+  flattenConfig,
   metric,
   metricRanges,
   numericResults,
@@ -29,6 +30,15 @@ import {
 
 /** How many epochs a curve is sampled down to. */
 const CURVE_POINTS = 12;
+
+/**
+ * How many config settings one run prints.
+ *
+ * A full pipeline config runs to hundreds of keys — paths, seeds, logging
+ * flags — and a tool result is re-sent with every later message. Enough to see
+ * what a run was set to, not enough to crowd out the answer it was asked for.
+ */
+const MAX_CONFIG_KEYS = 40;
 
 /**
  * How many metric ranges a whole comparison may spell out, across every run.
@@ -359,14 +369,23 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     {
       title: 'One training run',
       description:
-        'A run: its status, how long it took, how many epochs it recorded, and what the last ' +
-        'epoch measured. Use for "how did run X go". For the shape of the curve rather than its ' +
-        'endpoint, use get_training_curve.',
+        'A run: its status, how long it took, the hyperparameters it was launched with, what ' +
+        'the last epoch measured, and where every metric peaked. Use for "how did run X go" and ' +
+        'for "what was it set to" — the configuration is here, so a recommendation about what to ' +
+        'change next can name the current value rather than guessing at it. For the shape of the ' +
+        'curve rather than its endpoint, use get_training_curve.',
       inputSchema: { training: z.string().describe('The training id, from list_trainings') }
     },
     async ({ training }) => {
       try {
-        const { training: details, epochs } = await vision.getTrainingWithEpochs(key, training);
+        // Configs are fetched alongside, and a failure there must not take the
+        // run's metrics with it: the settings are context for the numbers, not
+        // the answer. A run whose config was deleted still has results worth
+        // reading.
+        const [{ training: details, epochs }, configs] = await Promise.all([
+          vision.getTrainingWithEpochs(key, training),
+          vision.getTrainingConfigs(key, training).catch(() => [])
+        ]);
 
         const lines = [
           `${details.name} [${details.status}]`,
@@ -378,6 +397,22 @@ function registerReadTools(server: McpServer, caller: Caller): void {
         if (started) lines.push(`Started ${day(started)}${details.endTime ? `, ended ${day(details.endTime)}` : ''}.`);
         if (details.tags.length > 0) lines.push(`Tags: ${details.tags.join(', ')}.`);
         if (details.datasetId) lines.push(`Dataset: ${details.datasetId}.`);
+
+        // Before the early return below, not after: a run that has not started
+        // yet is exactly when "what is this set to" is the question being
+        // asked, and it is the one run with no epochs to describe instead.
+        const settings = configs.flatMap((config) => flattenConfig(config.config_data));
+        if (settings.length > 0) {
+          const shown = settings.slice(0, MAX_CONFIG_KEYS);
+          lines.push(
+            '',
+            `Configuration${configs[0]?.config_name ? ` (${configs[0].config_name})` : ''}:`,
+            ...shown.map(([path, value]) => `  ${path} = ${value}`)
+          );
+          if (settings.length > shown.length) {
+            lines.push(`  (${count(settings.length - shown.length)} further settings not shown)`);
+          }
+        }
 
         if (epochs.length === 0) {
           lines.push('', 'No epochs recorded yet.');

@@ -158,6 +158,24 @@ describe('routing', () => {
       { method: 'GET', path: '/datasets/d1' }
     ],
     [
+      'getTrainingConfigs',
+      () => vision.getTrainingConfigs('k', 't1'),
+      { configs: [{ summary: 'base', config_data: { lr: 0.1 } }] },
+      // Through the run, not `/configs/:id`: the run is what the caller's
+      // access was checked against, and the config library is unscoped.
+      { method: 'GET', path: '/trainings/t1/configs' }
+    ],
+    [
+      'exportFinding',
+      () => vision.exportFinding('k', 'f1', { selectBy: 'val.loss', direction: 'min' }),
+      { filename: 'f.tex', tex: '\\subsection{x}' },
+      {
+        method: 'GET',
+        path: '/findings/f1/latex',
+        query: { selectBy: 'val.loss', direction: 'min' }
+      }
+    ],
+    [
       'listVisualizations',
       () => vision.listVisualizations('k', 't-uuid', { limit: 20 }),
       { visualizations: [] },

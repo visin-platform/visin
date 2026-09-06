@@ -88,9 +88,17 @@ describe('findingRoutes', () => {
   it('registers the whole surface and nothing else', () => {
     expect(find('get', '/')).toBeDefined();
     expect(find('get', '/:id')).toBeDefined();
+    expect(find('get', '/:id/latex')).toBeDefined();
     expect(find('post', '/')).toBeDefined();
     expect(find('delete', '/:id')).toBeDefined();
-    expect(routes).toHaveLength(4);
+    expect(routes).toHaveLength(5);
+  });
+
+  it('exports through the same optional auth the finding itself follows', () => {
+    // The export carries the finding's prose and its cited runs' measurements,
+    // so it must be exactly as visible as the finding — no more.
+    // optionalAuth + validation + controller.
+    expect(find('get', '/:id/latex')!.handlerCount).toBe(3);
   });
 
   it('lets reads follow the project rather than requiring a session', () => {

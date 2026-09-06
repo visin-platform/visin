@@ -67,6 +67,18 @@ const SERVER_INSTRUCTIONS = [
   'keeping, citing the runs it draws on so a reader can check it. Record what you found, not what',
   'you assume; a guess stored as a result is worse than no record at all.',
   '',
+  'Write findings short. State the result and the number behind it and stop — no preamble, no',
+  'restating the question, no account of how you got there. A finding is read by someone deciding',
+  'what to do next, and by get_finding(format:"latex"), which turns it into a paper subsection',
+  'with a results table generated from the cited runs\' recorded epochs. Never hand-write that',
+  'table: retyping a number is the one way a wrong figure reaches a paper, and the export reads',
+  'every value straight from the training log.',
+  '',
+  'record_finding also takes recommendations — what to change for the next run. Keep it concrete:',
+  'a setting and the value to try. get_training shows the configuration a run was launched with,',
+  'so name the current value rather than guessing at it. It is stored apart from the analysis and',
+  'the export writes it as a comment, because a reviewer should never read it.',
+  '',
   'Costs are estimates from a flat hourly rate applied to recorded epoch time, not a bill from',
   'anyone. Quote them as approximate.'
 ].join('\n');

@@ -7,6 +7,9 @@ import {
   datasetsResponseSchema,
   imageCategoriesResponseSchema,
   parseResponse,
+  trainingConfigsResponseSchema,
+  findingExportSchema,
+  type Config,
   projectSchema,
   projectsResponseSchema,
   testResultsResponseSchema,
@@ -90,6 +93,19 @@ export const vision = {
 
   getTraining: (apiKey: string, id: string): Promise<Training> =>
     get(trainingSchema, apiKey, `/trainings/${encodeURIComponent(id)}`),
+
+  /**
+   * The hyperparameters a run was launched with.
+   *
+   * Reached through the run rather than `/configs/:id` because the run is what
+   * the caller's access was checked against — the config library itself is
+   * deliberately unscoped, and addressing it directly would read around that
+   * check rather than through it.
+   */
+  getTrainingConfigs: (apiKey: string, id: string): Promise<Config[]> =>
+    get(trainingConfigsResponseSchema, apiKey, `/trainings/${encodeURIComponent(id)}/configs`).then(
+      (response) => response.configs
+    ),
 
   getTrainingWithEpochs: (
     apiKey: string,
@@ -188,9 +204,23 @@ export const vision = {
   getFinding: (apiKey: string, id: string): Promise<Finding> =>
     get(findingSchema, apiKey, `/findings/${encodeURIComponent(id)}`),
 
+  exportFinding: (
+    apiKey: string,
+    id: string,
+    query?: Query
+  ): Promise<{ filename: string; tex: string }> =>
+    get(findingExportSchema, apiKey, `/findings/${encodeURIComponent(id)}/latex`, query),
+
   createFinding: (
     apiKey: string,
-    body: { project: string; training?: string; title: string; body: string; trainingIds?: string[] }
+    body: {
+      project: string;
+      training?: string;
+      title: string;
+      body: string;
+      recommendations?: string;
+      trainingIds?: string[];
+    }
   ): Promise<Finding> => post(findingSchema, apiKey, '/findings', body),
 
   listImageCategories: (apiKey: string, datasetId: string): Promise<ImageCategory[]> =>
