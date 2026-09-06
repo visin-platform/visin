@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.175](https://github.com/visin-platform/visin-monorepo/compare/v0.0.174...v0.0.175) (2026-09-06)
+
+
+### Features
+
+* add latex export of ai analysis ([93df9f8](https://github.com/visin-platform/visin-monorepo/commit/93df9f880a1e4f8614dbd3d974f9d26b6823069c))
+
 ### [0.0.174](https://github.com/visin-platform/visin-monorepo/compare/v0.0.173...v0.0.174) (2026-09-06)
 
 
