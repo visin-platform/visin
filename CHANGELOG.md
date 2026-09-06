@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.177](https://github.com/visin-platform/visin-monorepo/compare/v0.0.176...v0.0.177) (2026-09-06)
+
+
+### Features
+
+* optimize aggregation endpoints ([8eba6b8](https://github.com/visin-platform/visin-monorepo/commit/8eba6b82b6072d7d965eeb56c321cc4f0407aec6))
+
 ### [0.0.176](https://github.com/visin-platform/visin-monorepo/compare/v0.0.175...v0.0.176) (2026-09-06)
 
 
