@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.176](https://github.com/visin-platform/visin-monorepo/compare/v0.0.175...v0.0.176) (2026-09-06)
+
+
+### Features
+
+* add assistant info to landing page ([a0d52c8](https://github.com/visin-platform/visin-monorepo/commit/a0d52c821bc35241cc49ae90433dd748d55517fc))
+
 ### [0.0.175](https://github.com/visin-platform/visin-monorepo/compare/v0.0.174...v0.0.175) (2026-09-06)
 
 
