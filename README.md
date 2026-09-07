@@ -66,9 +66,9 @@ graph LR
 | `label-front`    | 3008 | Labeling workbench and job administration          |
 | `vision-front`   | 3012 | Main application UI                                |
 
-Infrastructure in `apps/infra/`: Nginx reverse proxy (`visin-proxy`), MongoDB, Redis
-(label-service's bundle-import queue), a Cloudflare Tunnel connector (`cloudflared`),
-and Beszel monitoring.
+The stack also needs MongoDB (every service except file-service) and Redis
+(label-service's bundle-import queue). The root `compose.yml` runs both for you; a
+production deployment can point at whatever instances you already operate.
 
 ### Auth
 
@@ -203,8 +203,13 @@ touches (see `.github/workflows/test.yml`).
 
 ## Production deployment
 
-Each service has its own `compose.yml` and multi-stage `Dockerfile`. A shared
-root `.env` (copied from `.env.example`) provides secrets to all containers.
+The root `compose.yml` from [Quickstart](#run-it) is a complete deployment: set
+the four secrets it names, `NODE_ENV=production`, and a `PUBLIC_HOST` your users
+can reach, and put TLS in front of it.
+
+To run services individually instead — separate hosts, a subset of the platform,
+or your own orchestrator — each has its own `compose.yml` and multi-stage
+`Dockerfile`, and depends on nothing outside its own directory:
 
 ```sh
 cp .env.example .env
@@ -213,10 +218,20 @@ docker compose -f apps/backend/auth-service/compose.yml up -d
 # repeat for other services
 ```
 
-Deploys run via GitHub Actions (`Deploy Application Service` workflow), which
-builds each app's image from its own directory — apps never rely on the
-monorepo root at runtime. See `apps/infra/visin-proxy/` for the Nginx reverse
-proxy setup.
+Each of those files builds its image locally unless one is already present. To run
+a prebuilt image instead, point `REGISTRY` and `TAG` at one:
+
+```sh
+REGISTRY=ghcr.io/visin-platform TAG=0.0.178 \
+  docker compose -f apps/backend/auth-service/compose.yml up -d
+```
+
+The same two variables work on the root `compose.yml`, and are how you pin a
+deployment to a released version rather than tracking `latest`.
+
+Serving the frontends and APIs on separate hostnames needs a reverse proxy in
+front; any will do. If you use one shared parent domain, set `COOKIE_DOMAIN` to
+it so the session cookie reaches every subdomain.
 
 ## Contributing
 

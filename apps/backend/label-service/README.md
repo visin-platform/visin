@@ -53,11 +53,11 @@ somewhere durable rather than dropping it.
 - **Redis down**: `startImport` fails the `ImportJob` it just created and returns 502
   rather than leaving it at `pending` with nothing to run it.
 
-Redis is shared infrastructure (`apps/infra/redis/`), deployed on its own from the
-"Deploy Infrastructure Service" workflow and reached over `visinnet`. It runs with
-`appendonly yes` and `maxmemory-policy noeviction` on purpose: a queued import lives
-only in Redis until a worker takes it, so an eviction or an unsaved restart would
-strand its `ImportJob` at `pending`.
+Redis is shared infrastructure, not owned by this service — the root `compose.yml`
+runs one, and a deployment can point `REDIS_URL` at any instance. Run it with
+`appendonly yes` and `maxmemory-policy noeviction`: a queued import lives only in
+Redis until a worker takes it, so an eviction or an unsaved restart would strand its
+`ImportJob` at `pending`.
 
 ## Changing a bundle
 

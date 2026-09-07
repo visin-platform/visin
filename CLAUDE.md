@@ -13,7 +13,7 @@ apps/backend/{auth,file,group,vision,label,mcp}-service  Express + TypeScript + 
 apps/frontend/{landing,auth,account,vision,label}-front  React + Vite + MUI
 libs/backend-core     @visin/backend-core   — shared Express middleware/app bootstrap
 libs/frontend-core    @visin/frontend-core  — shared auth/API-client/React components
-apps/infra/visin-proxy  Nginx reverse proxy config
+compose.yml           the whole stack, zero-config; per-service compose.yml alongside each app
 ```
 
 Each service/front has its own `package.json`, `Dockerfile`, and `compose.yml` and never depends on the monorepo
