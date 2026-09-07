@@ -3,7 +3,7 @@
 ## Getting started
 
 1. Fork the repository and clone your fork.
-2. Follow the [Local Development](README.md#local-development) setup in the README.
+2. Follow the [Quickstart](README.md#quickstart) setup in the README.
 3. Create a branch from `main`:
    ```bash
    git checkout -b feat/your-feature-name

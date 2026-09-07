@@ -1,7 +1,7 @@
 import { Box, Button, Container, Grid, Stack, Typography } from '@mui/material';
 import { CheckCircleOutlined } from '@mui/icons-material';
 import GitHubIcon from './GitHubIcon';
-import { GITHUB_URL, OPEN_SOURCE_POINTS } from '../content';
+import { GITHUB_URL, OPEN_SOURCE_POINTS, QUICKSTART } from '../content';
 import { INK } from '../theme';
 
 export default function OpenSource() {
@@ -63,15 +63,15 @@ export default function OpenSource() {
                 overflowX: 'auto'
               }}
             >
-              <Box component="span" sx={{ color: 'rgba(255,255,255,0.45)', userSelect: 'none' }}>
-                ${' '}
-              </Box>
-              git clone https://github.com/visin-platform/visin-monorepo
-              <br />
-              <Box component="span" sx={{ color: 'rgba(255,255,255,0.45)', userSelect: 'none' }}>
-                ${' '}
-              </Box>
-              npm install && npm run dev
+              {QUICKSTART.map((cmd, i) => (
+                <Box component="span" key={cmd}>
+                  {i > 0 && <br />}
+                  <Box component="span" sx={{ color: 'rgba(255,255,255,0.45)', userSelect: 'none' }}>
+                    ${' '}
+                  </Box>
+                  {cmd}
+                </Box>
+              ))}
             </Box>
           </Grid>
         </Grid>

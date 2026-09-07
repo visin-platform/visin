@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: toomastahves/mcp-service:latest
+    image: ${REGISTRY:-toomastahves}/mcp-service:${TAG:-latest}
     restart: unless-stopped
     stop_grace_period: 15s
     ports:

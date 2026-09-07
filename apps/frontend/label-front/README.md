@@ -1,7 +1,6 @@
 # label-front
 
 Frontend for the Visin labeling platform: labeling workbench + job administration.
-Design and roadmap live in the repo root's `TODO-LABELING.md`.
 
 - Dev port: `3008`
 - Stack: React + Vite + MUI, auth/api-client from `@visin/frontend-core`

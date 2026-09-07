@@ -9,7 +9,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/visin-platform/visin-monorepo.git",
+    "url": "git+https://github.com/visin-platform/visin.git",
     "directory": "libs/backend-core"
   },
   "author": "Toomas Tahves",

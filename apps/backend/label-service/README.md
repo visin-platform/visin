@@ -1,8 +1,7 @@
 # label-service
 
 Backend for the Visin labeling platform: label bundles (uploaded image sets), labeling
-jobs, tasks, answers, and export. Design and roadmap live in the repo root's
-`TODO-LABELING.md`.
+jobs, tasks, answers, and export.
 
 - Port: `5008`
 - Stack: Express + TypeScript + Mongoose, bootstrapped from `@visin/backend-core`
@@ -80,5 +79,5 @@ npm test --workspace=label-service
 ```
 
 Copy `.env.example` to `.env` and fill in secrets (JWT secret must match auth-service).
-The import queue needs Redis: `docker compose -f docker-compose.dev.yml up -d` at the
-repo root starts it alongside MongoDB, matching the default `REDIS_URL`.
+The import queue needs Redis: `docker compose up -d mongodb redis` at the repo root
+starts it alongside MongoDB, matching the default `REDIS_URL`.

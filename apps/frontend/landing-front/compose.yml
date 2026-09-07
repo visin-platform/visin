@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: toomastahves/landing-front:latest
+    image: ${REGISTRY:-toomastahves}/landing-front:${TAG:-latest}
     restart: unless-stopped
     environment:
       VISION_FRONT_URL: ${VISION_FRONT_URL}

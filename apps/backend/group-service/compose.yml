@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: toomastahves/group-service:latest
+    image: ${REGISTRY:-toomastahves}/group-service:${TAG:-latest}
     restart: unless-stopped
     stop_grace_period: 15s
     ports:

@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: toomastahves/auth-service:latest
+    image: ${REGISTRY:-toomastahves}/auth-service:${TAG:-latest}
     restart: unless-stopped
     stop_grace_period: 15s
     ports:

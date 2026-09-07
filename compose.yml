@@ -1,0 +1,247 @@
+# Visin — the whole platform, one command.
+#
+#   docker compose up -d          # first run builds the images (a few minutes)
+#   open http://localhost:3000
+#
+# This file is the "try it" and self-host path. It needs NO configuration: every
+# secret below has a working development default, so a fresh clone boots as-is.
+# `apps/*/*/compose.yml` are the per-service production files, deployed one at a
+# time; this one runs everything together on a single host.
+#
+# ---------------------------------------------------------------------------
+# BEFORE PUTTING THIS ON A NETWORK, override at minimum:
+#   JWT_SECRET  INTERNAL_SERVICE_TOKEN  FILE_SERVICE_API_KEY  FILE_SERVICE_HMAC_SECRET
+# and set NODE_ENV=production (which also turns on Secure cookies, so serve HTTPS).
+# Put them in a `.env` beside this file — every value here reads from the
+# environment first and only falls back to the development default.
+# ---------------------------------------------------------------------------
+#
+# Reaching it from another machine: set PUBLIC_HOST to an address that machine's
+# browser can resolve, e.g. `PUBLIC_HOST=http://192.168.1.10 docker compose up -d`.
+# Note that browsers reject Secure cookies on a bare IP, so leave NODE_ENV at its
+# development default in that case, or terminate TLS in front.
+
+name: visin
+
+# Service URLs are consumed from two directions and the two values differ:
+#   *_INTERNAL / backend-to-backend  →  container DNS  (http://auth-service:5001)
+#   anything the BROWSER is handed   →  PUBLIC_HOST    (http://localhost:5001)
+# file-service is the clearest case: it signs upload URLs the browser must reach,
+# while vision-service and label-service call its /internal routes container-to-
+# container. Same variable name, deliberately different values per service.
+
+x-common: &common
+  restart: unless-stopped
+  init: true
+
+x-app-env: &app-env
+  NODE_ENV: ${NODE_ENV:-development}
+  MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/visin}
+  JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-before-exposing}
+  INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-only-internal-token-change-before-exposing}
+  CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3004,http://localhost:3007,http://localhost:3008,http://localhost:3012}
+
+x-file-creds: &file-creds
+  FILE_SERVICE_API_KEY: ${FILE_SERVICE_API_KEY:-dev-only-file-api-key-change-before-exposing}
+  FILE_SERVICE_HMAC_SECRET: ${FILE_SERVICE_HMAC_SECRET:-dev-only-file-hmac-secret-change-before-exposing}
+
+x-needs-mongo: &needs-mongo
+  mongodb:
+    condition: service_healthy
+
+services:
+  # ---------------------------------------------------------------- data stores
+  mongodb:
+    image: mongo:8.2.11
+    <<: *common
+    # Bound to loopback, not 0.0.0.0: the containers reach Mongo over the compose
+    # network and don't need this at all. It is published so `npm run dev` — which
+    # runs the apps on the host against mongodb://localhost:27017 — can use the
+    # same data store, without exposing an unauthenticated Mongo to the network.
+    ports: ['127.0.0.1:27017:27017']
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ['CMD-SHELL', 'mongosh --quiet --eval ''db.runCommand("ping").ok''']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Backs label-service's bundle-import queue (BullMQ). Nothing else needs it.
+  redis:
+    image: redis:8.2-alpine
+    <<: *common
+    command: ['redis-server', '--appendonly', 'yes']
+    ports: ['127.0.0.1:6379:6379']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Optional Mongo web UI: `docker compose --profile tools up -d`
+  mongo-express:
+    image: mongo-express:1.0.2-18
+    <<: *common
+    profiles: ['tools']
+    ports: ['127.0.0.1:8081:8081']
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
+      ME_CONFIG_BASICAUTH: 'false'
+    depends_on: *needs-mongo
+
+  # ------------------------------------------------------------------- backends
+  auth-service:
+    build: ./apps/backend/auth-service
+    image: ${REGISTRY:-visin}/auth-service:${TAG:-local}
+    <<: *common
+    ports: ['5001:5001']
+    depends_on: *needs-mongo
+    environment:
+      <<: *app-env
+      PORT: 5001
+      GROUP_SERVICE_URL: http://group-service:5006
+      # Blank disables the Google button and leaves email + password sign-in.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      # Blank on purpose: a single host needs no shared parent domain, and the
+      # code falls back to "localhost".
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      # Blank disables issuing user API keys; nothing else changes.
+      API_KEY_ENCRYPTION_SECRET: ${API_KEY_ENCRYPTION_SECRET:-}
+      # OAuth issuer + consent redirect: browser-reachable addresses.
+      AUTH_SERVICE_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5001
+      AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
+      MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
+
+  file-service:
+    build: ./apps/backend/file-service
+    image: ${REGISTRY:-visin}/file-service:${TAG:-local}
+    <<: *common
+    ports: ['5002:5002']
+    environment:
+      <<: [*app-env, *file-creds]
+      PORT: 5002
+      FILE_SERVICE_DATA_DIR: /data
+      # Browser-facing: this is what signed upload/download URLs are built from.
+      FILE_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5002
+    volumes:
+      - file_data:/data
+
+  group-service:
+    build: ./apps/backend/group-service
+    image: ${REGISTRY:-visin}/group-service:${TAG:-local}
+    <<: *common
+    ports: ['5006:5006']
+    depends_on: *needs-mongo
+    environment:
+      <<: *app-env
+      PORT: 5006
+      AUTH_SERVICE_URL: http://auth-service:5001
+
+  vision-service:
+    build: ./apps/backend/vision-service
+    image: ${REGISTRY:-visin}/vision-service:${TAG:-local}
+    <<: *common
+    ports: ['4010:4010']
+    depends_on: *needs-mongo
+    environment:
+      <<: [*app-env, *file-creds]
+      PORT: 4010
+      # Internal: /internal/* calls, container to container.
+      FILE_SERVICE_URL: http://file-service:5002
+
+  label-service:
+    build: ./apps/backend/label-service
+    image: ${REGISTRY:-visin}/label-service:${TAG:-local}
+    <<: *common
+    ports: ['5008:5008']
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: [*app-env, *file-creds]
+      PORT: 5008
+      GROUP_SERVICE_URL: http://group-service:5006
+      FILE_SERVICE_URL: http://file-service:5002
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+
+  mcp-service:
+    build: ./apps/backend/mcp-service
+    image: ${REGISTRY:-visin}/mcp-service:${TAG:-local}
+    <<: *common
+    ports: ['5009:5009']
+    depends_on: *needs-mongo
+    environment:
+      <<: *app-env
+      PORT: 5009
+      VISION_INTERNAL_URL: http://vision-service:4010
+      VISION_SERVICE_URL: http://vision-service:4010
+      # Both are read by connecting assistants, so both must be reachable.
+      MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
+      AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
+
+  # ------------------------------------------------------------------ frontends
+  # Every value here lands in a config.json the browser fetches at runtime, so
+  # all of them are PUBLIC_HOST addresses — never container names.
+  landing-front:
+    build: ./apps/frontend/landing-front
+    image: ${REGISTRY:-visin}/landing-front:${TAG:-local}
+    <<: *common
+    ports: ['3000:80']
+    environment:
+      VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
+      VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012
+
+  auth-front:
+    build: ./apps/frontend/auth-front
+    image: ${REGISTRY:-visin}/auth-front:${TAG:-local}
+    <<: *common
+    ports: ['3004:80']
+    environment:
+      AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
+      VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+
+  account-front:
+    build: ./apps/frontend/account-front
+    image: ${REGISTRY:-visin}/account-front:${TAG:-local}
+    <<: *common
+    ports: ['3007:80']
+    environment:
+      AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
+      AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
+      GROUP_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5006
+      VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012
+
+  label-front:
+    build: ./apps/frontend/label-front
+    image: ${REGISTRY:-visin}/label-front:${TAG:-local}
+    <<: *common
+    ports: ['3008:80']
+    environment:
+      AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
+      AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
+      ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
+      LABEL_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5008
+      VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012
+
+  vision-front:
+    build: ./apps/frontend/vision-front
+    image: ${REGISTRY:-visin}/vision-front:${TAG:-local}
+    <<: *common
+    ports: ['3012:80']
+    environment:
+      VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
+      AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
+      AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
+      ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
+      LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
+
+volumes:
+  mongodb_data:
+  redis_data:
+  file_data:

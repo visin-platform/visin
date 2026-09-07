@@ -7,3 +7,10 @@ Dockerfile
 dist
 credentials/
 cache/
+
+# Local file storage. .gitignore already excludes it, but Docker does not read
+# that: without this line `COPY . .` sweeps every uploaded file into the build
+# context. On a developer machine that is tens of gigabytes, and any image built
+# there would carry the uploads inside it. At runtime this path is a volume
+# (FILE_SERVICE_DATA_DIR=/data), never image content.
+data/

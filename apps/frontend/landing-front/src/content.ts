@@ -7,7 +7,15 @@
  * a paragraph to explain belongs in the docs, not on the way in.
  */
 
-export const GITHUB_URL = 'https://github.com/visin-platform';
+export const GITHUB_URL = 'https://github.com/visin-platform/visin';
+
+/**
+ * The quickstart shown in the terminal block, byte-for-byte the same three
+ * commands as the README. Docker is the only prerequisite: every secret has a
+ * development default, so a fresh clone boots with no configuration. Built from
+ * GITHUB_URL so the clone line cannot drift from the link beside it.
+ */
+export const QUICKSTART = [`git clone ${GITHUB_URL}`, 'cd visin', 'docker compose up -d'];
 
 export interface Step {
   /** Key into the icon map in Workflow.tsx. */

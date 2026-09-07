@@ -5,11 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Visin: a computer vision & analytics platform (manage datasets, train models, analyze results, label images). An
-npm-workspaces monorepo of 5 independently-deployable backend services and 5 React frontends, plus 2 shared
+npm-workspaces monorepo of 6 independently-deployable backend services and 5 React frontends, plus 2 shared
 libraries.
 
 ```
-apps/backend/{auth,file,group,vision,label}-service   Express + TypeScript + Mongoose
+apps/backend/{auth,file,group,vision,label,mcp}-service  Express + TypeScript + Mongoose
 apps/frontend/{landing,auth,account,vision,label}-front  React + Vite + MUI
 libs/backend-core     @visin/backend-core   — shared Express middleware/app bootstrap
 libs/frontend-core    @visin/frontend-core  — shared auth/API-client/React components
@@ -25,7 +25,8 @@ root at runtime or deploy time — only at dev time via npm workspace hoisting.
 npm install                          # one install at the root covers every workspace
 npm run dev                          # all backends + frontends, hot reload
 npm run dev:back / npm run dev:front # backends only / frontends only
-docker compose -f docker-compose.dev.yml up -d   # MongoDB for local dev (add --profile tools for mongo-express)
+docker compose up -d mongodb redis   # data stores for local dev (add --profile tools for mongo-express)
+docker compose up -d                 # the whole stack in containers, zero config
 
 npm run lint        # ESLint, flat config, zero warnings allowed anywhere
 npm run typecheck   # tsc --noEmit per workspace

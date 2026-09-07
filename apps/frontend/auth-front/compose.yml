@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: toomastahves/auth-front:latest
+    image: ${REGISTRY:-toomastahves}/auth-front:${TAG:-latest}
     restart: unless-stopped
     environment:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}

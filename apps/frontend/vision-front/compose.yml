@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: toomastahves/vision-front:latest
+    image: ${REGISTRY:-toomastahves}/vision-front:${TAG:-latest}
     restart: unless-stopped
     environment:
       VISION_API_URL: ${VISION_API_URL}

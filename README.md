@@ -4,7 +4,7 @@ Advanced Computer Vision & Analytics Platform — manage datasets, train models,
 
 ## Architecture
 
-Visin is an npm-workspaces monorepo of four backend services and four React frontends.
+Visin is an npm-workspaces monorepo of six backend services and five React frontends.
 Each app is independently buildable and deployable (its own `package.json`, `Dockerfile`,
 and `compose.yml`).
 
@@ -14,45 +14,61 @@ graph LR
     landing["landing-front :3000"]
     authf["auth-front :3004"]
     account["account-front :3007"]
+    labelf["label-front :3008"]
     visionf["vision-front :3012"]
   end
 
   subgraph Backends
+    visions["vision-service :4010"]
     auths["auth-service :5001"]
     files["file-service :5002"]
     groups["group-service :5006"]
-    visions["vision-service :4010"]
+    labels["label-service :5008"]
+    mcps["mcp-service :5009"]
   end
 
   landing --> visions
   authf --> auths
+  authf --> visions
   account --> auths
-  visionf --> visions
+  account --> groups
+  labelf --> auths
+  labelf --> labels
   visionf --> auths
-  visionf --> groups
+  visionf --> visions
 
   auths <--> groups
   visions --> files
+  labels --> files
+  mcps --> visions
+  mcps --> auths
 
   auths --> db[(MongoDB)]
   groups --> db
   visions --> db
+  labels --> db
+  mcps --> db
+  labels --> queue[(Redis)]
   files --> storage[/file storage/]
 ```
 
-| Workspace        | Port | Description                                       |
-| ---------------- | ---- | ------------------------------------------------- |
-| `auth-service`   | 5001 | Authentication (Google SSO), JWT, user management |
-| `file-service`   | 5002 | File upload/download with signed URLs             |
-| `group-service`  | 5006 | User group management                             |
-| `vision-service` | 4010 | Datasets, training, analysis, benchmarks          |
-| `landing-front`  | 3000 | Public landing page                               |
-| `auth-front`     | 3004 | Sign-in page                                      |
-| `account-front`  | 3007 | Account settings                                  |
-| `vision-front`   | 3012 | Main application UI                               |
+| Workspace        | Port | Description                                        |
+| ---------------- | ---- | -------------------------------------------------- |
+| `vision-service` | 4010 | Datasets, training, analysis, benchmarks           |
+| `auth-service`   | 5001 | Authentication (Google SSO), JWT, user management  |
+| `file-service`   | 5002 | File upload/download with signed URLs              |
+| `group-service`  | 5006 | User group management                              |
+| `label-service`  | 5008 | Labeling bundles, jobs, tasks, answers, export     |
+| `mcp-service`    | 5009 | MCP server exposing Visin data to AI assistants    |
+| `landing-front`  | 3000 | Public landing page                                |
+| `auth-front`     | 3004 | Sign-in page                                       |
+| `account-front`  | 3007 | Account settings                                   |
+| `label-front`    | 3008 | Labeling workbench and job administration          |
+| `vision-front`   | 3012 | Main application UI                                |
 
-Infrastructure in `apps/infra/`: Nginx reverse proxy, MongoDB, Redis (label-service's
-bundle-import queue), Cloudflare DDNS cron.
+Infrastructure in `apps/infra/`: Nginx reverse proxy (`visin-proxy`), MongoDB, Redis
+(label-service's bundle-import queue), a Cloudflare Tunnel connector (`cloudflared`),
+and Beszel monitoring.
 
 ### Auth
 
@@ -65,7 +81,7 @@ Two sign-in strategies, both issuing the same session:
   and `/auth/validate` returns 403; nothing else changes.
 
 User sessions ride an httpOnly `access_token` cookie issued by `auth-service` (its domain is a
-shared parent across every Visin subdomain in production, so one cookie authenticates all four services).
+shared parent across every Visin subdomain in production, so one cookie authenticates every backend service).
 Backend services accept that cookie, falling back to an `Authorization: Bearer` header for non-browser callers —
 vision-service's project API tokens use that header path, never the cookie.
 
@@ -83,12 +99,40 @@ Both live in `@visin/backend-core`'s `middleware/internalServiceAuth.ts`. Adding
 picking the right one of these two; skipping the gate on a route meant to be internal-only silently opens it to
 any authenticated user.
 
-## Prerequisites
-
-- **Node.js 26+** (matches CI and the Docker images)
-- **Docker** (for MongoDB in development, and for deployment)
-
 ## Quickstart
+
+### Run it
+
+Docker is the only requirement.
+
+```sh
+git clone https://github.com/visin-platform/visin.git
+cd visin
+docker compose up -d
+```
+
+Then open <http://localhost:3000>. **No configuration is needed** — every secret
+has a working development default, so a fresh clone boots as-is. The first run
+builds the images and takes a few minutes; later runs start in seconds.
+
+To reach it from another machine, give it an address that machine's browser can
+resolve:
+
+```sh
+PUBLIC_HOST=http://192.168.1.10 docker compose up -d
+```
+
+Before putting it on a network, override `JWT_SECRET`, `INTERNAL_SERVICE_TOKEN`,
+`FILE_SERVICE_API_KEY` and `FILE_SERVICE_HMAC_SECRET` in a `.env` beside
+`compose.yml`, and set `NODE_ENV=production` — which also enables `Secure`
+cookies, so serve it over HTTPS.
+
+`docker compose down` stops everything; add `-v` to also discard the database
+and uploaded files.
+
+### Develop on it
+
+For hot reload you need **Node.js 26+** as well (matching CI and the images).
 
 ```sh
 # 1. Install all workspace dependencies (one install at the root covers every app)
@@ -97,8 +141,8 @@ npm install
 # 2. Create local env files from the templates, then fill in the <change-me> values
 for f in apps/backend/*/.env.example apps/frontend/*/.env.example; do cp -n "$f" "${f%.example}"; done
 
-# 3. Start MongoDB
-docker compose -f docker-compose.dev.yml up -d
+# 3. Start just the data stores (the apps run on the host, with hot reload)
+docker compose up -d mongodb redis
 
 # 4. Start all backends and frontends with hot reload
 npm run dev
@@ -107,6 +151,10 @@ npm run dev
 The landing page is then at <http://localhost:3000> and the main app at
 <http://localhost:3012>. Add `--profile tools` to the compose command for a
 mongo-express UI at <http://localhost:8081>.
+
+Mongo and Redis are published on `127.0.0.1` only, so the host-run apps reach
+them at `localhost:27017` / `localhost:6379` while nothing is exposed to the
+network.
 
 Backends and frontends can also be started separately with `npm run dev:back`
 and `npm run dev:front`.
