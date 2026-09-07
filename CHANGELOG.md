@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.178](https://github.com/visin-platform/visin/compare/v0.0.177...v0.0.178) (2026-09-07)
+
+
+### Features
+
+* rename repo ([2e64d70](https://github.com/visin-platform/visin/commit/2e64d704df9becc307ad9e9fb36a32ec0c8c15e3))
+
 ### [0.0.177](https://github.com/visin-platform/visin-monorepo/compare/v0.0.176...v0.0.177) (2026-09-06)
 
 
