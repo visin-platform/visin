@@ -4,14 +4,14 @@
 
 ### Bug Fixes
 
-* **ci:** only attach provenance when the repository is public ([b858500](https://github.com/visin-platform/visin/commit/b858500c2a910f081942b61bd73df418f600c6ea))
-* **ci:** strip the sha256 prefix from digest filenames ([a4e3cb9](https://github.com/visin-platform/visin/commit/a4e3cb9f3c9ac0f3c4c56dbec7aebcd31596f67e))
+* **ci:** only attach provenance when the repository is public ([7ac232c](https://github.com/visin-platform/visin/commit/7ac232c1d4c25e9a23b398554b0ff15a29cc5b0f))
+* **ci:** strip the sha256 prefix from digest filenames ([b368603](https://github.com/visin-platform/visin/commit/b3686032318934e755e6abe498610a302da909c3))
 
 
 ### Chores
 
-* **release:** @visin/backend-core 1.0.0 ([64de6e7](https://github.com/visin-platform/visin/commit/64de6e7a56f2733f465c4784a231cd1b475d1f1b))
-* **release:** @visin/frontend-core 1.0.0 ([77e2ce2](https://github.com/visin-platform/visin/commit/77e2ce2d05a1d0f0731027ae3df309c6d550baa0))
+* **release:** @visin/backend-core 1.0.0 ([83f4343](https://github.com/visin-platform/visin/commit/83f43436cac6f9155144f2f2e62c10414a3a2fff))
+* **release:** @visin/frontend-core 1.0.0 ([2af0405](https://github.com/visin-platform/visin/commit/2af0405d7bc02d25b51aa1abe49aca7355074f99))
 
 ### [0.0.182](https://github.com/visin-platform/visin/compare/v0.0.181...v0.0.182) (2026-09-08)
 
