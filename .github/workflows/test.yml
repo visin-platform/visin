@@ -189,6 +189,9 @@ jobs:
           name: coverage-${{ steps.safe-name.outputs.name }}
           path: '**/coverage/lcov.info'
           if-no-files-found: ignore
+          # Read within days of a run if at all; the default of 90 keeps every
+          # push's coverage against the account's storage quota for a quarter.
+          retention-days: 7
 
   test-vision-front:
     needs: changes
@@ -257,6 +260,7 @@ jobs:
           name: coverage-vision-front
           path: apps/frontend/vision-front/coverage/lcov.info
           if-no-files-found: ignore
+          retention-days: 7
 
   e2e:
     needs: changes

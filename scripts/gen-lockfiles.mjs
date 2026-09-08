@@ -87,7 +87,16 @@ for (const rel of targets) {
       stdio: 'pipe'
     });
     copyFileSync(join(tmp, 'package-lock.json'), lockPath);
-    console.log(`  wrote ${rel}/package-lock.json`);
+    // A written-but-ignored lockfile is invisible until the image build fails,
+    // and reads as "no lockfile" everywhere in between.
+    let ignored = false;
+    try {
+      execFileSync('git', ['check-ignore', '-q', lockPath], { cwd: ROOT, stdio: 'pipe' });
+      ignored = true;
+    } catch {
+      /* exit 1 means not ignored, which is what we want */
+    }
+    console.log(`  wrote ${rel}/package-lock.json${ignored ? '  ← IGNORED BY GIT, it will not be committed' : ''}`);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
