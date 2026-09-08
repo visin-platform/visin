@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${REGISTRY:-toomastahves}/file-service:${TAG:-latest}
+    image: ${REGISTRY:-ghcr.io/visin-platform}/file-service:${TAG:-latest}
     restart: unless-stopped
     stop_grace_period: 15s
     ports:

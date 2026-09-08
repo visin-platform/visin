@@ -218,16 +218,19 @@ docker compose -f apps/backend/auth-service/compose.yml up -d
 # repeat for other services
 ```
 
-Each of those files builds its image locally unless one is already present. To run
-a prebuilt image instead, point `REGISTRY` and `TAG` at one:
+Those files run the published images from
+`ghcr.io/visin-platform`, which carry builds for both `linux/amd64` and
+`linux/arm64`, so the same tag works on a laptop and on a Raspberry Pi.
+
+`TAG` defaults to `latest`. Pin a release instead — `latest` moves, and a
+deployment that tracks it cannot be rolled back or identified after the fact:
 
 ```sh
-REGISTRY=ghcr.io/visin-platform TAG=0.0.178 \
-  docker compose -f apps/backend/auth-service/compose.yml up -d
+TAG=1.0.0 docker compose -f apps/backend/auth-service/compose.yml up -d
 ```
 
-The same two variables work on the root `compose.yml`, and are how you pin a
-deployment to a released version rather than tracking `latest`.
+`REGISTRY` points somewhere else, if you mirror the images or build your own.
+Both variables work on the root `compose.yml` too.
 
 Serving the frontends and APIs on separate hostnames needs a reverse proxy in
 front; any will do. If you use one shared parent domain, set `COOKIE_DOMAIN` to

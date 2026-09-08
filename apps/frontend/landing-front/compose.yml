@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${REGISTRY:-toomastahves}/landing-front:${TAG:-latest}
+    image: ${REGISTRY:-ghcr.io/visin-platform}/landing-front:${TAG:-latest}
     restart: unless-stopped
     environment:
       VISION_FRONT_URL: ${VISION_FRONT_URL}

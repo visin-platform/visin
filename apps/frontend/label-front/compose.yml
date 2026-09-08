@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${REGISTRY:-toomastahves}/label-front:${TAG:-latest}
+    image: ${REGISTRY:-ghcr.io/visin-platform}/label-front:${TAG:-latest}
     restart: unless-stopped
     environment:
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}

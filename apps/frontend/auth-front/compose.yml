@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${REGISTRY:-toomastahves}/auth-front:${TAG:-latest}
+    image: ${REGISTRY:-ghcr.io/visin-platform}/auth-front:${TAG:-latest}
     restart: unless-stopped
     environment:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
