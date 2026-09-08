@@ -30,9 +30,15 @@ const job = {
   progress: { tasks: 3, completed: 0, answers: 0, myAnswers: 0 }
 };
 
+// Must satisfy the whole WorkItem shape, not just the parts the assertions read:
+// the workbench dereferences `answer` without a guard (`currentItem?.answer.mine`),
+// so an item missing it throws and React unmounts the tree to a blank page —
+// which surfaces as the next locator timing out rather than as an error.
 const workItem = (id: string) => ({
   task: { _id: id, jobId: 'j1', labelImageId: `img-${id}`, order: 0 },
-  images: { frame: { url: PNG_1PX, width: 1, height: 1 }, layers: [] }
+  images: { frame: { url: PNG_1PX, width: 1, height: 1 }, layers: [] },
+  position: { index: Number(id.slice(1)) - 1, total: 3 },
+  answer: { count: 0, mine: null, latest: null }
 });
 
 test('sign-in → open job → label 3 tasks → progress reflects it', async ({ page }) => {
