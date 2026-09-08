@@ -44,10 +44,6 @@ on:
           - account-front
           - label-front
           - vision-front
-      tag:
-        description: 'Image tag (default: version in package.json)'
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -84,11 +80,12 @@ jobs:
             done
           fi
 
-          # A tag push names the version; a manual run may override it, and
-          # otherwise falls back to whatever package.json currently says.
-          if [ -n "${{ inputs.tag }}" ]; then
-            TAG='${{ inputs.tag }}'
-          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+          # The version is never typed. A tag push carries it in the tag name;
+          # a manual run takes whatever package.json says, which after a release
+          # is that release. There is no way to name a version by hand, because
+          # a hand-typed one produces images labelled with a version the
+          # repository has no record of and nothing to check out to reproduce.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             TAG="${GITHUB_REF_NAME#v}"
           else
             TAG="$(node -p "require('./package.json').version")"
