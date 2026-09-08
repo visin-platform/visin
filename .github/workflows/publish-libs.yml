@@ -45,7 +45,7 @@ on:
 
 permissions:
   contents: write # commits the version bump and the re-pinned consumers
-  id-token: write # npm trusted publishing (OIDC); without it, publish falls back to a token
+  id-token: write # lets npm attach a provenance attestation to the publish
 
 # Two library publishes at once would race on the consumer re-pin commit.
 concurrency:
@@ -100,13 +100,29 @@ jobs:
       - name: Build
         run: npm run build --workspace=@visin/${{ inputs.library }}
 
-      # No NODE_AUTH_TOKEN: npm (>= 11.5.1, which the pinned Node ships) detects
-      # the OIDC credential and publishes with provenance automatically. This
-      # requires the package to name this repository and workflow as a trusted
-      # publisher in its npmjs.com settings.
+      # Publishes with an automation token rather than npm trusted publishing,
+      # because configuring a trusted publisher needs 2FA on the npm account.
+      #
+      # --provenance keeps the part that matters: npm still attaches an
+      # attestation tying the tarball to this repository, commit and workflow
+      # run, so a consumer can verify where it came from. That works with a
+      # token as long as the job can mint an OIDC identity (id-token: write) and
+      # the package's repository field matches the repository building it,
+      # which it does.
+      #
+      # What is lost is only the absence of a stored credential. Scope NPM_TOKEN
+      # as a granular token limited to the two @visin packages, so a leak cannot
+      # reach the rest of the account, and give it an expiry.
       - name: Publish
         working-directory: libs/${{ inputs.library }}
-        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN is not set"
+            exit 1
+          fi
+          npm publish --access public --provenance
 
       # Consumers pin the lib exactly, so every one of them has to move before a
       # service image can pick the new version up. Leaving this out is the
