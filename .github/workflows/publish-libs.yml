@@ -102,27 +102,35 @@ jobs:
 
       # Publishes with an automation token rather than npm trusted publishing,
       # because configuring a trusted publisher needs 2FA on the npm account.
+      # Scope NPM_TOKEN as a granular token limited to the two @visin packages,
+      # so a leak cannot reach the rest of the account, and give it an expiry.
       #
-      # --provenance keeps the part that matters: npm still attaches an
-      # attestation tying the tarball to this repository, commit and workflow
-      # run, so a consumer can verify where it came from. That works with a
-      # token as long as the job can mint an OIDC identity (id-token: write) and
-      # the package's repository field matches the repository building it,
-      # which it does.
-      #
-      # What is lost is only the absence of a stored credential. Scope NPM_TOKEN
-      # as a granular token limited to the two @visin packages, so a leak cannot
-      # reach the rest of the account, and give it an expiry.
+      # Provenance is attached only when this repository is public. npm verifies
+      # the attestation against the source repository and rejects the whole
+      # publish — with a 422, after the tarball has been prepared — if that
+      # repository cannot be read: "Only public source repositories are
+      # supported when publishing with provenance". So asking for it while
+      # private does not degrade to publishing without it, it fails the release.
+      # Once this repository is public the flag turns itself on and later
+      # versions carry an attestation; earlier ones simply will not.
       - name: Publish
         working-directory: libs/${{ inputs.library }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VISIBILITY: ${{ github.event.repository.visibility }}
         run: |
           if [ -z "$NODE_AUTH_TOKEN" ]; then
             echo "::error::NPM_TOKEN is not set"
             exit 1
           fi
-          npm publish --access public --provenance
+
+          if [ "$VISIBILITY" = "public" ]; then
+            echo "Repository is public — publishing with provenance."
+            npm publish --access public --provenance
+          else
+            echo "::warning::repository is ${VISIBILITY:-not public}; publishing without provenance"
+            npm publish --access public
+          fi
 
       # Consumers pin the lib exactly, so every one of them has to move before a
       # service image can pick the new version up. Leaving this out is the
