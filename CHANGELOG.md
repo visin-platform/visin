@@ -1,4 +1,18 @@
 # Visin Changelog
+## [1.0.0](https://github.com/visin-platform/visin/compare/v0.0.182...v1.0.0) (2026-09-08)
+
+
+### Bug Fixes
+
+* **ci:** only attach provenance when the repository is public ([b858500](https://github.com/visin-platform/visin/commit/b858500c2a910f081942b61bd73df418f600c6ea))
+* **ci:** strip the sha256 prefix from digest filenames ([a4e3cb9](https://github.com/visin-platform/visin/commit/a4e3cb9f3c9ac0f3c4c56dbec7aebcd31596f67e))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.0.0 ([64de6e7](https://github.com/visin-platform/visin/commit/64de6e7a56f2733f465c4784a231cd1b475d1f1b))
+* **release:** @visin/frontend-core 1.0.0 ([77e2ce2](https://github.com/visin-platform/visin/commit/77e2ce2d05a1d0f0731027ae3df309c6d550baa0))
+
 ### [0.0.182](https://github.com/visin-platform/visin/compare/v0.0.181...v0.0.182) (2026-09-08)
 
 ### [0.0.181](https://github.com/visin-platform/visin/compare/v0.0.180...v0.0.181) (2026-09-08)
