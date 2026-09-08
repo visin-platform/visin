@@ -4,14 +4,14 @@
 
 ### Bug Fixes
 
-* **ci:** only attach provenance when the repository is public ([7ac232c](https://github.com/visin-platform/visin/commit/7ac232c1d4c25e9a23b398554b0ff15a29cc5b0f))
-* **ci:** strip the sha256 prefix from digest filenames ([b368603](https://github.com/visin-platform/visin/commit/b3686032318934e755e6abe498610a302da909c3))
+* **ci:** only attach provenance when the repository is public ([b2a6ece](https://github.com/visin-platform/visin/commit/b2a6ece4d8242128995638de6d90ae30f537d608))
+* **ci:** strip the sha256 prefix from digest filenames ([a138922](https://github.com/visin-platform/visin/commit/a138922a2a58d2b5b63485d1c427569da78eede4))
 
 
 ### Chores
 
-* **release:** @visin/backend-core 1.0.0 ([83f4343](https://github.com/visin-platform/visin/commit/83f43436cac6f9155144f2f2e62c10414a3a2fff))
-* **release:** @visin/frontend-core 1.0.0 ([2af0405](https://github.com/visin-platform/visin/commit/2af0405d7bc02d25b51aa1abe49aca7355074f99))
+* **release:** @visin/backend-core 1.0.0 ([963ef1d](https://github.com/visin-platform/visin/commit/963ef1d2bd06d84d436ac67edd2eb8c3c9af0ac0))
+* **release:** @visin/frontend-core 1.0.0 ([fa2e2e4](https://github.com/visin-platform/visin/commit/fa2e2e4920742035535b2ce946d13a68b6755fba))
 
 ### [0.0.182](https://github.com/visin-platform/visin/compare/v0.0.181...v0.0.182) (2026-09-08)
 
@@ -24,210 +24,210 @@
 
 ### Bug Fixes
 
-* label front e2e test ([e9f57d2](https://github.com/visin-platform/visin/commit/e9f57d286f504d634588bbc3f50f3ac5e876b9ff))
+* label front e2e test ([2ebe3a9](https://github.com/visin-platform/visin/commit/2ebe3a9d89ce9832dcbd4f5ca40291e6c38ae571))
 
 ### [0.0.178](https://github.com/visin-platform/visin/compare/v0.0.177...v0.0.178) (2026-09-07)
 
 
 ### Features
 
-* rename repo ([fac6540](https://github.com/visin-platform/visin/commit/fac6540cf2deb0f86b7aeaf458070ac4b6d07cc5))
+* rename repo ([ea508b3](https://github.com/visin-platform/visin/commit/ea508b3a5531ca1f39dcd8eea1e76d7d538aeada))
 
 ### [0.0.177](https://github.com/visin-platform/visin/compare/v0.0.176...v0.0.177) (2026-09-06)
 
 
 ### Features
 
-* optimize aggregation endpoints ([5a9abe0](https://github.com/visin-platform/visin/commit/5a9abe058005138e1151e8e90c8dc4a7eb076d6f))
+* optimize aggregation endpoints ([fa18332](https://github.com/visin-platform/visin/commit/fa18332f4dd95cd3241f6cd1dda27e2478d7c29a))
 
 ### [0.0.176](https://github.com/visin-platform/visin/compare/v0.0.175...v0.0.176) (2026-09-06)
 
 
 ### Features
 
-* add assistant info to landing page ([3e6bb3b](https://github.com/visin-platform/visin/commit/3e6bb3bf2d6e4b0ec7c28ab1f0f0be2ea39b1332))
+* add assistant info to landing page ([2b4bd59](https://github.com/visin-platform/visin/commit/2b4bd593f1836f4a8935410d43ca87e48a07cfa9))
 
 ### [0.0.175](https://github.com/visin-platform/visin/compare/v0.0.174...v0.0.175) (2026-09-06)
 
 
 ### Features
 
-* add latex export of ai analysis ([4f3453a](https://github.com/visin-platform/visin/commit/4f3453aa32fd34c72f5fb0e33bfc530a7b60c91e))
+* add latex export of ai analysis ([7b3db97](https://github.com/visin-platform/visin/commit/7b3db973f91171a8ffeeca056225a9e6daa0876c))
 
 ### [0.0.174](https://github.com/visin-platform/visin/compare/v0.0.173...v0.0.174) (2026-09-06)
 
 
 ### Features
 
-* let ai analyze data based on best epoch ([4cde115](https://github.com/visin-platform/visin/commit/4cde1154dbc231fd22eef0d73609c0cf09df8425))
+* let ai analyze data based on best epoch ([8264e8e](https://github.com/visin-platform/visin/commit/8264e8e798841458e698c94462ddc50aeb8de05d))
 
 ### [0.0.173](https://github.com/visin-platform/visin/compare/v0.0.172...v0.0.173) (2026-09-05)
 
 
 ### Bug Fixes
 
-* mcp tool responses ([77bcb54](https://github.com/visin-platform/visin/commit/77bcb54d515dcb2d71dcd1294a857992597cd1b6))
+* mcp tool responses ([75027fe](https://github.com/visin-platform/visin/commit/75027fe4d755feae6eff578445ad0532c7dd8c60))
 
 ### [0.0.172](https://github.com/visin-platform/visin/compare/v0.0.171...v0.0.172) (2026-09-05)
 
 
 ### Bug Fixes
 
-* mcp tool issues ([98b2bb7](https://github.com/visin-platform/visin/commit/98b2bb75aa09dce97356e4df3acb2af65d8b6706))
+* mcp tool issues ([bceed3b](https://github.com/visin-platform/visin/commit/bceed3b330d9d0943f353081b1f1cc59b2645c4d))
 
 ### [0.0.171](https://github.com/visin-platform/visin/compare/v0.0.170...v0.0.171) (2026-09-05)
 
 
 ### Features
 
-* add claude analysis tools ([1981ca5](https://github.com/visin-platform/visin/commit/1981ca55f0aa14382a3942ed89e4171aa36a6dcf))
+* add claude analysis tools ([405330e](https://github.com/visin-platform/visin/commit/405330eec7ec9ca8060dbb1f3c6bdf56088c349d))
 
 ### [0.0.170](https://github.com/visin-platform/visin/compare/v0.0.169...v0.0.170) (2026-09-05)
 
 
 ### Features
 
-* add agent auditing ([a8c1643](https://github.com/visin-platform/visin/commit/a8c164392513fd91eb10d035ae2a2f7899c1f0cd))
+* add agent auditing ([7551bf3](https://github.com/visin-platform/visin/commit/7551bf3658fdd5e283078ff997ea9a727bc69ffb))
 
 ### [0.0.169](https://github.com/visin-platform/visin/compare/v0.0.168...v0.0.169) (2026-09-05)
 
 
 ### Bug Fixes
 
-* add missing jwt secret to mcp service ([ba693a1](https://github.com/visin-platform/visin/commit/ba693a1512161387e3f7ad0d1d300acb5787eda8))
+* add missing jwt secret to mcp service ([393065a](https://github.com/visin-platform/visin/commit/393065a21503719813ed515fb0a7b72c687256e0))
 
 ### [0.0.168](https://github.com/visin-platform/visin/compare/v0.0.167...v0.0.168) (2026-09-05)
 
 
 ### Bug Fixes
 
-* add authorize endpoint to public cors paths ([864c63c](https://github.com/visin-platform/visin/commit/864c63c8d3063f51c69567bf920d8885f3ab23ed))
+* add authorize endpoint to public cors paths ([8ad96d9](https://github.com/visin-platform/visin/commit/8ad96d9d16a4b5a6cd90f40c9622a1b4480b663b))
 
 ### [0.0.167](https://github.com/visin-platform/visin/compare/v0.0.166...v0.0.167) (2026-09-05)
 
 
 ### Features
 
-* add public cors rules for mcp clients ([33d85e9](https://github.com/visin-platform/visin/commit/33d85e9e721d393df9c41bf5067bfbae61eb6c61))
+* add public cors rules for mcp clients ([f6566db](https://github.com/visin-platform/visin/commit/f6566db9ea2fc06c1c0628cdc4df9c2bb0d1b83e))
 
 ### [0.0.166](https://github.com/visin-platform/visin/compare/v0.0.165...v0.0.166) (2026-09-05)
 
 
 ### Features
 
-* add mcp service to deployment ([97f69b4](https://github.com/visin-platform/visin/commit/97f69b43c6099a737e4a93ae40b6be71d4accf31))
+* add mcp service to deployment ([7df6f07](https://github.com/visin-platform/visin/commit/7df6f073e1e5ef17bcb97d8987495fd1e704d1de))
 
 ### [0.0.165](https://github.com/visin-platform/visin/compare/v0.0.164...v0.0.165) (2026-09-05)
 
 
 ### Features
 
-* setup mcp service ([b9a1d4c](https://github.com/visin-platform/visin/commit/b9a1d4c99e64854cf72443660b8a1b2db2be6a04))
+* setup mcp service ([dfc7d67](https://github.com/visin-platform/visin/commit/dfc7d678efcd0f09c986e37b047166b59c3d0c01))
 
 ### [0.0.164](https://github.com/visin-platform/visin/compare/v0.0.163...v0.0.164) (2026-08-21)
 
 
 ### Bug Fixes
 
-* deleted project not disappearing from list ([8514223](https://github.com/visin-platform/visin/commit/85142233c903c3f6b535162989a81e2d0cdf5d56))
+* deleted project not disappearing from list ([1e2e0df](https://github.com/visin-platform/visin/commit/1e2e0df84d8a843d44f15791ff703c819d965d96))
 
 ### [0.0.163](https://github.com/visin-platform/visin/compare/v0.0.162...v0.0.163) (2026-08-19)
 
 
 ### Features
 
-* add status to upload ([6f635ea](https://github.com/visin-platform/visin/commit/6f635ea0851c8603ed6ebd6107bff841d66a19ec))
+* add status to upload ([0483f65](https://github.com/visin-platform/visin/commit/0483f65896dc31cb1787d7489a002be0054083be))
 
 ### [0.0.162](https://github.com/visin-platform/visin/compare/v0.0.161...v0.0.162) (2026-08-19)
 
 
 ### Features
 
-* add progress for upload ([c44f2c5](https://github.com/visin-platform/visin/commit/c44f2c54183451e8d88fc602876a42bdaeff49a3))
+* add progress for upload ([d442232](https://github.com/visin-platform/visin/commit/d4422325b9aa97439dd69a02ab7246c8ebb284f0))
 
 ### [0.0.161](https://github.com/visin-platform/visin/compare/v0.0.160...v0.0.161) (2026-08-19)
 
 
 ### Features
 
-* add upload chunking ([230c689](https://github.com/visin-platform/visin/commit/230c689f9949145b01a9829eae46bf267bc2fb4a))
+* add upload chunking ([78285b2](https://github.com/visin-platform/visin/commit/78285b27e2e54821a1ae7b7815a1abb3a7a11490))
 
 ### [0.0.160](https://github.com/visin-platform/visin/compare/v0.0.159...v0.0.160) (2026-08-19)
 
 
 ### Features
 
-* simplify dataset upload ([1b9e803](https://github.com/visin-platform/visin/commit/1b9e8030aaa92bd400d1e1cbb51f432ac9f58429))
+* simplify dataset upload ([d531ff4](https://github.com/visin-platform/visin/commit/d531ff4bfe75e563cacd1bb40c3134e2e9c62f38))
 
 ### [0.0.159](https://github.com/visin-platform/visin/compare/v0.0.158...v0.0.159) (2026-08-12)
 
 
 ### Features
 
-* make labeling tool public ([7d6f219](https://github.com/visin-platform/visin/commit/7d6f2194d4c0bbf3aab01549dd5433ab15807e3a))
+* make labeling tool public ([4df3d22](https://github.com/visin-platform/visin/commit/4df3d22dc1e3dd7af401e5bd8f34cc196b32d7fa))
 
 ### [0.0.158](https://github.com/visin-platform/visin/compare/v0.0.157...v0.0.158) (2026-08-08)
 
 
 ### Features
 
-* setup search engine discovery ([438798c](https://github.com/visin-platform/visin/commit/438798cf0cdb403ccdb0ad34c9c85e6f0bdfe126))
+* setup search engine discovery ([bd1cba2](https://github.com/visin-platform/visin/commit/bd1cba212e885e0dde54e405ea3aa474b44d2eea))
 
 ### [0.0.157](https://github.com/visin-platform/visin/compare/v0.0.156...v0.0.157) (2026-08-04)
 
 
 ### Bug Fixes
 
-* failing test ([b449863](https://github.com/visin-platform/visin/commit/b44986302d730adc444d53490dd6736652da0688))
+* failing test ([dad6eff](https://github.com/visin-platform/visin/commit/dad6eff633343693892d5275827c91ac95b1e356))
 
 ### [0.0.156](https://github.com/visin-platform/visin/compare/v0.0.155...v0.0.156) (2026-08-04)
 
 
 ### Bug Fixes
 
-* db connection retries ([bd9f69e](https://github.com/visin-platform/visin/commit/bd9f69e92df1877c831703bac3cd2f8c46d46211))
+* db connection retries ([929192e](https://github.com/visin-platform/visin/commit/929192e2453dc88a41364187a3241ce2010d4427))
 
 ### [0.0.155](https://github.com/visin-platform/visin/compare/v0.0.154...v0.0.155) (2026-08-04)
 
 
 ### Bug Fixes
 
-* db connection retries ([455a454](https://github.com/visin-platform/visin/commit/455a454b6fff98b367bbc136c879555fb156ab3f))
+* db connection retries ([6bc1f90](https://github.com/visin-platform/visin/commit/6bc1f9002c0c3104ee59610d8e8ca0ffe64cc7ac))
 
 ### [0.0.154](https://github.com/visin-platform/visin/compare/v0.0.153...v0.0.154) (2026-08-04)
 
 
 ### Features
 
-* improve labeling ux ([32922de](https://github.com/visin-platform/visin/commit/32922deb315fa11787724effcb5b2fabc16e2477))
+* improve labeling ux ([9b94c8e](https://github.com/visin-platform/visin/commit/9b94c8e816809fa5d8ad6b24e20a744485bbd26d))
 
 ### [0.0.153](https://github.com/visin-platform/visin/compare/v0.0.152...v0.0.153) (2026-08-04)
 
 
 ### Features
 
-* improve export for labeling ([4511f44](https://github.com/visin-platform/visin/commit/4511f44840643440cdc20dc3bec3da162d2c02fe))
+* improve export for labeling ([d166c16](https://github.com/visin-platform/visin/commit/d166c165dadcafcc34c29cddc00dc93f7caa5261))
 
 ### [0.0.152](https://github.com/visin-platform/visin/compare/v0.0.151...v0.0.152) (2026-08-04)
 
 
 ### Features
 
-* release libraries ([059861e](https://github.com/visin-platform/visin/commit/059861e5d027ad9be0b33ec451f156ed90c465a5))
+* release libraries ([a529713](https://github.com/visin-platform/visin/commit/a5297131429494946360ff6cbd00a9892592216f))
 
 ### [0.0.151](https://github.com/visin-platform/visin/compare/v0.0.150...v0.0.151) (2026-08-04)
 
 
 ### Features
 
-* improve ux for labeling ([9cce3ab](https://github.com/visin-platform/visin/commit/9cce3ab33bc241379c931939474c975092a08af2))
+* improve ux for labeling ([ca55822](https://github.com/visin-platform/visin/commit/ca5582249f25ab9be6a5ffa499f32d4b63d6f4ff))
 
 ### [0.0.150](https://github.com/visin-platform/visin/compare/v0.0.149...v0.0.150) (2026-08-03)
 
 
 ### Features
 
-* add chunking to file upload ([f5d78e9](https://github.com/visin-platform/visin/commit/f5d78e9bcfdf0a72fc7cd3a14216e9ac85978cdd))
+* add chunking to file upload ([53d6865](https://github.com/visin-platform/visin/commit/53d68659a61834d2d8a4841dd01e4b6b5060848e))
 
 ### [0.0.149](https://github.com/visin-platform/visin/compare/v0.0.148...v0.0.149) (2026-08-03)
 
@@ -250,57 +250,57 @@
 
 ### Features
 
-* delete labeling jobs ([6294b34](https://github.com/visin-platform/visin/commit/6294b34355684dbe00c018630b1b7632f854b8c8))
+* delete labeling jobs ([94c2eae](https://github.com/visin-platform/visin/commit/94c2eae7fa40c8fd288679ebcd7b63081388f764))
 
 ### [0.0.146](https://github.com/visin-platform/visin/compare/v0.0.145...v0.0.146) (2026-08-02)
 
 
 ### Features
 
-* setup redis queue ([7142b74](https://github.com/visin-platform/visin/commit/7142b74a50df760ec69bae86ca711bcd9203cc21))
+* setup redis queue ([6d23928](https://github.com/visin-platform/visin/commit/6d23928b9e959659f63660e51af75f385d9f7bc2))
 
 ### [0.0.145](https://github.com/visin-platform/visin/compare/v0.0.144...v0.0.145) (2026-08-02)
 
 
 ### Features
 
-* improve labeling tool ([9814280](https://github.com/visin-platform/visin/commit/98142803206b7d6330c9279035d60fedbca0c065))
+* improve labeling tool ([5fea498](https://github.com/visin-platform/visin/commit/5fea4985526d006373b5c5f544c8683c5f5d94c2))
 
 ### [0.0.144](https://github.com/visin-platform/visin/compare/v0.0.143...v0.0.144) (2026-08-02)
 
 
 ### Bug Fixes
 
-* add mandatory annotation  set ([7a358bf](https://github.com/visin-platform/visin/commit/7a358bf6c958bc1f4148c8d9f844c007aeab4b0b))
+* add mandatory annotation  set ([3a6a614](https://github.com/visin-platform/visin/commit/3a6a614c3f30c137d21e019603aee8ff9418bd83))
 
 ### [0.0.143](https://github.com/visin-platform/visin/compare/v0.0.142...v0.0.143) (2026-08-02)
 
 
 ### Bug Fixes
 
-* import time out ([be08cd8](https://github.com/visin-platform/visin/commit/be08cd857fb4c5858f41c3771a7e64d726c91ea1))
+* import time out ([3d5274a](https://github.com/visin-platform/visin/commit/3d5274afcce2a55248339dfb05d45f0bba88b2e7))
 
 ### [0.0.142](https://github.com/visin-platform/visin/compare/v0.0.141...v0.0.142) (2026-08-02)
 
 
 ### Bug Fixes
 
-* rate limiter ([b214ba6](https://github.com/visin-platform/visin/commit/b214ba65ddddcaf1178c3be7325ce666525da54b))
+* rate limiter ([2381395](https://github.com/visin-platform/visin/commit/2381395287ebdce3594c6f003eb837fcd8ba9604))
 
 ### [0.0.141](https://github.com/visin-platform/visin/compare/v0.0.140...v0.0.141) (2026-08-02)
 
 
 ### Features
 
-* release libraries ([15b978d](https://github.com/visin-platform/visin/commit/15b978df8c729ac8aaa9fd515fde5d613dbfb0d9))
-* split upload and mapping steps ([13ee4dc](https://github.com/visin-platform/visin/commit/13ee4dca2236b6e47f469a9af8ef48cd9392506b))
+* release libraries ([362e1bd](https://github.com/visin-platform/visin/commit/362e1bd310dee24e2cb0c21691bfacca2c1ab648))
+* split upload and mapping steps ([2bb247c](https://github.com/visin-platform/visin/commit/2bb247cb97add53fb66979702c8e5fcbb00957c3))
 
 ### [0.0.140](https://github.com/visin-platform/visin/compare/v0.0.139...v0.0.140) (2026-08-02)
 
 
 ### Features
 
-* fix library versions ([14c071b](https://github.com/visin-platform/visin/commit/14c071b81425680964bc206a60ab0d9a5ecc1fb6))
+* fix library versions ([01d385d](https://github.com/visin-platform/visin/commit/01d385dd9242f1e96f3bf559613102333ce83e78))
 
 ### [0.0.139](https://github.com/visin-platform/visin/compare/v0.0.138...v0.0.139) (2026-08-02)
 
@@ -311,49 +311,49 @@
 
 ### Bug Fixes
 
-* file upload error ([b2fa263](https://github.com/visin-platform/visin/commit/b2fa2632bce79382d381c6dd9c9ce8ec73a71476))
+* file upload error ([30fd4e8](https://github.com/visin-platform/visin/commit/30fd4e859e537a11e64d086a2566c6d646623335))
 
 ### [0.0.138](https://github.com/visin-platform/visin/compare/v0.0.137...v0.0.138) (2026-08-02)
 
 
 ### Bug Fixes
 
-* file upload unzip time out ([7b323f8](https://github.com/visin-platform/visin/commit/7b323f8722506465c003a47bb065f16ef4625060))
+* file upload unzip time out ([c223d50](https://github.com/visin-platform/visin/commit/c223d501ce373bdf694650547104ac30f0a486a4))
 
 ### [0.0.137](https://github.com/visin-platform/visin/compare/v0.0.136...v0.0.137) (2026-08-02)
 
 
 ### Features
 
-* add edit bundle ([2106126](https://github.com/visin-platform/visin/commit/21061266fe1d3fb7b6af601d9f15fe9cb8c6ad0a))
+* add edit bundle ([1e4417a](https://github.com/visin-platform/visin/commit/1e4417a8a130d7ccb9c0b50ddc1314443a0844f7))
 
 ### [0.0.136](https://github.com/visin-platform/visin/compare/v0.0.135...v0.0.136) (2026-08-02)
 
 
 ### Features
 
-* add mapping step to labeling ([611a769](https://github.com/visin-platform/visin/commit/611a76952411d9c39968b63a5b3adb34b059c1b9))
+* add mapping step to labeling ([bfd217a](https://github.com/visin-platform/visin/commit/bfd217a2c78a8236568da85a9c95915aa5acfc6e))
 
 ### [0.0.135](https://github.com/visin-platform/visin/compare/v0.0.134...v0.0.135) (2026-08-02)
 
 
 ### Features
 
-* add username and password login ([cdfbbd5](https://github.com/visin-platform/visin/commit/cdfbbd57ffc905811c4287a3c1ba0ee4db1ef8b4))
+* add username and password login ([e65b5b7](https://github.com/visin-platform/visin/commit/e65b5b75fa9c43548c51c6c0b6e30bad16797536))
 
 ### [0.0.134](https://github.com/visin-platform/visin/compare/v0.0.133...v0.0.134) (2026-08-02)
 
 
 ### Features
 
-* redesign landing page ([a8110ed](https://github.com/visin-platform/visin/commit/a8110ed4bbe24f1eb14980388a8946cd6a4241c3))
+* redesign landing page ([e84256f](https://github.com/visin-platform/visin/commit/e84256f033b1a871e54a9c7fcb7f2e05f9e4907c))
 
 ### [0.0.133](https://github.com/visin-platform/visin/compare/v0.0.132...v0.0.133) (2026-08-02)
 
 
 ### Features
 
-* add group management and unify side menu items ([aa8045c](https://github.com/visin-platform/visin/commit/aa8045c27cb4b7b89ad11755be0ac24da234cd95))
+* add group management and unify side menu items ([6f08666](https://github.com/visin-platform/visin/commit/6f086663c9e7a7df1084d1daf4443fbf233c4c7b))
 
 ### [0.0.132](https://github.com/visin-platform/visin/compare/v0.0.131...v0.0.132) (2026-07-30)
 
@@ -372,63 +372,63 @@
 
 ### Features
 
-* remove references to minio ([36c4837](https://github.com/visin-platform/visin/commit/36c48371a5df399388d25cc843231f52d0df2a2f))
+* remove references to minio ([4124513](https://github.com/visin-platform/visin/commit/41245139c7d7b57494ce5ff64ff0bdd6f9879864))
 
 ### [0.0.129](https://github.com/visin-platform/visin/compare/v0.0.128...v0.0.129) (2026-07-29)
 
 
 ### Features
 
-* remove old migration ([b9fa672](https://github.com/visin-platform/visin/commit/b9fa672d346356a53a0c21203713163641cb2b17))
+* remove old migration ([66f4f18](https://github.com/visin-platform/visin/commit/66f4f181c8f0be0b4f887ba4686c59868490baef))
 
 ### [0.0.128](https://github.com/visin-platform/visin/compare/v0.0.127...v0.0.128) (2026-07-29)
 
 
 ### Features
 
-* migrate minio fileid references to local file system ([816c847](https://github.com/visin-platform/visin/commit/816c847076f8d43605cf76abd27ee64986c7bcd5))
+* migrate minio fileid references to local file system ([7092eeb](https://github.com/visin-platform/visin/commit/7092eeb21d904b11d1670ed0c50bc634e8ca3b95))
 
 ### [0.0.127](https://github.com/visin-platform/visin/compare/v0.0.126...v0.0.127) (2026-07-29)
 
 
 ### Features
 
-* release libraries ([64d89af](https://github.com/visin-platform/visin/commit/64d89af461eb758e3cf06ee42e8b3752be428043))
+* release libraries ([a8f8f2a](https://github.com/visin-platform/visin/commit/a8f8f2a6bc3b0cd751173a03175b2e2249d9c13e))
 
 ### [0.0.126](https://github.com/visin-platform/visin/compare/v0.0.125...v0.0.126) (2026-07-29)
 
 
 ### Features
 
-* reduce code duplication ([a5e0e43](https://github.com/visin-platform/visin/commit/a5e0e43fb175817300e9469eeb916463da57ce30))
+* reduce code duplication ([a493cb7](https://github.com/visin-platform/visin/commit/a493cb7f51ccbfffcdab77c651dbe1657d15e370))
 
 ### [0.0.125](https://github.com/visin-platform/visin/compare/v0.0.124...v0.0.125) (2026-07-26)
 
 
 ### Features
 
-* shard slow vision front tests ([40da6b2](https://github.com/visin-platform/visin/commit/40da6b2d9483ddada7b5399543c08701c84f2085))
+* shard slow vision front tests ([77a00f5](https://github.com/visin-platform/visin/commit/77a00f553707279d73fd76e4e1579671315399ba))
 
 ### [0.0.124](https://github.com/visin-platform/visin/compare/v0.0.123...v0.0.124) (2026-07-26)
 
 
 ### Features
 
-* reduce test warnings ([964a478](https://github.com/visin-platform/visin/commit/964a478aa8271c15c5d905623f542256b29db9bd))
+* reduce test warnings ([be3a486](https://github.com/visin-platform/visin/commit/be3a486e5a42e71a9482d4e10c57f22a9c638ed9))
 
 ### [0.0.123](https://github.com/visin-platform/visin/compare/v0.0.122...v0.0.123) (2026-07-26)
 
 
 ### Features
 
-* release libraries ([c3076c4](https://github.com/visin-platform/visin/commit/c3076c48487b68d4ffc30ecbd4cbd5adf4d17abc))
+* release libraries ([3c55207](https://github.com/visin-platform/visin/commit/3c552071ccdb7802852b59aa5416d24dfee2c5d0))
 
 ### [0.0.122](https://github.com/visin-platform/visin/compare/v0.0.121...v0.0.122) (2026-07-25)
 
 
 ### Bug Fixes
 
-* address confirmed bugs and build gap from TODO analysis ([7e9e5fd](https://github.com/visin-platform/visin/commit/7e9e5fd1de92afc2b1fd7c0f70543f86630ecfae))
+* address confirmed bugs and build gap from TODO analysis ([70d5f9c](https://github.com/visin-platform/visin/commit/70d5f9c575c828b1a863294b92a159301f912f42))
 
 ### [0.0.121](https://github.com/visin-platform/visin/compare/v0.0.120...v0.0.121) (2026-07-24)
 
