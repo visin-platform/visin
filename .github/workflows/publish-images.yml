@@ -23,10 +23,27 @@ on:
   workflow_dispatch:
     inputs:
       services:
-        description: 'Services to build, space separated, or "all"'
+        description: 'What to build'
         required: true
         default: 'all'
-        type: string
+        # A dropdown, so the service names do not have to be remembered or
+        # spelled right. GitHub allows only one selection, which is why there is
+        # no way to name a subset: the cases that matter are one service and
+        # every service, and a subset is that many runs.
+        type: choice
+        options:
+          - all
+          - auth-service
+          - file-service
+          - group-service
+          - label-service
+          - mcp-service
+          - vision-service
+          - landing-front
+          - auth-front
+          - account-front
+          - label-front
+          - vision-front
       tag:
         description: 'Image tag (default: version in package.json)'
         required: false
