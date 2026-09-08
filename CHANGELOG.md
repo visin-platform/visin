@@ -1,4 +1,11 @@
 # Visin Changelog
+### [0.0.179](https://github.com/visin-platform/visin/compare/v0.0.178...v0.0.179) (2026-09-08)
+
+
+### Bug Fixes
+
+* label front e2e test ([cbb775e](https://github.com/visin-platform/visin/commit/cbb775ef37412541bfb5e7010584712f16be1189))
+
 ### [0.0.178](https://github.com/visin-platform/visin/compare/v0.0.177...v0.0.178) (2026-09-07)
 
 
