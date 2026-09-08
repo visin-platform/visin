@@ -41,24 +41,6 @@ jobs:
       - name: Fetch all tags
         run: git fetch --tags
 
-      - name: Get next version
-        id: next_version
-        run: |
-          if [ -n "${{ inputs.release-as }}" ]; then
-            next_version="${{ inputs.release-as }}"
-          else
-            current_version=$(node -p "require('./package.json').version")
-            next_version=$(npx semver $current_version -i patch)
-          fi
-          echo "next_version=$next_version" >> $GITHUB_OUTPUT
-
-      - name: Delete existing next version tag if exists
-        run: |
-          if git show-ref --tags | grep -q "refs/tags/v${{ steps.next_version.outputs.next_version }}"; then
-            git push origin :v${{ steps.next_version.outputs.next_version }} || true
-            git tag -d v${{ steps.next_version.outputs.next_version }} || true
-          fi
-
       - name: Copy .versionrc.json from .github to workflow directory
         run: |
           cp .github/.versionrc.json $GITHUB_WORKSPACE/.versionrc.json
