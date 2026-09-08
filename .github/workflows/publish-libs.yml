@@ -1,0 +1,143 @@
+# Publishes a shared library to npmjs.com.
+#
+# Why npmjs and not GitHub Packages, which hosts the container images: the npm
+# registry on GitHub Packages requires an access token to *install*, even for
+# public packages. The services install these libraries during their Docker
+# build (`npm i` inside each service's Dockerfile, which never sees this
+# monorepo), so hosting them there would mean nobody could build a Visin image —
+# or run `docker compose up` — without first creating a GitHub token. The
+# container registry is the exception that allows anonymous pulls; the npm one
+# is not.
+#
+# Publishing happens through npm trusted publishing: the job authenticates with
+# a short-lived OIDC token instead of a stored npm token, and npm attaches a
+# provenance attestation tying the tarball to this repository and commit. That
+# is the same property GITHUB_TOKEN gives the image workflow — nothing
+# long-lived is stored here.
+#
+# Deliberately separate from the image release. A service image installs these
+# libraries *from the registry*, so a library has to be published, and every
+# consumer re-pinned, before any image that needs it is built. Combining the two
+# would mean one pipeline publishing, committing its own version bump, and then
+# rebuilding from the commit it just made.
+
+name: Publish libraries
+
+on:
+  workflow_dispatch:
+    inputs:
+      library:
+        description: 'Library to publish'
+        required: true
+        type: choice
+        options:
+          - backend-core
+          - frontend-core
+      release-type:
+        description: 'Version bump'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write # commits the version bump and the re-pinned consumers
+  id-token: write # npm trusted publishing (OIDC); without it, publish falls back to a token
+
+# Two library publishes at once would race on the consumer re-pin commit.
+concurrency:
+  group: publish-libs
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install
+        run: npm ci
+
+      # Verify the library on its own before anything is published. A broken
+      # publish cannot be withdrawn — npm forbids reusing a version number.
+      - name: Verify
+        run: |
+          npm run typecheck --workspace=@visin/${{ inputs.library }}
+          npm run lint --workspace=@visin/${{ inputs.library }}
+          npm test --workspace=@visin/${{ inputs.library }}
+
+      # standard-version here only rewrites package.json: each lib's own
+      # .versionrc.json skips changelog, commit and tag, so this cannot collide
+      # with the monorepo's vX.Y.Z tags.
+      - name: Bump version
+        working-directory: libs/${{ inputs.library }}
+        run: npx standard-version --release-as ${{ inputs.release-type }}
+
+      - name: Refuse to republish an existing version
+        id: version
+        working-directory: libs/${{ inputs.library }}
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          echo "name=$NAME"       >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "::error::$NAME@$VERSION is already on the registry"
+            exit 1
+          fi
+          echo "Publishing $NAME@$VERSION"
+
+      - name: Build
+        run: npm run build --workspace=@visin/${{ inputs.library }}
+
+      # No NODE_AUTH_TOKEN: npm (>= 11.5.1, which the pinned Node ships) detects
+      # the OIDC credential and publishes with provenance automatically. This
+      # requires the package to name this repository and workflow as a trusted
+      # publisher in its npmjs.com settings.
+      - name: Publish
+        working-directory: libs/${{ inputs.library }}
+        run: npm publish --access public
+
+      # Consumers pin the lib exactly, so every one of them has to move before a
+      # service image can pick the new version up. Leaving this out is the
+      # failure the sync script exists to prevent: Docker restores a cached
+      # install of the old lib and compiles fresh source against it.
+      - name: Re-pin consumers
+        run: node scripts/sync-lib-versions.mjs
+
+      - name: Commit the bump
+        env:
+          NAME: ${{ steps.version.outputs.name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "Visinbot"
+          git config user.email "bot@visin.eu"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to commit — consumers were already pinned."
+            exit 0
+          fi
+          git commit -m "chore(release): $NAME $VERSION"
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Summary
+        env:
+          NAME: ${{ steps.version.outputs.name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          {
+            echo "### Published \`$NAME@$VERSION\`"
+            echo ""
+            echo "- <https://www.npmjs.com/package/$NAME/v/$VERSION>"
+            echo "- Consumers re-pinned; build images to pick it up."
+          } >> "$GITHUB_STEP_SUMMARY"
