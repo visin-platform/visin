@@ -1,0 +1,3 @@
+# Requests a review from the maintainer on every pull request. Without this a
+# pull request can sit unnoticed, since nothing else assigns a reviewer.
+* @toomastahves
