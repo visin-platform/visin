@@ -1,0 +1,201 @@
+# Publishes every app image to GHCR, for both linux/amd64 and linux/arm64.
+#
+# Both architectures matter and neither is optional: arm64 is what the project's
+# own deployment runs on, and amd64 is what almost every laptop and cloud VM
+# needs. Publishing one architecture makes `docker compose pull` fail for the
+# other with "no matching manifest", so they are built together and joined into
+# a single manifest list per service. A puller then gets the right one from the
+# same tag, and nothing downstream has to know which.
+#
+# Each architecture builds on its own native runner rather than under QEMU:
+# emulating arm64 on an x64 host is several times slower and used to dominate
+# the release time. The two run in parallel, so adding amd64 costs almost no
+# wall clock.
+#
+# Authentication is the job's own GITHUB_TOKEN — scoped to this run and expiring
+# with it — so no registry credential is stored in this repository.
+
+name: Publish images
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      services:
+        description: 'Services to build, space separated, or "all"'
+        required: true
+        default: 'all'
+        type: string
+      tag:
+        description: 'Image tag (default: version in package.json)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.plan.outputs.services }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: plan
+        run: |
+          ALL="auth-service file-service group-service label-service mcp-service vision-service \
+               landing-front auth-front account-front label-front vision-front"
+
+          REQUESTED='${{ inputs.services }}'
+          if [ -z "$REQUESTED" ] || [ "$REQUESTED" = "all" ]; then
+            SVCS="$ALL"
+          else
+            SVCS="$REQUESTED"
+            # Fail loudly on a typo rather than silently building nothing.
+            for s in $SVCS; do
+              case " $ALL " in
+                *" $s "*) ;;
+                *) echo "::error::unknown service '$s'"; exit 1 ;;
+              esac
+            done
+          fi
+
+          # A tag push names the version; a manual run may override it, and
+          # otherwise falls back to whatever package.json currently says.
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG='${{ inputs.tag }}'
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME#v}"
+          else
+            TAG="$(node -p "require('./package.json').version")"
+          fi
+
+          echo "services=$(printf '%s\n' $SVCS | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Building [$SVCS] as tag $TAG"
+
+  # One job per service per architecture, each on a native runner. Nothing is
+  # tagged here: each job pushes an untagged image and reports only its digest,
+  # because two jobs pushing the same tag would race and the loser would vanish.
+  build:
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both axes must be real matrix keys so this is a cross product:
+        # services x platforms. Putting `platform` only under `include` would
+        # apply each entry to every combination in turn, the later overwriting
+        # the earlier, and quietly build a single architecture.
+        service: ${{ fromJSON(needs.setup.outputs.services) }}
+        platform: [linux/amd64, linux/arm64]
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve build context
+        id: ctx
+        run: |
+          case "${{ matrix.service }}" in
+            *-front) TIER=frontend ;;
+            *)       TIER=backend ;;
+          esac
+          echo "dir=apps/$TIER/${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+          echo "pair=${{ matrix.platform }}" | tr '/' '-' >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ steps.ctx.outputs.dir }}
+          file: ./${{ steps.ctx.outputs.dir }}/Dockerfile
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.service }}-${{ steps.ctx.outputs.pair }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ steps.ctx.outputs.pair }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${{ steps.build.outputs.digest }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.service }}-${{ steps.ctx.outputs.pair }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Joins each service's two digests into one manifest list, which is the thing
+  # that actually gets a tag. Until this runs the images exist but are
+  # unreachable by name.
+  merge:
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.setup.outputs.services) }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-${{ matrix.service }}-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}
+          TAG: ${{ needs.setup.outputs.tag }}
+        run: |
+          docker buildx imagetools create \
+            --tag "$IMAGE:$TAG" \
+            --tag "$IMAGE:latest" \
+            $(printf "$IMAGE@sha256:%s " *)
+
+      - name: Verify both architectures are present
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}
+          TAG: ${{ needs.setup.outputs.tag }}
+        run: |
+          # A manifest list carrying only one architecture is the failure this
+          # whole workflow exists to prevent, and it is invisible until someone
+          # on the missing platform tries to pull. Fail here instead.
+          ARCHES=$(docker buildx imagetools inspect "$IMAGE:$TAG" --raw \
+            | jq -r '.manifests[] | select(.platform.os=="linux") | .platform.architecture' \
+            | sort -u | tr '\n' ' ')
+          echo "$IMAGE:$TAG -> $ARCHES"
+          for want in amd64 arm64; do
+            case " $ARCHES " in
+              *" $want "*) ;;
+              *) echo "::error::$IMAGE:$TAG is missing linux/$want"; exit 1 ;;
+            esac
+          done
