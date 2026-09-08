@@ -9,11 +9,12 @@ release on `main` only.
 
 Please **do not open a public issue** for security vulnerabilities.
 
-Instead, report it privately using one of these channels:
+Instead, report it privately through
+[Security → Report a vulnerability](https://github.com/visin-platform/visin/security/advisories/new).
 
-1. **GitHub private vulnerability reporting** (preferred):
-   [Security → Report a vulnerability](https://github.com/visin-platform/visin/security/advisories/new)
-2. **Email**: toomastahves@hotmail.com — include "SECURITY" in the subject line.
+The report stays private between you and the maintainers until a fix is
+published, and it keeps the discussion attached to the repository rather than in
+somebody's inbox.
 
 Please include:
 

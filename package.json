@@ -27,7 +27,9 @@
     "format": "prettier --write .",
     "sync:libs": "node scripts/sync-lib-versions.mjs",
     "sync:libs:check": "node scripts/sync-lib-versions.mjs --check",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lockfiles": "node scripts/gen-lockfiles.mjs",
+    "lockfiles:check": "node scripts/gen-lockfiles.mjs --check"
   },
   "devDependencies": {
     "concurrently": "^10.0.3",

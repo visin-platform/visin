@@ -112,6 +112,12 @@ jobs:
       - name: Check workspaces pin the current lib versions
         run: npm run sync:libs:check
 
+      # A per-service lockfile that disagrees with its package.json makes that
+      # service's `npm ci` fail during the image build — after a release has
+      # been tagged. Catch it here instead.
+      - name: Check per-service lockfiles match their package.json
+        run: npm run lockfiles:check
+
   lint:
     needs: changes
     if: needs.changes.outputs.workspaces != '[]'

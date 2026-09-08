@@ -51,9 +51,11 @@ an individual is officially representing the community in public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-toomastahves@hotmail.com. All complaints will be reviewed and investigated
-promptly and fairly.
+reported privately through
+[Security → Report a vulnerability](https://github.com/visin-platform/visin/security/advisories/new),
+which is the only private channel this repository has and is read by the
+maintainers. All complaints will be reviewed and investigated promptly and
+fairly.
 
 All community leaders are obligated to respect the privacy and security of the
 reporter of any incident.

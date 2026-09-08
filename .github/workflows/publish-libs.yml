@@ -139,6 +139,15 @@ jobs:
       - name: Re-pin consumers
         run: node scripts/sync-lib-versions.mjs
 
+      # Re-pinning changes what every consumer asks for, so both the hoisted
+      # lockfile and the per-service ones now describe the previous version.
+      # Left stale, the next image build fails at `npm ci` — after the release
+      # has been tagged and there is nothing to roll back to.
+      - name: Regenerate lockfiles
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          node scripts/gen-lockfiles.mjs
+
       - name: Commit the bump
         env:
           NAME: ${{ steps.version.outputs.name }}
