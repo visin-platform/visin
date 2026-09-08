@@ -1,9 +1,25 @@
+# Cuts a release: bumps the version, writes the changelog entry, tags it.
+#
+# Run deliberately, not on every push. Firing on push made the version a count
+# of commits rather than a statement about the software — every merge produced a
+# patch bump, a bot commit and a tag, so the history carried a release for each
+# change and the number said nothing about what had actually changed. It also
+# raced: a push landing while this ran was rejected until its author pulled the
+# bot's commit, and the tag it wanted could already exist (hence the delete step
+# below).
+#
+# The tag this creates is what triggers the image build, so cutting a release
+# and publishing images are one action.
+
 name: Conventional Changelog & Tag
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      release-as:
+        description: 'Explicit version (e.g. 1.0.0). Leave empty for a patch bump.'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -28,8 +44,12 @@ jobs:
       - name: Get next version
         id: next_version
         run: |
-          current_version=$(node -p "require('./package.json').version")
-          next_version=$(npx semver $current_version -i patch)
+          if [ -n "${{ inputs.release-as }}" ]; then
+            next_version="${{ inputs.release-as }}"
+          else
+            current_version=$(node -p "require('./package.json').version")
+            next_version=$(npx semver $current_version -i patch)
+          fi
           echo "next_version=$next_version" >> $GITHUB_OUTPUT
 
       - name: Delete existing next version tag if exists
@@ -44,7 +64,12 @@ jobs:
           cp .github/.versionrc.json $GITHUB_WORKSPACE/.versionrc.json
 
       - name: Run standard-version
-        run: npx standard-version
+        run: |
+          if [ -n "${{ inputs.release-as }}" ]; then
+            npx standard-version --release-as "${{ inputs.release-as }}"
+          else
+            npx standard-version
+          fi
 
       - name: Push changes and tags
         env:
