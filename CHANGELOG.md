@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.2.0](https://github.com/visin-platform/visin/compare/v1.1.0...v1.2.0) (2026-09-09)
+
+
+### Features
+
+* setup customizable taxonomy ([59e5447](https://github.com/visin-platform/visin/commit/59e5447ba651f8b31040a90f0405ad031226329a))
+
 ## [1.1.0](https://github.com/visin-platform/visin/compare/v1.0.0...v1.1.0) (2026-09-09)
 
 
