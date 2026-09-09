@@ -1,4 +1,23 @@
 # Visin Changelog
+## [1.1.0](https://github.com/visin-platform/visin/compare/v1.0.0...v1.1.0) (2026-09-09)
+
+
+### Features
+
+* **mcp:** tell clients which tools are read-only ([8172935](https://github.com/visin-platform/visin/commit/8172935bd6c522d9eae908e9dc0133447e2e411a))
+
+
+### Bug Fixes
+
+* **ci:** commit vision-service's lockfile, and expire coverage artifacts ([f197dae](https://github.com/visin-platform/visin/commit/f197daef2ddfc3e72d037c4956343fcfccfc738b))
+* derive release version from commits ([091e425](https://github.com/visin-platform/visin/commit/091e4253cc398f6b949a534a2fdb9c515a10f178))
+* point the per-service compose files at the published images ([3e98bb8](https://github.com/visin-platform/visin/commit/3e98bb870b7bd4fe665e8c9014764d45937f1f83))
+
+
+### Chores
+
+* harden the repository for public visibility ([c6a5776](https://github.com/visin-platform/visin/commit/c6a57762d9db965f02e9878b41d42ba12177cea2))
+
 ## [1.0.0](https://github.com/visin-platform/visin/compare/v0.0.182...v1.0.0) (2026-09-08)
 
 
