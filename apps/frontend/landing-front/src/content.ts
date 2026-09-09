@@ -36,7 +36,7 @@ export const STEPS: Step[] = [
   { icon: 'label', title: 'Label', body: 'Split the job across your team.' },
   { icon: 'train', title: 'Train', body: 'Your script posts epochs and renders.' },
   { icon: 'compare', title: 'Compare', body: 'Runs side by side, at their best epoch.' },
-  { icon: 'write', title: 'Write up', body: 'Claude drafts the paper section.' }
+  { icon: 'write', title: 'Write up', body: 'Your assistant drafts the paper section.' }
 ];
 
 export interface OpenSourcePoint {
@@ -132,7 +132,7 @@ export interface ConnectStep {
 export const CONNECT_STEPS: ConnectStep[] = [
   {
     title: 'One click, no key',
-    body: 'Point your assistant at the endpoint, tick what it may do, done. Read-only unless you say otherwise.'
+    body: 'Point your assistant at the endpoint, tick what it may do, done. Claude and ChatGPT connect this way, and so does anything else that speaks MCP. Read-only unless you say otherwise.'
   },
   {
     title: 'Reading and writing are separate',

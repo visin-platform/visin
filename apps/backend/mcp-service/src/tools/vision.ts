@@ -663,7 +663,11 @@ function registerWriteTools(server: McpServer, caller: Caller): void {
           .boolean()
           .optional()
           .describe('Whether anyone can see it. Defaults to private; only set true if the user said so.')
-      }
+      },
+      // Adds a project; touches nothing that already exists. The two update
+      // tools below leave the hint alone, because overwriting a name or
+      // replacing a run's tags does lose what was there.
+      annotations: { destructiveHint: false }
     },
     async ({ name, description, isPublic }) => {
       try {

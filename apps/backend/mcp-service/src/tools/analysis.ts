@@ -194,7 +194,9 @@ function registerWriteTools(server: McpServer, caller: Caller): void {
           .max(50)
           .optional()
           .describe('Every run the conclusion draws on, so a reader can check it')
-      }
+      },
+      // A finding is only ever added. Nothing here edits or removes one.
+      annotations: { destructiveHint: false }
     },
     async ({ project, title, body, recommendations, training, trainingIds }) => {
       try {

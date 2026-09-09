@@ -142,8 +142,8 @@ export default function Assistant() {
           </Typography>
           <Typography sx={{ color: 'rgba(255,255,255,0.75)', fontSize: '1.075rem' }}>
             Every run you record leaves a trail: epoch curves, per-class scores, benchmarks, rendered frames. Visin
-            speaks MCP, so Claude reads all of it directly and tells you what it means. Then it writes the answer onto
-            the project. Three months later that note is still there.
+            speaks MCP, so an assistant reads all of it directly and tells you what it means. Then it writes the
+            answer onto the project. Three months later that note is still there.
           </Typography>
         </Box>
 
@@ -174,7 +174,7 @@ export default function Assistant() {
               >
                 <Box aria-hidden sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#22c55e', flexShrink: 0 }} />
                 <Typography sx={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.62)' }}>
-                  Claude, connected to Visin
+                  An assistant, connected to Visin
                 </Typography>
               </Stack>
 

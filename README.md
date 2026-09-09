@@ -52,6 +52,25 @@ cookies, so serve it over HTTPS.
 `docker compose down` stops everything; add `-v` to discard the database and
 uploaded files too.
 
+## Connect an assistant
+
+`mcp-service` is a plain MCP server, so anything that speaks MCP can read your
+runs — Claude and ChatGPT both do. Point it at the endpoint:
+
+```
+http://localhost:5009/mcp
+```
+
+Sign in when it asks and tick the permissions you want to grant. It then reads
+epochs, scores, benchmarks and rendered frames, and can write findings back if
+you let it — never more than your own account can already see. Read-only tools
+say so, so a client can run them without asking every time and save the prompts
+for the handful that change something. Connected apps are listed in account
+settings, where you can disconnect one.
+
+Hosted assistants need a public HTTPS address, so behind a reverse proxy the
+endpoint is your own, e.g. `https://mcp.example.com/mcp`.
+
 ## Develop on it
 
 Hot reload additionally needs **Node.js 26+**, matching CI and the images.

@@ -242,6 +242,39 @@ describe('the protocol', () => {
     expect(body.result.tools).toEqual([]);
   });
 
+  it('says which tools are read-only, so a client need not ask before every list', async () => {
+    // The prompts a person actually reads are the rare ones. Fifteen reads
+    // behind an approval each is how `update_training` gets waved through.
+    verify.mockResolvedValue({
+      ok: true,
+      userId: 'u1',
+      keyId: 'doc-1',
+      scopes: ['vision:read', 'vision:write', 'analysis:write']
+    });
+
+    const { body } = await rpc('tools/list');
+    const annotations = new Map(
+      body.result.tools.map((tool: { name: string; annotations?: unknown }) => [
+        tool.name,
+        tool.annotations
+      ])
+    );
+
+    expect(annotations.get('list_projects')).toMatchObject({
+      readOnlyHint: true,
+      openWorldHint: false
+    });
+    expect(annotations.get('view_visualizations')).toMatchObject({ readOnlyHint: true });
+    expect(annotations.get('update_training')).toMatchObject({ readOnlyHint: false });
+    // Additive writes say so for themselves; renaming a run does not, because
+    // it overwrites what was there.
+    expect(annotations.get('record_finding')).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false
+    });
+    expect(annotations.get('update_project')).not.toMatchObject({ destructiveHint: false });
+  });
+
   it.each([
     ['resources/list', 'resources'],
     ['resources/templates/list', 'resourceTemplates'],

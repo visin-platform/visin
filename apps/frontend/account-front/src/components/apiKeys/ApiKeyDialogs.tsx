@@ -82,7 +82,7 @@ export const CreateApiKeyDialog: React.FC<CreateApiKeyDialogProps> = ({
             fullWidth
             size="small"
             label="What is it for?"
-            placeholder="Claude Code"
+            placeholder="My assistant"
             value={name}
             disabled={busy}
             onChange={event => setName(event.target.value)}

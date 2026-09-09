@@ -5,7 +5,7 @@ import ProductVisual from './ProductVisual';
 import { GITHUB_URL } from '../content';
 import { INK } from '../theme';
 
-const BADGES = ['Analyses your runs with Claude', 'Open source, MIT', 'Self-hosted'];
+const BADGES = ['Analyses your runs over MCP', 'Open source, MIT', 'Self-hosted'];
 
 interface HeroProps {
   appUrl: string;
@@ -51,9 +51,10 @@ export default function Hero({ appUrl }: HeroProps) {
             </Typography>
 
             <Typography sx={{ fontSize: { xs: '1.05rem', md: '1.2rem' }, color: 'rgba(255,255,255,0.75)', mb: 4, maxWidth: 560 }}>
-              Visin records every epoch, score and rendered frame your training produces. Connect Claude
-              and it reads them — not your summary of them — then drafts the paper section, table
-              included. Runs on your own machines.
+              Visin records every epoch, score and rendered frame your training produces. Connect an
+              assistant that speaks MCP — Claude, ChatGPT, your own — and it reads them, not your
+              summary of them, then drafts the paper section, table included. Runs on your own
+              machines.
             </Typography>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
