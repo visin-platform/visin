@@ -16,6 +16,7 @@ import ProjectBenchmarksTab from './ProjectBenchmarksTab';
 import ProjectComparisonsTab from './ProjectComparisonsTab';
 import FindingsPanel from '../analysis/FindingsPanel';
 import ProjectSettings from '../ProjectSettings';
+import { discoverClasses, discoverConditions } from '../../taxonomy/discover';
 import { Training, TestResultsPaginatedResponse, BenchmarksPaginatedResponse } from '../../types';
 import { Project } from '../../types/Project';
 
@@ -121,6 +122,13 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
   onBenchmarksRowsPerPageChange,
   project
 }) => {
+  // Conditions and classes this project's results already use, so the settings
+  // editor can offer them rather than making someone retype what is in the data.
+  const discoveredVocabulary = React.useMemo(() => {
+    const results = testResultsResponse?.data?.testResults ?? [];
+    return { conditions: discoverConditions(results), classes: discoverClasses(results) };
+  }, [testResultsResponse]);
+
   return (
     <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
@@ -240,7 +248,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       {isOwner && (
         <TabPanel value={tabValue} index={7}>
           <Box sx={{ px: 3 }}>
-            <ProjectSettings project={project} />
+            <ProjectSettings project={project} discovered={discoveredVocabulary} />
           </Box>
         </TabPanel>
       )}

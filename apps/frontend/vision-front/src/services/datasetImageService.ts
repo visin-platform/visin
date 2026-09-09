@@ -1,7 +1,12 @@
 import { visionApi } from '../config/visionApi';
 import { ApiResponse } from '../types';
 
-export type WeatherCondition = 'day_fair' | 'night_fair' | 'day_rain' | 'night_rain' | 'snow';
+/**
+ * A capture condition, as a free string. Images arrive from ingest pipelines over
+ * the API, which cannot register a vocabulary first, so this is deliberately open —
+ * a project's taxonomy relabels what turns up, it never limits it.
+ */
+export type ImageCondition = string;
 
 export interface DatasetImage {
   _id: string;
@@ -19,7 +24,7 @@ export interface DatasetImage {
   height?: number;
   tags: string[];
   labels: string[];
-  weatherCondition?: WeatherCondition;
+  condition?: ImageCondition;
   metadata: Record<string, unknown>;
   signedUrl?: string;
   signedUrlExpiresAt?: string;
@@ -53,7 +58,7 @@ export const getAllImages = async (
   search?: string,
   tags?: string,
   random?: boolean,
-  weatherCondition?: WeatherCondition
+  condition?: ImageCondition
 ): Promise<DatasetImagesResponse> => {
   const response = await visionApi.get('/dataset-images', {
     params: {
@@ -62,7 +67,7 @@ export const getAllImages = async (
       search,
       tags,
       random: random ? 'true' : undefined,
-      weatherCondition
+      condition
     }
   });
   return response.data as DatasetImagesResponse;
@@ -78,12 +83,12 @@ export const getImagesByDataset = async (
   search?: string,
   categoryId?: string,
   tags?: string,
-  weatherCondition?: WeatherCondition,
+  condition?: ImageCondition,
   sortBy?: 'updatedAt' | 'createdAt' | 'filename',
   sortOrder?: 'asc' | 'desc'
 ): Promise<DatasetImagesResponse> => {
   const response = await visionApi.get(`/dataset-images/dataset/${datasetId}`, {
-    params: { page, limit, search, categoryId, tags, weatherCondition, sortBy, sortOrder }
+    params: { page, limit, search, categoryId, tags, condition, sortBy, sortOrder }
   });
   return response.data as DatasetImagesResponse;
 };
@@ -131,7 +136,7 @@ export const createDatasetImage = async (imageData: {
   height?: number;
   tags?: string[];
   labels?: string[];
-  weatherCondition?: WeatherCondition;
+  condition?: ImageCondition;
   metadata?: Record<string, unknown>;
 }): Promise<DatasetImage> => {
   const response = await visionApi.post('/dataset-images', imageData);
@@ -149,7 +154,7 @@ export const updateDatasetImage = async (
     tags?: string[];
     labels?: string[];
     categoryId?: string;
-    weatherCondition?: WeatherCondition;
+    condition?: ImageCondition;
     metadata?: Record<string, unknown>;
   }
 ): Promise<DatasetImage> => {

@@ -148,7 +148,7 @@ const defaultDatasetImages = {
   setPage: vi.fn(),
   pageSize: 50,
   setPageSize: vi.fn(),
-  filters: { category: '', tags: [], weather: '' },
+  filters: { category: '', tags: [], condition: '' },
   updateFilter: vi.fn()
 };
 
@@ -174,8 +174,8 @@ const defaultImageEditor = {
   setSelectedCategoryForEdit: vi.fn(),
   selectedTagsForEdit: '',
   setSelectedTagsForEdit: vi.fn(),
-  selectedWeatherForEdit: '',
-  setSelectedWeatherForEdit: vi.fn(),
+  selectedConditionForEdit: '',
+  setSelectedConditionForEdit: vi.fn(),
   closeEditImageModal: vi.fn(),
   handleEditImageCategory: vi.fn(),
   handleSaveImageCategory: vi.fn()

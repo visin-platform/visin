@@ -23,17 +23,21 @@ import {
   ArrowBack as ArrowBackIcon,
   ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
-import { DatasetImage, WeatherCondition } from '../../services/datasetImageService';
+import { DatasetImage, ImageCondition } from '../../services/datasetImageService';
 import { ImageCategory } from '../../services/imageCategoryService';
+import { humanize } from '../../taxonomy/humanize';
 
-// Weather condition options
-const WEATHER_CONDITIONS: { value: WeatherCondition; label: string }[] = [
-  { value: 'day_fair', label: 'Day Fair' },
-  { value: 'night_fair', label: 'Night Fair' },
-  { value: 'day_rain', label: 'Day Rain' },
-  { value: 'night_rain', label: 'Night Rain' },
-  { value: 'snow', label: 'Snow' }
-];
+/**
+ * Quality markers this grid highlights. A tag equal to one of these, or containing
+ * it, colours the badge. Configurable per dataset rather than the old fixed
+ * `good_annotations` / `bad_annotations` pair.
+ */
+export interface QualityLabels {
+  good: string[];
+  bad: string[];
+}
+
+const DEFAULT_QUALITY_LABELS: QualityLabels = { good: ['good'], bad: ['bad'] };
 
 interface DatasetImagesTabProps {
   images: DatasetImage[];
@@ -43,9 +47,14 @@ interface DatasetImagesTabProps {
   filters: {
     category: string;
     tags: string[];
-    weather: WeatherCondition | '';
+    condition: ImageCondition;
   };
-  updateFilter: (key: 'category' | 'tags' | 'weather', value: string | string[] | WeatherCondition) => void;
+  updateFilter: (key: 'category' | 'tags' | 'condition', value: string | string[]) => void;
+  /** conditions present in this dataset, for the filter dropdown */
+  conditionOptions?: string[];
+  /** what the condition axis is called — "Weather", "Scenario", "Site", … */
+  conditionLabel?: string;
+  qualityLabels?: QualityLabels;
   categories: ImageCategory[];
   availableTags: string[];
   onImageClick: (image: DatasetImage) => void;
@@ -67,6 +76,9 @@ const DatasetImagesTab: React.FC<DatasetImagesTabProps> = ({
   error,
   filters,
   updateFilter,
+  conditionOptions = [],
+  conditionLabel = 'Condition',
+  qualityLabels = DEFAULT_QUALITY_LABELS,
   categories,
   availableTags,
   onImageClick,
@@ -137,23 +149,25 @@ const DatasetImagesTab: React.FC<DatasetImagesTabProps> = ({
           </Select>
         </FormControl>
 
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel>Filter by Weather</InputLabel>
-          <Select
-            value={filters.weather}
-            onChange={(e) => updateFilter('weather', e.target.value)}
-            label="Filter by Weather"
-          >
-            <MenuItem value="">
-              <em>All Weather Conditions</em>
-            </MenuItem>
-            {WEATHER_CONDITIONS.map((condition) => (
-              <MenuItem key={condition.value} value={condition.value}>
-                {condition.label}
+        {conditionOptions.length > 0 && (
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>{`Filter by ${conditionLabel}`}</InputLabel>
+            <Select
+              value={filters.condition}
+              onChange={(e) => updateFilter('condition', e.target.value)}
+              label={`Filter by ${conditionLabel}`}
+            >
+              <MenuItem value="">
+                <em>{`All ${conditionLabel}s`}</em>
               </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+              {conditionOptions.map((condition) => (
+                <MenuItem key={condition} value={condition}>
+                  {humanize(condition)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
 
         <Autocomplete
           multiple
@@ -245,12 +259,12 @@ const DatasetImagesTab: React.FC<DatasetImagesTabProps> = ({
           }}
         >
           {images.map((image: DatasetImage) => {
-            const hasGoodLabel = image.tags.some(tag => 
-              tag.toLowerCase().includes('good') || tag === 'good_annotations'
-            );
-            const hasBadLabel = image.tags.some(tag => 
-              tag.toLowerCase().includes('bad') || tag === 'bad_annotations'
-            );
+            const matches = (markers: string[]) =>
+              image.tags.some(tag =>
+                markers.some(marker => tag.toLowerCase().includes(marker.toLowerCase()))
+              );
+            const hasGoodLabel = matches(qualityLabels.good);
+            const hasBadLabel = matches(qualityLabels.bad);
             
             let statusColor = 'warning.main'; // unlabeled
             let statusText = 'Unlabeled';

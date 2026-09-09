@@ -151,7 +151,7 @@ function describeClass(scores: Record<string, unknown>): string {
 /**
  * A test result as a table rather than nested JSON.
  *
- * A condition is not one shape: the weather conditions break down by class,
+ * A condition is not one shape: named conditions break down by class,
  * while the top-level `overall` is a flat set of summary numbers. Both are
  * rendered, the scalars gathered onto one line so a summary does not sprawl
  * into six.

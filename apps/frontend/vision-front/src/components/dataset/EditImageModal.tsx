@@ -8,17 +8,9 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { WeatherCondition } from '../../services/datasetImageService';
+import { ImageCondition } from '../../services/datasetImageService';
 import { ImageCategory } from '../../services/imageCategoryService';
-
-// Weather condition options
-const WEATHER_CONDITIONS: { value: WeatherCondition; label: string }[] = [
-  { value: 'day_fair', label: 'Day Fair' },
-  { value: 'night_fair', label: 'Night Fair' },
-  { value: 'day_rain', label: 'Day Rain' },
-  { value: 'night_rain', label: 'Night Rain' },
-  { value: 'snow', label: 'Snow' }
-];
+import { humanize } from '../../taxonomy/humanize';
 
 interface EditImageModalProps {
   open: boolean;
@@ -27,8 +19,16 @@ interface EditImageModalProps {
   categories: ImageCategory[];
   selectedCategory: string;
   setSelectedCategory: (id: string) => void;
-  selectedWeather: WeatherCondition | '';
-  setSelectedWeather: (weather: WeatherCondition | '') => void;
+  selectedCondition: ImageCondition;
+  setSelectedCondition: (condition: ImageCondition) => void;
+  /**
+   * Conditions already seen in this dataset, offered as suggestions. Not a closed
+   * list: ingest pipelines set conditions over the API, so a value that has never
+   * been seen here is still valid and typing a new one is allowed.
+   */
+  conditionOptions?: string[];
+  /** what the condition axis is called — "Weather", "Scenario", "Site", … */
+  conditionLabel?: string;
   selectedTags: string;
   setSelectedTags: (tags: string) => void;
 }
@@ -40,8 +40,10 @@ const EditImageModal: React.FC<EditImageModalProps> = ({
   categories,
   selectedCategory,
   setSelectedCategory,
-  selectedWeather,
-  setSelectedWeather,
+  selectedCondition,
+  setSelectedCondition,
+  conditionOptions = [],
+  conditionLabel = 'Condition',
   selectedTags,
   setSelectedTags
 }) => {
@@ -57,7 +59,7 @@ const EditImageModal: React.FC<EditImageModalProps> = ({
             color: "text.secondary",
             mb: 2
           }}>
-          Update the category, weather condition, and tags for this image.
+          Update the category, {conditionLabel.toLowerCase()}, and tags for this image.
         </Typography>
         <TextField
           select
@@ -80,25 +82,25 @@ const EditImageModal: React.FC<EditImageModalProps> = ({
           ))}
         </TextField>
         <TextField
-          select
           fullWidth
-          label="Weather Condition"
-          value={selectedWeather}
-          onChange={(e) => setSelectedWeather(e.target.value as WeatherCondition | '')}
-          slotProps={{
-            select: {
-              native: true,
-            }
-          }}
+          label={conditionLabel}
+          value={selectedCondition}
+          onChange={(e) => setSelectedCondition(e.target.value)}
+          slotProps={{ htmlInput: { list: 'image-condition-options' } }}
+          helperText={
+            conditionOptions.length > 0
+              ? `Existing values: ${conditionOptions.join(', ')}. Any value is allowed.`
+              : 'Any value is allowed. Leave blank for none.'
+          }
           sx={{ mb: 2 }}
-        >
-          <option value="">No Weather Condition</option>
-          {WEATHER_CONDITIONS.map((condition) => (
-            <option key={condition.value} value={condition.value}>
-              {condition.label}
+        />
+        <datalist id="image-condition-options">
+          {conditionOptions.map((condition) => (
+            <option key={condition} value={condition}>
+              {humanize(condition)}
             </option>
           ))}
-        </TextField>
+        </datalist>
         <TextField
           fullWidth
           label="Tags"

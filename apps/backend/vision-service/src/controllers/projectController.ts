@@ -54,9 +54,9 @@ export const getProjectByIdOrSlug = async (req: AuthRequest, res: Response): Pro
 // Create project
 export const createProject = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user!.id;
-  const { name, description, isPublic } = req.body;
+  const { name, description, isPublic, taxonomy } = req.body;
 
-  const savedProject = await projectService.createProject(userId, { name, description, isPublic });
+  const savedProject = await projectService.createProject(userId, { name, description, isPublic, taxonomy });
 
   res.status(201).json({
     success: true,
@@ -69,9 +69,9 @@ export const createProject = async (req: AuthRequest, res: Response): Promise<vo
 export const updateProject = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
   const userId = req.user!.id;
-  const { name, description, isPublic, slug } = req.body;
+  const { name, description, isPublic, slug, taxonomy } = req.body;
 
-  const updatedProject = await projectService.updateProject(id, userId, { name, description, isPublic, slug });
+  const updatedProject = await projectService.updateProject(id, userId, { name, description, isPublic, slug, taxonomy });
 
   res.json({
     success: true,

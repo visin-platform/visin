@@ -23,7 +23,8 @@ const baseProps = {
   pagination: { page: 1, limit: 25, total: 0, pages: 1 },
   isLoading: false,
   error: null,
-  filters: { category: '', tags: [] as string[], weather: '' as const },
+  filters: { category: '', tags: [] as string[], condition: '' },
+  conditionOptions: ['day_fair', 'snow'],
   updateFilter: vi.fn(),
   categories,
   availableTags: ['tag1', 'tag2'],
@@ -179,15 +180,28 @@ describe('DatasetImagesTab', () => {
     expect(updateFilter).toHaveBeenCalledWith('category', 'c1');
   });
 
-  it('updates the weather filter', () => {
+  it('updates the condition filter using the values seen in the dataset', () => {
     const updateFilter = vi.fn();
     render(<DatasetImagesTab {...baseProps} updateFilter={updateFilter} />);
 
-    const [, weatherSelect] = screen.getAllByRole('combobox');
-    fireEvent.mouseDown(weatherSelect);
+    const [, conditionSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(conditionSelect);
     fireEvent.click(within(screen.getByRole('listbox')).getByText('Snow'));
 
-    expect(updateFilter).toHaveBeenCalledWith('weather', 'snow');
+    expect(updateFilter).toHaveBeenCalledWith('condition', 'snow');
+  });
+
+  it('hides the condition filter when the dataset uses no conditions', () => {
+    render(<DatasetImagesTab {...baseProps} conditionOptions={[]} />);
+
+    expect(screen.queryByLabelText(/Filter by Condition/)).not.toBeInTheDocument();
+  });
+
+  it('labels the condition filter with the project wording', () => {
+    render(<DatasetImagesTab {...baseProps} conditionLabel="Site" />);
+
+    expect(screen.getAllByText('Filter by Site').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Filter by Condition')).not.toBeInTheDocument();
   });
 
   it('shows pagination controls and disables Previous on the first page', () => {

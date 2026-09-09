@@ -347,6 +347,50 @@ describe('projectSchemas', () => {
     expect(createProjectBodySchema.safeParse({}).success).toBe(false);
   });
 
+  it('createProjectBodySchema accepts a taxonomy and rejects a malformed one', () => {
+    const ok = createProjectBodySchema.parse({
+      name: 'P',
+      taxonomy: {
+        conditionLabel: 'Site',
+        taskType: 'detection',
+        conditions: [{ key: 'line_a', label: 'Line A', color: '#1976d2', order: 0 }],
+        metrics: [{ key: 'rmse', direction: 'lower', decimals: 3, format: 'number' }]
+      }
+    });
+    expect(ok.taxonomy?.conditions?.[0].key).toBe('line_a');
+    expect(ok.taxonomy?.metrics?.[0].direction).toBe('lower');
+
+    // a term with no key would be unaddressable
+    expect(
+      createProjectBodySchema.safeParse({ name: 'P', taxonomy: { conditions: [{ label: 'x' }] } })
+        .success
+    ).toBe(false);
+    expect(
+      createProjectBodySchema.safeParse({ name: 'P', taxonomy: { taskType: 'sorcery' } }).success
+    ).toBe(false);
+    expect(
+      createProjectBodySchema.safeParse({
+        name: 'P',
+        taxonomy: { metrics: [{ key: 'iou', direction: 'sideways' }] }
+      }).success
+    ).toBe(false);
+    expect(
+      createProjectBodySchema.safeParse({ name: 'P', taxonomy: { classes: [{ key: 'c', color: 'red' }] } })
+        .success
+    ).toBe(false);
+  });
+
+  it('a taxonomy never constrains which conditions or classes may be reported', () => {
+    // the point of the design: it decorates discovered keys, it does not gate them
+    const parsed = createProjectBodySchema.parse({
+      name: 'P',
+      taxonomy: { conditions: [{ key: 'day_fair' }] }
+    });
+    expect(parsed.taxonomy?.conditions).toHaveLength(1);
+    // and creating a result for some other condition is a different schema entirely
+    expect(createProjectBodySchema.safeParse({ name: 'P' }).success).toBe(true);
+  });
+
   it('updateProjectBodySchema does not coerce isPublic', () => {
     expect(updateProjectBodySchema.safeParse({ isPublic: 'yes' }).success).toBe(false);
     expect(updateProjectBodySchema.parse({ slug: 's' }).slug).toBe('s');

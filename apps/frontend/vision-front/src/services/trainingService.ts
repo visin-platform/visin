@@ -13,9 +13,12 @@ export interface TrainingStats {
   totalTime: number;
   totalEpochs: number;
   avgEpochTime: number;
-  totalCpuCost: number;
-  totalGpuCost: number;
-  totalCost: number;
+  /** absent when no project involved has priced its hardware */
+  totalCpuCost?: number;
+  totalGpuCost?: number;
+  totalCost?: number;
+  /** ISO code the costs are in; 'MIXED' when they span currencies */
+  currency?: string;
   filters: {
     status: string | null;
     datasetId: string | null;

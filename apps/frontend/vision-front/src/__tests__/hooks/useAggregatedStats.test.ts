@@ -22,19 +22,29 @@ describe('useAggregatedStats', () => {
     expect(result.current.aggregatedStats).toBeNull();
   });
 
-  it('detects no cyclist+pedestrian data when absent', () => {
-    const { result } = renderHook(() => useAggregatedStats([makeTestResult()]));
-    expect(result.current.hasCyclistPedestrianData).toBe(false);
-  });
-
-  it('detects cyclist+pedestrian data when present', () => {
+  it('picks up a multi-word class without it being special-cased', () => {
     const testResult = makeTestResult({
       test_results: {
         day_fair: { 'cyclist + pedestrian': { iou: 0.5, precision: 0.6, recall: 0.4, ap: 0.55 } },
       },
     });
     const { result } = renderHook(() => useAggregatedStats([testResult]));
-    expect(result.current.hasCyclistPedestrianData).toBe(true);
+
+    expect(result.current.aggregatedStats!['day_fair']['cyclist + pedestrian'].iou.mean).toBeCloseTo(0.5);
+  });
+
+  it('aggregates a vocabulary the platform has never seen', () => {
+    const factory = makeTestResult({
+      test_results: {
+        line_a: { scratch: { iou: 0.4, precision: 0.5 }, dent: { iou: 0.9 } },
+      },
+    });
+    const { result } = renderHook(() => useAggregatedStats([factory]));
+    const stats = result.current.aggregatedStats!;
+
+    expect(Object.keys(stats)).toEqual(['line_a']);
+    expect(stats['line_a']['scratch'].iou.mean).toBeCloseTo(0.4);
+    expect(stats['line_a']['dent'].iou.mean).toBeCloseTo(0.9);
   });
 
   it('computes the mean IoU for a single result correctly', () => {
@@ -65,11 +75,20 @@ describe('useAggregatedStats', () => {
     expect(vehicleIou.mean).toBeCloseTo(0.7); // (0.8 + 0.6) / 2
   });
 
-  it('skips conditions with no data for a class', () => {
+  it('omits a condition the data never mentions, rather than inventing zeroes', () => {
     const { result } = renderHook(() => useAggregatedStats([makeTestResult()]));
-    const nightFair = result.current.aggregatedStats!['night_fair'];
+    const stats = result.current.aggregatedStats!;
 
-    expect(nightFair['vehicle'].iou.values).toHaveLength(0);
-    expect(nightFair['vehicle'].iou.mean).toBe(0);
+    expect(Object.keys(stats)).toEqual(['day_fair']);
+    expect(stats['night_fair']).toBeUndefined();
+  });
+
+  it('leaves a metric a class never reported at zero with no values', () => {
+    const { result } = renderHook(() => useAggregatedStats([makeTestResult()]));
+    // the fixture reports no f1_score anywhere
+    const vehicle = result.current.aggregatedStats!['day_fair']['vehicle'];
+
+    expect(vehicle.f1_score.values).toHaveLength(0);
+    expect(vehicle.f1_score.mean).toBe(0);
   });
 });

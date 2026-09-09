@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import IoUMetricsTable from './IoUMetricsTable';
+import { TaxonomyProvider } from '../../taxonomy/TaxonomyProvider';
 
 const iouMetric = (v: number) => ({ iou: { mean: v } });
 
@@ -50,6 +51,41 @@ describe('IoUMetricsTable', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /latex/i })[0]);
 
     expect(screen.getByText(/IoU Metrics LaTeX Code/)).toBeInTheDocument();
+  });
+
+  it('renders a vocabulary the platform has never seen, from the data alone', () => {
+    const factory = {
+      training: { _id: 't1', name: 'Run 1' },
+      testResultsCount: 1,
+      aggregatedResults: { line_a: { scratch: { iou: { mean: 0.5 } }, dent: { iou: { mean: 0.7 } } } }
+    } as unknown as ReturnType<typeof makeComparison>;
+
+    renderTable([factory]);
+
+    expect(screen.getAllByText('LINE A').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Scratch IoU').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Dent IoU').length).toBeGreaterThan(0);
+    expect(screen.queryByText('DAY FAIR')).not.toBeInTheDocument();
+  });
+
+  it('uses the project labels and ordering when a taxonomy is configured', () => {
+    render(
+      <MemoryRouter>
+        <TaxonomyProvider
+          taxonomy={{
+            conditionLabel: 'Shift',
+            conditions: [{ key: 'day_fair', label: 'Morning Shift' }],
+            classes: [{ key: 'human', label: 'Operator' }]
+          }}
+        >
+          <IoUMetricsTable comparisonData={[makeComparison('t1', 'Run 1', 0.5)]} />
+        </TaxonomyProvider>
+      </MemoryRouter>
+    );
+
+    expect(screen.getAllByText('MORNING SHIFT').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Operator IoU').length).toBeGreaterThan(0);
+    expect(screen.getByText(/by shift and classes/)).toBeInTheDocument();
   });
 
   it('sorts by training name, toggling direction on repeated clicks', () => {

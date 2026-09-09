@@ -105,10 +105,21 @@ const DatasetDetailPage: React.FC = () => {
     retry: false,
   });
 
-  const images = imagesData?.data?.images || [];
+  const images = React.useMemo(() => imagesData?.data?.images || [], [imagesData]);
   const pagination = imagesData?.data?.pagination || { page: 1, limit: 50, total: 0, pages: 1 };
   const datasetCategories = categoriesData || [];
   const availableTags = availableTagsData || [];
+
+  // Conditions actually present on this page of images. Datasets are not
+  // project-scoped, so there is no taxonomy to read here — the values ingest
+  // pipelines have written are the vocabulary.
+  const conditionOptions = React.useMemo(
+    () =>
+      Array.from(
+        new Set(images.map(image => image.condition).filter((c): c is string => Boolean(c)))
+      ).sort((a, b) => a.localeCompare(b)),
+    [images]
+  );
 
   const {
     categoryModalOpen,
@@ -132,8 +143,8 @@ const DatasetDetailPage: React.FC = () => {
     setSelectedCategoryForEdit,
     selectedTagsForEdit,
     setSelectedTagsForEdit,
-    selectedWeatherForEdit,
-    setSelectedWeatherForEdit,
+    selectedConditionForEdit,
+    setSelectedConditionForEdit,
     closeEditImageModal,
     handleEditImageCategory,
     handleSaveImageCategory
@@ -291,6 +302,7 @@ const DatasetDetailPage: React.FC = () => {
               error={imagesError}
               filters={filters}
               updateFilter={updateFilter}
+              conditionOptions={conditionOptions}
               categories={datasetCategories}
               availableTags={availableTags}
               onImageClick={handleImageClick}
@@ -380,8 +392,9 @@ const DatasetDetailPage: React.FC = () => {
         categories={datasetCategories}
         selectedCategory={selectedCategoryForEdit}
         setSelectedCategory={setSelectedCategoryForEdit}
-        selectedWeather={selectedWeatherForEdit}
-        setSelectedWeather={setSelectedWeatherForEdit}
+        selectedCondition={selectedConditionForEdit}
+        setSelectedCondition={setSelectedConditionForEdit}
+        conditionOptions={conditionOptions}
         selectedTags={selectedTagsForEdit}
         setSelectedTags={setSelectedTagsForEdit}
       />

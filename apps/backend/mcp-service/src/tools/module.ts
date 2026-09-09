@@ -269,14 +269,14 @@ const MAX_METRICS_PER_EPOCH = 12;
  * The metrics of one epoch, in a stable order.
  *
  * What a run records is its own business, and the shapes differ: some write
- * `{ loss, mAP }` flat, others nest `{ train: { loss, mean_iou, vehicle: {...} } }`.
+ * `{ loss, mAP }` flat, others nest `{ train: { loss, mean_iou, <class>: {...} } }`.
  * Reading only the top level meant a run of the second kind reported "no
  * metrics recorded" for every single epoch — the curve tool returned nothing at
  * all, and said so confidently.
  *
  * So the tree is walked, and then only the *shallowest* leaves are kept. That
  * is what separates a summary from a breakdown without knowing either schema:
- * `train.loss` sits above `train.vehicle.iou`, and it is the one a curve is
+ * `train.loss` sits above `train.<class>.iou`, and it is the one a curve is
  * asking about. The per-class detail is what `get_test_results` is for.
  */
 export const numericResults = (results: Record<string, unknown>): Array<[string, number]> => {

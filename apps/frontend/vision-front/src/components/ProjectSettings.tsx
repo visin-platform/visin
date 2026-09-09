@@ -37,12 +37,21 @@ import { apiTokenService, ApiToken } from '../services/apiTokenService';
 import { projectService } from '../services/projectService';
 import { Project, UpdateProjectData } from '../types/Project';
 import { formatDateTime } from '../utils';
+import TaxonomyEditor from './taxonomy/TaxonomyEditor';
+import CostingEditor from './taxonomy/CostingEditor';
+import { ProjectCosting, ProjectTaxonomy } from '../types/taxonomy';
 
 interface ProjectSettingsProps {
   project: Project;
+  /**
+   * Conditions and classes seen in this project's results, offered as a
+   * one-click starting point. Optional: the editor is useful without it, and
+   * anything left unconfigured is discovered at render time anyway.
+   */
+  discovered?: { conditions?: string[]; classes?: string[] };
 }
 
-const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
+const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }) => {
   const queryClient = useQueryClient();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newTokenName, setNewTokenName] = useState('');
@@ -55,6 +64,8 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
   const [editSlug, setEditSlug] = useState(project.slug || '');
   const [editDescription, setEditDescription] = useState(project.description || '');
   const [editIsPublic, setEditIsPublic] = useState(project.isPublic);
+  const [editTaxonomy, setEditTaxonomy] = useState<ProjectTaxonomy>(project.taxonomy ?? {});
+  const [editCosting, setEditCosting] = useState<ProjectCosting>(project.costing ?? {});
   const [projectUpdateError, setProjectUpdateError] = useState<string | null>(null);
 
   const { data: tokensResponse } = useQuery({
@@ -120,7 +131,10 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
     const updateData: UpdateProjectData = {
       name: editName,
       description: editDescription,
-      isPublic: editIsPublic
+      isPublic: editIsPublic,
+      // null clears it: an emptied form puts the project back on pure discovery
+      taxonomy: Object.keys(editTaxonomy).length > 0 ? editTaxonomy : null,
+      costing: Object.keys(editCosting).length > 0 ? editCosting : null
     };
 
     if (editSlug.trim()) {
@@ -222,6 +236,56 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project }) => {
               </Tooltip>
             </Box>
           </Box>
+        </CardContent>
+      </Card>
+      {/* Result vocabulary */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Typography variant="h6">Result Labels</Typography>
+            <Button
+              size="small"
+              onClick={() => setEditTaxonomy({})}
+              disabled={updateProjectMutation.isPending || Object.keys(editTaxonomy).length === 0}
+            >
+              Reset to discovered
+            </Button>
+          </Box>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+            How this project's conditions, classes and metrics are named and ordered.
+            Purely cosmetic — your training pipeline can report anything it likes and it
+            will still show up. Save with the button at the top of the page.
+          </Typography>
+          <TaxonomyEditor
+            value={editTaxonomy}
+            onChange={setEditTaxonomy}
+            disabled={updateProjectMutation.isPending}
+            discovered={discovered}
+          />
+        </CardContent>
+      </Card>
+      {/* Compute costs */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+            <Typography variant="h6">Compute Costs</Typography>
+            <Button
+              size="small"
+              onClick={() => setEditCosting({})}
+              disabled={updateProjectMutation.isPending || Object.keys(editCosting).length === 0}
+            >
+              Clear rates
+            </Button>
+          </Box>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+            What an hour on this project's hardware costs. Save with the button at the
+            top of the page.
+          </Typography>
+          <CostingEditor
+            value={editCosting}
+            onChange={setEditCosting}
+            disabled={updateProjectMutation.isPending}
+          />
         </CardContent>
       </Card>
       {/* API Tokens Section */}

@@ -9,8 +9,16 @@ import {
   FormControlLabel,
   Switch,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Typography
 } from '@mui/material';
+import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import TaxonomyEditor from './taxonomy/TaxonomyEditor';
+import CostingEditor from './taxonomy/CostingEditor';
+import { ProjectCosting, ProjectTaxonomy } from '../types/taxonomy';
 
 interface ProjectFormDialogProps {
   open: boolean;
@@ -24,6 +32,10 @@ interface ProjectFormDialogProps {
   onDescriptionChange: (value: string) => void;
   isPublic: boolean;
   onIsPublicChange: (value: boolean) => void;
+  taxonomy: ProjectTaxonomy;
+  onTaxonomyChange: (taxonomy: ProjectTaxonomy) => void;
+  costing: ProjectCosting;
+  onCostingChange: (costing: ProjectCosting) => void;
   error: string | null;
   success: string | null;
 }
@@ -40,6 +52,10 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
   onDescriptionChange,
   isPublic,
   onIsPublicChange,
+  taxonomy,
+  onTaxonomyChange,
+  costing,
+  onCostingChange,
   error,
   success
 }) => {
@@ -97,6 +113,31 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
           }
           label="Public Project (Visible to everyone)"
         />
+        <Accordion sx={{ mt: 2 }} disableGutters elevation={0} variant="outlined">
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Customise how results are labelled (optional)
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <TaxonomyEditor
+              value={taxonomy}
+              onChange={onTaxonomyChange}
+              disabled={isCreating}
+              compact
+            />
+          </AccordionDetails>
+        </Accordion>
+        <Accordion sx={{ mt: 1 }} disableGutters elevation={0} variant="outlined">
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Set compute cost rates (optional)
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <CostingEditor value={costing} onChange={onCostingChange} disabled={isCreating} />
+          </AccordionDetails>
+        </Accordion>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={isCreating}>

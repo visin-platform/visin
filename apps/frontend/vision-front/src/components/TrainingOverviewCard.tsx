@@ -26,6 +26,8 @@ import {
   Timer as TimerIcon
 } from '@mui/icons-material';
 import { Training, Epoch } from '../types';
+import { costOf } from '../costing/costing';
+import { useCosting, useFormatCost } from '../costing/useCosting';
 
 interface TrainingOverviewCardProps {
   training: Training;
@@ -37,6 +39,9 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
   epochs,
 }) => {
   const theme = useTheme();
+  const costing = useCosting();
+  const formatCost = useFormatCost();
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const day = date.getDate().toString().padStart(2, '0');
@@ -65,26 +70,10 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
     if (!epochs.length) return null;
 
     const totalSeconds = epochs.reduce((sum, epoch) => sum + (epoch.epoch_time || 0), 0);
-    const totalHours = totalSeconds / 3600;
+    const { totalHours, cpuCost, gpuCost, totalCost } = costOf(totalSeconds, costing);
 
-    const CPU_RATE_PER_HOUR = 0.006;
-    const GPU_RATE_PER_HOUR = 0.20;
-
-    const cpuHours = totalHours;
-    const gpuHours = totalHours;
-
-    const cpuCost = cpuHours * CPU_RATE_PER_HOUR;
-    const gpuCost = gpuHours * GPU_RATE_PER_HOUR;
-    const totalCost = cpuCost + gpuCost;
-
-    return {
-      totalHours,
-      cpuHours,
-      gpuHours,
-      cpuCost,
-      gpuCost,
-      totalCost
-    };
+    // CPU and GPU are billed for the same wall-clock hours; they differ only in rate.
+    return { totalHours, cpuHours: totalHours, gpuHours: totalHours, cpuCost, gpuCost, totalCost };
   };
 
   const getStatusColor = (status: Training['status']): 'success' | 'error' | 'default' | 'warning' | 'info' => {
@@ -301,8 +290,8 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                   <Grid size={{ xs: 6, sm: 3 }}>
                     <MetricCard 
                       title="Est. Cost" 
-                      value={costData ? `€${costData.totalCost.toFixed(2)}` : '-'} 
-                      subValue={costData ? `CPU: €${costData.cpuCost.toFixed(2)} | GPU: €${costData.gpuCost.toFixed(2)}` : undefined}
+                      value={costData ? formatCost(costData.totalCost) : '-'}
+                      subValue={costData ? `CPU: ${formatCost(costData.cpuCost)} | GPU: ${formatCost(costData.gpuCost)}` : undefined}
                       icon={<MoneyIcon />} 
                       color={theme.palette.warning.main} 
                     />

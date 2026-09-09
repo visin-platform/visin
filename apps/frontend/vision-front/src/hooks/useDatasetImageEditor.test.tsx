@@ -22,7 +22,7 @@ const makeImage = (overrides: Record<string, unknown> = {}) =>
     _id: 'img1',
     categoryId: 'cat1',
     tags: ['good', 'sunny'],
-    weatherCondition: 'day_fair',
+    condition: 'day_fair',
     ...overrides
   } as any);
 
@@ -43,7 +43,7 @@ describe('useDatasetImageEditor', () => {
     expect(result.current.editImageModalOpen).toBe(true);
     expect(result.current.selectedCategoryForEdit).toBe('cat1');
     expect(result.current.selectedTagsForEdit).toBe('good, sunny');
-    expect(result.current.selectedWeatherForEdit).toBe('day_fair');
+    expect(result.current.selectedConditionForEdit).toBe('day_fair');
   });
 
   it('saves the edited image, splitting and trimming the comma-separated tags', async () => {
@@ -58,7 +58,7 @@ describe('useDatasetImageEditor', () => {
     act(() => {
       result.current.setSelectedTagsForEdit('good,  bad ,, sunny');
       result.current.setSelectedCategoryForEdit('cat2');
-      result.current.setSelectedWeatherForEdit('snow');
+      result.current.setSelectedConditionForEdit('snow');
     });
 
     await act(async () => {
@@ -68,21 +68,21 @@ describe('useDatasetImageEditor', () => {
     expect(mockedUpdate).toHaveBeenCalledWith('img1', {
       categoryId: 'cat2',
       tags: ['good', 'bad', 'sunny'],
-      weatherCondition: 'snow'
+      condition: 'snow'
     });
     expect(onSuccess).toHaveBeenCalledWith('Image updated successfully');
     expect(result.current.editImageModalOpen).toBe(false);
     expect(result.current.editingImage).toBeNull();
   });
 
-  it('sends undefined for categoryId/weatherCondition when cleared', async () => {
+  it('sends undefined for categoryId/condition when cleared', async () => {
     mockedUpdate.mockResolvedValue({} as any);
     const onSuccess = vi.fn();
     const onError = vi.fn();
     const { result } = renderHook(() => useDatasetImageEditor('ds1', onSuccess, onError), { wrapper: makeWrapper() });
 
     act(() => {
-      result.current.handleEditImageCategory(makeImage({ categoryId: '', weatherCondition: undefined, tags: [] }));
+      result.current.handleEditImageCategory(makeImage({ categoryId: '', condition: undefined, tags: [] }));
     });
 
     await act(async () => {
@@ -92,7 +92,7 @@ describe('useDatasetImageEditor', () => {
     expect(mockedUpdate).toHaveBeenCalledWith('img1', {
       categoryId: undefined,
       tags: [],
-      weatherCondition: undefined
+      condition: undefined
     });
   });
 

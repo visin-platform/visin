@@ -119,6 +119,50 @@ row: each bare call re-runs `resolveProject` (up to two indexed queries), so a 1
 lookups for a handful of distinct projects. The checker is per-request by design — never hoist it to module scope,
 or a privacy change gets served from a stale memo.
 
+### Project taxonomy (what results are called)
+
+Results arrive from training pipelines over the API, which cannot be asked to declare their vocabulary
+first — so `Epoch.results` and `TestResult.test_results` are open `Mixed` blobs and **the readers discover
+what is in them**. `vision-front/src/taxonomy/discover.ts` walks a payload for its conditions, classes and
+metrics; `resolveTaxonomy.ts` merges that with the project's optional `Project.taxonomy` (labels, colours,
+order, and the one thing data cannot state: whether a metric is better high or low). `TaxonomyProvider` /
+`useTaxonomy` hand the resolved result to components; `useTaxonomyFor(results)` re-resolves for a narrower
+scope, and `resolveTaxonomyFor` is the non-React entry point for exports.
+
+Discovery is the authoritative half. A taxonomy **never gates a write** — posting a class or condition the
+project never named still succeeds and still renders; the taxonomy only decorates it. `taskType` seeds
+metric presets at creation (`applyTaskTypePresets`) and is then inert: nothing branches on it, which is what
+keeps `other` a first-class choice. `metrics[].direction` is what makes "best value" correct for a loss or a
+latency — taking a maximum unconditionally highlighted the *worst* row for those.
+
+Consequently a literal `'day_fair'` or `'vehicle'` in vision-front application code is a bug, and
+`no-restricted-syntax` in its `eslint.config.mjs` fails the build on one. Fixtures may still use those names
+— that is what proves the generic code renders the real data — and the suites deliberately carry a second,
+unrelated vocabulary so a regression to hard-coding fails a test.
+
+`DatasetImage.condition` is a free string for the same reason (it was a closed five-value `weatherCondition`
+enum; the rename is finished end to end, data included, and nothing should reference the old name again).
+Datasets are not project-scoped, so the dataset screens take their condition list from the images on hand
+rather than from a taxonomy.
+
+### Project cost rates
+
+`Project.costing` holds `cpuRatePerHour` / `gpuRatePerHour` / `currency`. These were a hard-coded
+`0.006` / `0.20` pair repeated in three places in vision-service and a fourth in vision-front, with a `€`
+nailed on at each display site (`€${n}` in three, `${n}€` in a fourth).
+
+There is **no default rate**, on purpose: an unpriced project reports no money at all rather than a
+plausible figure derived from someone else's cloud pricing. `resolveCosting` returns `null` unless *both*
+rates are set — pricing CPU without GPU would silently bill half the machine — and `costOf` then returns
+measured `totalHours` with the money fields absent. The API omits `cpuCost`/`gpuCost`/`totalCost`/`currency`
+in that case and the UI shows `-`.
+
+Rates are resolved **per row**, not once per query: a trainings page or a comparison can span projects, and a
+training need not belong to one at all, so `costingByProject` batches one lookup and `costingFor` applies each
+project's card. A cross-project total whose projects use different currencies reports `currency: 'MIXED'`,
+which the frontend renders as a bare number plus a label rather than picking a symbol. Money is formatted with
+`Intl.NumberFormat` in the viewer's locale — never a hard-coded symbol.
+
 ### Layering (vision-service, and the pattern the other backends follow)
 
 `routes/` (thin, wires validation + controller) → `controllers/` (request/response shape, calls services or, in

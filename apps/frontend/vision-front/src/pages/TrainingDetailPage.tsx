@@ -24,6 +24,8 @@ import { useTrainingDetail } from '../hooks/useTrainingDetail';
 import { useTrainingEdit } from '../hooks/useTrainingEdit';
 import { useTrainingActions } from '../hooks/useTrainingActions';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
+import { CostingProvider } from '../costing/CostingProvider';
 import { projectService } from '../services/projectService';
 
 const TrainingDetailPage: React.FC = () => {
@@ -151,6 +153,8 @@ const TrainingDetailPage: React.FC = () => {
   }
 
   return (
+    <TaxonomyProvider taxonomy={project?.taxonomy}>
+    <CostingProvider costing={project?.costing}>
     <Container maxWidth="xl" sx={{ pb: 4 }}>
       {/* Breadcrumbs */}
       <PageBreadcrumbs
@@ -318,6 +322,8 @@ const TrainingDetailPage: React.FC = () => {
         loadingProjects={editLoadingProjects}
       />
     </Container>
+    </CostingProvider>
+    </TaxonomyProvider>
   );
 };
 

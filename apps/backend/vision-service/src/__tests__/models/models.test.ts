@@ -5,7 +5,7 @@ import Comparison from '../../models/Comparison';
 import Config from '../../models/Config';
 import Contact from '../../models/Contact';
 import DatasetAnalysis from '../../models/DatasetAnalysis';
-import DatasetImage, { WEATHER_CONDITIONS } from '../../models/DatasetImage';
+import DatasetImage from '../../models/DatasetImage';
 import Dataset from '../../models/Dataset';
 import Epoch from '../../models/Epoch';
 import EpochVisualization from '../../models/EpochVisualization';
@@ -157,9 +157,7 @@ describe('Contact', () => {
 });
 
 describe('DatasetImage', () => {
-  it('exposes the weather condition list and validates against it', () => {
-    expect(WEATHER_CONDITIONS).toContain('day_fair');
-
+  it('accepts any capture condition, including one it has never seen', () => {
     const image = new DatasetImage({
       filename: 'f.jpg',
       originalName: 'o.jpg',
@@ -168,12 +166,14 @@ describe('DatasetImage', () => {
       categoryId: new mongoose.Types.ObjectId(),
       mimetype: 'image/jpeg',
       size: 1,
-      weatherCondition: 'snow',
+      condition: 'snow',
     });
     expect(image.validateSync()).toBeUndefined();
 
-    image.weatherCondition = 'volcano' as never;
-    expect(image.validateSync()?.errors.weatherCondition).toBeDefined();
+    // `condition` is deliberately open: ingest pipelines write it over the API and
+    // cannot register a vocabulary first, so an unfamiliar value must still save.
+    image.condition = 'volcano';
+    expect(image.validateSync()).toBeUndefined();
   });
 
   it('serializes fileId/thumbnailFileId under their current names only', () => {

@@ -28,7 +28,7 @@ describe('datasetImageService', () => {
     mockedApi.get.mockResolvedValue({ data: { success: true, data: { images: [], pagination: {} } } });
     await getAllImages(undefined, 10, 'search', 'tag1', true, 'day_fair');
     expect(mockedApi.get).toHaveBeenCalledWith('/dataset-images', {
-      params: { page: 1, limit: 10, search: 'search', tags: 'tag1', random: 'true', weatherCondition: 'day_fair' }
+      params: { page: 1, limit: 10, search: 'search', tags: 'tag1', random: 'true', condition: 'day_fair' }
     });
   });
 
@@ -36,7 +36,7 @@ describe('datasetImageService', () => {
     mockedApi.get.mockResolvedValue({ data: { success: true, data: { images: [], pagination: {} } } });
     await getAllImages(2);
     expect(mockedApi.get).toHaveBeenCalledWith('/dataset-images', {
-      params: { page: 2, limit: undefined, search: undefined, tags: undefined, random: undefined, weatherCondition: undefined }
+      params: { page: 2, limit: undefined, search: undefined, tags: undefined, random: undefined, condition: undefined }
     });
   });
 
@@ -44,7 +44,7 @@ describe('datasetImageService', () => {
     mockedApi.get.mockResolvedValue({ data: { success: true, data: { images: [], pagination: {} } } });
     await getImagesByDataset('ds1', 1, 20, 'q', 'cat1', 'tag', 'snow', 'filename', 'asc');
     expect(mockedApi.get).toHaveBeenCalledWith('/dataset-images/dataset/ds1', {
-      params: { page: 1, limit: 20, search: 'q', categoryId: 'cat1', tags: 'tag', weatherCondition: 'snow', sortBy: 'filename', sortOrder: 'asc' }
+      params: { page: 1, limit: 20, search: 'q', categoryId: 'cat1', tags: 'tag', condition: 'snow', sortBy: 'filename', sortOrder: 'asc' }
     });
   });
 

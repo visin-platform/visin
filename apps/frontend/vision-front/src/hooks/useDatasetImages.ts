@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { getImagesByDataset, WeatherCondition } from '../services/datasetImageService';
+import { getImagesByDataset, ImageCondition } from '../services/datasetImageService';
 
 interface UseDatasetImagesProps {
   datasetId: string;
@@ -13,7 +13,7 @@ export const useDatasetImages = ({ datasetId, initialPageSize = 50 }: UseDataset
   const [filters, setFilters] = useState({
     category: '',
     tags: [] as string[],
-    weather: '' as WeatherCondition | ''
+    condition: '' as ImageCondition
   });
 
   const query = useQuery({
@@ -25,7 +25,7 @@ export const useDatasetImages = ({ datasetId, initialPageSize = 50 }: UseDataset
       undefined,
       filters.category || undefined,
       filters.tags.length > 0 ? filters.tags.join(' ') : undefined,
-      filters.weather || undefined,
+      filters.condition || undefined,
       'updatedAt',
       'desc'
     ),
@@ -33,7 +33,7 @@ export const useDatasetImages = ({ datasetId, initialPageSize = 50 }: UseDataset
     placeholderData: keepPreviousData,
   });
 
-  const updateFilter = (key: keyof typeof filters, value: string | string[] | WeatherCondition) => {
+  const updateFilter = (key: keyof typeof filters, value: string | string[]) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setPage(1); // Reset to first page on filter change
   };

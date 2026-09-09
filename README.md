@@ -52,6 +52,47 @@ cookies, so serve it over HTTPS.
 `docker compose down` stops everything; add `-v` to discard the database and
 uploaded files too.
 
+## Your own vocabulary
+
+Visin does not assume what your images contain or how your runs are grouped. A
+result posted by a training pipeline is stored as-is, and the UI reads its
+vocabulary back out of the payload:
+
+```jsonc
+// POST /api/test-results — condition and class names are yours to choose
+{
+  "epoch": 40,
+  "epoch_uuid": "…",
+  "test_results": {
+    "line_a": {                                   // a "condition": any grouping you like
+      "scratch": { "iou": 0.41, "precision": 0.55 },  // a class: whatever your model predicts
+      "dent":    { "iou": 0.88, "precision": 0.91 },
+      "overall": { "mean_dice": 0.64 }
+    },
+    "line_b": { "scratch": { "iou": 0.39 }, "overall": { "mean_dice": 0.60 } }
+  }
+}
+```
+
+Tables, charts and LaTeX exports size themselves to that — two classes give you
+two columns. Nothing has to be registered first, which matters because results
+usually arrive from a pipeline over the API rather than from a person in the UI.
+
+A project can optionally add a **taxonomy** (Project → Settings → Result Labels,
+or at creation time) to control how the same data reads:
+
+- **Task type** — seeds sensible metric defaults; segmentation, detection,
+  classification, or none at all.
+- **Condition axis name** — "Weather", "Scenario", "Site", "Line", "Split".
+- **Conditions and classes** — display names, colours, and the order columns appear in.
+- **Metrics** — display name, decimals, and **whether higher or lower is better**. This
+  last one is the only thing your data cannot tell us, and it decides which value
+  gets highlighted as best: set it for a loss, an error rate, or a latency.
+
+The taxonomy is purely cosmetic. It never restricts what a pipeline may report —
+anything you have not configured is still discovered and shown, named after its
+key.
+
 ## Connect an assistant
 
 `mcp-service` is a plain MCP server, so anything that speaks MCP can read your

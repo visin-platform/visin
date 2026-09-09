@@ -12,6 +12,7 @@ import {
   getUploadSignedUrlRequest
 } from '../services/datasetImageService';
 import type {
+  ExportImageNamesQuery,
   GetAllImagesQuery,
   GetImagesByDatasetQuery,
   GetUploadUrlBody
@@ -37,14 +38,14 @@ export const getUploadUrl = async (req: Request, res: Response): Promise<void> =
 
 // Get all images
 export const getAllImages = async (req: Request, res: Response): Promise<void> => {
-  const { page, limit, search, tags, random, weatherCondition } = req.query as unknown as GetAllImagesQuery;
+  const { page, limit, search, tags, random, condition } = req.query as unknown as GetAllImagesQuery;
 
   const result = await getImages({
     page,
     limit,
     search,
     tags: tags ? tags.split(' ').map(tag => tag.trim()).filter(tag => tag.length > 0) : undefined,
-    weatherCondition,
+    condition,
     random: random === 'true'
   });
 
@@ -69,7 +70,7 @@ export const createDatasetImage = async (req: Request, res: Response): Promise<v
     height,
     tags,
     labels,
-    weatherCondition,
+    condition,
     metadata
   } = req.body;
 
@@ -87,7 +88,7 @@ export const createDatasetImage = async (req: Request, res: Response): Promise<v
     height,
     tags,
     labels,
-    weatherCondition,
+    condition,
     metadata
   });
 
@@ -108,7 +109,7 @@ export const createDatasetImage = async (req: Request, res: Response): Promise<v
 // Get images by dataset
 export const getImagesByDataset = async (req: Request, res: Response): Promise<void> => {
   const datasetId = req.params.datasetId as string;
-  const { page, limit, search, categoryId, tags, weatherCondition, sortBy, sortOrder } =
+  const { page, limit, search, categoryId, tags, condition, sortBy, sortOrder } =
     req.query as unknown as GetImagesByDatasetQuery;
 
   const result = await getImages({
@@ -118,7 +119,7 @@ export const getImagesByDataset = async (req: Request, res: Response): Promise<v
     search,
     categoryId,
     tags: tags ? tags.split(' ').map(tag => tag.trim()).filter(tag => tag.length > 0) : undefined,
-    weatherCondition,
+    condition,
     sortBy,
     sortOrder
   });
@@ -163,7 +164,7 @@ export const getImageById = async (req: Request, res: Response): Promise<void> =
 // Update image
 export const updateImage = async (req: Request, res: Response): Promise<void> => {
   const id = req.params.id as string;
-  const { title, description, tags, labels, categoryId, weatherCondition, metadata } = req.body;
+  const { title, description, tags, labels, categoryId, condition, metadata } = req.body;
 
   const image = await updateImageService(id, {
     title,
@@ -171,7 +172,7 @@ export const updateImage = async (req: Request, res: Response): Promise<void> =>
     tags,
     labels,
     categoryId,
-    weatherCondition,
+    condition,
     metadata
   });
 
@@ -198,12 +199,12 @@ export const deleteImage = async (req: Request, res: Response): Promise<void> =>
 // Export image names as CSV
 export const exportImageNames = async (req: Request, res: Response): Promise<void> => {
   const datasetId = req.params.datasetId as string;
-  const tag = (req.query as { tag?: string }).tag;
+  const { tag, pathPrefix } = req.query as unknown as ExportImageNamesQuery;
 
   const images = await exportImageNamesService(datasetId, tag);
 
   // Create CSV content
-  const csvRows = images.map(img => `camera/${img.filename}`).join('\n');
+  const csvRows = images.map(img => `${pathPrefix ?? ''}${img.filename}`).join('\n');
   const csvContent = csvRows;
 
   // Set headers for CSV download

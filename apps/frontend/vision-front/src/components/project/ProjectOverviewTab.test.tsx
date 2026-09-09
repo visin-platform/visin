@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ProjectOverviewTab from './ProjectOverviewTab';
+import { formatCost } from '../../costing/costing';
 
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -16,6 +17,7 @@ const stats = {
   totalTrainings: 5,
   totalTime: 7384, // 2h 3m
   totalCost: 12.5,
+  currency: 'EUR',
   avgEpochTime: 120
 };
 
@@ -34,7 +36,7 @@ describe('ProjectOverviewTab', () => {
     );
     expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.getByText('2h 3m')).toBeInTheDocument();
-    expect(screen.getByText('12.50€')).toBeInTheDocument();
+    expect(screen.getByText(formatCost(12.5, 'EUR'))).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('8')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();

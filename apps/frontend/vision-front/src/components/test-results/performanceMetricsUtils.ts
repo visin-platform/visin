@@ -1,3 +1,5 @@
+import { ResolvedTaxonomy } from '../../types/taxonomy';
+
 export interface MetricStat {
   mean: number;
   std?: number;
@@ -16,13 +18,21 @@ export interface ComparisonData {
 
 export type SortDirection = 'asc' | 'desc';
 
-const METRICS = ['iou', 'precision', 'recall', 'f1_score', 'ap'] as const;
+export const DEFAULT_CLASS_METRICS = ['iou', 'precision', 'recall', 'f1_score', 'ap'];
 
-/** Best (maximum) mean value for each metric of one class, across all trainings being compared. */
+/**
+ * Best mean value for each metric of one class, across the trainings being compared.
+ *
+ * "Best" is direction-aware: taking the maximum unconditionally highlighted the
+ * *worst* row for any metric where lower wins — a loss, a latency, an error rate.
+ * The taxonomy is the only thing that knows which way a metric reads.
+ */
 export function getBestValues(
   comparisonData: ComparisonData[],
   condition: string,
-  className: string
+  className: string,
+  taxonomy: ResolvedTaxonomy,
+  metrics: string[] = DEFAULT_CLASS_METRICS
 ): { [metric: string]: number } {
   const bestValues: { [key: string]: number } = {};
 
@@ -31,9 +41,11 @@ export function getBestValues(
     const classMetrics = conditionData?.[className];
     if (!classMetrics) return;
 
-    METRICS.forEach((metric) => {
+    metrics.forEach((metric) => {
       const mean = classMetrics[metric]?.mean;
-      if (mean !== undefined && (bestValues[metric] === undefined || mean > bestValues[metric])) {
+      if (mean === undefined) return;
+      const current = bestValues[metric];
+      if (current === undefined || taxonomy.isBetter(metric, mean, current)) {
         bestValues[metric] = mean;
       }
     });
@@ -42,7 +54,7 @@ export function getBestValues(
   return bestValues;
 }
 
-/** Sorts comparisonData by a table column ("training", "overall_fw_iou", or "<className>_<metric>") for one weather condition. */
+/** Sorts comparisonData by a table column ("training", "overall_<metric>", or "<className>_<metric>") for one condition. */
 export function sortComparisonData(
   comparisonData: ComparisonData[],
   condition: string,
@@ -61,12 +73,16 @@ export function sortComparisonData(
     const conditionDataA = a.aggregatedResults?.[condition] as ConditionAggregates | undefined;
     const conditionDataB = b.aggregatedResults?.[condition] as ConditionAggregates | undefined;
 
-    if (column === 'overall_fw_iou') {
-      aValue = conditionDataA?.overall?.fw_iou?.mean ?? -Infinity;
-      bValue = conditionDataB?.overall?.fw_iou?.mean ?? -Infinity;
+    if (column.startsWith('overall_')) {
+      const metric = column.slice('overall_'.length);
+      aValue = conditionDataA?.overall?.[metric]?.mean ?? -Infinity;
+      bValue = conditionDataB?.overall?.[metric]?.mean ?? -Infinity;
     } else {
-      // Column format: "<className>_<metric>" (e.g. "human_iou", "sign_precision")
-      const [className, metric] = column.split('_');
+      // Column format: "<class>_<metric>". A class name may itself contain an
+      // underscore, so split on the *last* one and let the metric be the tail.
+      const split = column.lastIndexOf('_');
+      const className = split === -1 ? column : column.slice(0, split);
+      const metric = split === -1 ? '' : column.slice(split + 1);
       aValue = conditionDataA?.[className]?.[metric]?.mean ?? -Infinity;
       bValue = conditionDataB?.[className]?.[metric]?.mean ?? -Infinity;
     }
@@ -83,28 +99,35 @@ export function formatMetricNumber(value: unknown, decimals: number, multiplier:
   return 'N/A';
 }
 
-/** Renders one weather condition's performance metrics table as a LaTeX table*, bolding each column's best value. */
+/**
+ * Renders one condition's performance metrics table as a LaTeX table*, bolding each
+ * column's best value. Width follows the class and metric lists it is given, so a
+ * project with two classes gets a two-class table rather than three empty columns.
+ */
 export function generateConditionLatex(
   comparisonData: ComparisonData[],
   condition: string,
   decimals: number,
-  multiplier: number
+  multiplier: number,
+  taxonomy: ResolvedTaxonomy,
+  classNames: string[] = taxonomy.classes.map(c => c.key),
+  metrics: string[] = DEFAULT_CLASS_METRICS
 ): string {
-  const classNames = ['human', 'sign', 'vehicle'];
-  const conditionTitle = condition.replace('_', ' ').toUpperCase();
+  const conditionTitle = taxonomy.conditionTitle(condition).toUpperCase();
+  const summaryMetric = taxonomy.overallMetrics[0];
 
   let latex = `\\begin{table*}[t]\n\\centering\n\\caption{Test Results Performance Metrics - ${conditionTitle}}\n\\label{tab:performance_metrics_${condition}}\n`;
-  latex += `\\begin{tabular}{|l|${'c|c|c|c|c|'.repeat(classNames.length)}c|}\n\\hline\n`;
+  const columnSpec = classNames.map(() => 'c|'.repeat(metrics.length)).join('');
+  latex += `\\begin{tabular}{|l|${columnSpec}${summaryMetric ? 'c|' : ''}}\n\\hline\n`;
 
-  latex += 'Training & ';
-  classNames.forEach((className, index) => {
-    const classTitle = className.charAt(0).toUpperCase() + className.slice(1);
-    latex += `${classTitle} IoU & ${classTitle} Prec. & ${classTitle} Rec. & ${classTitle} F1 & ${classTitle} AP`;
-    if (index < classNames.length - 1) {
-      latex += ' & ';
-    }
+  const headerCells = classNames.flatMap(className => {
+    const classTitle = taxonomy.classLabel(className);
+    return metrics.map(metric => `${classTitle} ${taxonomy.metric(metric).label}`);
   });
-  latex += ' & FW IoU \\\\\n\\hline\n';
+  if (summaryMetric) {
+    headerCells.push(summaryMetric.label);
+  }
+  latex += `Training & ${headerCells.join(' & ')} \\\\\n\\hline\n`;
 
   comparisonData.forEach(comp => {
     const trainingName = comp.training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
@@ -113,9 +136,9 @@ export function generateConditionLatex(
 
     classNames.forEach((className) => {
       const classMetrics = conditionData?.[className];
-      const bestValues = getBestValues(comparisonData, condition, className);
+      const bestValues = getBestValues(comparisonData, condition, className, taxonomy, metrics);
 
-      METRICS.forEach((metric) => {
+      metrics.forEach((metric) => {
         const mean = classMetrics?.[metric]?.mean;
         if (mean !== undefined) {
           const isBest = mean === bestValues[metric];
@@ -128,10 +151,9 @@ export function generateConditionLatex(
       });
     });
 
-    if (conditionData?.overall?.fw_iou?.mean !== undefined) {
-      latex += `& ${(conditionData.overall.fw_iou.mean * multiplier).toFixed(decimals)} `;
-    } else {
-      latex += '& N/A ';
+    if (summaryMetric) {
+      const summary = conditionData?.overall?.[summaryMetric.key]?.mean;
+      latex += summary !== undefined ? `& ${(summary * multiplier).toFixed(decimals)} ` : '& N/A ';
     }
 
     latex += '\\\\ \\hline\n';

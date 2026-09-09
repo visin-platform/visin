@@ -12,31 +12,43 @@ const baseProps = {
   categories,
   selectedCategory: '',
   setSelectedCategory: vi.fn(),
-  selectedWeather: '' as const,
-  setSelectedWeather: vi.fn(),
+  selectedCondition: '',
+  setSelectedCondition: vi.fn(),
+  conditionOptions: ['day_fair', 'snow'],
   selectedTags: '',
   setSelectedTags: vi.fn(),
 };
 
 describe('EditImageModal', () => {
-  it('lists categories and weather conditions as select options', () => {
+  it('lists categories as select options and suggests known conditions', () => {
     render(<EditImageModal {...baseProps} />);
 
     expect(screen.getByRole('option', { name: 'Cars' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Snow' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'No Category' })).toBeInTheDocument();
+    expect(screen.getByText(/Existing values: day_fair, snow/)).toBeInTheDocument();
   });
 
-  it('calls setSelectedCategory/setSelectedWeather on change', () => {
+  it('accepts a condition the dataset has never used', () => {
+    const setSelectedCondition = vi.fn();
+    render(<EditImageModal {...baseProps} setSelectedCondition={setSelectedCondition} />);
+
+    // free text, because ingest pipelines set conditions over the API
+    fireEvent.change(screen.getByLabelText('Condition'), { target: { value: 'sandstorm' } });
+    expect(setSelectedCondition).toHaveBeenCalledWith('sandstorm');
+  });
+
+  it('uses the project wording for the condition field', () => {
+    render(<EditImageModal {...baseProps} conditionLabel="Site" />);
+
+    expect(screen.getByLabelText('Site')).toBeInTheDocument();
+  });
+
+  it('calls setSelectedCategory on change', () => {
     const setSelectedCategory = vi.fn();
-    const setSelectedWeather = vi.fn();
-    render(<EditImageModal {...baseProps} setSelectedCategory={setSelectedCategory} setSelectedWeather={setSelectedWeather} />);
+    render(<EditImageModal {...baseProps} setSelectedCategory={setSelectedCategory} />);
 
     fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
     expect(setSelectedCategory).toHaveBeenCalledWith('c1');
-
-    fireEvent.change(screen.getByLabelText('Weather Condition'), { target: { value: 'snow' } });
-    expect(setSelectedWeather).toHaveBeenCalledWith('snow');
   });
 
   it('calls setSelectedTags on tags input change', () => {

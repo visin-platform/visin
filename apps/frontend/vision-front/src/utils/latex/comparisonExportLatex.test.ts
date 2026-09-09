@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { generateTrainingLatex, generateTestingLatex, generateBenchmarkingLatex } from './comparisonExportLatex';
 import type { TrainingComparison, ComparisonEpoch } from '@/types';
 import type { TestResultsDatum } from './comparisonExportLatex';
+import { discoverAggregateVocabulary } from '@/components/test-results/aggregateVocabulary';
+import { resolveTaxonomy } from '@/taxonomy/resolveTaxonomy';
+import { DEFAULT_CLASS_METRICS } from '@/components/test-results/performanceMetricsUtils';
 
 const epoch = (epochNum: number, valMeanIoU: number | undefined, valExtra: Record<string, unknown> = {}): ComparisonEpoch =>
   ({
@@ -110,12 +113,28 @@ describe('generateTestingLatex', () => {
     testResultsCount: 1,
   };
 
+  /** Project config naming both conditions, so `snow` shows even with no data. */
+  const taxonomyFor = (data: TestResultsDatum[]) =>
+    discoverAggregateVocabulary(
+      data,
+      resolveTaxonomy(
+        {
+          conditions: [
+            { key: 'day_fair', label: 'Day Fair', order: 0 },
+            { key: 'snow', label: 'Snow', order: 1 }
+          ]
+        },
+        {}
+      ),
+      DEFAULT_CLASS_METRICS
+    ).taxonomy;
+
   it('returns an empty string for no test results data', () => {
-    expect(generateTestingLatex([], 2, 100)).toBe('');
+    expect(generateTestingLatex([], 2, 100, taxonomyFor([]))).toBe('');
   });
 
-  it('renders performance/IoU/AP tables per weather condition', () => {
-    const latex = generateTestingLatex([datum], 2, 100);
+  it('renders performance/IoU/AP tables per condition', () => {
+    const latex = generateTestingLatex([datum], 2, 100, taxonomyFor([datum]));
 
     expect(latex).toContain('Performance Metrics - DAY FAIR');
     expect(latex).toContain('IoU Metrics - DAY FAIR');
@@ -124,11 +143,30 @@ describe('generateTestingLatex', () => {
   });
 
   it('escapes training names and reports N/A for conditions with no data', () => {
-    const latex = generateTestingLatex([datum], 2, 100);
+    const latex = generateTestingLatex([datum], 2, 100, taxonomyFor([datum]));
 
     expect(latex).toContain('Run \\& 1');
-    // snow has no aggregatedResults entry, so its class metrics are N/A
+    // snow is configured but has no aggregatedResults entry, so its cells are N/A
     expect(latex).toMatch(/Performance Metrics - SNOW[\s\S]*N\/A/);
+  });
+
+  it('renders an unfamiliar vocabulary with no project config at all', () => {
+    const factory: TestResultsDatum = {
+      training: { _id: 't1', name: 'Run 1' },
+      aggregatedResults: { line_a: { scratch: { iou: { mean: 0.4 } } } },
+      testResultsCount: 1
+    } as unknown as TestResultsDatum;
+    const discovered = discoverAggregateVocabulary(
+      [factory],
+      resolveTaxonomy(undefined, {}),
+      DEFAULT_CLASS_METRICS
+    ).taxonomy;
+
+    const latex = generateTestingLatex([factory], 2, 100, discovered);
+
+    expect(latex).toContain('IoU Metrics - LINE A');
+    expect(latex).toContain('Scratch IoU');
+    expect(latex).not.toContain('DAY FAIR');
   });
 });
 

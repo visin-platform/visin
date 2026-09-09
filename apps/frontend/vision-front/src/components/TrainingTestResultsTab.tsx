@@ -91,7 +91,6 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
         allTestResults={allTestResults}
         testResultsLoading={testResultsLoading}
         availableTestEpochs={availableTestEpochs}
-        hasCyclistPedestrianData={false}
         uploading={uploading}
         onLatexExport={onLatexExport}
         onDeleteTestResult={onDeleteTestResult}

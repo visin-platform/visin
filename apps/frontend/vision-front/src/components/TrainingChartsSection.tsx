@@ -5,7 +5,8 @@ import {
   Typography
 } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
-import { Epoch, EpochMetrics } from '../types';
+import { Epoch } from '../types';
+import ClassMetricChart from './ClassMetricChart';
 
 interface TrainingChartsSectionProps {
   epochs: Epoch[];
@@ -104,65 +105,14 @@ export const TrainingChartsSection: React.FC<TrainingChartsSectionProps> = ({ ep
       )}
       {/* Class IoU Over Time Chart */}
       {epochs.length > 0 && (
-        <Paper sx={{ p: 3 }}>
+        <Box>
           <Typography variant="h6" gutterBottom>
             Class IoU Over Time
           </Typography>
-          <Box sx={{ width: '100%', height: { xs: 300, sm: 350, md: 400 } }}>
-            <LineChart
-              xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
-              series={[
-                {
-                  data: epochs.map(epoch => (epoch.results?.val?.vehicle as EpochMetrics | undefined)?.iou || 0),
-                  label: 'Vehicle (Val)',
-                  color: '#e57373'
-                },
-                {
-                  data: epochs.map(epoch => (epoch.results?.train?.vehicle as EpochMetrics | undefined)?.iou || 0),
-                  label: 'Vehicle (Train)',
-                  color: '#ffcdd2'
-                },
-                {
-                  data: epochs.map(epoch => (epoch.results?.val?.sign as EpochMetrics | undefined)?.iou || 0),
-                  label: 'Sign (Val)',
-                  color: '#81c784'
-                },
-                {
-                  data: epochs.map(epoch => (epoch.results?.train?.sign as EpochMetrics | undefined)?.iou || 0),
-                  label: 'Sign (Train)',
-                  color: '#c8e6c9'
-                },
-                {
-                  data: epochs.map(epoch => (epoch.results?.val?.cyclist as EpochMetrics | undefined)?.iou || 0),
-                  label: 'Cyclist (Val)',
-                  color: '#64b5f6'
-                },
-                {
-                  data: epochs.map(epoch => (epoch.results?.train?.cyclist as EpochMetrics | undefined)?.iou || 0),
-                  label: 'Cyclist (Train)',
-                  color: '#bbdefb'
-                },
-                {
-                  data: epochs.map(epoch => (epoch.results?.val?.pedestrian as EpochMetrics | undefined)?.iou || 0),
-                  label: 'Pedestrian (Val)',
-                  color: '#ffb74d'
-                },
-                {
-                  data: epochs.map(epoch => (epoch.results?.train?.pedestrian as EpochMetrics | undefined)?.iou || 0),
-                  label: 'Pedestrian (Train)',
-                  color: '#ffe0b2'
-                }
-              ]}
-              margin={{ top: 10, bottom: 60, left: 60, right: 10 }}
-              slotProps={{
-                legend: {
-                  direction: 'horizontal',
-                  position: { vertical: 'top', horizontal: 'center' },
-                }
-              }}
-            />
-          </Box>
-        </Paper>
+          {/* Series are discovered from the epochs, so this follows whatever
+              classes the run reported instead of four hard-coded ones. */}
+          <ClassMetricChart epochs={epochs} metric="iou" />
+        </Box>
       )}
     </Box>
   );

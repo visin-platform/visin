@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import DatasetInfoSection from './DatasetInfoSection';
 import type { Training } from '../types';
+import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -62,7 +63,7 @@ describe('DatasetInfoSection', () => {
     expect(screen.getByText('Dataset Splits')).toBeInTheDocument();
   });
 
-  it('renders the weather breakdown chart when test_breakdown is present', () => {
+  it('renders the condition breakdown chart when test_breakdown is present', () => {
     const training: Training = {
       ...baseTraining,
       metadata: {
@@ -76,14 +77,42 @@ describe('DatasetInfoSection', () => {
               day_fair: { count: 5, percentage: 25 },
               day_rain: { count: 5, percentage: 25 },
               night_fair: { count: 5, percentage: 25 },
-              night_rain: { count: 5, percentage: 25 }
+              night_rain: { count: 5, percentage: 25 },
+              // a fifth condition the old hard-coded four-bar chart dropped entirely
+              snow: { count: 5, percentage: 25 }
             }
           }
         }
       }
     };
     render(<DatasetInfoSection training={training} />);
-    expect(screen.getByText('Test Set Weather Conditions')).toBeInTheDocument();
+
+    // axis tick labels don't lay out in jsdom, so the bar set itself is covered
+    // by orderKeysByTaxonomy's own tests; here we check the section renders
+    expect(screen.getByText('Test Set Conditions')).toBeInTheDocument();
+  });
+
+  it('uses the project taxonomy for the axis heading and bar labels', () => {
+    const training: Training = {
+      ...baseTraining,
+      metadata: {
+        dataset_info: {
+          dataset_overview: { total_frames: 100 },
+          dataset_splits: {
+            test_breakdown: { line_a: { count: 5, percentage: 50 }, line_b: { count: 5, percentage: 50 } }
+          }
+        }
+      }
+    };
+    render(
+      <TaxonomyProvider
+        taxonomy={{ conditionLabel: 'Line', conditions: [{ key: 'line_a', label: 'Line A' }] }}
+      >
+        <DatasetInfoSection training={training} />
+      </TaxonomyProvider>
+    );
+
+    expect(screen.getByText('Test Set Lines')).toBeInTheDocument();
   });
 
   it('renders class distribution and frames-per-class charts when classes are present', () => {

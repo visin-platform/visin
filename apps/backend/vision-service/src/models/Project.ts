@@ -1,4 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { IProjectTaxonomy, TaxonomySchema } from './taxonomy';
+import { CostingSchema, IProjectCosting } from './costing';
 
 export interface IProject extends Document {
   _id: Types.ObjectId;
@@ -7,6 +9,8 @@ export interface IProject extends Document {
   description?: string;
   isPublic: boolean;
   ownerId: string;
+  taxonomy?: IProjectTaxonomy;
+  costing?: IProjectCosting;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +45,14 @@ const ProjectSchema: Schema = new Schema(
       type: String,
       required: true,
       index: true
+    },
+    taxonomy: {
+      type: TaxonomySchema,
+      required: false
+    },
+    costing: {
+      type: CostingSchema,
+      required: false
     }
   },
   {

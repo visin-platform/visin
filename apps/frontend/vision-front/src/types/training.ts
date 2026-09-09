@@ -24,6 +24,8 @@ export interface Training {
     cpuCost: number;
     gpuCost: number;
     totalCost: number;
+    /** ISO code the costs above are denominated in, from the project's rates */
+    currency?: string;
   };
 }
 

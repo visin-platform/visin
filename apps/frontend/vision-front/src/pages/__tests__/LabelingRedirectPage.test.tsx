@@ -43,10 +43,13 @@ describe('LabelingRedirectPage', () => {
     expect(replace).toHaveBeenCalledWith('https://label.test/jobs');
   });
 
-  it('falls back to the production URL without config', () => {
+  it('redirects nowhere when labeling is not configured', () => {
+    // it used to fall back to our own hosted label-front, which sent the users
+    // of any other deployment off to a domain they have nothing to do with
     vi.mocked(getGlobalConfig).mockReturnValue({});
     render(<LabelingRedirectPage />);
 
-    expect(replace).toHaveBeenCalledWith('https://label.visin.eu/jobs');
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.getByText(/Labeling is not configured/)).toBeInTheDocument();
   });
 });

@@ -21,8 +21,9 @@ import { useNavigate } from 'react-router-dom';
 import type { AuthUser } from '@visin/frontend-core';
 import { TrainingStats } from '../../services/trainingService';
 import { ProjectDashboardStats } from '../../services/projectService';
+import { useFormatCost } from '../../costing/useCosting';
 
-export type ProjectOverviewStats = Pick<TrainingStats, 'totalTrainings' | 'totalTime' | 'totalCost' | 'avgEpochTime'>;
+export type ProjectOverviewStats = Pick<TrainingStats, 'totalTrainings' | 'totalTime' | 'totalCost' | 'avgEpochTime'> & { currency?: string };
 export type ProjectOverviewDashboardStats = Pick<ProjectDashboardStats, 'testResultsCount' | 'visualizationsCount' | 'benchmarksCount'>;
 
 interface ProjectOverviewTabProps {
@@ -39,6 +40,7 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
   user
 }) => {
   const navigate = useNavigate();
+  const formatCost = useFormatCost();
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -46,9 +48,7 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
     return `${hours}h ${minutes}m`;
   };
 
-  const formatCost = (cost: number) => {
-    return `${cost.toFixed(2)}€`;
-  };
+
 
   return (
     <>
@@ -114,7 +114,7 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
               <Typography variant="h4" sx={{
                 fontWeight: "bold"
               }}>
-                {formatCost(stats?.totalCost || 0)}
+                {formatCost(stats?.totalCost || 0, stats?.currency)}
               </Typography>
             </CardContent>
           </Card>

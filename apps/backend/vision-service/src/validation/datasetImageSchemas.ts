@@ -6,7 +6,7 @@ export const getAllImagesQuerySchema = z.object({
   limit: z.coerce.number().int().positive().default(50),
   search: looseStringParam,
   tags: looseStringParam,
-  weatherCondition: looseStringParam,
+  condition: looseStringParam,
   random: looseStringParam
 });
 export type GetAllImagesQuery = z.infer<typeof getAllImagesQuerySchema>;
@@ -23,7 +23,7 @@ export const getImagesByDatasetQuerySchema = z.object({
     .union([z.string(), z.array(z.string())])
     .optional()
     .transform(v => (Array.isArray(v) ? v.join(' ') : v)),
-  weatherCondition: looseStringParam,
+  condition: looseStringParam,
   sortBy: looseStringParam.default('updatedAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc')
 });
@@ -56,7 +56,7 @@ export const createDatasetImageBodySchema = z.object({
   height: z.coerce.number().optional(),
   tags: z.array(z.string()).default([]),
   labels: z.array(z.string()).default([]),
-  weatherCondition: z.string().optional(),
+  condition: z.string().optional(),
   metadata: z.unknown().default({})
 });
 
@@ -66,10 +66,14 @@ export const updateImageBodySchema = z.object({
   tags: z.array(z.string()).optional(),
   labels: z.array(z.string()).optional(),
   categoryId: z.string().nullable().optional(),
-  weatherCondition: z.string().optional(),
+  condition: z.string().optional(),
   metadata: z.unknown().optional()
 });
 
 export const exportImageNamesQuerySchema = z.object({
-  tag: looseStringParam
+  tag: looseStringParam,
+  // Prepended to each filename in the manifest. Empty by default: the old
+  // hard-coded "camera/" assumed a sensor layout only some datasets have.
+  pathPrefix: looseStringParam.default('')
 });
+export type ExportImageNamesQuery = z.infer<typeof exportImageNamesQuerySchema>;

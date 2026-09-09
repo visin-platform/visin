@@ -1,5 +1,6 @@
 import type { ComparisonEpoch, TrainingComparison, EpochMetrics, BenchmarkResult } from '@/types';
 import { formatTime, formatNumber } from '../comparisonLatexGenerator';
+import type { ResolvedTaxonomy } from '@/types/taxonomy';
 
 interface MetricStat {
   mean: number;
@@ -210,90 +211,76 @@ export function generateTrainingLatex(
 }
 
 /**
- * Builds the "Export All LaTeX" testing tab: performance/IoU/AP metrics
- * per weather condition. See generateTrainingLatex for extraction context.
+ * Builds the "Export All LaTeX" testing tab: performance/IoU/AP metrics per
+ * condition. See generateTrainingLatex for extraction context.
+ *
+ * Conditions, classes and the summary column all come from the taxonomy resolved
+ * against these results, so the tables are as wide as the data — not as wide as
+ * one particular dataset happened to be.
  */
 export function generateTestingLatex(
   testResultsData: TestResultsDatum[],
   decimals: number,
-  multiplier: number
+  multiplier: number,
+  taxonomy: ResolvedTaxonomy
 ): string {
   if (!testResultsData.length) return '';
   const d = decimals;
   const m = multiplier;
-  const conditions = ['day_fair', 'night_fair', 'day_rain', 'night_rain', 'snow'];
-  const classNames = ['human', 'sign', 'vehicle'];
+  const conditions = taxonomy.conditions;
+  const classes = taxonomy.classes;
+  if (!conditions.length || !classes.length) return '';
+
+  const perfMetrics = ['iou', 'precision', 'recall', 'f1_score', 'ap'];
+  const summaryMetric = taxonomy.overallMetrics[0];
+  const esc = (v: string) => v.replace(/[&%$#_{}~^\\]/g, '\\$&');
+  const fmt = (v: number | undefined) => (v !== undefined ? `${(v * m).toFixed(d)}` : 'N/A');
+
+  /** One class-by-metric table for a single condition. */
+  const table = (
+    caption: string,
+    label: string,
+    metrics: string[],
+    withSummary: boolean,
+    cond: string
+  ) => {
+    const perClassSpec = 'c|'.repeat(metrics.length).repeat(classes.length);
+    let tbl = `\\begin{table*}[t]\n\\centering\n\\caption{${caption}}\n\\label{${label}}\n`;
+    tbl += `\\begin{tabular}{|l|${perClassSpec}${withSummary && summaryMetric ? 'c|' : ''}}\n\\hline\n`;
+
+    const headers = classes.flatMap(cls =>
+      metrics.map(metric => `${esc(cls.label)} ${esc(taxonomy.metric(metric).label)}`)
+    );
+    if (withSummary && summaryMetric) {
+      headers.push(esc(summaryMetric.label));
+    }
+    tbl += `Training & ${headers.join(' & ')} \\\\\n\\hline\n`;
+
+    testResultsData.forEach(({ training, aggregatedResults }) => {
+      const condData = aggregatedResults?.[cond] as ConditionAggregates | undefined;
+      tbl += `${esc(training.name)} `;
+      classes.forEach(cls => {
+        metrics.forEach(metric => {
+          tbl += `& ${fmt(condData?.[cls.key]?.[metric]?.mean)} `;
+        });
+      });
+      if (withSummary && summaryMetric) {
+        tbl += `& ${fmt(condData?.overall?.[summaryMetric.key]?.mean)} `;
+      }
+      tbl += '\\\\ \\hline\n';
+    });
+
+    return `${tbl}\\end{tabular}\n\\end{table*}\n`;
+  };
+
   let out = '';
+  conditions.forEach(condition => {
+    const condTitle = esc(condition.label.toUpperCase());
+    const cond = condition.key;
 
-  conditions.forEach(cond => {
-    const condTitle = cond.replace('_', ' ').toUpperCase();
-
-    // Performance metrics
-    let perfTbl = `\\begin{table*}[t]\n\\centering\n\\caption{Performance Metrics - ${condTitle}}\n\\label{tab:performance_${cond}}\n`;
-    perfTbl += `\\begin{tabular}{|l|${'c|c|c|c|c|'.repeat(classNames.length)}c|}\n\\hline\n`;
-    perfTbl += 'Training & ' + classNames.map(cn => {
-      const ct = cn[0].toUpperCase() + cn.slice(1);
-      return `${ct} IoU & ${ct} Prec. & ${ct} Rec. & ${ct} F1 & ${ct} AP`;
-    }).join(' & ') + ' & FW IoU \\\\\n\\hline\n';
-    testResultsData.forEach(({ training, aggregatedResults }) => {
-      const name = training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
-      const condData = aggregatedResults?.[cond] as ConditionAggregates | undefined;
-      perfTbl += `${name} `;
-      classNames.forEach(cn => {
-        const cls = condData?.[cn];
-        const fmtM = (v: number | undefined) => v !== undefined ? `${(v * m).toFixed(d)}` : 'N/A';
-        perfTbl += `& ${fmtM(cls?.iou?.mean)} `;
-        perfTbl += `& ${fmtM(cls?.precision?.mean)} `;
-        perfTbl += `& ${fmtM(cls?.recall?.mean)} `;
-        perfTbl += `& ${fmtM(cls?.f1_score?.mean)} `;
-        perfTbl += `& ${fmtM(cls?.ap?.mean)} `;
-      });
-      const fwIou = condData?.overall?.fw_iou?.mean;
-      perfTbl += `& ${fwIou !== undefined ? `${(fwIou * m).toFixed(d)}` : 'N/A'} `;
-      perfTbl += '\\\\ \\hline\n';
-    });
-    perfTbl += '\\end{tabular}\n\\end{table*}\n';
-    out += perfTbl + '\n';
-
-    // IoU metrics
-    let iouTbl = `\\begin{table*}[t]\n\\centering\n\\caption{IoU Metrics - ${condTitle}}\n\\label{tab:iou_${cond}}\n`;
-    iouTbl += `\\begin{tabular}{|l|${'c|'.repeat(classNames.length)}}\n\\hline\n`;
-    iouTbl += 'Training & ' + classNames.map((cn, i) => {
-      const ct = cn[0].toUpperCase() + cn.slice(1);
-      return ct + ' IoU' + (i < classNames.length - 1 ? ' & ' : '');
-    }).join('') + ' \\\\\n\\hline\n';
-    testResultsData.forEach(({ training, aggregatedResults }) => {
-      const name = training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
-      const condData = aggregatedResults?.[cond] as ConditionAggregates | undefined;
-      iouTbl += `${name} `;
-      classNames.forEach(cn => {
-        const v = condData?.[cn]?.iou?.mean;
-        iouTbl += `& ${v !== undefined ? `${(v * m).toFixed(d)}` : 'N/A'} `;
-      });
-      iouTbl += '\\\\ \\hline\n';
-    });
-    iouTbl += '\\end{tabular}\n\\end{table*}\n';
-    out += iouTbl + '\n';
-
-    // AP metrics
-    let apTbl = `\\begin{table*}[t]\n\\centering\n\\caption{AP Metrics - ${condTitle}}\n\\label{tab:ap_${cond}}\n`;
-    apTbl += `\\begin{tabular}{|l|${'c|'.repeat(classNames.length)}}\n\\hline\n`;
-    apTbl += 'Training & ' + classNames.map((cn, i) => {
-      const ct = cn[0].toUpperCase() + cn.slice(1);
-      return ct + ' AP' + (i < classNames.length - 1 ? ' & ' : '');
-    }).join('') + ' \\\\\n\\hline\n';
-    testResultsData.forEach(({ training, aggregatedResults }) => {
-      const name = training.name.replace(/[&%$#_{}~^\\]/g, '\\$&');
-      const condData = aggregatedResults?.[cond] as ConditionAggregates | undefined;
-      apTbl += `${name} `;
-      classNames.forEach(cn => {
-        const v = condData?.[cn]?.ap?.mean;
-        apTbl += `& ${v !== undefined ? `${(v * m).toFixed(d)}` : 'N/A'} `;
-      });
-      apTbl += '\\\\ \\hline\n';
-    });
-    apTbl += '\\end{tabular}\n\\end{table*}\n';
-    out += apTbl + '\n';
+    out += table(`Performance Metrics - ${condTitle}`, `tab:performance_${cond}`, perfMetrics, true, cond) + '\n';
+    out += table(`IoU Metrics - ${condTitle}`, `tab:iou_${cond}`, ['iou'], false, cond) + '\n';
+    out += table(`AP Metrics - ${condTitle}`, `tab:ap_${cond}`, ['ap'], false, cond) + '\n';
   });
   return out;
 }

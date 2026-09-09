@@ -55,6 +55,7 @@ import type { Request, Response } from 'express';
 import * as epochCtrl from '../../controllers/epochController';
 import * as comparisonCtrl from '../../controllers/comparisonController';
 import * as imageCtrl from '../../controllers/datasetImageController';
+import { exportImageNamesQuerySchema } from '../../validation/datasetImageSchemas';
 import Epoch from '../../models/Epoch';
 import Training from '../../models/Training';
 import Comparison from '../../models/Comparison';
@@ -626,7 +627,12 @@ describe('datasetImageController', () => {
     const res = makeRes();
 
     await imageCtrl.exportImageNames(
-      makeReq({ params: { datasetId: 'd1' }, query: { tag: 'good' } }),
+      makeReq({
+        params: { datasetId: 'd1' },
+        // parsed through the schema so the controller sees the same defaults it
+        // does in production; the prefix is caller-supplied and empty by default
+        query: exportImageNamesQuerySchema.parse({ tag: 'good', pathPrefix: 'camera/' })
+      }),
       res
     );
 
@@ -636,6 +642,18 @@ describe('datasetImageController', () => {
       'attachment; filename="images_good_d1.csv"'
     );
     expect(res.send).toHaveBeenCalledWith('camera/a.jpg\ncamera/b.jpg');
+  });
+
+  it('exportImageNames writes bare filenames when no prefix is given', async () => {
+    mockedImageSvc.exportImageNames.mockResolvedValue([{ filename: 'a.jpg' }, { filename: 'b.jpg' }]);
+    const res = makeRes();
+
+    await imageCtrl.exportImageNames(
+      makeReq({ params: { datasetId: 'd1' }, query: exportImageNamesQuerySchema.parse({}) }),
+      res
+    );
+
+    expect(res.send).toHaveBeenCalledWith('a.jpg\nb.jpg');
   });
 
   it('exportImageNames defaults the filename tag to all', async () => {

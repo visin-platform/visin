@@ -31,6 +31,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { Training } from '../types';
 import { formatDateTime, formatDuration } from '../utils';
+import { useFormatCost } from '../costing/useCosting';
 
 interface TrainingsTableProps {
   trainings: Training[];
@@ -173,6 +174,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
 }) => {
   const navigate = useNavigate();
   const theme = useTheme();
+  const formatCost = useFormatCost();
 
   if (isLoading) {
     return (
@@ -360,7 +362,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                     <Typography variant="body2" sx={{
                       fontWeight: 500
                     }}>
-                      {training.metrics ? `€${((training.metrics.cpuCost || 0) + (training.metrics.gpuCost || 0)).toFixed(2)}` : '-'}
+                      {training.metrics ? formatCost((training.metrics.cpuCost || 0) + (training.metrics.gpuCost || 0), training.metrics.currency) : '-'}
                     </Typography>
                   </TableCell>
                   <TableCell>

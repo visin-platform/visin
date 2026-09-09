@@ -2,6 +2,9 @@ import React from 'react';
 import { Box, Paper } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
 import { Epoch } from '../types';
+import { discoverEpochClasses, readMetric } from '../taxonomy/discover';
+import { useTaxonomy } from '../taxonomy/useTaxonomy';
+import { PALETTE } from '../taxonomy/resolveTaxonomy';
 
 export type ClassMetric = 'iou' | 'precision' | 'recall' | 'f1' | 'ap';
 
@@ -13,130 +16,65 @@ interface ClassMetricChartProps {
   includeZeroValues?: boolean;
 }
 
-type MetricRecord = Record<string, unknown>;
-
-const EXCLUDED_KEYS = new Set(['loss', 'mean_iou', 'learning_rate', 'epoch_time', 'timestamp', 'per_class']);
-
-const COLORS = [
-  '#1976d2',
-  '#d32f2f',
-  '#f57c00',
-  '#388e3c',
-  '#7b1fa2',
-  '#00796b',
-  '#c2185b',
-  '#0097a7',
-  '#fbc02d',
-  '#6a1b9a'
-];
-
-const isRecord = (value: unknown): value is MetricRecord =>
-  typeof value === 'object' && value !== null;
-
-const getConditionResults = (epoch: Epoch, key: 'val' | 'train' | 'metrics'): MetricRecord => {
-  const value = epoch.results?.[key];
-  return isRecord(value) ? value : {};
-};
-
-const getPerClassResults = (conditionResults: MetricRecord): MetricRecord => {
-  const value = conditionResults.per_class;
-  return isRecord(value) ? value : {};
-};
-
-const getMetricValue = (entry: unknown, metric: ClassMetric): number | undefined => {
-  if (!isRecord(entry)) {
-    return undefined;
-  }
-
-  const value = entry[metric];
-  if (typeof value === 'number') {
-    return value;
-  }
-
-  if (metric === 'ap' && isRecord(value) && typeof value.mean === 'number') {
-    return value.mean;
-  }
-
-  return undefined;
-};
-
-const addClassesWithMetric = (classes: Set<string>, results: MetricRecord, metric: ClassMetric) => {
-  Object.entries(results).forEach(([className, entry]) => {
-    if (!EXCLUDED_KEYS.has(className) && getMetricValue(entry, metric) !== undefined) {
-      classes.add(className);
-    }
-  });
-};
-
 const findMetricValue = (epoch: Epoch, className: string, metric: ClassMetric): number | null => {
-  const valResults = getConditionResults(epoch, 'val');
-  const trainResults = getConditionResults(epoch, 'train');
-  const metricsResults = getConditionResults(epoch, 'metrics');
-
-  const candidates = [
-    valResults[className],
-    trainResults[className],
-    metricsResults[className],
-    getPerClassResults(valResults)[className],
-    getPerClassResults(trainResults)[className],
-    getPerClassResults(metricsResults)[className]
-  ];
-
-  for (const candidate of candidates) {
-    const value = getMetricValue(candidate, metric);
-    if (value !== undefined) {
-      return value;
+  const sections = ['val', 'train', 'metrics'] as const;
+  for (const section of sections) {
+    const block = epoch.results?.[section] as Record<string, unknown> | undefined;
+    if (!block) {
+      continue;
+    }
+    const perClass = block.per_class as Record<string, unknown> | undefined;
+    for (const candidate of [block[className], perClass?.[className]]) {
+      const value = readMetric(candidate, metric);
+      if (value !== undefined) {
+        return value;
+      }
     }
   }
-
   return null;
 };
 
-const hasSeriesData = (
-  series: { data: (number | null)[] }[],
-  includeZeroValues: boolean
-) =>
-  series.some((item) =>
-    item.data.some((value) => value !== null && (includeZeroValues || value !== 0))
+const hasSeriesData = (series: { data: (number | null)[] }[], includeZeroValues: boolean) =>
+  series.some(item =>
+    item.data.some(value => value !== null && (includeZeroValues || value !== 0))
   );
 
 const ClassMetricChart: React.FC<ClassMetricChartProps> = ({
   epochs,
   metric,
   emptyState = null,
-  labelFormatter = (className) => className,
+  labelFormatter,
   includeZeroValues = false
 }) => {
+  const taxonomy = useTaxonomy();
+
   if (epochs.length === 0) {
     return null;
   }
 
-  const allClasses = new Set<string>();
-  epochs.forEach((epoch) => {
-    const valResults = getConditionResults(epoch, 'val');
-    const trainResults = getConditionResults(epoch, 'train');
-    const metricsResults = getConditionResults(epoch, 'metrics');
+  const classesArray = discoverEpochClasses(epochs, metric).sort();
 
-    [valResults, trainResults, metricsResults].forEach((results) => {
-      addClassesWithMetric(allClasses, results, metric);
-      addClassesWithMetric(allClasses, getPerClassResults(results), metric);
-    });
-  });
-
-  if (allClasses.size === 0) {
+  if (classesArray.length === 0) {
     return emptyState;
   }
 
-  const classesArray = Array.from(allClasses).sort();
-  const regularClasses = classesArray.filter((className) => !className.endsWith('_2d'));
-  const twoDClasses = classesArray.filter((className) => className.endsWith('_2d'));
-  const epochNumbers = epochs.map((epoch) => epoch.epoch);
+  // A `_2d` suffix marks a projection of the same class onto the image plane; its
+  // values live on a different scale, so those series get their own chart.
+  const regularClasses = classesArray.filter(className => !className.endsWith('_2d'));
+  const twoDClasses = classesArray.filter(className => className.endsWith('_2d'));
+  const epochNumbers = epochs.map(epoch => epoch.epoch);
+
+  // A project-configured colour/label wins; otherwise fall back to the palette so
+  // an unconfigured class still gets a stable, distinct series.
+  const termFor = (className: string) => taxonomy.classes.find(c => c.key === className);
+  const labelFor = (className: string) =>
+    labelFormatter ? labelFormatter(className) : taxonomy.classLabel(className);
 
   const createChartSeries = (classList: string[]) =>
     classList.map((className, index) => ({
-      data: epochs.map((epoch) => findMetricValue(epoch, className, metric)),
-      label: labelFormatter(className),
-      color: COLORS[index % COLORS.length],
+      data: epochs.map(epoch => findMetricValue(epoch, className, metric)),
+      label: labelFor(className),
+      color: termFor(className)?.color ?? PALETTE[index % PALETTE.length],
       showMark: false
     }));
 

@@ -16,6 +16,8 @@ import { useAuth } from '../contexts/AuthContext';
 
 // New components
 import ProjectHeader from '../components/project/ProjectHeader';
+import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
+import { CostingProvider } from '../costing/CostingProvider';
 import ProjectTabs from '../components/project/ProjectTabs';
 import type { VisualizationsGroupedResult } from '../components/project/ProjectVisualizationsTab';
 import EditProjectDialog from '../components/project/EditProjectDialog';
@@ -188,6 +190,8 @@ const ProjectDashboardPage: React.FC = () => {
   const isOwner = user?.id === project.ownerId;
 
   return (
+    <TaxonomyProvider taxonomy={project.taxonomy}>
+    <CostingProvider costing={project.costing}>
     <Container maxWidth="xl" sx={{ mt: 0, mb: 8 }}>
       {/* Breadcrumbs */}
       <PageBreadcrumbs
@@ -256,6 +260,8 @@ const ProjectDashboardPage: React.FC = () => {
         isDeleting={deleteProjectMutation.isPending}
       />
     </Container>
+    </CostingProvider>
+    </TaxonomyProvider>
   );
 };
 

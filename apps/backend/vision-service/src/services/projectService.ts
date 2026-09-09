@@ -1,13 +1,17 @@
 import { QueryFilter } from 'mongoose';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Project, { IProject } from '../models/Project';
+import {
+  IProjectTaxonomy,
+  TASK_TYPE_METRIC_PRESETS,
+  TASK_TYPE_OVERALL_PRESETS
+} from '../models/taxonomy';
+import { IProjectCosting, costOf, resolveCosting } from '../models/costing';
 import Training from '../models/Training';
 import Epoch from '../models/Epoch';
 import Benchmark from '../models/Benchmark';
 import type { GetProjectsQuery } from '../validation/projectSchemas';
 
-const CPU_RATE_PER_HOUR = 0.006;
-const GPU_RATE_PER_HOUR = 0.20;
 
 function assertAccess(project: IProject, userId: string | undefined): void {
   if (!project.isPublic && project.ownerId !== userId) {
@@ -64,10 +68,32 @@ interface CreateProjectData {
   name: string;
   description?: string;
   isPublic?: boolean;
+  taxonomy?: IProjectTaxonomy;
+  costing?: IProjectCosting;
 }
 
+/**
+ * Fills in the metric definitions implied by a chosen task type. Only ever adds:
+ * anything the caller spelled out wins, and a project with no `taskType` is left
+ * alone so it relies purely on discovery.
+ */
+export const applyTaskTypePresets = (taxonomy?: IProjectTaxonomy): IProjectTaxonomy | undefined => {
+  if (!taxonomy?.taskType) {
+    return taxonomy;
+  }
+  return {
+    ...taxonomy,
+    metrics: taxonomy.metrics ?? TASK_TYPE_METRIC_PRESETS[taxonomy.taskType],
+    overallMetrics: taxonomy.overallMetrics ?? TASK_TYPE_OVERALL_PRESETS[taxonomy.taskType]
+  };
+};
+
 export const createProject = async (userId: string, data: CreateProjectData): Promise<IProject> => {
-  const project = new Project({ ...data, ownerId: userId });
+  const project = new Project({
+    ...data,
+    taxonomy: applyTaskTypePresets(data.taxonomy),
+    ownerId: userId
+  });
   return project.save();
 };
 
@@ -76,6 +102,8 @@ interface UpdateProjectData {
   description?: string;
   isPublic?: boolean;
   slug?: string;
+  taxonomy?: IProjectTaxonomy | null;
+  costing?: IProjectCosting | null;
 }
 
 export const updateProject = async (id: string, userId: string, data: UpdateProjectData): Promise<IProject> => {
@@ -87,7 +115,7 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
     throw new ForbiddenError();
   }
 
-  const { name, description, isPublic, slug } = data;
+  const { name, description, isPublic, slug, taxonomy, costing } = data;
 
   if (name) project.name = name;
   if (description !== undefined) project.description = description;
@@ -104,6 +132,14 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
       // Empty slug means remove it
       project.slug = undefined;
     }
+  }
+  // null clears the taxonomy and returns the project to pure discovery
+  if (taxonomy !== undefined) {
+    project.taxonomy = taxonomy === null ? undefined : applyTaskTypePresets(taxonomy);
+  }
+  // null clears the rates and returns the project to the platform defaults
+  if (costing !== undefined) {
+    project.costing = costing === null ? undefined : costing;
   }
 
   return project.save();
@@ -126,9 +162,12 @@ interface ProjectDashboardStats {
     totalTime: number;
     totalEpochs: number;
     avgEpochTime: number;
-    totalCpuCost: number;
-    totalGpuCost: number;
-    totalCost: number;
+    /** absent when the project has not priced its hardware */
+    totalCpuCost?: number;
+    totalGpuCost?: number;
+    totalCost?: number;
+    /** ISO code the amounts above are denominated in */
+    currency?: string;
   };
   testResultsCount: number;
   visualizationsCount: number;
@@ -186,14 +225,9 @@ export const getProjectDashboardStats = async (
       }
     },
     {
+      // Costs are applied in JS below, at this project's own rates.
       $addFields: {
         totalHours: { $divide: ['$totalTime', 3600] },
-        totalCpuCost: { $multiply: [{ $divide: ['$totalTime', 3600] }, CPU_RATE_PER_HOUR] },
-        totalGpuCost: { $multiply: [{ $divide: ['$totalTime', 3600] }, GPU_RATE_PER_HOUR] },
-        totalCost: { $add: [
-          { $multiply: [{ $divide: ['$totalTime', 3600] }, CPU_RATE_PER_HOUR] },
-          { $multiply: [{ $divide: ['$totalTime', 3600] }, GPU_RATE_PER_HOUR] }
-        ]},
         avgEpochTime: { $cond: { if: { $gt: ['$totalEpochs', 0] }, then: { $divide: ['$totalTime', '$totalEpochs'] }, else: 0 } }
       }
     }
@@ -238,13 +272,13 @@ export const getProjectDashboardStats = async (
     totalTrainings: 0,
     totalTime: 0,
     totalEpochs: 0,
-    avgEpochTime: 0,
-    totalCpuCost: 0,
-    totalGpuCost: 0,
-    totalCost: 0
+    avgEpochTime: 0
   };
   const testResultsCount = testResultsResult[0]?.count || 0;
   const visualizationsCount = visualizationsResult[0]?.count || 0;
+
+  const costing = resolveCosting(project.costing);
+  const cost = costOf(trainingStats.totalTime, costing);
 
   return {
     trainingStats: {
@@ -252,9 +286,10 @@ export const getProjectDashboardStats = async (
       totalTime: trainingStats.totalTime,
       totalEpochs: trainingStats.totalEpochs,
       avgEpochTime: trainingStats.avgEpochTime,
-      totalCpuCost: trainingStats.totalCpuCost,
-      totalGpuCost: trainingStats.totalGpuCost,
-      totalCost: trainingStats.totalCost
+      totalCpuCost: cost.cpuCost,
+      totalGpuCost: cost.gpuCost,
+      totalCost: cost.totalCost,
+      currency: cost.currency
     },
     testResultsCount,
     visualizationsCount,

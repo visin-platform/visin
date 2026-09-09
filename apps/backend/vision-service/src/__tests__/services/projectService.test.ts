@@ -144,8 +144,53 @@ describe('createProject', () => {
 
     const result = (await createProject('u1', { name: 'New', isPublic: true })) as AnyDoc;
 
-    expect(mockedProject).toHaveBeenCalledWith({ name: 'New', isPublic: true, ownerId: 'u1' });
+    expect(mockedProject).toHaveBeenCalledWith({
+      name: 'New',
+      isPublic: true,
+      taxonomy: undefined,
+      ownerId: 'u1',
+    });
     expect(result._id).toBe('new');
+  });
+
+  it('seeds metric definitions from the chosen task type', async () => {
+    mockedProject.mockImplementation((data: AnyDoc) => ({
+      ...data,
+      save: jest.fn().mockResolvedValue(data),
+    }));
+
+    await createProject('u1', { name: 'New', taxonomy: { taskType: 'detection' } });
+
+    const taxonomy = (mockedProject.mock.calls[0][0] as AnyDoc).taxonomy;
+    expect(taxonomy.metrics.map((m: AnyDoc) => m.key)).toContain('mAP_50');
+    expect(taxonomy.overallMetrics).toEqual(['mAP_50', 'mAP_50_95']);
+  });
+
+  it('never overwrites metrics the caller spelled out', async () => {
+    mockedProject.mockImplementation((data: AnyDoc) => ({
+      ...data,
+      save: jest.fn().mockResolvedValue(data),
+    }));
+
+    await createProject('u1', {
+      name: 'New',
+      taxonomy: { taskType: 'segmentation', metrics: [{ key: 'custom' }] },
+    });
+
+    const taxonomy = (mockedProject.mock.calls[0][0] as AnyDoc).taxonomy;
+    expect(taxonomy.metrics).toEqual([{ key: 'custom' }]);
+  });
+
+  it('leaves a project with no task type on pure discovery', async () => {
+    mockedProject.mockImplementation((data: AnyDoc) => ({
+      ...data,
+      save: jest.fn().mockResolvedValue(data),
+    }));
+
+    await createProject('u1', { name: 'New', taxonomy: { conditionLabel: 'Site' } });
+
+    const taxonomy = (mockedProject.mock.calls[0][0] as AnyDoc).taxonomy;
+    expect(taxonomy).toEqual({ conditionLabel: 'Site' });
   });
 });
 
@@ -178,6 +223,26 @@ describe('updateProject', () => {
     await expect(updateProject('p1', 'owner-1', { slug: 'taken' })).rejects.toThrow(
       'Slug already exists'
     );
+  });
+
+  it('replaces the taxonomy and clears it with null', async () => {
+    const doc = projectDoc();
+    mockedProject.findById.mockResolvedValue(doc);
+
+    await updateProject('p1', 'owner-1', { taxonomy: { conditionLabel: 'Site' } });
+    expect(doc.taxonomy).toEqual({ conditionLabel: 'Site' });
+
+    // null returns the project to pure discovery, which undefined cannot express
+    await updateProject('p1', 'owner-1', { taxonomy: null });
+    expect(doc.taxonomy).toBeUndefined();
+  });
+
+  it('leaves the taxonomy alone when the update does not mention it', async () => {
+    const doc = projectDoc({ taxonomy: { conditionLabel: 'Weather' } });
+    mockedProject.findById.mockResolvedValue(doc);
+
+    await updateProject('p1', 'owner-1', { name: 'Renamed' });
+    expect(doc.taxonomy).toEqual({ conditionLabel: 'Weather' });
   });
 
   it('sets a unique slug (trimmed) and clears an empty one', async () => {
@@ -230,9 +295,6 @@ describe('getProjectDashboardStats', () => {
         totalTime: 7200,
         totalEpochs: 4,
         avgEpochTime: 1800,
-        totalCpuCost: 0.012,
-        totalGpuCost: 0.4,
-        totalCost: 0.412,
       },
     ]);
     mockedEpoch.aggregate.mockResolvedValueOnce([{ count: 9 }]).mockResolvedValueOnce([{ count: 7 }]);
@@ -242,10 +304,32 @@ describe('getProjectDashboardStats', () => {
     const stats = await getProjectDashboardStats('p-slug', 'owner-1');
 
     expect(stats.trainingStats.totalTrainings).toBe(2);
-    expect(stats.trainingStats.totalCost).toBeCloseTo(0.412);
+    // this project has no rate card, so no money is reported — only measured time
+    expect(stats.trainingStats.totalCost).toBeUndefined();
+    expect(stats.trainingStats.currency).toBeUndefined();
     expect(stats.testResultsCount).toBe(9);
     expect(stats.visualizationsCount).toBe(7);
     expect(stats.benchmarksCount).toBe(3);
+  });
+
+  it('prices the same hours once the project has rates', async () => {
+    mockedProject.findOne.mockResolvedValue(
+      projectDoc({ costing: { cpuRatePerHour: 0.006, gpuRatePerHour: 0.2, currency: 'EUR' } })
+    );
+    mockedTraining.aggregate.mockResolvedValue([
+      { totalTrainings: 2, totalTime: 7200, totalEpochs: 4, avgEpochTime: 1800 }
+    ]);
+    mockedTraining.find.mockReturnValue({ select: jest.fn().mockResolvedValue([]) });
+    mockedEpoch.aggregate.mockResolvedValue([]);
+    mockedBenchmark.countDocuments.mockResolvedValue(0);
+
+    const stats = await getProjectDashboardStats('p-slug', 'owner-1');
+
+    // 2 hours at 0.006 + 0.20
+    expect(stats.trainingStats.totalCpuCost).toBeCloseTo(0.012);
+    expect(stats.trainingStats.totalGpuCost).toBeCloseTo(0.4);
+    expect(stats.trainingStats.totalCost).toBeCloseTo(0.412);
+    expect(stats.trainingStats.currency).toBe('EUR');
   });
 
   it('counts through the epochs of a known training set, not by fanning out', async () => {

@@ -1,82 +1,72 @@
 import { useMemo } from 'react';
-import { TestResult, TestResultCondition, TestResultMetrics } from '../types';
+import { TestResult, TestResultMetrics } from '../types';
+import { isRecord, readMetric } from '../taxonomy/discover';
+import { useTaxonomyFor } from '../taxonomy/useTaxonomy';
+import { DEFAULT_CLASS_METRICS } from '../components/test-results/performanceMetricsUtils';
 
-export interface AggregatedStats {
-  [condition: string]: {
-    [className: string]: {
-      iou: { values: number[]; mean: number };
-      precision: { values: number[]; mean: number };
-      recall: { values: number[]; mean: number };
-      ap: { values: number[]; mean: number };
-    };
-  };
+export interface MetricAggregate {
+  values: number[];
+  mean: number;
 }
+export type AggregatedStats = Record<string, Record<string, Record<string, MetricAggregate>>>;
 
+const mean = (values: number[]) =>
+  values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
+
+/**
+ * Averages each class's metrics per condition, across a set of test results.
+ *
+ * Conditions, classes and metrics all come from the payloads rather than a fixed
+ * list, so a project that reports something this platform has never seen still
+ * aggregates. The taxonomy only decides the order they come back in.
+ */
 export const useAggregatedStats = (allTestResults: TestResult[]) => {
-  const hasCyclistPedestrianData = useMemo(() => {
-    return allTestResults.some(testResult => {
-      return ['day_fair', 'day_rain', 'night_fair', 'night_rain', 'snow'].some(condition => {
-        const conditionData = testResult.test_results[condition] as TestResultCondition | undefined;
-        return conditionData && conditionData['cyclist + pedestrian'];
-      });
-    });
-  }, [allTestResults]);
+  const taxonomy = useTaxonomyFor(allTestResults);
 
   const aggregatedStats = useMemo(() => {
     if (allTestResults.length === 0) return null;
 
-    const conditions = ['day_fair', 'day_rain', 'snow', 'night_fair', 'night_rain'];
-    const classes = ['vehicle', 'sign', 'human'];
-    if (hasCyclistPedestrianData) classes.push('cyclist + pedestrian');
-
     const aggregated: AggregatedStats = {};
 
-    conditions.forEach(condition => {
-      aggregated[condition] = {};
-      classes.forEach(className => {
-        aggregated[condition][className] = {
-          iou: { values: [], mean: 0 },
-          precision: { values: [], mean: 0 },
-          recall: { values: [], mean: 0 },
-          ap: { values: [], mean: 0 }
-        };
-      });
-    });
+    taxonomy.conditions.forEach(condition => {
+      const perClass: Record<string, Record<string, MetricAggregate>> = {};
 
-    // Collect all values
-    allTestResults.forEach(testResult => {
-      conditions.forEach(condition => {
-        const conditionData = testResult.test_results[condition] as TestResultCondition | undefined;
-        if (!conditionData) return;
+      taxonomy.classes.forEach(className => {
+        const collected: Record<string, number[]> = {};
 
-        classes.forEach(className => {
-          const classData = conditionData[className] as TestResultMetrics | undefined;
-          if (!classData) return;
+        allTestResults.forEach(testResult => {
+          const conditionData = testResult.test_results?.[condition.key];
+          if (!isRecord(conditionData)) return;
+          const classData = conditionData[className.key] as TestResultMetrics | undefined;
+          if (!isRecord(classData)) return;
 
-          if (typeof classData.iou === 'number') aggregated[condition][className].iou.values.push(classData.iou);
-          if (typeof classData.precision === 'number') aggregated[condition][className].precision.values.push(classData.precision);
-          if (typeof classData.recall === 'number') aggregated[condition][className].recall.values.push(classData.recall);
-          if (typeof classData.ap === 'number') aggregated[condition][className].ap.values.push(classData.ap);
+          DEFAULT_CLASS_METRICS.forEach(metric => {
+            const value = readMetric(classData, metric);
+            if (value !== undefined) {
+              (collected[metric] ??= []).push(value);
+            }
+          });
         });
-      });
-    });
 
-    // Calculate mean for each metric
-    conditions.forEach(condition => {
-      classes.forEach(className => {
-        (['iou', 'precision', 'recall', 'ap'] as const).forEach(metric => {
-          const values = aggregated[condition][className][metric].values;
-          if (values.length > 0) {
-            const mean = values.reduce((sum: number, val: number) => sum + val, 0) / values.length;
-
-            aggregated[condition][className][metric].mean = mean;
-          }
-        });
+        // Keep the class only where something was actually reported, so an absent
+        // class does not become a row of zeroes.
+        if (Object.keys(collected).length > 0) {
+          perClass[className.key] = Object.fromEntries(
+            DEFAULT_CLASS_METRICS.map(metric => {
+              const values = collected[metric] ?? [];
+              return [metric, { values, mean: mean(values) }];
+            })
+          );
+        }
       });
+
+      if (Object.keys(perClass).length > 0) {
+        aggregated[condition.key] = perClass;
+      }
     });
 
     return aggregated;
-  }, [allTestResults, hasCyclistPedestrianData]);
+  }, [allTestResults, taxonomy]);
 
-  return { aggregatedStats, hasCyclistPedestrianData };
+  return { aggregatedStats, taxonomy };
 };

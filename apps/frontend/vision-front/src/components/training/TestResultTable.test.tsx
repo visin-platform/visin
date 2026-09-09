@@ -29,7 +29,6 @@ const makeTestResult = (overrides: Record<string, unknown> = {}): TestResult =>
   } as unknown as TestResult);
 
 const baseProps = {
-  hasCyclistPedestrianData: false,
   onLatexExport: vi.fn(),
   onDeleteTestResult: vi.fn(),
   isAuthenticated: true,
@@ -39,7 +38,8 @@ describe('TestResultTable', () => {
   it('renders per-condition metrics with 4-decimal formatting', () => {
     render(<TestResultTable {...baseProps} testResult={makeTestResult()} />);
 
-    expect(screen.getByText('Dry Day')).toBeInTheDocument();
+    // no project taxonomy in scope, so the condition key is humanized
+    expect(screen.getByText('Day Fair')).toBeInTheDocument();
     expect(screen.getAllByText('0.8000').length).toBeGreaterThan(0);
   });
 
@@ -65,7 +65,7 @@ describe('TestResultTable', () => {
     render(<TestResultTable {...baseProps} testResult={makeTestResult()} />);
 
     expect(screen.getByText('Overall Confusion Matrix (All Conditions)')).toBeInTheDocument();
-    expect(screen.getByText('Dry Day Confusion Matrix')).toBeInTheDocument();
+    expect(screen.getByText('Day Fair Confusion Matrix')).toBeInTheDocument();
   });
 
   it('calls onLatexExport', () => {
@@ -93,9 +93,41 @@ describe('TestResultTable', () => {
     expect(screen.queryByRole('button', { name: /delete result/i })).not.toBeInTheDocument();
   });
 
-  it('shows extra cyclist+pedestrian columns when hasCyclistPedestrianData is true', () => {
-    render(<TestResultTable {...baseProps} testResult={makeTestResult()} hasCyclistPedestrianData />);
+  it('picks up an extra class from the payload with no configuration', () => {
+    const withExtra = makeTestResult({
+      test_results: {
+        day_fair: {
+          ...(makeTestResult().test_results.day_fair as Record<string, unknown>),
+          'cyclist + pedestrian': metric(0.5),
+        },
+      },
+    });
+    render(<TestResultTable {...baseProps} testResult={withExtra} />);
 
-    expect(screen.getAllByText('Cyc+Ped').length).toBeGreaterThan(0);
+    // one header cell per metric group
+    expect(screen.getAllByText('Cyclist + Pedestrian').length).toBe(4);
+  });
+
+  it('renders an unfamiliar vocabulary from the data alone', () => {
+    const factory = makeTestResult({
+      test_results: { line_a: { scratch: metric(0.4), overall: { mean_dice: 0.6 } } },
+    });
+    render(<TestResultTable {...baseProps} testResult={factory} />);
+
+    expect(screen.getByText('Line A')).toBeInTheDocument();
+    expect(screen.getAllByText('Scratch').length).toBe(4);
+    expect(screen.getByText('Mean Dice')).toBeInTheDocument();
+    expect(screen.queryByText('Day Fair')).not.toBeInTheDocument();
+  });
+
+  it('labels confusion-matrix axes by position when the payload names none', () => {
+    const unlabelled = makeTestResult({
+      test_results: {
+        day_fair: { vehicle: metric(0.8), overall: { confusion_matrix: [[1, 2], [3, 4]] } },
+      },
+    });
+    render(<TestResultTable {...baseProps} testResult={unlabelled} />);
+
+    expect(screen.getAllByText('Class 0').length).toBeGreaterThan(0);
   });
 });

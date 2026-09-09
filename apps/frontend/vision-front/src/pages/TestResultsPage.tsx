@@ -30,7 +30,13 @@ import {
   Compare as CompareIcon
 } from '@mui/icons-material';
 import { testResultService } from '../services/testResultService';
-import { TestResult, TestResultData, TestResultMetrics, TestResultOverallMetrics, TestResultCondition } from '../types';
+import { TestResult, TestResultData } from '../types';
+import { isRecord, readMetric } from '../taxonomy/discover';
+import { RESERVED_CLASS_KEYS, RESERVED_CONDITION_KEYS } from '../taxonomy/reserved';
+import { useTaxonomyFor } from '../taxonomy/useTaxonomy';
+
+/** Per-class metrics this listing averages into one column each. */
+const AVERAGED_METRICS = ['iou', 'precision', 'recall', 'f1_score'];
 import { useAuth } from '../contexts/AuthContext';
 import { isGroupAdmin } from '../utils/permissions';
 
@@ -53,6 +59,10 @@ export const TestResultsPage: React.FC = () => {
   });
 
   const testResults: TestResult[] = data?.data.testResults || [];
+
+  // No project in scope on this listing, so the vocabulary comes from the results
+  // themselves — which is exactly the API-fed case.
+  const taxonomy = useTaxonomyFor(testResults);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => testResultService.deleteTestResult(id),
@@ -87,64 +97,69 @@ export const TestResultsPage: React.FC = () => {
     return new Date(dateString).toLocaleString();
   };
 
-  const formatNumber = (value: number, decimals: number = 4): string => {
+  const formatNumber = (value: number | undefined, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {
       return value.toFixed(decimals);
     }
     return '-';
   };
 
-  const getAverageMetric = (conditionData: TestResultData[string], metric: keyof TestResultMetrics): number => {
-    const classNames: string[] = ['vehicle', 'sign', 'human'];
-    const validClasses = classNames.filter(className => {
-      const classData = (conditionData as TestResultCondition)[className];
-      return classData && typeof classData === 'object' && (
-        metric in classData ||
-        (metric === 'f1_score' && ('f1' in classData || 'mean_f1' in classData))
-      );
-    });
+  /**
+   * Mean of one metric across every class in a condition. Classes come from the
+   * payload, so a project with its own vocabulary averages over its own classes.
+   */
+  const getAverageMetric = (conditionData: unknown, metric: string): number | undefined => {
+    if (!isRecord(conditionData)) return undefined;
 
-    if (validClasses.length === 0) return 0;
+    const values = Object.entries(conditionData)
+      .filter(([key]) => !RESERVED_CLASS_KEYS.has(key))
+      .map(([, classData]) => readMetric(classData, metric))
+      .filter((value): value is number => value !== undefined);
 
-    const sum = validClasses.reduce((acc, className) => {
-      const classData = (conditionData as TestResultCondition)[className] as TestResultMetrics;
-      // Handle different F1 field names: f1_score, f1, or mean_f1
-      const value = metric === 'f1_score' ?
-        (classData.f1_score || classData.f1 || classData.mean_f1) :
-        classData[metric];
-      return acc + (value || 0);
-    }, 0);
-
-    return sum / validClasses.length;
+    if (values.length === 0) return undefined;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
   };
 
-  const getOverallMetrics = (testResults: TestResultData): { mIoU_foreground: number; mean_accuracy: number; fw_iou: number; pixel_accuracy: number } => {
-    const conditions = ['day_fair', 'day_rain', 'night_fair', 'night_rain', 'snow'];
-    const metrics = conditions.map(condition => {
-      const conditionData = testResults[condition];
-      return (conditionData && typeof conditionData === 'object' && 'overall' in conditionData) ? conditionData.overall : null;
-    }).filter(Boolean) as TestResultOverallMetrics[];
-    
-    if (metrics.length === 0) {
-      // Fallback to overall section if available
-      const overall = testResults.overall;
-      if (overall && typeof overall === 'object' && 'mIoU_foreground' in overall) {
-        return {
-          mIoU_foreground: overall.mIoU_foreground || 0,
-          mean_accuracy: overall.mean_accuracy || 0,
-          fw_iou: overall.fw_iou || 0,
-          pixel_accuracy: overall.pixel_accuracy || 0
-        };
-      }
-      return { mIoU_foreground: 0, mean_accuracy: 0, fw_iou: 0, pixel_accuracy: 0 };
-    }
+  /**
+   * Mean of one metric across every condition of a result. The old version tried
+   * three named conditions in turn and took the first truthy answer, so `snow` and
+   * `night_rain` never counted and a genuine 0 fell through to the next condition.
+   */
+  const getAverageAcrossConditions = (testResults: TestResultData, metric: string): number | undefined => {
+    if (!isRecord(testResults)) return undefined;
 
-    return {
-      mIoU_foreground: metrics.reduce((sum, m) => sum + m.mIoU_foreground, 0) / metrics.length,
-      mean_accuracy: metrics.reduce((sum, m) => sum + m.mean_accuracy, 0) / metrics.length,
-      fw_iou: metrics.reduce((sum, m) => sum + m.fw_iou, 0) / metrics.length,
-      pixel_accuracy: metrics.reduce((sum, m) => sum + m.pixel_accuracy, 0) / metrics.length
-    };
+    const values = Object.entries(testResults)
+      .filter(([key]) => !RESERVED_CONDITION_KEYS.has(key))
+      .map(([, conditionData]) => getAverageMetric(conditionData, metric))
+      .filter((value): value is number => value !== undefined);
+
+    if (values.length === 0) return undefined;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  };
+
+  /** Mean of each summary metric across the conditions that report an `overall`. */
+  const getOverallMetrics = (testResults: TestResultData): Record<string, number | undefined> => {
+    if (!isRecord(testResults)) return {};
+
+    const blocks = Object.entries(testResults)
+      .filter(([key]) => !RESERVED_CONDITION_KEYS.has(key))
+      .map(([, conditionData]) => (isRecord(conditionData) ? conditionData.overall : undefined))
+      .filter(isRecord);
+
+    // fall back to the top-level `overall` when no condition carries one
+    const sources = blocks.length > 0 ? blocks : [testResults.overall].filter(isRecord);
+
+    return Object.fromEntries(
+      taxonomy.overallMetrics.map(metric => {
+        const values = sources
+          .map(block => readMetric(block, metric.key))
+          .filter((value): value is number => value !== undefined);
+        return [
+          metric.key,
+          values.length === 0 ? undefined : values.reduce((sum, v) => sum + v, 0) / values.length
+        ];
+      })
+    );
   };
 
   const handleSelectTestResult = (testResultId: string, checked: boolean) => {
@@ -271,30 +286,16 @@ export const TestResultsPage: React.FC = () => {
                     <TableCell sx={{ fontWeight: 600 }}>
                       Epoch
                     </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Avg IoU
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Avg Precision
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Avg Recall
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Avg F1
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      mIoU Foreground
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Mean Accuracy
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      FW IoU
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Pixel Accuracy
-                    </TableCell>
+                    {AVERAGED_METRICS.map(metric => (
+                      <TableCell key={metric} align="right" sx={{ fontWeight: 600 }}>
+                        Avg {taxonomy.metric(metric).label}
+                      </TableCell>
+                    ))}
+                    {taxonomy.overallMetrics.map(metric => (
+                      <TableCell key={metric.key} align="right" sx={{ fontWeight: 600 }}>
+                        {metric.label}
+                      </TableCell>
+                    ))}
                     <TableCell align="center" sx={{ fontWeight: 600 }}>
                       Timestamp
                     </TableCell>
@@ -305,18 +306,9 @@ export const TestResultsPage: React.FC = () => {
                 </TableHead>
                 <TableBody>
                   {testResults.map((testResult) => {
-                    const avgIou = getAverageMetric(testResult.test_results.day_fair, 'iou') || 
-                                   getAverageMetric(testResult.test_results.day_rain, 'iou') || 
-                                   getAverageMetric(testResult.test_results.night_fair, 'iou') || 0;
-                    const avgPrecision = getAverageMetric(testResult.test_results.day_fair, 'precision') || 
-                                        getAverageMetric(testResult.test_results.day_rain, 'precision') || 
-                                        getAverageMetric(testResult.test_results.night_fair, 'precision') || 0;
-                    const avgRecall = getAverageMetric(testResult.test_results.day_fair, 'recall') || 
-                                     getAverageMetric(testResult.test_results.day_rain, 'recall') || 
-                                     getAverageMetric(testResult.test_results.night_fair, 'recall') || 0;
-                    const avgF1 = getAverageMetric(testResult.test_results.day_fair, 'f1_score') || 
-                                 getAverageMetric(testResult.test_results.day_rain, 'f1_score') || 
-                                 getAverageMetric(testResult.test_results.night_fair, 'f1_score') || 0;
+                    const averages = AVERAGED_METRICS.map(metric =>
+                      getAverageAcrossConditions(testResult.test_results, metric)
+                    );
                     const overallMetrics = getOverallMetrics(testResult.test_results);
 
                     return (
@@ -346,14 +338,14 @@ export const TestResultsPage: React.FC = () => {
                         <TableCell>
                           Epoch {testResult.epoch}
                         </TableCell>
-                        <TableCell align="right">{formatNumber(avgIou)}</TableCell>
-                        <TableCell align="right">{formatNumber(avgPrecision)}</TableCell>
-                        <TableCell align="right">{formatNumber(avgRecall)}</TableCell>
-                        <TableCell align="right">{formatNumber(avgF1)}</TableCell>
-                        <TableCell align="right">{formatNumber(overallMetrics.mIoU_foreground)}</TableCell>
-                        <TableCell align="right">{formatNumber(overallMetrics.mean_accuracy)}</TableCell>
-                        <TableCell align="right">{formatNumber(overallMetrics.fw_iou)}</TableCell>
-                        <TableCell align="right">{formatNumber(overallMetrics.pixel_accuracy)}</TableCell>
+                        {AVERAGED_METRICS.map((metric, index) => (
+                          <TableCell key={metric} align="right">{formatNumber(averages[index])}</TableCell>
+                        ))}
+                        {taxonomy.overallMetrics.map(metric => (
+                          <TableCell key={metric.key} align="right">
+                            {formatNumber(overallMetrics[metric.key], metric.decimals)}
+                          </TableCell>
+                        ))}
                         <TableCell align="center" sx={{ fontSize: '0.875rem' }}>
                           {formatDate(testResult.timestamp)}
                         </TableCell>

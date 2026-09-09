@@ -60,8 +60,9 @@ describe('ClassAPChart', () => {
     ];
     render(<ClassAPChart epochs={epochs} />);
     // Both the regular and the _2d class chart legends should be rendered
-    expect(screen.getByText('vehicle')).toBeInTheDocument();
-    expect(screen.getByText('vehicle_2d')).toBeInTheDocument();
+    // series labels are humanized now that they come from the taxonomy
+    expect(screen.getByText('Vehicle')).toBeInTheDocument();
+    expect(screen.getByText('Vehicle 2d')).toBeInTheDocument();
   });
 
   it('falls back to per_class structure when val/train do not have direct ap fields', () => {

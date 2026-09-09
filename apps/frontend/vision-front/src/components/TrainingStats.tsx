@@ -7,14 +7,18 @@ import {
   AttachMoney as CostIcon,
   Storage as StorageIcon
 } from '@mui/icons-material';
+import { useFormatCost } from '../costing/useCosting';
 
 interface TrainingStatsProps {
   stats: {
     totalTrainings: number;
     totalTime: number;
-    totalCpuCost: number;
-    totalGpuCost: number;
-    totalCost: number;
+    /** absent when no project involved has priced its hardware */
+    totalCpuCost?: number;
+    totalGpuCost?: number;
+    totalCost?: number;
+    /** ISO code from the backend; 'MIXED' when the total spans currencies */
+    currency?: string;
   };
   selectedTags: string[];
 }
@@ -88,6 +92,7 @@ const StatCard: React.FC<{
 
 export const TrainingStats: React.FC<TrainingStatsProps> = ({ stats, selectedTags }) => {
   const theme = useTheme();
+  const formatCost = useFormatCost();
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -149,19 +154,19 @@ export const TrainingStats: React.FC<TrainingStatsProps> = ({ stats, selectedTag
         />
         <StatCard
           title="CPU Cost"
-          value={`€${stats.totalCpuCost.toFixed(2)}`}
+          value={formatCost(stats.totalCpuCost, stats.currency)}
           icon={<CpuIcon />}
           color={theme.palette.success.main}
         />
         <StatCard
           title="GPU Cost"
-          value={`€${stats.totalGpuCost.toFixed(2)}`}
+          value={formatCost(stats.totalGpuCost, stats.currency)}
           icon={<GpuIcon />}
           color={theme.palette.warning.main}
         />
         <StatCard
           title="Total Cost"
-          value={`€${stats.totalCost.toFixed(2)}`}
+          value={formatCost(stats.totalCost, stats.currency)}
           icon={<CostIcon />}
           color={theme.palette.error.main}
         />

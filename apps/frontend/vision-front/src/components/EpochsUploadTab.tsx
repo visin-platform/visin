@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -19,7 +19,9 @@ import {
   Info as InfoIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { Epoch, EpochMetrics } from '../types';
+import { Epoch } from '../types';
+import { discoverEpochClasses, readMetric } from '../taxonomy/discover';
+import { useTaxonomy } from '../taxonomy/useTaxonomy';
 
 interface EpochsUploadTabProps {
   epochs: Epoch[];
@@ -41,6 +43,10 @@ export const EpochsUploadTab: React.FC<EpochsUploadTabProps> = ({
   onDelete
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const taxonomy = useTaxonomy();
+
+  // One IoU column per class the uploaded epochs actually report.
+  const classNames = useMemo(() => discoverEpochClasses(epochs, 'iou').sort(), [epochs]);
 
   const handleFileClick = () => {
     fileInputRef.current?.click();
@@ -120,10 +126,11 @@ export const EpochsUploadTab: React.FC<EpochsUploadTabProps> = ({
                   <TableCell align="right"><strong>Val Loss</strong></TableCell>
                   <TableCell align="right"><strong>Train mIoU</strong></TableCell>
                   <TableCell align="right"><strong>Val mIoU</strong></TableCell>
-                  <TableCell align="right"><strong>Vehicle IoU</strong></TableCell>
-                  <TableCell align="right"><strong>Sign IoU</strong></TableCell>
-                  <TableCell align="right"><strong>Cyclist IoU</strong></TableCell>
-                  <TableCell align="right"><strong>Pedestrian IoU</strong></TableCell>
+                  {classNames.map(className => (
+                    <TableCell key={className} align="right">
+                      <strong>{taxonomy.classLabel(className)} IoU</strong>
+                    </TableCell>
+                  ))}
                   <TableCell align="right"><strong>Learning Rate</strong></TableCell>
                   <TableCell align="right"><strong>Time (s)</strong></TableCell>
                   <TableCell align="center"><strong>Actions</strong></TableCell>
@@ -137,10 +144,11 @@ export const EpochsUploadTab: React.FC<EpochsUploadTabProps> = ({
                     <TableCell align="right">{epoch.results?.val?.loss?.toFixed(4) || '-'}</TableCell>
                     <TableCell align="right">{epoch.results?.train?.mean_iou?.toFixed(4) || '-'}</TableCell>
                     <TableCell align="right">{epoch.results?.val?.mean_iou?.toFixed(4) || '-'}</TableCell>
-                    <TableCell align="right">{(epoch.results?.val?.vehicle as EpochMetrics | undefined)?.iou?.toFixed(4) || '-'}</TableCell>
-                    <TableCell align="right">{(epoch.results?.val?.sign as EpochMetrics | undefined)?.iou?.toFixed(4) || '-'}</TableCell>
-                    <TableCell align="right">{(epoch.results?.val?.cyclist as EpochMetrics | undefined)?.iou?.toFixed(4) || '-'}</TableCell>
-                    <TableCell align="right">{(epoch.results?.val?.pedestrian as EpochMetrics | undefined)?.iou?.toFixed(4) || '-'}</TableCell>
+                    {classNames.map(className => (
+                      <TableCell key={className} align="right">
+                        {readMetric(epoch.results?.val?.[className], 'iou')?.toFixed(4) ?? '-'}
+                      </TableCell>
+                    ))}
                     <TableCell align="right">{epoch.learning_rate?.toExponential(2) || '-'}</TableCell>
                     <TableCell align="right">{epoch.epoch_time?.toFixed(2) || '-'}</TableCell>
                     <TableCell align="center">

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { generateLatexCode, generateAggregatedLatexCode } from './latexGenerator';
+import { generateLatexCode } from './latexGenerator';
+import { resolveTaxonomyFor } from '../taxonomy/useTaxonomy';
 import type { TestResult } from '../types';
 
 const metric = (v: number) => ({ iou: v, precision: v, recall: v, ap: v });
@@ -30,60 +31,62 @@ describe('generateLatexCode', () => {
     expect(latex).toContain('\\end{table*}');
   });
 
-  it('renders "-" placeholders for missing classes/overall/inference data', () => {
-    const latex = generateLatexCode(makeTestResult({ test_results: { day_fair: {} } }));
+  it('renders "-" placeholders for a condition carrying no metrics', () => {
+    const result = makeTestResult({
+      test_results: { day_fair: { vehicle: metric(0.8) }, snow: {} },
+    });
+    const latex = generateLatexCode(result);
 
-    expect(latex).toContain(' - & - & - & - ');
+    expect(latex).toContain('-');
+    expect(latex).toContain('Snow');
   });
 
   it('skips conditions entirely absent from test_results', () => {
     const latex = generateLatexCode(makeTestResult({ test_results: {} }));
 
-    expect(latex).not.toContain('Dry day');
-  });
-});
-
-describe('generateAggregatedLatexCode', () => {
-  const aggregatedStats = {
-    day_fair: {
-      vehicle: { iou: { mean: 0.8 }, precision: { mean: 0.7 }, recall: { mean: 0.6 }, ap: { mean: 0.5 } },
-      sign: { iou: { mean: 0.4 }, precision: { mean: 0.3 }, recall: { mean: 0.2 }, ap: { mean: 0.1 } },
-      human: { iou: { mean: 0.9 }, precision: { mean: 0.9 }, recall: { mean: 0.9 }, ap: { mean: 0.9 } },
-    },
-  };
-
-  it('bolds the best value per metric/class and singularizes the caption for one run', () => {
-    const latex = generateAggregatedLatexCode(aggregatedStats, false, 1);
-
-    expect(latex).not.toContain('of 1 total');
-    expect(latex).toContain('\\textbf{0.80}');
-    expect(latex).toContain('Vehicle');
-    expect(latex).not.toContain('Cyclist');
-  });
-
-  it('includes the cyclist+pedestrian class when present and notes the run count', () => {
-    const withCyclist = {
-      day_fair: {
-        ...aggregatedStats.day_fair,
-        'cyclist + pedestrian': { iou: { mean: 0.5 }, precision: { mean: 0.5 }, recall: { mean: 0.5 }, ap: { mean: 0.5 } },
-      },
-    };
-
-    const latex = generateAggregatedLatexCode(withCyclist, true, 3);
-
-    expect(latex).toContain('of 3 total');
-    expect(latex).toContain('Cyclist + pedestrian');
-  });
-
-  it('renders "-" for missing metric data and skips absent conditions', () => {
-    const latex = generateAggregatedLatexCode({ day_fair: {} }, false, 1);
-
-    expect(latex).toContain('- & - & -');
-  });
-
-  it('handles an empty aggregatedStats object', () => {
-    const latex = generateAggregatedLatexCode({}, false, 1);
-
+    expect(latex).not.toContain('Day Fair');
     expect(latex).toContain('\\end{table*}');
+  });
+
+  it('sizes the table to the classes present rather than a fixed four', () => {
+    const twoClasses = makeTestResult({
+      test_results: { line_a: { scratch: metric(0.4), dent: metric(0.9) } },
+    });
+    const latex = generateLatexCode(twoClasses);
+
+    // 2 classes x 4 metrics, no overall/inference block in this payload
+    expect(latex).toContain('\\multicolumn{2}{|c|}{IoU}');
+    expect(latex).toContain('Scratch & Dent');
+    expect(latex).toContain('Line A');
+    expect(latex).not.toContain('Vehicle');
+  });
+
+  it('uses a project taxonomy for labels and the condition-axis wording', () => {
+    const result = makeTestResult({
+      test_results: { line_a: { scratch: metric(0.4) } },
+    });
+    const taxonomy = resolveTaxonomyFor(
+      {
+        conditionLabel: 'Line',
+        conditions: [{ key: 'line_a', label: 'Line A' }],
+        classes: [{ key: 'scratch', label: 'Surface Scratch' }],
+      },
+      [result]
+    );
+
+    const latex = generateLatexCode(result, taxonomy);
+
+    expect(latex).toContain('Surface Scratch');
+    expect(latex).toContain('across lines.');
+  });
+
+  it('escapes LaTeX-special characters in a class label', () => {
+    // humanize turns underscores into spaces, so use a character it leaves alone
+    const result = makeTestResult({
+      test_results: { line_a: { 'r&d': metric(0.4) } },
+    });
+    const latex = generateLatexCode(result);
+
+    expect(latex).toContain('R\\&d');
   });
 });

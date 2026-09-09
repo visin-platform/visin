@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Paper,
   Box,
@@ -15,7 +15,15 @@ import {
 } from '@mui/material';
 import { Code as CodeIcon } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import type { ComparisonData, ConditionAggregates } from './performanceMetricsUtils';
+import MetricCell from './MetricCell';
+import { useTaxonomy } from '../../taxonomy/useTaxonomy';
+import { discoverAggregateVocabulary } from './aggregateVocabulary';
+import {
+  type ComparisonData,
+  type ConditionAggregates,
+  DEFAULT_CLASS_METRICS,
+  getBestValues
+} from './performanceMetricsUtils';
 
 interface PerClassMetricsTableProps {
   comparisonData: ComparisonData[];
@@ -28,6 +36,12 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
 }) => {
   const theme = useTheme();
 
+  const projectTaxonomy = useTaxonomy();
+  const { taxonomy, conditions, classes, metrics } = useMemo(
+    () => discoverAggregateVocabulary(comparisonData, projectTaxonomy, DEFAULT_CLASS_METRICS),
+    [comparisonData, projectTaxonomy]
+  );
+
   const formatNumber = (value: number | undefined, decimals: number = 4): string => {
     if (typeof value === 'number' && !isNaN(value)) {
       return value.toFixed(decimals);
@@ -35,37 +49,13 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
     return 'N/A';
   };
 
-  // Helper function to find the best (maximum) value for each metric across all trainings
-  const getBestValues = (condition: string, className: string) => {
-    const bestValues: { [key: string]: number } = {};
-    
-    comparisonData.forEach((comp) => {
-      const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
-      const classMetrics = conditionData?.[className];
-      
-      if (classMetrics) {
-        ['iou', 'precision', 'recall', 'f1_score', 'ap'].forEach((metric) => {
-          const metricData = classMetrics[metric];
-          if (metricData?.mean !== undefined) {
-            if (bestValues[metric] === undefined || metricData.mean > bestValues[metric]) {
-              bestValues[metric] = metricData.mean;
-            }
-          }
-        });
-      }
-    });
-    
-    return bestValues;
-  };
-
   if (comparisonData.length === 0) return null;
 
-  // Class names are consistent across all trainings based on API structure
-  const classNames = ['human', 'sign', 'vehicle'];
+  const metricKeys = metrics.map(m => m.key);
 
   return (
-    <Paper 
-      sx={{ 
+    <Paper
+      sx={{
         mb: 4,
         boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
         bgcolor: alpha(theme.palette.primary.main, 0.05),
@@ -88,27 +78,27 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
           </Button>
         </Box>
       </Box>
-      {['day_fair', 'night_fair', 'day_rain', 'night_rain', 'snow'].map(condition => (
-        <Box key={condition} sx={{ mb: 4 }}>
-          <Typography variant="h6" sx={{ mb: 2, textTransform: 'capitalize', ml: 2 }}>
-            {condition.replace('_', ' ')} - Per-Class Metrics
+      {conditions.map(condition => (
+        <Box key={condition.key} sx={{ mb: 4 }}>
+          <Typography variant="h6" sx={{ mb: 2, ml: 2 }}>
+            {condition.label} - Per-Class Metrics
           </Typography>
           <TableContainer component={Paper} sx={{ mb: 3, overflowX: 'auto' }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ borderBottom: '2px solid rgba(224, 224, 224, 1)' }}>
-                    <strong>{condition.replace('_', ' ').toUpperCase()}</strong>
+                    <strong>{condition.label.toUpperCase()}</strong>
                   </TableCell>
                   {comparisonData.map((comp) => (
                     <TableCell
                       key={comp.training._id}
-                      colSpan={5}
+                      colSpan={metrics.length}
                       align="center"
                       sx={{ borderBottom: '2px solid rgba(224, 224, 224, 1)' }}
                     >
                       <Box>
-                        <Link 
+                        <Link
                           to={`/trainings/${comp.training._id}`}
                           style={{ textDecoration: 'none', color: 'inherit' }}
                         >
@@ -126,150 +116,66 @@ const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
                   </TableCell>
                   {comparisonData.map((comp) => (
                     <React.Fragment key={comp.training._id}>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>IoU</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>Precision</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>Recall</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>F1</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem', borderRight: '2px solid rgba(224, 224, 224, 1)' }}>AP</TableCell>
+                      {metrics.map((metric, index) => (
+                        <TableCell
+                          key={metric.key}
+                          align="center"
+                          sx={{
+                            fontWeight: 600,
+                            fontSize: '0.875rem',
+                            ...(index === metrics.length - 1
+                              ? { borderRight: '2px solid rgba(224, 224, 224, 1)' }
+                              : {})
+                          }}
+                        >
+                          {metric.label}
+                        </TableCell>
+                      ))}
                     </React.Fragment>
                   ))}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {classNames.map((className) => {
-                  return (
-                    <TableRow key={className}>
-                      <TableCell sx={{ fontWeight: 600 }}>
-                        {className.charAt(0).toUpperCase() + className.slice(1)}
-                      </TableCell>
-                      {comparisonData.map((comp) => {
-                        const conditionData = comp.aggregatedResults?.[condition] as ConditionAggregates | undefined;
-                        const classMetrics = conditionData?.[className];
-                        const bestValues = getBestValues(condition, className);
+                {classes.map((className) => (
+                  <TableRow key={className.key}>
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      {className.label}
+                    </TableCell>
+                    {comparisonData.map((comp) => {
+                      const conditionData = comp.aggregatedResults?.[condition.key] as ConditionAggregates | undefined;
+                      const classMetrics = conditionData?.[className.key];
+                      const bestValues = getBestValues(
+                        comparisonData,
+                        condition.key,
+                        className.key,
+                        taxonomy,
+                        metricKeys
+                      );
 
-                        return (
-                          <React.Fragment key={comp.training._id}>
-                            <TableCell align="center">
-                              {classMetrics?.iou?.mean !== undefined ? (
-                                <Typography 
-                                  variant="body2" 
-                                  sx={{ 
-                                    fontSize: '0.75rem', 
-                                    whiteSpace: 'nowrap',
-                                    fontWeight: classMetrics.iou.mean === bestValues.iou ? 'bold' : 'normal'
-                                  }}
-                                >
-                                  {formatNumber(classMetrics.iou.mean, 2)} ± {formatNumber(classMetrics.iou.std, 2)}
-                                </Typography>
-                              ) : (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    color: "text.secondary",
-                                    fontSize: '0.75rem'
-                                  }}>
-                                  N/A
-                                </Typography>
-                              )}
-                            </TableCell>
-                            <TableCell align="center">
-                              {classMetrics?.precision?.mean !== undefined ? (
-                                <Typography 
-                                  variant="body2" 
-                                  sx={{ 
-                                    fontSize: '0.75rem', 
-                                    whiteSpace: 'nowrap',
-                                    fontWeight: classMetrics.precision.mean === bestValues.precision ? 'bold' : 'normal'
-                                  }}
-                                >
-                                  {formatNumber(classMetrics.precision.mean, 2)} ± {formatNumber(classMetrics.precision.std, 2)}
-                                </Typography>
-                              ) : (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    color: "text.secondary",
-                                    fontSize: '0.75rem'
-                                  }}>
-                                  N/A
-                                </Typography>
-                              )}
-                            </TableCell>
-                            <TableCell align="center">
-                              {classMetrics?.recall?.mean !== undefined ? (
-                                <Typography 
-                                  variant="body2" 
-                                  sx={{ 
-                                    fontSize: '0.75rem', 
-                                    whiteSpace: 'nowrap',
-                                    fontWeight: classMetrics.recall.mean === bestValues.recall ? 'bold' : 'normal'
-                                  }}
-                                >
-                                  {formatNumber(classMetrics.recall.mean, 2)} ± {formatNumber(classMetrics.recall.std, 2)}
-                                </Typography>
-                              ) : (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    color: "text.secondary",
-                                    fontSize: '0.75rem'
-                                  }}>
-                                  N/A
-                                </Typography>
-                              )}
-                            </TableCell>
-                            <TableCell align="center">
-                              {classMetrics?.f1_score?.mean !== undefined ? (
-                                <Typography 
-                                  variant="body2" 
-                                  sx={{ 
-                                    fontSize: '0.75rem', 
-                                    whiteSpace: 'nowrap',
-                                    fontWeight: classMetrics.f1_score.mean === bestValues.f1_score ? 'bold' : 'normal'
-                                  }}
-                                >
-                                  {formatNumber(classMetrics.f1_score.mean, 2)} ± {formatNumber(classMetrics.f1_score.std, 2)}
-                                </Typography>
-                              ) : (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    color: "text.secondary",
-                                    fontSize: '0.75rem'
-                                  }}>
-                                  N/A
-                                </Typography>
-                              )}
-                            </TableCell>
-                            <TableCell align="center" sx={{ borderRight: '2px solid rgba(224, 224, 224, 1)' }}>
-                              {classMetrics?.ap?.mean !== undefined ? (
-                                <Typography 
-                                  variant="body2" 
-                                  sx={{ 
-                                    fontSize: '0.75rem', 
-                                    whiteSpace: 'nowrap',
-                                    fontWeight: classMetrics.ap.mean === bestValues.ap ? 'bold' : 'normal'
-                                  }}
-                                >
-                                  {formatNumber(classMetrics.ap.mean, 2)} ± {formatNumber(classMetrics.ap.std, 2)}
-                                </Typography>
-                              ) : (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    color: "text.secondary",
-                                    fontSize: '0.75rem'
-                                  }}>
-                                  N/A
-                                </Typography>
-                              )}
-                            </TableCell>
-                          </React.Fragment>
-                        );
-                      })}
-                    </TableRow>
-                  );
-                })}
+                      return (
+                        <React.Fragment key={comp.training._id}>
+                          {metrics.map((metric, index) => {
+                            const stat = classMetrics?.[metric.key];
+                            return (
+                              <MetricCell
+                                key={metric.key}
+                                value={stat?.mean}
+                                // mean ± std, the shape this table has always shown
+                                format={mean => `${formatNumber(mean, 2)} ± ${formatNumber(stat?.std, 2)}`}
+                                best={stat?.mean !== undefined && stat.mean === bestValues[metric.key]}
+                                borderRight={
+                                  index === metrics.length - 1
+                                    ? '2px solid rgba(224, 224, 224, 1)'
+                                    : undefined
+                                }
+                              />
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </TableContainer>

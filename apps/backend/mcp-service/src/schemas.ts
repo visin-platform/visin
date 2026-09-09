@@ -148,7 +148,7 @@ const classScoresSchema = z
 /**
  * What sits under a condition, which is not one shape.
  *
- * A weather condition maps to per-class score objects; the top-level `overall`
+ * A named condition maps to per-class score objects; the top-level `overall`
  * maps straight to summary scalars (`mIoU_foreground`, `fw_iou`, ...). Demanding
  * objects everywhere failed the whole parse on that one key, and the `.catch({})`
  * that used to sit here turned the failure into an empty result — so the tool

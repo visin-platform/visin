@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import TrainingsTable from './TrainingsTable';
 import { Training } from '../types';
+import { formatCost } from '../costing/costing';
 
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -34,6 +35,7 @@ const trainings: Training[] = [
       maxEpoch: 10,
       lastEpochTimestamp: null,
       cpuCost: 1.5,
+      currency: 'EUR',
       gpuCost: 2.5,
       totalCost: 4
     }
@@ -96,7 +98,7 @@ describe('TrainingsTable', () => {
     expect(screen.getByText('Training Two')).toBeInTheDocument();
     expect(screen.getByText('seg')).toBeInTheDocument();
     expect(screen.getByText('completed')).toBeInTheDocument();
-    expect(screen.getByText('€4.00')).toBeInTheDocument();
+    expect(screen.getByText(formatCost(4, 'EUR'))).toBeInTheDocument();
   });
 
   it('navigates to the training detail page when a row is clicked', () => {

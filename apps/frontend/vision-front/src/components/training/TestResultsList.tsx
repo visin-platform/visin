@@ -14,7 +14,6 @@ interface TestResultsListProps {
   allTestResults: TestResult[];
   testResultsLoading: boolean;
   availableTestEpochs: number[];
-  hasCyclistPedestrianData: boolean;
   uploading: boolean;
   onLatexExport: (testResult: TestResult) => void;
   onDeleteTestResult?: (testResultId: string) => void;
@@ -25,7 +24,6 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
   allTestResults,
   testResultsLoading,
   availableTestEpochs,
-  hasCyclistPedestrianData,
   uploading,
   onLatexExport,
   onDeleteTestResult,
@@ -112,7 +110,6 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
                   <TestResultTable
                     key={testResult._id}
                     testResult={testResult}
-                    hasCyclistPedestrianData={hasCyclistPedestrianData}
                     onLatexExport={onLatexExport}
                     onDeleteTestResult={() => handleDeleteClick(testResult)}
                     isAuthenticated={isAuthenticated}

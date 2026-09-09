@@ -9,6 +9,8 @@ import {
 } from '@mui/material';
 import { BarChart } from '@mui/x-charts';
 import { Training } from '../types';
+import { useTaxonomy } from '../taxonomy/useTaxonomy';
+import { orderKeysByTaxonomy } from '../taxonomy/resolveTaxonomy';
 
 interface DatasetClassStats {
   name?: string;
@@ -42,11 +44,19 @@ interface DatasetInfoSectionProps {
 }
 
 export const DatasetInfoSection: React.FC<DatasetInfoSectionProps> = ({ training }) => {
+  const taxonomy = useTaxonomy();
+
   if (!training.metadata?.dataset_info) {
     return null;
   }
 
   const datasetInfo = training.metadata.dataset_info as DatasetInfo;
+
+  // Every condition the breakdown reports, ordered by the project taxonomy where
+  // it names them. The old version listed four bars by hand and silently dropped
+  // any other condition — `snow` never appeared at all.
+  const testBreakdown = datasetInfo.dataset_splits?.test_breakdown;
+  const breakdownKeys = orderKeysByTaxonomy(taxonomy.conditions, testBreakdown);
   const classes = datasetInfo.segmentation_statistics?.classes;
   const classNames = classes ? Object.values(classes).map((cls) => cls.name || 'Unknown') : [];
   const pixelData = classes ? Object.values(classes).map((cls) => cls.total_pixels || 0) : [];
@@ -170,28 +180,22 @@ export const DatasetInfoSection: React.FC<DatasetInfoSectionProps> = ({ training
           </Paper>
         )}
 
-        {/* Test Set Weather Breakdown Chart */}
-        {datasetInfo.dataset_splits?.test_breakdown && (
+        {/* Test Set Condition Breakdown Chart */}
+        {breakdownKeys.length > 0 && (
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
-              Test Set Weather Conditions
+              Test Set {taxonomy.conditionLabel}s
             </Typography>
             <Box sx={{ width: '100%', height: { xs: 300, sm: 350, md: 400 } }}>
               <BarChart
-                xAxis={[{ scaleType: 'band', data: ['Day Fair', 'Day Rain', 'Night Fair', 'Night Rain'] }]}
+                xAxis={[{ scaleType: 'band', data: breakdownKeys.map(key => taxonomy.conditionTitle(key)) }]}
                 series={[{
-                  data: [
-                    datasetInfo.dataset_splits.test_breakdown.day_fair?.count || 0,
-                    datasetInfo.dataset_splits.test_breakdown.day_rain?.count || 0,
-                    datasetInfo.dataset_splits.test_breakdown.night_fair?.count || 0,
-                    datasetInfo.dataset_splits.test_breakdown.night_rain?.count || 0
-                  ],
+                  data: breakdownKeys.map(key => testBreakdown?.[key]?.count || 0),
                   label: 'Frames',
                   color: '#ff9800',
                   valueFormatter: (value, context) => {
-                    const conditions = ['day_fair', 'day_rain', 'night_fair', 'night_rain'];
-                    const condition = conditions[context.dataIndex];
-                    const percentage = datasetInfo.dataset_splits?.test_breakdown?.[condition]?.percentage?.toFixed(1) || '0.0';
+                    const key = breakdownKeys[context.dataIndex];
+                    const percentage = testBreakdown?.[key]?.percentage?.toFixed(1) || '0.0';
                     return `${value?.toLocaleString() || 0} (${percentage}%)`;
                   }
                 }]}

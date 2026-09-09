@@ -17,7 +17,6 @@ const baseProps = {
   allTestResults: [] as TestResult[],
   testResultsLoading: false,
   availableTestEpochs: [] as number[],
-  hasCyclistPedestrianData: false,
   uploading: false,
   onLatexExport: vi.fn(),
   onDeleteTestResult: vi.fn(),

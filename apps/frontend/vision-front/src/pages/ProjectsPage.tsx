@@ -36,6 +36,7 @@ import { useQuery } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
 import { Project } from '../types/Project';
 import ProjectFormDialog from '../components/ProjectFormDialog';
+import { ProjectCosting, ProjectTaxonomy } from '../types/taxonomy';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDateTime } from '../utils';
@@ -51,6 +52,10 @@ const ProjectsPage: React.FC = () => {
   const [projectName, setProjectName] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
   const [isPublic, setIsPublic] = useState(false);
+  // Optional display settings; an empty object means "discover everything".
+  const [taxonomy, setTaxonomy] = useState<ProjectTaxonomy>({});
+  // Blank means this project shows no costs; there is no default rate.
+  const [costing, setCosting] = useState<ProjectCosting>({});
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
@@ -90,14 +95,19 @@ const ProjectsPage: React.FC = () => {
         await projectService.updateProject(editingProjectId, {
           name: projectName.trim(),
           description: projectDescription.trim() || undefined,
-          isPublic
+          isPublic,
+          // null clears it, so an emptied form returns the project to discovery
+          taxonomy: Object.keys(taxonomy).length > 0 ? taxonomy : null,
+          costing: Object.keys(costing).length > 0 ? costing : null
         });
         setCreateSuccess('Project updated successfully!');
       } else {
         await projectService.createProject({
           name: projectName.trim(),
           description: projectDescription.trim() || undefined,
-          isPublic
+          isPublic,
+          taxonomy: Object.keys(taxonomy).length > 0 ? taxonomy : undefined,
+          costing: Object.keys(costing).length > 0 ? costing : undefined
         });
         setCreateSuccess(`Project "${projectName}" created successfully!`);
       }
@@ -107,6 +117,8 @@ const ProjectsPage: React.FC = () => {
       setProjectName('');
       setProjectDescription('');
       setIsPublic(false);
+      setTaxonomy({});
+      setCosting({});
       refetch();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to save project');
@@ -120,6 +132,8 @@ const ProjectsPage: React.FC = () => {
     setProjectName(project.name);
     setProjectDescription(project.description || '');
     setIsPublic(project.isPublic);
+    setTaxonomy(project.taxonomy ?? {});
+    setCosting(project.costing ?? {});
     setCreateModalOpen(true);
   };
 
@@ -151,6 +165,8 @@ const ProjectsPage: React.FC = () => {
       setProjectName('');
       setProjectDescription('');
       setIsPublic(false);
+      setTaxonomy({});
+      setCosting({});
       setCreateError(null);
       setCreateSuccess(null);
       setEditingProjectId(null);
@@ -342,6 +358,10 @@ const ProjectsPage: React.FC = () => {
         onDescriptionChange={setProjectDescription}
         isPublic={isPublic}
         onIsPublicChange={setIsPublic}
+        taxonomy={taxonomy}
+        onTaxonomyChange={setTaxonomy}
+        costing={costing}
+        onCostingChange={setCosting}
         error={createError}
         success={createSuccess}
       />

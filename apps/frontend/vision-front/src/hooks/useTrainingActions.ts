@@ -5,6 +5,7 @@ import { trainingService } from '../services/trainingService';
 import { testResultService } from '../services/testResultService';
 import { processEpochFiles, processTestResultFiles, UploadResult } from '../utils/fileUploadHelpers';
 import { generateLatexCode } from '../utils/latexGenerator';
+import { resolveTaxonomyFor, useProjectTaxonomy } from '../taxonomy/useTaxonomy';
 
 interface UseTrainingActionsOptions {
   trainingId: string | undefined;
@@ -23,6 +24,8 @@ export function useTrainingActions({ trainingId, refetch, onTrainingDeleted }: U
   const [uploadResults, setUploadResults] = useState<UploadResult>({ successful: [], failed: [] });
   const [latexModalOpen, setLatexModalOpen] = useState(false);
   const [latexCode, setLatexCode] = useState('');
+
+  const projectTaxonomy = useProjectTaxonomy();
 
   const handleFileUpload = async (files: FileList, type: 'epoch' | 'testResult') => {
     if (!files || files.length === 0 || !trainingId) return;
@@ -114,7 +117,8 @@ export function useTrainingActions({ trainingId, refetch, onTrainingDeleted }: U
   };
 
   const handleLatexExport = (testResult: TestResult) => {
-    setLatexCode(generateLatexCode(testResult));
+    // resolve against this result's own vocabulary, keeping the project's labels
+    setLatexCode(generateLatexCode(testResult, resolveTaxonomyFor(projectTaxonomy, [testResult])));
     setLatexModalOpen(true);
   };
 

@@ -57,8 +57,9 @@ describe('ClassF1Chart', () => {
       })
     ];
     render(<ClassF1Chart epochs={epochs} />);
-    expect(screen.getByText('vehicle')).toBeInTheDocument();
-    expect(screen.getByText('vehicle_2d')).toBeInTheDocument();
+    // series labels are humanized now that they come from the taxonomy
+    expect(screen.getByText('Vehicle')).toBeInTheDocument();
+    expect(screen.getByText('Vehicle 2d')).toBeInTheDocument();
   });
 
   it('falls back to per_class structure when direct fields are missing', () => {

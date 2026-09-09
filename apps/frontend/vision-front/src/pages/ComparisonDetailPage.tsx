@@ -15,6 +15,10 @@ import { Edit as EditIcon, Delete as DeleteIcon, Code as CodeIcon } from '@mui/i
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { comparisonService } from '../services/comparisonService';
+import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
+import { discoverAggregateVocabulary } from '../components/test-results/aggregateVocabulary';
+import { resolveTaxonomy } from '../taxonomy/resolveTaxonomy';
+import { DEFAULT_CLASS_METRICS } from '../components/test-results/performanceMetricsUtils';
 import { trainingService } from '../services/trainingService';
 import { projectService } from '../services/projectService';
 import { usePageTitle } from '../hooks/usePageTitle';
@@ -232,9 +236,21 @@ const ComparisonDetailPage: React.FC = () => {
     [comparisonData, decimals, multiplier]
   );
 
+  // The export runs outside the provider's subtree, so resolve the same taxonomy
+  // here: the project's labels merged with what these comparisons actually contain.
+  const exportTaxonomy = React.useMemo(
+    () =>
+      discoverAggregateVocabulary(
+        testResultsData,
+        resolveTaxonomy(project?.taxonomy, {}),
+        DEFAULT_CLASS_METRICS
+      ).taxonomy,
+    [testResultsData, project?.taxonomy]
+  );
+
   const testingLatex = React.useMemo(
-    () => generateTestingLatex(testResultsData, decimals, multiplier),
-    [testResultsData, decimals, multiplier]
+    () => generateTestingLatex(testResultsData, decimals, multiplier, exportTaxonomy),
+    [testResultsData, decimals, multiplier, exportTaxonomy]
   );
 
   const benchmarkingLatex = React.useMemo(
@@ -277,6 +293,7 @@ const ComparisonDetailPage: React.FC = () => {
   }
 
   return (
+    <TaxonomyProvider taxonomy={project?.taxonomy}>
     <Container maxWidth="lg" sx={{ pb: 4 }}>
       {/* Breadcrumbs */}
       <PageBreadcrumbs
@@ -500,6 +517,7 @@ const ComparisonDetailPage: React.FC = () => {
         onCopyAll={handleCopyLatex}
       />
     </Container>
+    </TaxonomyProvider>
   );
 };
 

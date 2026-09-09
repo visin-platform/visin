@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { DatasetImage, WeatherCondition, updateDatasetImage } from '../services/datasetImageService';
+import { DatasetImage, ImageCondition, updateDatasetImage } from '../services/datasetImageService';
 
 export function useDatasetImageEditor(datasetId: string | undefined, onSuccess: (message: string) => void, onError: (message: string) => void) {
   const queryClient = useQueryClient();
@@ -8,7 +8,7 @@ export function useDatasetImageEditor(datasetId: string | undefined, onSuccess: 
   const [editImageModalOpen, setEditImageModalOpen] = useState(false);
   const [selectedCategoryForEdit, setSelectedCategoryForEdit] = useState<string>('');
   const [selectedTagsForEdit, setSelectedTagsForEdit] = useState<string>('');
-  const [selectedWeatherForEdit, setSelectedWeatherForEdit] = useState<WeatherCondition | ''>('');
+  const [selectedConditionForEdit, setSelectedConditionForEdit] = useState<ImageCondition>('');
 
   const closeEditImageModal = () => {
     setEditImageModalOpen(false);
@@ -19,7 +19,7 @@ export function useDatasetImageEditor(datasetId: string | undefined, onSuccess: 
     setEditingImage(image);
     setSelectedCategoryForEdit(image.categoryId || '');
     setSelectedTagsForEdit(image.tags.join(', '));
-    setSelectedWeatherForEdit(image.weatherCondition || '');
+    setSelectedConditionForEdit(image.condition || '');
     setEditImageModalOpen(true);
   };
 
@@ -34,7 +34,7 @@ export function useDatasetImageEditor(datasetId: string | undefined, onSuccess: 
       await updateDatasetImage(editingImage._id, {
         categoryId: selectedCategoryForEdit || undefined,
         tags: tags,
-        weatherCondition: selectedWeatherForEdit || undefined
+        condition: selectedConditionForEdit || undefined
       });
       onSuccess('Image updated successfully');
       closeEditImageModal();
@@ -51,8 +51,8 @@ export function useDatasetImageEditor(datasetId: string | undefined, onSuccess: 
     setSelectedCategoryForEdit,
     selectedTagsForEdit,
     setSelectedTagsForEdit,
-    selectedWeatherForEdit,
-    setSelectedWeatherForEdit,
+    selectedConditionForEdit,
+    setSelectedConditionForEdit,
     closeEditImageModal,
     handleEditImageCategory,
     handleSaveImageCategory

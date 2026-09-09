@@ -9,6 +9,7 @@ import Project from '../models/Project';
 import Comparison from '../models/Comparison';
 import { testResultService } from './testResultService';
 import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from './projectAccessService';
+import { costOf, costingByProject, costingFor } from './costingService';
 
 interface TrainingMetrics {
   totalTime: number;
@@ -18,6 +19,8 @@ interface TrainingMetrics {
   cpuCost?: number;
   gpuCost?: number;
   totalCost?: number;
+  /** ISO code the costs above are denominated in */
+  currency?: string;
 }
 export type TrainingWithMetrics = Record<string, unknown> & { metrics: TrainingMetrics };
 type TrainingComparisonItem = Awaited<ReturnType<typeof testResultService.getAggregatedTestResultsByTraining>>['comparison'][number];
@@ -154,10 +157,6 @@ export const trainingService = {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    // Cost calculation rates
-    const CPU_RATE_PER_HOUR = 0.006;
-    const GPU_RATE_PER_HOUR = 0.20;
-
     const [fetchedTrainings, total] = await Promise.all([
       Training.find(query)
         .sort({ updatedAt: -1 })
@@ -195,13 +194,6 @@ export const trainingService = {
           }
         },
         {
-          $addFields: {
-            'metrics.cpuCost': { $multiply: [{ $divide: [{ $ifNull: ['$metrics.totalTime', 0] }, 3600] }, CPU_RATE_PER_HOUR] },
-            'metrics.gpuCost': { $multiply: [{ $divide: [{ $ifNull: ['$metrics.totalTime', 0] }, 3600] }, GPU_RATE_PER_HOUR] },
-            'metrics.totalCost': { $add: [{ $ifNull: ['$metrics.cpuCost', 0] }, { $ifNull: ['$metrics.gpuCost', 0] }] }
-          }
-        },
-        {
           $project: {
             _id: 1,
             metrics: 1
@@ -215,11 +207,29 @@ export const trainingService = {
         metricsMap.set(item._id.toString(), item.metrics);
       });
 
-      // Add metrics to trainings
-      trainingsOutput = trainings.map(training => ({
-        ...training.toObject(),
-        metrics: metricsMap.get(training._id.toString()) || { totalTime: 0, epochCount: 0, maxEpoch: 0, lastEpochTimestamp: null, cpuCost: 0, gpuCost: 0, totalCost: 0 }
-      }));
+      // A page can span projects, and a training need not belong to one at all,
+      // so costs are applied per row at that project's rates rather than by one
+      // constant baked into the pipeline.
+      const byProject = await costingByProject(trainings.map(t => t.projectId));
+
+      trainingsOutput = trainings.map(training => {
+        const base = metricsMap.get(training._id.toString());
+        const cost = costOf(base?.totalTime ?? 0, costingFor(byProject, training.projectId));
+        return {
+          ...training.toObject(),
+          metrics: {
+            totalTime: base?.totalTime ?? 0,
+            epochCount: base?.epochCount ?? 0,
+            maxEpoch: base?.maxEpoch ?? 0,
+            lastEpochTimestamp: base?.lastEpochTimestamp ?? null,
+            // absent when the training's project has not priced its hardware
+            cpuCost: cost.cpuCost,
+            gpuCost: cost.gpuCost,
+            totalCost: cost.totalCost,
+            currency: cost.currency
+          }
+        };
+      });
     }
 
     return {
@@ -498,9 +508,6 @@ export const trainingService = {
       matchQuery.tags = tags.length === 1 ? { $in: tags } : { $all: tags };
     }
 
-    const CPU_RATE_PER_HOUR = 0.006;
-    const GPU_RATE_PER_HOUR = 0.20;
-
     // Use aggregation pipeline for better performance
     const aggregationPipeline = [
       // Match trainings based on filters
@@ -532,16 +539,10 @@ export const trainingService = {
           totalEpochs: { $sum: '$epochCount' }
         }
       },
-      // Calculate costs
+      // Costs are applied in JS below, per project.
       {
         $addFields: {
           totalHours: { $divide: ['$totalTime', 3600] },
-          totalCpuCost: { $multiply: [{ $divide: ['$totalTime', 3600] }, CPU_RATE_PER_HOUR] },
-          totalGpuCost: { $multiply: [{ $divide: ['$totalTime', 3600] }, GPU_RATE_PER_HOUR] },
-          totalCost: { $add: [
-            { $multiply: [{ $divide: ['$totalTime', 3600] }, CPU_RATE_PER_HOUR] },
-            { $multiply: [{ $divide: ['$totalTime', 3600] }, GPU_RATE_PER_HOUR] }
-          ]},
           avgEpochTime: { $cond: { if: { $gt: ['$totalEpochs', 0] }, then: { $divide: ['$totalTime', '$totalEpochs'] }, else: 0 } }
         }
       }
@@ -552,14 +553,60 @@ export const trainingService = {
       totalTrainings: 0,
       totalTime: 0,
       totalEpochs: 0,
-      totalCpuCost: 0,
-      totalGpuCost: 0,
-      totalCost: 0,
       avgEpochTime: 0
     };
 
+    // These totals may span projects with different rates, so the time is summed
+    // per project and each project's own rates applied to its share.
+    const perProject = await Training.aggregate([
+      { $match: matchQuery },
+      {
+        $lookup: {
+          from: 'training_epoches',
+          let: { trainingId: '$_id' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] }, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] } },
+            { $group: { _id: null, time: { $sum: '$epoch_time' } } }
+          ],
+          as: 'epochStats'
+        }
+      },
+      {
+        $group: {
+          _id: '$projectId',
+          totalTime: { $sum: { $ifNull: [{ $arrayElemAt: ['$epochStats.time', 0] }, 0] } }
+        }
+      }
+    ]);
+
+    const byProject = await costingByProject(perProject.map(row => row._id));
+    const priced = perProject
+      .map(row => ({ row, cost: costOf(row.totalTime, costingFor(byProject, row._id)) }))
+      .filter(({ cost }) => cost.totalCost !== undefined);
+
+    // Only projects that have priced their hardware contribute. With none, the
+    // totals are omitted entirely rather than reported as a confident zero.
+    const totals = priced.length
+      ? priced.reduce(
+          (acc, { cost }) => ({
+            totalCpuCost: acc.totalCpuCost + (cost.cpuCost ?? 0),
+            totalGpuCost: acc.totalGpuCost + (cost.gpuCost ?? 0),
+            totalCost: acc.totalCost + (cost.totalCost ?? 0)
+          }),
+          { totalCpuCost: 0, totalGpuCost: 0, totalCost: 0 }
+        )
+      : {};
+
+    // Amounts in different currencies cannot be summed into one figure; say so
+    // rather than implying the total is denominated in whichever came first.
+    const currencies = new Set(priced.map(({ cost }) => cost.currency));
+    const currency =
+      currencies.size === 1 ? [...currencies][0] : currencies.size > 1 ? 'MIXED' : undefined;
+
     return {
       ...stats,
+      ...totals,
+      currency,
       filters: {
         status: status || null,
         datasetId: datasetId || null,
@@ -638,6 +685,10 @@ export const trainingService = {
       return acc;
     }, {} as Record<string, IBenchmark[]>);
 
+    // Compared trainings often come from different projects, so each one's costs
+    // use its own project's rates.
+    const byProject = await costingByProject(trainings.map(t => t.projectId));
+
     // Calculate comparison data for each training
     const comparisonData = trainings.map(training => {
       const trainingId = training._id.toString();
@@ -658,13 +709,10 @@ export const trainingService = {
       const totalTime = trainingEpochs.reduce((sum, epoch) => sum + (epoch.epoch_time || 0), 0);
       const avgEpochTime = trainingEpochs.length > 0 ? totalTime / trainingEpochs.length : 0;
 
-      // Calculate costs (using the same rates as frontend)
-      const CPU_RATE_PER_HOUR = 0.006;
-      const GPU_RATE_PER_HOUR = 0.20;
-      const totalHours = totalTime / 3600;
-      const cpuCost = totalHours * CPU_RATE_PER_HOUR;
-      const gpuCost = totalHours * GPU_RATE_PER_HOUR;
-      const totalCost = cpuCost + gpuCost;
+      const { totalHours, cpuCost, gpuCost, totalCost, currency } = costOf(
+        totalTime,
+        costingFor(byProject, training.projectId)
+      );
 
       return {
         training: {
@@ -684,7 +732,8 @@ export const trainingService = {
             totalHours,
             cpuCost,
             gpuCost,
-            totalCost
+            totalCost,
+            currency
           }
         },
         lastEpoch: lastEpoch ? {

@@ -38,8 +38,15 @@ describe('TrainingMetricsTable', () => {
     expect(screen.getAllByText('0.500').length).toBeGreaterThan(0);
   });
 
-  it('shows N/A for missing class metrics in a condition', () => {
-    renderWithRouter(<TrainingMetricsTable comparisonData={[makeTraining('t1', 'Training One', { day_fair: {} })]} />);
+  it('shows N/A where a class is missing a metric the condition otherwise reports', () => {
+    // `sign` reports only iou, so its precision/recall/f1 cells fall back to N/A
+    const partial = {
+      day_fair: {
+        human: { iou: { mean: 0.5 }, precision: { mean: 0.5 }, recall: { mean: 0.5 }, f1_score: { mean: 0.5 } },
+        sign: { iou: { mean: 0.3 } }
+      }
+    };
+    renderWithRouter(<TrainingMetricsTable comparisonData={[makeTraining('t1', 'Training One', partial)]} />);
     expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
   });
 

@@ -19,7 +19,7 @@ export interface ImageFilterOptions {
   search?: string;
   categoryId?: string;
   tags?: string[];
-  weatherCondition?: string;
+  condition?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   random?: boolean;
@@ -39,7 +39,7 @@ export interface CreateDatasetImageData {
   height?: number;
   tags?: string[];
   labels?: string[];
-  weatherCondition?: string;
+  condition?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -49,7 +49,7 @@ export interface UpdateDatasetImageData {
   tags?: string[];
   labels?: string[];
   categoryId?: string | null;
-  weatherCondition?: string;
+  condition?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -120,7 +120,7 @@ export const getImages = async (options: ImageFilterOptions) => {
     search,
     categoryId,
     tags,
-    weatherCondition,
+    condition,
     sortBy = 'updatedAt',
     sortOrder = 'desc',
     random
@@ -144,8 +144,8 @@ export const getImages = async (options: ImageFilterOptions) => {
     query.tags = { $in: tags };
   }
   
-  if (weatherCondition) {
-    query.weatherCondition = weatherCondition as IDatasetImage['weatherCondition'];
+  if (condition) {
+    query.condition = condition;
   }
 
   const limitNum = Math.min(Number(limit), 1000000);
@@ -227,7 +227,7 @@ export const createDatasetImage = async (data: CreateDatasetImageData) => {
     height,
     tags = [],
     labels = [],
-    weatherCondition,
+    condition,
     metadata = {}
   } = data;
 
@@ -257,7 +257,7 @@ export const createDatasetImage = async (data: CreateDatasetImageData) => {
     height,
     tags: tags.map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0),
     labels: labels.map((label: string) => label.trim()).filter((label: string) => label.length > 0),
-    weatherCondition,
+    condition,
     metadata
   });
 
@@ -558,7 +558,7 @@ export const getImageById = async (id: string) => {
 };
 
 export const updateImage = async (id: string, data: UpdateDatasetImageData) => {
-  const { title, description, tags, labels, categoryId, weatherCondition, metadata } = data;
+  const { title, description, tags, labels, categoryId, condition, metadata } = data;
 
   const updateData: UpdateQuery<IDatasetImage> = {};
   if (title !== undefined) updateData.title = title?.trim();
@@ -566,7 +566,7 @@ export const updateImage = async (id: string, data: UpdateDatasetImageData) => {
   if (tags) updateData.tags = tags.map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
   if (labels) updateData.labels = labels.map((label: string) => label.trim()).filter((label: string) => label.length > 0);
   if (categoryId !== undefined) updateData.categoryId = categoryId || null; // Allow null to remove category
-  if (weatherCondition !== undefined) updateData.weatherCondition = weatherCondition as IDatasetImage['weatherCondition'];
+  if (condition !== undefined) updateData.condition = condition;
   if (metadata) updateData.metadata = metadata;
 
   const image = await DatasetImage.findByIdAndUpdate(id, updateData, { new: true });

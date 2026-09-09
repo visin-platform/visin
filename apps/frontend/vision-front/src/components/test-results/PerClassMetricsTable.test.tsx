@@ -32,6 +32,13 @@ const renderTable = (comparisonData: ComparisonData[], onGenerateLatex = vi.fn()
   );
 
 describe('PerClassMetricsTable', () => {
+  it('renders no condition sections when the payload carries no results', () => {
+    const empty = { training: { _id: 't1', name: 'Empty' }, testResultsCount: 0, aggregatedResults: {} };
+    renderTable([empty as unknown as ComparisonData]);
+    // discovery found no conditions, so there is nothing to tabulate
+    expect(screen.queryByText('Class')).not.toBeInTheDocument();
+  });
+
   it('renders nothing for empty comparison data', () => {
     const { container } = renderTable([]);
     expect(container.querySelector('.MuiPaper-root')).toBeNull();
@@ -46,9 +53,14 @@ describe('PerClassMetricsTable', () => {
     ).toBeGreaterThan(0);
   });
 
-  it('shows N/A for missing metric values', () => {
-    const sparse = { training: { _id: 't1', name: 'Sparse' }, testResultsCount: 1, aggregatedResults: {} };
-    renderTable([sparse]);
+  it('shows N/A where one training lacks a metric the others report', () => {
+    const sparse = {
+      training: { _id: 't2', name: 'Sparse' },
+      testResultsCount: 1,
+      // same condition and class, but only iou — the other four columns are blank
+      aggregatedResults: { day_fair: { human: { iou: { mean: 0.3, std: 0 } } } },
+    } as unknown as ComparisonData;
+    renderTable([makeComparison('t1', 'Full', 0.5) as unknown as ComparisonData, sparse]);
 
     expect(screen.getAllByText('N/A').length).toBeGreaterThan(0);
   });

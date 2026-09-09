@@ -112,7 +112,7 @@ describe('getImages', () => {
       search: 'cat',
       categoryId: 'c1',
       tags: ['good'],
-      weatherCondition: 'snow',
+      condition: 'snow',
       sortBy: 'createdAt',
       sortOrder: 'asc',
       page: 2,
@@ -124,7 +124,7 @@ describe('getImages', () => {
       $text: { $search: 'cat' },
       categoryId: 'c1',
       tags: { $in: ['good'] },
-      weatherCondition: 'snow',
+      condition: 'snow',
     });
     expect(chain.sort).toHaveBeenCalledWith({ createdAt: 1 });
     expect(chain.skip).toHaveBeenCalledWith(10);
@@ -418,7 +418,7 @@ describe('updateImage', () => {
       tags: [' a ', ''],
       labels: [' l ', ' '],
       categoryId: null,
-      weatherCondition: 'snow',
+      condition: 'snow',
       metadata: { k: 1 },
     });
 
@@ -429,7 +429,7 @@ describe('updateImage', () => {
         tags: ['a'],
         labels: ['l'],
         categoryId: null,
-        weatherCondition: 'snow',
+        condition: 'snow',
         metadata: { k: 1 },
       },
       { new: true }

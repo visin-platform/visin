@@ -99,9 +99,25 @@ const mockProjectSelect = (ids: string[]) => {
   return select;
 };
 
+/**
+ * `Project.find` serves two callers here: the visibility check, which chains
+ * `.select('_id')`, and the cost-rate lookup, which passes a 'costing' projection
+ * and awaits directly. This routes on the projection so one test can exercise both.
+ */
+const mockProjectFind = (visibleIds: string[], costingDocs: AnyDoc[] = []) => {
+  mockedProject.find.mockImplementation((_filter: unknown, projection?: string) =>
+    projection === 'costing'
+      ? Promise.resolve(costingDocs)
+      : { select: jest.fn().mockResolvedValue(visibleIds.map((id) => ({ _id: { toString: () => id } }))) }
+  );
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockedCheckAccess.mockResolvedValue(true);
+  // Cost-rate lookup: no project overrides unless a test says otherwise, so
+  // costs fall back to the platform defaults.
+  mockedProject.find.mockResolvedValue([]);
 });
 
 describe('getTrainings', () => {
@@ -226,10 +242,34 @@ describe('getTrainings', () => {
       epochCount: 0,
       maxEpoch: 0,
       lastEpochTimestamp: null,
-      cpuCost: 0,
-      gpuCost: 0,
-      totalCost: 0,
+      // the training's project has no rate card, so no money is reported
+      cpuCost: undefined,
+      gpuCost: undefined,
+      totalCost: undefined,
+      currency: undefined,
     });
+  });
+
+  it('prices a training at its own project rates', async () => {
+    const doc = trainingDoc('t-priced');
+    doc.projectId = 'p1';
+    mockFindChain([doc]);
+    mockedTraining.countDocuments.mockResolvedValue(1);
+    mockedTraining.aggregate.mockResolvedValue([
+      { _id: doc._id, metrics: { totalTime: 7200, epochCount: 2, maxEpoch: 2, lastEpochTimestamp: null } },
+    ]);
+    mockProjectFind(['p1'], [
+      { _id: { toString: () => 'p1' }, costing: { cpuRatePerHour: 1, gpuRatePerHour: 10, currency: 'USD' } },
+    ]);
+
+    const result = await trainingService.getTrainings('u1', {}, {});
+    const metrics = (result.trainings[0] as TrainingWithMetrics).metrics;
+
+    // 2 hours at 1 + 10
+    expect(metrics.cpuCost).toBeCloseTo(2);
+    expect(metrics.gpuCost).toBeCloseTo(20);
+    expect(metrics.totalCost).toBeCloseTo(22);
+    expect(metrics.currency).toBe('USD');
   });
 });
 
@@ -588,7 +628,8 @@ describe('compareTrainings', () => {
     expect(entry.metrics.avgEpochTime).toBe(5400);
     expect(entry.metrics.maxEpochTime).toBe(7200);
     expect(entry.metrics.cost.totalHours).toBe(3);
-    expect(entry.metrics.cost.totalCost).toBeCloseTo(3 * 0.206);
+    // hours are measured either way; money needs the project to have rates
+    expect(entry.metrics.cost.totalCost).toBeUndefined();
     expect(entry.lastEpoch?.epoch).toBe(2);
     expect(entry.aggregatedTestResults).toEqual({ mIoU: 0.7 });
     expect(entry.testResultsCount).toBe(4);

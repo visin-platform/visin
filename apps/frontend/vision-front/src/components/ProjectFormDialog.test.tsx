@@ -15,6 +15,10 @@ const baseProps = {
   onDescriptionChange: vi.fn(),
   isPublic: false,
   onIsPublicChange: vi.fn(),
+  taxonomy: {},
+  onTaxonomyChange: vi.fn(),
+  costing: {},
+  onCostingChange: vi.fn(),
   error: null as string | null,
   success: null as string | null
 };
@@ -82,5 +86,41 @@ describe('ProjectFormDialog', () => {
     expect(screen.getByText('Oops')).toBeInTheDocument();
     rerender(<ProjectFormDialog {...baseProps} success="Saved" />);
     expect(screen.getByText('Saved')).toBeInTheDocument();
+  });
+
+  it('offers optional result-label customisation, collapsed by default', async () => {
+    render(<ProjectFormDialog {...baseProps} />);
+
+    // collapsed by default, so creating a project never requires touching it
+    const toggle = screen.getByRole('button', { name: /Customise how results are labelled/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText('Task type')).toBeInTheDocument();
+    expect(screen.getByLabelText('Name for the condition axis')).toBeInTheDocument();
+  });
+
+  it('reports a chosen task type back to the caller', async () => {
+    const onTaxonomyChange = vi.fn();
+    render(<ProjectFormDialog {...baseProps} onTaxonomyChange={onTaxonomyChange} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /Customise how results are labelled/ }));
+    await userEvent.type(screen.getByLabelText('Name for the condition axis'), 'S');
+
+    expect(onTaxonomyChange).toHaveBeenCalledWith({ conditionLabel: 'S' });
+  });
+
+  it('offers optional cost rates, collapsed and blank by default', async () => {
+    render(<ProjectFormDialog {...baseProps} />);
+
+    const toggle = screen.getByRole('button', { name: /Set compute cost rates/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(toggle);
+
+    expect(screen.getByLabelText('CPU rate per hour')).toHaveValue(null);
+    expect(screen.getByText(/No rates set, so this project shows no costs/)).toBeInTheDocument();
   });
 });

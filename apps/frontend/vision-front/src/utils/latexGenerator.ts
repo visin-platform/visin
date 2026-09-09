@@ -1,157 +1,108 @@
-import { TestResult, TestResultCondition, TestResultMetrics } from '../types';
+import { TestResult } from '../types';
+import { ResolvedTaxonomy } from '../types/taxonomy';
+import { isRecord, readMetric } from '../taxonomy/discover';
+import { resolveTaxonomyFor } from '../taxonomy/useTaxonomy';
 
-interface MetricStat {
-  mean: number;
-  std?: number;
+/**
+ * One test result as a LaTeX table: conditions down the page, classes across it.
+ *
+ * The table's width follows the data. It used to be a hand-written 23-column
+ * header naming Vehicle/Sign/Cyclist+Ped/Human four times over and a single
+ * template literal emitting all 23 cells, which meant a project with two classes
+ * got three empty columns and a project with five silently lost one.
+ */
+
+const CLASS_METRICS = ['iou', 'precision', 'recall', 'ap'];
+
+/** Overall/inference columns, appended after the per-class block. */
+interface SummaryColumn {
+  key: string;
+  label: string;
+  decimals: number;
+  /** which pseudo-class of the condition holds it */
+  source: 'overall' | 'inference_time';
 }
-type ClassAggregates = Record<string, MetricStat>;
-export type AggregatedStats = Record<string, Record<string, ClassAggregates>>;
 
-export const generateLatexCode = (testResult: TestResult): string => {
-  const conditions = [
-    { key: 'day_fair', label: 'Dry day' },
-    { key: 'day_rain', label: 'Rainy day' },
-    { key: 'snow', label: 'Snow' },
-    { key: 'night_fair', label: 'Dry night' },
-    { key: 'night_rain', label: 'Rainy night' }
-  ];
+const INFERENCE_COLUMNS: SummaryColumn[] = [
+  { key: 'avg_per_sample_ms', label: 'Avg (ms)', decimals: 2, source: 'inference_time' },
+  { key: 'throughput_fps', label: 'FPS', decimals: 1, source: 'inference_time' },
+  { key: 'total_seconds', label: 'Total (s)', decimals: 1, source: 'inference_time' }
+];
+
+const escapeLatex = (value: string) => value.replace(/[&%$#_{}~^\\]/g, '\\$&');
+
+export const generateLatexCode = (testResult: TestResult, taxonomy?: ResolvedTaxonomy): string => {
+  const resolved = taxonomy ?? resolveTaxonomyFor(undefined, [testResult]);
+
+  const conditions = resolved.conditions.filter(condition =>
+    isRecord(testResult.test_results?.[condition.key])
+  );
+  const classes = resolved.classes;
+
+  // Only include an overall column something actually reported.
+  const overallColumns: SummaryColumn[] = resolved.overallMetrics.map(metric => ({
+    key: metric.key,
+    label: metric.label,
+    decimals: metric.decimals,
+    source: 'overall' as const
+  }));
+  const inferenceColumns = INFERENCE_COLUMNS.filter(column =>
+    conditions.some(condition => {
+      const block = testResult.test_results?.[condition.key];
+      return isRecord(block) && readMetric(block.inference_time, column.key) !== undefined;
+    })
+  );
+
+  const totalColumns = classes.length * CLASS_METRICS.length + overallColumns.length + inferenceColumns.length;
+
+  const metricGroups = CLASS_METRICS.map(
+    metric => `\\multicolumn{${classes.length}}{|c|}{${resolved.metric(metric).label}}`
+  );
+  if (overallColumns.length > 0) {
+    metricGroups.push(`\\multicolumn{${overallColumns.length}}{|c|}{Overall Metrics}`);
+  }
+  if (inferenceColumns.length > 0) {
+    metricGroups.push(`\\multicolumn{${inferenceColumns.length}}{|c|}{Inference Time}`);
+  }
+
+  const classHeaders = CLASS_METRICS.flatMap(() => classes.map(c => escapeLatex(c.label)));
+  const summaryHeaders = [...overallColumns, ...inferenceColumns].map(c => escapeLatex(c.label));
 
   let latex = `\\begin{table*}[ht]
 \\centering
-\\caption{Performance comparison during various weather conditions.}
-\\begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
-\\hline & \\multicolumn{4}{|c|}{IoU} & \\multicolumn{4}{|c|}{Precision} & \\multicolumn{4}{|c|}{Recall} & \\multicolumn{4}{|c|}{AP} & \\multicolumn{4}{|c|}{Overall Metrics} & \\multicolumn{3}{|c|}{Inference Time} \\\\
-\\hline & Vehicle & Sign & Cyclist+Ped & Human & Vehicle & Sign & Cyclist+Ped & Human & Vehicle & Sign & Cyclist+Ped & Human & Vehicle & Sign & Cyclist+Ped & Human & mIoU Foreground & Mean Accuracy & FW IoU & Pixel Accuracy & Avg (ms) & FPS & Total (s) \\\\
+\\caption{Performance comparison across ${escapeLatex(resolved.conditionLabel.toLowerCase())}s.}
+\\begin{tabular}{|c|${'c|'.repeat(totalColumns)}}
+\\hline & ${metricGroups.join(' & ')} \\\\
+\\hline & ${[...classHeaders, ...summaryHeaders].join(' & ')} \\\\
 \\hline
 `;
 
-  conditions.forEach((condition) => {
-    const conditionData = testResult.test_results[condition.key] as TestResultCondition | undefined;
-    if (!conditionData) return;
+  conditions.forEach(condition => {
+    const conditionData = testResult.test_results[condition.key];
+    if (!isRecord(conditionData)) return;
 
-    const vehicle = conditionData.vehicle;
-    const sign = conditionData.sign;
-    const cyclistPedestrian = conditionData['cyclist + pedestrian'] as TestResultMetrics | undefined;
-    const human = conditionData.human;
-    const overall = conditionData.overall;
-    const inferenceTime = conditionData.inference_time;
+    const cells = [
+      ...CLASS_METRICS.flatMap(metric =>
+        classes.map(className => {
+          const value = readMetric(conditionData[className.key], metric);
+          return value === undefined ? '-' : value.toFixed(resolved.metric(metric).decimals);
+        })
+      ),
+      ...[...overallColumns, ...inferenceColumns].map(column => {
+        const value = readMetric(conditionData[column.source], column.key);
+        return value === undefined ? '-' : value.toFixed(column.decimals);
+      })
+    ];
 
-    latex += `\\multicolumn{23}{|c|}{${condition.label}} \\\\
+    latex += `\\multicolumn{${totalColumns + 1}}{|c|}{${escapeLatex(condition.label)}} \\\\
 \\hline
-Camera & ${vehicle ? vehicle.iou.toFixed(4) : '-'} & ${sign ? sign.iou.toFixed(4) : '-'} & ${cyclistPedestrian ? cyclistPedestrian.iou.toFixed(4) : '-'} & ${human ? human.iou.toFixed(4) : '-'} & ${vehicle ? vehicle.precision.toFixed(4) : '-'} & ${sign ? sign.precision.toFixed(4) : '-'} & ${cyclistPedestrian ? cyclistPedestrian.precision.toFixed(4) : '-'} & ${human ? human.precision.toFixed(4) : '-'} & ${vehicle ? vehicle.recall.toFixed(4) : '-'} & ${sign ? sign.recall.toFixed(4) : '-'} & ${cyclistPedestrian ? cyclistPedestrian.recall.toFixed(4) : '-'} & ${human ? human.recall.toFixed(4) : '-'} & ${vehicle ? vehicle.ap.toFixed(4) : '-'} & ${sign ? sign.ap.toFixed(4) : '-'} & ${cyclistPedestrian ? cyclistPedestrian.ap.toFixed(4) : '-'} & ${human ? human.ap.toFixed(4) : '-'} & ${overall ? overall.mIoU_foreground.toFixed(4) : '-'} & ${overall ? overall.mean_accuracy.toFixed(4) : '-'} & ${overall ? overall.fw_iou.toFixed(4) : '-'} & ${overall ? overall.pixel_accuracy.toFixed(4) : '-'} & ${inferenceTime ? inferenceTime.avg_per_sample_ms.toFixed(2) : '-'} & ${inferenceTime ? inferenceTime.throughput_fps.toFixed(1) : '-'} & ${inferenceTime ? inferenceTime.total_seconds.toFixed(1) : '-'} \\\\
+${cells.length > 0 ? `Result & ${cells.join(' & ')}` : 'Result'} \\\\
 \\hline
 `;
   });
 
   latex += `\\end{tabular}
 \\label{table:performance}
-\\end{table*}`;
-
-  return latex;
-};
-
-export const generateAggregatedLatexCode = (aggregatedStats: AggregatedStats, hasCyclistPedestrianData: boolean, testResultsCount: number): string => {
-  const conditions = [
-    { key: 'day_fair', label: 'Dry day' },
-    { key: 'day_rain', label: 'Rainy day' },
-    { key: 'snow', label: 'Snow' },
-    { key: 'night_fair', label: 'Dry night' },
-    { key: 'night_rain', label: 'Rainy night' }
-  ];
-
-  const classes = ['vehicle', 'sign'];
-  if (hasCyclistPedestrianData) classes.push('cyclist + pedestrian');
-  classes.push('human');
-
-  // Helper function to find the best (maximum) value for each metric across all trainings
-  const getBestValues = (conditionKey: string) => {
-    const bestValues: { [key: string]: { [className: string]: number } } = {
-      iou: {},
-      precision: {},
-      recall: {},
-      ap: {}
-    };
-    
-    const conditionData = aggregatedStats[conditionKey];
-    if (!conditionData) return bestValues;
-    
-    classes.forEach((className) => {
-      ['iou', 'precision', 'recall', 'ap'].forEach((metric) => {
-        const metricData = conditionData[className]?.[metric];
-        if (metricData?.mean !== undefined) {
-          if (bestValues[metric][className] === undefined || metricData.mean > bestValues[metric][className]) {
-            bestValues[metric][className] = metricData.mean;
-          }
-        }
-      });
-    });
-    
-    return bestValues;
-  };
-
-  // Helper function to format value with bold if it's the best
-  const formatValue = (metricData: MetricStat | undefined, isBest: boolean): string => {
-    if (!metricData || typeof metricData.mean !== 'number') return '-';
-    const value = `${metricData.mean.toFixed(2)}`;
-    return isBest ? `\\textbf{${value}}` : value;
-  };
-
-  let latex = `\\begin{table*}[ht]
-\\centering
-\\caption{Performance metrics from the most recent test run${testResultsCount > 1 ? ` (of ${testResultsCount} total)` : ''}.}
-\\begin{tabular}{|c|${'c|'.repeat(classes.length * 4)}}
-\\hline & \\multicolumn{${classes.length}}{|c|}{IoU} & \\multicolumn{${classes.length}}{|c|}{Precision} & \\multicolumn{${classes.length}}{|c|}{Recall} & \\multicolumn{${classes.length}}{|c|}{AP} \\\\
-\\hline & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} & ${classes.map(cls => cls.charAt(0).toUpperCase() + cls.slice(1)).join(' & ')} \\\\
-\\hline
-`;
-
-  conditions.forEach((condition) => {
-    const conditionData = aggregatedStats[condition.key];
-    if (!conditionData) return;
-
-    const bestValues = getBestValues(condition.key);
-
-    latex += `${condition.label}`;
-
-    // IoU values
-    classes.forEach((className) => {
-      const metricData = conditionData[className]?.iou;
-      const isBest = metricData?.mean === bestValues.iou[className];
-      const value = formatValue(metricData, isBest);
-      latex += ` & ${value}`;
-    });
-
-    // Precision values
-    classes.forEach((className) => {
-      const metricData = conditionData[className]?.precision;
-      const isBest = metricData?.mean === bestValues.precision[className];
-      const value = formatValue(metricData, isBest);
-      latex += ` & ${value}`;
-    });
-
-    // Recall values
-    classes.forEach((className) => {
-      const metricData = conditionData[className]?.recall;
-      const isBest = metricData?.mean === bestValues.recall[className];
-      const value = formatValue(metricData, isBest);
-      latex += ` & ${value}`;
-    });
-
-    // AP values
-    classes.forEach((className) => {
-      const metricData = conditionData[className]?.ap;
-      const isBest = metricData?.mean === bestValues.ap[className];
-      const value = formatValue(metricData, isBest);
-      latex += ` & ${value}`;
-    });
-
-    latex += ` \\\\
-\\hline
-`;
-  });
-
-  latex += `\\end{tabular}
-\\label{table:aggregated_performance}
 \\end{table*}`;
 
   return latex;
