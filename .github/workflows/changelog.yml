@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       release-as:
-        description: 'Explicit version (e.g. 1.0.0). Leave empty for a patch bump.'
+        description: 'Explicit version (e.g. 1.1.0) or patch|minor|major. Leave empty to derive from the commits.'
         required: false
         type: string
 
