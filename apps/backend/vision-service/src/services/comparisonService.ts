@@ -70,7 +70,11 @@ const buildScopedComparisonQuery = async (
     if (!(await checkProjectAccess(userId, filters.projectId))) {
       throw new ForbiddenError();
     }
-    query.projectId = filters.projectId;
+    // The filter may name a slug, but `projectId` stores the canonical id — the
+    // unresolved form silently matched nothing.
+    const project = await resolveProject(filters.projectId);
+    if (!project) throw new NotFoundError('Project not found');
+    query.projectId = project._id.toString();
     return query;
   }
 

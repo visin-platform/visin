@@ -18,7 +18,13 @@ async function fetchGroups(userId: string): Promise<ProjectGroup[]> {
   // session token and cannot authenticate to ordinary group-management routes.
   const payload = JSON.stringify(['vision-project-groups', userId, issuedAt]);
   const signature = createHmac('sha256', requireEnv('JWT_SECRET')).update(payload).digest('hex');
-  const baseUrl = process.env.NODE_ENV === 'production' ? 'https://group-api.visin.eu' : 'http://localhost:5006';
+  // Container to container where Compose says so; the hosted address and the
+  // host-side dev port are only fallbacks. Without this the whole-stack Compose
+  // file — which leaves NODE_ENV at development — resolves group-service to
+  // vision-service's own container, and every signed-in read fails.
+  const baseUrl =
+    process.env.GROUP_SERVICE_URL ||
+    (process.env.NODE_ENV === 'production' ? 'https://group-api.visin.eu' : 'http://localhost:5006');
   const response = await fetchWithTimeout(`${baseUrl}/api/internal/project-groups`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId, issuedAt, signature }),

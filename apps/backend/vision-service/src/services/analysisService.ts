@@ -281,9 +281,6 @@ export const getAnalysisDownload = async (id: string) => {
 export const deleteAnalysis = async (id: string, userId?: string) => {
   const analysis = await findAnalysisOrThrow(id);
   assertLibraryWrite(analysis, userId);
-  if (!analysis) {
-    throw new NotFoundError('Analysis not found');
-  }
 
   const fileId = storedFileId(analysis);
   if (fileId && fileId.startsWith(DATASET_FILE_PREFIX)) {

@@ -73,16 +73,13 @@ const TrainingDetailPage: React.FC = () => {
     handleEditCancel,
     editName, setEditName,
     editDescription, setEditDescription,
-    editConfigId, setEditConfigId,
     editDatasetId, setEditDatasetId,
     editProjectId, setEditProjectId,
     editStatus, setEditStatus,
     editTags, setEditTags,
     availableTags,
-    editConfigs,
     editDatasets,
     editProjects,
-    editLoadingConfigs,
     editLoadingDatasets,
     editLoadingProjects,
     isUpdating,
@@ -296,13 +293,11 @@ const TrainingDetailPage: React.FC = () => {
         onSubmit={handleEditConfirm}
         isEditing={true}
         isCreating={isUpdating}
-        isLoadingData={editLoadingConfigs || editLoadingDatasets || editLoadingProjects}
+        isLoadingData={editLoadingDatasets || editLoadingProjects}
         trainingName={editName}
         onNameChange={setEditName}
         trainingDescription={editDescription}
         onDescriptionChange={setEditDescription}
-        selectedConfigId={editConfigId}
-        onConfigChange={setEditConfigId}
         selectedDatasetId={editDatasetId}
         onDatasetChange={setEditDatasetId}
         selectedProjectId={editProjectId}
@@ -312,12 +307,10 @@ const TrainingDetailPage: React.FC = () => {
         trainingTags={editTags}
         onTagsChange={setEditTags}
         availableTags={availableTags}
-        configs={editConfigs}
         datasets={editDatasets}
         projects={editProjects}
         error={updateError}
         success={updateSuccess}
-        loadingConfigs={editLoadingConfigs}
         loadingDatasets={editLoadingDatasets}
         loadingProjects={editLoadingProjects}
       />

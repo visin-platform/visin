@@ -49,9 +49,6 @@ vi.mock('../TrainingFormDialog', () => ({
 vi.mock('../../services/trainingService', () => ({
   trainingService: { updateTraining: vi.fn(), deleteTraining: vi.fn() },
 }));
-vi.mock('../../services/configService', () => ({
-  configService: { getAllConfigs: vi.fn() },
-}));
 vi.mock('../../services/projectService', () => ({
   projectService: { getProjects: vi.fn() },
 }));
@@ -63,13 +60,11 @@ vi.mock('../../services/comparisonService', () => ({
 }));
 
 import { trainingService } from '../../services/trainingService';
-import { configService } from '../../services/configService';
 import { projectService } from '../../services/projectService';
 import { getAllAnalyses } from '../../services/analysisService';
 import { comparisonService } from '../../services/comparisonService';
 
 const mockedTraining = vi.mocked(trainingService);
-const mockedConfig = vi.mocked(configService);
 const mockedProject = vi.mocked(projectService);
 const mockedGetAllAnalyses = vi.mocked(getAllAnalyses);
 const mockedComparison = vi.mocked(comparisonService);
@@ -105,7 +100,6 @@ const renderTab = (props = {}) => render(<ProjectTrainingsTab {...baseProps} {..
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedConfig.getAllConfigs.mockResolvedValue({ success: true, data: { configs: [] } } as never);
   mockedGetAllAnalyses.mockResolvedValue({ success: true, data: [] } as never);
   mockedProject.getProjects.mockResolvedValue({ success: true, data: [] } as never);
 });
@@ -137,7 +131,6 @@ describe('ProjectTrainingsTab', () => {
 
     fireEvent.click(screen.getByText('edit-t1'));
 
-    await waitFor(() => expect(mockedConfig.getAllConfigs).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText('editing-training')).toBeInTheDocument());
   });
 

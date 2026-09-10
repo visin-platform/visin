@@ -17,7 +17,7 @@ import {
   Box,
   FormHelperText
 } from '@mui/material';
-import { Config, Training } from '../types';
+import { Training } from '../types';
 import { Project } from '../types/Project';
 import { DatasetAnalysis } from '../services/analysisService';
 import TagInput from './TagInput';
@@ -38,8 +38,6 @@ interface TrainingFormDialogProps {
   onNameChange: (value: string) => void;
   trainingDescription: string;
   onDescriptionChange: (value: string) => void;
-  selectedConfigId: string;
-  onConfigChange: (value: string) => void;
   selectedDatasetId: string;
   onDatasetChange: (value: string) => void;
   selectedProjectId: string;
@@ -49,12 +47,10 @@ interface TrainingFormDialogProps {
   trainingTags: string[];
   onTagsChange: (tags: string[]) => void;
   availableTags?: string[];
-  configs: Config[];
   datasets: DatasetAnalysis[];
   projects: Project[];
   error: string | null;
   success: string | null;
-  loadingConfigs: boolean;
   loadingDatasets: boolean;
   loadingProjects: boolean;
 }
@@ -70,8 +66,6 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
   onNameChange,
   trainingDescription,
   onDescriptionChange,
-  selectedConfigId,
-  onConfigChange,
   selectedDatasetId,
   onDatasetChange,
   selectedProjectId,
@@ -81,12 +75,10 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
   trainingTags,
   onTagsChange,
   availableTags = [],
-  configs,
   datasets,
   projects,
   error,
   success,
-  loadingConfigs,
   loadingDatasets,
   loadingProjects
 }) => {
@@ -156,38 +148,6 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
           )}
         </FormControl>
         <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Select Config (Optional)</InputLabel>
-          <Select
-            value={selectedConfigId}
-            onChange={(e: SelectChangeEvent<string>) => onConfigChange(e.target.value)}
-            label="Select Config (Optional)"
-            disabled={isCreating || isLoadingData || loadingConfigs}
-          >
-            <MenuItem value="">
-              <em>None</em>
-            </MenuItem>
-            {configs.map((config: Config) => (
-              <MenuItem key={config._id} value={config._id}>
-                <Box>
-                  <Typography variant="body2" sx={{
-                    fontWeight: 500
-                  }}>
-                    {config.config_name || 'Unnamed'}
-                  </Typography>
-                  {config.summary && (
-                    <Typography variant="caption" sx={{
-                      color: "text.secondary"
-                    }}>
-                      {config.summary}
-                    </Typography>
-                  )}
-                </Box>
-              </MenuItem>
-            ))}
-          </Select>
-          <FormHelperText>Config contents are publicly shared, including in private projects.</FormHelperText>
-        </FormControl>
-        <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel>Select Dataset Analysis (Optional)</InputLabel>
           <Select
             value={selectedDatasetId}
@@ -235,7 +195,7 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
           />
         </Box>
         <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 2 }}>
-          A unique UUID will be automatically generated for this training. You can select a dataset analysis and/or config. After creating, you can upload epoch JSON files to track training progress.
+          A unique UUID will be automatically generated for this training. You can select a dataset analysis. After creating, you can upload epoch JSON files to track training progress. The training&apos;s config is set by the pipeline that reports it and is shown, read-only, on the Config tab.
         </Typography>
       </DialogContent>
       <DialogActions>

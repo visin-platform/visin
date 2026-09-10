@@ -51,6 +51,7 @@ jest.mock('../../services/projectAccessService', () => ({
   checkProjectAccess: jest.fn(),
   getVisibleProjectIds: jest.fn(),
   isWithinTokenScope: jest.fn(),
+  resolveProject: jest.fn(),
 }));
 jest.mock('../../services/datasetImageService', () => ({
   getImages: jest.fn(),
@@ -78,6 +79,7 @@ import Comparison from '../../models/Comparison';
 import {
   checkProjectAccess,
   getVisibleProjectIds,
+  resolveProject,
   isWithinTokenScope,
 } from '../../services/projectAccessService';
 import * as imageService from '../../services/datasetImageService';
@@ -88,6 +90,7 @@ const mockedComparison = Comparison as unknown as jest.Mock & Record<string, jes
 const mockedCheckAccess = checkProjectAccess as jest.Mock;
 const mockedVisibleProjects = getVisibleProjectIds as jest.Mock;
 const mockedTokenScope = isWithinTokenScope as jest.Mock;
+const mockedResolveProject = resolveProject as jest.Mock;
 const mockedImageSvc = imageService as unknown as Record<string, jest.Mock>;
 
 type AnyDoc = Record<string, unknown>;
@@ -120,6 +123,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedCheckAccess.mockResolvedValue(true);
   mockedTokenScope.mockReturnValue(true);
+  // A projectId filter may be a slug; the query always uses the resolved id.
+  mockedResolveProject.mockImplementation((identifier: string) => ({ _id: identifier }));
 });
 
 describe('epochController.getEpochsByTraining', () => {

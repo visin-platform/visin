@@ -57,17 +57,5 @@ export const configService = {
   async createConfigsBatch(configs: CreateConfigData[]): Promise<ApiResponse<Config[]>> {
     const response = await visionApi.post('/configs/batch', { configs });
     return response.data as ApiResponse<Config[]>;
-  },
-
-  // Update config
-  async updateConfig(id: string, configData: Partial<CreateConfigData>): Promise<ApiResponse<Config>> {
-    const response = await visionApi.put(`/configs/${id}`, configData);
-    return response.data as ApiResponse<Config>;
-  },
-
-  // Delete config
-  async deleteConfig(id: string): Promise<ApiResponse<void>> {
-    const response = await visionApi.delete(`/configs/${id}`);
-    return response.data as ApiResponse<void>;
   }
 };
