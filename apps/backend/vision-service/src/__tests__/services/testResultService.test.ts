@@ -124,6 +124,10 @@ const pagination = { sortBy: 'timestamp', order: -1 as const };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedVisibleTrainings.mockResolvedValue([]);
+  mockedEpoch.find.mockResolvedValue([]);
+  mockedTraining.find.mockResolvedValue([]);
+  mockedTraining.findById.mockResolvedValue(trainingDoc('t1'));
   mockedCheckAccess.mockResolvedValue(true);
   mockedTokenScope.mockReturnValue(true);
 });
@@ -142,7 +146,7 @@ describe('getTestResults', () => {
 
     const result = (await testResultService.getTestResults('u1', {}, pagination)) as AnyDoc;
 
-    expect(query.where).toHaveBeenCalledWith('epoch_uuid');
+    expect(mockedTestResult.find).toHaveBeenCalledWith({ deletedAt: null, $and: [{ epoch_uuid: { $in: ['e1'] } }] });
     expect(result.testResults).toHaveLength(1);
     expect(result.testResults[0].training.name).toBe('Training t1');
     expect(result.testResults[0].epoch_info).toEqual({ epoch: 3, epoch_time: 60 });
@@ -183,7 +187,7 @@ describe('getTestResults', () => {
     )) as AnyDoc;
 
     expect(result.testResults).toEqual([]);
-    expect(result.pagination.total).toBe(0);
+    expect(result.total).toBe(0);
   });
 
   it('returns empty for a project whose trainings have no epochs', async () => {
@@ -229,7 +233,7 @@ describe('getTestResults', () => {
     ).resolves.toEqual({ testResults: [], total: 0 });
   });
 
-  it('filters by epoch and epoch_uuids without extra scoping', async () => {
+  it('intersects epoch filters with mandatory visibility', async () => {
     const query = makeQuery([trDoc('e1')]);
     mockedTestResult.find.mockReturnValue(query);
     mockedEpoch.find.mockResolvedValueOnce([epochDoc('e1', 't1')]);
@@ -237,9 +241,8 @@ describe('getTestResults', () => {
 
     await testResultService.getTestResults('u1', { epoch: 5, epoch_uuids: ['e1'] }, pagination);
 
-    expect(query.equals).toHaveBeenCalledWith(5);
-    expect(query.in).toHaveBeenCalledWith(['e1']);
-    expect(mockedVisibleTrainings).not.toHaveBeenCalled();
+    expect(mockedTestResult.find).toHaveBeenCalledWith({ deletedAt: null, $and: [{ epoch_uuid: { $in: ['e1'] } }, { epoch: 5 }, { epoch_uuid: { $in: ['e1'] } }] });
+    expect(mockedVisibleTrainings).toHaveBeenCalledWith('u1');
   });
 
   it('paginates with a parallel count query', async () => {
@@ -247,7 +250,7 @@ describe('getTestResults', () => {
     mockedTestResult.find.mockReturnValue(query);
     mockedTestResult.countDocuments.mockResolvedValue(12);
     mockedEpoch.find
-      .mockResolvedValueOnce([epochDoc('e1', 't1')]);
+      .mockResolvedValue([epochDoc('e1', 't1')]);
     mockedTraining.find.mockResolvedValue([trainingDoc('t1')]);
 
     const result = (await testResultService.getTestResults(
@@ -260,17 +263,17 @@ describe('getTestResults', () => {
     expect(query.limit).toHaveBeenCalledWith(5);
     expect(mockedTestResult.countDocuments).toHaveBeenCalledWith({
       deletedAt: null,
-      epoch_uuid: { $in: ['e1'] },
+      $and: [{ epoch_uuid: { $in: ['e1'] } }, { epoch_uuid: { $in: ['e1'] } }],
     });
-    expect(result.pagination.page).toBe(2);
+    expect(result.pagination).toEqual({ page: 2, limit: 5, total: 12, pages: 3 });
   });
 });
 
 describe('checkTestResultAccess', () => {
-  it('allows orphaned results (no parent epoch)', async () => {
+  it('denies orphaned results (no parent epoch)', async () => {
     mockedEpoch.findOne.mockResolvedValue(null);
 
-    await expect(testResultService.checkTestResultAccess('e-x', 'u1')).resolves.toBe(true);
+    await expect(testResultService.checkTestResultAccess('e-x', 'u1')).resolves.toBe(false);
   });
 
   it('denies when the training project is not accessible', async () => {
@@ -314,7 +317,7 @@ describe('getTestResultById / getTestResultByTestUuid', () => {
   it('returns the doc when accessible', async () => {
     const doc = trDoc('e1');
     mockedTestResult.findOne.mockResolvedValue(doc);
-    mockedEpoch.findOne.mockResolvedValue(null);
+    mockedEpoch.findOne.mockResolvedValue(epochDoc('e1', 't1'));
 
     await expect(testResultService.getTestResultById('x', 'u1')).resolves.toBe(doc);
     await expect(testResultService.getTestResultByTestUuid('x', 'u1')).resolves.toBe(doc);
@@ -333,7 +336,7 @@ describe('getTestResultsByEpochUuid', () => {
   });
 
   it('returns enriched results without pagination', async () => {
-    mockedEpoch.findOne.mockResolvedValue(null); // orphan check passes
+    mockedEpoch.findOne.mockResolvedValue(epochDoc('e1', 't1'));
     const query = makeQuery([trDoc('e1')]);
     mockedTestResult.find.mockReturnValue(query);
     mockedEpoch.find.mockResolvedValue([epochDoc('e1', 't1')]);
@@ -346,7 +349,7 @@ describe('getTestResultsByEpochUuid', () => {
   });
 
   it('paginates when page/limit are given', async () => {
-    mockedEpoch.findOne.mockResolvedValue(null);
+    mockedEpoch.findOne.mockResolvedValue(epochDoc('e1', 't1'));
     const query = makeQuery([trDoc('e1')]);
     mockedTestResult.find.mockReturnValue(query);
     mockedEpoch.find.mockResolvedValue([epochDoc('e1', 't1')]);
@@ -499,7 +502,7 @@ describe('getTestResultEpochs', () => {
     mockedTestResult.distinct.mockReturnValue({ sort });
 
     await expect(testResultService.getTestResultEpochs()).resolves.toEqual([1, 2, 3]);
-    expect(mockedTestResult.distinct).toHaveBeenCalledWith('epoch');
+    expect(mockedTestResult.distinct).toHaveBeenCalledWith('epoch', { deletedAt: null, epoch_uuid: { $in: [] } });
   });
 });
 

@@ -10,7 +10,7 @@ Current constraints: tests belong to the project they exercise and use in-memory
 
 Visin has a useful, substantial implementation and a stronger foundation than a typical prototype: strict TypeScript, shared infrastructure, validation, meaningful domain logic, extensive unit tests, container builds, and CI. However, its permission boundaries and concurrent write behavior are not consistent enough for an internet-facing installation with mutually untrusted users. Those gaps should take precedence over adding features or splitting more services.
 
-The most important problems are email-based authorization without email verification, project credentials inheriting a person's broader authority, public visibility granting write access, incomplete session revocation, and multi-step updates that cannot recover reliably from races or interruptions. Several comments describe guarantees that the implementation does not actually enforce.
+At the original baseline, the most important problems were email-based authorization, project credentials inheriting a person's broader authority, public visibility granting write access, incomplete session revocation, and multi-step updates that could not recover reliably from races or interruptions. The current remaining identity risks are implicit Google account linking and incomplete session revocation; group membership itself now uses accepted account IDs. Several comments describe guarantees that the implementation does not actually enforce.
 
 This is a repository-wide manual review, not a CodeRabbit report, a penetration test, or a claim that every line and runtime behavior has been exhaustively verified. It covered all 13 workspaces at the architecture/configuration level and traced representative identity, permissions, ingestion, labeling, file transfer, analytics, export, and frontend workflows in depth. No deployed system, real user data, or live database was accessed. Product proposals below are distinguished from confirmed defects.
 
@@ -28,12 +28,12 @@ Unchecked items are remaining work. Remove an item only after its implementation
 
 ## P0: permission boundaries
 
-### 01. Verify email ownership before using it to grant group access
+### 01. Stop implicit Google sign-in linking by email
 
-- [ ] **P0 — Reproduced.** Registration accepts an arbitrary unused email and immediately issues a session. Group membership and role checks trust that email. An attacker who registers an invited person's address before that person has an account can inherit its group permissions without controlling the mailbox. Adding an address to a group does not require an existing verified account.
-- **Evidence:** `apps/backend/auth-service/src/controllers/authController.ts:79–105`; `apps/backend/auth-service/src/models/User.ts`; `apps/backend/group-service/src/services/groupService.ts:101–128,181–188`; `apps/backend/label-service/src/services/groupAccessService.ts:17–44`.
-- **Fix:** Introduce verified identities and explicit invitation acceptance. Store memberships against immutable user IDs; resolve an invitation's email only after verification. Preserve a deliberate, separately protected offline bootstrap flow. For Google sign-in, validate the email verification claim and bind the provider identity explicitly rather than relying only on the email string.
-- **Acceptance:** Registering an invited email without verification grants no group access. Test invitations before and after account creation, expired/replayed verification links, Google account linking, and migration of existing email-based memberships.
+- [ ] **P0 — Source-confirmed remaining identity gap.** Group authority now uses account IDs and explicit single-use invitation acceptance, but Google sign-in still resolves an existing account solely by email. A person can pre-register an unused address with a password; a later Google sign-in by its real owner enters that same account without removing the pre-registrant's password. Accepting group invitations through that account therefore does not isolate the two people.
+- **Evidence:** `apps/backend/auth-service/src/controllers/authController.ts` (`register`, `login`, `validateToken`); `models/User.ts` stores no Google subject binding.
+- **Fix:** Bind Google authentication to a stable provider subject and require an explicit, authenticated account-linking flow. Do not merge accounts solely because emails match. Email verification is explicitly out of scope per the user; this requires a separate account-linking change, not a verification-email feature.
+- **Acceptance:** A pre-registered password account and the legitimate Google identity cannot silently share account authority. Existing linked users retain a documented sign-in path after the user's migration. Test same-email identities and provider-subject changes.
 
 ## P1: identity, privacy, deployment, and durability
 
@@ -43,7 +43,6 @@ Unchecked items are remaining work. Remove an item only after its implementation
 - **Evidence:** `apps/backend/auth-service/src/controllers/profileController.ts:110–132`; `middleware/authMiddleware.ts:38–49`; `services/jwtService.ts:3,20–21`; `controllers/authController.ts:189–217`; `libs/backend-core/src/middleware/authMiddleware.ts:38–60`.
 - **Fix:** Establish a consistent revocation model: shared session/version validation, introspection with bounded caching, or short-lived access credentials backed by revocable sessions. Define whether password resets also revoke API keys and OAuth grants. Make user-facing wording match the implemented timing.
 - **Acceptance:** Exercise a real password change and administrative invalidation, then replay the old credential against auth, group, vision, and label APIs. Assert the agreed revocation deadline at every boundary.
-- **Additional source-confirmed defect:** `apps/backend/group-service/src/controllers/groupController.ts:22` calls `/api/auth/internal/invalidate-tokens`, while `apps/backend/auth-service/src/index.ts:68` mounts the matching route under `/auth/internal/invalidate-tokens`. Correct and test that inter-service request as part of revocation work.
 
 ### 07. Make OAuth refresh rotation atomic and grant-scoped
 
@@ -282,7 +281,7 @@ This is an assessment of this repository snapshot, not a measurement of the auth
 
 ## Delivery order
 
-1. **Authorization stabilization:** 01 and 03, with the relevant tests from 30; then 06–08, 10, and 18. Public read versus write permission (03) is the next direct application-boundary fix. Shared libraries remain public/non-confidential by explicit policy; their private training association is protected.
+1. **Authorization stabilization:** 01 (explicit provider-account linking), 06 (session revocation), and 10 (labeling visibility), with the relevant tests from 30; then 07–08 and 18. Group write permissions and result-read privacy are implemented. Shared libraries remain public/non-confidential by explicit policy; their private training association is protected.
 2. **Deployment-related observations:** 15 and 17 remain documented, but deployment is owned outside this repository. Preserve the accepted production-domain defaults and existing variables; do not change Compose or require pipeline updates as part of application fixes.
 3. **Durability and labeling correctness:** 11–14, 19–23, and 33, using fault/concurrency tests and a real database/queue.
 4. **Operational and contract quality:** 24–25, 28–32, and 34–36, with measured performance and a restore drill.
@@ -340,3 +339,40 @@ These are work packages, not time estimates. Size them after the permission poli
 - File-reference protection completed alongside 03: new stored-file attachments require single-resource reservations with uploader/family/parent checks and stored-size verification. Stolen, expired, conflicting, and concurrently replayed attachments are rejected. The independent candidate review found two regressions, both fixed and covered: public comparison viewing no longer attempts a write, and archive replacement clears stale aliases while preserving analysis metrics. Remaining upload-content limits and reconciliation are tracked in 08.
 - Backend validation for the group write policy: **580/580 vision-service tests** in 30 suites, coverage **98.15% statements / 91.62% branches / 97.78% functions / 98.84% lines**; **121/121 group-service tests** in nine suites with **100% coverage**, all configured floors passed. Persistence tests use in-memory MongoDB. The permission/client/project-token suites also passed **56/56 tests** against vision-service's pinned dependencies, along with its build. All three affected workspaces passed lint, type checking, and builds. OpenAPI YAML/references and whitespace checks passed.
 - Frontend validation for 03: **1,278/1,278 vision-front tests** in 183 files, coverage **90.82% statements / 80.76% branches / 86.78% functions / 91.84% lines**, all configured floors passed. The nine Project Settings tests also passed after isolating the group-picker cache by project owner. Completed item **03** has been removed from the remaining backlog.
+
+### Group and permission security review — 2026-09-10
+
+The group authorization structure is clearer: routes wire validation/controllers,
+controllers resolve the authenticated actor, services enforce membership and role
+rules, and project access consumes current memberships by immutable account ID.
+An assigned group's members can modify project trainings/results; group administration
+and project-owner administration remain distinct. This scoped review does **not**
+establish that the whole application is safe for mutually untrusted users.
+
+- Completed the account-ID transition across group, auth, label, vision and account UI callers/tests. Added explicit, manually shared, seven-day single-use invitations; acceptance binds the authenticated account ID in the same versioned write that consumes the token. No email verification or mail delivery was introduced. Same-email accounts do not acquire each other's group memberships through the group API.
+- Verified owner/admin restrictions, last-owner concurrency, invitation expiry/revocation/replay, explicit acceptance, identity-spoof rejection, and ID-only members. Group query caches are isolated by signed-in account. Group changes rely on live authorization rather than session invalidation side effects.
+- Fixed private test-result leaks through epoch/UUID filters and inconsistent pagination counts. Project, training and epoch filters intersect mandatory visibility; metadata lists use authenticated visibility too.
+- Result/visualization reads now require live epochs and trainings before disclosure or file signing. Benchmark list/stats reject missing/deleted parent filters; detail checks raw references before population, and standalone listing requires no training/epoch references.
+- A separate read-only patch review found the frontend epoch-results route's parameter mismatch. Corrected it and verified public, owner, current group-member and unrelated/revoked-member behavior through HTTP.
+- Updated group OpenAPI and group/vision documentation. Existing email-only memberships require the user's migration. No new deployment variables, Compose/pipeline changes, root single-test commands, external testing database, or shared-library exports were introduced.
+
+| Project | Passing tests | Coverage gates |
+| --- | ---: | --- |
+| group-service | 118 / 118 (10 suites) | Passed; floors raised to 99% statements, 98% branches, 99% functions/lines |
+| vision-service | 588 / 588 (30 suites) | Passed |
+| auth-service | 205 / 205 (17 suites) | Passed |
+| label-service | 303 / 303 (28 suites) | Passed |
+| account-front | 193 / 193 (24 files) | Passed |
+
+All five affected projects passed lint and type checking. Account-front's production
+build passed. Vision-service's build and 42 focused tests also passed against an
+isolated copy using pinned dependencies. Database regressions use in-memory MongoDB.
+OpenAPI YAML parsing and final whitespace checks passed. Browser interaction was
+covered with component tests; no live deployment or end-to-end SSO run was performed.
+
+Remaining high-priority risks: **01** implicit Google account linking by email,
+**06** cross-service session revocation, **10** private labeling publication/access,
+and **11** streaming archive/upload limits. The direct email-based group grant was
+removed, but 01 remains open because Google's existing email lookup can still merge
+a real mailbox owner's sign-in with a pre-registered password account. Email
+verification is not the proposed fix. These are remaining work, not completed items.

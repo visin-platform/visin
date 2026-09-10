@@ -36,15 +36,29 @@ export default function GroupInvitationPage() {
   });
   if (isLoading) return <CircularProgress />;
   if (!valid) return <Alert severity="error">This invitation link is invalid.</Alert>;
-  if (!isAuthenticated) return <Box><Typography>Sign in to review this group invitation.</Typography><Button onClick={login}>Sign in</Button></Box>;
+  if (!isAuthenticated)
+    return (
+      <Box>
+        <Typography>Sign in to review this group invitation.</Typography>
+        <Button onClick={login}>Sign in</Button>
+      </Box>
+    );
   const error = preview.error || accept.error;
-  return <Box sx={{ p: 4 }}>
-    {preview.isPending && <CircularProgress />}
-    {error && <Alert severity="error">{error.message}</Alert>}
-    {preview.data && <>
-      <Typography variant="h5">Join {preview.data.name}</Typography>
-      <Typography sx={{ my: 2 }}>Join as {preview.data.role} using {user?.email || user?.id}.</Typography>
-      <Button variant="contained" disabled={accept.isPending || preview.isError} onClick={() => accept.mutate()}>Accept invitation</Button>
-    </>}
-  </Box>;
+  return (
+    <Box sx={{ p: 4 }}>
+      {preview.isPending && <CircularProgress />}
+      {error && <Alert severity="error">{error.message}</Alert>}
+      {preview.data && (
+        <>
+          <Typography variant="h5">Join {preview.data.name}</Typography>
+          <Typography sx={{ my: 2 }}>
+            Join as {preview.data.role} using {user?.email || user?.id}.
+          </Typography>
+          <Button variant="contained" disabled={accept.isPending || preview.isError} onClick={() => accept.mutate()}>
+            Accept invitation
+          </Button>
+        </>
+      )}
+    </Box>
+  );
 }

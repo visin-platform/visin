@@ -14,14 +14,15 @@ const mockedService = vi.hoisted(() => ({
   remove: vi.fn(),
   restore: vi.fn(),
   deleteForever: vi.fn(),
-  addMember: vi.fn(),
+  createInvitation: vi.fn(),
+  revokeInvitations: vi.fn(),
   updateMemberRole: vi.fn(),
   removeMember: vi.fn()
 }));
 
 vi.mock('../../services/groupService', () => ({ groupService: mockedService }));
 
-const auth = vi.hoisted(() => ({ user: { email: 'owner@x.com' } as { email: string } | null }));
+const auth = vi.hoisted(() => ({ user: { id: 'owner-ID', email: 'owner@x.com' } as { id: string; email: string } | null }));
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: auth.user }) }));
 
 const makeGroup = (overrides: Partial<Group> = {}): Group => ({
@@ -29,9 +30,9 @@ const makeGroup = (overrides: Partial<Group> = {}): Group => ({
   name: 'Team',
   createdBy: 'owner@x.com',
   members: [
-    { email: 'owner@x.com', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' },
-    { email: 'admin@x.com', role: 'admin', joinedAt: '2026-01-02T00:00:00.000Z' },
-    { email: 'member@x.com', role: 'member', joinedAt: '2026-01-03T00:00:00.000Z' }
+    { userId: 'owner-ID', email: 'owner@x.com', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' },
+    { userId: 'admin-ID', email: 'admin@x.com', role: 'admin', joinedAt: '2026-01-02T00:00:00.000Z' },
+    { userId: 'member-ID', email: 'member@x.com', role: 'member', joinedAt: '2026-01-03T00:00:00.000Z' }
   ],
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-03T00:00:00.000Z',
@@ -58,7 +59,7 @@ const renderTab = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  auth.user = { email: 'owner@x.com' };
+  auth.user = { id: 'owner-ID', email: 'owner@x.com' };
   mockedService.listMine.mockResolvedValue([makeGroup()]);
   mockedService.listDeleted.mockResolvedValue([]);
   mockedService.create.mockResolvedValue(makeGroup());
@@ -66,7 +67,8 @@ beforeEach(() => {
   mockedService.remove.mockResolvedValue(undefined);
   mockedService.restore.mockResolvedValue(makeGroup());
   mockedService.deleteForever.mockResolvedValue(undefined);
-  mockedService.addMember.mockResolvedValue(makeGroup());
+  mockedService.createInvitation.mockResolvedValue({ token: 'a'.repeat(64) });
+  mockedService.revokeInvitations.mockResolvedValue(undefined);
   mockedService.updateMemberRole.mockResolvedValue(makeGroup());
   mockedService.removeMember.mockResolvedValue(makeGroup());
 });
@@ -91,7 +93,7 @@ describe('GroupsTab list states', () => {
 
   it('singularises the member count', async () => {
     mockedService.listMine.mockResolvedValue([
-      makeGroup({ members: [{ email: 'owner@x.com', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' }] })
+      makeGroup({ members: [{ userId: 'owner-ID', email: 'owner@x.com', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' }] })
     ]);
     renderTab();
 
@@ -208,23 +210,22 @@ describe('GroupsTab group actions', () => {
 });
 
 describe('GroupsTab member management', () => {
-  it('adds a member with the chosen role', async () => {
+  it('creates an invite link with the chosen role', async () => {
     renderTab();
     await openGroup();
-
-    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: ' New@X.com ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
-
-    await waitFor(() =>
-      expect(mockedService.addMember).toHaveBeenCalledWith('g1', 'New@X.com', 'member')
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Create invite link' }));
+    await waitFor(() => expect(mockedService.createInvitation).toHaveBeenCalledWith('g1', 'member'));
+    expect(await screen.findByLabelText('Invitation link')).toHaveValue(`${window.location.origin}/invite#${'a'.repeat(64)}`);
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke pending invites' }));
+    await waitFor(() => expect(mockedService.revokeInvitations).toHaveBeenCalledWith('g1'));
+    await waitFor(() => expect(screen.queryByLabelText('Invitation link')).not.toBeInTheDocument());
   });
 
   it('offers the owner role only to owners', async () => {
     renderTab();
     await openGroup();
 
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Role' }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Invitation role' }));
     expect(within(screen.getByRole('listbox')).getByRole('option', { name: 'owner' })).toBeInTheDocument();
   });
 
@@ -236,7 +237,7 @@ describe('GroupsTab member management', () => {
     fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'admin' }));
 
     await waitFor(() =>
-      expect(mockedService.updateMemberRole).toHaveBeenCalledWith('g1', 'member@x.com', 'admin')
+      expect(mockedService.updateMemberRole).toHaveBeenCalledWith('g1', 'member-ID', 'admin')
     );
   });
 
@@ -248,7 +249,7 @@ describe('GroupsTab member management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     await waitFor(() =>
-      expect(mockedService.removeMember).toHaveBeenCalledWith('g1', 'member@x.com')
+      expect(mockedService.removeMember).toHaveBeenCalledWith('g1', 'member-ID')
     );
   });
 
@@ -261,22 +262,12 @@ describe('GroupsTab member management', () => {
     expect(screen.getByRole('button', { name: 'Leave group' })).toBeDisabled();
   });
 
-  it('ignores an add submitted with a blank email', async () => {
-    renderTab();
-    await openGroup();
-
-    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: '  ' } });
-    fireEvent.submit(screen.getByLabelText('Email address'));
-
-    expect(mockedService.addMember).not.toHaveBeenCalled();
-  });
-
   it('lets a second owner be managed once one exists', async () => {
     mockedService.listMine.mockResolvedValue([
       makeGroup({
         members: [
-          { email: 'owner@x.com', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' },
-          { email: 'owner2@x.com', role: 'owner', joinedAt: '2026-01-02T00:00:00.000Z' }
+          { userId: 'owner-ID', email: 'owner@x.com', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' },
+          { userId: 'owner2-ID', email: 'owner2@x.com', role: 'owner', joinedAt: '2026-01-02T00:00:00.000Z' }
         ]
       })
     ]);
@@ -289,20 +280,20 @@ describe('GroupsTab member management', () => {
 });
 
 describe('GroupsTab permissions', () => {
-  it('hides rename, add-member, and delete from a plain member', async () => {
-    auth.user = { email: 'member@x.com' };
+  it('hides rename, invitations, and delete from a plain member', async () => {
+    auth.user = { id: 'member-ID', email: 'member@x.com' };
     renderTab();
     await openGroup();
 
     expect(screen.queryByRole('button', { name: /rename group/i })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Invitation role')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete group/i })).not.toBeInTheDocument();
     // ...but they can still leave.
     expect(screen.getByRole('button', { name: 'Leave group' })).toBeEnabled();
   });
 
   it('lets an admin manage members but not owners or the group itself', async () => {
-    auth.user = { email: 'admin@x.com' };
+    auth.user = { id: 'admin-ID', email: 'admin@x.com' };
     renderTab();
     await openGroup();
 
@@ -311,12 +302,12 @@ describe('GroupsTab permissions', () => {
     expect(screen.getByRole('combobox', { name: 'Role for member@x.com' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove owner@x.com' })).toBeDisabled();
 
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Role' }));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Invitation role' }));
     expect(within(screen.getByRole('listbox')).queryByRole('option', { name: 'owner' })).not.toBeInTheDocument();
   });
 
   it('shows no role chip for a non-member viewer', async () => {
-    auth.user = null;
+    auth.user = { id: 'stranger-ID', email: 'owner@x.com' };
     renderTab();
     await openGroup();
 
@@ -325,8 +316,8 @@ describe('GroupsTab permissions', () => {
 });
 
 describe('GroupsTab leaving a group', () => {
-  it('phrases self-removal as leaving and sends the user own email', async () => {
-    auth.user = { email: 'member@x.com' };
+  it('phrases self-removal as leaving and sends the user own account ID', async () => {
+    auth.user = { id: 'member-ID', email: 'member@x.com' };
     renderTab();
     await openGroup();
 
@@ -335,7 +326,7 @@ describe('GroupsTab leaving a group', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     await waitFor(() =>
-      expect(mockedService.removeMember).toHaveBeenCalledWith('g1', 'member@x.com')
+      expect(mockedService.removeMember).toHaveBeenCalledWith('g1', 'member-ID')
     );
   });
 });
@@ -388,7 +379,7 @@ describe('GroupsTab deleted groups', () => {
   });
 
   it('hides restore controls from a non-owner', async () => {
-    auth.user = { email: 'member@x.com' };
+    auth.user = { id: 'member-ID', email: 'member@x.com' };
     mockedService.listDeleted.mockResolvedValue([makeGroup({ _id: 'g2', name: 'Old Team' })]);
     renderTab();
     await screen.findByText('Team');
@@ -401,13 +392,28 @@ describe('GroupsTab deleted groups', () => {
 
 describe('GroupsTab error reporting', () => {
   it('surfaces the service message when a mutation is rejected', async () => {
-    mockedService.addMember.mockRejectedValue(new Error('User is already a member'));
+    mockedService.createInvitation.mockRejectedValue(new Error('Group changed concurrently'));
     renderTab();
     await openGroup();
 
-    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'member@x.com' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create invite link' }));
 
-    expect(await screen.findByText('User is already a member')).toBeInTheDocument();
+    expect(await screen.findByText('Group changed concurrently')).toBeInTheDocument();
   });
+});
+
+it('manages ID-only memberships while displaying their account IDs', async () => {
+  mockedService.listMine.mockResolvedValue([makeGroup({ members: [
+    { userId: 'owner-ID', role: 'owner', joinedAt: '2026-01-01' },
+    { userId: 'member-ID', role: 'member', joinedAt: '2026-01-01' }
+  ] })]);
+  renderTab();
+  await openGroup();
+  expect(screen.getByText('member-ID')).toBeInTheDocument();
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Role for member-ID' }));
+  fireEvent.click(screen.getByRole('option', { name: 'admin' }));
+  await waitFor(() => expect(mockedService.updateMemberRole).toHaveBeenCalledWith('g1', 'member-ID', 'admin'));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove member-ID' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+  await waitFor(() => expect(mockedService.removeMember).toHaveBeenCalledWith('g1', 'member-ID'));
 });

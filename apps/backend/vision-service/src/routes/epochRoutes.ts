@@ -31,7 +31,7 @@ router.get(
   getEpochsByTraining
 );
 router.get(
-  '/uuid/:uuid/test-results',
+  '/uuid/:epochUuid/test-results',
   optionalAuthMiddleware,
   validateRequest({ query: getTestResultsByEpochUuidQuerySchema }),
   getTestResultsByEpochUuid

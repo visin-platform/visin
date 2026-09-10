@@ -24,7 +24,6 @@ it('requires the service actor to match the authenticated request identity', asy
     expect(await getUserGroups()).toEqual([]);
     expect(await getUserGroups('u2')).toEqual([]);
   });
-  await inRequest(async () => { expect(await getUserGroups('u1')).toEqual([]); }, { id: 'u1', email: '' });
   expect(fetchMock).not.toHaveBeenCalled();
 });
 it('signs only the verified identity and caches membership only within a request', async () => {
@@ -36,8 +35,8 @@ it('signs only the verified identity and caches membership only within a request
   const [url, options] = fetchMock.mock.calls[0];
   expect(url).toBe('http://localhost:5006/api/internal/project-groups');
   const body = JSON.parse(options!.body as string);
-  expect(body).toEqual({ userId: 'u1', email: user.email, issuedAt: expect.any(Number), signature: expect.any(String) });
-  expect(body.signature).toBe(createHmac('sha256', 'test-secret').update(JSON.stringify(['vision-project-groups', 'u1', user.email, body.issuedAt])).digest('hex'));
+  expect(body).toEqual({ userId: 'u1', issuedAt: expect.any(Number), signature: expect.any(String) });
+  expect(body.signature).toBe(createHmac('sha256', 'test-secret').update(JSON.stringify(['vision-project-groups', 'u1', body.issuedAt])).digest('hex'));
   await inRequest(() => getUserGroups('u1'));
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
@@ -63,4 +62,8 @@ it('holds the request until downstream authentication populates its identity', a
   identityContextMiddleware(request, {} as Parameters<typeof identityContextMiddleware>[1], next);
   expect(next).toHaveBeenCalledTimes(1);
   expect(requestIdentityContext.getStore()).toBeUndefined();
+});
+
+it('accepts an ID-only identity without using email as authority', async () => {
+  await inRequest(async () => { expect(await getUserGroups('u1')).toHaveLength(1); }, { id: 'u1', email: '' });
 });

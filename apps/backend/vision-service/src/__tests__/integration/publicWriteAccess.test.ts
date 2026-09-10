@@ -3,6 +3,7 @@ import { getUserGroups } from '../../clients/projectGroupsClient';
 import { identityContextMiddleware } from '../../middleware/requestIdentityContext';
 jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn() }));
 import Epoch from '../../models/Epoch';
+import EpochVisualization from '../../models/EpochVisualization';
 import TestResult from '../../models/TestResult';
 import Benchmark from '../../models/Benchmark';
 import Comparison from '../../models/Comparison';
@@ -431,4 +432,72 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect(updated?.data.downloadUrl).toBeUndefined();
   });
 
+
+  describe('read privacy regressions', () => {
+    async function privateResults() {
+      const project = await Project.create({ name: 'Secret', ownerId: 'owner', isPublic: false, editorGroupIds: ['a'.repeat(24)] });
+      const training = await Training.create({ name: 'Secret run', uuid: 'secret-run', projectId: String(project._id) });
+      await Epoch.create({ timestamp: new Date(), trainingId: String(training._id), training_uuid: training.uuid, epoch_uuid: 'secret-epoch', epoch: 73, results: {} });
+      const result = await TestResult.create({ epoch: 73, epoch_uuid: 'secret-epoch', test_uuid: 'secret-test', timestamp: new Date(), test_results: { secret: { object: { iou: 1 } } } });
+      await EpochVisualization.create({ epoch_uuid: 'secret-epoch', visualization_uuid: 'secret-viz', filename: 'secret.png', type: 'secret-type', fileId: 'secret-file' });
+      const benchmark = await Benchmark.create({ ...benchmarkBody, training_id: training._id, training_uuid: training.uuid });
+      return { training, result, benchmark };
+    }
+    it.each(['', 'stranger'])('does not expose private results through epoch filters (%s)', async actor => {
+      await privateResults();
+      for (const query of ['epoch=73', 'epoch_uuids=secret-epoch', `projectId=${projectId}&epoch_uuids=secret-epoch`, 'training_uuid=public-run&epoch_uuids=secret-epoch']) {
+        const response = await request(`test-results?${query}&page=1&limit=1`, 'GET', undefined, actor);
+        expect(response.status).toBe(200);
+        expect(JSON.stringify(response.body)).not.toContain('secret-test');
+      }
+      expect(JSON.stringify((await request('test-results/epochs', 'GET', undefined, actor)).body)).not.toContain('73');
+      expect(JSON.stringify((await request('visualizations/types', 'GET', undefined, actor)).body)).not.toContain('secret-type');
+      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, 'owner')).body)).toContain('secret-test');
+      expect(JSON.stringify((await request('test-results/epochs', 'GET', undefined, 'owner')).body)).toContain('73');
+    });
+    it('serves the frontend epoch-results route for public and authorized private epochs', async () => {
+      await privateResults();
+      await TestResult.create({ epoch: 1, epoch_uuid: 'public-epoch', test_uuid: 'public-test', timestamp: new Date(), test_results: {} });
+      for (const actor of ['', 'owner', 'stranger']) {
+        const response = await request('epochs/uuid/public-epoch/test-results', 'GET', undefined, actor);
+        expect(response.status).toBe(200);
+        expect(JSON.stringify(response.body)).toContain('public-test');
+      }
+      expect((await request('epochs/uuid/secret-epoch/test-results')).status).toBe(200);
+      expect((await request('epochs/uuid/secret-epoch/test-results', 'GET', undefined, 'stranger')).status).toBe(403);
+      jest.mocked(getUserGroups).mockImplementation(async userId => userId === 'editor' ? [{ id: 'a'.repeat(24), name: 'Editors' }] : []);
+      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, 'editor')).body)).toContain('secret-test');
+      expect((await request('epochs/uuid/secret-epoch/test-results', 'GET', undefined, 'editor')).status).toBe(200);
+      jest.mocked(getUserGroups).mockResolvedValue([]);
+      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, 'editor')).body)).not.toContain('secret-test');
+
+    });
+    it('intersects filters and counts all matching authorized results across pages', async () => {
+      await privateResults();
+      await TestResult.create([1, 2, 3].map(i => ({ epoch: 1, epoch_uuid: 'public-epoch', test_uuid: `public-test-${i}`, timestamp: new Date(), test_results: {} })));
+      const response = await request('test-results?epoch=1&page=2&limit=1');
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ data: { pagination: { total: 3, pages: 3 } } });
+      expect(JSON.stringify((await request(`test-results?projectId=${projectId}&epoch_uuids=secret-epoch`)).body)).not.toContain('secret-test');
+    });
+    it.each(['soft-delete', 'missing'] as const)('denies result, benchmark and file reads with a %s parent', async action => {
+      const { training, result, benchmark } = await privateResults();
+      if (action === 'soft-delete') await Training.updateOne({ _id: training._id }, { deletedAt: new Date() });
+      else await Training.deleteOne({ _id: training._id });
+      for (const path of ['visualizations/training/secret-run?includeUrls=true', 'visualizations/types?training_uuid=secret-run', 'visualizations/secret-viz', 'visualizations/epoch/secret-epoch', 'benchmarks?training_uuid=secret-run', 'benchmarks/stats?training_uuid=secret-run', `benchmarks/${benchmark._id}`, `test-results/${result._id}`]) {
+        const response = await request(path, 'GET', undefined, 'stranger');
+        expect([403, 404]).toContain(response.status);
+      }
+      expect(files.getSignedUrl).not.toHaveBeenCalled();
+    });
+    it('keeps true standalone benchmarks public while excluding orphan references', async () => {
+      await Benchmark.create(benchmarkBody);
+      await Benchmark.create({ ...benchmarkBody, training_uuid: 'deleted-run' });
+      const response = await request('benchmarks', 'GET', undefined, '');
+      expect(response.status).toBe(200);
+      expect(JSON.stringify(response.body)).not.toContain('deleted-run');
+      expect(response.body).toMatchObject({ data: { pagination: { total: 1 } } });
+      expect((await request('benchmarks/stats', 'GET', undefined, '')).body).toMatchObject({ data: { totalBenchmarks: 1 } });
+    });
+  });
 });

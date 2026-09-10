@@ -3,6 +3,7 @@ import { QueryFilter } from 'mongoose';
 import { tokenProjectId } from '../middleware/projectTokenContext';
 import { ForbiddenError, NotFoundError, logger } from '@visin/backend-core';
 import Benchmark, { IBenchmark } from '../models/Benchmark';
+import Epoch from '../models/Epoch';
 import Training, { ITraining } from '../models/Training';
 import { checkProjectAccess, getVisibleTrainingIds, isWithinTokenScope } from './projectAccessService';
 import type { GetBenchmarksQuery, CreateBenchmarkBody, UpdateBenchmarkBody } from '../validation/benchmarkSchemas';
@@ -12,7 +13,10 @@ interface BenchmarksPage {
   pagination: { page: number; limit: number; total: number; pages: number };
 }
 
-export const getBenchmarks = async (filters: GetBenchmarksQuery, userId: string | undefined): Promise<BenchmarksPage> => {
+export const getBenchmarks = async (
+  filters: GetBenchmarksQuery,
+  userId: string | undefined
+): Promise<BenchmarksPage> => {
   const { training_uuid, projectId, sortBy, order } = filters;
   const page = filters.page ?? 1;
   const limit = filters.limit ?? 25;
@@ -31,13 +35,14 @@ export const getBenchmarks = async (filters: GetBenchmarksQuery, userId: string 
       return { benchmarks: [], pagination: { page, limit, total: 0, pages: 0 } };
     }
 
-    const trainingIds = trainings.map(t => t._id.toString());
+    const trainingIds = trainings.map((t) => t._id.toString());
     query.training_id = { $in: trainingIds };
   }
   // Filter by training UUID if provided
   else if (training_uuid) {
     const training = await Training.findOne({ uuid: training_uuid, deletedAt: null });
-    if (training && !(await checkProjectAccess(userId, training.projectId))) {
+    if (!training) throw new NotFoundError('Training not found');
+    if (!(await checkProjectAccess(userId, training.projectId))) {
       throw new ForbiddenError();
     }
     query.training_uuid = training_uuid;
@@ -49,24 +54,22 @@ export const getBenchmarks = async (filters: GetBenchmarksQuery, userId: string 
     const visibleTrainingIds = await getVisibleTrainingIds(userId);
     query.$or = [
       { training_id: { $in: visibleTrainingIds } },
-      { training_id: null },
-      { training_id: { $exists: false } }
+      { training_id: null, training_uuid: null, epoch_uuid: null }
     ];
   }
 
   const skip = (page - 1) * limit;
 
   const [benchmarks, total] = await Promise.all([
-    Benchmark.find(query).sort({ [sortBy]: order }).skip(skip).limit(limit),
+    Benchmark.find(query)
+      .sort({ [sortBy]: order })
+      .skip(skip)
+      .limit(limit),
     Benchmark.countDocuments(query)
   ]);
 
   // Get unique training IDs from benchmarks
-  const trainingIds = [...new Set(
-    benchmarks
-      .map(b => b.training_id)
-      .filter(id => id != null)
-  )];
+  const trainingIds = [...new Set(benchmarks.map((b) => b.training_id).filter((id) => id != null))];
 
   // Fetch training data if we have training IDs
   let trainingMap = new Map();
@@ -77,16 +80,14 @@ export const getBenchmarks = async (filters: GetBenchmarksQuery, userId: string 
         deletedAt: null
       }).select('name uuid');
 
-      trainingMap = new Map(
-        trainings.map(training => [training._id.toString(), training])
-      );
+      trainingMap = new Map(trainings.map((training) => [training._id.toString(), training]));
     } catch (populateError) {
       logger.warn('Failed to fetch training data for benchmarks', { error: (populateError as Error).message });
       // Continue without training data
     }
   }
 
-  const benchmarksWithTraining = benchmarks.map(benchmark => ({
+  const benchmarksWithTraining = benchmarks.map((benchmark) => ({
     ...benchmark.toObject(),
     training_id: benchmark.training_id ? trainingMap.get(benchmark.training_id.toString()) || null : null
   }));
@@ -98,26 +99,50 @@ export const getBenchmarks = async (filters: GetBenchmarksQuery, userId: string 
 };
 
 export const getBenchmarkById = async (id: string, userId: string | undefined): Promise<IBenchmark> => {
-  const benchmark = await Benchmark.findOne({ _id: id, deletedAt: null })
-    .populate('training_id', 'name uuid projectId');
+  const benchmark = await Benchmark.findOne({ _id: id, deletedAt: null });
+  if (!benchmark) throw new NotFoundError('Benchmark not found');
 
-  if (!benchmark) {
-    throw new NotFoundError('Benchmark not found');
+  // Resolve the raw reference before population can turn a missing parent into
+  // null. Every supplied reference must lead to the same live, readable parent.
+  let training: ITraining | null = null;
+  const parents: ITraining[] = [];
+  if (benchmark.training_id) {
+    training = await Training.findOne({ _id: benchmark.training_id, deletedAt: null });
+    if (!training) throw new NotFoundError('Training not found');
+    parents.push(training);
   }
-
-  // .populate('training_id', ...) replaces the ObjectId with a partial
-  // training doc at runtime — Mongoose's static types don't reflect that.
-  const trainingProjectId = (benchmark.training_id as unknown as Pick<ITraining, 'projectId'> | null)?.projectId;
-  if (!(await checkProjectAccess(userId, trainingProjectId))) {
+  if (benchmark.training_uuid) {
+    training = await Training.findOne({ uuid: benchmark.training_uuid, deletedAt: null });
+    if (!training) throw new NotFoundError('Training not found');
+    parents.push(training);
+  }
+  if (benchmark.epoch_uuid) {
+    const epoch = await Epoch.findOne({ epoch_uuid: benchmark.epoch_uuid, deletedAt: null });
+    if (!epoch) throw new NotFoundError('Epoch not found');
+    training = await Training.findOne({ _id: epoch.trainingId, deletedAt: null });
+    if (!training) throw new NotFoundError('Training not found');
+    parents.push(training);
+  }
+  if (
+    parents.some((parent) => parent._id.toString() !== training!._id.toString()) ||
+    !(await checkProjectAccess(userId, training?.projectId))
+  )
     throw new ForbiddenError();
-  }
+  await benchmark.populate('training_id', 'name uuid projectId');
 
   return benchmark;
 };
 
 export async function assertBenchmarkWrite(
-  reference: { training_uuid?: string; epoch_uuid?: string; training_id?: IBenchmark['training_id']; ownerId?: string; deletedAt?: Date },
-  userId?: string, reqProjectId?: string
+  reference: {
+    training_uuid?: string;
+    epoch_uuid?: string;
+    training_id?: IBenchmark['training_id'];
+    ownerId?: string;
+    deletedAt?: Date;
+  },
+  userId?: string,
+  reqProjectId?: string
 ) {
   let training: ITraining | null = null;
   if (reference.training_id) {
@@ -127,13 +152,15 @@ export async function assertBenchmarkWrite(
   if (reference.training_uuid) {
     const byUuid = await Training.findOne({ uuid: reference.training_uuid, deletedAt: null });
     await assertResourceWrite(byUuid, userId);
-    if (training && training._id.toString() !== byUuid!._id.toString()) throw new ForbiddenError('Conflicting benchmark parents');
+    if (training && training._id.toString() !== byUuid!._id.toString())
+      throw new ForbiddenError('Conflicting benchmark parents');
     training = byUuid;
   }
   if (reference.epoch_uuid) {
     const epoch = await assertEpochWrite(reference.epoch_uuid, userId, reqProjectId);
     const byEpoch = await Training.findOne({ _id: epoch.trainingId, deletedAt: null });
-    if (training && training._id.toString() !== byEpoch!._id.toString()) throw new ForbiddenError('Conflicting benchmark parents');
+    if (training && training._id.toString() !== byEpoch!._id.toString())
+      throw new ForbiddenError('Conflicting benchmark parents');
     training = byEpoch;
   }
   if (!isWithinTokenScope(reqProjectId, training?.projectId)) throw new ForbiddenError();
@@ -141,7 +168,11 @@ export async function assertBenchmarkWrite(
   return training;
 }
 
-async function saveBenchmark(data: CreateBenchmarkBody, reqProjectId: string | undefined, userId?: string): Promise<IBenchmark> {
+async function saveBenchmark(
+  data: CreateBenchmarkBody,
+  reqProjectId: string | undefined,
+  userId?: string
+): Promise<IBenchmark> {
   const ownerId = requireActor(userId);
   const training = await assertBenchmarkWrite({ ...data, ownerId }, userId, reqProjectId);
   const training_id = training?._id ?? null;
@@ -161,10 +192,7 @@ async function saveBenchmark(data: CreateBenchmarkBody, reqProjectId: string | u
 
   if (data.training_uuid) {
     try {
-      await Training.findOneAndUpdate(
-        { uuid: data.training_uuid, deletedAt: null },
-        { updatedAt: new Date() }
-      );
+      await Training.findOneAndUpdate({ uuid: data.training_uuid, deletedAt: null }, { updatedAt: new Date() });
     } catch (updateError) {
       logger.warn('Failed to update training timestamp', { error: (updateError as Error).message });
       // Don't fail the request if timestamp update fails
@@ -174,11 +202,17 @@ async function saveBenchmark(data: CreateBenchmarkBody, reqProjectId: string | u
   return savedBenchmark;
 }
 
-export const createBenchmark = (data: CreateBenchmarkBody, reqProjectId: string | undefined, userId?: string): Promise<IBenchmark> =>
-  saveBenchmark(data, reqProjectId, userId);
+export const createBenchmark = (
+  data: CreateBenchmarkBody,
+  reqProjectId: string | undefined,
+  userId?: string
+): Promise<IBenchmark> => saveBenchmark(data, reqProjectId, userId);
 
-export const uploadBenchmark = (data: CreateBenchmarkBody, reqProjectId: string | undefined, userId?: string): Promise<IBenchmark> =>
-  saveBenchmark(data, reqProjectId, userId);
+export const uploadBenchmark = (
+  data: CreateBenchmarkBody,
+  reqProjectId: string | undefined,
+  userId?: string
+): Promise<IBenchmark> => saveBenchmark(data, reqProjectId, userId);
 
 interface BenchmarkStats {
   totalBenchmarks: number;
@@ -198,7 +232,8 @@ export const getBenchmarkStats = async (
 
   if (training_uuid) {
     const training = await Training.findOne({ uuid: training_uuid, deletedAt: null });
-    if (training && !(await checkProjectAccess(userId, training.projectId))) {
+    if (!training) throw new NotFoundError('Training not found');
+    if (!(await checkProjectAccess(userId, training.projectId))) {
       throw new ForbiddenError();
     }
     query.training_uuid = training_uuid;
@@ -209,8 +244,7 @@ export const getBenchmarkStats = async (
     const visibleTrainingIds = await getVisibleTrainingIds(userId);
     query.$or = [
       { training_id: { $in: visibleTrainingIds } },
-      { training_id: null },
-      { training_id: { $exists: false } }
+      { training_id: null, training_uuid: null, epoch_uuid: null }
     ];
   }
 
@@ -232,8 +266,8 @@ export const getBenchmarkStats = async (
     let totalMemory = 0;
     let resultCount = 0;
 
-    benchmarks.forEach(benchmark => {
-      benchmark.results.forEach(result => {
+    benchmarks.forEach((benchmark) => {
+      benchmark.results.forEach((result) => {
         if (result.total_parameters) {
           totalParameters += result.total_parameters;
           resultCount++;
@@ -269,12 +303,16 @@ export const updateBenchmark = async (
   }
 
   await assertBenchmarkWrite(benchmark, userId, reqProjectId);
-  const nextParent = await assertBenchmarkWrite({
-    ownerId: benchmark.ownerId,
-    training_id: updateData.training_uuid !== undefined ? null : benchmark.training_id,
-    training_uuid: updateData.training_uuid !== undefined ? updateData.training_uuid : benchmark.training_uuid,
-    epoch_uuid: updateData.epoch_uuid !== undefined ? updateData.epoch_uuid : benchmark.epoch_uuid
-  }, userId, reqProjectId);
+  const nextParent = await assertBenchmarkWrite(
+    {
+      ownerId: benchmark.ownerId,
+      training_id: updateData.training_uuid !== undefined ? null : benchmark.training_id,
+      training_uuid: updateData.training_uuid !== undefined ? updateData.training_uuid : benchmark.training_uuid,
+      epoch_uuid: updateData.epoch_uuid !== undefined ? updateData.epoch_uuid : benchmark.epoch_uuid
+    },
+    userId,
+    reqProjectId
+  );
 
   if (updateData.timestamp) {
     benchmark.timestamp = new Date(updateData.timestamp);

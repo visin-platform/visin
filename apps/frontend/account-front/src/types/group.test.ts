@@ -6,9 +6,9 @@ const group: Group = {
   name: 'Team',
   createdBy: 'owner@x.com',
   members: [
-    { email: 'owner@x.com', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' },
-    { email: 'admin@x.com', role: 'admin', joinedAt: '2026-01-02T00:00:00.000Z' },
-    { email: 'member@x.com', role: 'member', joinedAt: '2026-01-03T00:00:00.000Z' }
+    { userId: 'owner-ID', email: 'owner@x.com', role: 'owner', joinedAt: '2026-01-01T00:00:00.000Z' },
+    { userId: 'admin-ID', email: 'admin@x.com', role: 'admin', joinedAt: '2026-01-02T00:00:00.000Z' },
+    { userId: 'member-ID', email: 'member@x.com', role: 'member', joinedAt: '2026-01-03T00:00:00.000Z' }
   ],
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-03T00:00:00.000Z'
@@ -41,31 +41,33 @@ describe('permissionsFor', () => {
 });
 
 describe('roleOf', () => {
-  it('matches case-insensitively', () => {
-    expect(roleOf(group, 'Admin@X.com')).toBe('admin');
+  it('matches immutable account IDs', () => {
+    expect(roleOf(group, 'admin-ID')).toBe('admin');
   });
 
-  it('is undefined for a non-member or a missing email', () => {
+  it('is undefined for a non-member or a missing account ID', () => {
     expect(roleOf(group, 'stranger@x.com')).toBeUndefined();
     expect(roleOf(group, undefined)).toBeUndefined();
+    expect(roleOf(group, 'admin@x.com')).toBeUndefined();
+    expect(roleOf(group, 'Admin-ID')).toBeUndefined();
   });
 });
 
 describe('isLastOwner', () => {
   it('is true for the only owner', () => {
-    expect(isLastOwner(group, 'owner@x.com')).toBe(true);
+    expect(isLastOwner(group, 'owner-ID')).toBe(true);
   });
 
   it('is false once a second owner exists', () => {
     const twoOwners: Group = {
       ...group,
-      members: [...group.members, { email: 'owner2@x.com', role: 'owner', joinedAt: '2026-01-04T00:00:00.000Z' }]
+      members: [...group.members, { userId: 'owner2-ID', email: 'owner2@x.com', role: 'owner', joinedAt: '2026-01-04T00:00:00.000Z' }]
     };
 
-    expect(isLastOwner(twoOwners, 'owner@x.com')).toBe(false);
+    expect(isLastOwner(twoOwners, 'owner-ID')).toBe(false);
   });
 
   it('is false for members who are not the owner', () => {
-    expect(isLastOwner(group, 'admin@x.com')).toBe(false);
+    expect(isLastOwner(group, 'admin-ID')).toBe(false);
   });
 });

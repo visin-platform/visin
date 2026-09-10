@@ -78,7 +78,7 @@ describe('listJobsForUser', () => {
     const sort = jest.fn().mockResolvedValue([]);
     mockedJob.find.mockReturnValue({ sort });
 
-    await svc.listJobsForUser('user@x.com', 'worker', 'u1');
+    await svc.listJobsForUser('u1', 'worker');
 
     expect(mockedJob.find).toHaveBeenCalledWith({ groupId: { $in: ['g1', 'g2'] }, status: 'active' });
   });
@@ -109,7 +109,7 @@ describe('listJobsForUser', () => {
     const sort = jest.fn().mockResolvedValue([]);
     mockedJob.find.mockReturnValue({ sort });
 
-    await svc.listJobsForUser('user@x.com', 'admin', 'u1');
+    await svc.listJobsForUser('u1', 'admin');
 
     expect(mockedJob.find).toHaveBeenCalledWith({ groupId: { $in: ['g1'] } });
   });
@@ -128,7 +128,7 @@ describe('listJobsForUser', () => {
     ]);
     mockedAnswer.aggregate.mockResolvedValue([{ _id: 'j1', answers: 7, myAnswers: 2 }]);
 
-    const listed = await svc.listJobsForUser('user@x.com', 'worker', 'u1');
+    const listed = await svc.listJobsForUser('u1', 'worker');
 
     expect(listed[0]).toEqual({ _id: 'j1', name: 'A', progress: { tasks: 10, completed: 7, answers: 7, myAnswers: 2 } });
     // A job with no answers still gets a zeroed progress rather than none.

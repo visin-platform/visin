@@ -82,8 +82,8 @@ groups they currently belong to and remove existing grants. Group membership is
 verified against group-service once per request; token `groupRoles` are not used
 as permission grants. Removing a member, deleting a group, or removing the project
 grant takes effect on the next request. A failed membership lookup grants no access.
-The separate email-verification/session-revocation backlog still applies to the
-platform identity system.
+Membership uses immutable account IDs accepted through group invitations. The
+separate Google-account-linking and session-revocation backlog still applies.
 
 Standalone trainings, benchmarks, comparisons, and shared libraries record their
 creator in `ownerId`. Dataset images and categories inherit the owner of their
@@ -139,3 +139,13 @@ docker compose -f apps/backend/vision-service/compose.yml up --build
 ```
 
 The compose file expects MongoDB and file-service configuration through env vars, and joins the external `visinnet` network.
+
+## Result read boundaries
+
+Test-result filters intersect the caller's visible live trainings/epochs. Supplying
+an epoch number, UUID list, training or project never replaces this constraint;
+pagination counts use the same predicate. Metadata lists apply the same visibility.
+Result and visualization detail reads require a live epoch and training before
+returning data or signing files. Missing/deleted training filters fail closed for
+visualizations and benchmarks. Only benchmarks without any training or epoch
+reference are treated as public standalone hardware benchmarks.

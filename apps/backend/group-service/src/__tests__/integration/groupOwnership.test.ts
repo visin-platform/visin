@@ -2,7 +2,8 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Group } from '../../models/Group';
 import {
-  addMember,
+  createInvitation,
+  acceptInvitation,
   createGroup,
   deleteGroup,
   permanentlyDeleteGroup,
@@ -12,6 +13,11 @@ import {
   updateMemberActivity,
   updateMemberRole,
 } from '../../services/groupService';
+
+async function addMember(id: string, actor: string, userId: string, role: 'owner' | 'admin' | 'member' = 'member') {
+  const invitation = await createInvitation(id, actor, role);
+  return acceptInvitation(invitation.token, userId);
+}
 
 describe('group ownership against in-memory MongoDB', () => {
   let mongo: MongoMemoryServer | undefined;
@@ -63,9 +69,9 @@ describe('group ownership against in-memory MongoDB', () => {
     it.each(transitions)('keeps an owner after simultaneous %s / %s', async (first, second) => {
       const id = await twoOwners(legacy);
       const read = await readSameRevision(id);
-      const change = (email: string, action: 'demote' | 'remove') => action === 'demote'
-        ? updateMemberRole(id, email, email, 'admin')
-        : removeMember(id, email, email);
+      const change = (userId: string, action: 'demote' | 'remove') => action === 'demote'
+        ? updateMemberRole(id, userId, userId, 'admin')
+        : removeMember(id, userId, userId);
 
       const results = await Promise.allSettled([
         change('first@example.test', first),
@@ -80,7 +86,7 @@ describe('group ownership against in-memory MongoDB', () => {
       const persisted = await Group.findById(id);
       const owners = persisted!.members.filter((member) => member.role === 'owner');
       expect(owners).toHaveLength(1);
-      await expect(removeMember(id, owners[0].email, owners[0].email)).rejects.toMatchObject({
+      await expect(removeMember(id, owners[0].userId, owners[0].userId)).rejects.toMatchObject({
         statusCode: 409,
       });
     });
@@ -90,9 +96,9 @@ describe('group ownership against in-memory MongoDB', () => {
     const id = await twoOwners();
     const stale = await Group.findById(id);
     await updateMemberRole(id, 'first@example.test', 'second@example.test', 'admin');
-    jest.spyOn(Group, 'findOne').mockResolvedValueOnce(stale);
+    jest.spyOn(Group, 'findOne').mockReturnValueOnce({ select: () => Promise.resolve(stale) } as unknown as ReturnType<typeof Group.findOne>);
 
-    await expect(addMember(id, 'second@example.test', 'third@example.test', 'owner'))
+    await expect(createInvitation(id, 'second@example.test', 'owner'))
       .rejects.toMatchObject({ statusCode: 409 });
     jest.restoreAllMocks();
     await expect(addMember(id, 'second@example.test', 'third@example.test', 'owner'))
@@ -100,13 +106,13 @@ describe('group ownership against in-memory MongoDB', () => {
     expect((await Group.findById(id))!.members).toHaveLength(2);
   });
 
-  it.each(['owner', 'admin', 'member'] as const)('preserves ownership when legacy duplicate emails start with %s', async (firstRole) => {
+  it.each(['owner', 'admin', 'member'] as const)('preserves ownership when legacy duplicate userIds start with %s', async (firstRole) => {
     const group = await Group.create({
       name: 'Legacy duplicates',
       createdBy: 'owner@example.test',
       members: [
-        { email: 'owner@example.test', role: firstRole },
-        { email: 'owner@example.test', role: 'owner' },
+        { userId: 'owner@example.test', role: firstRole },
+        { userId: 'owner@example.test', role: 'owner' },
       ],
     });
 
@@ -120,8 +126,8 @@ describe('group ownership against in-memory MongoDB', () => {
       name: 'Legacy duplicates',
       createdBy: 'owner@example.test',
       members: [
-        { email: 'owner@example.test', role: 'owner' },
-        { email: 'owner@example.test', role: 'owner' },
+        { userId: 'owner@example.test', role: 'owner' },
+        { userId: 'owner@example.test', role: 'owner' },
       ],
     });
 
@@ -141,7 +147,7 @@ describe('group ownership against in-memory MongoDB', () => {
       .rejects.toMatchObject({ statusCode: 409 });
     jest.restoreAllMocks();
     const persisted = await Group.findById(id);
-    expect(persisted!.members.find((member) => member.email === 'second@example.test')!.role).toBe('admin');
+    expect(persisted!.members.find((member) => member.userId === 'second@example.test')!.role).toBe('admin');
     expect(persisted!.members).toHaveLength(3);
   });
 
@@ -163,11 +169,11 @@ describe('group ownership against in-memory MongoDB', () => {
     await updateMemberRole(id, 'first@example.test', 'first@example.test', 'admin');
     await addMember(id, 'first@example.test', 'member@example.test');
     const snapshot = await Group.findById(id);
-    await updateMemberActivity([id], 'Member@Example.Test');
+    await updateMemberActivity([id], 'member@example.test');
     jest.spyOn(Group, 'findOne').mockResolvedValueOnce(snapshot);
     await updateGroup(id, 'first@example.test', { name: 'Renamed' });
     jest.restoreAllMocks();
-    expect((await Group.findById(id))!.members.find((member) => member.email === 'member@example.test')!.lastActivity)
+    expect((await Group.findById(id))!.members.find((member) => member.userId === 'member@example.test')!.lastActivity)
       .toBeInstanceOf(Date);
     await removeMember(id, 'first@example.test', 'first@example.test');
     await deleteGroup(id, 'second@example.test');

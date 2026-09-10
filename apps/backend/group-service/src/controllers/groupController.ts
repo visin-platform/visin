@@ -14,9 +14,6 @@ const actorId = (req: InternalServiceRequest): string => {
 
 export const createGroup = async (req: InternalServiceRequest, res: Response): Promise<void> => {
   const userId = actorId(req);
-  if (!userId) {
-    throw new BadRequestError('User ID required');
-  }
   const { name } = req.body as { name: string };
   const group = await svc.createGroup(userId, name, req.user?.email);
   res.status(201).json({ success: true, data: group });
@@ -24,22 +21,19 @@ export const createGroup = async (req: InternalServiceRequest, res: Response): P
 
 export const listMine = async (req: InternalServiceRequest, res: Response): Promise<void> => {
   const userId = actorId(req);
-  if (!userId) {
-    throw new BadRequestError('User ID required');
-  }
   const groups = await svc.listMyGroups(userId);
 
   // Update last activity for this user in each group
-  await svc.updateMemberActivity(groups.map((group) => group._id.toString()), userId);
+  await svc.updateMemberActivity(
+    groups.map((group) => group._id.toString()),
+    userId
+  );
 
   res.json({ success: true, data: groups });
 };
 
 export const listMyDeleted = async (req: InternalServiceRequest, res: Response): Promise<void> => {
   const userId = actorId(req);
-  if (!userId) {
-    throw new BadRequestError('User ID required');
-  }
   const groups = await svc.listMyDeletedGroups(userId);
   res.json({ success: true, data: groups });
 };
@@ -54,11 +48,8 @@ export const listMyDeleted = async (req: InternalServiceRequest, res: Response):
  */
 export const getMyGroupRoles = async (req: InternalServiceRequest, res: Response): Promise<void> => {
   const userId = actorId(req);
-  if (!userId) {
-    throw new BadRequestError('User ID required');
-  }
   const groups = await svc.listMyGroups(userId);
-  const roles = [...new Set(groups.map(group => svc.memberRole(group, userId)).filter(Boolean))];
+  const roles = [...new Set(groups.map((group) => svc.memberRole(group, userId)).filter(Boolean))];
   res.json({ success: true, data: roles });
 };
 
@@ -90,12 +81,7 @@ export const permanentlyDeleteGroup = async (req: Request, res: Response): Promi
 
 export const updateRole = async (req: Request, res: Response): Promise<void> => {
   const { role } = req.body as { role: GroupRole };
-  const group = await svc.updateMemberRole(
-    req.params.id as string,
-    actorId(req),
-    req.params.memberId as string,
-    role
-  );
+  const group = await svc.updateMemberRole(req.params.id as string, actorId(req), req.params.memberId as string, role);
 
   res.json({ success: true, data: group });
 };

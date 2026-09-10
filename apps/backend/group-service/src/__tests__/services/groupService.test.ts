@@ -18,7 +18,6 @@ import {
   deleteGroup,
   restoreGroup,
   permanentlyDeleteGroup,
-  addMember,
   memberRole,
   updateMemberRole,
   removeMember,
@@ -32,7 +31,7 @@ const mockedGroup = Group as unknown as Record<string, jest.Mock>;
 type TestGroup = {
   __v?: number;
   name: string;
-  members: { email: string; role: GroupRole; joinedAt: Date }[];
+  members: { userId: string; role: GroupRole; joinedAt: Date }[];
   deletedAt?: Date;
   save: jest.Mock;
 };
@@ -41,9 +40,9 @@ const makeGroup = (overrides: Partial<TestGroup> = {}): TestGroup => ({
   __v: 0,
   name: 'Team',
   members: [
-    { email: 'owner@x.com', role: 'owner', joinedAt: new Date() },
-    { email: 'admin@x.com', role: 'admin', joinedAt: new Date() },
-    { email: 'member@x.com', role: 'member', joinedAt: new Date() },
+    { userId: 'owner@x.com', role: 'owner', joinedAt: new Date() },
+    { userId: 'admin@x.com', role: 'admin', joinedAt: new Date() },
+    { userId: 'member@x.com', role: 'member', joinedAt: new Date() },
   ],
   save: jest.fn().mockResolvedValue(undefined),
   ...overrides,
@@ -54,13 +53,13 @@ beforeEach(() => {
 });
 
 describe('updateMemberActivity', () => {
-  it('stamps lastActivity for the normalized member email in one write', async () => {
+  it('stamps lastActivity for the exact member ID in one write', async () => {
     mockedGroup.updateMany.mockResolvedValue({});
 
-    await updateMemberActivity(['g1', 'g2'], 'Member@X.com');
+    await updateMemberActivity(['g1', 'g2'], 'member@x.com');
 
     expect(mockedGroup.updateMany).toHaveBeenCalledWith(
-      { _id: { $in: ['g1', 'g2'] }, 'members.email': 'member@x.com' },
+      { _id: { $in: ['g1', 'g2'] }, 'members.userId': 'member@x.com' },
       { $set: { 'members.$.lastActivity': expect.any(Date) } }
     );
   });
@@ -77,12 +76,12 @@ describe('createGroup', () => {
     const created = makeGroup();
     mockedGroup.create.mockResolvedValue(created);
 
-    const result = await createGroup('Owner@X.com', '  Team  ');
+    const result = await createGroup('owner@x.com', '  Team  ');
 
     expect(mockedGroup.create).toHaveBeenCalledWith({
       name: 'Team',
       createdBy: 'owner@x.com',
-      members: [{ email: 'owner@x.com', role: 'owner', joinedAt: expect.any(Date) }],
+      members: [{ userId: 'owner@x.com', role: 'owner', joinedAt: expect.any(Date) }],
     });
     expect(result).toBe(created);
   });
@@ -93,10 +92,10 @@ describe('listMyGroups / listMyDeletedGroups', () => {
     const sort = jest.fn().mockResolvedValue([]);
     mockedGroup.find.mockReturnValue({ sort });
 
-    await listMyGroups('Member@X.com');
+    await listMyGroups('member@x.com');
 
     expect(mockedGroup.find).toHaveBeenCalledWith({
-      'members.email': 'member@x.com',
+      'members.userId': 'member@x.com',
       deletedAt: null,
     });
     expect(sort).toHaveBeenCalledWith({ updatedAt: -1 });
@@ -111,7 +110,7 @@ describe('listMyGroups / listMyDeletedGroups', () => {
     // `deletedAt` defaults to null on every document, so `$exists` would match
     // live groups too — deleted state has to be matched by value.
     expect(mockedGroup.find).toHaveBeenCalledWith({
-      'members.email': 'member@x.com',
+      'members.userId': 'member@x.com',
       deletedAt: { $ne: null },
     });
     expect(sort).toHaveBeenCalledWith({ deletedAt: -1 });
@@ -131,11 +130,11 @@ describe('getGroupIfMember', () => {
     await expect(getGroupIfMember('g1', 'stranger@x.com')).rejects.toThrow('Access denied');
   });
 
-  it('returns the group for a member (case-insensitive)', async () => {
+  it('returns the group for a member by account ID', async () => {
     const group = makeGroup();
     mockedGroup.findOne.mockResolvedValue(group);
 
-    await expect(getGroupIfMember('g1', 'Member@X.com')).resolves.toBe(group);
+    await expect(getGroupIfMember('g1', 'member@x.com')).resolves.toBe(group);
     expect(mockedGroup.findOne).toHaveBeenCalledWith({ _id: 'g1', deletedAt: null });
   });
 });
@@ -292,85 +291,11 @@ describe('permanentlyDeleteGroup', () => {
   });
 });
 
-describe('addMember', () => {
-  it('forbids admins from creating another owner', async () => {
-    const group = makeGroup();
-    mockedGroup.findOne.mockResolvedValue(group);
-
-    await expect(addMember('g1', 'Admin@X.com', 'second@x.com', 'owner')).rejects.toMatchObject({
-      statusCode: 403,
-    });
-    expect(group.members).toHaveLength(3);
-    expect(group.save).not.toHaveBeenCalled();
-  });
-
-  it('lets an existing owner add a second owner for handover', async () => {
-    const group = makeGroup();
-    mockedGroup.findOne.mockResolvedValue(group);
-
-    await addMember('g1', 'Owner@X.com', 'Second@X.com', 'owner');
-
-    expect(group.members[3]).toEqual(expect.objectContaining({ email: 'second@x.com', role: 'owner' }));
-    expect(group.save).toHaveBeenCalledTimes(1);
-  });
-
-  it('lets admins add another admin', async () => {
-    const group = makeGroup();
-    mockedGroup.findOne.mockResolvedValue(group);
-
-    await addMember('g1', 'admin@x.com', 'second@x.com', 'admin');
-
-    expect(group.members[3].role).toBe('admin');
-  });
-
-  it('throws NotFound for a missing group', async () => {
-    mockedGroup.findOne.mockResolvedValue(null);
-
-    await expect(addMember('g1', 'owner@x.com', 'new@x.com')).rejects.toThrow('Not found');
-  });
-
-  it('forbids plain members from adding', async () => {
-    mockedGroup.findOne.mockResolvedValue(makeGroup());
-
-    await expect(addMember('g1', 'member@x.com', 'new@x.com')).rejects.toThrow('Access denied');
-  });
-
-  it('rejects duplicates with Conflict', async () => {
-    mockedGroup.findOne.mockResolvedValue(makeGroup());
-
-    await expect(addMember('g1', 'owner@x.com', 'Member@X.com')).rejects.toThrow(
-      'User is already a member'
-    );
-  });
-
-  it('adds a member with the default role', async () => {
-    const group = makeGroup();
-    mockedGroup.findOne.mockResolvedValue(group);
-
-    await addMember('g1', 'admin@x.com', 'New@X.com');
-
-    expect(group.members).toHaveLength(4);
-    expect(group.members[3]).toEqual(
-      expect.objectContaining({ email: 'new@x.com', role: 'member' })
-    );
-    expect(group.save).toHaveBeenCalled();
-  });
-
-  it('adds a member with an explicit role', async () => {
-    const group = makeGroup();
-    mockedGroup.findOne.mockResolvedValue(group);
-
-    await addMember('g1', 'owner@x.com', 'new@x.com', 'admin');
-
-    expect(group.members[3].role).toBe('admin');
-  });
-});
-
 describe('memberRole', () => {
   it('returns the role for a member and undefined otherwise', () => {
     const group = makeGroup() as unknown as IGroup;
 
-    expect(memberRole(group, 'Owner@X.com')).toBe('owner');
+    expect(memberRole(group, 'owner@x.com')).toBe('owner');
     expect(memberRole(group, 'nobody@x.com')).toBeUndefined();
   });
 });
@@ -404,9 +329,9 @@ describe('updateMemberRole', () => {
     const group = makeGroup();
     mockedGroup.findOne.mockResolvedValue(group);
 
-    await updateMemberRole('g1', 'owner@x.com', 'Member@X.com', 'admin');
+    await updateMemberRole('g1', 'owner@x.com', 'member@x.com', 'admin');
 
-    expect(group.members.find((m) => m.email === 'member@x.com')?.role).toBe('admin');
+    expect(group.members.find((m) => m.userId === 'member@x.com')?.role).toBe('admin');
     expect(group.save).toHaveBeenCalled();
   });
 
@@ -436,12 +361,12 @@ describe('updateMemberRole', () => {
 
   it('demotes an owner once a second owner exists', async () => {
     const group = makeGroup();
-    group.members.push({ email: 'owner2@x.com', role: 'owner', joinedAt: new Date() });
+    group.members.push({ userId: 'owner2@x.com', role: 'owner', joinedAt: new Date() });
     mockedGroup.findOne.mockResolvedValue(group);
 
     await updateMemberRole('g1', 'owner@x.com', 'owner@x.com', 'admin');
 
-    expect(group.members.find((m) => m.email === 'owner@x.com')?.role).toBe('admin');
+    expect(group.members.find((m) => m.userId === 'owner@x.com')?.role).toBe('admin');
   });
 });
 
@@ -468,9 +393,9 @@ describe('removeMember', () => {
     const group = makeGroup();
     mockedGroup.findOne.mockResolvedValue(group);
 
-    await removeMember('g1', 'Member@X.com', 'member@x.com');
+    await removeMember('g1', 'member@x.com', 'member@x.com');
 
-    expect(group.members.some((m) => m.email === 'member@x.com')).toBe(false);
+    expect(group.members.some((m) => m.userId === 'member@x.com')).toBe(false);
     expect(group.save).toHaveBeenCalled();
   });
 
@@ -505,12 +430,12 @@ describe('removeMember', () => {
 
   it('removes an owner once a second owner exists', async () => {
     const group = makeGroup();
-    group.members.push({ email: 'owner2@x.com', role: 'owner', joinedAt: new Date() });
+    group.members.push({ userId: 'owner2@x.com', role: 'owner', joinedAt: new Date() });
     mockedGroup.findOne.mockResolvedValue(group);
 
     await removeMember('g1', 'owner2@x.com', 'owner@x.com');
 
-    expect(group.members.some((m) => m.email === 'owner@x.com')).toBe(false);
+    expect(group.members.some((m) => m.userId === 'owner@x.com')).toBe(false);
   });
 });
 
@@ -524,7 +449,7 @@ describe('checkMembership', () => {
   it('reports membership with role', async () => {
     mockedGroup.findOne.mockResolvedValue(makeGroup());
 
-    await expect(checkMembership('g1', 'Admin@X.com')).resolves.toEqual({
+    await expect(checkMembership('g1', 'admin@x.com')).resolves.toEqual({
       member: true,
       role: 'admin',
     });

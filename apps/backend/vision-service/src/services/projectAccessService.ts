@@ -16,7 +16,7 @@ export async function resolveProject(projectId: string): Promise<IProject | null
 
 /**
  * True if userId may access projectId: public projects are open to everyone,
- * private ones only to their owner. No projectId means the resource isn't
+ * private ones to their owner or assigned group members. No projectId means the resource isn't
  * scoped to a project (e.g. a standalone training). Project credentials must
  * additionally resolve to their own project, including for public resources;
  * they cannot access standalone resources through this policy.

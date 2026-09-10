@@ -10,8 +10,8 @@ import { Group } from '../../models/Group';
 
 const secret = 'synthetic-project-groups-secret';
 const assertion = (overrides: Record<string, unknown> = {}, purpose = 'vision-project-groups') => {
-  const body = { userId: 'user-1', email: 'member@example.test', issuedAt: Date.now(), ...overrides };
-  const payload = JSON.stringify([purpose, body.userId, body.email, body.issuedAt]);
+  const body = { userId: 'user-1', issuedAt: Date.now(), ...overrides };
+  const payload = JSON.stringify([purpose, body.userId, body.issuedAt]);
   return { ...body, signature: createHmac('sha256', secret).update(payload).digest('hex') };
 };
 
@@ -42,26 +42,26 @@ describe('project membership assertions with in-memory MongoDB', () => {
   const request = (body: unknown) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
   it('returns only current, live memberships and no member identities', async () => {
-    const live = await Group.create({ name: 'Research', createdBy: 'owner@example.test', members: [{ email: 'member@example.test', role: 'member' }] });
-    await Group.create({ name: 'Deleted', createdBy: 'owner@example.test', deletedAt: new Date(), members: [{ email: 'member@example.test', role: 'member' }] });
-    await Group.create({ name: 'Other', createdBy: 'owner@example.test', members: [{ email: 'other@example.test', role: 'member' }] });
-    const response = await request(assertion({ email: 'MEMBER@example.test' }));
+    const live = await Group.create({ name: 'Research', createdBy: 'owner@example.test', members: [{ userId: 'user-1', role: 'member' }] });
+    await Group.create({ name: 'Deleted', createdBy: 'owner@example.test', deletedAt: new Date(), members: [{ userId: 'user-1', role: 'member' }] });
+    await Group.create({ name: 'Other', createdBy: 'owner@example.test', members: [{ userId: 'other', role: 'member' }] });
+    const response = await request(assertion());
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(await response.json()).toEqual({ success: true, data: [{ id: live._id.toString(), name: 'Research' }] });
     await Group.updateOne({ _id: live._id }, { $set: { members: [] } });
     expect(await (await request(assertion())).json()).toEqual({ success: true, data: [] });
   });
-  it.each(['email', 'userId', 'issuedAt'])('rejects a changed %s assertion', async field => {
+  it.each(['userId', 'issuedAt'])('rejects a changed %s assertion', async field => {
     const body = assertion();
-    const value = field === 'issuedAt' ? body.issuedAt - 1 : field === 'email' ? 'other@example.test' : 'other';
+    const value = field === 'issuedAt' ? body.issuedAt - 1 : 'other';
     expect((await request({ ...body, [field]: value })).status).toBe(403);
   });
   it.each([-31_000, 31_000])('rejects assertions outside the timestamp window (%i)', async delta => {
     expect((await request(assertion({ issuedAt: Date.now() + delta }))).status).toBe(403);
   });
   it('rejects unsigned, malformed, or differently purposed assertions', async () => {
-    expect((await request({ userId: 'user-1', email: 'member@example.test', issuedAt: Date.now() })).status).toBe(400);
+    expect((await request({ userId: 'user-1', issuedAt: Date.now() })).status).toBe(400);
     expect((await request({ ...assertion(), signature: 'not-a-signature' })).status).toBe(400);
     expect((await request(assertion({}, 'different-purpose'))).status).toBe(403);
   });

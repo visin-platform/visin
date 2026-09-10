@@ -127,8 +127,7 @@ describe('getBenchmarks', () => {
       deletedAt: null,
       $or: [
         { training_id: { $in: ['t1'] } },
-        { training_id: null },
-        { training_id: { $exists: false } },
+        { training_id: null, training_uuid: null, epoch_uuid: null },
       ],
     });
     expect((result.benchmarks[0] as AnyDoc).training_id.name).toBe('Training t1');
@@ -186,26 +185,24 @@ describe('getBenchmarks', () => {
 
 describe('getBenchmarkById', () => {
   it('404s when missing', async () => {
-    const populate = jest.fn().mockResolvedValue(null);
-    mockedBenchmark.findOne.mockReturnValue({ populate });
-
+    mockedBenchmark.findOne.mockResolvedValue(null);
     await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow('Benchmark not found');
   });
-
-  it('403s when the parent project is not visible', async () => {
-    const populate = jest.fn().mockResolvedValue(benchmarkDoc({ training_id: { projectId: 'p1' } }));
-    mockedBenchmark.findOne.mockReturnValue({ populate });
-    mockedCheckAccess.mockResolvedValue(false);
-
-    await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow();
-  });
-
-  it('returns the benchmark when visible', async () => {
-    const doc = benchmarkDoc({ training_id: { projectId: 'p1' } });
-    const populate = jest.fn().mockResolvedValue(doc);
-    mockedBenchmark.findOne.mockReturnValue({ populate });
-
+  it('checks the raw parent before population', async () => {
+    const doc = benchmarkDoc({ populate: jest.fn().mockResolvedValue(undefined) });
+    mockedBenchmark.findOne.mockResolvedValue(doc);
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     await expect(getBenchmarkById('b1', 'u1')).resolves.toBe(doc);
+    expect(doc.populate).toHaveBeenCalledWith('training_id', 'name uuid projectId');
+    mockedCheckAccess.mockResolvedValue(false);
+    doc.populate.mockClear();
+    await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow('Access denied');
+    expect(doc.populate).not.toHaveBeenCalled();
+  });
+  it('does not treat an orphan UUID as standalone', async () => {
+    mockedBenchmark.findOne.mockResolvedValue(benchmarkDoc({ training_id: null }));
+    mockedTraining.findOne.mockResolvedValue(null);
+    await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow('Training not found');
   });
 });
 

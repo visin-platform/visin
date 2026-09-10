@@ -83,7 +83,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
                   label="Group name"
                   value={name}
                   disabled={busy}
-                  onChange={event => setName(event.target.value)}
+                  onChange={(event) => setName(event.target.value)}
                   sx={{ flexGrow: 1, maxWidth: 360 }}
                 />
                 <IconButton aria-label="Save name" disabled={busy || !trimmed} onClick={commitRename}>
@@ -94,12 +94,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
                 </IconButton>
               </>
             ) : (
-              <Button
-                size="small"
-                startIcon={<Edit />}
-                onClick={() => setEditingName(true)}
-                sx={{ borderRadius: 2 }}
-              >
+              <Button size="small" startIcon={<Edit />} onClick={() => setEditingName(true)} sx={{ borderRadius: 2 }}>
                 Rename group
               </Button>
             )}
@@ -111,8 +106,8 @@ const GroupCard: React.FC<GroupCardProps> = ({
           permissions={permissions}
           currentUserId={currentUserId}
           busy={busy}
-          onChangeRole={(email, role) => onChangeRole(group._id, email, role)}
-          onRemove={email => onRemoveMember(group._id, email)}
+          onChangeRole={(userId, role) => onChangeRole(group._id, userId, role)}
+          onRemove={(userId) => onRemoveMember(group._id, userId)}
         />
 
         {permissions.canManageMembers && (

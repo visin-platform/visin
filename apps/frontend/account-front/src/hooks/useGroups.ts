@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { groupService } from '../services/groupService';
+import { useAuth } from '../contexts/AuthContext';
 import { Group, GroupRole } from '../types/group';
 
 export const groupKeys = {
@@ -7,11 +8,19 @@ export const groupKeys = {
   deleted: ['groups', 'deleted'] as const
 };
 
-export const useMyGroups = () =>
-  useQuery({ queryKey: groupKeys.mine, queryFn: groupService.listMine });
+export const useMyGroups = () => {
+  const { user } = useAuth();
+  return useQuery({ queryKey: [...groupKeys.mine, user?.id], queryFn: groupService.listMine, enabled: !!user?.id });
+};
 
-export const useDeletedGroups = (enabled: boolean) =>
-  useQuery({ queryKey: groupKeys.deleted, queryFn: groupService.listDeleted, enabled });
+export const useDeletedGroups = (enabled: boolean) => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: [...groupKeys.deleted, user?.id],
+    queryFn: groupService.listDeleted,
+    enabled: enabled && !!user?.id
+  });
+};
 
 /**
  * Every mutation here can change both lists (a delete moves a group from one to
@@ -34,17 +43,13 @@ const useGroupMutation = <TArgs>(
 export const useCreateGroup = () => useGroupMutation((name: string) => groupService.create(name));
 
 export const useRenameGroup = () =>
-  useGroupMutation(({ groupId, name }: { groupId: string; name: string }) =>
-    groupService.rename(groupId, name)
-  );
+  useGroupMutation(({ groupId, name }: { groupId: string; name: string }) => groupService.rename(groupId, name));
 
 export const useDeleteGroup = () => useGroupMutation((groupId: string) => groupService.remove(groupId));
 
-export const useRestoreGroup = () =>
-  useGroupMutation((groupId: string) => groupService.restore(groupId));
+export const useRestoreGroup = () => useGroupMutation((groupId: string) => groupService.restore(groupId));
 
-export const useDeleteGroupForever = () =>
-  useGroupMutation((groupId: string) => groupService.deleteForever(groupId));
+export const useDeleteGroupForever = () => useGroupMutation((groupId: string) => groupService.deleteForever(groupId));
 
 export const useUpdateMemberRole = () =>
   useGroupMutation(({ groupId, userId, role }: { groupId: string; userId: string; role: GroupRole }) =>

@@ -43,9 +43,8 @@ function assertCanAssignRole(actingRole: GroupRole, role: GroupRole, previousRol
  */
 export async function updateMemberActivity(groupIds: string[], memberId: string): Promise<void> {
   if (groupIds.length === 0) return;
-  const memberIdValue = memberId;
   await Group.updateMany(
-    { _id: { $in: groupIds }, 'members.userId': memberIdValue },
+    { _id: { $in: groupIds }, 'members.userId': memberId },
     { $set: { 'members.$.lastActivity': new Date() } }
   );
 }
@@ -74,20 +73,16 @@ export async function getGroupIfMember(groupId: string, userId: string): Promise
   return group;
 }
 
-export async function updateGroup(
-  groupId: string,
-  actingId: string,
-  updates: { name?: string }
-): Promise<IGroup> {
+export async function updateGroup(groupId: string, actingId: string, updates: { name?: string }): Promise<IGroup> {
   const group = await Group.findOne({ _id: groupId, ...NOT_DELETED });
   if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingId);
   if (!myRole || (myRole !== 'owner' && myRole !== 'admin')) throw new ForbiddenError();
-  
+
   if (updates.name !== undefined) {
     group.name = String(updates.name).trim();
   }
-  
+
   await saveGroup(group);
   return group;
 }
@@ -97,7 +92,7 @@ export async function deleteGroup(groupId: string, actingId: string): Promise<vo
   if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingId);
   if (myRole !== 'owner') throw new ForbiddenError();
-  
+
   // Soft delete by setting deletedAt timestamp
   group.deletedAt = new Date();
   await saveGroup(group);
@@ -108,7 +103,7 @@ export async function restoreGroup(groupId: string, actingId: string): Promise<I
   if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingId);
   if (myRole !== 'owner') throw new ForbiddenError();
-  
+
   // Restore by removing deletedAt timestamp
   group.deletedAt = undefined;
   await saveGroup(group);
@@ -120,12 +115,12 @@ export async function permanentlyDeleteGroup(groupId: string, actingId: string):
   if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingId);
   if (myRole !== 'owner') throw new ForbiddenError();
-  
+
   // A restore or ownership change after authorization must invalidate deletion.
   const deleted = await Group.findOneAndDelete({
     _id: groupId,
     ...IS_DELETED,
-    __v: revisionFilter(group),
+    __v: revisionFilter(group)
   });
   if (!deleted) throw new ConflictError(CONCURRENT_CHANGE);
 }
@@ -211,7 +206,7 @@ export async function createInvitation(groupId: string, actorId: string, role: G
   if (!group) throw new NotFoundError();
   assertCanInvite(group, actorId, role);
   const now = new Date();
-  group.invitations = (group.invitations || []).filter(invitation => invitation.expiresAt > now);
+  group.invitations = (group.invitations || []).filter((invitation) => invitation.expiresAt > now);
   if (group.invitations.length >= 100) throw new ConflictError('Revoke pending invitations before creating more');
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -232,7 +227,7 @@ async function findInvitation(token: string) {
   if (!/^[0-9a-f]{64}$/.test(token)) throw new NotFoundError('Invitation is invalid or expired');
   const tokenHash = invitationHash(token);
   const group = await Group.findOne({ 'invitations.tokenHash': tokenHash, ...NOT_DELETED }).select('+invitations');
-  const invitation = group?.invitations?.find(item => item.tokenHash === tokenHash && item.expiresAt > new Date());
+  const invitation = group?.invitations?.find((item) => item.tokenHash === tokenHash && item.expiresAt > new Date());
   if (!group || !invitation) throw new NotFoundError('Invitation is invalid or expired');
   assertCanInvite(group, invitation.createdBy, invitation.role);
   return { group, invitation, tokenHash };
@@ -245,9 +240,10 @@ export async function previewInvitation(token: string) {
 
 export async function acceptInvitation(token: string, userId: string, email?: string): Promise<IGroup> {
   const { group, invitation, tokenHash } = await findInvitation(token);
-  if (group.members.some(member => member.userId === userId)) throw new ConflictError('Already a member of this group');
+  if (group.members.some((member) => member.userId === userId))
+    throw new ConflictError('Already a member of this group');
   group.members.push({ userId, ...(email ? { email } : {}), role: invitation.role, joinedAt: new Date() });
-  group.invitations = group.invitations!.filter(item => item.tokenHash !== tokenHash);
+  group.invitations = group.invitations!.filter((item) => item.tokenHash !== tokenHash);
   // The membership insert and single-use token consumption share one versioned
   // document write. A race or stale authority cannot consume the token alone.
   group.$where = { deletedAt: null, invitations: { $elemMatch: { tokenHash, expiresAt: { $gt: new Date() } } } };

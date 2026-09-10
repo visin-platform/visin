@@ -86,16 +86,16 @@ describe('groupService group mutations', () => {
 });
 
 describe('groupService member mutations', () => {
-  it('adds a member', async () => {
+  it('creates an invitation', async () => {
     const fetchMock = stubFetch();
 
-    await groupService.addMember('g1', 'new@x.com', 'admin');
+    await groupService.createInvitation('g1', 'admin');
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://group-api.test/api/groups/g1/members');
-    expect(init.body).toBe(JSON.stringify({ email: 'new@x.com', role: 'admin' }));
+    expect(url).toBe('http://group-api.test/api/groups/g1/invitations');
+    expect(init.body).toBe(JSON.stringify({ role: 'admin' }));
   });
 
-  it('updates a member role, encoding the email in the path', async () => {
+  it('updates a member role, encoding the account ID in the path', async () => {
     const fetchMock = stubFetch();
 
     await groupService.updateMemberRole('g1', 'a+b@x.com', 'member');
@@ -135,4 +135,20 @@ describe('base URL', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/groups/mine');
     vi.doUnmock('../config/ConfigProvider');
   });
+});
+
+it('revokes pending invitations', async () => {
+  const fetchMock = stubFetch(undefined, 204);
+  await groupService.revokeInvitations('g1');
+  expect(fetchMock.mock.calls[0][0]).toContain('/g1/invitations');
+  expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
+});
+it.each(['previewInvitation', 'acceptInvitation'] as const)('%s sends the secret only in the request body', async action => {
+  const fetchMock = stubFetch();
+  await groupService[action]('secret-token');
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toContain(action === 'previewInvitation' ? '/invitations/preview' : '/invitations/accept');
+  expect(url).not.toContain('secret-token');
+  expect(init.body).toBe(JSON.stringify({ token: 'secret-token' }));
+  expect(init.method).toBe('POST');
 });

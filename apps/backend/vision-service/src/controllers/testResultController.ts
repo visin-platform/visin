@@ -96,7 +96,7 @@ export const deleteTestResult = async (req: Request, res: Response): Promise<voi
 
 // Get unique epochs that have test results
 export const getTestResultEpochs = async (req: Request, res: Response): Promise<void> => {
-  const epochs = await testResultService.getTestResultEpochs();
+  const epochs = await testResultService.getTestResultEpochs(req.user?.id);
   res.json({
     success: true,
     data: { epochs }
