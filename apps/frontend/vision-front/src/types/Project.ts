@@ -6,6 +6,7 @@ export interface Project {
   slug?: string;
   description?: string;
   isPublic: boolean;
+  editorGroupIds?: string[];
   ownerId: string;
   /** how this project's conditions, classes and metrics should read; see types/taxonomy */
   taxonomy?: ProjectTaxonomy;
@@ -19,6 +20,7 @@ export interface CreateProjectData {
   name: string;
   description?: string;
   isPublic?: boolean;
+  editorGroupIds?: string[];
   taxonomy?: ProjectTaxonomy;
   costing?: ProjectCosting;
 }
@@ -28,6 +30,7 @@ export interface UpdateProjectData {
   slug?: string;
   description?: string;
   isPublic?: boolean;
+  editorGroupIds?: string[];
   /** null clears the taxonomy, returning the project to pure discovery */
   taxonomy?: ProjectTaxonomy | null;
   /** null clears the rates, so the project stops reporting costs */

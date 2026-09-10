@@ -13,6 +13,8 @@ export interface IUser extends Document {
    */
   passwordHash?: string;
   roles: string[];
+  /** Internal singleton marker; only first-run setup may assign it. */
+  bootstrapSlot?: 'initial-admin';
   lastLoginAt?: Date;
   tokenVersion: number; // for token invalidation
   createdAt: Date;
@@ -27,10 +29,19 @@ const UserSchema = new Schema<IUser>(
     signupMethod: { type: String, required: true },
     passwordHash: { type: String, select: false },
     roles: { type: [String], default: [] },
+    bootstrapSlot: { type: String, enum: ['initial-admin'], immutable: true, select: false },
     lastLoginAt: { type: Date },
     tokenVersion: { type: Number, default: 1 }
   },
   { timestamps: true }
 );
+
+// The claim and administrator are one document, so a failed response cannot
+// leave a pending lock or authorize another administrator. Other users omit it.
+UserSchema.index({ bootstrapSlot: 1 }, {
+  name: 'unique_initial_admin',
+  unique: true,
+  partialFilterExpression: { bootstrapSlot: 'initial-admin' },
+});
 
 export const User = model<IUser>('User', UserSchema);

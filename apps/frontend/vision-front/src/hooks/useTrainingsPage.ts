@@ -1,3 +1,4 @@
+import { useWriteCapabilities } from './useWriteCapabilities';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -59,7 +60,9 @@ export const useTrainingsPage = () => {
   });
   const configs = configsData?.data.configs || [];
   const datasets = analysisData?.data || [];
-  const projects = projectsData?.data || [];
+  const availableProjects = projectsData?.data || [];
+  const canEditProject = useWriteCapabilities('project', availableProjects.map(project => project._id));
+  const projects = availableProjects.filter(project => canEditProject(project._id));
 
   // Initialize selectedTags and excludedTags from URL parameters
   useEffect(() => {
@@ -189,6 +192,9 @@ export const useTrainingsPage = () => {
 
   // Use paginated trainings for display
   const displayTrainings = shouldFetchAll ? paginatedTrainings : filteredTrainings;
+
+  const canWrite = useWriteCapabilities('training', [...displayTrainings.map(row => row._id), ...selectedTrainingIds]);
+  const canDeleteSelected = selectedTrainingIds.size > 0 && [...selectedTrainingIds].every(canWrite);
 
   // CSV Export function
   const exportToCSV = () => {
@@ -348,6 +354,7 @@ export const useTrainingsPage = () => {
   };
 
   const handleDeleteSelected = async () => {
+    if (!canDeleteSelected) return;
     try {
       setCreating(true);
       const trainingsToDelete = Array.from(selectedTrainingIds);
@@ -371,6 +378,8 @@ export const useTrainingsPage = () => {
   };
 
   return {
+    canWrite,
+    canDeleteSelected,
     isAuthenticated,
     page,
     rowsPerPage,

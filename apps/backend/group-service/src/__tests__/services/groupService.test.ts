@@ -4,7 +4,7 @@ jest.mock('../../models/Group', () => ({
     find: jest.fn(),
     findOne: jest.fn(),
     updateMany: jest.fn(),
-    findByIdAndDelete: jest.fn(),
+    findOneAndDelete: jest.fn(),
   },
 }));
 
@@ -25,10 +25,12 @@ import {
   checkMembership,
 } from '../../services/groupService';
 import { Group, IGroup, GroupRole } from '../../models/Group';
+import { Error as MongooseError } from 'mongoose';
 
 const mockedGroup = Group as unknown as Record<string, jest.Mock>;
 
 type TestGroup = {
+  __v?: number;
   name: string;
   members: { email: string; role: GroupRole; joinedAt: Date }[];
   deletedAt?: Date;
@@ -36,6 +38,7 @@ type TestGroup = {
 };
 
 const makeGroup = (overrides: Partial<TestGroup> = {}): TestGroup => ({
+  __v: 0,
   name: 'Team',
   members: [
     { email: 'owner@x.com', role: 'owner', joinedAt: new Date() },
@@ -138,6 +141,25 @@ describe('getGroupIfMember', () => {
 });
 
 describe('updateGroup', () => {
+  it('returns a retryable conflict for stale saves', async () => {
+    const group = makeGroup();
+    const { Group: GroupModel } = jest.requireActual<typeof import('../../models/Group')>('../../models/Group');
+    group.save.mockRejectedValue(new MongooseError.VersionError(new GroupModel(), 0, ['name']));
+    mockedGroup.findOne.mockResolvedValue(group);
+
+    await expect(updateGroup('g1', 'owner@x.com', { name: 'New' })).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Group changed concurrently; reload it and retry',
+    });
+  });
+
+  it('does not turn an unrelated persistence failure into a conflict', async () => {
+    const error = new Error('Database unavailable');
+    mockedGroup.findOne.mockResolvedValue(makeGroup({ save: jest.fn().mockRejectedValue(error) }));
+
+    await expect(updateGroup('g1', 'owner@x.com', { name: 'New' })).rejects.toBe(error);
+  });
+
   it('throws NotFound for a missing group', async () => {
     mockedGroup.findOne.mockResolvedValue(null);
 
@@ -240,17 +262,67 @@ describe('permanentlyDeleteGroup', () => {
 
   it('removes the document', async () => {
     mockedGroup.findOne.mockResolvedValue(makeGroup({ deletedAt: new Date() }));
-    mockedGroup.findByIdAndDelete.mockResolvedValue({});
+    mockedGroup.findOneAndDelete.mockResolvedValue({});
 
     await permanentlyDeleteGroup('g1', 'owner@x.com');
 
-    expect(mockedGroup.findByIdAndDelete).toHaveBeenCalledWith('g1');
+    expect(mockedGroup.findOneAndDelete).toHaveBeenCalledWith({
+      _id: 'g1', deletedAt: { $ne: null }, __v: 0,
+    });
     // Only soft-deleted groups are eligible; a live group must not be hard-deleted.
     expect(mockedGroup.findOne).toHaveBeenCalledWith({ _id: 'g1', deletedAt: { $ne: null } });
+  });
+
+  it('returns a conflict when the authorized revision no longer matches', async () => {
+    mockedGroup.findOne.mockResolvedValue(makeGroup({ deletedAt: new Date() }));
+    mockedGroup.findOneAndDelete.mockResolvedValue(null);
+
+    await expect(permanentlyDeleteGroup('g1', 'owner@x.com')).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it('conditionally deletes imported groups without a version key', async () => {
+    mockedGroup.findOne.mockResolvedValue(makeGroup({ __v: undefined, deletedAt: new Date() }));
+    mockedGroup.findOneAndDelete.mockResolvedValue({});
+
+    await permanentlyDeleteGroup('g1', 'owner@x.com');
+
+    expect(mockedGroup.findOneAndDelete).toHaveBeenCalledWith({
+      _id: 'g1', deletedAt: { $ne: null }, __v: { $exists: false },
+    });
   });
 });
 
 describe('addMember', () => {
+  it('forbids admins from creating another owner', async () => {
+    const group = makeGroup();
+    mockedGroup.findOne.mockResolvedValue(group);
+
+    await expect(addMember('g1', 'Admin@X.com', 'second@x.com', 'owner')).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    expect(group.members).toHaveLength(3);
+    expect(group.save).not.toHaveBeenCalled();
+  });
+
+  it('lets an existing owner add a second owner for handover', async () => {
+    const group = makeGroup();
+    mockedGroup.findOne.mockResolvedValue(group);
+
+    await addMember('g1', 'Owner@X.com', 'Second@X.com', 'owner');
+
+    expect(group.members[3]).toEqual(expect.objectContaining({ email: 'second@x.com', role: 'owner' }));
+    expect(group.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets admins add another admin', async () => {
+    const group = makeGroup();
+    mockedGroup.findOne.mockResolvedValue(group);
+
+    await addMember('g1', 'admin@x.com', 'second@x.com', 'admin');
+
+    expect(group.members[3].role).toBe('admin');
+  });
+
   it('throws NotFound for a missing group', async () => {
     mockedGroup.findOne.mockResolvedValue(null);
 

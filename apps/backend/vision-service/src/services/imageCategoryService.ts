@@ -1,3 +1,4 @@
+import { assertDatasetWrite } from './writeAccessService';
 import { UpdateQuery } from 'mongoose';
 import { ConflictError, NotFoundError, logger } from '@visin/backend-core';
 import ImageCategory, { IImageCategory } from '../models/ImageCategory';
@@ -16,7 +17,8 @@ interface UpdateImageCategoryData {
   color?: string;
 }
 
-export const createImageCategory = async ({ name, description, datasetId, color }: CreateImageCategoryData) => {
+export const createImageCategory = async ({ name, description, datasetId, color }: CreateImageCategoryData, userId?: string) => {
+  await assertDatasetWrite(datasetId, userId);
   const existingCategory = await ImageCategory.findOne({ datasetId, name });
   if (existingCategory) {
     throw new ConflictError('Category with this name already exists for this dataset');
@@ -55,7 +57,9 @@ export const getCategoryById = async (id: string) => {
   return category;
 };
 
-export const updateCategory = async (id: string, { name, description, color }: UpdateImageCategoryData) => {
+export const updateCategory = async (id: string, { name, description, color }: UpdateImageCategoryData, userId?: string) => {
+  const current = await getCategoryById(id);
+  await assertDatasetWrite(current.datasetId.toString(), userId);
   const updateData: UpdateQuery<IImageCategory> = {};
   if (name !== undefined) updateData.name = name;
   if (description !== undefined) updateData.description = description;
@@ -83,12 +87,13 @@ export const updateCategory = async (id: string, { name, description, color }: U
   return category;
 };
 
-export const deleteCategory = async (id: string) => {
+export const deleteCategory = async (id: string, userId?: string) => {
   const category = await ImageCategory.findById(id);
   if (!category) {
     throw new NotFoundError('Image category not found');
   }
 
+  await assertDatasetWrite(category.datasetId.toString(), userId);
   const imagesCount = await DatasetImage.countDocuments({ categoryId: id });
 
   if (imagesCount > 0) {

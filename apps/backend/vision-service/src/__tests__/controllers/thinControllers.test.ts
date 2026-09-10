@@ -281,11 +281,11 @@ describe('benchmarkController', () => {
 
     const createRes = makeRes();
     await benchmarkCtrl.createBenchmark(makeReq({ projectId: 'p1', body: { epoch: 1 } }), createRes);
-    expect(mockedBenchmarkSvc.createBenchmark).toHaveBeenCalledWith({ epoch: 1 }, 'p1');
+    expect(mockedBenchmarkSvc.createBenchmark).toHaveBeenCalledWith({ epoch: 1 }, 'p1', 'u1');
     expect(createRes.status).toHaveBeenCalledWith(201);
 
     await benchmarkCtrl.uploadBenchmark(makeReq({ body: { epoch: 2 } }), makeRes());
-    expect(mockedBenchmarkSvc.uploadBenchmark).toHaveBeenCalledWith({ epoch: 2 }, undefined);
+    expect(mockedBenchmarkSvc.uploadBenchmark).toHaveBeenCalledWith({ epoch: 2 }, undefined, 'u1');
 
     await benchmarkCtrl.getBenchmarkStats(makeReq({ query: { training_uuid: 'tu' } }), makeRes());
     expect(mockedBenchmarkSvc.getBenchmarkStats).toHaveBeenCalledWith('tu', 'u1');

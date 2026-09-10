@@ -11,6 +11,7 @@ export interface IGroupMember {
 
 export interface IGroup extends Document {
   _id: Types.ObjectId;
+  __v?: number;
   name: string;
   createdBy: string; // email
   members: IGroupMember[];
@@ -29,7 +30,7 @@ const GroupSchema = new Schema<IGroup>({
     lastActivity: { type: Date, default: null }
   }],
   deletedAt: { type: Date, default: null }
-},{ timestamps: true });
+},{ timestamps: true, optimisticConcurrency: true });
 
 GroupSchema.index({ 'members.email': 1 });
 

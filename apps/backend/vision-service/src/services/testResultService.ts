@@ -1,5 +1,7 @@
+import { assertEpochWrite } from './writeAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
 import { QueryFilter } from 'mongoose';
+import { projectTokenContext, tokenProjectId } from '../middleware/projectTokenContext';
 import { ConflictError, ForbiddenError, NotFoundError, logger } from '@visin/backend-core';
 import TestResult, { ITestResult } from '../models/TestResult';
 import Epoch, { IEpoch } from '../models/Epoch';
@@ -47,6 +49,14 @@ export const testResultService = {
     const { epoch, epoch_uuids, training_uuid, projectId } = filters;
 
     let query = TestResult.find({ deletedAt: null });
+    // Caller filters must never replace this mandatory authorization predicate.
+    let tokenEpochFilter: QueryFilter<ITestResult> | undefined;
+    if (tokenProjectId()) {
+      const ids = await getVisibleTrainingIds(userId);
+      const epochs = await Epoch.find({ trainingId: { $in: ids }, deletedAt: null }, 'epoch_uuid');
+      tokenEpochFilter = { epoch_uuid: { $in: epochs.map(row => row.epoch_uuid) } };
+      query = query.and([tokenEpochFilter]);
+    }
 
     // Filter by projectId if provided
     if (projectId) {
@@ -119,6 +129,7 @@ export const testResultService = {
       
       // Build count query based on filters
       const countQuery: QueryFilter<ITestResult> = { deletedAt: null };
+      if (tokenEpochFilter) countQuery.$and = [tokenEpochFilter];
       if (projectId) {
         const trainings = await Training.find({ projectId, deletedAt: null });
         if (trainings.length > 0) {
@@ -252,7 +263,7 @@ export const testResultService = {
    */
   async checkTestResultAccess(epochUuid: string, userId: string | undefined, reqProjectId?: string): Promise<boolean> {
     const epoch = await Epoch.findOne({ epoch_uuid: epochUuid });
-    if (!epoch) return true; // Orphaned test result, not tied to a private training
+    if (!epoch) return isWithinTokenScope(reqProjectId, undefined);
     const training = await Training.findById(epoch.trainingId);
     if (!(await checkProjectAccess(userId, training?.projectId))) return false;
     return isWithinTokenScope(reqProjectId, training?.projectId);
@@ -342,7 +353,8 @@ export const testResultService = {
       if (existing) throw new ConflictError(`Test result with test_uuid ${test_uuid} already exists`);
     }
 
-    const epochDoc = await Epoch.findOne({ epoch_uuid });
+    const epochDoc = await assertEpochWrite(epoch_uuid, userId, reqProjectId);
+    if (!epochDoc && !isWithinTokenScope(reqProjectId, undefined)) throw new ForbiddenError();
     if (epochDoc) {
       const training = await Training.findById(epochDoc.trainingId);
       if (!(await checkProjectAccess(userId, training?.projectId)) || !isWithinTokenScope(reqProjectId, training?.projectId)) {
@@ -376,11 +388,16 @@ export const testResultService = {
   async updateTestResult(id: string, userId: string | undefined, reqProjectId: string | undefined, data: UpdateTestResultData) {
     const testResult = await TestResult.findOne({ _id: id, deletedAt: null });
     if (!testResult) throw new NotFoundError('Test result not found');
+    await assertEpochWrite(testResult.epoch_uuid, userId, reqProjectId);
     if (!(await this.checkTestResultAccess(testResult.epoch_uuid, userId, reqProjectId))) {
       throw new ForbiddenError();
     }
 
     const { timestamp, epoch, epoch_uuid, test_results } = data;
+    if (epoch_uuid !== undefined) await assertEpochWrite(epoch_uuid, userId, reqProjectId);
+    if (epoch_uuid !== undefined && !(await this.checkTestResultAccess(epoch_uuid, userId, reqProjectId))) {
+      throw new ForbiddenError();
+    }
 
     if (timestamp !== undefined) testResult.timestamp = new Date(timestamp);
     if (epoch !== undefined) testResult.epoch = epoch;
@@ -406,6 +423,7 @@ export const testResultService = {
   async deleteTestResult(id: string, userId: string | undefined, reqProjectId: string | undefined) {
     const testResult = await TestResult.findOne({ _id: id, deletedAt: null });
     if (!testResult) throw new NotFoundError('Test result not found');
+    await assertEpochWrite(testResult.epoch_uuid, userId, reqProjectId);
     if (!(await this.checkTestResultAccess(testResult.epoch_uuid, userId, reqProjectId))) {
       throw new ForbiddenError();
     }
@@ -416,6 +434,12 @@ export const testResultService = {
   },
 
   async getTestResultEpochs() {
+    const context = projectTokenContext.getStore();
+    if (context) {
+      const ids = await getVisibleTrainingIds(context.userId);
+      const epochs = await Epoch.find({ trainingId: { $in: ids }, deletedAt: null }, 'epoch_uuid');
+      return TestResult.distinct('epoch', { epoch_uuid: { $in: epochs.map(row => row.epoch_uuid) }, deletedAt: null }).sort();
+    }
     return await TestResult.distinct('epoch').sort();
   },
 

@@ -9,6 +9,7 @@ export interface IProject extends Document {
   description?: string;
   isPublic: boolean;
   ownerId: string;
+  editorGroupIds?: string[];
   taxonomy?: IProjectTaxonomy;
   costing?: IProjectCosting;
   createdAt: Date;
@@ -46,6 +47,7 @@ const ProjectSchema: Schema = new Schema(
       required: true,
       index: true
     },
+    editorGroupIds: { type: [String], default: [], index: true },
     taxonomy: {
       type: TaxonomySchema,
       required: false

@@ -16,9 +16,7 @@ import {
   issueSession
 } from '../services/sessionService';
 import { User } from '../models/User';
-
-/** True only while the instance has no users at all — the first-run window. */
-const isFirstRun = async (): Promise<boolean> => (await User.countDocuments()) === 0;
+import { assertRegistrationOpen, createFirstUser, needsSetup } from '../services/bootstrapService';
 
 /**
  * Lets the sign-in page decide what to show before asking for credentials: a
@@ -28,7 +26,7 @@ const isFirstRun = async (): Promise<boolean> => (await User.countDocuments()) =
 export const getSetupStatus = async (_req: Request, res: Response): Promise<void> => {
   res.json({
     success: true,
-    needsSetup: await isFirstRun(),
+    needsSetup: await needsSetup(),
     // The sign-in page hides the Google button entirely when unconfigured,
     // rather than rendering one that fails on click.
     googleEnabled: Boolean(process.env.GOOGLE_CLIENT_ID)
@@ -36,32 +34,11 @@ export const getSetupStatus = async (_req: Request, res: Response): Promise<void
 };
 
 /**
- * First-run bootstrap: creates the owner account and signs it in. Guarded by
- * the collection being empty, so it closes permanently the moment it succeeds
- * — there is no window in which a second caller can claim admin.
+ * The indexed user insert is the atomic bootstrap claim. If issuing the session
+ * fails after that commit, the new owner recovers through ordinary password login.
  */
 export const setupFirstUser = async (req: Request, res: Response): Promise<void> => {
-  if (!(await isFirstRun())) {
-    throw new ConflictError('Setup has already been completed');
-  }
-
-  const { email, password, firstName, lastName } = req.body as {
-    email: string;
-    password: string;
-    firstName?: string;
-    lastName?: string;
-  };
-
-  const dbUser = await User.create({
-    email: email.toLowerCase(),
-    firstName,
-    lastName,
-    signupMethod: 'password',
-    passwordHash: await hashPassword(password),
-    // The first account administers the instance.
-    roles: ['admin'],
-    lastLoginAt: new Date()
-  });
+  const dbUser = await createFirstUser(req.body);
 
   logger.info('First user created via setup', { email: dbUser.email });
 
@@ -77,6 +54,7 @@ export const setupFirstUser = async (req: Request, res: Response): Promise<void>
  * sees only public work and gates nothing behind an administrator's inbox.
  */
 export const register = async (req: Request, res: Response): Promise<void> => {
+  await assertRegistrationOpen();
   const { email, password, firstName, lastName } = req.body as {
     email: string;
     password: string;

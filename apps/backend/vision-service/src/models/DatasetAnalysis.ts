@@ -1,6 +1,8 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IDatasetAnalysis extends Document {
+  /** Absent on legacy records; never inferred from the first editor. */
+  ownerId?: string;
   dataset: string; // 'waymo', 'zod', etc.
   fileId?: string; // file-service path of the uploaded dataset archive
   size?: string; // Human-readable size, derived from the uploaded file
@@ -12,6 +14,7 @@ export interface IDatasetAnalysis extends Document {
 
 const DatasetAnalysisSchema: Schema = new Schema(
   {
+    ownerId: { type: String, immutable: true, index: true },
     dataset: {
       type: String,
       required: true,

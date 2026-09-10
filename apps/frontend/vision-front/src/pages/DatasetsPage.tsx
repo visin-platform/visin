@@ -105,7 +105,7 @@ export const DatasetsPage: React.FC = () => {
           <Typography variant="body1" sx={{
             color: "text.secondary"
           }}>
-            Manage and analyze your dataset collections
+            Dataset analyses and files are publicly shared, including when used by a private project.
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>

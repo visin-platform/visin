@@ -1,3 +1,20 @@
+import { assertResourceWrite } from '../../services/writeAccessService';
+import { ForbiddenError } from '@visin/backend-core';
+// These workflow tests stub the write-policy boundary. HTTP/Mongo integration
+// tests exercise the real owner/group policy, parent resolution, and denial effects.
+jest.mock('../../services/writeAccessService', () => ({
+  ...jest.requireActual('../../services/writeAccessService'),
+  assertResourceWrite: jest.fn(async (resource: unknown) => {
+    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+  }),
+  assertLibraryWrite: jest.fn(),
+  assertDatasetWrite: jest.fn(),
+  assertEpochWrite: jest.fn(async (uuid: string) => {
+    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
+    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+    return epoch;
+  })
+}));
 jest.mock('../../models/Training', () => {
   const ctor = Object.assign(jest.fn(), {
     find: jest.fn(),
@@ -33,6 +50,8 @@ jest.mock('../../services/testResultService', () => ({
 jest.mock('../../services/projectAccessService', () => {
   const checkProjectAccess = jest.fn();
   return {
+    ...jest.requireActual('../../services/projectAccessService'),
+    getEditableProjectIds: jest.fn().mockResolvedValue(['p1']),
     checkProjectAccess,
     // Delegates straight through, so these tests keep asserting on
     // checkProjectAccess per row; the memoization itself is covered in
@@ -115,6 +134,7 @@ const mockProjectFind = (visibleIds: string[], costingDocs: AnyDoc[] = []) => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedCheckAccess.mockResolvedValue(true);
+  mockedVisibleProjects.mockResolvedValue(['p1']);
   // Cost-rate lookup: no project overrides unless a test says otherwise, so
   // costs fall back to the platform defaults.
   mockedProject.find.mockResolvedValue([]);
@@ -132,11 +152,11 @@ describe('getTrainings', () => {
 
     const result = await trainingService.getTrainings('u1', {}, { page: 2, limit: 10 });
 
-    expect(mockedProject.find).toHaveBeenCalledWith({ $or: [{ isPublic: true }, { ownerId: 'u1' }] });
+    expect(mockedVisibleProjects).toHaveBeenCalledWith('u1');
     expect(mockedTraining.find).toHaveBeenCalledWith(
       expect.objectContaining({
         deletedAt: null,
-        $or: [{ projectId: { $in: ['p1'] } }, { projectId: { $exists: false } }],
+        $or: [{ projectId: { $in: ['p1'] } }, { projectId: { $exists: false } }, { projectId: null }],
       })
     );
     expect((result.trainings[0] as TrainingWithMetrics).metrics.totalTime).toBe(7200);
@@ -150,7 +170,7 @@ describe('getTrainings', () => {
 
     const result = await trainingService.getTrainings(undefined, {}, {});
 
-    expect(mockedProject.find).toHaveBeenCalledWith({ isPublic: true });
+    expect(mockedVisibleProjects).toHaveBeenCalledWith(undefined);
     expect(mockedTraining.aggregate).not.toHaveBeenCalled();
     expect(result.trainings).toEqual([]);
     expect(result.pagination.pages).toBe(0);
@@ -401,6 +421,8 @@ describe('createTraining', () => {
   });
 
   it('403s when the target project is not accessible', async () => {
+    mockedProject.findOne.mockResolvedValue({ _id: 'p1' });
+    jest.mocked(assertResourceWrite).mockRejectedValueOnce(new ForbiddenError('Access denied to project'));
     mockedCheckAccess.mockResolvedValue(false);
 
     await expect(
@@ -416,13 +438,11 @@ describe('createTraining', () => {
     expect(mockedTraining.mock.calls[0][0].projectId).toBe('p9');
   });
 
-  it('keeps the raw projectId when it resolves nowhere', async () => {
+  it('rejects an unresolved project instead of storing an orphan', async () => {
     mockedProject.findOne.mockResolvedValue(null);
     mockedProject.findById.mockResolvedValue(null);
 
-    await trainingService.createTraining('u1', { name: 'T', projectId: 'raw-id' });
-
-    expect(mockedTraining.mock.calls[0][0].projectId).toBe('raw-id');
+    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'raw-id' })).rejects.toThrow('Access denied to project');
   });
 });
 
@@ -500,7 +520,7 @@ describe('deleteTraining', () => {
       { deletedAt: expect.any(Date) }
     );
     expect(mockedComparison.updateMany).toHaveBeenCalledWith(
-      { itemIds: VALID_ID },
+      { itemIds: VALID_ID, $or: [{ projectId: { $in: ['p1'] } }, { projectId: null, ownerId: 'u1' }] },
       { $pull: { itemIds: VALID_ID }, updatedAt: expect.any(Date) }
     );
   });
@@ -518,6 +538,69 @@ describe('deleteTraining', () => {
 });
 
 describe('getTrainingStats', () => {
+  async function costStats(
+    rows: Array<{ _id?: string; totalTime: number; totalTrainings: number }>,
+    projects: Array<{ _id: string; costing: { cpuRatePerHour: number; gpuRatePerHour: number; currency: string } }>,
+  ) {
+    mockedVisibleProjects.mockResolvedValue(rows.flatMap(row => row._id ? [row._id] : []));
+    mockedTraining.aggregate.mockResolvedValueOnce([{
+      totalTrainings: rows.reduce((sum, row) => sum + row.totalTrainings, 0),
+      totalTime: rows.reduce((sum, row) => sum + row.totalTime, 0),
+      totalEpochs: 1,
+      avgEpochTime: 1,
+    }]).mockResolvedValueOnce(rows);
+    mockedProject.find.mockResolvedValue(projects);
+    return trainingService.getTrainingStats('u1', {});
+  }
+
+  it('keeps currencies separate and reports partial pricing coverage', async () => {
+    const stats = await costStats([
+      { _id: 'eur1', totalTime: 3600, totalTrainings: 1 },
+      { _id: 'usd', totalTime: 3600, totalTrainings: 2 },
+      { _id: 'eur2', totalTime: 7200, totalTrainings: 1 },
+      { totalTime: 1800, totalTrainings: 1 },
+    ], [
+      { _id: 'eur1', costing: { cpuRatePerHour: 1, gpuRatePerHour: 9, currency: 'EUR' } },
+      { _id: 'usd', costing: { cpuRatePerHour: 20, gpuRatePerHour: 80, currency: 'USD' } },
+      { _id: 'eur2', costing: { cpuRatePerHour: 2, gpuRatePerHour: 3, currency: 'EUR' } },
+    ]);
+
+    expect(stats).not.toHaveProperty('totalCost');
+    expect(stats).not.toHaveProperty('totalCpuCost');
+    expect(stats).not.toHaveProperty('totalGpuCost');
+    expect(stats).not.toHaveProperty('currency');
+    expect(stats).toMatchObject({
+      costTotalsByCurrency: [
+        { currency: 'EUR', totalCpuCost: 5, totalGpuCost: 15, totalCost: 20 },
+        { currency: 'USD', totalCpuCost: 20, totalGpuCost: 80, totalCost: 100 },
+      ],
+      costCoverage: { pricedTrainings: 4, unpricedTrainings: 1, pricedTime: 14400, unpricedTime: 1800 },
+    });
+  });
+
+  it('keeps single-currency totals and distinguishes free from unpriced training', async () => {
+    const stats = await costStats([
+      { _id: 'free', totalTime: 3600, totalTrainings: 2 },
+      { _id: 'unpriced', totalTime: 7200, totalTrainings: 3 },
+    ], [{ _id: 'free', costing: { cpuRatePerHour: 0, gpuRatePerHour: 0, currency: 'EUR' } }]);
+
+    expect(stats).toMatchObject({
+      totalCost: 0, totalCpuCost: 0, totalGpuCost: 0, currency: 'EUR',
+      costTotalsByCurrency: [{ currency: 'EUR', totalCpuCost: 0, totalGpuCost: 0, totalCost: 0 }],
+      costCoverage: { pricedTrainings: 2, unpricedTrainings: 3, pricedTime: 3600, unpricedTime: 7200 },
+    });
+  });
+
+  it('reports completely unpriced training without inventing monetary totals', async () => {
+    const stats = await costStats([{ totalTime: 3600, totalTrainings: 2 }], []);
+
+    expect(stats).not.toHaveProperty('totalCost');
+    expect(stats).toMatchObject({
+      costTotalsByCurrency: [],
+      costCoverage: { pricedTrainings: 0, unpricedTrainings: 2, pricedTime: 0, unpricedTime: 3600 },
+    });
+  });
+
   it('returns zeroed stats when nothing matches', async () => {
     mockedVisibleProjects.mockResolvedValue([]);
     mockedTraining.aggregate.mockResolvedValue([]);
@@ -554,17 +637,10 @@ describe('getTrainingStats', () => {
     );
   });
 
-  it('resolves the project filter (slug, id, then raw fallback)', async () => {
+  it('rejects unknown project filters instead of querying orphan identifiers', async () => {
     mockedProject.findOne.mockResolvedValue(null);
     mockedProject.findById.mockResolvedValue(null);
-    mockedTraining.aggregate.mockResolvedValue([]);
-
-    await trainingService.getTrainingStats('u1', { projectId: 'raw', datasetId: 'd1', tags: ['x'] });
-
-    const match = mockedTraining.aggregate.mock.calls[0][0][0].$match;
-    expect(match.projectId).toBe('raw');
-    expect(match.datasetId).toBe('d1');
-    expect(match.tags).toEqual({ $in: ['x'] });
+    await expect(trainingService.getTrainingStats('u1', { projectId: 'raw' })).rejects.toThrow('Project not found');
   });
 });
 

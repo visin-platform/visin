@@ -1,3 +1,4 @@
+import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -33,8 +34,6 @@ import {
 } from '@mui/icons-material';
 import { Benchmark } from '@/types';
 import { benchmarkService } from '@/services/benchmarkService';
-import { useAuth } from '../contexts/AuthContext';
-import { isGroupAdmin } from '../utils/permissions';
 
 const BenchmarksPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +41,6 @@ const BenchmarksPage: React.FC = () => {
   const [benchmarkToDelete, setBenchmarkToDelete] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
   const theme = useTheme();
   const queryClient = useQueryClient();
 
@@ -102,7 +100,7 @@ const BenchmarksPage: React.FC = () => {
   };
 
   // Check if user has permission to delete benchmarks (owner or admin role)
-  const canDeleteBenchmarks = () => isAuthenticated && isGroupAdmin(user);
+  const canDeleteBenchmarks = useWriteCapabilities('benchmark', benchmarks.map(row => row._id));
 
   const handleRowClick = (benchmark: Benchmark) => {
     if (benchmark.training_id && typeof benchmark.training_id === 'object' && '_id' in benchmark.training_id) {
@@ -275,7 +273,7 @@ const BenchmarksPage: React.FC = () => {
                       {formatTimestamp(benchmark.timestamp)}
                     </TableCell>
                     <TableCell>
-                      {canDeleteBenchmarks() && (
+                      {canDeleteBenchmarks(benchmark._id) && (
                         <Tooltip title="Delete">
                           <IconButton
                             size="small"

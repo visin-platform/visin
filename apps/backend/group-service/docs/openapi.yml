@@ -283,6 +283,63 @@ components:
       description: Internal service token for inter-service communication
 
 paths:
+  /api/internal/project-groups:
+    post:
+      tags: [Group Membership]
+      summary: Resolve current groups for a verified vision-service identity
+      description: >-
+        Read-only service assertion using the existing JWT_SECRET. The signature is
+        hex HMAC-SHA256 over JSON.stringify(["vision-project-groups", userId, email, issuedAt]).
+        The timestamp must be within 30 seconds. This assertion cannot authenticate
+        ordinary group-management requests. Only live group IDs and names are returned.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, email, issuedAt, signature]
+              properties:
+                userId:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                email:
+                  type: string
+                  format: email
+                issuedAt:
+                  type: integer
+                  format: int64
+                  description: Unix timestamp in milliseconds
+                signature:
+                  type: string
+                  pattern: '^[0-9a-f]{64}$'
+      responses:
+        '200':
+          description: Current memberships; Cache-Control is no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+        '400':
+          description: Invalid request body
+        '403':
+          description: Invalid signature or expired assertion
   # Health check endpoint
   /health:
     get:

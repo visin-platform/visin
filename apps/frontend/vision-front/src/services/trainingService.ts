@@ -8,17 +8,35 @@ import {
   TrainingComparisonResponse
 } from '../types';
 
+export interface CurrencyCostTotal {
+  currency: string;
+  totalCpuCost: number;
+  totalGpuCost: number;
+  totalCost: number;
+}
+
+export interface CostCoverage {
+  pricedTrainings: number;
+  unpricedTrainings: number;
+  /** Measured durations in seconds. */
+  pricedTime: number;
+  unpricedTime: number;
+}
+
 export interface TrainingStats {
   totalTrainings: number;
   totalTime: number;
   totalEpochs: number;
   avgEpochTime: number;
-  /** absent when no project involved has priced its hardware */
+  /** Scalar costs exist only when all priced runs use one currency. */
   totalCpuCost?: number;
   totalGpuCost?: number;
   totalCost?: number;
-  /** ISO code the costs are in; 'MIXED' when they span currencies */
+  /** ISO code for the scalar costs. No cross-currency scalar is returned. */
   currency?: string;
+  /** Estimates at current project rates. Optional for older server versions. */
+  costTotalsByCurrency?: CurrencyCostTotal[];
+  costCoverage?: CostCoverage;
   filters: {
     status: string | null;
     datasetId: string | null;

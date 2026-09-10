@@ -42,3 +42,10 @@ describe('findingService', () => {
     expect(mockedApi.delete).toHaveBeenCalledWith('/findings/f1');
   });
 });
+
+it('passes pagination alongside the existing filters', async () => {
+  mockedApi.get.mockResolvedValue({ data: { success: true, data: [] } });
+  const params = { project: 'p1', training: 't1', limit: 50, before: '2026-09-01T00:00:00.000Z_507f1f77bcf86cd799439011' };
+  await findingService.list(params);
+  expect(mockedApi.get).toHaveBeenCalledWith('/findings', { params });
+});

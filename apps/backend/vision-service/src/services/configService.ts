@@ -1,7 +1,8 @@
+import { requireActor } from './writeAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
 import { NotFoundError } from '@visin/backend-core';
+import { trainingService } from './trainingService';
 import Config from '../models/Config';
-import Training from '../models/Training';
 import type { GetAllConfigsQuery } from '../validation/configSchemas';
 
 interface ConfigData {
@@ -43,11 +44,8 @@ export const getAllConfigs = async ({ page, limit, sortBy, order }: GetAllConfig
   };
 };
 
-export const getConfigsByTraining = async (trainingId: string) => {
-  const training = await Training.findById(trainingId);
-  if (!training) {
-    throw new NotFoundError('Training not found');
-  }
+export const getConfigsByTraining = async (trainingId: string, userId?: string) => {
+  const training = await trainingService.getTrainingById(trainingId, userId);
 
   if (training.configId) {
     const config = await Config.findById(training.configId);
@@ -85,8 +83,9 @@ export const getConfigByUuid = async (uuid: string) => {
   return config;
 };
 
-export const createConfig = async ({ summary, config_data, config_name, metadata }: ConfigData) => {
+export const createConfig = async ({ summary, config_data, config_name, metadata }: ConfigData, userId?: string) => {
   const configData = new Config({
+    ownerId: requireActor(userId),
     config_uuid: uuidv4(),
     summary,
     config_data,

@@ -78,7 +78,8 @@ const ConfigsPage: React.FC = () => {
         </Box>
       </Box>
       <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
-        Manage training configurations. Configs are independent and can be selected when creating trainings.
+        Configs are publicly shared, including when selected by a private project.
+        Upload only non-confidential configurations; remove passwords, API keys, and other secrets first.
       </Typography>
       {/* Messages */}
       {success && (

@@ -65,22 +65,27 @@ function registerReadTools(server: McpServer, caller: Caller): void {
           .string()
           .optional()
           .describe('Training id — matches findings about that run or citing it'),
-        limit: z.number().int().min(1).max(50).optional().describe('How many (default 20)')
+        limit: z.number().int().min(1).max(50).optional().describe('How many (default 20)'),
+        before: z.string().length(49).optional().describe('Continuation cursor from the previous list_findings page; keep the same filters')
       }
     },
-    async ({ project, training, limit }) => {
+    async ({ project, training, limit, before }) => {
       try {
-        const findings = await vision.listFindings(key, { project, training, limit: limit ?? 20 });
+        const findings = await vision.listFindings(key, { project, training, limit: limit ?? 20, before });
 
         if (findings.length === 0) {
-          return ok('Nothing has been recorded yet for that.');
+          return ok(before ? 'No more findings.' : 'Nothing has been recorded yet for that.');
         }
 
         const { shown, note } = capped(findings, 50, 'findings');
+        const last = shown[shown.length - 1];
+        const continuation = findings.length >= (limit ?? 20)
+          ? `\nFor older findings, call list_findings with the same filters and before="${last.createdAt}_${last._id}". An empty page means the end.`
+          : '';
         return ok(
           [`${count(findings.length)} recorded:`, ...shown.map(describe), '', 'Use get_finding to read one in full.'].join(
             '\n'
-          ) + note
+          ) + note + continuation
         );
       } catch (error) {
         return explain(error);

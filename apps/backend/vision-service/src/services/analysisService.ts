@@ -1,17 +1,16 @@
+import { claimUpload, reserveUpload, deleteReservedFile, isExternalUrl } from './uploadReservationService';
+import { assertLibraryWrite, requireActor } from './writeAccessService';
 import { randomUUID } from 'crypto';
 import { QueryFilter } from 'mongoose';
 import { BadRequestError, NotFoundError, logger } from '@visin/backend-core';
 import DatasetAnalysis, { IDatasetAnalysis } from '../models/DatasetAnalysis';
 import {
-  deleteFile,
-  getFileMetadata,
   getSignedUrl,
   getUploadSignedUrl
 } from './fileServiceClient';
 
 // Every dataset archive lives under this prefix, one folder per upload.
 const DATASET_FILE_PREFIX = 'datasets/';
-const DATASET_FILE_ID_PATTERN = /^datasets\/[0-9a-f-]{36}\/[^/]+$/;
 const UPLOAD_URL_EXPIRY_MINUTES = 15;
 const DOWNLOAD_URL_EXPIRY_MINUTES = 60;
 
@@ -32,17 +31,6 @@ interface UpdateAnalysisData {
   fileId?: string;
   data?: Record<string, unknown>;
 }
-
-/**
- * A client only ever posts back a `fileId` this service handed it, so anything
- * off that shape is a caller trying to attach an unrelated file-service path
- * (someone else's image, another dataset's archive) to their own analysis.
- */
-const assertDatasetFileId = (fileId: string): void => {
-  if (!DATASET_FILE_ID_PATTERN.test(fileId)) {
-    throw new BadRequestError('Invalid fileId: expected an upload URL issued by this service');
-  }
-};
 
 /** Strip path separators and other trouble out of a browser-supplied filename. */
 const sanitizeFilename = (filename: string): string => {
@@ -68,16 +56,6 @@ const formatBytes = (bytes: number): string => {
  * The stored file's own metadata is the only trustworthy source for size — a
  * browser-reported byte count is just another client-supplied field.
  */
-const readSize = async (fileId: string): Promise<string | undefined> => {
-  try {
-    const metadata = await getFileMetadata(fileId);
-    return formatBytes(metadata.size);
-  } catch (error) {
-    logger.warn('Could not read uploaded dataset size', { fileId, error: (error as Error).message });
-    return undefined;
-  }
-};
-
 /**
  * `downloadUrl` is exposed for backwards compatibility with clients (and with
  * records written before `fileId` existed, which kept the value inside `data`).
@@ -115,14 +93,17 @@ export const createUploadUrl = async ({
   filename: string;
   mimetype: string;
   dataset?: string;
-}) => {
+}, userId?: string) => {
+  const ownerId = requireActor(userId);
   const fileId = `${DATASET_FILE_PREFIX}${randomUUID()}/${sanitizeFilename(filename)}`;
+
+  const reservation = await reserveUpload(fileId, 'archive', '-', mimetype, ownerId);
 
   // Before the signed URL: a failed reservation must not leave a live upload
   // URL pointing at a file nothing will ever claim.
   let analysisId: string | undefined;
   if (dataset) {
-    const reserved = await DatasetAnalysis.create({ dataset, fileId, status: 'pending', data: {} });
+    const reserved = await DatasetAnalysis.create({ _id: reservation.allocationId, ownerId, dataset, fileId, status: 'pending', data: {} });
     analysisId = String(reserved._id);
     logger.info('Dataset analysis reserved', { dataset, id: analysisId, fileId });
   }
@@ -140,8 +121,9 @@ export const createUploadUrl = async ({
  * Idempotent — completing an already-ready record just returns it, so a
  * retried request after a dropped response is harmless.
  */
-export const completeAnalysis = async (id: string) => {
+export const completeAnalysis = async (id: string, userId?: string) => {
   const analysis = await findAnalysisOrThrow(id);
+  assertLibraryWrite(analysis, userId);
 
   if (analysis.status !== 'pending') {
     return toAnalysisResponse(analysis);
@@ -151,7 +133,8 @@ export const completeAnalysis = async (id: string) => {
     throw new BadRequestError('Analysis has no uploaded archive to complete');
   }
 
-  analysis.size = await readSize(analysis.fileId);
+  const uploaded = await claimUpload(analysis.fileId, 'archive', '-', 'analysis', userId, id);
+  analysis.size = formatBytes(uploaded.size);
   analysis.status = 'ready';
   await analysis.save();
 
@@ -160,15 +143,21 @@ export const completeAnalysis = async (id: string) => {
   return toAnalysisResponse(analysis);
 };
 
-export const uploadAnalysis = async (analysisData: UploadAnalysisData) => {
-  if (analysisData.fileId) {
-    assertDatasetFileId(analysisData.fileId);
+export const uploadAnalysis = async (analysisData: UploadAnalysisData, userId?: string) => {
+  const ownerId = requireActor(userId);
+  const fileId = analysisData.fileId || analysisData.data?.downloadUrl;
+  if (fileId !== undefined && typeof fileId !== 'string') throw new BadRequestError('Invalid archive reference');
+  if (analysisData.fileId && analysisData.data?.downloadUrl && analysisData.data.downloadUrl !== analysisData.fileId) {
+    throw new BadRequestError('Conflicting archive references');
   }
-
+  const uploaded = fileId && !isExternalUrl(fileId)
+    ? await claimUpload(fileId, 'archive', '-', 'analysis', userId) : undefined;
   const analysis = new DatasetAnalysis({
+    _id: uploaded?.resourceId,
+    ownerId,
     dataset: analysisData.dataset,
     fileId: analysisData.fileId,
-    size: analysisData.fileId ? await readSize(analysisData.fileId) : undefined,
+    size: uploaded ? formatBytes(uploaded.size) : undefined,
     data: analysisData.data || {}
   });
 
@@ -213,30 +202,33 @@ const findAnalysisOrThrow = async (id: string) => {
 
 export const getAnalysisById = async (id: string) => toAnalysisResponse(await findAnalysisOrThrow(id));
 
-export const updateAnalysis = async (id: string, updateData: UpdateAnalysisData) => {
+export const updateAnalysis = async (id: string, updateData: UpdateAnalysisData, userId?: string) => {
   const analysis = await findAnalysisOrThrow(id);
+  assertLibraryWrite(analysis, userId);
 
-  if (updateData.dataset !== undefined) {
-    analysis.dataset = updateData.dataset;
+  const previous = storedFileId(analysis);
+  const nextFileId = updateData.fileId !== undefined ? updateData.fileId : analysis.fileId;
+  const replacingFile = updateData.fileId !== undefined && updateData.data === undefined;
+  const nextData = updateData.data !== undefined ? updateData.data : { ...analysis.data };
+  // A file-only replacement supersedes the previous archive alias while
+  // preserving the analysis metrics. Explicit conflicting input still fails.
+  if (replacingFile) delete nextData.downloadUrl;
+  const nested = nextData?.downloadUrl;
+  if (nested !== undefined && typeof nested !== 'string') throw new BadRequestError('Invalid archive reference');
+  if (nextFileId && nested && nested !== nextFileId) throw new BadRequestError('Conflicting archive references');
+  const next = nextFileId || (nested as string | undefined);
+  if (next && next !== previous && !isExternalUrl(next)) {
+    const uploaded = await claimUpload(next, 'archive', '-', 'analysis', userId, id);
+    analysis.size = formatBytes(uploaded.size);
   }
-
-  if (updateData.data !== undefined) {
-    analysis.data = updateData.data;
+  if (updateData.dataset !== undefined) analysis.dataset = updateData.dataset;
+  if (updateData.data !== undefined || replacingFile) {
+    analysis.data = nextData;
     analysis.markModified('data');
   }
-
-  if (updateData.fileId !== undefined) {
-    assertDatasetFileId(updateData.fileId);
-    const replaced = analysis.fileId;
-    analysis.fileId = updateData.fileId;
-    analysis.size = await readSize(updateData.fileId);
-    // Replacing the archive orphans the old one; nothing else references it.
-    if (replaced && replaced !== updateData.fileId) {
-      await deleteFile(replaced);
-    }
-  }
-
+  if (updateData.fileId !== undefined) analysis.fileId = updateData.fileId;
   await analysis.save();
+  if (previous && previous !== next) await deleteReservedFile(previous, 'analysis', id);
 
   logger.info('Dataset analysis updated', { id: analysis._id, dataset: analysis.dataset });
 
@@ -286,17 +278,19 @@ export const getAnalysisDownload = async (id: string) => {
   return { downloadUrl: signedUrlData.signedUrl, expiresAt: signedUrlData.expiresAt };
 };
 
-export const deleteAnalysis = async (id: string) => {
-  const analysis = await DatasetAnalysis.findByIdAndDelete(id);
+export const deleteAnalysis = async (id: string, userId?: string) => {
+  const analysis = await findAnalysisOrThrow(id);
+  assertLibraryWrite(analysis, userId);
   if (!analysis) {
     throw new NotFoundError('Analysis not found');
   }
 
   const fileId = storedFileId(analysis);
   if (fileId && fileId.startsWith(DATASET_FILE_PREFIX)) {
-    await deleteFile(fileId);
+    await deleteReservedFile(fileId, 'analysis', id);
   }
 
+  await DatasetAnalysis.findByIdAndDelete(id);
   logger.info('Dataset analysis deleted', { id: analysis._id });
 };
 

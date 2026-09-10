@@ -1,6 +1,8 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IComparison extends Document {
+  /** Absent on legacy records; never inferred from the first editor. */
+  ownerId?: string;
   uuid: string;
   name: string;
   description?: string;
@@ -15,6 +17,7 @@ export interface IComparison extends Document {
 
 const ComparisonSchema: Schema = new Schema(
   {
+    ownerId: { type: String, immutable: true, index: true },
     uuid: {
       type: String,
       required: true,

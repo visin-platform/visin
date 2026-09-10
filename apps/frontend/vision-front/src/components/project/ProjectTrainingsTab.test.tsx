@@ -1,3 +1,4 @@
+vi.mock('../../hooks/useWriteCapabilities', () => ({ useWriteCapabilities: () => () => true }));
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -116,7 +117,7 @@ describe('ProjectTrainingsTab', () => {
     expect(screen.getByText('Training t1')).toBeInTheDocument();
   });
 
-  it('shows Compare Selected once 2+ trainings are selected and creates a comparison', async () => {
+  it('opens a read-only comparison without persisting project data', async () => {
     mockedComparison.createComparison.mockResolvedValue({ success: true, data: { uuid: 'cmp-1' } } as never);
     renderTab({ trainings: [makeTraining('t1'), makeTraining('t2')] });
 
@@ -126,12 +127,8 @@ describe('ProjectTrainingsTab', () => {
     const compareButton = screen.getByRole('button', { name: /compare selected \(2\)/i });
     fireEvent.click(compareButton);
 
-    await waitFor(() =>
-      expect(mockedComparison.createComparison).toHaveBeenCalledWith(
-        expect.objectContaining({ itemIds: expect.arrayContaining(['t1', 't2']), projectId: 'p1' })
-      )
-    );
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/comparisons/cmp-1'));
+    expect(mockedComparison.createComparison).not.toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith('/trainings/compare?ids=t1,t2');
   });
 
   it('loads edit data and opens the edit dialog pre-filled', async () => {

@@ -1,3 +1,4 @@
+import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -26,8 +27,6 @@ import {
 import { getCategoriesByDataset } from '../services/imageCategoryService';
 import FileUpload from '../components/FileUpload';
 import { usePageTitle } from '../hooks/usePageTitle';
-import { useAuth } from '../contexts/AuthContext';
-import { isGroupAdmin } from '../utils/permissions';
 import { useDatasetImages } from '../hooks/useDatasetImages';
 import { useDatasetCategoryManager } from '../hooks/useDatasetCategoryManager';
 import { useDatasetImageEditor } from '../hooks/useDatasetImageEditor';
@@ -49,7 +48,7 @@ const DatasetDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const theme = useTheme();
-  const { isAuthenticated, user } = useAuth();
+  const canWrite = useWriteCapabilities('dataset', id ? [id] : []);
 
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(0);
@@ -158,7 +157,7 @@ const DatasetDetailPage: React.FC = () => {
 
   usePageTitle(analysis ? `Dataset: ${analysis.dataset} - Vision` : 'Dataset Details - Vision');
 
-  const canDeleteDatasets = () => isAuthenticated && isGroupAdmin(user);
+  const canDeleteDatasets = () => canWrite(id);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);

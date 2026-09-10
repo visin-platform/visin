@@ -3,7 +3,8 @@ import { z } from '@visin/backend-core';
 export const listFindingsQuerySchema = z.object({
   project: z.string().optional(),
   training: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional()
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  before: z.string().length(49).optional()
 });
 
 export const createFindingBodySchema = z.object({

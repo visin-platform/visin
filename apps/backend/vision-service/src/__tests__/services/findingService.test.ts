@@ -12,7 +12,9 @@ jest.mock('../../models/Training', () => ({
 }));
 jest.mock('../../models/Epoch', () => ({ __esModule: true, default: { find: jest.fn() } }));
 jest.mock('../../services/projectAccessService', () => ({
+  ...jest.requireActual('../../services/projectAccessService'),
   checkProjectAccess: jest.fn(),
+  getVisibleProjectIds: jest.fn(),
   createProjectAccessChecker: jest.fn(),
 }));
 
@@ -20,7 +22,7 @@ import Finding from '../../models/Finding';
 import Project from '../../models/Project';
 import Training from '../../models/Training';
 import Epoch from '../../models/Epoch';
-import { checkProjectAccess, createProjectAccessChecker } from '../../services/projectAccessService';
+import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from '../../services/projectAccessService';
 import {
   createFinding,
   deleteFinding,
@@ -78,6 +80,7 @@ const listReturns = (rows: unknown[]) => {
 beforeEach(() => {
   jest.clearAllMocks();
   access.mockResolvedValue(true);
+  (getVisibleProjectIds as jest.Mock).mockResolvedValue(['mine']);
   project.findOne.mockResolvedValue(null);
   project.findById.mockResolvedValue({ _id: { toString: () => 'p1' }, ownerId: OWNER });
   training.countDocuments.mockResolvedValue(0);
@@ -112,15 +115,13 @@ describe('listFindings', () => {
     ]);
   });
 
-  it('filters an unscoped listing row by row, so it is not a way around privacy', async () => {
-    // With no project filter the query cannot be bounded up front.
-    listReturns([row({ projectId: 'mine' }), row({ _id: 'f2', projectId: 'someone-elses' })]);
-    access.mockImplementation(async (_u: string, p: string) => p === 'mine');
-
+  it('scopes an unscoped listing to visible projects before applying the limit', async () => {
+    listReturns([row({ projectId: 'mine' })]);
     const visible = await listFindings(OWNER, {});
-
+    expect(getVisibleProjectIds).toHaveBeenCalledWith(OWNER);
+    expect(finding.find).toHaveBeenCalledWith({ deletedAt: null, projectId: { $in: ['mine'] } });
     expect(visible).toHaveLength(1);
-    expect(visible[0].projectId).toBe('mine');
+    expect(access).not.toHaveBeenCalled();
   });
 
   it('caps how many rows one request can pull', async () => {
@@ -302,7 +303,7 @@ describe('createFinding', () => {
     project.findById.mockResolvedValue({ _id: { toString: () => 'p1' }, ownerId: 'someone-else' });
 
     await expect(createFinding({ project: 'p1', title: 'T', body: 'B' }, author)).rejects.toThrow(
-      /Only the project owner/
+      /Project edit permission/
     );
     expect(finding.create).not.toHaveBeenCalled();
   });

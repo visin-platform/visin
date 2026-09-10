@@ -19,6 +19,8 @@ const TrainingsPage: React.FC = () => {
 
   const {
     isAuthenticated,
+    canWrite,
+    canDeleteSelected,
     page,
     rowsPerPage,
     searchTerm,
@@ -107,10 +109,11 @@ const TrainingsPage: React.FC = () => {
         onExport={exportToCSV}
         onCompare={handleCompareSelected}
         onDelete={() => setDeleteMultipleDialogOpen(true)}
-        isAuthenticated={isAuthenticated}
+        isAuthenticated={canDeleteSelected}
       />
 
       <TrainingsTable
+        canWrite={canWrite}
         trainings={displayTrainings}
         isLoading={isLoading}
         page={page}

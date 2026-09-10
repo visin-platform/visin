@@ -1,6 +1,8 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IDataset extends Document {
+  /** Absent on legacy records; never inferred from the first editor. */
+  ownerId?: string;
   uuid: string;
   name: string;
   description?: string;
@@ -18,6 +20,7 @@ export interface IDataset extends Document {
 
 const DatasetSchema: Schema = new Schema(
   {
+    ownerId: { type: String, immutable: true, index: true },
     uuid: {
       type: String,
       required: true,

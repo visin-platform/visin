@@ -56,8 +56,8 @@ describe('formatCost', () => {
     expect(formatCost(NaN, 'EUR')).toBe('-');
   });
 
-  it('labels a cross-project total that spans currencies', () => {
-    expect(formatCost(30, 'MIXED')).toBe('30.00 (mixed currencies)');
+  it('suppresses invalid mixed-currency scalars from older servers', () => {
+    expect(formatCost(30, 'MIXED')).toBe('-');
   });
 
   it('falls back to a plain suffix for a code Intl does not know', () => {

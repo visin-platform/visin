@@ -1,6 +1,8 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface ITraining extends Document {
+  /** Absent on legacy records; never inferred from the first editor. */
+  ownerId?: string;
   _id: Types.ObjectId;
   uuid: string;
   name: string;
@@ -20,6 +22,7 @@ export interface ITraining extends Document {
 
 const TrainingSchema: Schema = new Schema(
   {
+    ownerId: { type: String, immutable: true, index: true },
     uuid: {
       type: String,
       required: true,

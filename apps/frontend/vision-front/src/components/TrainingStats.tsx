@@ -7,25 +7,19 @@ import {
   AttachMoney as CostIcon,
   Storage as StorageIcon
 } from '@mui/icons-material';
-import { useFormatCost } from '../costing/useCosting';
+import { formatCost } from '../costing/costing';
+import type { TrainingStats as TrainingStatsData } from '../services/trainingService';
 
 interface TrainingStatsProps {
-  stats: {
-    totalTrainings: number;
-    totalTime: number;
-    /** absent when no project involved has priced its hardware */
-    totalCpuCost?: number;
-    totalGpuCost?: number;
-    totalCost?: number;
-    /** ISO code from the backend; 'MIXED' when the total spans currencies */
-    currency?: string;
-  };
+  stats: Pick<TrainingStatsData,
+    'totalTrainings' | 'totalTime' | 'totalCpuCost' | 'totalGpuCost' | 'totalCost' |
+    'currency' | 'costTotalsByCurrency' | 'costCoverage'>;
   selectedTags: string[];
 }
 
 const StatCard: React.FC<{
   title: string;
-  value: string;
+  value: React.ReactNode;
   icon: React.ReactNode;
   color: string;
 }> = ({ title, value, icon, color }) => {
@@ -92,7 +86,17 @@ const StatCard: React.FC<{
 
 export const TrainingStats: React.FC<TrainingStatsProps> = ({ stats, selectedTags }) => {
   const theme = useTheme();
-  const formatCost = useFormatCost();
+  const hours = (seconds: number) => `${Math.round(seconds / 3600 * 10) / 10}h`;
+  const costValue = (key: 'totalCpuCost' | 'totalGpuCost' | 'totalCost') => {
+    if (stats.costTotalsByCurrency) {
+      return stats.costTotalsByCurrency.length ? stats.costTotalsByCurrency.map(total => (
+        <Box component="span" sx={{ display: 'block' }} key={total.currency}>
+          {formatCost(total[key], total.currency)}
+        </Box>
+      )) : '-';
+    }
+    return formatCost(stats[key], stats.currency);
+  };
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -148,29 +152,37 @@ export const TrainingStats: React.FC<TrainingStatsProps> = ({ stats, selectedTag
         />
         <StatCard
           title="Total Time"
-          value={`${Math.round(stats.totalTime / 3600 * 10) / 10}h`}
+          value={hours(stats.totalTime)}
           icon={<TimeIcon />}
           color={theme.palette.info.main}
         />
         <StatCard
           title="CPU Cost"
-          value={formatCost(stats.totalCpuCost, stats.currency)}
+          value={costValue('totalCpuCost')}
           icon={<CpuIcon />}
           color={theme.palette.success.main}
         />
         <StatCard
           title="GPU Cost"
-          value={formatCost(stats.totalGpuCost, stats.currency)}
+          value={costValue('totalGpuCost')}
           icon={<GpuIcon />}
           color={theme.palette.warning.main}
         />
         <StatCard
           title="Total Cost"
-          value={formatCost(stats.totalCost, stats.currency)}
+          value={costValue('totalCost')}
           icon={<CostIcon />}
           color={theme.palette.error.main}
         />
       </Box>
+      {stats.costCoverage && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Cost estimates cover {stats.costCoverage.pricedTrainings} of{' '}
+          {stats.costCoverage.pricedTrainings + stats.costCoverage.unpricedTrainings} trainings
+          {' '}({hours(stats.costCoverage.pricedTime)} priced; {hours(stats.costCoverage.unpricedTime)} unpriced),
+          using current project rates.
+        </Typography>
+      )}
     </Box>
   );
 };

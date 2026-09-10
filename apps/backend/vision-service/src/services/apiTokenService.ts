@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { ForbiddenError, NotFoundError } from '@visin/backend-core';
 import ApiToken from '../models/ApiToken';
 import { isProjectOwner } from './projectAccessService';
+import { requireUserCredential } from '../middleware/projectTokenContext';
 
 interface CreateTokenData {
   name: string;
@@ -10,6 +11,7 @@ interface CreateTokenData {
 }
 
 export const createToken = async ({ name, projectId, expiresInDays }: CreateTokenData, userId: string) => {
+  requireUserCredential();
   if (!(await isProjectOwner(userId, projectId))) {
     throw new ForbiddenError('Only the project owner can create API tokens for it');
   }
@@ -42,6 +44,7 @@ export const createToken = async ({ name, projectId, expiresInDays }: CreateToke
 };
 
 export const getTokens = async (projectId: string, userId: string) => {
+  requireUserCredential();
   if (!(await isProjectOwner(userId, projectId))) {
     throw new ForbiddenError('Only the project owner can view its API tokens');
   }
@@ -50,6 +53,7 @@ export const getTokens = async (projectId: string, userId: string) => {
 };
 
 export const revokeToken = async (id: string, userId: string) => {
+  requireUserCredential();
   const token = await ApiToken.findById(id);
   if (!token) {
     throw new NotFoundError('Token not found');

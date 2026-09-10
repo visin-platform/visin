@@ -162,7 +162,7 @@ describe('optionalAuth', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it('attaches the user and upserts on a valid token', async () => {
+  it('attaches an existing user only when identity and token version match', async () => {
     mockedVerifyJWT.mockReturnValue(decoded);
     mockedUser.findOneAndUpdate.mockResolvedValue(dbUser);
     const req = makeReq({ cookies: { access_token: 't' } });
@@ -171,12 +171,33 @@ describe('optionalAuth', () => {
 
     expect(req.user).toEqual(decoded);
     expect(mockedUser.findOneAndUpdate).toHaveBeenCalledWith(
-      { email: 'test@example.com' },
-      expect.objectContaining({
-        $setOnInsert: { email: 'test@example.com', signupMethod: 'google' },
-      }),
-      { new: true, upsert: true }
+      { _id: 'db-id-1', email: 'test@example.com', tokenVersion: 3 },
+      { $set: { lastLoginAt: expect.any(Date) } },
+      { new: true, upsert: false }
     );
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues anonymously when the account no longer matches', async () => {
+    mockedVerifyJWT.mockReturnValue(decoded);
+    mockedUser.findOneAndUpdate.mockResolvedValue(null);
+    const req = makeReq({ headers: { authorization: 'Bearer t' } });
+
+    await optionalAuth(req, makeRes(), next);
+
+    expect(req.user).toBeUndefined();
+    expect(req.dbUser).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not look up a token missing its version', async () => {
+    mockedVerifyJWT.mockReturnValue({ ...decoded, tokenVersion: undefined });
+    const req = makeReq({ cookies: { access_token: 't' } });
+
+    await optionalAuth(req, makeRes(), next);
+
+    expect(mockedUser.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(req.user).toBeUndefined();
     expect(next).toHaveBeenCalledTimes(1);
   });
 
@@ -235,4 +256,3 @@ describe('requireRole', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 });
-

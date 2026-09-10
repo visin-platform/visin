@@ -8,7 +8,8 @@ import {
   FormControlLabel,
   Switch,
   Button,
-  Box
+  Box,
+  Typography
 } from '@mui/material';
 
 interface EditProjectDialogProps {
@@ -61,6 +62,9 @@ const EditProjectDialog: React.FC<EditProjectDialogProps> = ({
             }
             label="Public project"
           />
+          <Typography variant="body2" color="text.secondary">
+            Configs, dataset analyses, and dataset files remain publicly shared, even in a private project.
+          </Typography>
         </Box>
       </DialogContent>
       <DialogActions>

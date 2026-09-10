@@ -12,7 +12,7 @@ import {
  * what the app shows and what a later session reads back cannot drift.
  */
 export const findingService = {
-  async list(params: { project?: string; training?: string }): Promise<Finding[]> {
+  async list(params: { project?: string; training?: string; limit?: number; before?: string }): Promise<Finding[]> {
     const response = await visionApi.get('/findings', { params });
     return (response.data as ApiResponse<Finding[]>).data;
   },

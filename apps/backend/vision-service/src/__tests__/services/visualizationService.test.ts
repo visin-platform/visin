@@ -1,3 +1,28 @@
+jest.mock('../../services/uploadReservationService', () => ({
+  ...jest.requireActual('../../services/uploadReservationService'),
+  reserveUpload: jest.fn(async () => ({ allocationId: 'reserved-id' })),
+  claimUpload: jest.fn(async (_fileId: string, _kind: string, _parent: string, _resource: string, _user: string, resourceId?: string) => {
+    const files = jest.requireMock('../../services/fileServiceClient');
+    const metadata = files.getFileMetadata ? await files.getFileMetadata(_fileId) : undefined;
+    return { resourceId: resourceId || 'reserved-id', size: metadata?.size ?? 10 };
+  }),
+  deleteReservedFile: jest.fn(async (fileId: string) => jest.requireMock('../../services/fileServiceClient').deleteFile(fileId))
+}));
+// These workflow tests stub the write-policy boundary. HTTP/Mongo integration
+// tests exercise the real owner/group policy, parent resolution, and denial effects.
+jest.mock('../../services/writeAccessService', () => ({
+  ...jest.requireActual('../../services/writeAccessService'),
+  assertResourceWrite: jest.fn(async (resource: unknown) => {
+    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+  }),
+  assertLibraryWrite: jest.fn(),
+  assertDatasetWrite: jest.fn(),
+  assertEpochWrite: jest.fn(async (uuid: string) => {
+    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
+    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+    return epoch;
+  })
+}));
 jest.mock('../../models/EpochVisualization', () => {
   const ctor = Object.assign(jest.fn(), {
     find: jest.fn(),
@@ -21,6 +46,7 @@ jest.mock('../../services/fileServiceClient', () => ({
   getUploadSignedUrl: jest.fn(),
 }));
 jest.mock('../../services/projectAccessService', () => ({
+  ...jest.requireActual('../../services/projectAccessService'),
   checkProjectAccess: jest.fn(),
   getVisibleTrainingIds: jest.fn(),
   isWithinTokenScope: jest.fn(),
@@ -75,6 +101,7 @@ const vizDoc = (uuid: string, overrides: AnyDoc = {}): AnyDoc => ({
 });
 
 const epochDoc = (uuid: string, overrides: AnyDoc = {}): AnyDoc => ({
+  _id: uuid,
   epoch_uuid: uuid,
   epoch: 4,
   trainingId: 't1',
@@ -213,8 +240,8 @@ describe('getVisualizationByUuid / deleteVisualization', () => {
   });
 
   it('deletes only the database record', async () => {
+    mockedEpoch.findOne.mockResolvedValue({ _id: 'e1', trainingId: 't1' });
     mockedViz.findOne.mockResolvedValue(vizDoc('v1'));
-    mockedEpoch.findOne.mockResolvedValue(null);
     mockedViz.deleteOne.mockResolvedValue({});
 
     await deleteVisualization('v1', 'u1', undefined);

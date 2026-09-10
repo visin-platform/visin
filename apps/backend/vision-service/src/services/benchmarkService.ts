@@ -1,4 +1,6 @@
+import { assertResourceWrite, requireActor, assertEpochWrite } from './writeAccessService';
 import { QueryFilter } from 'mongoose';
+import { tokenProjectId } from '../middleware/projectTokenContext';
 import { ForbiddenError, NotFoundError, logger } from '@visin/backend-core';
 import Benchmark, { IBenchmark } from '../models/Benchmark';
 import Training, { ITraining } from '../models/Training';
@@ -16,6 +18,7 @@ export const getBenchmarks = async (filters: GetBenchmarksQuery, userId: string 
   const limit = filters.limit ?? 25;
 
   const query: QueryFilter<IBenchmark> = { deletedAt: null };
+  if (tokenProjectId()) query.$and = [{ training_id: { $in: await getVisibleTrainingIds(userId) } }];
 
   // Filter by projectId if provided
   if (projectId) {
@@ -112,27 +115,40 @@ export const getBenchmarkById = async (id: string, userId: string | undefined): 
   return benchmark;
 };
 
-async function resolveTrainingId(training_uuid: string | undefined, reqProjectId: string | undefined) {
-  if (!training_uuid) return null;
-  try {
-    const training = await Training.findOne({ uuid: training_uuid, deletedAt: null });
-    if (!training) return null;
-    if (!isWithinTokenScope(reqProjectId, training.projectId)) {
-      throw new ForbiddenError('Training does not belong to the token\'s project');
-    }
-    return training._id;
-  } catch (error) {
-    if (error instanceof ForbiddenError) throw error;
-    logger.warn('Failed to find training for uuid', { training_uuid, error: (error as Error).message });
-    return null;
+export async function assertBenchmarkWrite(
+  reference: { training_uuid?: string; epoch_uuid?: string; training_id?: IBenchmark['training_id']; ownerId?: string; deletedAt?: Date },
+  userId?: string, reqProjectId?: string
+) {
+  let training: ITraining | null = null;
+  if (reference.training_id) {
+    training = await Training.findOne({ _id: reference.training_id, deletedAt: null });
+    await assertResourceWrite(training, userId);
   }
+  if (reference.training_uuid) {
+    const byUuid = await Training.findOne({ uuid: reference.training_uuid, deletedAt: null });
+    await assertResourceWrite(byUuid, userId);
+    if (training && training._id.toString() !== byUuid!._id.toString()) throw new ForbiddenError('Conflicting benchmark parents');
+    training = byUuid;
+  }
+  if (reference.epoch_uuid) {
+    const epoch = await assertEpochWrite(reference.epoch_uuid, userId, reqProjectId);
+    const byEpoch = await Training.findOne({ _id: epoch.trainingId, deletedAt: null });
+    if (training && training._id.toString() !== byEpoch!._id.toString()) throw new ForbiddenError('Conflicting benchmark parents');
+    training = byEpoch;
+  }
+  if (!isWithinTokenScope(reqProjectId, training?.projectId)) throw new ForbiddenError();
+  await assertResourceWrite(training || reference, userId);
+  return training;
 }
 
-async function saveBenchmark(data: CreateBenchmarkBody, reqProjectId: string | undefined): Promise<IBenchmark> {
-  const training_id = await resolveTrainingId(data.training_uuid, reqProjectId);
+async function saveBenchmark(data: CreateBenchmarkBody, reqProjectId: string | undefined, userId?: string): Promise<IBenchmark> {
+  const ownerId = requireActor(userId);
+  const training = await assertBenchmarkWrite({ ...data, ownerId }, userId, reqProjectId);
+  const training_id = training?._id ?? null;
 
   const benchmark = new Benchmark({
-    training_uuid: data.training_uuid,
+    ownerId,
+    training_uuid: training?.uuid,
     training_id,
     epoch_uuid: data.epoch_uuid,
     epoch: data.epoch,
@@ -158,11 +174,11 @@ async function saveBenchmark(data: CreateBenchmarkBody, reqProjectId: string | u
   return savedBenchmark;
 }
 
-export const createBenchmark = (data: CreateBenchmarkBody, reqProjectId: string | undefined): Promise<IBenchmark> =>
-  saveBenchmark(data, reqProjectId);
+export const createBenchmark = (data: CreateBenchmarkBody, reqProjectId: string | undefined, userId?: string): Promise<IBenchmark> =>
+  saveBenchmark(data, reqProjectId, userId);
 
-export const uploadBenchmark = (data: CreateBenchmarkBody, reqProjectId: string | undefined): Promise<IBenchmark> =>
-  saveBenchmark(data, reqProjectId);
+export const uploadBenchmark = (data: CreateBenchmarkBody, reqProjectId: string | undefined, userId?: string): Promise<IBenchmark> =>
+  saveBenchmark(data, reqProjectId, userId);
 
 interface BenchmarkStats {
   totalBenchmarks: number;
@@ -178,6 +194,7 @@ export const getBenchmarkStats = async (
   userId: string | undefined
 ): Promise<BenchmarkStats> => {
   const query: QueryFilter<IBenchmark> = { deletedAt: null };
+  if (tokenProjectId()) query.$and = [{ training_id: { $in: await getVisibleTrainingIds(userId) } }];
 
   if (training_uuid) {
     const training = await Training.findOne({ uuid: training_uuid, deletedAt: null });
@@ -251,13 +268,13 @@ export const updateBenchmark = async (
     throw new NotFoundError('Benchmark not found');
   }
 
-  if (benchmark.training_id) {
-    const currentTraining = await Training.findById(benchmark.training_id);
-    if (!(await checkProjectAccess(userId, currentTraining?.projectId)) ||
-        !isWithinTokenScope(reqProjectId, currentTraining?.projectId)) {
-      throw new ForbiddenError();
-    }
-  }
+  await assertBenchmarkWrite(benchmark, userId, reqProjectId);
+  const nextParent = await assertBenchmarkWrite({
+    ownerId: benchmark.ownerId,
+    training_id: updateData.training_uuid !== undefined ? null : benchmark.training_id,
+    training_uuid: updateData.training_uuid !== undefined ? updateData.training_uuid : benchmark.training_uuid,
+    epoch_uuid: updateData.epoch_uuid !== undefined ? updateData.epoch_uuid : benchmark.epoch_uuid
+  }, userId, reqProjectId);
 
   if (updateData.timestamp) {
     benchmark.timestamp = new Date(updateData.timestamp);
@@ -268,27 +285,9 @@ export const updateBenchmark = async (
   if (updateData.results) {
     benchmark.results = updateData.results as IBenchmark['results'];
   }
-  if (updateData.training_uuid !== undefined) {
-    benchmark.training_uuid = updateData.training_uuid;
-
-    if (updateData.training_uuid) {
-      try {
-        const training = await Training.findOne({ uuid: updateData.training_uuid, deletedAt: null });
-        if (training && (!(await checkProjectAccess(userId, training.projectId)) || !isWithinTokenScope(reqProjectId, training.projectId))) {
-          throw new ForbiddenError();
-        }
-        benchmark.training_id = training ? training._id : null;
-      } catch (error) {
-        if (error instanceof ForbiddenError) throw error;
-        logger.warn('Failed to find training for uuid', { training_uuid: updateData.training_uuid, error: (error as Error).message });
-      }
-    } else {
-      benchmark.training_id = null;
-    }
-  }
-  if (updateData.epoch_uuid !== undefined) {
-    benchmark.epoch_uuid = updateData.epoch_uuid;
-  }
+  benchmark.training_id = nextParent?._id ?? null;
+  benchmark.training_uuid = nextParent?.uuid;
+  if (updateData.epoch_uuid !== undefined) benchmark.epoch_uuid = updateData.epoch_uuid;
   if (updateData.epoch !== undefined) {
     benchmark.epoch = updateData.epoch;
   }
@@ -307,13 +306,7 @@ export const deleteBenchmark = async (
     throw new NotFoundError('Benchmark not found');
   }
 
-  if (benchmark.training_id) {
-    const currentTraining = await Training.findById(benchmark.training_id);
-    if (!(await checkProjectAccess(userId, currentTraining?.projectId)) ||
-        !isWithinTokenScope(reqProjectId, currentTraining?.projectId)) {
-      throw new ForbiddenError();
-    }
-  }
+  await assertBenchmarkWrite(benchmark, userId, reqProjectId);
 
   benchmark.deletedAt = new Date();
   await benchmark.save();

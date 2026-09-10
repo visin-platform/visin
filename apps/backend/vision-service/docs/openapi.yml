@@ -4,6 +4,18 @@ info:
   description: |
     API for managing computer vision datasets, training runs, model evaluation, and analysis.
 
+    Configurations, dataset metadata, dataset analyses, images, and dataset archives
+    are public shared libraries, even when selected by private trainings. Their
+    direct lookup, list, download, and export endpoints do not inherit project
+    privacy. Upload only non-confidential content and remove credentials before
+    ingestion; arbitrary JSON and archive contents are not automatically redacted.
+    A training's selected-config relationship follows the training's visibility.
+    Public visibility does not grant write access. Project owners and current
+    members of assigned editor groups can modify project data; project settings,
+    grants, deletion, and tokens remain owner-only. Standalone/library creators
+    control their records. Unowned records require operator migration before editing.
+    New file references must consume an uploader/parent-bound reservation.
+
     ## Key Features
     - Dataset and image management
     - Training run orchestration
@@ -415,6 +427,17 @@ components:
           type: string
         description:
           type: string
+        ownerId:
+          type: string
+        isPublic:
+          type: boolean
+        editorGroupIds:
+          type: array
+          maxItems: 100
+          description: Current members of these groups can read and edit project data. Only the project owner manages grants.
+          items:
+            type: string
+            pattern: '^[0-9a-fA-F]{24}$'
         createdAt:
           type: string
           format: date-time
@@ -463,6 +486,15 @@ components:
           type: number
 
   securitySchemes:
+    BearerCredential:
+      type: http
+      scheme: bearer
+      description: User session, project token, or supported user API key/OAuth access token
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: User session cookie
     ApiToken:
       type: apiKey
       in: header
@@ -492,6 +524,140 @@ components:
             $ref: '#/components/schemas/Error'
 
 paths:
+  /write-capabilities:
+    get:
+      summary: Current browser-session write capabilities
+      description: Anonymous users and project credentials receive false. Responses are not cached. Resource writes independently recheck permissions.
+      security:
+        - SessionCookie: []
+        - BearerCredential: []
+        - {}
+      parameters:
+        - in: query
+          name: kind
+          required: true
+          schema:
+            type: string
+            enum: [project, training, comparison, benchmark, test-result, analysis, dataset]
+        - in: query
+          name: ids
+          required: true
+          description: One to 100 comma-separated ObjectIds
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Map of resource IDs to write permission
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    additionalProperties:
+                      type: boolean
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /write-capabilities/groups:
+    get:
+      summary: Groups the signed-in project owner can assign
+      security:
+        - SessionCookie: []
+        - BearerCredential: []
+      responses:
+        '200':
+          description: Current live group IDs and names
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+
+  /findings:
+    get:
+      tags: [Projects]
+      summary: List visible recorded findings
+      description: |
+        Includes public projects and the authenticated user's own projects.
+        Visibility and subject/citation filters apply before the limit. Results
+        are ordered by createdAt descending, then _id descending to break ties.
+        To continue, set before to the last row's createdAt + "_" + _id, keeping
+        the same filters. Example: 2026-09-01T00:00:00.000Z_507f1f77bcf86cd799439011.
+        Stop when a page has fewer than limit rows; a full final page may be
+        followed by an empty page. The response data remains an array.
+        The cursor still works if its row is deleted. Each page reapplies current
+        visibility; this is not a snapshot. Refresh to see newly added findings
+        above the cursor or findings made visible since an earlier page.
+      parameters:
+        - name: project
+          in: query
+          description: Project slug or ID; an inaccessible project returns 403.
+          schema: { type: string }
+        - name: training
+          in: query
+          description: Matches the finding's subject training or a cited training.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: before
+          in: query
+          description: The previous page's final createdAt (UTC ISO timestamp with milliseconds), underscore, and lowercase 24-character ObjectId.
+          schema: { type: string, minLength: 49, maxLength: 49 }
+      responses:
+        '200':
+          description: One page of visible findings, including visible cited training names.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [_id, projectId, title, body, createdAt, trainingIds, citedTrainings, authorKind, authorLabel]
+                      properties:
+                        _id: { type: string }
+                        projectId: { type: string }
+                        trainingId: { type: string }
+                        title: { type: string }
+                        body: { type: string }
+                        recommendations: { type: string }
+                        createdAt: { type: string, format: date-time }
+                        authorKind: { type: string, enum: [person, assistant] }
+                        authorLabel: { type: string }
+                        trainingIds: { type: array, items: { type: string } }
+                        citedTrainings:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              _id: { type: string }
+                              name: { type: string }
+                              status: { type: string }
+        '400':
+          description: Invalid limit or cursor.
+        '403':
+          description: The selected project is not visible to this caller.
+        '404':
+          description: The selected project does not exist.
   # Datasets
   /datasets:
     get:
@@ -1284,6 +1450,12 @@ paths:
     get:
       tags: [Trainings]
       summary: Get training statistics
+      description: |
+        Cost estimates use each project's current CPU/GPU rates. Amounts are
+        grouped by currency without exchange-rate conversion. Legacy scalar cost
+        fields and currency are present only when exactly one currency is priced.
+        Coverage includes unpriced trainings and measured durations in seconds;
+        zero rates count as priced. These are current estimates, not historical bills.
       security:
         - ApiToken: []
       responses:
@@ -1314,6 +1486,39 @@ paths:
                         type: number
                       totalCost:
                         type: number
+                      currency:
+                        type: string
+                        description: ISO currency code of the optional scalar costs
+                      costTotalsByCurrency:
+                        type: array
+                        description: One subtotal per currency, sorted by currency code; empty if unpriced
+                        items:
+                          type: object
+                          required: [currency, totalCpuCost, totalGpuCost, totalCost]
+                          properties:
+                            currency:
+                              type: string
+                              example: EUR
+                            totalCpuCost:
+                              type: number
+                            totalGpuCost:
+                              type: number
+                            totalCost:
+                              type: number
+                      costCoverage:
+                        type: object
+                        required: [pricedTrainings, unpricedTrainings, pricedTime, unpricedTime]
+                        properties:
+                          pricedTrainings:
+                            type: integer
+                          unpricedTrainings:
+                            type: integer
+                          pricedTime:
+                            type: number
+                            description: Measured seconds with configured rates
+                          unpricedTime:
+                            type: number
+                            description: Measured seconds without configured rates
                       filters:
                         type: object
 
@@ -1549,8 +1754,16 @@ paths:
     get:
       tags: [Trainings]
       summary: Get configurations for a training
+      description: |
+        Resolves a non-deleted training and checks its project visibility before
+        returning its selected config. Public and standalone trainings allow
+        anonymous access; private trainings require their owner's identity.
+        Project tokens are additionally restricted to their own project.
+        The config's content remains available through the shared public library.
       security:
-        - ApiToken: []
+        - {}
+        - BearerCredential: []
+        - SessionCookie: []
       parameters:
         - name: id
           in: path
@@ -1569,9 +1782,19 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Configuration'
+                    type: object
+                    properties:
+                      configs:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Configuration'
+                      total:
+                        type: integer
+                        enum: [0, 1]
+        '403':
+          description: The caller cannot access this training's project
+        '404':
+          description: Training is missing or deleted
 
   # Epochs
   /epochs:
@@ -3226,6 +3449,13 @@ paths:
                   type: string
                 description:
                   type: string
+                editorGroupIds:
+                  type: array
+                  maxItems: 100
+                  description: Owner-controlled group grants. New groups must belong to the caller's current memberships; an empty array removes all grants.
+                  items:
+                    type: string
+                    pattern: '^[0-9a-fA-F]{24}$'
       responses:
         '201':
           description: Project created successfully
@@ -3291,6 +3521,13 @@ paths:
                   type: string
                 description:
                   type: string
+                editorGroupIds:
+                  type: array
+                  maxItems: 100
+                  description: Owner-controlled group grants. New groups must belong to the caller's current memberships; an empty array removes all grants.
+                  items:
+                    type: string
+                    pattern: '^[0-9a-fA-F]{24}$'
       responses:
         '200':
           description: Project updated successfully

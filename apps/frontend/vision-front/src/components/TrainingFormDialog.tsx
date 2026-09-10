@@ -185,6 +185,7 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
               </MenuItem>
             ))}
           </Select>
+          <FormHelperText>Config contents are publicly shared, including in private projects.</FormHelperText>
         </FormControl>
         <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel>Select Dataset Analysis (Optional)</InputLabel>
@@ -206,6 +207,7 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
               );
             })}
           </Select>
+          <FormHelperText>Dataset analyses and files are publicly shared, including in private projects.</FormHelperText>
         </FormControl>
         <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel>Status</InputLabel>

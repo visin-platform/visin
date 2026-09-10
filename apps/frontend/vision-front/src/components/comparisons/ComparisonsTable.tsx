@@ -32,7 +32,7 @@ interface ComparisonsTableProps {
   onViewComparison: (comparison: Comparison) => void;
   onEditComparison: (comparison: Comparison) => void;
   onDeleteComparison: (id: string) => void;
-  canDelete: boolean;
+  canDelete: (id: string) => boolean;
   formatTimestamp: (timestamp: string) => string;
   getTypeColor: (type: string) => ChipProps['color'];
   theme: Theme;
@@ -152,7 +152,7 @@ const ComparisonsTable: React.FC<ComparisonsTableProps> = ({
               </TableCell>
               <TableCell>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  {canDelete && (
+                  {canDelete(comparison._id) && (
                     <Tooltip title="Edit">
                       <IconButton
                         size="small"
@@ -165,7 +165,7 @@ const ComparisonsTable: React.FC<ComparisonsTableProps> = ({
                       </IconButton>
                     </Tooltip>
                   )}
-                  {canDelete && (
+                  {canDelete(comparison._id) && (
                     <Tooltip title="Delete">
                       <IconButton
                         size="small"

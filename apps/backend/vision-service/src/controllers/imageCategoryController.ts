@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import * as imageCategoryService from '../services/imageCategoryService';
 
 export const createImageCategory = async (req: Request, res: Response): Promise<void> => {
-  const savedCategory = await imageCategoryService.createImageCategory(req.body);
+  const savedCategory = await imageCategoryService.createImageCategory(req.body, req.user?.id);
 
   res.status(201).json({
     success: true,
@@ -41,7 +41,7 @@ export const getCategoryById = async (req: Request, res: Response): Promise<void
 
 export const updateCategory = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
-  const category = await imageCategoryService.updateCategory(id, req.body);
+  const category = await imageCategoryService.updateCategory(id, req.body, req.user?.id);
 
   res.json({
     success: true,
@@ -52,7 +52,7 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
 
 export const deleteCategory = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
-  await imageCategoryService.deleteCategory(id);
+  await imageCategoryService.deleteCategory(id, req.user?.id);
 
   res.json({
     success: true,

@@ -90,7 +90,7 @@ export const createDatasetImage = async (req: Request, res: Response): Promise<v
     labels,
     condition,
     metadata
-  });
+  }, req.user?.id);
 
   logger.info('Dataset image created', {
     id: savedImage._id,
@@ -174,7 +174,7 @@ export const updateImage = async (req: Request, res: Response): Promise<void> =>
     categoryId,
     condition,
     metadata
-  });
+  }, req.user?.id);
 
   res.json({
     success: true,
@@ -186,7 +186,7 @@ export const updateImage = async (req: Request, res: Response): Promise<void> =>
 // Delete image
 export const deleteImage = async (req: Request, res: Response): Promise<void> => {
   const id = req.params.id as string;
-  const result = await deleteImageService(id);
+  const result = await deleteImageService(id, req.user?.id);
 
   logger.info('Dataset image deleted', { id, ...result });
 

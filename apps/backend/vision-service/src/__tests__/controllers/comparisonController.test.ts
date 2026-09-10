@@ -1,3 +1,18 @@
+// These workflow tests stub the write-policy boundary. HTTP/Mongo integration
+// tests exercise the real owner/group policy, parent resolution, and denial effects.
+jest.mock('../../services/writeAccessService', () => ({
+  ...jest.requireActual('../../services/writeAccessService'),
+  assertResourceWrite: jest.fn(async (resource: unknown) => {
+    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+  }),
+  assertLibraryWrite: jest.fn(),
+  assertDatasetWrite: jest.fn(),
+  assertEpochWrite: jest.fn(async (uuid: string) => {
+    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
+    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+    return epoch;
+  })
+}));
 import type { Request, Response } from 'express';
 import { NotFoundError, ForbiddenError } from '@visin/backend-core';
 import { getComparisonById, createComparison } from '../../controllers/comparisonController';
@@ -11,6 +26,8 @@ const makeRes = () => {
 
 jest.mock('../../models/Comparison');
 jest.mock('../../services/projectAccessService', () => ({
+  ...jest.requireActual('../../services/projectAccessService'),
+  resolveProject: jest.fn(async (id: string) => ({ _id: id })),
   checkProjectAccess: jest.fn(),
   getVisibleProjectIds: jest.fn().mockResolvedValue([])
 }));

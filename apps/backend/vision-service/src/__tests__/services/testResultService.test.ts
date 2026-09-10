@@ -1,3 +1,18 @@
+// These workflow tests stub the write-policy boundary. HTTP/Mongo integration
+// tests exercise the real owner/group policy, parent resolution, and denial effects.
+jest.mock('../../services/writeAccessService', () => ({
+  ...jest.requireActual('../../services/writeAccessService'),
+  assertResourceWrite: jest.fn(async (resource: unknown) => {
+    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+  }),
+  assertLibraryWrite: jest.fn(),
+  assertDatasetWrite: jest.fn(),
+  assertEpochWrite: jest.fn(async (uuid: string) => {
+    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
+    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+    return epoch;
+  })
+}));
 jest.mock('../../models/TestResult', () => {
   const ctor = Object.assign(jest.fn(), {
     find: jest.fn(),
@@ -411,17 +426,13 @@ describe('createTestResult', () => {
     ).resolves.toBeDefined();
   });
 
-  it('creates for an orphan epoch_uuid without access checks', async () => {
+  it('rejects orphan epoch ingestion before persistence', async () => {
     mockedTestResult.findOne.mockResolvedValue(null);
     mockedEpoch.findOne.mockResolvedValue(null);
-
-    await testResultService.createTestResult(undefined, undefined, {
-      epoch: 1,
-      epoch_uuid: 'nowhere',
-      test_results: {},
-    });
-
-    expect(mockedCheckAccess).not.toHaveBeenCalled();
+    await expect(testResultService.createTestResult('u1', undefined, {
+      epoch: 1, epoch_uuid: 'nowhere', test_results: {}
+    })).rejects.toThrow();
+    expect(mockedTestResult).not.toHaveBeenCalled();
   });
 });
 
@@ -450,9 +461,8 @@ describe('updateTestResult / deleteTestResult', () => {
   it('applies partial updates and touches parent timestamps', async () => {
     const doc = trDoc('e1');
     mockedTestResult.findOne.mockResolvedValue(doc);
-    mockedEpoch.findOne
-      .mockResolvedValueOnce(null) // access check: orphan → allowed
-      .mockResolvedValueOnce(epochDoc('e2', 't1')); // timestamp update lookup
+    mockedEpoch.findOne.mockImplementation(async (query: { epoch_uuid: string }) => epochDoc(query.epoch_uuid, 't1'));
+    mockedTraining.findById.mockResolvedValue(trainingDoc('t1'));
     mockedEpoch.findByIdAndUpdate.mockResolvedValue({});
     mockedTraining.findByIdAndUpdate.mockResolvedValue({});
 
@@ -474,7 +484,8 @@ describe('updateTestResult / deleteTestResult', () => {
   it('soft-deletes', async () => {
     const doc = trDoc('e1');
     mockedTestResult.findOne.mockResolvedValue(doc);
-    mockedEpoch.findOne.mockResolvedValue(null);
+    mockedEpoch.findOne.mockResolvedValue(epochDoc('e1', 't1'));
+    mockedTraining.findById.mockResolvedValue(trainingDoc('t1'));
 
     await expect(testResultService.deleteTestResult('x', 'u1', undefined)).resolves.toBe(true);
     expect(doc.deletedAt).toBeInstanceOf(Date);

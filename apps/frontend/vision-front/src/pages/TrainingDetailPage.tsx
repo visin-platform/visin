@@ -1,3 +1,4 @@
+import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -19,7 +20,6 @@ import TrainingDetailHeader from '../components/training/TrainingDetailHeader';
 import TrainingDetailTabs from '../components/training/TrainingDetailTabs';
 
 import { usePageTitle } from '../hooks/usePageTitle';
-import { useAuth } from '../contexts/AuthContext';
 import { useTrainingDetail } from '../hooks/useTrainingDetail';
 import { useTrainingEdit } from '../hooks/useTrainingEdit';
 import { useTrainingActions } from '../hooks/useTrainingActions';
@@ -32,7 +32,7 @@ const TrainingDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAuthenticated, user } = useAuth();
+  const canWrite = useWriteCapabilities('training', id ? [id] : []);
 
   // Tab mapping
   const tabNames = ['overview', 'epochs', 'test-results', 'visualizations', 'system-info', 'config', 'benchmarks', 'analysis'];
@@ -171,7 +171,7 @@ const TrainingDetailPage: React.FC = () => {
       />
       <TrainingDetailHeader
         training={training}
-        isAuthenticated={isAuthenticated}
+        isAuthenticated={canWrite(id)}
         isLoading={isLoading}
         onRefresh={() => refetch()}
         onEdit={handleEditTraining}
@@ -201,7 +201,7 @@ const TrainingDetailPage: React.FC = () => {
           onConfirmDelete={handleConfirmDelete}
           onSetDeleteOpen={setDeleteOpen}
           onSetUploadResultsOpen={setUploadResultsOpen}
-          isAuthenticated={isAuthenticated}
+          isAuthenticated={canWrite(id)}
         />
       )}
       {/* Test Results Tab */}
@@ -222,7 +222,7 @@ const TrainingDetailPage: React.FC = () => {
           onSetUploadResultsOpen={setUploadResultsOpen}
           onSetLatexModalOpen={setLatexModalOpen}
           onDeleteTestResult={handleDeleteTestResult}
-          isAuthenticated={isAuthenticated}
+          isAuthenticated={canWrite(id)}
         />
       )}
       {/* Visualizations Tab */}
@@ -230,7 +230,7 @@ const TrainingDetailPage: React.FC = () => {
         <TrainingVisualizationsTab
           training_uuid={training.uuid}
           epochs={epochs}
-          isAuthenticated={isAuthenticated}
+          isAuthenticated={canWrite(id)}
         />
       )}
       {/* System Info Tab */}
@@ -251,7 +251,7 @@ const TrainingDetailPage: React.FC = () => {
       {detailTab === 6 && (
         <TrainingBenchmarksTab
           training_uuid={training.uuid}
-          isAuthenticated={isAuthenticated}
+          isAuthenticated={canWrite(id)}
         />
       )}
       {/* Conclusions about this run, and comparative ones that cite it. Needs
@@ -260,7 +260,7 @@ const TrainingDetailPage: React.FC = () => {
         <FindingsPanel
           projectId={project._id}
           trainingId={training._id}
-          isOwner={user?.id === project.ownerId}
+          isOwner={canWrite(id)}
         />
       )}
       {/* Dialogs */}

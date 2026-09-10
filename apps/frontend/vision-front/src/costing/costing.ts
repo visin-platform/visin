@@ -63,15 +63,15 @@ export const costOf = (seconds: number, costing: ResolvedCosting | null): Traini
  * for everyone outside one convention.
  *
  * Returns a dash when there is no amount or no currency, which is the honest
- * answer for an unpriced project. `MIXED` is what the backend reports for a total
- * spanning currencies; there is no single symbol for that.
+ * answer for an unpriced project. Older servers may send `MIXED`; suppress that
+ * invalid scalar instead of presenting unlike currencies as one amount.
  */
 export const formatCost = (amount?: number, currency?: string): string => {
   if (typeof amount !== 'number' || Number.isNaN(amount) || !currency) {
     return '-';
   }
   if (currency === 'MIXED') {
-    return `${amount.toFixed(2)} (mixed currencies)`;
+    return '-';
   }
   try {
     return new Intl.NumberFormat(undefined, {

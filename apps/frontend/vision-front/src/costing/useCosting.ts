@@ -9,8 +9,7 @@ export const useCosting = (): ResolvedCosting | null => useContext(CostingContex
  * Formats money in the project's currency.
  *
  * Takes an optional `currency` override for figures the backend has already
- * denominated — a cross-project total may come back as `MIXED`, which no single
- * project's rate card can describe. With neither, the result is a dash.
+ * denominated in a currency. With neither, the result is a dash.
  */
 export const useFormatCost = () => {
   const costing = useContext(CostingContext);

@@ -1,4 +1,5 @@
 import express from 'express';
+import projectGroupsRoutes from './routes/projectGroupsRoutes';
 import path from 'path';
 import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv } from '@visin/backend-core';
 import { authenticateToken } from './middleware/authMiddleware';
@@ -22,6 +23,7 @@ app.get('/health', createHealthCheckHandler({
 // Serve OpenAPI docs as static files (before auth middleware)
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));
 
+app.use('/api/internal/project-groups', projectGroupsRoutes);
 app.use('/api', authenticateToken);
 app.use('/api/groups', groupRoutes);
 

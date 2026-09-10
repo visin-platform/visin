@@ -1,3 +1,4 @@
+import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -23,8 +24,6 @@ import {
   ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
 import { getAllAnalyses, DatasetAnalysis, deleteAnalysis, editAnalysis } from '../services/analysisService';
-import { useAuth } from '../contexts/AuthContext';
-import { isGroupAdmin } from '../utils/permissions';
 import { useDatasetDownload } from '../hooks/useDatasetDownload';
 import AnalysisTableRow from './dataset/AnalysisTableRow';
 import DeleteAnalysisDialog from './dataset/DeleteAnalysisDialog';
@@ -44,7 +43,6 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   onCompareSelected = () => { }
 }) => {
   const theme = useTheme();
-  const { isAuthenticated, user } = useAuth();
   const [actionError, setError] = useState<string | null>(null);
   const [selectedAnalysis, setSelectedAnalysis] = useState<DatasetAnalysis | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -103,9 +101,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   });
   const editLoading = updateMutation.isPending;
 
-  const canEditDatasets = () => isAuthenticated;
-
-  const canDeleteDatasets = () => isAuthenticated && isGroupAdmin(user);
+  const canDeleteDatasets = useWriteCapabilities('analysis', analyses.map(row => row._id));
 
   const handleDeleteClick = (analysis: DatasetAnalysis) => {
     setSelectedAnalysis(analysis);
@@ -282,8 +278,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     analysis={analysis}
                     isSelected={selectedAnalysisIds.has(analysis._id)}
                     onSelect={onSelectAnalysis}
-                    canEdit={canEditDatasets()}
-                    canDelete={!!canDeleteDatasets()}
+                    canEdit={canDeleteDatasets(analysis._id)}
+                    canDelete={canDeleteDatasets(analysis._id)}
                     isDownloading={downloadingId === analysis._id}
                     isDeleting={deleteLoading}
                     isEditing={editLoading}
