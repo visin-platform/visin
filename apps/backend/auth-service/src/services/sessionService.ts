@@ -22,7 +22,7 @@ export const displayName = (user: Pick<IUser, 'firstName' | 'lastName' | 'email'
  * group-service directly instead of trusting a claim that goes stale between
  * refreshes.
  */
-export const getUserGroupRoles = async (email: string): Promise<string[]> => {
+export const getUserGroupRoles = async (userId: string): Promise<string[]> => {
   let groupRoles: string[] = [];
   try {
     const groupServiceUrl = process.env.GROUP_SERVICE_URL;
@@ -30,7 +30,7 @@ export const getUserGroupRoles = async (email: string): Promise<string[]> => {
 
     if (groupServiceUrl && internalToken) {
       const groupResponse = await fetchWithTimeout(
-        `${groupServiceUrl}/api/groups/mine/roles?userEmail=${encodeURIComponent(email)}`,
+        `${groupServiceUrl}/api/groups/mine/roles?userId=${encodeURIComponent(userId)}`,
         {
           method: 'GET',
           headers: {
@@ -53,7 +53,7 @@ export const getUserGroupRoles = async (email: string): Promise<string[]> => {
       }
     }
   } catch (error) {
-    logger.warn('Failed to fetch user groups for JWT', { email, error: (error as Error).message });
+    logger.warn('Failed to fetch user groups for JWT', { userId, error: (error as Error).message });
   }
 
   return groupRoles;
@@ -74,7 +74,7 @@ export const issueSession = async (
   dbUser: IUser,
   name: string = displayName(dbUser)
 ): Promise<{ payload: UserPayload; token: string }> => {
-  const groupRoles = await getUserGroupRoles(dbUser.email);
+  const groupRoles = await getUserGroupRoles(dbUser._id.toString());
 
   const payload: UserPayload = {
     id: dbUser._id.toString(),

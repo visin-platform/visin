@@ -11,7 +11,7 @@ export const createBundle = async (req: Request, res: Response): Promise<void> =
 
 export const listBundles = async (req: Request, res: Response): Promise<void> => {
   const user = requireUser(req);
-  const bundles = await svc.listBundlesForUser(user.email!.toLowerCase());
+  const bundles = await svc.listBundlesForUser(user.id);
   res.json({ success: true, data: bundles });
 };
 

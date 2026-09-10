@@ -36,8 +36,8 @@ export const createBundle = async (
 };
 
 /** Bundles in any group the user belongs to. */
-export const listBundlesForUser = async (userEmail: string): Promise<ILabelBundle[]> => {
-  const myGroups = await groups.getMyGroups(userEmail);
+export const listBundlesForUser = async (userId: string): Promise<ILabelBundle[]> => {
+  const myGroups = await groups.getMyGroups(userId);
   const groupIds = myGroups.map((g) => g.groupId);
   return LabelBundle.find({ groupId: { $in: groupIds } }).sort({ updatedAt: -1 });
 };

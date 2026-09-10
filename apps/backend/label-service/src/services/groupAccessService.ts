@@ -8,7 +8,7 @@ import { GroupMembership } from '../clients/groupServiceClient';
 const requestCaches = new WeakMap<Request, Map<string, Promise<GroupMembership>>>();
 
 export const requireUser = (req: Request): UserPayload => {
-  if (!req.user?.id || !req.user.email) {
+  if (!req.user?.id) {
     throw new UnauthorizedError('Authenticated user required');
   }
   return req.user;
@@ -23,7 +23,7 @@ const membershipFor = (req: Request, groupId: string): Promise<GroupMembership> 
   }
   let membership = cache.get(groupId);
   if (!membership) {
-    membership = groups.checkMembership(groupId, user.email!.toLowerCase());
+    membership = groups.checkMembership(groupId, user.id);
     cache.set(groupId, membership);
   }
   return membership;

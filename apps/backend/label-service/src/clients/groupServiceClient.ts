@@ -21,8 +21,8 @@ const internalHeaders = (): Record<string, string> => ({
 });
 
 /** Membership + role of one user in one group. Returns non-member for a missing group. */
-export const checkMembership = async (groupId: string, userEmail: string): Promise<GroupMembership> => {
-  const url = `${baseUrl()}/api/groups/${encodeURIComponent(groupId)}/membership?userEmail=${encodeURIComponent(userEmail)}`;
+export const checkMembership = async (groupId: string, userId: string): Promise<GroupMembership> => {
+  const url = `${baseUrl()}/api/groups/${encodeURIComponent(groupId)}/membership?userId=${encodeURIComponent(userId)}`;
   const response = await fetchWithTimeout(url, { headers: internalHeaders(), serviceName: 'group-service' });
 
   if (response.status === 404) {
@@ -36,20 +36,19 @@ export const checkMembership = async (groupId: string, userEmail: string): Promi
 };
 
 /** All groups the user belongs to, with their role in each. */
-export const getMyGroups = async (userEmail: string): Promise<MyGroup[]> => {
-  const url = `${baseUrl()}/api/groups/mine?userEmail=${encodeURIComponent(userEmail)}`;
+export const getMyGroups = async (userId: string): Promise<MyGroup[]> => {
+  const url = `${baseUrl()}/api/groups/mine?userId=${encodeURIComponent(userId)}`;
   const response = await fetchWithTimeout(url, { headers: internalHeaders(), serviceName: 'group-service' });
 
   if (!response.ok) {
     throw new Error(`group-service group listing failed (${response.status})`);
   }
   const body = (await response.json()) as {
-    data: { _id: string; name: string; members: { email: string; role: GroupRole }[] }[];
+    data: { _id: string; name: string; members: { userId: string; role: GroupRole }[] }[];
   };
-  const email = userEmail.toLowerCase();
   return (body.data || []).map((group) => ({
     groupId: String(group._id),
     name: group.name,
-    role: group.members.find((m) => m.email === email)?.role || 'member'
+    role: group.members.find((m) => m.userId === userId)?.role || 'member'
   }));
 };

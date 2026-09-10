@@ -2,7 +2,6 @@ import { z } from '@visin/backend-core';
 
 export const projectGroupsBodySchema = z.object({
   userId: z.string().min(1).max(200),
-  email: z.email(),
   issuedAt: z.number().int(),
   signature: z.string().regex(/^[0-9a-f]{64}$/)
 });

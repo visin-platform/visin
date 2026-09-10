@@ -145,7 +145,7 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
   };
 
   // Fetch user group roles and include in JWT payload
-  const groupRoles = await getUserGroupRoles(userPayload.email);
+  const groupRoles = await getUserGroupRoles(userPayload.id);
 
   const jwtPayload: UserPayload = {
     ...userPayload,
@@ -203,7 +203,7 @@ export const verifyAuth = async (req: Request, res: Response): Promise<void> => 
   }
 
   // Fetch fresh user group roles
-  const groupRoles = await getUserGroupRoles(currentUser.email);
+  const groupRoles = await getUserGroupRoles(currentUser.id);
 
   // Generate new JWT with fresh roles
   const jwtPayload: UserPayload = {
@@ -241,7 +241,7 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
   }
 
   // Fetch fresh user group roles
-  const groupRoles = await getUserGroupRoles(currentUser.email);
+  const groupRoles = await getUserGroupRoles(currentUser.id);
 
   // Generate new JWT with updated roles
   const jwtPayload: UserPayload = {
