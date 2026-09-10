@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.3.0](https://github.com/visin-platform/visin/compare/v1.2.0...v1.3.0) (2026-09-10)
+
+
+### Features
+
+* add group permissions ([#1](https://github.com/visin-platform/visin/issues/1)) ([4f5df6d](https://github.com/visin-platform/visin/commit/4f5df6d7fbf962c55d6980f7825c95b3e31b6b49))
+
 ## [1.2.0](https://github.com/visin-platform/visin/compare/v1.1.0...v1.2.0) (2026-09-09)
 
 
