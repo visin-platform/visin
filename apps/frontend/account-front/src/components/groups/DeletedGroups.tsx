@@ -18,7 +18,7 @@ interface DeletedGroupsProps {
   groups: Group[];
   loading: boolean;
   busy: boolean;
-  currentUserEmail?: string;
+  currentUserId?: string;
   expanded: boolean;
   onToggle: (expanded: boolean) => void;
   onRestore: (groupId: string) => void;
@@ -29,7 +29,7 @@ const DeletedGroups: React.FC<DeletedGroupsProps> = ({
   groups,
   loading,
   busy,
-  currentUserEmail,
+  currentUserId,
   expanded,
   onToggle,
   onRestore,
@@ -61,7 +61,7 @@ const DeletedGroups: React.FC<DeletedGroupsProps> = ({
       ) : (
         <List disablePadding>
           {groups.map(group => {
-            const canManage = permissionsFor(roleOf(group, currentUserEmail)).canDeleteGroup;
+            const canManage = permissionsFor(roleOf(group, currentUserId)).canDeleteGroup;
             return (
               <ListItem
                 key={group._id}

@@ -46,19 +46,14 @@ export const useRestoreGroup = () =>
 export const useDeleteGroupForever = () =>
   useGroupMutation((groupId: string) => groupService.deleteForever(groupId));
 
-export const useAddMember = () =>
-  useGroupMutation(({ groupId, email, role }: { groupId: string; email: string; role: GroupRole }) =>
-    groupService.addMember(groupId, email, role)
-  );
-
 export const useUpdateMemberRole = () =>
-  useGroupMutation(({ groupId, email, role }: { groupId: string; email: string; role: GroupRole }) =>
-    groupService.updateMemberRole(groupId, email, role)
+  useGroupMutation(({ groupId, userId, role }: { groupId: string; userId: string; role: GroupRole }) =>
+    groupService.updateMemberRole(groupId, userId, role)
   );
 
 export const useRemoveMember = () =>
-  useGroupMutation(({ groupId, email }: { groupId: string; email: string }) =>
-    groupService.removeMember(groupId, email)
+  useGroupMutation(({ groupId, userId }: { groupId: string; userId: string }) =>
+    groupService.removeMember(groupId, userId)
   );
 
 export type { Group };
