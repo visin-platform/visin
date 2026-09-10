@@ -19,6 +19,8 @@ const TrainingsPage: React.FC = () => {
 
   const {
     isAuthenticated,
+    canWrite,
+    canDeleteSelected,
     page,
     rowsPerPage,
     searchTerm,
@@ -32,8 +34,6 @@ const TrainingsPage: React.FC = () => {
     setTrainingDescription,
     selectedDatasetId,
     setSelectedDatasetId,
-    selectedConfigId,
-    setSelectedConfigId,
     selectedProjectId,
     setSelectedProjectId,
     selectedStatus,
@@ -41,10 +41,8 @@ const TrainingsPage: React.FC = () => {
     trainingTags,
     setTrainingTags,
     datasets,
-    configs,
     projects,
     loadingDatasets,
-    loadingConfigs,
     loadingProjects,
     creating,
     createError,
@@ -107,10 +105,11 @@ const TrainingsPage: React.FC = () => {
         onExport={exportToCSV}
         onCompare={handleCompareSelected}
         onDelete={() => setDeleteMultipleDialogOpen(true)}
-        isAuthenticated={isAuthenticated}
+        isAuthenticated={canDeleteSelected}
       />
 
       <TrainingsTable
+        canWrite={canWrite}
         trainings={displayTrainings}
         isLoading={isLoading}
         page={page}
@@ -137,13 +136,11 @@ const TrainingsPage: React.FC = () => {
         onSubmit={handleCreateTraining}
         isEditing={!!editingTrainingId}
         isCreating={creating}
-        isLoadingData={loadingConfigs || loadingDatasets || loadingProjects}
+        isLoadingData={loadingDatasets || loadingProjects}
         trainingName={trainingName}
         onNameChange={setTrainingName}
         trainingDescription={trainingDescription}
         onDescriptionChange={setTrainingDescription}
-        selectedConfigId={selectedConfigId}
-        onConfigChange={setSelectedConfigId}
         selectedDatasetId={selectedDatasetId}
         onDatasetChange={setSelectedDatasetId}
         selectedProjectId={selectedProjectId}
@@ -153,12 +150,10 @@ const TrainingsPage: React.FC = () => {
         trainingTags={trainingTags}
         onTagsChange={setTrainingTags}
         availableTags={availableTags}
-        configs={configs}
         datasets={datasets}
         projects={projects}
         error={createError}
         success={createSuccess}
-        loadingConfigs={loadingConfigs}
         loadingDatasets={loadingDatasets}
         loadingProjects={loadingProjects}
       />

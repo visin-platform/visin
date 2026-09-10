@@ -1,3 +1,5 @@
+import { visionApi } from '../config/visionApi';
+vi.mock('../config/visionApi', () => ({ visionApi: { get: vi.fn(async () => ({ data: { data: [] } })) } }));
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -66,7 +68,20 @@ const renderComponent = () => {
 describe('ProjectSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(visionApi.get).mockResolvedValue({ data: { data: [] } });
     mockedApiTokenService.getTokens.mockResolvedValue({ data: [] } as any);
+  });
+
+  it('saves an editor group selected from the owner’s groups', async () => {
+    const id = 'a'.repeat(24);
+    vi.mocked(visionApi.get).mockResolvedValue({ data: { data: [{ id, name: 'Researchers' }] } });
+    mockedProjectService.updateProject.mockResolvedValue({ data: project } as any);
+    renderComponent();
+    const picker = screen.getByRole('combobox', { name: 'Editor groups' });
+    fireEvent.mouseDown(picker);
+    fireEvent.click(await screen.findByRole('option', { name: 'Researchers' }));
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() => expect(mockedProjectService.updateProject).toHaveBeenCalledWith('p1', expect.objectContaining({ editorGroupIds: [id] })));
   });
 
   it('renders project fields pre-filled from the project prop', async () => {

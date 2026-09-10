@@ -1,3 +1,7 @@
+vi.mock('../../hooks/useWriteCapabilities', async () => {
+  const { useAuth } = await import('../../contexts/AuthContext');
+  return { useWriteCapabilities: () => { const { isAuthenticated } = useAuth(); return (id?: string) => !!id && isAuthenticated; } };
+});
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

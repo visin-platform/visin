@@ -113,6 +113,9 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
           }
           label="Public Project (Visible to everyone)"
         />
+        <Typography variant="body2" color="text.secondary">
+          Configs, dataset analyses, and dataset files remain publicly shared, even in a private project.
+        </Typography>
         <Accordion sx={{ mt: 2 }} disableGutters elevation={0} variant="outlined">
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>

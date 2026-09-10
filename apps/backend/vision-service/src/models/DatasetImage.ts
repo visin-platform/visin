@@ -46,7 +46,7 @@ const DatasetImageSchema: Schema = new Schema(
     },
     datasetId: {
       type: Schema.Types.ObjectId,
-      ref: 'training_dataset', // Reference to Dataset model
+      ref: 'dataset_analysis', // Reference to DatasetAnalysis model
       required: true
     },
     categoryId: {

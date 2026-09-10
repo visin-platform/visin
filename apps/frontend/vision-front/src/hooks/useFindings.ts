@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { findingService } from '../services/findingService';
 import {
   CreateFindingRequest,
@@ -11,12 +11,31 @@ export const findingKeys = {
   list: (project?: string, training?: string) => ['findings', project, training] as const
 };
 
-export const useFindings = (params: { project?: string; training?: string }) =>
-  useQuery({
-    queryKey: findingKeys.list(params.project, params.training),
-    queryFn: () => findingService.list(params),
-    enabled: Boolean(params.project || params.training)
+const PAGE_SIZE = 50;
+
+export const useFindings = (params: { project?: string; training?: string }) => {
+  const query = useInfiniteQuery({
+    queryKey: [...findingKeys.list(params.project, params.training), 'pages'],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => findingService.list({ ...params, limit: PAGE_SIZE, before: pageParam }),
+    getNextPageParam: (lastPage, _pages, lastCursor) => {
+      if (lastPage.length < PAGE_SIZE) return undefined;
+      const last = lastPage[lastPage.length - 1];
+      const cursor = `${last.createdAt}_${last._id}`;
+      // An older API may ignore `before`; stop if it does not advance.
+      return cursor === lastCursor ? undefined : cursor;
+    },
+    enabled: Boolean(params.project || params.training),
   });
+  const rows = query.data?.pages.flat();
+  const seen = new Set<string>();
+  const data = rows?.filter(row => {
+    if (seen.has(row._id)) return false;
+    seen.add(row._id);
+    return true;
+  });
+  return { ...query, data };
+};
 
 const useFindingMutation = <TArgs, TResult>(mutationFn: (args: TArgs) => Promise<TResult>) => {
   const queryClient = useQueryClient();

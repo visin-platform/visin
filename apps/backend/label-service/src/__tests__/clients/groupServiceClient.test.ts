@@ -19,7 +19,7 @@ describe('checkMembership', () => {
     const result = await checkMembership('g1', 'user@x.com');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://groups.test/api/groups/g1/membership?userEmail=user%40x.com',
+      'http://groups.test/api/groups/g1/membership?userId=user%40x.com',
       expect.objectContaining({
         headers: { 'x-internal-token': 'internal-token', 'x-service-id': 'label-service' },
         // A stalled group-service must not hang the caller (fetchWithTimeout).
@@ -48,17 +48,17 @@ describe('getMyGroups', () => {
       jsonResponse({
         success: true,
         data: [
-          { _id: 'g1', name: 'Team A', members: [{ email: 'user@x.com', role: 'owner' }] },
+          { _id: 'g1', name: 'Team A', members: [{ userId: 'user@x.com', role: 'owner' }] },
           {
             _id: 'g2',
             name: 'Team B',
-            members: [{ email: 'other@x.com', role: 'owner' }, { email: 'user@x.com', role: 'member' }],
+            members: [{ userId: 'other@x.com', role: 'owner' }, { userId: 'user@x.com', role: 'member' }],
           },
         ],
       })
     );
 
-    expect(await getMyGroups('User@X.com')).toEqual([
+    expect(await getMyGroups('user@x.com')).toEqual([
       { groupId: 'g1', name: 'Team A', role: 'owner' },
       { groupId: 'g2', name: 'Team B', role: 'member' },
     ]);

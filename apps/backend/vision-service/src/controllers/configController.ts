@@ -15,7 +15,7 @@ export const getAllConfigs = async (req: Request, res: Response): Promise<void> 
 // Get configs for a training (configs associated with training through selection)
 export const getConfigsByTraining = async (req: Request, res: Response): Promise<void> => {
   const { id, trainingId } = req.params as { id?: string; trainingId?: string };
-  const data = await configService.getConfigsByTraining(trainingId || id || '');
+  const data = await configService.getConfigsByTraining(trainingId || id || '', req.user?.id);
 
   res.json({
     success: true,
@@ -47,7 +47,7 @@ export const getConfigByUuid = async (req: Request, res: Response): Promise<void
 
 // Create config
 export const createConfig = async (req: Request, res: Response): Promise<void> => {
-  const savedConfig = await configService.createConfig(req.body);
+  const savedConfig = await configService.createConfig(req.body, req.user?.id);
 
   res.status(201).json({
     success: true,
@@ -58,7 +58,7 @@ export const createConfig = async (req: Request, res: Response): Promise<void> =
 
 // Create config from JSON file
 export const createConfigFromJson = async (req: Request, res: Response): Promise<void> => {
-  const savedConfig = await configService.createConfig(req.body);
+  const savedConfig = await configService.createConfig(req.body, req.user?.id);
 
   res.status(201).json({
     success: true,

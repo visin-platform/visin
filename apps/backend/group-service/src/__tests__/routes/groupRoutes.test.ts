@@ -35,11 +35,11 @@ describe('groupRoutes', () => {
     expect(find('delete', '/:id')).toBeDefined();
     expect(find('post', '/:id/restore')).toBeDefined();
     expect(find('delete', '/:id/permanent')).toBeDefined();
-    expect(find('post', '/:id/members')).toBeDefined();
-    expect(find('patch', '/:id/members/:memberEmail')).toBeDefined();
-    expect(find('delete', '/:id/members/:memberEmail')).toBeDefined();
+    expect(find('post', '/:id/invitations')).toBeDefined();
+    expect(find('patch', '/:id/members/:memberId')).toBeDefined();
+    expect(find('delete', '/:id/members/:memberId')).toBeDefined();
     expect(find('get', '/:id/membership')).toBeDefined();
-    expect(routes).toHaveLength(13);
+    expect(routes).toHaveLength(16);
   });
 
   it('gates every route behind allowUserOrInternalService', () => {
@@ -52,7 +52,7 @@ describe('groupRoutes', () => {
   it('validates bodies on mutating routes', () => {
     expect(find('post', '/')!.handlerCount).toBe(3);
     expect(find('patch', '/:id')!.handlerCount).toBe(3);
-    expect(find('post', '/:id/members')!.handlerCount).toBe(3);
-    expect(find('patch', '/:id/members/:memberEmail')!.handlerCount).toBe(3);
+    expect(find('post', '/:id/invitations')!.handlerCount).toBe(3);
+    expect(find('patch', '/:id/members/:memberId')!.handlerCount).toBe(3);
   });
 });

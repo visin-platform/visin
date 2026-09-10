@@ -79,7 +79,7 @@ describe('listBundles', () => {
 
     await ctrl.listBundles(makeReq(), makeRes());
 
-    expect(mockedSvc.listBundlesForUser).toHaveBeenCalledWith('user@x.com');
+    expect(mockedSvc.listBundlesForUser).toHaveBeenCalledWith('u1');
   });
 });
 

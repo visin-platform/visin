@@ -26,7 +26,7 @@ const router = express.Router();
 // Reads are public + private (optional auth, scoped to the parent training's
 // project); writes require a logged-in user.
 router.get('/', optionalAuthMiddleware, validateRequest({ query: getTestResultsQuerySchema }), getTestResults);
-router.get('/epochs', getTestResultEpochs);
+router.get('/epochs', optionalAuthMiddleware, getTestResultEpochs);
 router.get('/:id', optionalAuthMiddleware, getTestResultById);
 router.get('/test/:testUuid', optionalAuthMiddleware, getTestResultByTestUuid);
 router.post('/', authMiddleware, validateRequest({ body: createTestResultBodySchema }), createTestResult);

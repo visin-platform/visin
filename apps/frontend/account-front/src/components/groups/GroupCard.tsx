@@ -15,33 +15,31 @@ import {
 import { Check, Close, Delete, Edit, ExpandMore } from '@mui/icons-material';
 import { Group, GroupRole, permissionsFor, roleOf } from '../../types/group';
 import GroupMembers from './GroupMembers';
-import AddMemberForm from './AddMemberForm';
+import GroupInvitations from './GroupInvitations';
 
 interface GroupCardProps {
   group: Group;
-  currentUserEmail?: string;
+  currentUserId?: string;
   busy: boolean;
   onRename: (groupId: string, name: string) => void;
   onDelete: (group: Group) => void;
-  onAddMember: (groupId: string, email: string, role: GroupRole) => void;
-  onChangeRole: (groupId: string, email: string, role: GroupRole) => void;
-  onRemoveMember: (groupId: string, email: string) => void;
+  onChangeRole: (groupId: string, userId: string, role: GroupRole) => void;
+  onRemoveMember: (groupId: string, userId: string) => void;
 }
 
 const GroupCard: React.FC<GroupCardProps> = ({
   group,
-  currentUserEmail,
+  currentUserId,
   busy,
   onRename,
   onDelete,
-  onAddMember,
   onChangeRole,
   onRemoveMember
 }) => {
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(group.name);
 
-  const myRole = roleOf(group, currentUserEmail);
+  const myRole = roleOf(group, currentUserId);
   const permissions = permissionsFor(myRole);
   const trimmed = name.trim();
 
@@ -85,7 +83,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
                   label="Group name"
                   value={name}
                   disabled={busy}
-                  onChange={event => setName(event.target.value)}
+                  onChange={(event) => setName(event.target.value)}
                   sx={{ flexGrow: 1, maxWidth: 360 }}
                 />
                 <IconButton aria-label="Save name" disabled={busy || !trimmed} onClick={commitRename}>
@@ -96,12 +94,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
                 </IconButton>
               </>
             ) : (
-              <Button
-                size="small"
-                startIcon={<Edit />}
-                onClick={() => setEditingName(true)}
-                sx={{ borderRadius: 2 }}
-              >
+              <Button size="small" startIcon={<Edit />} onClick={() => setEditingName(true)} sx={{ borderRadius: 2 }}>
                 Rename group
               </Button>
             )}
@@ -111,19 +104,15 @@ const GroupCard: React.FC<GroupCardProps> = ({
         <GroupMembers
           group={group}
           permissions={permissions}
-          currentUserEmail={currentUserEmail}
+          currentUserId={currentUserId}
           busy={busy}
-          onChangeRole={(email, role) => onChangeRole(group._id, email, role)}
-          onRemove={email => onRemoveMember(group._id, email)}
+          onChangeRole={(userId, role) => onChangeRole(group._id, userId, role)}
+          onRemove={(userId) => onRemoveMember(group._id, userId)}
         />
 
         {permissions.canManageMembers && (
           <Box sx={{ mt: 3 }}>
-            <AddMemberForm
-              busy={busy}
-              canAddOwner={permissions.canManageOwners}
-              onAdd={(email, role) => onAddMember(group._id, email, role)}
-            />
+            <GroupInvitations groupId={group._id} canInviteOwner={permissions.canManageOwners} />
           </Box>
         )}
 

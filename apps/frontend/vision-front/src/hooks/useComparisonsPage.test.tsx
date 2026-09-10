@@ -1,3 +1,7 @@
+vi.mock('./useWriteCapabilities', async () => {
+  const { useAuth } = await import('../contexts/AuthContext');
+  return { useWriteCapabilities: () => { const { isAuthenticated } = useAuth(); return (id?: string) => !!id && isAuthenticated; } };
+});
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -109,21 +113,21 @@ describe('useComparisonsPage', () => {
   it('canDeleteComparisons is true for an owner/admin group member', async () => {
     const { result } = renderHook(() => useComparisonsPage(), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.canDeleteComparisons()).toBe(true);
+    expect(result.current.canDeleteComparisons('c1')).toBe(true);
   });
 
   it('canDeleteComparisons is false for an unauthenticated user', async () => {
     authState = { user: null, isAuthenticated: false };
     const { result } = renderHook(() => useComparisonsPage(), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.canDeleteComparisons()).toBe(false);
+    expect(result.current.canDeleteComparisons('c1')).toBe(false);
   });
 
-  it('canDeleteComparisons is false for a user without owner/admin groups', async () => {
+  it('an authenticated editor need not hold a global group admin role', async () => {
     authState = { user: { groupRoles: ['member'] }, isAuthenticated: true };
     const { result } = renderHook(() => useComparisonsPage(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.canDeleteComparisons()).toBe(false);
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    expect(result.current.canDeleteComparisons('c1')).toBe(true);
   });
 
   it('handleDeleteComparison opens the delete dialog, and handleConfirmDelete deletes + refetches', async () => {

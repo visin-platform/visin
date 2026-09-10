@@ -1,3 +1,4 @@
+import { useWriteCapabilities } from './useWriteCapabilities';
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -5,8 +6,6 @@ import { useTheme } from '@mui/material';
 import { Comparison } from '@/types';
 import { comparisonService } from '@/services/comparisonService';
 import { trainingService } from '@/services/trainingService';
-import { useAuth } from '../contexts/AuthContext';
-import { isGroupAdmin } from '../utils/permissions';
 
 export const useComparisonsPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -21,7 +20,6 @@ export const useComparisonsPage = () => {
   const [actionError, setActionError] = useState<string | null>(null);
   const navigate = useNavigate();
   const theme = useTheme();
-  const { user, isAuthenticated } = useAuth();
   const [sortBy, setSortBy] = useState<'name' | 'type' | 'createdAt' | 'itemCount'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const queryClient = useQueryClient();
@@ -119,7 +117,7 @@ export const useComparisonsPage = () => {
   };
 
   // Check if user has permission to delete comparisons (owner or admin role)
-  const canDeleteComparisons = () => isAuthenticated && isGroupAdmin(user);
+  const canDeleteComparisons = useWriteCapabilities('comparison', comparisons.map(row => row._id));
 
   const handleEditComparison = async (comparison: Comparison) => {
     setComparisonToEdit(comparison);

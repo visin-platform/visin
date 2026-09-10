@@ -31,7 +31,7 @@ describe('meRoutes', () => {
 
     await handler(req, res, next);
 
-    expect(mockedGetMyGroups).toHaveBeenCalledWith('user@x.com');
+    expect(mockedGetMyGroups).toHaveBeenCalledWith('u1');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ groupId: 'g1', name: 'Team', role: 'owner' }] });
     expect(next).not.toHaveBeenCalled();
   });

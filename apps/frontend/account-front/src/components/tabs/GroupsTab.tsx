@@ -3,7 +3,6 @@ import { Alert, Box, Button, CircularProgress, Paper, Typography } from '@mui/ma
 import { GroupAdd } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  useAddMember,
   useCreateGroup,
   useDeleteGroup,
   useDeleteGroupForever,
@@ -14,7 +13,7 @@ import {
   useRestoreGroup,
   useUpdateMemberRole
 } from '../../hooks/useGroups';
-import { Group, GroupRole } from '../../types/group';
+import { Group } from '../../types/group';
 import GroupCard from '../groups/GroupCard';
 import DeletedGroups from '../groups/DeletedGroups';
 import { ConfirmDialog, CreateGroupDialog } from '../groups/GroupDialogs';
@@ -22,7 +21,7 @@ import { ConfirmDialog, CreateGroupDialog } from '../groups/GroupDialogs';
 type PendingConfirm =
   | { kind: 'deleteGroup'; group: Group }
   | { kind: 'deleteForever'; group: Group }
-  | { kind: 'removeMember'; group: Group; email: string };
+  | { kind: 'removeMember'; group: Group; userId: string };
 
 const GroupsTab: React.FC = () => {
   const { user } = useAuth();
@@ -38,7 +37,6 @@ const GroupsTab: React.FC = () => {
   const deleteGroup = useDeleteGroup();
   const restoreGroup = useRestoreGroup();
   const deleteForever = useDeleteGroupForever();
-  const addMember = useAddMember();
   const updateMemberRole = useUpdateMemberRole();
   const removeMember = useRemoveMember();
 
@@ -48,7 +46,6 @@ const GroupsTab: React.FC = () => {
     deleteGroup,
     restoreGroup,
     deleteForever,
-    addMember,
     updateMemberRole,
     removeMember
   ];
@@ -75,9 +72,9 @@ const GroupsTab: React.FC = () => {
       case 'removeMember':
         return {
           title:
-            pending.email === user?.email?.toLowerCase()
+            pending.userId === user?.id
               ? `Leave ${pending.group.name}?`
-              : `Remove ${pending.email}?`,
+              : `Remove ${pending.group.members.find(member => member.userId === pending.userId)?.email || pending.userId}?`,
           message: `They lose access to everything shared with ${pending.group.name}.`,
           confirmLabel: 'Remove'
         };
@@ -89,7 +86,7 @@ const GroupsTab: React.FC = () => {
     if (confirm.kind === 'deleteGroup') deleteGroup.mutate(confirm.group._id);
     if (confirm.kind === 'deleteForever') deleteForever.mutate(confirm.group._id);
     if (confirm.kind === 'removeMember') {
-      removeMember.mutate({ groupId: confirm.group._id, email: confirm.email });
+      removeMember.mutate({ groupId: confirm.group._id, userId: confirm.userId });
     }
     setConfirm(null);
   };
@@ -139,17 +136,14 @@ const GroupsTab: React.FC = () => {
             <GroupCard
               key={group._id}
               group={group}
-              currentUserEmail={user?.email}
+              currentUserId={user?.id}
               busy={busy}
               onRename={(groupId, name) => renameGroup.mutate({ groupId, name })}
               onDelete={target => setConfirm({ kind: 'deleteGroup', group: target })}
-              onAddMember={(groupId, email, role: GroupRole) =>
-                addMember.mutate({ groupId, email, role })
-              }
-              onChangeRole={(groupId, email, role) => updateMemberRole.mutate({ groupId, email, role })}
-              onRemoveMember={(groupId, email) => {
+              onChangeRole={(groupId, userId, role) => updateMemberRole.mutate({ groupId, userId, role })}
+              onRemoveMember={(groupId, userId) => {
                 const target = groups.data.find(candidate => candidate._id === groupId);
-                if (target) setConfirm({ kind: 'removeMember', group: target, email });
+                if (target) setConfirm({ kind: 'removeMember', group: target, userId });
               }}
             />
           ))
@@ -165,7 +159,7 @@ const GroupsTab: React.FC = () => {
           groups={deletedGroups.data ?? []}
           loading={trashOpen && deletedGroups.isLoading}
           busy={busy}
-          currentUserEmail={user?.email}
+          currentUserId={user?.id}
           expanded={trashOpen}
           onToggle={setTrashOpen}
           onRestore={groupId => restoreGroup.mutate(groupId)}

@@ -1,3 +1,4 @@
+import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
@@ -37,12 +38,9 @@ import { useTaxonomyFor } from '../taxonomy/useTaxonomy';
 
 /** Per-class metrics this listing averages into one column each. */
 const AVERAGED_METRICS = ['iou', 'precision', 'recall', 'f1_score'];
-import { useAuth } from '../contexts/AuthContext';
-import { isGroupAdmin } from '../utils/permissions';
 
 export const TestResultsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
   const theme = useTheme();
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -81,7 +79,7 @@ export const TestResultsPage: React.FC = () => {
   const success = deleteMutation.isSuccess ? 'Test result deleted successfully' : null;
 
   // Check if user has permission to delete test results (owner or admin role)
-  const canDeleteTestResults = () => isAuthenticated && isGroupAdmin(user);
+  const canDeleteTestResults = useWriteCapabilities('test-result', testResults.map(row => row._id));
 
   const handleDeleteClick = (testResult: TestResult) => {
     setDeleteTarget(testResult);
@@ -350,7 +348,7 @@ export const TestResultsPage: React.FC = () => {
                           {formatDate(testResult.timestamp)}
                         </TableCell>
                         <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                          {canDeleteTestResults() && (
+                          {canDeleteTestResults(testResult._id) && (
                             <Tooltip title="Delete">
                               <IconButton size="small" onClick={() => handleDeleteClick(testResult)}>
                                 <DeleteIcon fontSize="small" />

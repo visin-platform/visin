@@ -310,7 +310,7 @@ const FindingsPanel: React.FC<FindingsPanelProps> = ({ projectId, trainingId, is
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress />
         </Box>
-      ) : findings.error ? (
+      ) : findings.error && !findings.data?.length ? (
         <Alert severity="error">{findings.error.message}</Alert>
       ) : (findings.data?.length ?? 0) === 0 ? (
         <Box sx={{ py: 6, textAlign: 'center' }}>
@@ -332,6 +332,12 @@ const FindingsPanel: React.FC<FindingsPanelProps> = ({ projectId, trainingId, is
               exporting={exportFinding.isPending}
             />
           ))}
+          {findings.error && <Alert severity="error">{findings.error.message}</Alert>}
+          {findings.hasNextPage && (
+            <Button onClick={() => findings.fetchNextPage()} disabled={findings.isFetching}>
+              {findings.isFetchingNextPage ? 'Loading more…' : findings.isFetchNextPageError ? 'Retry loading more' : 'Load more'}
+            </Button>
+          )}
         </Stack>
       )}
 

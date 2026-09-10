@@ -5,7 +5,7 @@ jest.mock('../../models/User', () => ({
     findOne: jest.fn(),
     create: jest.fn(),
     updateOne: jest.fn(),
-    countDocuments: jest.fn()
+    exists: jest.fn()
   }
 }));
 jest.mock('@visin/backend-core', () => ({
@@ -57,11 +57,12 @@ beforeEach(() => {
   delete process.env.GOOGLE_CLIENT_ID;
   delete process.env.GROUP_SERVICE_URL;
   mockedUser.updateOne.mockResolvedValue({});
+  mockedUser.exists.mockResolvedValue({ _id: 'existing-user' });
 });
 
 describe('getSetupStatus', () => {
   it('reports setup as needed while no user exists', async () => {
-    mockedUser.countDocuments.mockResolvedValue(0);
+    mockedUser.exists.mockResolvedValue(null);
     const res = makeRes();
 
     await getSetupStatus(makeReq(), res);
@@ -70,7 +71,7 @@ describe('getSetupStatus', () => {
   });
 
   it('reports setup as done once a user exists', async () => {
-    mockedUser.countDocuments.mockResolvedValue(1);
+    mockedUser.exists.mockResolvedValue({ _id: 'existing-user' });
     const res = makeRes();
 
     await getSetupStatus(makeReq(), res);
@@ -80,7 +81,7 @@ describe('getSetupStatus', () => {
 
   it('reports Google as available only when a client id is configured', async () => {
     process.env.GOOGLE_CLIENT_ID = 'client-id';
-    mockedUser.countDocuments.mockResolvedValue(1);
+    mockedUser.exists.mockResolvedValue({ _id: 'existing-user' });
     const res = makeRes();
 
     await getSetupStatus(makeReq(), res);
@@ -93,7 +94,7 @@ describe('setupFirstUser', () => {
   const body = { email: 'Owner@Example.com', password: 'a-strong-password', firstName: 'Ada', lastName: 'Lovelace' };
 
   it('creates an approved admin and signs them in', async () => {
-    mockedUser.countDocuments.mockResolvedValue(0);
+    mockedUser.exists.mockResolvedValue(null);
     mockedUser.create.mockImplementation(async (doc: Record<string, unknown>) => dbUser(doc));
     const res = makeRes();
 
@@ -112,7 +113,7 @@ describe('setupFirstUser', () => {
   });
 
   it('names the session from the supplied first and last name', async () => {
-    mockedUser.countDocuments.mockResolvedValue(0);
+    mockedUser.exists.mockResolvedValue(null);
     mockedUser.create.mockImplementation(async (doc: Record<string, unknown>) => dbUser(doc));
     const res = makeRes();
 
@@ -122,7 +123,7 @@ describe('setupFirstUser', () => {
   });
 
   it('falls back to the email when no name is given', async () => {
-    mockedUser.countDocuments.mockResolvedValue(0);
+    mockedUser.exists.mockResolvedValue(null);
     mockedUser.create.mockImplementation(async (doc: Record<string, unknown>) =>
       dbUser({ ...doc, firstName: undefined, lastName: undefined })
     );
@@ -134,7 +135,7 @@ describe('setupFirstUser', () => {
   });
 
   it('closes permanently once any user exists', async () => {
-    mockedUser.countDocuments.mockResolvedValue(1);
+    mockedUser.exists.mockResolvedValue({ _id: 'existing-user' });
 
     await expect(setupFirstUser(makeReq(body), makeRes())).rejects.toThrow('Setup has already been completed');
     expect(mockedUser.create).not.toHaveBeenCalled();

@@ -119,6 +119,10 @@ const DatasetUploadDialog: React.FC<DatasetUploadDialogProps> = ({
         <DialogTitle>{title}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+            Dataset analyses and files are publicly shared, including in private projects.
+            Upload only non-confidential data and remove credentials from archive contents first.
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
             {fileRequired
               ? 'Upload your dataset archive. Its size and download link are set automatically.'
               : 'Rename the dataset, and optionally replace its archive with a new upload.'}

@@ -4,11 +4,11 @@ describe('Group model', () => {
   it('applies defaults and lowercases emails', () => {
     const group = new Group({
       name: 'Team',
-      createdBy: 'Owner@X.com',
-      members: [{ email: 'Owner@X.com', role: 'owner' }],
+      createdBy: 'Owner-ID',
+      members: [{ userId: 'Owner-ID', email: 'Owner@X.com', role: 'owner' }],
     });
 
-    expect(group.createdBy).toBe('owner@x.com');
+    expect(group.createdBy).toBe('Owner-ID');
     expect(group.members[0].email).toBe('owner@x.com');
     expect(group.members[0].joinedAt).toBeDefined();
     // Persisted as null rather than absent — every soft-delete query must
@@ -27,7 +27,7 @@ describe('Group model', () => {
     const group = new Group({
       name: 'Team',
       createdBy: 'o@x.com',
-      members: [{ email: 'o@x.com', role: 'superuser' }],
+      members: [{ userId: 'Owner-ID', email: 'o@x.com', role: 'superuser' }],
     });
 
     expect(group.validateSync()?.errors['members.0.role']).toBeDefined();

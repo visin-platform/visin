@@ -240,7 +240,7 @@ describe('scoped to one run', () => {
   it('asks for findings by training rather than by project', async () => {
     renderTab(true, 't1');
 
-    await waitFor(() => expect(mockedService.list).toHaveBeenCalledWith({ training: 't1' }));
+    await waitFor(() => expect(mockedService.list).toHaveBeenCalledWith({ training: 't1', limit: 50, before: undefined }));
   });
 
   it('attributes what it writes to the run as well as the project', async () => {
@@ -391,4 +391,39 @@ describe('what to run next', () => {
       )
     );
   });
+});
+
+describe('finding pagination', () => {
+  const fullPage = () => Array.from({ length: 50 }, (_, i) => finding({
+    _id: i.toString(16).padStart(24, '0'), title: `Conclusion ${i}`,
+    trainingIds: [], citedTrainings: [],
+  }));
+
+  it('keeps the first page on failure and retries the same cursor to append older findings', async () => {
+    const page = fullPage();
+    mockedService.list.mockResolvedValueOnce(page)
+      .mockRejectedValueOnce(new Error('Connection lost'))
+      .mockResolvedValueOnce([finding({ _id: 'older', title: 'Older conclusion' })]);
+    renderTab(false);
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    expect(await screen.findByText('Connection lost')).toBeInTheDocument();
+    expect(screen.getByText('Conclusion 0')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry loading more' }));
+    expect(await screen.findByText('Older conclusion')).toBeInTheDocument();
+    expect(screen.getByText('Conclusion 49')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+    expect(mockedService.list.mock.calls.slice(1).map(call => call[0])).toEqual([
+      { project: 'p1', limit: 50, before: `${page[49].createdAt}_${page[49]._id}` },
+      { project: 'p1', limit: 50, before: `${page[49].createdAt}_${page[49]._id}` },
+    ]);
+  }, 15_000);
+
+  it('avoids duplicate cards and stops when an older API ignores the cursor', async () => {
+    mockedService.list.mockResolvedValue(fullPage());
+    renderTab(false);
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument());
+    expect(screen.getAllByText('Conclusion 0')).toHaveLength(1);
+    expect(mockedService.list).toHaveBeenCalledTimes(2);
+  }, 15_000);
 });

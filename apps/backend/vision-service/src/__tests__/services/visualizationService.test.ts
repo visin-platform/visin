@@ -1,3 +1,28 @@
+jest.mock('../../services/uploadReservationService', () => ({
+  ...jest.requireActual('../../services/uploadReservationService'),
+  reserveUpload: jest.fn(async () => ({ allocationId: 'reserved-id' })),
+  claimUpload: jest.fn(async (_fileId: string, _kind: string, _parent: string, _resource: string, _user: string, resourceId?: string) => {
+    const files = jest.requireMock('../../services/fileServiceClient');
+    const metadata = files.getFileMetadata ? await files.getFileMetadata(_fileId) : undefined;
+    return { resourceId: resourceId || 'reserved-id', size: metadata?.size ?? 10 };
+  }),
+  deleteReservedFile: jest.fn(async (fileId: string) => jest.requireMock('../../services/fileServiceClient').deleteFile(fileId))
+}));
+// These workflow tests stub the write-policy boundary. HTTP/Mongo integration
+// tests exercise the real owner/group policy, parent resolution, and denial effects.
+jest.mock('../../services/writeAccessService', () => ({
+  ...jest.requireActual('../../services/writeAccessService'),
+  assertResourceWrite: jest.fn(async (resource: unknown) => {
+    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+  }),
+  assertLibraryWrite: jest.fn(),
+  assertDatasetWrite: jest.fn(),
+  assertEpochWrite: jest.fn(async (uuid: string) => {
+    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
+    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+    return epoch;
+  })
+}));
 jest.mock('../../models/EpochVisualization', () => {
   const ctor = Object.assign(jest.fn(), {
     find: jest.fn(),
@@ -21,6 +46,7 @@ jest.mock('../../services/fileServiceClient', () => ({
   getUploadSignedUrl: jest.fn(),
 }));
 jest.mock('../../services/projectAccessService', () => ({
+  ...jest.requireActual('../../services/projectAccessService'),
   checkProjectAccess: jest.fn(),
   getVisibleTrainingIds: jest.fn(),
   isWithinTokenScope: jest.fn(),
@@ -75,6 +101,7 @@ const vizDoc = (uuid: string, overrides: AnyDoc = {}): AnyDoc => ({
 });
 
 const epochDoc = (uuid: string, overrides: AnyDoc = {}): AnyDoc => ({
+  _id: uuid,
   epoch_uuid: uuid,
   epoch: 4,
   trainingId: 't1',
@@ -105,6 +132,7 @@ const mockEpochSelect = (docs: unknown[]) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedTraining.findById.mockResolvedValue({ _id: 't1', projectId: 'p1' });
   mockedCheckAccess.mockResolvedValue(true);
   mockedTokenScope.mockReturnValue(true);
   mockedFileService.getSignedUrl.mockResolvedValue(signed);
@@ -204,7 +232,7 @@ describe('getVisualizationByUuid / deleteVisualization', () => {
 
   it('returns the visualization with a signed URL', async () => {
     mockedViz.findOne.mockResolvedValue(vizDoc('v1'));
-    mockedEpoch.findOne.mockResolvedValue(null); // orphan epoch → allowed
+    mockedEpoch.findOne.mockResolvedValue(epochDoc('e1'));
 
     const result = (await getVisualizationByUuid('v1', 'u1')) as AnyDoc;
 
@@ -213,8 +241,8 @@ describe('getVisualizationByUuid / deleteVisualization', () => {
   });
 
   it('deletes only the database record', async () => {
+    mockedEpoch.findOne.mockResolvedValue({ _id: 'e1', trainingId: 't1' });
     mockedViz.findOne.mockResolvedValue(vizDoc('v1'));
-    mockedEpoch.findOne.mockResolvedValue(null);
     mockedViz.deleteOne.mockResolvedValue({});
 
     await deleteVisualization('v1', 'u1', undefined);
@@ -233,7 +261,7 @@ describe('getVisualizationsByEpoch', () => {
   });
 
   it('lists visualizations with signed URLs, filtered by type', async () => {
-    mockedEpoch.findOne.mockResolvedValue(null);
+    mockedEpoch.findOne.mockResolvedValue(epochDoc('e1'));
     mockVizFindChain([vizDoc('v1')]);
 
     const result = await getVisualizationsByEpoch('e1', 'loss', 'u1');
@@ -248,7 +276,7 @@ describe('getVisualizationsByTraining', () => {
   const filters = { limit: 50, page: 1, includeUrls: 'true' };
 
   it('returns a paginated flat list for a specific training', async () => {
-    mockedTraining.findOne.mockResolvedValue({ uuid: 'uuid-t1', projectId: 'p1' });
+    mockedTraining.findOne.mockResolvedValue({ _id: 't1', uuid: 'uuid-t1', projectId: 'p1' });
     mockEpochSelect([epochDoc('e1')]);
     mockedViz.countDocuments.mockResolvedValue(1);
     mockVizFindChain([vizDoc('v1')]);
@@ -261,14 +289,14 @@ describe('getVisualizationsByTraining', () => {
   });
 
   it('403s when the training project is not visible', async () => {
-    mockedTraining.findOne.mockResolvedValue({ uuid: 'uuid-t1', projectId: 'p-private' });
+    mockedTraining.findOne.mockResolvedValue({ _id: 't1', uuid: 'uuid-t1', projectId: 'p-private' });
     mockedCheckAccess.mockResolvedValue(false);
 
     await expect(getVisualizationsByTraining('uuid-t1', filters, 'u1')).rejects.toThrow();
   });
 
   it('returns empty when the training has no epochs', async () => {
-    mockedTraining.findOne.mockResolvedValue(null);
+    mockedTraining.findOne.mockResolvedValue({ _id: 't1', uuid: 'uuid-t1' });
     mockEpochSelect([]);
 
     const result = (await getVisualizationsByTraining('uuid-t1', filters, 'u1')) as AnyDoc;
@@ -279,8 +307,8 @@ describe('getVisualizationsByTraining', () => {
 
   it('groups by training when only projectId is given', async () => {
     const sort = jest.fn().mockResolvedValue([
-      { uuid: 'uuid-t1', name: 'T1' },
-      { uuid: 'uuid-t2', name: 'T2' },
+      { _id: 't1', uuid: 'uuid-t1', name: 'T1' },
+      { _id: 't2', uuid: 'uuid-t2', name: 'T2' },
     ]);
     const select = jest.fn().mockReturnValue({ sort });
     mockedTraining.find.mockReturnValue({ select });
@@ -343,7 +371,7 @@ describe('getVisualizationsByTraining', () => {
 
 describe('getVisualizationTypes', () => {
   it('scopes by epoch_uuid with access check', async () => {
-    mockedEpoch.findOne.mockResolvedValue(null);
+    mockedEpoch.findOne.mockResolvedValue(epochDoc('e1'));
     mockedViz.distinct.mockResolvedValue(['b', 'a']);
 
     const types = await getVisualizationTypes(undefined, 'e1', 'u1');
@@ -361,7 +389,7 @@ describe('getVisualizationTypes', () => {
   });
 
   it('scopes by training_uuid via its epochs', async () => {
-    mockedTraining.findOne.mockResolvedValue({ uuid: 'uuid-t1', projectId: 'p1' });
+    mockedTraining.findOne.mockResolvedValue({ _id: 't1', uuid: 'uuid-t1', projectId: 'p1' });
     mockEpochSelect([epochDoc('e1')]);
     mockedViz.distinct.mockResolvedValue([]);
 
@@ -371,7 +399,7 @@ describe('getVisualizationTypes', () => {
   });
 
   it('403s when the training project is not visible', async () => {
-    mockedTraining.findOne.mockResolvedValue({ uuid: 'uuid-t1', projectId: 'p-private' });
+    mockedTraining.findOne.mockResolvedValue({ _id: 't1', uuid: 'uuid-t1', projectId: 'p-private' });
     mockedCheckAccess.mockResolvedValue(false);
 
     await expect(getVisualizationTypes('uuid-t1', undefined, 'u1')).rejects.toThrow();

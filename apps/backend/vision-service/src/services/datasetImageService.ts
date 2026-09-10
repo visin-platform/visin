@@ -1,3 +1,5 @@
+import { claimUpload, reserveUpload, deleteReservedFile } from './uploadReservationService';
+import { assertDatasetWrite } from './writeAccessService';
 import mongoose, { QueryFilter, UpdateQuery } from 'mongoose';
 import { BadRequestError, ConflictError, NotFoundError, logger } from '@visin/backend-core';
 import DatasetImage, { IDatasetImage } from '../models/DatasetImage';
@@ -6,7 +8,7 @@ import ImageCategory from '../models/ImageCategory';
 import { 
   getPhotoSignedUrlsBatch, 
   SignedUrlData, 
-  deleteFile, 
+
   getPhotoSignedUrl, 
   generateFileId, 
   getUploadSignedUrl 
@@ -212,7 +214,8 @@ export const getImages = async (options: ImageFilterOptions) => {
   };
 };
 
-export const createDatasetImage = async (data: CreateDatasetImageData) => {
+export const createDatasetImage = async (data: CreateDatasetImageData, userId?: string) => {
+  await assertDatasetWrite(data.datasetId, userId);
   const {
     filename,
     originalName,
@@ -233,7 +236,7 @@ export const createDatasetImage = async (data: CreateDatasetImageData) => {
 
   // Validate category exists
   const category = await ImageCategory.findById(categoryId);
-  if (!category) {
+  if (!category || category.datasetId.toString() !== datasetId) {
     throw new BadRequestError('Invalid categoryId. Category does not exist.');
   }
 
@@ -243,7 +246,9 @@ export const createDatasetImage = async (data: CreateDatasetImageData) => {
     throw new ConflictError('Image with this file ID already exists');
   }
 
+  const uploaded = await claimUpload(fileId, 'image', datasetId, 'image', userId, undefined, size, mimetype);
   const image = new DatasetImage({
+    _id: uploaded.resourceId,
     filename,
     originalName,
     fileId,
@@ -557,7 +562,14 @@ export const getImageById = async (id: string) => {
   }
 };
 
-export const updateImage = async (id: string, data: UpdateDatasetImageData) => {
+export const updateImage = async (id: string, data: UpdateDatasetImageData, userId?: string) => {
+  const current = await DatasetImage.findById(id);
+  if (!current) throw new NotFoundError('Dataset image not found');
+  await assertDatasetWrite(current.datasetId.toString(), userId);
+  if (data.categoryId) {
+    const category = await ImageCategory.findById(data.categoryId);
+    if (!category || category.datasetId.toString() !== current.datasetId.toString()) throw new BadRequestError('Category belongs to a different dataset');
+  }
   const { title, description, tags, labels, categoryId, condition, metadata } = data;
 
   const updateData: UpdateQuery<IDatasetImage> = {};
@@ -578,27 +590,17 @@ export const updateImage = async (id: string, data: UpdateDatasetImageData) => {
   return image;
 };
 
-export const deleteImage = async (id: string) => {
+export const deleteImage = async (id: string, userId?: string) => {
   const image = await DatasetImage.findById(id);
   if (!image) {
     throw new NotFoundError('Dataset image not found');
   }
 
-  // Delete the stored files (both original and thumbnail if exists)
-  try {
-    // Delete original file
-    await deleteFile(image.fileId);
-    logger.info('Deleted original file', { fileId: image.fileId });
+  await assertDatasetWrite(image.datasetId.toString(), userId);
 
-    // Delete thumbnail file if it exists
-    if (image.thumbnailFileId) {
-      await deleteFile(image.thumbnailFileId);
-      logger.info('Deleted thumbnail file', { thumbnailFileId: image.thumbnailFileId });
-    }
-  } catch (error) {
-    logger.error('Failed to delete files for dataset image', { fileId: image.fileId, error: (error as Error).message });
-    // Continue with database deletion even if file deletion fails
-  }
+  await deleteReservedFile(image.fileId, 'image', id);
+  // Thumbnails on historical records have no independently verified upload.
+  // Keep their bytes for operator reconciliation instead of trusting a path.
 
   // Delete the image record from database
   await DatasetImage.findByIdAndDelete(id);
@@ -612,18 +614,20 @@ export const deleteImage = async (id: string) => {
 
 export const getUploadSignedUrlRequest = async (data: { filename: string, mimetype: string, datasetId: string, categoryId?: string, userId: string }) => {
   const { filename, mimetype, datasetId, categoryId, userId } = data;
+  await assertDatasetWrite(datasetId, userId);
 
   // Validate category exists if provided
   if (categoryId) {
     const category = await ImageCategory.findById(categoryId);
-    if (!category) {
+    if (!category || category.datasetId.toString() !== datasetId) {
       throw new BadRequestError('Invalid categoryId. Category does not exist.');
     }
   }
 
   // Generate secure file ID
-  const fileId = generateFileId(userId, datasetId, filename, 'vision'); // Using 'vision' as groupId
+  const fileId = generateFileId(userId, datasetId, filename.replace(/[^A-Za-z0-9._-]/g, '_'), 'vision'); // Using 'vision' as groupId
   
+  await reserveUpload(fileId, 'image', datasetId, mimetype, userId);
   const uploadUrl = await getUploadSignedUrl(fileId, mimetype, 15);
 
   // Clients echo the returned file id back on the follow-up create call.

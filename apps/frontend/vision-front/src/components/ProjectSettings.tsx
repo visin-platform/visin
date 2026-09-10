@@ -1,6 +1,8 @@
+import { visionApi } from '../config/visionApi';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Autocomplete,
   Box,
   Typography,
   Button,
@@ -63,6 +65,15 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
   const [editName, setEditName] = useState(project.name);
   const [editSlug, setEditSlug] = useState(project.slug || '');
   const [editDescription, setEditDescription] = useState(project.description || '');
+  const [editorGroupIds, setEditorGroupIds] = useState<string[]>(project.editorGroupIds || []);
+  const { data: groups = [], isError: groupsFailed } = useQuery({
+    queryKey: ['project-editor-groups', project.ownerId],
+    queryFn: async () => {
+      const response = await visionApi.get('/write-capabilities/groups');
+      return (response.data as { data: { id: string; name: string }[] }).data;
+    }
+  });
+  const groupOptions = [...new Set([...groups.map(group => group.id), ...editorGroupIds])];
   const [editIsPublic, setEditIsPublic] = useState(project.isPublic);
   const [editTaxonomy, setEditTaxonomy] = useState<ProjectTaxonomy>(project.taxonomy ?? {});
   const [editCosting, setEditCosting] = useState<ProjectCosting>(project.costing ?? {});
@@ -94,6 +105,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['project', project._id] });
+      queryClient.invalidateQueries({ queryKey: ['write-capabilities'] });
       setProjectUpdateError(null);
     },
     onError: (error: ApiError | Error) => {
@@ -132,6 +144,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
       name: editName,
       description: editDescription,
       isPublic: editIsPublic,
+      editorGroupIds,
       // null clears it: an emptied form puts the project back on pure discovery
       taxonomy: Object.keys(editTaxonomy).length > 0 ? editTaxonomy : null,
       costing: Object.keys(editCosting).length > 0 ? editCosting : null
@@ -198,10 +211,24 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
               rows={3}
             />
 
+            <Autocomplete
+              multiple
+              options={groupOptions}
+              value={editorGroupIds}
+              onChange={(_event, ids) => setEditorGroupIds(ids)}
+              getOptionLabel={id => groups.find(group => group.id === id)?.name || id}
+              renderInput={params => <TextField {...params} label="Editor groups"
+                helperText="Members can read this project and create, edit, and delete its trainings and results. Project settings and tokens remain owner-only." />}
+            />
+            {groupsFailed && <Alert severity="error">Could not load your groups. Retry before adding a group.</Alert>}
+
             <FormControlLabel
               control={<Switch checked={editIsPublic} onChange={(e) => setEditIsPublic(e.target.checked)} />}
               label="Public project"
             />
+            <Typography variant="body2" color="text.secondary">
+              Configs, dataset analyses, and dataset files remain publicly shared, even in a private project.
+            </Typography>
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography variant="body2" sx={{

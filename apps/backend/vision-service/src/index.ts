@@ -1,4 +1,6 @@
 import express from 'express';
+import { identityContextMiddleware } from './middleware/requestIdentityContext';
+import writeCapabilitiesRoutes from './routes/writeCapabilitiesRoutes';
 import path from 'path';
 import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, apiKeyAuth } from '@visin/backend-core';
 import datasetRoutes from './routes/datasetRoutes';
@@ -38,7 +40,7 @@ app.use((req, res, next) => {
 });
 
 // Global Middleware
-app.use(apiTokenMiddleware);
+app.use(identityContextMiddleware, apiTokenMiddleware);
 
 /**
  * User API keys (`vsn_live_…`), for non-browser callers like the MCP server.
@@ -58,6 +60,7 @@ app.use(apiTokenMiddleware);
  */
 const COMPARE_IS_A_READ = { readPaths: [/^\/compare(\/|$)/] };
 
+app.use('/api/write-capabilities', writeCapabilitiesRoutes);
 app.use('/api/datasets', apiKeyAuth('dataset'), datasetRoutes);
 app.use('/api/trainings', apiKeyAuth('vision', COMPARE_IS_A_READ), trainingRoutes);
 app.use('/api/epochs', apiKeyAuth('vision'), epochRoutes);

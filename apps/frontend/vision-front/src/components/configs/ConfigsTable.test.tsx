@@ -28,13 +28,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof ConfigsTable>>
   return {
     configs,
     loading: false,
-    selectedConfigIds: new Set<string>(),
-    onSelectAll: vi.fn(),
-    onSelectConfig: vi.fn(),
     onViewDetails: vi.fn(),
-    onEdit: vi.fn(),
-    onDelete: vi.fn(),
-    onDeleteMultiple: vi.fn(),
     ...overrides
   };
 }
@@ -57,45 +51,21 @@ describe('ConfigsTable', () => {
     expect(screen.getByText('Summary 1')).toBeInTheDocument();
   });
 
-  it('shows selection banner and calls onDeleteMultiple', () => {
-    const onDeleteMultiple = vi.fn();
-    const selectedConfigIds = new Set(['cfg1']);
-    render(<ConfigsTable {...baseProps({ selectedConfigIds, onDeleteMultiple })} />);
-    expect(screen.getByText('1 config(s) selected')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Delete Selected'));
-    expect(onDeleteMultiple).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onSelectConfig when a row checkbox is toggled', () => {
-    const onSelectConfig = vi.fn();
-    render(<ConfigsTable {...baseProps({ onSelectConfig })} />);
-    const checkboxes = screen.getAllByRole('checkbox');
-    // index 0 is select-all, index 1 is first row
-    fireEvent.click(checkboxes[1]);
-    expect(onSelectConfig).toHaveBeenCalledWith('cfg1');
-  });
-
-  it('calls onSelectAll when the header checkbox is toggled', () => {
-    const onSelectAll = vi.fn();
-    render(<ConfigsTable {...baseProps({ onSelectAll })} />);
-    const checkboxes = screen.getAllByRole('checkbox');
-    fireEvent.click(checkboxes[0]);
-    expect(onSelectAll).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onViewDetails, onEdit and onDelete from row actions', () => {
+  it('calls onViewDetails from the row action', () => {
     const onViewDetails = vi.fn();
-    const onEdit = vi.fn();
-    const onDelete = vi.fn();
-    render(<ConfigsTable {...baseProps({ onViewDetails, onEdit, onDelete })} />);
+    render(<ConfigsTable {...baseProps({ onViewDetails })} />);
 
     fireEvent.click(screen.getAllByLabelText('View config details')[0]);
     expect(onViewDetails).toHaveBeenCalledWith(configs[0]);
+  });
 
-    fireEvent.click(screen.getAllByLabelText('Edit config name')[0]);
-    expect(onEdit).toHaveBeenCalledWith(configs[0]);
-
-    fireEvent.click(screen.getAllByLabelText('Delete config')[0]);
-    expect(onDelete).toHaveBeenCalledWith('cfg1');
+  // Configs are a read-only record of what a run used, so the table offers no
+  // way to select, rename or delete one.
+  it('offers no selection or mutation controls', () => {
+    render(<ConfigsTable {...baseProps()} />);
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    expect(screen.queryByLabelText('Edit config name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Delete config')).not.toBeInTheDocument();
+    expect(screen.queryByText('Delete Selected')).not.toBeInTheDocument();
   });
 });

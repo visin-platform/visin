@@ -61,15 +61,10 @@ describe('configService', () => {
     });
   });
 
-  it('updateConfig puts partial data', async () => {
-    mockedApi.put.mockResolvedValue({ data: { success: true, data: {} } });
-    await configService.updateConfig('c1', { summary: 'updated' });
-    expect(mockedApi.put).toHaveBeenCalledWith('/configs/c1', { summary: 'updated' });
-  });
-
-  it('deleteConfig deletes by id', async () => {
-    mockedApi.delete.mockResolvedValue({ data: { success: true } });
-    await configService.deleteConfig('c1');
-    expect(mockedApi.delete).toHaveBeenCalledWith('/configs/c1');
+  // Configs are read-only once uploaded — vision-service exposes no update or
+  // delete route, so the client offers no method that would call one.
+  it('exposes no way to update or delete a config', () => {
+    expect('updateConfig' in configService).toBe(false);
+    expect('deleteConfig' in configService).toBe(false);
   });
 });

@@ -12,7 +12,7 @@ import type {
  */
 export const createUploadUrl = async (req: Request, res: Response): Promise<void> => {
   const { filename, mimetype, dataset } = req.body as AnalysisUploadUrlBody;
-  const data = await analysisService.createUploadUrl({ filename, mimetype, dataset });
+  const data = await analysisService.createUploadUrl({ filename, mimetype, dataset }, req.user?.id);
 
   res.status(201).json({
     success: true,
@@ -25,7 +25,7 @@ export const createUploadUrl = async (req: Request, res: Response): Promise<void
  * POST /analysis/upload
  */
 export const uploadAnalysis = async (req: Request, res: Response): Promise<void> => {
-  const analysis = await analysisService.uploadAnalysis(req.body);
+  const analysis = await analysisService.uploadAnalysis(req.body, req.user?.id);
 
   res.status(201).json({
     success: true,
@@ -40,7 +40,7 @@ export const uploadAnalysis = async (req: Request, res: Response): Promise<void>
  */
 export const completeAnalysis = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
-  const analysis = await analysisService.completeAnalysis(id);
+  const analysis = await analysisService.completeAnalysis(id, req.user?.id);
 
   res.json({
     success: true,
@@ -84,7 +84,7 @@ export const getAnalysisById = async (req: Request, res: Response): Promise<void
  */
 export const updateAnalysis = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
-  const analysis = await analysisService.updateAnalysis(id, req.body);
+  const analysis = await analysisService.updateAnalysis(id, req.body, req.user?.id);
 
   res.json({
     success: true,
@@ -115,7 +115,7 @@ export const getAnalysisByDataset = async (req: Request, res: Response): Promise
  */
 export const deleteAnalysis = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
-  await analysisService.deleteAnalysis(id);
+  await analysisService.deleteAnalysis(id, req.user?.id);
 
   res.json({
     success: true,

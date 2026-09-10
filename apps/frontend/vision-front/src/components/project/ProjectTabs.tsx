@@ -1,3 +1,4 @@
+import { useWriteCapabilities } from '../../hooks/useWriteCapabilities';
 import React from 'react';
 import {
   Box,
@@ -124,6 +125,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
 }) => {
   // Conditions and classes this project's results already use, so the settings
   // editor can offer them rather than making someone retype what is in the data.
+  const canWrite = useWriteCapabilities('project', [project._id]);
   const discoveredVocabulary = React.useMemo(() => {
     const results = testResultsResponse?.data?.testResults ?? [];
     return { conditions: discoverConditions(results), classes: discoverClasses(results) };
@@ -230,7 +232,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
           rowsPerPage={benchmarksRowsPerPage}
           onPageChange={onBenchmarksPageChange}
           onRowsPerPageChange={onBenchmarksRowsPerPageChange}
-          isOwner={isOwner}
+          isOwner={canWrite(project._id)}
         />
       </TabPanel>
 
@@ -241,7 +243,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
 
       {/* Analysis Tab — written conclusions, from the app or from an assistant */}
       <TabPanel value={tabValue} index={6}>
-        <FindingsPanel projectId={project._id} isOwner={isOwner} />
+        <FindingsPanel projectId={project._id} isOwner={canWrite(project._id)} />
       </TabPanel>
 
       {/* Settings Tab */}

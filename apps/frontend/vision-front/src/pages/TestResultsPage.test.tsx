@@ -1,3 +1,5 @@
+const canWriteMock = vi.hoisted(() => vi.fn(() => true));
+vi.mock('../hooks/useWriteCapabilities', () => ({ useWriteCapabilities: () => canWriteMock }));
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -72,6 +74,7 @@ const testResult1 = {
 describe('TestResultsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    canWriteMock.mockReturnValue(true);
     useAuthMock.mockReturnValue({ user: { id: 'u1', groupRoles: ['owner'] }, isAuthenticated: true });
   });
 
@@ -105,8 +108,9 @@ describe('TestResultsPage', () => {
     expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
   });
 
-  it('hides the delete action for users without owner/admin role', async () => {
+  it('hides the delete action for users without write permission', async () => {
     useAuthMock.mockReturnValue({ user: { id: 'u2', groupRoles: ['member'] }, isAuthenticated: true });
+    canWriteMock.mockReturnValue(false);
     testResultServiceMock.getTestResults.mockResolvedValue({ data: { testResults: [testResult1] } });
 
     renderPage();

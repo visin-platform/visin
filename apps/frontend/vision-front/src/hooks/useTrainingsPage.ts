@@ -1,8 +1,8 @@
+import { useWriteCapabilities } from './useWriteCapabilities';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { trainingService } from '../services/trainingService';
-import { configService } from '../services/configService';
 import { projectService } from '../services/projectService';
 import { getAllAnalyses } from '../services/analysisService';
 import { Training } from '../types';
@@ -24,7 +24,6 @@ export const useTrainingsPage = () => {
   const [trainingName, setTrainingName] = useState('');
   const [trainingDescription, setTrainingDescription] = useState('');
   const [selectedDatasetId, setSelectedDatasetId] = useState('');
-  const [selectedConfigId, setSelectedConfigId] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<Training['status']>('pending');
   const [trainingTags, setTrainingTags] = useState<string[]>([]);
@@ -39,14 +38,9 @@ export const useTrainingsPage = () => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [excludedTags, setExcludedTags] = useState<string[]>([]);
 
-  // Configs/datasets/projects for the create/edit modal — only fetched while
-  // the modal is open, and shared between the "create" and "edit" entry
-  // points (previously each hand-rolled its own duplicate Promise.all).
-  const { data: configsData, isLoading: loadingConfigs } = useQuery({
-    queryKey: ['configs', 'all'],
-    queryFn: () => configService.getAllConfigs(),
-    enabled: createModalOpen
-  });
+  // Datasets/projects for the create/edit modal — only fetched while the
+  // modal is open, and shared between the "create" and "edit" entry points
+  // (previously each hand-rolled its own duplicate Promise.all).
   const { data: analysisData, isLoading: loadingDatasets } = useQuery({
     queryKey: ['dataset-analyses', 100, 0],
     queryFn: () => getAllAnalyses(100, 0),
@@ -57,9 +51,10 @@ export const useTrainingsPage = () => {
     queryFn: () => projectService.getProjects(),
     enabled: createModalOpen
   });
-  const configs = configsData?.data.configs || [];
   const datasets = analysisData?.data || [];
-  const projects = projectsData?.data || [];
+  const availableProjects = projectsData?.data || [];
+  const canEditProject = useWriteCapabilities('project', availableProjects.map(project => project._id));
+  const projects = availableProjects.filter(project => canEditProject(project._id));
 
   // Initialize selectedTags and excludedTags from URL parameters
   useEffect(() => {
@@ -190,6 +185,9 @@ export const useTrainingsPage = () => {
   // Use paginated trainings for display
   const displayTrainings = shouldFetchAll ? paginatedTrainings : filteredTrainings;
 
+  const canWrite = useWriteCapabilities('training', [...displayTrainings.map(row => row._id), ...selectedTrainingIds]);
+  const canDeleteSelected = selectedTrainingIds.size > 0 && [...selectedTrainingIds].every(canWrite);
+
   // CSV Export function
   const exportToCSV = () => {
     const selectedTrainings = filteredTrainings.filter((training: Training) => selectedTrainingIds.has(training._id));
@@ -231,7 +229,6 @@ export const useTrainingsPage = () => {
           name: trainingName.trim(),
           description: trainingDescription.trim() || undefined,
           datasetId: selectedDatasetId || undefined,
-          configId: selectedConfigId || undefined,
           projectId: selectedProjectId || undefined,
           status: selectedStatus,
           tags: trainingTags,
@@ -242,7 +239,6 @@ export const useTrainingsPage = () => {
           name: trainingName.trim(),
           description: trainingDescription.trim() || undefined,
           datasetId: selectedDatasetId || undefined,
-          configId: selectedConfigId || undefined,
           projectId: selectedProjectId || undefined,
           status: selectedStatus,
           tags: trainingTags,
@@ -255,7 +251,6 @@ export const useTrainingsPage = () => {
       setTrainingName('');
       setTrainingDescription('');
       setSelectedDatasetId('');
-      setSelectedConfigId('');
       setSelectedProjectId('');
       refetch();
       refetchTags();
@@ -272,7 +267,6 @@ export const useTrainingsPage = () => {
       setTrainingName('');
       setTrainingDescription('');
       setSelectedDatasetId('');
-      setSelectedConfigId('');
       setSelectedProjectId('');
       setSelectedStatus('pending');
       setTrainingTags([]);
@@ -283,14 +277,13 @@ export const useTrainingsPage = () => {
   };
 
   const handleEditTraining = (training: Training) => {
-    // Opening the modal flips `enabled` on the configs/datasets/projects
+    // Opening the modal flips `enabled` on the datasets/projects
     // queries above, which fetch in the background — the modal already
     // renders a loading state for them via isLoadingData.
     setEditingTrainingId(training._id);
     setTrainingName(training.name);
     setTrainingDescription(training.description || '');
     setSelectedDatasetId(training.datasetId || '');
-    setSelectedConfigId(training.configId || '');
     setSelectedProjectId(training.projectId || '');
     setSelectedStatus(training.status);
     setTrainingTags(training.tags || []);
@@ -348,6 +341,7 @@ export const useTrainingsPage = () => {
   };
 
   const handleDeleteSelected = async () => {
+    if (!canDeleteSelected) return;
     try {
       setCreating(true);
       const trainingsToDelete = Array.from(selectedTrainingIds);
@@ -371,6 +365,8 @@ export const useTrainingsPage = () => {
   };
 
   return {
+    canWrite,
+    canDeleteSelected,
     isAuthenticated,
     page,
     rowsPerPage,
@@ -386,8 +382,6 @@ export const useTrainingsPage = () => {
     setTrainingDescription,
     selectedDatasetId,
     setSelectedDatasetId,
-    selectedConfigId,
-    setSelectedConfigId,
     selectedProjectId,
     setSelectedProjectId,
     selectedStatus,
@@ -395,10 +389,8 @@ export const useTrainingsPage = () => {
     trainingTags,
     setTrainingTags,
     datasets,
-    configs,
     projects,
     loadingDatasets,
-    loadingConfigs,
     loadingProjects,
     creating,
     createError,

@@ -24,7 +24,7 @@ const ImageCategorySchema: Schema = new Schema(
     },
     datasetId: {
       type: Schema.Types.ObjectId,
-      ref: 'training_dataset',
+      ref: 'dataset_analysis',
       required: true
     },
     color: {

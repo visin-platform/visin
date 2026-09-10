@@ -37,7 +37,7 @@ export const getDatasetByUuid = async (req: Request, res: Response): Promise<voi
 
 // Create dataset
 export const createDataset = async (req: Request, res: Response): Promise<void> => {
-  const savedDataset = await datasetService.createDataset(req.body);
+  const savedDataset = await datasetService.createDataset(req.body, req.user?.id);
 
   res.status(201).json({
     success: true,

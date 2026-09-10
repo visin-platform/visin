@@ -38,7 +38,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof ComparisonsTab
     onViewComparison: vi.fn(),
     onEditComparison: vi.fn(),
     onDeleteComparison: vi.fn(),
-    canDelete: true,
+    canDelete: () => true,
     formatTimestamp: (t: string) => `formatted-${t}`,
     getTypeColor: () => 'primary' as const,
     theme,
@@ -90,7 +90,7 @@ describe('ComparisonsTable', () => {
   });
 
   it('hides edit/delete actions when canDelete is false', () => {
-    render(<ComparisonsTable {...baseProps({ canDelete: false })} />);
+    render(<ComparisonsTable {...baseProps({ canDelete: () => false })} />);
     expect(screen.queryByLabelText('Edit')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Delete')).not.toBeInTheDocument();
   });

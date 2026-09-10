@@ -30,7 +30,7 @@ export const getBenchmarkById = async (req: Request, res: Response): Promise<voi
 export const createBenchmark = async (req: Request, res: Response): Promise<void> => {
   const benchmarkData = req.body as CreateBenchmarkBody;
 
-  const savedBenchmark = await benchmarkService.createBenchmark(benchmarkData, req.projectId);
+  const savedBenchmark = await benchmarkService.createBenchmark(benchmarkData, req.projectId, req.user?.id);
 
   res.status(201).json({
     success: true,
@@ -43,7 +43,7 @@ export const createBenchmark = async (req: Request, res: Response): Promise<void
 export const uploadBenchmark = async (req: Request, res: Response): Promise<void> => {
   const benchmarkData = req.body as CreateBenchmarkBody;
 
-  const savedBenchmark = await benchmarkService.uploadBenchmark(benchmarkData, req.projectId);
+  const savedBenchmark = await benchmarkService.uploadBenchmark(benchmarkData, req.projectId, req.user?.id);
 
   res.status(201).json({
     success: true,

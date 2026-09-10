@@ -340,9 +340,11 @@ paths:
       tags: [Authentication]
       summary: Create the first (owner) account
       description: |
-        Public, but only while no user exists — it returns 409 forever after.
+        Public, but only while no user exists. Existing installations return 409.
         The account it creates is an admin, because there is nobody who could
-        promote it. Signs the new owner in on success.
+        promote it. A unique bootstrap marker permits only one concurrent insert.
+        Signs the new owner in on success. If the insert succeeded but the response
+        was interrupted, recover through normal password login with those credentials.
       requestBody:
         required: true
         content:
@@ -374,7 +376,8 @@ paths:
       tags: [Authentication]
       summary: Register with email and password
       description: |
-        Public, and signs the new account straight in. There is no approval
+        Public after initial setup, and signs the new account straight in.
+        Returns 409 while the installation has no users. There is no approval
         step: what a user can reach is decided by group membership and by
         whether a project is public, so a fresh account simply sees only
         public work until it is invited to a group.
@@ -386,17 +389,13 @@ paths:
               $ref: '#/components/schemas/CredentialsRequest'
       responses:
         '201':
-          description: Account created, pending approval
+          description: Account created and signed in
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  approved: { type: boolean, example: false }
-                  message: { type: string }
+                $ref: '#/components/schemas/AuthResponse'
         '409':
-          description: An account with that email already exists
+          description: Initial setup is required, or an account with that email already exists
           content:
             application/json:
               schema:

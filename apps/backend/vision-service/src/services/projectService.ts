@@ -1,3 +1,4 @@
+import { getUserGroups } from '../clients/projectGroupsClient';
 import { QueryFilter } from 'mongoose';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Project, { IProject } from '../models/Project';
@@ -11,24 +12,28 @@ import Training from '../models/Training';
 import Epoch from '../models/Epoch';
 import Benchmark from '../models/Benchmark';
 import type { GetProjectsQuery } from '../validation/projectSchemas';
+import { requireUserCredential, tokenProjectId } from '../middleware/projectTokenContext';
+import { isWithinTokenScope, canEditProject, resolveProject } from './projectAccessService';
 
 
-function assertAccess(project: IProject, userId: string | undefined): void {
-  if (!project.isPublic && project.ownerId !== userId) {
+async function assertAccess(project: IProject, userId: string | undefined): Promise<void> {
+  if (!isWithinTokenScope(undefined, project._id.toString()) || (!project.isPublic && !(await canEditProject(project, userId)))) {
     throw new ForbiddenError();
   }
 }
 
 async function resolveByIdentifier(identifier: string): Promise<IProject | null> {
-  return (await Project.findOne({ slug: identifier })) || Project.findById(identifier);
+  return resolveProject(identifier);
 }
 
 export const listProjects = async (userId: string | undefined, filters: GetProjectsQuery): Promise<IProject[]> => {
   const { search, sortBy, sortOrder } = filters;
 
   // If user is logged in, include their private projects
-  const visibilityFilter = userId ? [{ isPublic: true }, { ownerId: userId }] : [{ isPublic: true }];
+  const groups = userId && !tokenProjectId() ? await getUserGroups(userId) : [];
+  const visibilityFilter = userId ? [{ isPublic: true }, { ownerId: userId }, ...(groups.length ? [{ editorGroupIds: { $in: groups.map(group => group.id) } }] : [])] : [{ isPublic: true }];
   const query: QueryFilter<IProject> = { $or: visibilityFilter };
+  if (tokenProjectId()) query._id = tokenProjectId();
 
   if (search) {
     query.$text = { $search: search };
@@ -42,7 +47,7 @@ export const getProjectBySlug = async (slug: string, userId: string | undefined)
   if (!project) {
     throw new NotFoundError('Project not found');
   }
-  assertAccess(project, userId);
+  await assertAccess(project, userId);
   return project;
 };
 
@@ -51,7 +56,7 @@ export const getProjectById = async (id: string, userId: string | undefined): Pr
   if (!project) {
     throw new NotFoundError('Project not found');
   }
-  assertAccess(project, userId);
+  await assertAccess(project, userId);
   return project;
 };
 
@@ -60,7 +65,7 @@ export const getProjectByIdOrSlug = async (identifier: string, userId: string | 
   if (!project) {
     throw new NotFoundError('Project not found');
   }
-  assertAccess(project, userId);
+  await assertAccess(project, userId);
   return project;
 };
 
@@ -68,6 +73,7 @@ interface CreateProjectData {
   name: string;
   description?: string;
   isPublic?: boolean;
+  editorGroupIds?: string[];
   taxonomy?: IProjectTaxonomy;
   costing?: IProjectCosting;
 }
@@ -88,7 +94,16 @@ export const applyTaskTypePresets = (taxonomy?: IProjectTaxonomy): IProjectTaxon
   };
 };
 
+async function assertAssignableGroups(next: string[], existing: string[], userId: string) {
+  const added = next.filter(id => !existing.includes(id));
+  if (!added.length) return;
+  const available = new Set((await getUserGroups(userId)).map(group => group.id));
+  if (added.some(id => !available.has(id))) throw new ForbiddenError('You can only assign groups you belong to');
+}
+
 export const createProject = async (userId: string, data: CreateProjectData): Promise<IProject> => {
+  requireUserCredential();
+  await assertAssignableGroups(data.editorGroupIds || [], [], userId);
   const project = new Project({
     ...data,
     taxonomy: applyTaskTypePresets(data.taxonomy),
@@ -101,12 +116,14 @@ interface UpdateProjectData {
   name?: string;
   description?: string;
   isPublic?: boolean;
+  editorGroupIds?: string[];
   slug?: string;
   taxonomy?: IProjectTaxonomy | null;
   costing?: IProjectCosting | null;
 }
 
 export const updateProject = async (id: string, userId: string, data: UpdateProjectData): Promise<IProject> => {
+  requireUserCredential();
   const project = await Project.findById(id);
   if (!project) {
     throw new NotFoundError('Project not found');
@@ -115,7 +132,11 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
     throw new ForbiddenError();
   }
 
-  const { name, description, isPublic, slug, taxonomy, costing } = data;
+  const { name, description, isPublic, slug, taxonomy, costing, editorGroupIds } = data;
+  if (editorGroupIds !== undefined) {
+    await assertAssignableGroups(editorGroupIds, project.editorGroupIds || [], userId);
+    project.editorGroupIds = [...new Set(editorGroupIds)];
+  }
 
   if (name) project.name = name;
   if (description !== undefined) project.description = description;
@@ -146,6 +167,7 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
 };
 
 export const deleteProject = async (id: string, userId: string): Promise<void> => {
+  requireUserCredential();
   const project = await Project.findById(id);
   if (!project) {
     throw new NotFoundError('Project not found');
@@ -182,7 +204,7 @@ export const getProjectDashboardStats = async (
   if (!project) {
     throw new NotFoundError('Project not found');
   }
-  assertAccess(project, userId);
+  await assertAccess(project, userId);
 
   const projectId = project._id.toString();
   const NOT_DELETED = [{ deletedAt: null }, { deletedAt: { $exists: false } }];

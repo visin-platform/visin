@@ -6,8 +6,6 @@ import type { ReactNode } from 'react';
 vi.mock('../services/configService', () => ({
   configService: {
     getAllConfigs: vi.fn(),
-    updateConfig: vi.fn(),
-    deleteConfig: vi.fn(),
     uploadConfig: vi.fn()
   }
 }));
@@ -51,112 +49,24 @@ describe('useConfigsPage', () => {
     expect(result.current.selectedConfig?._id).toBe('c1');
   });
 
-  it('handleEditClick prefills the edit form', async () => {
+  // A config records what a run used, so the page only reads: no rename, no
+  // delete, no row selection. The service has no method for any of them.
+  it('exposes no edit, delete or selection surface', async () => {
     const { result } = renderHook(() => useConfigsPage(), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    act(() => {
-      result.current.handleEditClick(makeConfig('c1', 'My Config'));
-    });
-
-    expect(result.current.editDialogOpen).toBe(true);
-    expect(result.current.editConfigName).toBe('My Config');
-  });
-
-  it('handleEditSave updates the config and shows a success message', async () => {
-    mockedConfig.updateConfig.mockResolvedValue({ success: true, data: makeConfig('c1') });
-    const { result } = renderHook(() => useConfigsPage(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    act(() => {
-      result.current.handleEditClick(makeConfig('c1', 'Old'));
-    });
-    act(() => {
-      result.current.setEditConfigName('New Name');
-    });
-
-    await act(async () => {
-      await result.current.handleEditSave();
-    });
-
-    await waitFor(() => expect(result.current.success).toBe('Config name updated successfully!'));
-    expect(mockedConfig.updateConfig).toHaveBeenCalledWith('c1', { config_name: 'New Name' });
-  });
-
-  it('handleEditSave sets an error message when the update fails', async () => {
-    mockedConfig.updateConfig.mockRejectedValue(new Error('update failed'));
-    const { result } = renderHook(() => useConfigsPage(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    act(() => {
-      result.current.handleEditClick(makeConfig('c1'));
-    });
-
-    await act(async () => {
-      await result.current.handleEditSave();
-    });
-
-    await waitFor(() => expect(result.current.error).toBe('update failed'));
-  });
-
-  it('handleDeleteClick opens the dialog, handleConfirmDelete deletes on confirm', async () => {
-    mockedConfig.deleteConfig.mockResolvedValue({ success: true, data: undefined });
-    const { result } = renderHook(() => useConfigsPage(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    act(() => {
-      result.current.handleDeleteClick('c1');
-    });
-    expect(result.current.deleteDialogOpen).toBe(true);
-
-    await act(async () => {
-      await result.current.handleConfirmDelete();
-    });
-
-    await waitFor(() => expect(result.current.success).toBe('Config deleted successfully!'));
-    expect(mockedConfig.deleteConfig).toHaveBeenCalledWith('c1');
-  });
-
-  it('handleSelectConfig toggles selection and handleSelectAll selects/clears all', async () => {
-    const { result } = renderHook(() => useConfigsPage(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    act(() => {
-      result.current.handleSelectConfig('c1');
-    });
-    expect(result.current.selectedConfigIds.has('c1')).toBe(true);
-
-    act(() => {
-      result.current.handleSelectConfig('c1');
-    });
-    expect(result.current.selectedConfigIds.has('c1')).toBe(false);
-
-    act(() => {
-      result.current.handleSelectAll();
-    });
-    expect(result.current.selectedConfigIds.size).toBe(2);
-
-    act(() => {
-      result.current.handleSelectAll();
-    });
-    expect(result.current.selectedConfigIds.size).toBe(0);
-  });
-
-  it('handleDeleteSelected deletes each selected config and reports the count', async () => {
-    mockedConfig.deleteConfig.mockResolvedValue({ success: true, data: undefined });
-    const { result } = renderHook(() => useConfigsPage(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    act(() => {
-      result.current.handleSelectAll();
-    });
-
-    await act(async () => {
-      await result.current.handleDeleteSelected();
-    });
-
-    await waitFor(() => expect(result.current.success).toBe('2 config(s) deleted successfully!'));
-    expect(mockedConfig.deleteConfig).toHaveBeenCalledTimes(2);
+    for (const key of [
+      'handleEditClick',
+      'handleEditSave',
+      'handleDeleteClick',
+      'handleConfirmDelete',
+      'handleSelectConfig',
+      'handleSelectAll',
+      'handleDeleteSelected',
+      'selectedConfigIds'
+    ]) {
+      expect(result.current).not.toHaveProperty(key);
+    }
   });
 
   it('handleFileChange sets an error when no files are provided', async () => {

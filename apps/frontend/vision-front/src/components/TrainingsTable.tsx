@@ -51,6 +51,7 @@ interface TrainingsTableProps {
   sortOrder: 'asc' | 'desc';
   onSort: (column: 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount') => void;
   isAuthenticated: boolean;
+  canWrite?: (id: string) => boolean;
 }
 
 const StatusChip: React.FC<{ status: Training['status'] }> = ({ status }) => {
@@ -170,7 +171,8 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
   sortBy,
   sortOrder,
   onSort,
-  isAuthenticated
+  isAuthenticated,
+  canWrite = () => false
 }) => {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -381,7 +383,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                   </TableCell>
                   <TableCell align="center">
                     <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                      {isAuthenticated && (
+                      {isAuthenticated && canWrite(training._id) && (
                         <>
                           <Tooltip title="Edit training">
                             <IconButton

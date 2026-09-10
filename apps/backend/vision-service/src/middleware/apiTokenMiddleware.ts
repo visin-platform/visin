@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import ApiToken from '../models/ApiToken';
 import { AuthRequest } from './authMiddleware';
 import { logger, looksLikeApiKey } from '@visin/backend-core';
+import { projectTokenContext } from './projectTokenContext';
 
 // How stale lastUsedAt must be before we bother writing an update — this
 // middleware runs on every authenticated request, so writing unconditionally
@@ -57,7 +58,7 @@ export const apiTokenMiddleware = async (req: AuthRequest, res: Response, next: 
           // Attach projectId to request to enforce scope for API tokens
           req.projectId = apiToken.projectId.toString();
           
-          return next();
+          return projectTokenContext.run({ projectId: req.projectId, userId: apiToken.createdBy }, next);
         }
       } catch (error) {
         logger.error('API Token validation error', { error: error instanceof Error ? error.message : error });

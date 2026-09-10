@@ -11,9 +11,6 @@ import { usePageTitle } from '../hooks/usePageTitle';
 import { useConfigsPage } from '../hooks/useConfigsPage';
 import ConfigsTable from '../components/configs/ConfigsTable';
 import ConfigDetailsDialog from '../components/configs/ConfigDetailsDialog';
-import EditConfigDialog from '../components/configs/EditConfigDialog';
-import DeleteConfigDialog from '../components/configs/DeleteConfigDialog';
-import DeleteMultipleConfigsDialog from '../components/configs/DeleteMultipleConfigsDialog';
 import ConfigUploadButton from '../components/configs/ConfigUploadButton';
 
 const ConfigsPage: React.FC = () => {
@@ -28,29 +25,12 @@ const ConfigsPage: React.FC = () => {
     success,
     setSuccess,
     uploading,
-    selectedConfigIds,
-    deleteMultipleDialogOpen,
-    setDeleteMultipleDialogOpen,
     detailsDialogOpen,
     setDetailsDialogOpen,
     selectedConfig,
-    deleteDialogOpen,
-    setDeleteDialogOpen,
-    editDialogOpen,
-    setEditDialogOpen,
-    editingConfig,
-    editConfigName,
-    setEditConfigName,
     fileInputRef,
     handleFileChange,
     handleViewDetails,
-    handleEditClick,
-    handleEditSave,
-    handleDeleteClick,
-    handleConfirmDelete,
-    handleSelectConfig,
-    handleSelectAll,
-    handleDeleteSelected,
     handleRefresh
   } = useConfigsPage();
 
@@ -78,7 +58,9 @@ const ConfigsPage: React.FC = () => {
         </Box>
       </Box>
       <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
-        Manage training configurations. Configs are independent and can be selected when creating trainings.
+        A config is the record of what a run was configured with, so it is read-only once uploaded — a training&apos;s
+        config is set by the pipeline that reports it. Configs are publicly shared, including when cited by a private
+        project. Upload only non-confidential configurations; remove passwords, API keys, and other secrets first.
       </Typography>
       {/* Messages */}
       {success && (
@@ -91,47 +73,12 @@ const ConfigsPage: React.FC = () => {
           {error}
         </Alert>
       )}
-      <ConfigsTable
-        configs={configs}
-        loading={loading}
-        selectedConfigIds={selectedConfigIds}
-        onSelectAll={handleSelectAll}
-        onSelectConfig={handleSelectConfig}
-        onViewDetails={handleViewDetails}
-        onEdit={handleEditClick}
-        onDelete={handleDeleteClick}
-        onDeleteMultiple={() => setDeleteMultipleDialogOpen(true)}
-      />
+      <ConfigsTable configs={configs} loading={loading} onViewDetails={handleViewDetails} />
       {/* Details Dialog */}
       <ConfigDetailsDialog
         open={detailsDialogOpen}
         onClose={() => setDetailsDialogOpen(false)}
         config={selectedConfig}
-      />
-      {/* Edit Config Name Dialog */}
-      <EditConfigDialog
-        open={editDialogOpen}
-        onClose={() => setEditDialogOpen(false)}
-        onSave={handleEditSave}
-        config={editingConfig}
-        configName={editConfigName}
-        onConfigNameChange={setEditConfigName}
-        loading={loading}
-      />
-      {/* Delete Confirmation Dialog */}
-      <DeleteConfigDialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        onConfirm={handleConfirmDelete}
-        loading={loading}
-      />
-      {/* Delete Multiple Confirmation Dialog */}
-      <DeleteMultipleConfigsDialog
-        open={deleteMultipleDialogOpen}
-        onClose={() => setDeleteMultipleDialogOpen(false)}
-        onConfirm={handleDeleteSelected}
-        count={selectedConfigIds.size}
-        loading={loading}
       />
     </Container>
   );

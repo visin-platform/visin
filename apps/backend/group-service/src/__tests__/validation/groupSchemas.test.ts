@@ -1,7 +1,7 @@
 import {
   createGroupBodySchema,
   updateGroupBodySchema,
-  addMemberBodySchema,
+  createInvitationBodySchema,
   updateRoleBodySchema,
 } from '../../validation/groupSchemas';
 
@@ -17,11 +17,10 @@ describe('groupSchemas', () => {
     expect(updateGroupBodySchema.safeParse({ name: '' }).success).toBe(false);
   });
 
-  it('addMemberBodySchema requires email and validates optional role', () => {
-    expect(addMemberBodySchema.parse({ email: 'a@x.com' })).toEqual({ email: 'a@x.com' });
-    expect(addMemberBodySchema.parse({ email: 'a@x.com', role: 'admin' }).role).toBe('admin');
-    expect(addMemberBodySchema.safeParse({ email: '' }).success).toBe(false);
-    expect(addMemberBodySchema.safeParse({ email: 'a@x.com', role: 'boss' }).success).toBe(false);
+  it('defaults invitation roles and rejects unknown roles', () => {
+    expect(createInvitationBodySchema.parse({})).toEqual({ role: 'member' });
+    expect(createInvitationBodySchema.parse({ role: 'admin' }).role).toBe('admin');
+    expect(createInvitationBodySchema.safeParse({ role: 'boss' }).success).toBe(false);
   });
 
   it('updateRoleBodySchema only accepts known roles', () => {

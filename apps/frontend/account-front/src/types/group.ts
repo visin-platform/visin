@@ -1,7 +1,8 @@
 export type GroupRole = 'owner' | 'admin' | 'member';
 
 export interface GroupMember {
-  email: string;
+  userId: string;
+  email?: string;
   role: GroupRole;
   joinedAt: string;
   lastActivity?: string | null;
@@ -34,11 +35,11 @@ export const permissionsFor = (role: GroupRole | undefined): GroupPermissions =>
   canManageOwners: role === 'owner'
 });
 
-export const roleOf = (group: Group, email: string | undefined): GroupRole | undefined =>
-  email ? group.members.find(member => member.email === email.toLowerCase())?.role : undefined;
+export const roleOf = (group: Group, userId: string | undefined): GroupRole | undefined =>
+  userId ? group.members.find(member => member.userId === userId)?.role : undefined;
 
 /** A group's last owner cannot be demoted or removed — group-service rejects it. */
-export const isLastOwner = (group: Group, email: string): boolean => {
+export const isLastOwner = (group: Group, userId: string): boolean => {
   const owners = group.members.filter(member => member.role === 'owner');
-  return owners.length === 1 && owners[0].email === email;
+  return owners.length === 1 && owners[0].userId === userId;
 };

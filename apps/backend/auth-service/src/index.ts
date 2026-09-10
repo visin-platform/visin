@@ -5,6 +5,7 @@ import authRoutes from './routes/authRoutes';
 import oauthRoutes from './routes/oauthRoutes';
 import { authorizationServerMetadata } from './controllers/oauthController';
 import path from 'path';
+import { initializeBootstrap } from './services/bootstrapService';
 
 // JWT_SECRET signs every session; INTERNAL_SERVICE_TOKEN gates /auth/internal/*.
 // GOOGLE_CLIENT_ID is deliberately NOT required: password sign-in works without
@@ -88,7 +89,9 @@ app.use(errorHandler);
 // health check while failing every request. Exiting hands recovery to the
 // container restart policy.
 connectDb({ serviceName: 'auth-service' })
-  .then(() => {
+  .then(async () => {
+    // Do not serve setup unless MongoDB can enforce its singleton insert.
+    await initializeBootstrap();
     app.listen(PORT, () => logger.info('Auth service started successfully', { port: PORT }));
   })
   .catch((err: Error) => {

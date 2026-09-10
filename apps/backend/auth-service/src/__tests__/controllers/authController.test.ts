@@ -160,7 +160,7 @@ describe('validateToken', () => {
     await validateToken(makeReq({ body: { idToken: 'x' } }), res);
 
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('http://group/api/groups/mine/roles?userEmail='),
+      expect.stringContaining('http://group/api/groups/mine/roles?userId='),
       expect.objectContaining({ headers: expect.objectContaining({ 'x-internal-token': 'internal' }) })
     );
     const claims = verifyJWT(res.json.mock.calls[0][0].token);

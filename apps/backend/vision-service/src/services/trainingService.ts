@@ -1,11 +1,13 @@
+import { assertResourceWrite, requireActor } from './writeAccessService';
+import { getEditableProjectIds, resolveProject } from './projectAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
 import { QueryFilter, Types } from 'mongoose';
+import { tokenProjectId } from '../middleware/projectTokenContext';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Training, { ITraining } from '../models/Training';
 import Epoch, { IEpoch } from '../models/Epoch';
 import TestResult from '../models/TestResult';
 import Benchmark, { IBenchmark } from '../models/Benchmark';
-import Project from '../models/Project';
 import Comparison from '../models/Comparison';
 import { testResultService } from './testResultService';
 import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from './projectAccessService';
@@ -21,6 +23,13 @@ interface TrainingMetrics {
   totalCost?: number;
   /** ISO code the costs above are denominated in */
   currency?: string;
+}
+
+interface CurrencyCostTotal {
+  currency: string;
+  totalCpuCost: number;
+  totalGpuCost: number;
+  totalCost: number;
 }
 export type TrainingWithMetrics = Record<string, unknown> & { metrics: TrainingMetrics };
 type TrainingComparisonItem = Awaited<ReturnType<typeof testResultService.getAggregatedTestResultsByTraining>>['comparison'][number];
@@ -90,6 +99,7 @@ export const trainingService = {
     const { search, status, datasetId, projectId, tags } = filters;
 
     const query: QueryFilter<ITraining> = { deletedAt: null };
+    if (tokenProjectId()) query.$and = [{ projectId: { $in: await getVisibleProjectIds(userId) } }];
 
     // Search functionality
     if (search) {
@@ -108,11 +118,7 @@ export const trainingService = {
 
     // Filter by project
     if (projectId) {
-      // Resolve projectId (could be slug or ID) to actual project
-      let project = await Project.findOne({ slug: projectId });
-      if (!project) {
-        project = await Project.findById(projectId);
-      }
+      const project = await resolveProject(projectId);
       if (!project) {
         throw new NotFoundError('Project not found');
       }
@@ -125,29 +131,12 @@ export const trainingService = {
 
       query.projectId = project._id.toString();
     } else {
-      // If no specific project filter, show trainings from accessible projects
-      if (userId) {
-        // Authenticated user: show trainings from public projects or projects they own, or without project
-        const accessibleProjects = await Project.find({
-          $or: [
-            { isPublic: true },
-            { ownerId: userId }
-          ]
-        }).select('_id');
-        const projectIds = accessibleProjects.map(p => p._id.toString());
-        query.$or = [
-          { projectId: { $in: projectIds } },
-          { projectId: { $exists: false } }
-        ];
-      } else {
-        // Unauthenticated user: only show trainings in public projects or without project
-        const publicProjects = await Project.find({ isPublic: true }).select('_id');
-        const projectIds = publicProjects.map(p => p._id.toString());
-        query.$or = [
-          { projectId: { $in: projectIds } },
-          { projectId: { $exists: false } }
-        ];
-      }
+      const projectIds = await getVisibleProjectIds(userId);
+      query.$or = [
+        { projectId: { $in: projectIds } },
+        { projectId: { $exists: false } },
+        { projectId: null }
+      ];
     }
 
     // Filter by tags
@@ -315,6 +304,9 @@ export const trainingService = {
   },
 
   async createTraining(userId: string, data: CreateTrainingData) {
+    if (tokenProjectId() && !(await this.checkProjectAccess(userId, data.projectId))) {
+      throw new ForbiddenError('Access denied to project');
+    }
     const { 
       name, 
       description, 
@@ -332,30 +324,20 @@ export const trainingService = {
       throw new BadRequestError('Training name is required');
     }
 
-    // Check project access if projectId is provided
+    const ownerId = requireActor(userId);
     let resolvedProjectId: string | undefined;
     if (projectId) {
-      const hasAccess = await this.checkProjectAccess(userId, projectId);
-      if (!hasAccess) {
-        throw new ForbiddenError('Access denied to project');
-      }
-
-      // Resolve to actual project _id for storage
-      let project = await Project.findOne({ slug: projectId });
-      if (!project) {
-        project = await Project.findById(projectId);
-      }
-      if (project) {
-        resolvedProjectId = project._id.toString();
-      } else {
-        resolvedProjectId = projectId; // Fallback
-      }
+      const project = await resolveProject(projectId);
+      if (!project) throw new ForbiddenError('Access denied to project');
+      resolvedProjectId = project._id.toString();
     }
+    await assertResourceWrite({ projectId: resolvedProjectId, ownerId }, userId);
 
     // Generate UUID if not provided
     const uuid = data.uuid || uuidv4();
 
     const training = new Training({
+      ownerId,
       uuid,
       name: name.trim(),
       description: description?.trim(),
@@ -384,6 +366,8 @@ export const trainingService = {
     if (!training) {
       throw new NotFoundError('Training not found');
     }
+
+    await assertResourceWrite(training, userId);
 
     // Check project access
     const hasAccess = await this.checkProjectAccess(userId, training.projectId);
@@ -429,6 +413,8 @@ export const trainingService = {
       throw new NotFoundError('Training not found');
     }
 
+    await assertResourceWrite(training, userId);
+
     // Check project access
     const hasAccess = await this.checkProjectAccess(userId, training.projectId);
     if (!hasAccess) {
@@ -453,9 +439,14 @@ export const trainingService = {
       await TestResult.updateMany({ epoch_uuid: { $in: epochUuids } }, { deletedAt: now });
     }
 
-    // Remove this training from all comparisons
+    // Only edit comparisons this principal can write. Foreign references remain
+    // historical references; deleting a training does not grant their ownership.
+    const editableProjects = await getEditableProjectIds(userId);
     await Comparison.updateMany(
-      { itemIds: id },
+      { itemIds: id, $or: [
+        { projectId: { $in: editableProjects } },
+        ...(!tokenProjectId() ? [{ projectId: null, ownerId: userId }] : [])
+      ] },
       { $pull: { itemIds: id }, updatedAt: now }
     );
 
@@ -466,6 +457,7 @@ export const trainingService = {
     const { status, datasetId, tags, projectId } = filters;
 
     const matchQuery: QueryFilter<ITraining> = { deletedAt: null };
+    if (tokenProjectId()) matchQuery.$and = [{ projectId: { $in: await getVisibleProjectIds(userId) } }];
 
     // Filter by status if provided
     if (status) {
@@ -482,16 +474,9 @@ export const trainingService = {
       if (!(await this.checkProjectAccess(userId, projectId))) {
         throw new ForbiddenError('Access denied to project');
       }
-      // Resolve projectId to _id
-      let project = await Project.findOne({ slug: projectId });
-      if (!project) {
-        project = await Project.findById(projectId);
-      }
-      if (project) {
-        matchQuery.projectId = project._id.toString();
-      } else {
-        matchQuery.projectId = projectId; // Fallback
-      }
+      const project = await resolveProject(projectId);
+      if (!project) throw new NotFoundError('Project not found');
+      matchQuery.projectId = project._id.toString();
     } else {
       // No project filter given: scope to trainings the caller can actually
       // see — otherwise these aggregate stats are computed across every
@@ -574,39 +559,45 @@ export const trainingService = {
       {
         $group: {
           _id: '$projectId',
+          totalTrainings: { $sum: 1 },
           totalTime: { $sum: { $ifNull: [{ $arrayElemAt: ['$epochStats.time', 0] }, 0] } }
         }
       }
     ]);
 
     const byProject = await costingByProject(perProject.map(row => row._id));
-    const priced = perProject
-      .map(row => ({ row, cost: costOf(row.totalTime, costingFor(byProject, row._id)) }))
-      .filter(({ cost }) => cost.totalCost !== undefined);
+    const totalsByCurrency = new Map<string, CurrencyCostTotal>();
+    const costCoverage = { pricedTrainings: 0, unpricedTrainings: 0, pricedTime: 0, unpricedTime: 0 };
+    for (const row of perProject) {
+      const rates = costingFor(byProject, row._id);
+      if (!rates) {
+        costCoverage.unpricedTrainings += row.totalTrainings;
+        costCoverage.unpricedTime += row.totalTime;
+        continue;
+      }
+      costCoverage.pricedTrainings += row.totalTrainings;
+      costCoverage.pricedTime += row.totalTime;
+      const cost = costOf(row.totalTime, rates);
+      const subtotal = totalsByCurrency.get(rates.currency) ?? {
+        currency: rates.currency, totalCpuCost: 0, totalGpuCost: 0, totalCost: 0,
+      };
+      subtotal.totalCpuCost += cost.cpuCost!;
+      subtotal.totalGpuCost += cost.gpuCost!;
+      subtotal.totalCost += cost.totalCost!;
+      totalsByCurrency.set(rates.currency, subtotal);
+    }
+    const costTotalsByCurrency = [...totalsByCurrency.values()]
+      .sort((a, b) => a.currency.localeCompare(b.currency));
 
-    // Only projects that have priced their hardware contribute. With none, the
-    // totals are omitted entirely rather than reported as a confident zero.
-    const totals = priced.length
-      ? priced.reduce(
-          (acc, { cost }) => ({
-            totalCpuCost: acc.totalCpuCost + (cost.cpuCost ?? 0),
-            totalGpuCost: acc.totalGpuCost + (cost.gpuCost ?? 0),
-            totalCost: acc.totalCost + (cost.totalCost ?? 0)
-          }),
-          { totalCpuCost: 0, totalGpuCost: 0, totalCost: 0 }
-        )
-      : {};
-
-    // Amounts in different currencies cannot be summed into one figure; say so
-    // rather than implying the total is denominated in whichever came first.
-    const currencies = new Set(priced.map(({ cost }) => cost.currency));
-    const currency =
-      currencies.size === 1 ? [...currencies][0] : currencies.size > 1 ? 'MIXED' : undefined;
+    // Retain scalar fields for single-currency clients only. These are estimates
+    // at current project rates; no exchange rates or historical billing implied.
+    const totals = costTotalsByCurrency.length === 1 ? costTotalsByCurrency[0] : {};
 
     return {
       ...stats,
       ...totals,
-      currency,
+      costTotalsByCurrency,
+      costCoverage,
       filters: {
         status: status || null,
         datasetId: datasetId || null,

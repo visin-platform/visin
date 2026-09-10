@@ -1,10 +1,13 @@
+import { canEditProject } from './projectAccessService';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Finding, { IFinding } from '../models/Finding';
 import Training from '../models/Training';
 import Epoch from '../models/Epoch';
 import Project from '../models/Project';
 import { ExportOptions, ExportRun, findingToLatex } from './latexExport';
-import { checkProjectAccess, createProjectAccessChecker } from './projectAccessService';
+import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from './projectAccessService';
+import { tokenProjectId } from '../middleware/projectTokenContext';
+import { parseFindingCursor } from './findingCursor';
 
 /**
  * Written conclusions about a project or a run.
@@ -98,6 +101,7 @@ export interface ListFindingsFilters {
   project?: string;
   training?: string;
   limit?: number;
+  before?: string;
 }
 
 export const listFindings = async (
@@ -110,6 +114,9 @@ export const listFindings = async (
     const projectId = await resolveProjectId(filters.project);
     if (!(await checkProjectAccess(userId, projectId))) throw new ForbiddenError();
     query.projectId = projectId;
+  } else {
+    // Privacy must be part of the query before the page limit is applied.
+    query.projectId = { $in: await getVisibleProjectIds(userId) };
   }
 
   if (filters.training) {
@@ -118,20 +125,20 @@ export const listFindings = async (
     query.$or = [{ trainingId: filters.training }, { trainingIds: filters.training }];
   }
 
+  if (filters.before !== undefined) {
+    const { createdAt, id } = parseFindingCursor(filters.before);
+    // Keep this separate from the subject-or-citation condition above.
+    query.$and = [{ $or: [
+      { createdAt: { $lt: createdAt } },
+      { createdAt, _id: { $lt: id } },
+    ] }];
+  }
+
   const findings = await Finding.find(query)
-    .sort({ createdAt: -1 })
+    .sort({ createdAt: -1, _id: -1 })
     .limit(Math.min(filters.limit ?? 50, 200));
 
-  if (filters.project) return attachCitations(findings, userId);
-
-  // No project filter: the query could not be scoped up front, so every row is
-  // checked before it is returned. Same rule as the rest of the service — an
-  // unscoped listing must never be a way around project privacy.
-  const visible: IFinding[] = [];
-  for (const finding of findings) {
-    if (await checkProjectAccess(userId, finding.projectId)) visible.push(finding);
-  }
-  return attachCitations(visible, userId);
+  return attachCitations(findings, userId);
 };
 
 export const getFinding = async (
@@ -171,8 +178,8 @@ export const createFinding = async (
   // Writing to a project you can only read would let anyone annotate any public
   // project. Findings are the owner's record, not a comment section.
   const project = await Project.findById(projectId);
-  if (project?.ownerId !== author.userId) {
-    throw new ForbiddenError('Only the project owner can record findings on it');
+  if (!(await canEditProject(project, author.userId))) {
+    throw new ForbiddenError('Project edit permission is required to record findings');
   }
 
   // The subject run is always among the citations, never only `trainingId`.
@@ -184,6 +191,12 @@ export const createFinding = async (
     ...new Set([...(input.training ? [input.training] : []), ...(input.trainingIds ?? [])])
   ];
   if (cited.length > 0) {
+    if (tokenProjectId()) {
+      const trainings = await Training.find({ _id: { $in: cited }, deletedAt: null });
+      for (const training of trainings) {
+        if (!(await checkProjectAccess(author.userId, training.projectId))) throw new ForbiddenError();
+      }
+    }
     // A citation naming a run that does not exist makes the finding unverifiable
     // by exactly the reader who would want to check it.
     const found = await Training.countDocuments({ _id: { $in: cited }, deletedAt: null });
@@ -276,9 +289,10 @@ const slugForFile = (title: string): string =>
 export const deleteFinding = async (id: string, userId: string | undefined): Promise<void> => {
   const finding = await Finding.findOne({ _id: id, deletedAt: null });
   if (!finding) throw new NotFoundError('Finding not found');
+  if (tokenProjectId() && !(await checkProjectAccess(userId, finding.projectId))) throw new ForbiddenError();
 
   const project = await Project.findById(finding.projectId);
-  if (project?.ownerId !== userId) throw new ForbiddenError();
+  if (!(await canEditProject(project, userId))) throw new ForbiddenError();
 
   // Soft, like every other delete here: a conclusion someone acted on is worth
   // being able to recover.

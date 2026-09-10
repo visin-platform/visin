@@ -1,3 +1,4 @@
+import { useWriteCapabilities } from '../../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
 import {
   Box,
@@ -29,7 +30,6 @@ import { trainingService } from '../../services/trainingService';
 import { Comparison, Training } from '../../types';
 import TrainingSelector from '../../components/comparison/TrainingSelector';
 import { formatDateTime } from '../../utils';
-import { useAuth } from '../../contexts/AuthContext';
 
 interface ProjectComparisonsTabProps {
   projectId: string;
@@ -41,7 +41,8 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const theme = useTheme();
-  const { isAuthenticated } = useAuth();
+  const canWrite = useWriteCapabilities('project', [projectId]);
+  const isAuthenticated = canWrite(projectId);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<ComparisonType>('trainings');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);

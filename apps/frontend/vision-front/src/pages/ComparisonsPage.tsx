@@ -114,7 +114,7 @@ const ComparisonsPage: React.FC = () => {
         onViewComparison={handleViewComparison}
         onEditComparison={handleEditComparison}
         onDeleteComparison={handleDeleteComparison}
-        canDelete={canDeleteComparisons()}
+        canDelete={canDeleteComparisons}
         formatTimestamp={formatTimestamp}
         getTypeColor={getTypeColor}
         theme={theme}

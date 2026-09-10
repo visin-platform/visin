@@ -1,3 +1,4 @@
+vi.mock('../../hooks/useWriteCapabilities', () => ({ useWriteCapabilities: () => () => true }));
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -48,9 +49,6 @@ vi.mock('../TrainingFormDialog', () => ({
 vi.mock('../../services/trainingService', () => ({
   trainingService: { updateTraining: vi.fn(), deleteTraining: vi.fn() },
 }));
-vi.mock('../../services/configService', () => ({
-  configService: { getAllConfigs: vi.fn() },
-}));
 vi.mock('../../services/projectService', () => ({
   projectService: { getProjects: vi.fn() },
 }));
@@ -62,13 +60,11 @@ vi.mock('../../services/comparisonService', () => ({
 }));
 
 import { trainingService } from '../../services/trainingService';
-import { configService } from '../../services/configService';
 import { projectService } from '../../services/projectService';
 import { getAllAnalyses } from '../../services/analysisService';
 import { comparisonService } from '../../services/comparisonService';
 
 const mockedTraining = vi.mocked(trainingService);
-const mockedConfig = vi.mocked(configService);
 const mockedProject = vi.mocked(projectService);
 const mockedGetAllAnalyses = vi.mocked(getAllAnalyses);
 const mockedComparison = vi.mocked(comparisonService);
@@ -104,7 +100,6 @@ const renderTab = (props = {}) => render(<ProjectTrainingsTab {...baseProps} {..
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedConfig.getAllConfigs.mockResolvedValue({ success: true, data: { configs: [] } } as never);
   mockedGetAllAnalyses.mockResolvedValue({ success: true, data: [] } as never);
   mockedProject.getProjects.mockResolvedValue({ success: true, data: [] } as never);
 });
@@ -116,7 +111,7 @@ describe('ProjectTrainingsTab', () => {
     expect(screen.getByText('Training t1')).toBeInTheDocument();
   });
 
-  it('shows Compare Selected once 2+ trainings are selected and creates a comparison', async () => {
+  it('opens a read-only comparison without persisting project data', async () => {
     mockedComparison.createComparison.mockResolvedValue({ success: true, data: { uuid: 'cmp-1' } } as never);
     renderTab({ trainings: [makeTraining('t1'), makeTraining('t2')] });
 
@@ -126,12 +121,8 @@ describe('ProjectTrainingsTab', () => {
     const compareButton = screen.getByRole('button', { name: /compare selected \(2\)/i });
     fireEvent.click(compareButton);
 
-    await waitFor(() =>
-      expect(mockedComparison.createComparison).toHaveBeenCalledWith(
-        expect.objectContaining({ itemIds: expect.arrayContaining(['t1', 't2']), projectId: 'p1' })
-      )
-    );
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/comparisons/cmp-1'));
+    expect(mockedComparison.createComparison).not.toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith('/trainings/compare?ids=t1,t2');
   });
 
   it('loads edit data and opens the edit dialog pre-filled', async () => {
@@ -140,7 +131,6 @@ describe('ProjectTrainingsTab', () => {
 
     fireEvent.click(screen.getByText('edit-t1'));
 
-    await waitFor(() => expect(mockedConfig.getAllConfigs).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText('editing-training')).toBeInTheDocument());
   });
 

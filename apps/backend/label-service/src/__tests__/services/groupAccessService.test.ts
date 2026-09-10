@@ -23,17 +23,17 @@ describe('requireUser', () => {
 
   it('rejects a request without a full user identity', () => {
     expect(() => requireUser({} as Request)).toThrow(UnauthorizedError);
-    expect(() => requireUser({ user: { id: 'u1' } } as unknown as Request)).toThrow(UnauthorizedError);
+    expect(() => requireUser({ user: { email: 'User@X.com' } } as unknown as Request)).toThrow(UnauthorizedError);
   });
 });
 
 describe('assertMember', () => {
-  it('passes for a member and lowercases the email', async () => {
+  it('passes the immutable account ID', async () => {
     mockedCheck.mockResolvedValue({ member: true, role: 'member' });
 
     await assertMember(makeReq(), 'g1');
 
-    expect(mockedCheck).toHaveBeenCalledWith('g1', 'user@x.com');
+    expect(mockedCheck).toHaveBeenCalledWith('g1', 'u1');
   });
 
   it('rejects a non-member', async () => {
@@ -77,4 +77,10 @@ describe('per-request cache', () => {
 
     expect(mockedCheck).toHaveBeenCalledTimes(2);
   });
+});
+
+it('does not require an email for membership', async () => {
+  mockedCheck.mockResolvedValue({ member: true, role: 'member' });
+  await assertMember({ user: { id: 'Id-Only' } } as Request, 'g1');
+  expect(mockedCheck).toHaveBeenCalledWith('g1', 'Id-Only');
 });

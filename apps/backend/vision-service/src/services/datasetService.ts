@@ -1,3 +1,5 @@
+import { claimUpload, isExternalUrl } from './uploadReservationService';
+import { requireActor } from './writeAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
 import { QueryFilter } from 'mongoose';
 import { NotFoundError } from '@visin/backend-core';
@@ -60,8 +62,12 @@ export const getDatasetById = async (id: string) => getDatasetByQuery({ _id: id 
 
 export const getDatasetByUuid = async (uuid: string) => getDatasetByQuery({ uuid });
 
-export const createDataset = async (data: CreateDatasetData) => {
+export const createDataset = async (data: CreateDatasetData, userId?: string) => {
+  const uploaded = data.downloadUrl && !isExternalUrl(data.downloadUrl)
+    ? await claimUpload(data.downloadUrl, 'archive', '-', 'dataset', userId) : undefined;
   const dataset = new Dataset({
+    _id: uploaded?.resourceId,
+    ownerId: requireActor(userId),
     uuid: data.uuid || uuidv4(),
     name: data.name,
     description: data.description,
@@ -92,12 +98,7 @@ export const getDatasetDownload = async (uuid: string) => {
       downloadUrl = dataset.downloadUrl;
     }
   } else {
-    const fallbackKey = `datasets/${dataset.name}.zip`;
-    const signedUrlData = await getSignedUrl(fallbackKey, 60);
-    if (!signedUrlData) {
-      throw new NotFoundError('Could not generate signed URL for the dataset');
-    }
-    downloadUrl = signedUrlData.signedUrl;
+    throw new NotFoundError('This dataset has no file to download');
   }
 
   return {

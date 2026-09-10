@@ -1,3 +1,4 @@
+import { assertResourceWrite } from './writeAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Epoch from '../models/Epoch';
@@ -139,10 +140,11 @@ export const createEpoch = async (
 ) => {
   const training = await getTrainingByIdOrThrow(data.trainingId);
   await assertTrainingAccess(training, userId, tokenProjectId, true);
+  await assertResourceWrite(training, userId);
 
   const epochData = new Epoch({
     trainingId: data.trainingId,
-    training_uuid: data.training_uuid,
+    training_uuid: training.uuid,
     epoch_uuid: data.epoch_uuid || uuidv4(),
     epoch: data.epoch,
     timestamp: data.timestamp || new Date(),
@@ -168,6 +170,7 @@ export const updateEpoch = async (
   const epoch = await getEpochByIdOrThrow(id);
   const training = await Training.findById(epoch.trainingId);
   await assertTrainingAccess(training, userId, tokenProjectId, true);
+  await assertResourceWrite(training, userId);
 
   if (updateData.timestamp !== undefined) epoch.timestamp = updateData.timestamp;
   if (updateData.results !== undefined) epoch.results = updateData.results;
@@ -204,6 +207,7 @@ export const createEpochFromJson = async (
   }
 
   await assertTrainingAccess(training, userId, tokenProjectId, true);
+  await assertResourceWrite(training, userId);
 
   if (data.epoch_uuid) {
     const existingEpoch = await Epoch.findOne({ epoch_uuid: data.epoch_uuid });
@@ -250,9 +254,12 @@ export const createEpochsBatch = async (
     if (!training || !(await checkProjectAccess(userId, training.projectId)) || !isWithinTokenScope(tokenProjectId, training.projectId)) {
       throw new ForbiddenError();
     }
+    await assertResourceWrite(training, userId);
   }
 
-  const savedEpochs = await Epoch.insertMany(preparedEpochs);
+  const savedEpochs = await Epoch.insertMany(preparedEpochs.map(epoch => ({
+    ...epoch, training_uuid: trainingById.get(epoch.trainingId)!.uuid
+  })));
 
   await Training.updateMany(
     { _id: { $in: uniqueTrainingIds } },

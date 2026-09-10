@@ -6,9 +6,6 @@ import type { ReactNode } from 'react';
 vi.mock('../services/trainingService', () => ({
   trainingService: { updateTraining: vi.fn(), getTrainings: vi.fn() }
 }));
-vi.mock('../services/configService', () => ({
-  configService: { getAllConfigs: vi.fn() }
-}));
 vi.mock('../services/projectService', () => ({
   projectService: { getProjects: vi.fn() }
 }));
@@ -17,14 +14,12 @@ vi.mock('../services/analysisService', () => ({
 }));
 
 import { trainingService } from '../services/trainingService';
-import { configService } from '../services/configService';
 import { projectService } from '../services/projectService';
 import { getAllAnalyses } from '../services/analysisService';
 import { useTrainingEdit } from './useTrainingEdit';
 import type { Training } from '../types';
 
 const mockedTraining = vi.mocked(trainingService);
-const mockedConfig = vi.mocked(configService);
 const mockedProject = vi.mocked(projectService);
 const mockedAnalyses = vi.mocked(getAllAnalyses);
 
@@ -47,7 +42,6 @@ const training: Training = {
 describe('useTrainingEdit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedConfig.getAllConfigs.mockResolvedValue({ success: true, data: { configs: [{ _id: 'c1' }] as any, pagination: {} as any } });
     mockedAnalyses.mockResolvedValue({ data: [{ _id: 'a1' }] as any, pagination: {} as any });
     mockedProject.getProjects.mockResolvedValue({ success: true, data: [{ _id: 'p1' }] as any });
     mockedTraining.getTrainings.mockResolvedValue({
@@ -56,7 +50,7 @@ describe('useTrainingEdit', () => {
     });
   });
 
-  it('handleEditTraining loads configs/datasets/projects/tags and opens the dialog prefilled', async () => {
+  it('handleEditTraining loads datasets/projects/tags and opens the dialog prefilled', async () => {
     const refetch = vi.fn();
     const { result } = renderHook(() => useTrainingEdit(training, refetch), { wrapper: makeWrapper() });
 
@@ -66,13 +60,11 @@ describe('useTrainingEdit', () => {
 
     expect(result.current.editDialogOpen).toBe(true);
     expect(result.current.editName).toBe('Training One');
-    expect(result.current.editConfigId).toBe('c1');
     expect(result.current.editDatasetId).toBe('d1');
     expect(result.current.editProjectId).toBe('p1');
     expect(result.current.editStatus).toBe('running');
     expect(result.current.editTags).toEqual(['a', 'b']);
     expect(result.current.availableTags).toEqual(['a', 'b', 'c']);
-    expect(result.current.editConfigs).toEqual([{ _id: 'c1' }]);
     expect(result.current.editDatasets).toEqual([{ _id: 'a1' }]);
     expect(result.current.editProjects).toEqual([{ _id: 'p1' }]);
   });
@@ -85,7 +77,7 @@ describe('useTrainingEdit', () => {
       await result.current.handleEditTraining();
     });
 
-    expect(mockedConfig.getAllConfigs).not.toHaveBeenCalled();
+    expect(mockedProject.getProjects).not.toHaveBeenCalled();
     expect(result.current.editDialogOpen).toBe(false);
   });
 

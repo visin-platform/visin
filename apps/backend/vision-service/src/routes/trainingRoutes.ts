@@ -32,7 +32,7 @@ router.get(
   validateRequest({ query: getTrainingWithEpochsQuerySchema }),
   getTrainingWithEpochs
 );
-router.get('/:id/configs', getConfigsByTraining);
+router.get('/:id/configs', optionalAuthMiddleware, getConfigsByTraining);
 router.get('/stats', optionalAuthMiddleware, validateRequest({ query: getTrainingStatsQuerySchema }), getTrainingStats);
 router.get('/', optionalAuthMiddleware, validateRequest({ query: getTrainingsQuerySchema }), getTrainings);
 router.get('/:id', optionalAuthMiddleware, getTrainingById);

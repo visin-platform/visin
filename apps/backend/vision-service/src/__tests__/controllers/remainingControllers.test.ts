@@ -1,3 +1,18 @@
+// These workflow tests stub the write-policy boundary. HTTP/Mongo integration
+// tests exercise the real owner/group policy, parent resolution, and denial effects.
+jest.mock('../../services/writeAccessService', () => ({
+  ...jest.requireActual('../../services/writeAccessService'),
+  assertResourceWrite: jest.fn(async (resource: unknown) => {
+    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+  }),
+  assertLibraryWrite: jest.fn(),
+  assertDatasetWrite: jest.fn(),
+  assertEpochWrite: jest.fn(async (uuid: string) => {
+    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
+    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+    return epoch;
+  })
+}));
 /**
  * Complements the existing epoch/comparison/datasetImage controller tests
  * with the handlers and branches those files don't cover.
@@ -32,9 +47,11 @@ jest.mock('../../models/Comparison', () => {
   return { __esModule: true, default: ctor };
 });
 jest.mock('../../services/projectAccessService', () => ({
+  ...jest.requireActual('../../services/projectAccessService'),
   checkProjectAccess: jest.fn(),
   getVisibleProjectIds: jest.fn(),
   isWithinTokenScope: jest.fn(),
+  resolveProject: jest.fn(),
 }));
 jest.mock('../../services/datasetImageService', () => ({
   getImages: jest.fn(),
@@ -62,6 +79,7 @@ import Comparison from '../../models/Comparison';
 import {
   checkProjectAccess,
   getVisibleProjectIds,
+  resolveProject,
   isWithinTokenScope,
 } from '../../services/projectAccessService';
 import * as imageService from '../../services/datasetImageService';
@@ -72,6 +90,7 @@ const mockedComparison = Comparison as unknown as jest.Mock & Record<string, jes
 const mockedCheckAccess = checkProjectAccess as jest.Mock;
 const mockedVisibleProjects = getVisibleProjectIds as jest.Mock;
 const mockedTokenScope = isWithinTokenScope as jest.Mock;
+const mockedResolveProject = resolveProject as jest.Mock;
 const mockedImageSvc = imageService as unknown as Record<string, jest.Mock>;
 
 type AnyDoc = Record<string, unknown>;
@@ -104,6 +123,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedCheckAccess.mockResolvedValue(true);
   mockedTokenScope.mockReturnValue(true);
+  // A projectId filter may be a slug; the query always uses the resolved id.
+  mockedResolveProject.mockImplementation((identifier: string) => ({ _id: identifier }));
 });
 
 describe('epochController.getEpochsByTraining', () => {
@@ -594,7 +615,7 @@ describe('datasetImageController', () => {
     );
 
     expect(mockedImageSvc.createDatasetImage).toHaveBeenCalledWith(
-      expect.objectContaining({ filename: 'f.jpg', fileId: 'm' })
+      expect.objectContaining({ filename: 'f.jpg', fileId: 'm' }), 'u1'
     );
     expect(res.status).toHaveBeenCalledWith(201);
   });
@@ -616,10 +637,10 @@ describe('datasetImageController', () => {
     expect(mockedImageSvc.getImageById).toHaveBeenCalledWith('i');
 
     await imageCtrl.updateImage(makeReq({ params: { id: 'i' }, body: { title: 'T' } }), makeRes());
-    expect(mockedImageSvc.updateImage).toHaveBeenCalledWith('i', expect.objectContaining({ title: 'T' }));
+    expect(mockedImageSvc.updateImage).toHaveBeenCalledWith('i', expect.objectContaining({ title: 'T' }), 'u1');
 
     await imageCtrl.deleteImage(makeReq({ params: { id: 'i' } }), makeRes());
-    expect(mockedImageSvc.deleteImage).toHaveBeenCalledWith('i');
+    expect(mockedImageSvc.deleteImage).toHaveBeenCalledWith('i', 'u1');
   });
 
   it('exportImageNames streams a CSV attachment', async () => {

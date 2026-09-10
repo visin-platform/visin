@@ -1,3 +1,4 @@
+import { useWriteCapabilities } from '../../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
 import {
   Box,
@@ -10,16 +11,14 @@ import {
 } from '@mui/material';
 import { Compare as CompareIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
 import TrainingsTable from '../TrainingsTable';
 import TrainingFormDialog from '../TrainingFormDialog';
 import { trainingService } from '../../services/trainingService';
-import { configService } from '../../services/configService';
 import { projectService } from '../../services/projectService';
 import { getAllAnalyses, type DatasetAnalysis } from '../../services/analysisService';
-import { comparisonService } from '../../services/comparisonService';
-import { Training, Config } from '../../types';
+import { Training } from '../../types';
 import { Project } from '../../types/Project';
 
 export type TrainingSortColumn = 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
@@ -53,6 +52,7 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
   onSort,
   isAuthenticated
 }) => {
+  const canWrite = useWriteCapabilities('training', trainings.map(row => row._id));
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   
@@ -64,17 +64,14 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
   const [trainingName, setTrainingName] = useState('');
   const [trainingDescription, setTrainingDescription] = useState('');
   const [selectedDatasetId, setSelectedDatasetId] = useState('');
-  const [selectedConfigId, setSelectedConfigId] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'pending' | 'running' | 'completed' | 'failed'>('pending');
   const [trainingTags, setTrainingTags] = useState<string[]>([]);
   
   const [datasets, setDatasets] = useState<DatasetAnalysis[]>([]);
-  const [configs, setConfigs] = useState<Config[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   
   const [loadingDatasets, setLoadingDatasets] = useState(false);
-  const [loadingConfigs, setLoadingConfigs] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [savingTraining, setSavingTraining] = useState(false);
   const [trainingError, setTrainingError] = useState<string | null>(null);
@@ -103,47 +100,21 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
     }
   };
 
-  // Create comparison mutation
-  const createComparisonMutation = useMutation({
-    mutationFn: (data: { name: string; itemIds: string[]; projectId: string }) =>
-      comparisonService.createComparison({
-        name: data.name,
-        type: 'trainings',
-        itemIds: data.itemIds,
-        projectId: data.projectId
-      }),
-    onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['project-comparisons', projectId] });
-      navigate(`/comparisons/${response.data.uuid}`);
-    }
-  });
-
   const handleCompareSelected = () => {
-    const selectedIds = Array.from(selectedTrainingIds);
-    if (selectedIds.length > 1) {
-      // Create a comparison with selected trainings
-      const comparisonName = `Comparison of ${selectedIds.length} trainings`;
-      createComparisonMutation.mutate({
-        name: comparisonName,
-        itemIds: selectedIds,
-        projectId: projectId
-      });
-    }
+    const ids = Array.from(selectedTrainingIds);
+    if (ids.length > 1) navigate(`/trainings/compare?ids=${ids.join(',')}`);
   };
 
   const handleEditTraining = async (training: Training) => {
     try {
-      setLoadingConfigs(true);
       setLoadingDatasets(true);
       setLoadingProjects(true);
 
-      const [configsRes, analysesRes, projectsRes] = await Promise.all([
-        configService.getAllConfigs(),
+      const [analysesRes, projectsRes] = await Promise.all([
         getAllAnalyses(100, 0),
         projectService.getProjects()
       ]);
 
-      setConfigs(configsRes.data.configs || []);
       setDatasets(analysesRes.data || []);
       setProjects(projectsRes.data || []);
 
@@ -151,7 +122,6 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
       setTrainingName(training.name);
       setTrainingDescription(training.description || '');
       setSelectedDatasetId(training.datasetId || '');
-      setSelectedConfigId(training.configId || '');
       setSelectedProjectId(training.projectId || '');
       setSelectedStatus(training.status);
       setTrainingTags(training.tags || []);
@@ -159,7 +129,6 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
     } catch (err) {
       console.error('Failed to load data for editing training:', err);
     } finally {
-      setLoadingConfigs(false);
       setLoadingDatasets(false);
       setLoadingProjects(false);
     }
@@ -173,7 +142,6 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
         name: trainingName,
         description: trainingDescription,
         datasetId: selectedDatasetId || undefined,
-        configId: selectedConfigId || undefined,
         projectId: selectedProjectId || undefined,
         status: selectedStatus,
         tags: trainingTags
@@ -232,6 +200,7 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
         )}
       </Box>
       <TrainingsTable 
+        canWrite={canWrite}
         trainings={trainings} 
         isLoading={isLoading}
         page={page}
@@ -260,7 +229,6 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
           setTrainingName('');
           setTrainingDescription('');
           setSelectedDatasetId('');
-          setSelectedConfigId('');
           setSelectedProjectId('');
           setSelectedStatus('pending');
           setTrainingTags([]);
@@ -270,13 +238,11 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
         onSubmit={handleSubmitTraining}
         isEditing={!!editingTrainingId}
         isCreating={savingTraining}
-        isLoadingData={loadingConfigs || loadingDatasets || loadingProjects}
+        isLoadingData={loadingDatasets || loadingProjects}
         trainingName={trainingName}
         onNameChange={setTrainingName}
         trainingDescription={trainingDescription}
         onDescriptionChange={setTrainingDescription}
-        selectedConfigId={selectedConfigId}
-        onConfigChange={setSelectedConfigId}
         selectedDatasetId={selectedDatasetId}
         onDatasetChange={setSelectedDatasetId}
         selectedProjectId={selectedProjectId}
@@ -286,12 +252,10 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
         trainingTags={trainingTags}
         onTagsChange={setTrainingTags}
         availableTags={[]}
-        configs={configs}
         datasets={datasets}
         projects={projects}
         error={trainingError}
         success={trainingSuccess}
-        loadingConfigs={loadingConfigs}
         loadingDatasets={loadingDatasets}
         loadingProjects={loadingProjects}
       />

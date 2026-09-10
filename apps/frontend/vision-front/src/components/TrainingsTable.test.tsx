@@ -66,7 +66,8 @@ const baseProps = {
   sortBy: 'createdAt' as const,
   sortOrder: 'desc' as const,
   onSort: vi.fn(),
-  isAuthenticated: true
+  isAuthenticated: true,
+  canWrite: () => true
 };
 
 const renderTable = (overrides: Partial<React.ComponentProps<typeof TrainingsTable>> = {}) =>
@@ -77,6 +78,12 @@ const renderTable = (overrides: Partial<React.ComponentProps<typeof TrainingsTab
   );
 
 describe('TrainingsTable', () => {
+  it('shows mutation controls only for writable rows in a mixed public list', () => {
+    renderTable({ canWrite: id => id === 't1' });
+    expect(screen.getAllByTestId('EditIcon')).toHaveLength(1);
+    expect(screen.getAllByTestId('DeleteIcon')).toHaveLength(1);
+  });
+
   it('renders a loading spinner when isLoading is true', () => {
     const { container } = renderTable({ isLoading: true });
     expect(container.querySelector('.MuiCircularProgress-root')).toBeInTheDocument();

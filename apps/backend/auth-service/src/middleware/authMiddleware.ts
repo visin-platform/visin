@@ -64,16 +64,19 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     const token = req.cookies?.access_token || req.headers.authorization?.replace('Bearer ', '');
     if (token) {
       const decoded = verifyJWT(token);
-      req.user = decoded;
-      // Upsert but do not block on approval
-      await User.findOneAndUpdate(
-        { email: decoded.email.toLowerCase() },
-        {
-          $setOnInsert: { email: decoded.email.toLowerCase(), signupMethod: 'google' },
-          $set: { lastLoginAt: new Date() }
-        },
-        { new: true, upsert: true }
-      );
+      // A retained session must not recreate a deleted user or consume setup.
+      // Matching identity and version in the update also rejects revoked tokens.
+      if (decoded.tokenVersion != null) {
+        const dbUser = await User.findOneAndUpdate(
+          { _id: decoded.id, email: decoded.email.toLowerCase(), tokenVersion: decoded.tokenVersion },
+          { $set: { lastLoginAt: new Date() } },
+          { new: true, upsert: false }
+        );
+        if (dbUser) {
+          req.user = decoded;
+          req.dbUser = dbUser;
+        }
+      }
     }
     next();
   } catch {
@@ -91,4 +94,3 @@ export const requireRole = (role: string) => {
     next();
   };
 };
-

@@ -73,8 +73,8 @@ const FindingSchema = new Schema<IFinding>(
   { timestamps: true, collection: 'findings' }
 );
 
-// Every listing is one project's findings, newest first.
-FindingSchema.index({ projectId: 1, createdAt: -1 });
+// Stable pages within visible projects, including equal creation timestamps.
+FindingSchema.index({ projectId: 1, deletedAt: 1, createdAt: -1, _id: -1 });
 // And the other way in: what has been concluded about this run.
 FindingSchema.index({ trainingIds: 1, createdAt: -1 });
 

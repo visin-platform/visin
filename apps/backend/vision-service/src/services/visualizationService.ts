@@ -1,3 +1,5 @@
+import { claimUpload, reserveUpload } from './uploadReservationService';
+import { assertEpochWrite } from './writeAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
 import { QueryFilter } from 'mongoose';
 import { ConflictError, ForbiddenError, NotFoundError, logger } from '@visin/backend-core';
@@ -5,22 +7,10 @@ import EpochVisualization, { IEpochVisualization } from '../models/EpochVisualiz
 import Epoch from '../models/Epoch';
 import Training from '../models/Training';
 import { getSignedUrl, getUploadSignedUrl, type SignedUrlData } from './fileServiceClient';
-import { checkProjectAccess, getVisibleTrainingIds, isWithinTokenScope } from './projectAccessService';
+import { checkProjectAccess, getVisibleTrainingIds } from './projectAccessService';
 import type { GetVisualizationsByTrainingQuery } from '../validation/visualizationSchemas';
 
-/**
- * Resolves an epoch's parent training and checks project access.
- * `reqProjectId`, when passed, additionally enforces that the training
- * belongs to that project — used on writes to keep a project-scoped API
- * token inside its own project.
- */
-async function checkEpochAccess(epochUuid: string, userId: string | undefined, reqProjectId?: string): Promise<boolean> {
-  const epoch = await Epoch.findOne({ epoch_uuid: epochUuid });
-  if (!epoch) return true; // Missing epoch is a 404 concern for the caller, not an access one
-  const training = await Training.findById(epoch.trainingId);
-  if (!(await checkProjectAccess(userId, training?.projectId))) return false;
-  return isWithinTokenScope(reqProjectId, training?.projectId);
-}
+import { checkEpochAccess } from './epochAccessService';
 
 function withSignedUrl(viz: IEpochVisualization, signedUrlData: SignedUrlData | null) {
   return {
@@ -49,14 +39,22 @@ export const getVisualizationUploadUrl = async (
     throw new NotFoundError('Epoch not found');
   }
 
+  await assertEpochWrite(epoch_uuid, userId, reqProjectId);
   if (!(await checkEpochAccess(epoch_uuid, userId, reqProjectId))) {
     throw new ForbiddenError();
   }
 
   const visualization_uuid = uuidv4();
-  const extension = filename.split('.').pop();
-  const fileId = `visualizations/${epoch_uuid}/${type}/${visualization_uuid}.${extension}`;
+  const extension =
+    filename
+      .split('.')
+      .pop()
+      ?.replace(/[^A-Za-z0-9]/g, '')
+      .slice(0, 12) || 'bin';
+  const folder = type.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'image';
+  const fileId = `visualizations/${epoch._id}/${folder}/${visualization_uuid}.${extension}`;
 
+  await reserveUpload(fileId, 'visualization', epoch_uuid, mimetype, userId, visualization_uuid);
   const uploadUrl = await getUploadSignedUrl(fileId, mimetype, 15);
 
   logger.info('Visualization upload URL generated', {
@@ -99,6 +97,7 @@ export const createVisualization = async (
     throw new NotFoundError('Epoch not found');
   }
 
+  await assertEpochWrite(epoch_uuid, userId, reqProjectId);
   if (!(await checkEpochAccess(epoch_uuid, userId, reqProjectId))) {
     throw new ForbiddenError();
   }
@@ -108,6 +107,7 @@ export const createVisualization = async (
     throw new ConflictError('Visualization with this UUID already exists');
   }
 
+  await claimUpload(fileId, 'visualization', epoch_uuid, 'visualization', userId, visualization_uuid, size, mimetype);
   const visualization = new EpochVisualization({
     epoch_uuid,
     visualization_uuid,
@@ -161,6 +161,7 @@ export const deleteVisualization = async (
     throw new NotFoundError('Visualization not found');
   }
 
+  await assertEpochWrite(visualization.epoch_uuid, userId, reqProjectId);
   if (!(await checkEpochAccess(visualization.epoch_uuid, userId, reqProjectId))) {
     throw new ForbiddenError();
   }
@@ -221,12 +222,15 @@ export const getVisualizationsByTraining = async (
   // If specific training_uuid is provided, return flat list for that training
   if (training_uuid && training_uuid.trim() !== '') {
     const parentTraining = await Training.findOne({ uuid: training_uuid, deletedAt: null });
-    if (parentTraining && !(await checkProjectAccess(userId, parentTraining.projectId))) {
+    if (!parentTraining) throw new NotFoundError('Training not found');
+    if (!(await checkProjectAccess(userId, parentTraining.projectId))) {
       throw new ForbiddenError();
     }
 
-    const epochs = await Epoch.find({ training_uuid }).select('epoch_uuid epoch');
-    const epochUuids = epochs.map(e => e.epoch_uuid);
+    const epochs = await Epoch.find({ trainingId: parentTraining._id.toString(), deletedAt: null }).select(
+      'epoch_uuid epoch'
+    );
+    const epochUuids = epochs.map((e) => e.epoch_uuid);
 
     if (epochUuids.length === 0) {
       return { visualizations: [], total: 0, pagination: { page, limit, total: 0, pages: 0 } };
@@ -243,7 +247,7 @@ export const getVisualizationsByTraining = async (
 
     const visualizationsWithUrls = await Promise.all(
       visualizations.map(async (viz) => {
-        const epoch = epochs.find(e => e.epoch_uuid === viz.epoch_uuid);
+        const epoch = epochs.find((e) => e.epoch_uuid === viz.epoch_uuid);
         const result: Record<string, unknown> = { ...viz.toObject(), epoch: epoch?.epoch };
         if (shouldIncludeUrls) {
           const signedUrlData = await getSignedUrl(viz.fileId, 60);
@@ -275,8 +279,10 @@ export const getVisualizationsByTraining = async (
 
     const trainingsData = await Promise.all(
       trainings.map(async (training) => {
-        const epochs = await Epoch.find({ training_uuid: training.uuid }).select('epoch_uuid epoch');
-        const epochUuids = epochs.map(e => e.epoch_uuid);
+        const epochs = await Epoch.find({ trainingId: training._id.toString(), deletedAt: null }).select(
+          'epoch_uuid epoch'
+        );
+        const epochUuids = epochs.map((e) => e.epoch_uuid);
 
         if (epochUuids.length === 0) {
           return { training_uuid: training.uuid, training_name: training.name, visualizations: [] };
@@ -291,7 +297,7 @@ export const getVisualizationsByTraining = async (
 
         const visualizationsWithUrls = await Promise.all(
           visualizations.map(async (viz) => {
-            const epoch = epochs.find(e => e.epoch_uuid === viz.epoch_uuid);
+            const epoch = epochs.find((e) => e.epoch_uuid === viz.epoch_uuid);
             const result: Record<string, unknown> = { ...viz.toObject(), epoch: epoch?.epoch };
             if (shouldIncludeUrls) {
               const signedUrlData = await getSignedUrl(viz.fileId, 60);
@@ -322,19 +328,23 @@ export const getVisualizationsByTraining = async (
   // is visible to the caller — otherwise this returns every project's
   // visualization images regardless of privacy.
   const visibleTrainingIds = await getVisibleTrainingIds(userId);
-  const visibleEpochs = await Epoch.find({ trainingId: { $in: visibleTrainingIds } }).select('epoch_uuid');
-  query.epoch_uuid = { $in: visibleEpochs.map(e => e.epoch_uuid) };
+  const visibleEpochs = await Epoch.find({ trainingId: { $in: visibleTrainingIds }, deletedAt: null }).select(
+    'epoch_uuid'
+  );
+  query.epoch_uuid = { $in: visibleEpochs.map((e) => e.epoch_uuid) };
 
   const skip = (page - 1) * limit;
   const total = await EpochVisualization.countDocuments(query);
   const visualizations = await EpochVisualization.find(query).sort({ uploadedAt: -1 }).skip(skip).limit(limit);
 
-  const uniqueEpochUuids = [...new Set(visualizations.map(v => v.epoch_uuid))];
-  const allEpochs = await Epoch.find({ epoch_uuid: { $in: uniqueEpochUuids } }).select('epoch_uuid epoch training_uuid');
+  const uniqueEpochUuids = [...new Set(visualizations.map((v) => v.epoch_uuid))];
+  const allEpochs = await Epoch.find({ epoch_uuid: { $in: uniqueEpochUuids }, deletedAt: null }).select(
+    'epoch_uuid epoch training_uuid'
+  );
 
   const visualizationsWithUrls = await Promise.all(
     visualizations.map(async (viz) => {
-      const epoch = allEpochs.find(e => e.epoch_uuid === viz.epoch_uuid);
+      const epoch = allEpochs.find((e) => e.epoch_uuid === viz.epoch_uuid);
       const result: Record<string, unknown> = {
         ...viz.toObject(),
         epoch: epoch?.epoch,
@@ -370,14 +380,22 @@ export const getVisualizationTypes = async (
     query.epoch_uuid = epoch_uuid;
   } else if (training_uuid) {
     const parentTraining = await Training.findOne({ uuid: training_uuid, deletedAt: null });
-    if (parentTraining && !(await checkProjectAccess(userId, parentTraining.projectId))) {
+    if (!parentTraining) throw new NotFoundError('Training not found');
+    if (!(await checkProjectAccess(userId, parentTraining.projectId))) {
       throw new ForbiddenError();
     }
-    const epochs = await Epoch.find({ training_uuid }).select('epoch_uuid');
-    const epochUuids = epochs.map(e => e.epoch_uuid);
+    const epochs = await Epoch.find({ trainingId: parentTraining._id.toString(), deletedAt: null }).select(
+      'epoch_uuid'
+    );
+    const epochUuids = epochs.map((e) => e.epoch_uuid);
     query.epoch_uuid = { $in: epochUuids };
   }
 
+  if (!epoch_uuid && !training_uuid) {
+    const ids = await getVisibleTrainingIds(userId);
+    const epochs = await Epoch.find({ trainingId: { $in: ids }, deletedAt: null }).select('epoch_uuid');
+    query.$and = [{ epoch_uuid: { $in: epochs.map((row) => row.epoch_uuid) } }];
+  }
   const types = await EpochVisualization.distinct('type', query);
   return types.sort();
 };

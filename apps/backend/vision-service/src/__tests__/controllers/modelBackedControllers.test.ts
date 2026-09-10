@@ -1,3 +1,30 @@
+import { claimUpload } from '../../services/uploadReservationService';
+import { ForbiddenError } from '@visin/backend-core';
+jest.mock('../../services/uploadReservationService', () => ({
+  ...jest.requireActual('../../services/uploadReservationService'),
+  reserveUpload: jest.fn(async () => ({ allocationId: 'reserved-id' })),
+  claimUpload: jest.fn(async (_fileId: string, _kind: string, _parent: string, _resource: string, _user: string, resourceId?: string) => {
+    const files = jest.requireMock('../../services/fileServiceClient');
+    const metadata = files.getFileMetadata ? await files.getFileMetadata(_fileId) : undefined;
+    return { resourceId: resourceId || 'reserved-id', size: metadata?.size ?? 10 };
+  }),
+  deleteReservedFile: jest.fn(async (fileId: string) => jest.requireMock('../../services/fileServiceClient').deleteFile(fileId))
+}));
+// These workflow tests stub the write-policy boundary. HTTP/Mongo integration
+// tests exercise the real owner/group policy, parent resolution, and denial effects.
+jest.mock('../../services/writeAccessService', () => ({
+  ...jest.requireActual('../../services/writeAccessService'),
+  assertResourceWrite: jest.fn(async (resource: unknown) => {
+    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+  }),
+  assertLibraryWrite: jest.fn(),
+  assertDatasetWrite: jest.fn(),
+  assertEpochWrite: jest.fn(async (uuid: string) => {
+    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
+    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+    return epoch;
+  })
+}));
 /**
  * Covers the controllers that talk to Mongoose models directly (older style):
  * analysis / config / dataset / imageCategory / apiToken.
@@ -53,7 +80,7 @@ jest.mock('../../models/ApiToken', () => {
 });
 jest.mock('../../models/Training', () => ({
   __esModule: true,
-  default: { findById: jest.fn() },
+  default: { findById: jest.fn(), findOne: jest.fn() },
 }));
 jest.mock('../../services/datasetImageService', () => ({
   getLabelingStats: jest.fn(),
@@ -65,7 +92,9 @@ jest.mock('../../services/fileServiceClient', () => ({
   deleteFile: jest.fn(),
 }));
 jest.mock('../../services/projectAccessService', () => ({
+  ...jest.requireActual('../../services/projectAccessService'),
   isProjectOwner: jest.fn(),
+  checkProjectAccess: jest.fn().mockResolvedValue(true),
 }));
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),
@@ -253,10 +282,11 @@ describe('analysisController', () => {
     expect(res.json.mock.calls[0][0].data.downloadUrl).toBe(FILE_ID);
   });
 
-  it('uploadAnalysis rejects a fileId this service never issued', async () => {
+  it('uploadAnalysis propagates reservation rejection before saving', async () => {
+    jest.mocked(claimUpload).mockRejectedValueOnce(new ForbiddenError('Unreserved file'));
     await expect(
       analysisCtrl.uploadAnalysis(makeReq({ body: { dataset: 'waymo', fileId: 'u1/album/original.png' } }), makeRes())
-    ).rejects.toThrow('Invalid fileId');
+    ).rejects.toThrow('Unreserved file');
     expect(mockedAnalysis).not.toHaveBeenCalled();
   });
 
@@ -359,11 +389,12 @@ describe('analysisController', () => {
   });
 
   it('deleteAnalysis 404s or deletes', async () => {
-    mockedAnalysis.findByIdAndDelete.mockResolvedValue(null);
+    mockedAnalysis.findById.mockResolvedValue(null);
     await expect(analysisCtrl.deleteAnalysis(makeReq({ params: { id: 'x' } }), makeRes())).rejects.toThrow(
       'Analysis not found'
     );
 
+    mockedAnalysis.findById.mockResolvedValue({ _id: 'a1', fileId: FILE_ID });
     mockedAnalysis.findByIdAndDelete.mockResolvedValue({ _id: 'a1', fileId: FILE_ID });
     const res = makeRes();
     await analysisCtrl.deleteAnalysis(makeReq({ params: { id: 'a1' } }), res);
@@ -415,18 +446,18 @@ describe('configController', () => {
   });
 
   it('getConfigsByTraining handles missing training, linked config, and none', async () => {
-    mockedTraining.findById.mockResolvedValue(null);
+    mockedTraining.findOne.mockResolvedValue(null);
     await expect(
       configCtrl.getConfigsByTraining(makeReq({ params: { trainingId: 't1' } }), makeRes())
     ).rejects.toThrow('Training not found');
 
-    mockedTraining.findById.mockResolvedValue({ _id: 't1', configId: 'c1' });
+    mockedTraining.findOne.mockResolvedValue({ _id: 't1', configId: 'c1' });
     mockedConfig.findById.mockResolvedValue({ _id: 'c1' });
     const res = makeRes();
     await configCtrl.getConfigsByTraining(makeReq({ params: { trainingId: 't1' } }), res);
     expect(res.json.mock.calls[0][0].data.total).toBe(1);
 
-    mockedTraining.findById.mockResolvedValue({ _id: 't1' });
+    mockedTraining.findOne.mockResolvedValue({ _id: 't1' });
     const res2 = makeRes();
     await configCtrl.getConfigsByTraining(makeReq({ params: { trainingId: 't1' } }), res2);
     expect(res2.json.mock.calls[0][0].data.total).toBe(0);
@@ -519,7 +550,7 @@ describe('datasetController', () => {
     expect(res.json).toHaveBeenCalledWith({ success: true, data: { total: 1 } });
   });
 
-  it('downloadDataset covers stored storage path, absolute URL, and default fallback', async () => {
+  it('downloadDataset uses explicit storage paths or URLs and rejects missing locations', async () => {
     // stored storage path
     mockedDataset.findOne.mockResolvedValue({ uuid: 'u', name: 'D', downloadUrl: 'datasets/D.zip' });
     mockedGetSignedUrl.mockResolvedValue({ signedUrl: 'http://signed' });
@@ -533,12 +564,10 @@ describe('datasetController', () => {
     await datasetCtrl.downloadDataset(makeReq({ params: { uuid: 'u' } }), res2);
     expect(res2.json.mock.calls[0][0].data.downloadUrl).toBe('https://cdn/x.zip');
 
-    // no stored URL → default path
     mockedDataset.findOne.mockResolvedValue({ uuid: 'u', name: 'D' });
-    const res3 = makeRes();
-    await datasetCtrl.downloadDataset(makeReq({ params: { uuid: 'u' } }), res3);
-    expect(mockedGetSignedUrl).toHaveBeenLastCalledWith('datasets/D.zip', 60);
-    expect(res3.json.mock.calls[0][0].data.downloadUrl).toBe('http://signed');
+    mockedGetSignedUrl.mockClear();
+    await expect(datasetCtrl.downloadDataset(makeReq({ params: { uuid: 'u' } }), makeRes())).rejects.toThrow('no file to download');
+    expect(mockedGetSignedUrl).not.toHaveBeenCalled();
   });
 
   it('downloadDataset 404s for missing dataset or unsignable URL', async () => {

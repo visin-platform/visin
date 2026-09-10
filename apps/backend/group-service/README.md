@@ -20,7 +20,6 @@ Copy `.env.example` to `.env` and set:
 - `MONGODB_URI`: MongoDB database used for groups.
 - `JWT_SECRET`: shared JWT verification secret. Must match `auth-service`.
 - `INTERNAL_SERVICE_TOKEN`: shared service-to-service token. Must match `auth-service`.
-- `AUTH_SERVICE_URL`: auth service URL, usually `http://localhost:5001`.
 - `CORS_ORIGIN`: comma-separated browser origins.
 
 ## Commands
@@ -33,6 +32,30 @@ npm run lint --workspace=group-service
 npm run typecheck --workspace=group-service
 ```
 
+Ownership changes require an existing owner. Admins can manage ordinary members
+and other admins, but cannot create or promote owners. To hand over ownership,
+invite and accept the replacement, or promote an existing member, first, then demote or remove the previous owner.
+The last owner cannot leave or be demoted.
+
+Membership and group lifecycle writes use optimistic concurrency. A concurrent
+change returns HTTP 409; reload the group and reconsider the action before
+retrying. Permanent deletion also checks the authorized revision and deleted state.
+
+### Database regression tests
+
+The ownership concurrency suite uses `mongodb-memory-server` and runs as part of
+the normal test command locally and in CI:
+
+```bash
+npm test --workspace=group-service -- --runInBand
+```
+
+It starts and stops its own isolated database, with no Docker or external MongoDB
+configuration. The first run downloads MongoDB 8.2.11 to the package's binary cache.
+The tests exercise real conditional writes, simultaneous demotions/removals,
+legacy duplicate memberships, imported groups without a version key, stale
+authorization, restore/delete races, and ordinary ownership handover.
+
 ## Docker Compose
 
 ```bash
@@ -40,3 +63,42 @@ docker compose -f apps/backend/group-service/compose.yml up --build
 ```
 
 The compose file expects the same env vars to be present in the shell or an env file, and joins the external `visinnet` network.
+
+## Project editor membership lookup
+
+Vision-service uses `POST /api/internal/project-groups` to obtain only the IDs and
+names of live groups for an authenticated account ID. The request contains
+`userId`, `issuedAt` (epoch milliseconds), and `signature` (hex HMAC-SHA256).
+The signed payload is `JSON.stringify(["vision-project-groups", userId, issuedAt])`
+using the existing shared `JWT_SECRET`. Assertions outside a 30-second window or
+with altered fields are rejected. This endpoint is read-only, returns no member
+list, and does not authenticate requests to ordinary group-management routes.
+No additional deployment environment variable is required.
+
+## Account identities and invitations
+
+Membership authority is `members[].userId`, the immutable auth-service account ID.
+`createdBy` is also an account ID; optional member `email` is display metadata only.
+Neither request email nor JWT `groupRoles` grants group access. Browser actions use
+`req.user.id`; authenticated internal callers specify `?userId=<account-id>`.
+Existing email-only memberships require an operator migration; there is no fallback.
+
+An owner/admin creates an invitation with `POST /api/groups/:id/invitations`
+and `{ "role": "member" }` (default). Only owners may invite owners. The response
+contains a random single-use token, role and expiry; only its SHA-256 hash is stored.
+Account-front presents `/invite#<token>` for direct sharing. Anyone possessing the
+link can accept it, so share it only with the intended person. Links expire after
+seven days, with at most 100 pending invitations per group.
+
+Signed-in recipients preview with `POST /api/groups/invitations/preview` and explicitly
+accept with `POST /api/groups/invitations/accept`, each using `{ "token": "..." }`.
+Preview does not consume the token or add membership. Acceptance binds the signed-in
+account ID and consumes the token in one versioned write. Replays, expired tokens,
+deleted groups, stale inviter authority, and existing-member role escalation fail.
+Owners/admins revoke all pending links with `DELETE /api/groups/:id/invitations`.
+Role changes and removals target `/api/groups/:id/members/:memberId` by account ID.
+
+No email verification or mail delivery is implemented. Group changes take effect
+through live membership checks; they do not log a person out across applications.
+The platform's separate session-revocation and Google-account-linking limitations
+remain tracked in the root `todo.md`.

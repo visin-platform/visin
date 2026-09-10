@@ -21,10 +21,10 @@ const ROLES: GroupRole[] = ['owner', 'admin', 'member'];
 interface GroupMembersProps {
   group: Group;
   permissions: GroupPermissions;
-  currentUserEmail?: string;
+  currentUserId?: string;
   busy: boolean;
-  onChangeRole: (email: string, role: GroupRole) => void;
-  onRemove: (email: string) => void;
+  onChangeRole: (userId: string, role: GroupRole) => void;
+  onRemove: (userId: string) => void;
 }
 
 /**
@@ -36,22 +36,22 @@ interface GroupMembersProps {
 const GroupMembers: React.FC<GroupMembersProps> = ({
   group,
   permissions,
-  currentUserEmail,
+  currentUserId,
   busy,
   onChangeRole,
   onRemove
 }) => {
-  const me = currentUserEmail?.toLowerCase();
+  const me = currentUserId;
 
-  const roleBlockedReason = (memberEmail: string, memberRole: GroupRole): string | null => {
-    if (isLastOwner(group, memberEmail)) return 'A group must keep at least one owner';
+  const roleBlockedReason = (memberId: string, memberRole: GroupRole): string | null => {
+    if (isLastOwner(group, memberId)) return 'A group must keep at least one owner';
     if (memberRole === 'owner' && !permissions.canManageOwners) return 'Only an owner can change an owner';
     return null;
   };
 
-  const removeBlockedReason = (memberEmail: string, memberRole: GroupRole): string | null => {
-    if (isLastOwner(group, memberEmail)) return 'A group must keep at least one owner';
-    if (memberEmail === me) return null;
+  const removeBlockedReason = (memberId: string, memberRole: GroupRole): string | null => {
+    if (isLastOwner(group, memberId)) return 'A group must keep at least one owner';
+    if (memberId === me) return null;
     if (!permissions.canManageMembers) return 'Only an owner or admin can remove members';
     if (memberRole === 'owner' && !permissions.canManageOwners) return 'Only an owner can remove an owner';
     return null;
@@ -68,16 +68,16 @@ const GroupMembers: React.FC<GroupMembersProps> = ({
       </TableHead>
       <TableBody>
         {group.members.map(member => {
-          const roleBlocked = roleBlockedReason(member.email, member.role);
-          const removeBlocked = removeBlockedReason(member.email, member.role);
+          const roleBlocked = roleBlockedReason(member.userId, member.role);
+          const removeBlocked = removeBlockedReason(member.userId, member.role);
           const canEditRole = permissions.canManageMembers && !roleBlocked;
 
           return (
-            <TableRow key={member.email}>
+            <TableRow key={member.userId}>
               <TableCell>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body2">{member.email}</Typography>
-                  {member.email === me && <Chip label="You" size="small" variant="outlined" />}
+                  <Typography variant="body2">{member.email || member.userId}</Typography>
+                  {member.userId === me && <Chip label="You" size="small" variant="outlined" />}
                 </Box>
               </TableCell>
               <TableCell>
@@ -87,10 +87,10 @@ const GroupMembers: React.FC<GroupMembersProps> = ({
                     fullWidth
                     value={member.role}
                     disabled={busy}
-                    inputProps={{ 'aria-label': `Role for ${member.email}` }}
-                    onChange={event => onChangeRole(member.email, event.target.value as GroupRole)}
+                    inputProps={{ 'aria-label': `Role for ${member.email || member.userId}` }}
+                    onChange={event => onChangeRole(member.userId, event.target.value as GroupRole)}
                   >
-                    {ROLES.map(role => (
+                    {ROLES.filter(role => permissions.canManageOwners || role !== 'owner').map(role => (
                       <MenuItem key={role} value={role}>
                         {role}
                       </MenuItem>
@@ -103,14 +103,14 @@ const GroupMembers: React.FC<GroupMembersProps> = ({
                 )}
               </TableCell>
               <TableCell align="right">
-                <Tooltip title={removeBlocked ?? (member.email === me ? 'Leave group' : 'Remove member')}>
+                <Tooltip title={removeBlocked ?? (member.userId === me ? 'Leave group' : 'Remove member')}>
                   <span>
                     <IconButton
                       size="small"
                       color="error"
                       disabled={busy || removeBlocked !== null}
-                      aria-label={member.email === me ? 'Leave group' : `Remove ${member.email}`}
-                      onClick={() => onRemove(member.email)}
+                      aria-label={member.userId === me ? 'Leave group' : `Remove ${member.email || member.userId}`}
+                      onClick={() => onRemove(member.userId)}
                     >
                       <PersonRemove fontSize="small" />
                     </IconButton>

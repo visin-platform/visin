@@ -151,6 +151,8 @@ services:
       PORT: 4010
       # Internal: /internal/* calls, container to container.
       FILE_SERVICE_URL: http://file-service:5002
+      # Project editor groups are read from group-service on every signed-in request.
+      GROUP_SERVICE_URL: http://group-service:5006
 
   label-service:
     build: ./apps/backend/label-service

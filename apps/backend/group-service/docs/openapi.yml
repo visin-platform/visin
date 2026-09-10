@@ -49,8 +49,8 @@ components:
           example: "Project Team Alpha"
         createdBy:
           type: string
-          format: email
-          example: "creator@example.com"
+          description: Immutable creator account ID
+          example: "507f1f77bcf86cd799439011"
         members:
           type: array
           items:
@@ -74,6 +74,9 @@ components:
     GroupMember:
       type: object
       properties:
+        userId:
+          type: string
+          description: Immutable account ID used for authorization
         email:
           type: string
           format: email
@@ -92,7 +95,7 @@ components:
           nullable: true
           example: "2023-01-15T10:30:00.000Z"
       required:
-        - email
+        - userId
         - role
         - joinedAt
 
@@ -245,20 +248,20 @@ components:
       required:
         - name
 
-    AddMemberRequest:
+    CreateInvitationRequest:
       type: object
       properties:
-        email:
-          type: string
-          format: email
-          example: "newmember@example.com"
         role:
           type: string
-          enum: ["owner", "admin", "member"]
-          default: "member"
-          example: "member"
-      required:
-        - email
+          enum: [owner, admin, member]
+          default: member
+    InvitationTokenRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
 
     UpdateRoleRequest:
       type: object
@@ -283,6 +286,60 @@ components:
       description: Internal service token for inter-service communication
 
 paths:
+  /api/internal/project-groups:
+    post:
+      tags: [Group Membership]
+      summary: Resolve current groups for a verified vision-service identity
+      description: >-
+        Read-only service assertion using the existing JWT_SECRET. The signature is
+        hex HMAC-SHA256 over JSON.stringify(["vision-project-groups", userId, issuedAt]).
+        The timestamp must be within 30 seconds. This assertion cannot authenticate
+        ordinary group-management requests. Only live group IDs and names are returned.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, issuedAt, signature]
+              properties:
+                userId:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                issuedAt:
+                  type: integer
+                  format: int64
+                  description: Unix timestamp in milliseconds
+                signature:
+                  type: string
+                  pattern: '^[0-9a-f]{64}$'
+      responses:
+        '200':
+          description: Current memberships; Cache-Control is no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+        '400':
+          description: Invalid request body
+        '403':
+          description: Invalid signature or expired assertion
   # Health check endpoint
   /health:
     get:
@@ -359,7 +416,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/GroupsResponse'
         '400':
-          description: Bad request - user email required
+          description: Bad request - user ID required
           content:
             application/json:
               schema:
@@ -389,7 +446,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/GroupsResponse'
         '400':
-          description: Bad request - user email required
+          description: Bad request - user ID required
           content:
             application/json:
               schema:
@@ -420,7 +477,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/GroupRolesResponse'
         '400':
-          description: Bad request - user email required
+          description: Bad request - user ID required
           content:
             application/json:
               schema:
@@ -656,63 +713,100 @@ paths:
         - internalAuth: []
 
   # Member Management Endpoints
-  /api/groups/{id}/members:
+  /api/groups/{id}/invitations:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
     post:
       tags: [Group Members]
-      summary: Add member to group
-      description: |
-        Adds a new member to the group.
-        User must be an owner or admin of the group.
-        Automatically invalidates the new member's tokens to refresh their group permissions.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Group ID
+      summary: Create a single-use invitation
+      description: Owners/admins may invite members or admins; only owners may invite owners. Share the returned link directly. Expires in seven days; at most 100 pending invitations. Response is not cacheable.
+      security:
+        - bearerAuth: []
+        - internalAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AddMemberRequest'
+              $ref: '#/components/schemas/CreateInvitationRequest'
       responses:
         '201':
-          description: Member added successfully
+          description: Invitation created; token is returned only at creation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      token: { type: string }
+                      expiresAt: { type: string, format: date-time }
+                      role: { type: string, enum: [owner, admin, member] }
+        '403': { description: Insufficient permissions }
+        '404': { description: Group not found }
+        '409': { description: Concurrent change or invitation limit reached }
+    delete:
+      tags: [Group Members]
+      summary: Revoke all pending invitations
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+      responses:
+        '204': { description: Pending invitations revoked }
+        '403': { description: Insufficient permissions }
+        '404': { description: Group not found }
+        '409': { description: Concurrent change }
+
+  /api/groups/invitations/preview:
+    post:
+      tags: [Group Members]
+      summary: Preview an invitation without consuming it
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationTokenRequest'
+      responses:
+        '200':
+          description: Non-cacheable groupId, name, role and expiresAt in the data envelope
+        '401': { description: Sign-in required }
+        '403': { description: Inviter no longer has permission }
+        '404': { description: Invalid, expired, revoked, or consumed invitation }
+
+  /api/groups/invitations/accept:
+    post:
+      tags: [Group Members]
+      summary: Explicitly accept an invitation as the signed-in account
+      description: Binds membership to req.user.id and consumes the token atomically. Email and caller-supplied account IDs do not grant authority.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationTokenRequest'
+      responses:
+        '200':
+          description: Membership accepted; response does not contain invitation hashes
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GroupResponse'
-        '400':
-          description: Bad request - invalid email or user already a member
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Group not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - bearerAuth: []
-        - internalAuth: []
+        '401': { description: Sign-in required }
+        '403': { description: Inviter no longer has permission }
+        '404': { description: Invalid, expired, revoked, or consumed invitation }
+        '409': { description: Already a member or concurrent change }
 
-  /api/groups/{id}/members/{memberEmail}:
+  /api/groups/{id}/members/{memberId}:
     patch:
       tags: [Group Members]
       summary: Update member role
@@ -720,7 +814,6 @@ paths:
         Updates a member's role in the group.
         User must be an owner or admin of the group.
         Cannot change the role of the group owner.
-        Automatically invalidates the member's tokens to refresh their permissions.
       parameters:
         - name: id
           in: path
@@ -728,13 +821,12 @@ paths:
           schema:
             type: string
           description: Group ID
-        - name: memberEmail
+        - name: memberId
           in: path
           required: true
           schema:
             type: string
-            format: email
-          description: Member's email address
+          description: Member's immutable account ID
       requestBody:
         required: true
         content:
@@ -783,7 +875,6 @@ paths:
         Removes a member from the group.
         User must be an owner or admin of the group.
         Cannot remove the group owner.
-        Automatically invalidates the removed member's tokens.
       parameters:
         - name: id
           in: path
@@ -791,13 +882,12 @@ paths:
           schema:
             type: string
           description: Group ID
-        - name: memberEmail
+        - name: memberId
           in: path
           required: true
           schema:
             type: string
-            format: email
-          description: Member's email address
+          description: Member's immutable account ID
       responses:
         '200':
           description: Member removed successfully

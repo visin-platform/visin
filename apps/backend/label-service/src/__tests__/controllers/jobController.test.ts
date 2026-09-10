@@ -89,7 +89,7 @@ describe('listJobs', () => {
 
     await ctrl.listJobs(makeReq(), res);
 
-    expect(mockedSvc.listJobsForUser).toHaveBeenCalledWith('user@x.com', 'worker', 'u1');
+    expect(mockedSvc.listJobsForUser).toHaveBeenCalledWith('u1', 'worker');
   });
 
   it('passes the admin role through', async () => {
@@ -97,7 +97,7 @@ describe('listJobs', () => {
 
     await ctrl.listJobs(makeReq({ query: { role: 'admin' } }), makeRes());
 
-    expect(mockedSvc.listJobsForUser).toHaveBeenCalledWith('user@x.com', 'admin', 'u1');
+    expect(mockedSvc.listJobsForUser).toHaveBeenCalledWith('u1', 'admin');
   });
 
   it('gives an anonymous caller the public listing', async () => {

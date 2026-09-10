@@ -38,11 +38,10 @@ export type JobWithProgress = Record<string, unknown> & { progress: JobProgress 
  * detail request per card.
  */
 export const listJobsForUser = async (
-  userEmail: string,
-  role: 'worker' | 'admin',
-  userId: string
+  userId: string,
+  role: 'worker' | 'admin'
 ): Promise<JobWithProgress[]> => {
-  const myGroups = await groups.getMyGroups(userEmail);
+  const myGroups = await groups.getMyGroups(userId);
   const jobs =
     role === 'admin'
       ? await LabelJob.find({

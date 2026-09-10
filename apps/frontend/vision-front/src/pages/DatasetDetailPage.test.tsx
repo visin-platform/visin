@@ -1,3 +1,5 @@
+const canWriteMock = vi.hoisted(() => vi.fn(() => true));
+vi.mock('../hooks/useWriteCapabilities', () => ({ useWriteCapabilities: () => canWriteMock }));
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -209,6 +211,7 @@ function renderPage() {
 describe('DatasetDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    canWriteMock.mockReturnValue(true);
     useAuthMock.mockReturnValue({ isAuthenticated: true, user: { id: 'u1', groupRoles: ['owner'] } });
     useDatasetImagesMock.mockReturnValue(defaultDatasetImages);
     useDatasetCategoryManagerMock.mockReturnValue(defaultCategoryManager);
@@ -301,8 +304,9 @@ describe('DatasetDetailPage', () => {
     });
   });
 
-  it('hides the delete action in the header for users without owner/admin role', async () => {
+  it('hides the delete action in the header for users without write permission', async () => {
     useAuthMock.mockReturnValue({ isAuthenticated: true, user: { id: 'u2', groupRoles: ['member'] } });
+    canWriteMock.mockReturnValue(false);
     getAnalysisByIdMock.mockResolvedValue(analysis1);
 
     renderPage();

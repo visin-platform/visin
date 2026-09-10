@@ -1,3 +1,28 @@
+jest.mock('../../services/uploadReservationService', () => ({
+  ...jest.requireActual('../../services/uploadReservationService'),
+  reserveUpload: jest.fn(async () => ({ allocationId: 'reserved-id' })),
+  claimUpload: jest.fn(async (_fileId: string, _kind: string, _parent: string, _resource: string, _user: string, resourceId?: string) => {
+    const files = jest.requireMock('../../services/fileServiceClient');
+    const metadata = files.getFileMetadata ? await files.getFileMetadata(_fileId) : undefined;
+    return { resourceId: resourceId || 'reserved-id', size: metadata?.size ?? 10 };
+  }),
+  deleteReservedFile: jest.fn(async (fileId: string) => jest.requireMock('../../services/fileServiceClient').deleteFile(fileId))
+}));
+// These workflow tests stub the write-policy boundary. HTTP/Mongo integration
+// tests exercise the real owner/group policy, parent resolution, and denial effects.
+jest.mock('../../services/writeAccessService', () => ({
+  ...jest.requireActual('../../services/writeAccessService'),
+  assertResourceWrite: jest.fn(async (resource: unknown) => {
+    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+  }),
+  assertLibraryWrite: jest.fn(),
+  assertDatasetWrite: jest.fn(),
+  assertEpochWrite: jest.fn(async (uuid: string) => {
+    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
+    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+    return epoch;
+  })
+}));
 jest.mock('../../models/DatasetImage', () => {
   const ctor = Object.assign(jest.fn(), {
     find: jest.fn(),
@@ -189,14 +214,14 @@ describe('createDatasetImage', () => {
   });
 
   it('409s when the fileId already exists', async () => {
-    mockedCategory.findById.mockResolvedValue({ _id: 'c1' });
+    mockedCategory.findById.mockResolvedValue({ _id: 'c1', datasetId: 'd1' });
     mockedImage.findOne.mockResolvedValue(imageDoc('m1'));
 
     await expect(createDatasetImage(data)).rejects.toThrow('already exists');
   });
 
   it('trims tags/labels and saves', async () => {
-    mockedCategory.findById.mockResolvedValue({ _id: 'c1' });
+    mockedCategory.findById.mockResolvedValue({ _id: 'c1', datasetId: 'd1' });
     mockedImage.findOne.mockResolvedValue(null);
     mockedImage.mockImplementation((d: AnyDoc) => ({
       ...d,
@@ -404,6 +429,7 @@ describe('getImageById', () => {
 
 describe('updateImage', () => {
   it('404s when missing', async () => {
+    mockedImage.findById.mockResolvedValue(null);
     mockedImage.findByIdAndUpdate.mockResolvedValue(null);
 
     await expect(updateImage('x', {})).rejects.toThrow('Dataset image not found');
@@ -411,6 +437,7 @@ describe('updateImage', () => {
 
   it('builds a partial update with trimming and category clearing', async () => {
     const updated = imageDoc('f1');
+    mockedImage.findById.mockResolvedValue(updated);
     mockedImage.findByIdAndUpdate.mockResolvedValue(updated);
 
     await updateImage('x', {
@@ -444,7 +471,7 @@ describe('deleteImage', () => {
     await expect(deleteImage('x')).rejects.toThrow('Dataset image not found');
   });
 
-  it('deletes storage files (original + thumbnail) then the record', async () => {
+  it('deletes the verified original but retains an unverified thumbnail', async () => {
     mockedImage.findById.mockResolvedValue(imageDoc('f1', { thumbnailFileId: 'thumb' }));
     mockedFileService.deleteFile.mockResolvedValue(undefined);
     mockedImage.findByIdAndDelete.mockResolvedValue({});
@@ -452,20 +479,18 @@ describe('deleteImage', () => {
     const result = await deleteImage('x');
 
     expect(mockedFileService.deleteFile).toHaveBeenCalledWith('f1');
-    expect(mockedFileService.deleteFile).toHaveBeenCalledWith('thumb');
+    expect(mockedFileService.deleteFile).not.toHaveBeenCalledWith('thumb');
     expect(mockedImage.findByIdAndDelete).toHaveBeenCalledWith('x');
     expect(result).toEqual({ datasetId: 'd1', fileId: 'f1', hadThumbnail: true });
   });
 
-  it('still removes the record when storage deletion fails', async () => {
+  it('retains the record for retry when storage deletion fails', async () => {
     mockedImage.findById.mockResolvedValue(imageDoc('f1'));
     mockedFileService.deleteFile.mockRejectedValue(new Error('file-service down'));
     mockedImage.findByIdAndDelete.mockResolvedValue({});
 
-    const result = await deleteImage('x');
-
-    expect(mockedImage.findByIdAndDelete).toHaveBeenCalledWith('x');
-    expect(result.hadThumbnail).toBe(false);
+    await expect(deleteImage('x')).rejects.toThrow('file-service down');
+    expect(mockedImage.findByIdAndDelete).not.toHaveBeenCalled();
   });
 });
 

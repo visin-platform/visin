@@ -1,3 +1,7 @@
+vi.mock('./useWriteCapabilities', async () => {
+  const { useAuth } = await import('../contexts/AuthContext');
+  return { useWriteCapabilities: () => { const { isAuthenticated } = useAuth(); return (id?: string) => !!id && id !== 'read-only' && isAuthenticated; } };
+});
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -84,6 +88,16 @@ beforeEach(() => {
 });
 
 describe('useTrainingsPage', () => {
+  it('refuses bulk deletion when the selection contains a read-only training', async () => {
+    const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    act(() => result.current.handleSelectTraining('t1'));
+    act(() => result.current.handleSelectTraining('read-only'));
+    expect(result.current.canDeleteSelected).toBe(false);
+    await act(async () => result.current.handleDeleteSelected());
+    expect(mockedTraining.deleteTraining).not.toHaveBeenCalled();
+  });
+
   it('loads trainings and available tags on mount', async () => {
     const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
 

@@ -9,7 +9,6 @@ jest.mock('../../services/groupService', () => ({
   deleteGroup: jest.fn(),
   restoreGroup: jest.fn(),
   permanentlyDeleteGroup: jest.fn(),
-  addMember: jest.fn(),
   updateMemberRole: jest.fn(),
   removeMember: jest.fn(),
   checkMembership: jest.fn(),
@@ -23,7 +22,6 @@ jest.mock('@visin/backend-core', () => ({
 
 import * as ctrl from '../../controllers/groupController';
 import * as svc from '../../services/groupService';
-import { logger } from '@visin/backend-core';
 import type { InternalServiceRequest } from '../../middleware/internalServiceAuth';
 
 const mockedSvc = svc as unknown as Record<string, jest.Mock>;
@@ -40,7 +38,7 @@ const makeReq = (overrides: Record<string, unknown> = {}): InternalServiceReques
   ({ body: {}, query: {}, params: {}, ...overrides } as unknown as InternalServiceRequest);
 
 const userReq = (overrides: Record<string, unknown> = {}) =>
-  makeReq({ user: { email: 'User@X.com' }, ...overrides });
+  makeReq({ user: { id: 'User-ID', email: 'User@X.com' }, ...overrides });
 
 const group = { _id: { toString: () => 'g1' }, name: 'Team' };
 
@@ -50,61 +48,53 @@ beforeEach(() => {
   delete process.env.INTERNAL_SERVICE_TOKEN;
 });
 
-describe('userEmail resolution', () => {
-  it('uses the authenticated user email, lowercased', async () => {
+describe('userId resolution', () => {
+  it('uses the authenticated account ID', async () => {
     mockedSvc.createGroup.mockResolvedValue(group);
     const res = makeRes();
 
     await ctrl.createGroup(userReq({ body: { name: 'Team' } }), res);
 
-    expect(mockedSvc.createGroup).toHaveBeenCalledWith('user@x.com', 'Team');
+    expect(mockedSvc.createGroup).toHaveBeenCalledWith('User-ID', 'Team', 'User@X.com');
   });
 
-  it('ignores a body userEmail for internal service requests', async () => {
+  it('ignores a body userId for internal service requests', async () => {
     // validateRequest parses the body through a Zod object schema, which strips
-    // unknown keys — a userEmail sent in the body never reaches the controller,
+    // unknown keys — a userId sent in the body never reaches the controller,
     // so it must not look like a working alternative to the query string.
     await expect(
       ctrl.createGroup(
-        makeReq({ isInternalService: true, body: { name: 'Team', userEmail: 'svc@x.com' } }),
+        makeReq({ isInternalService: true, body: { name: 'Team', userId: 'svc@x.com' } }),
         makeRes()
       )
-    ).rejects.toThrow('User email required');
+    ).rejects.toThrow('User ID required');
   });
 
-  it('uses query userEmail for internal service requests, lowercased', async () => {
+  it('uses query userId for internal service requests without normalization', async () => {
     mockedSvc.createGroup.mockResolvedValue(group);
 
     await ctrl.createGroup(
-      makeReq({ isInternalService: true, body: { name: 'Team' }, query: { userEmail: 'Svc@X.com' } }),
+      makeReq({ isInternalService: true, body: { name: 'Team' }, query: { userId: 'Svc@X.com' } }),
       makeRes()
     );
 
-    expect(mockedSvc.createGroup).toHaveBeenCalledWith('svc@x.com', 'Team');
+    expect(mockedSvc.createGroup).toHaveBeenCalledWith('Svc@X.com', 'Team', undefined);
   });
 
-  it('unwraps a repeated query userEmail', async () => {
-    const sortable = [group];
-    mockedSvc.listMyGroups.mockResolvedValue(sortable);
-    mockedSvc.updateMemberActivity.mockResolvedValue(undefined);
-
-    await ctrl.listMine(
-      makeReq({ isInternalService: true, query: { userEmail: ['q@x.com', 'other@x.com'] } }),
-      makeRes()
-    );
-
-    expect(mockedSvc.listMyGroups).toHaveBeenCalledWith('q@x.com');
+  it('rejects ambiguous repeated user IDs', async () => {
+    await expect(ctrl.listMine(makeReq({ isInternalService: true, query: { userId: ['a', 'b'] } }), makeRes()))
+      .rejects.toThrow('User ID required');
   });
 
   it('throws BadRequest when no email can be resolved', async () => {
     await expect(ctrl.createGroup(makeReq({ body: { name: 'T' } }), makeRes())).rejects.toThrow(
-      'User email required'
+      'User ID required'
     );
     await expect(ctrl.listMine(makeReq({ isInternalService: true }), makeRes())).rejects.toThrow(
-      'User email required'
+      'User ID required'
     );
-    await expect(ctrl.listMyDeleted(makeReq(), makeRes())).rejects.toThrow('User email required');
-    await expect(ctrl.getMyGroupRoles(makeReq(), makeRes())).rejects.toThrow('User email required');
+    await expect(ctrl.listMyDeleted(makeReq(), makeRes())).rejects.toThrow('User ID required');
+    await expect(ctrl.getMyGroupRoles(makeReq(), makeRes())).rejects.toThrow('User ID required');
   });
 });
 
@@ -130,7 +120,7 @@ describe('listMine', () => {
     await ctrl.listMine(userReq(), res);
 
     expect(mockedSvc.updateMemberActivity).toHaveBeenCalledTimes(1);
-    expect(mockedSvc.updateMemberActivity).toHaveBeenCalledWith(['g1', 'g2'], 'user@x.com');
+    expect(mockedSvc.updateMemberActivity).toHaveBeenCalledWith(['g1', 'g2'], 'User-ID');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: groups });
   });
 });
@@ -176,7 +166,7 @@ describe('single-group handlers', () => {
 
     await ctrl.getOne(userReq({ params: { id: 'g1' } }), res);
 
-    expect(mockedSvc.getGroupIfMember).toHaveBeenCalledWith('g1', 'user@x.com');
+    expect(mockedSvc.getGroupIfMember).toHaveBeenCalledWith('g1', 'User-ID');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: group });
   });
 
@@ -186,7 +176,7 @@ describe('single-group handlers', () => {
 
     await ctrl.updateGroup(userReq({ params: { id: 'g1' }, body: { name: 'New' } }), res);
 
-    expect(mockedSvc.updateGroup).toHaveBeenCalledWith('g1', 'user@x.com', { name: 'New' });
+    expect(mockedSvc.updateGroup).toHaveBeenCalledWith('g1', 'User-ID', { name: 'New' });
   });
 
   it('deleteGroup responds 204', async () => {
@@ -227,99 +217,16 @@ describe('single-group handlers', () => {
   });
 });
 
-describe('membership mutations + token invalidation', () => {
-  const configureAuthService = () => {
-    process.env.AUTH_SERVICE_URL = 'http://auth';
-    process.env.INTERNAL_SERVICE_TOKEN = 'internal';
-  };
 
-  it('addMember responds 201 and invalidates the new member tokens', async () => {
-    configureAuthService();
-    mockedSvc.addMember.mockResolvedValue(group);
-    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
-    const res = makeRes();
-
-    await ctrl.addMember(
-      userReq({ params: { id: 'g1' }, body: { email: 'new@x.com', role: 'member' } }),
-      res
-    );
-
-    expect(mockedSvc.addMember).toHaveBeenCalledWith('g1', 'user@x.com', 'new@x.com', 'member');
-    expect(global.fetch).toHaveBeenCalledWith(
-      'http://auth/api/auth/internal/invalidate-tokens',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ email: 'new@x.com' }),
-      })
-    );
-    expect(res.status).toHaveBeenCalledWith(201);
-  });
-
-  it('updateRole invalidates the affected member tokens', async () => {
-    configureAuthService();
+describe('membership mutations use account IDs', () => {
+  it('updates the target role', async () => {
     mockedSvc.updateMemberRole.mockResolvedValue(group);
-    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
-    const res = makeRes();
-
-    await ctrl.updateRole(
-      userReq({ params: { id: 'g1', memberEmail: 'm@x.com' }, body: { role: 'admin' } }),
-      res
-    );
-
-    expect(mockedSvc.updateMemberRole).toHaveBeenCalledWith('g1', 'user@x.com', 'm@x.com', 'admin');
-    expect(global.fetch).toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: group });
+    await ctrl.updateRole(userReq({ params: { id: 'g1', memberId: 'target-ID' }, body: { role: 'admin' } }), makeRes());
+    expect(mockedSvc.updateMemberRole).toHaveBeenCalledWith('g1', 'User-ID', 'target-ID', 'admin');
   });
-
-  it('removeMember invalidates the removed member tokens', async () => {
-    configureAuthService();
+  it('removes the target member', async () => {
     mockedSvc.removeMember.mockResolvedValue(group);
-    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
-    const res = makeRes();
-
-    await ctrl.removeMember(userReq({ params: { id: 'g1', memberEmail: 'm@x.com' } }), res);
-
-    expect(mockedSvc.removeMember).toHaveBeenCalledWith('g1', 'user@x.com', 'm@x.com');
-    expect(global.fetch).toHaveBeenCalled();
-  });
-
-  it('skips invalidation and warns when auth service is not configured', async () => {
-    mockedSvc.addMember.mockResolvedValue(group);
-    global.fetch = jest.fn() as unknown as typeof fetch;
-
-    await ctrl.addMember(userReq({ params: { id: 'g1' }, body: { email: 'new@x.com' } }), makeRes());
-
-    expect(global.fetch).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith('Auth service not configured for token invalidation');
-  });
-
-  it('logs but does not fail when invalidation responds non-ok', async () => {
-    configureAuthService();
-    mockedSvc.addMember.mockResolvedValue(group);
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500 }) as unknown as typeof fetch;
-    const res = makeRes();
-
-    await ctrl.addMember(userReq({ params: { id: 'g1' }, body: { email: 'new@x.com' } }), res);
-
-    expect(logger.error).toHaveBeenCalledWith(
-      'Failed to invalidate tokens',
-      expect.objectContaining({ status: 500 })
-    );
-    expect(res.status).toHaveBeenCalledWith(201);
-  });
-
-  it('logs but does not fail when invalidation fetch rejects', async () => {
-    configureAuthService();
-    mockedSvc.addMember.mockResolvedValue(group);
-    global.fetch = jest.fn().mockRejectedValue(new Error('down')) as unknown as typeof fetch;
-    const res = makeRes();
-
-    await ctrl.addMember(userReq({ params: { id: 'g1' }, body: { email: 'new@x.com' } }), res);
-
-    expect(logger.error).toHaveBeenCalledWith(
-      'Failed to invalidate tokens',
-      expect.objectContaining({ error: 'down' })
-    );
-    expect(res.status).toHaveBeenCalledWith(201);
+    await ctrl.removeMember(userReq({ params: { id: 'g1', memberId: 'target-ID' } }), makeRes());
+    expect(mockedSvc.removeMember).toHaveBeenCalledWith('g1', 'User-ID', 'target-ID');
   });
 });

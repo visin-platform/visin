@@ -314,3 +314,15 @@ describe('record_finding', () => {
     );
   });
 });
+
+describe('continuing finding pages', () => {
+  const before = '2026-09-05T10:00:00.000Z_507f1f77bcf86cd799439011';
+
+  it('supplies a continuation cursor and forwards it on the next request', async () => {
+    mocked.listFindings.mockResolvedValueOnce([finding({ _id: '507f1f77bcf86cd799439011' })]);
+    expect((await call('list_findings', { limit: 1 })).text).toContain(`before="${before}"`);
+    mocked.listFindings.mockResolvedValueOnce([]);
+    expect((await call('list_findings', { limit: 1, before })).text).toBe('No more findings.');
+    expect(mocked.listFindings).toHaveBeenLastCalledWith('k', { project: undefined, training: undefined, limit: 1, before });
+  });
+});

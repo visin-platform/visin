@@ -1,6 +1,8 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IBenchmark extends Document {
+  /** Absent on legacy records; never inferred from the first editor. */
+  ownerId?: string;
   training_uuid?: string;
   training_id?: mongoose.Types.ObjectId | null;
   epoch_uuid?: string;
@@ -54,6 +56,7 @@ export interface IBenchmark extends Document {
 
 const BenchmarkSchema: Schema = new Schema(
   {
+    ownerId: { type: String, immutable: true, index: true },
     training_uuid: {
       type: String,
       index: true

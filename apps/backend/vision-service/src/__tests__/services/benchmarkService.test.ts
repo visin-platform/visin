@@ -1,3 +1,21 @@
+jest.mock('../../models/Epoch', () => ({ __esModule: true, default: { findOne: jest.fn(async () => ({ trainingId: 't2' })) } }));
+import { assertResourceWrite } from '../../services/writeAccessService';
+import { ForbiddenError } from '@visin/backend-core';
+// These workflow tests stub the write-policy boundary. HTTP/Mongo integration
+// tests exercise the real owner/group policy, parent resolution, and denial effects.
+jest.mock('../../services/writeAccessService', () => ({
+  ...jest.requireActual('../../services/writeAccessService'),
+  assertResourceWrite: jest.fn(async (resource: unknown) => {
+    if (!resource) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+  }),
+  assertLibraryWrite: jest.fn(),
+  assertDatasetWrite: jest.fn(),
+  assertEpochWrite: jest.fn(async (uuid: string) => {
+    const epoch = await jest.requireMock('../../models/Epoch').default.findOne({ epoch_uuid: uuid });
+    if (!epoch) throw new (jest.requireActual('@visin/backend-core').ForbiddenError)();
+    return epoch;
+  })
+}));
 jest.mock('../../models/Benchmark', () => {
   const ctor = Object.assign(jest.fn(), {
     find: jest.fn(),
@@ -11,6 +29,7 @@ jest.mock('../../models/Training', () => ({
   default: { find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), findOneAndUpdate: jest.fn() },
 }));
 jest.mock('../../services/projectAccessService', () => ({
+  ...jest.requireActual('../../services/projectAccessService'),
   checkProjectAccess: jest.fn(),
   getVisibleTrainingIds: jest.fn(),
   isWithinTokenScope: jest.fn(),
@@ -108,8 +127,7 @@ describe('getBenchmarks', () => {
       deletedAt: null,
       $or: [
         { training_id: { $in: ['t1'] } },
-        { training_id: null },
-        { training_id: { $exists: false } },
+        { training_id: null, training_uuid: null, epoch_uuid: null },
       ],
     });
     expect((result.benchmarks[0] as AnyDoc).training_id.name).toBe('Training t1');
@@ -167,26 +185,24 @@ describe('getBenchmarks', () => {
 
 describe('getBenchmarkById', () => {
   it('404s when missing', async () => {
-    const populate = jest.fn().mockResolvedValue(null);
-    mockedBenchmark.findOne.mockReturnValue({ populate });
-
+    mockedBenchmark.findOne.mockResolvedValue(null);
     await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow('Benchmark not found');
   });
-
-  it('403s when the parent project is not visible', async () => {
-    const populate = jest.fn().mockResolvedValue(benchmarkDoc({ training_id: { projectId: 'p1' } }));
-    mockedBenchmark.findOne.mockReturnValue({ populate });
-    mockedCheckAccess.mockResolvedValue(false);
-
-    await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow();
-  });
-
-  it('returns the benchmark when visible', async () => {
-    const doc = benchmarkDoc({ training_id: { projectId: 'p1' } });
-    const populate = jest.fn().mockResolvedValue(doc);
-    mockedBenchmark.findOne.mockReturnValue({ populate });
-
+  it('checks the raw parent before population', async () => {
+    const doc = benchmarkDoc({ populate: jest.fn().mockResolvedValue(undefined) });
+    mockedBenchmark.findOne.mockResolvedValue(doc);
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     await expect(getBenchmarkById('b1', 'u1')).resolves.toBe(doc);
+    expect(doc.populate).toHaveBeenCalledWith('training_id', 'name uuid projectId');
+    mockedCheckAccess.mockResolvedValue(false);
+    doc.populate.mockClear();
+    await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow('Access denied');
+    expect(doc.populate).not.toHaveBeenCalled();
+  });
+  it('does not treat an orphan UUID as standalone', async () => {
+    mockedBenchmark.findOne.mockResolvedValue(benchmarkDoc({ training_id: null }));
+    mockedTraining.findOne.mockResolvedValue(null);
+    await expect(getBenchmarkById('b1', 'u1')).rejects.toThrow('Training not found');
   });
 });
 
@@ -209,7 +225,7 @@ describe('createBenchmark / uploadBenchmark', () => {
     mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedTraining.findOneAndUpdate.mockResolvedValue({});
 
-    const result = (await createBenchmark(body, undefined)) as AnyDoc;
+    const result = (await createBenchmark(body, undefined, 'u1')) as AnyDoc;
 
     expect(mockedBenchmark.mock.calls[0][0].training_id).toEqual(
       expect.objectContaining({ toString: expect.any(Function) })
@@ -222,36 +238,34 @@ describe('createBenchmark / uploadBenchmark', () => {
     mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedTokenScope.mockReturnValue(false);
 
-    await expect(createBenchmark(body, 'p-other')).rejects.toThrow(
-      "Training does not belong to the token's project"
+    await expect(createBenchmark(body, 'p-other', 'u1')).rejects.toThrow(
+      "Access denied"
     );
   });
 
-  it('saves without a training link when the uuid resolves nowhere', async () => {
+  it('rejects an unresolved training uuid', async () => {
     mockedTraining.findOne.mockResolvedValue(null);
 
-    await uploadBenchmark(body, undefined);
-
-    expect(mockedBenchmark.mock.calls[0][0].training_id).toBeNull();
+    await expect(uploadBenchmark(body, undefined, 'u1')).rejects.toThrow();
+    expect(mockedBenchmark).not.toHaveBeenCalled();
   });
 
-  it('swallows training lookup errors and saves unlinked', async () => {
+  it('fails closed on training lookup errors', async () => {
     mockedTraining.findOne.mockRejectedValue(new Error('db down'));
 
-    await createBenchmark(body, undefined);
-
-    expect(mockedBenchmark.mock.calls[0][0].training_id).toBeNull();
+    await expect(createBenchmark(body, undefined, 'u1')).rejects.toThrow('db down');
+    expect(mockedBenchmark).not.toHaveBeenCalled();
   });
 
   it('survives a failed training timestamp update', async () => {
     mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedTraining.findOneAndUpdate.mockRejectedValue(new Error('later'));
 
-    await expect(createBenchmark(body, undefined)).resolves.toBeDefined();
+    await expect(createBenchmark(body, undefined, 'u1')).resolves.toBeDefined();
   });
 
   it('skips training resolution entirely without a training_uuid', async () => {
-    await createBenchmark({ ...body, training_uuid: undefined }, undefined);
+    await createBenchmark({ ...body, training_uuid: undefined }, undefined, 'u1');
 
     expect(mockedTraining.findOne).not.toHaveBeenCalled();
     expect(mockedBenchmark.mock.calls[0][0].training_id).toBeNull();
@@ -321,7 +335,9 @@ describe('updateBenchmark', () => {
   });
 
   it('403s when the current training is out of reach', async () => {
+    jest.mocked(assertResourceWrite).mockRejectedValueOnce(new ForbiddenError());
     mockedBenchmark.findOne.mockResolvedValue(benchmarkDoc());
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedTraining.findById.mockResolvedValue(trainingDoc('t1'));
     mockedCheckAccess.mockResolvedValue(false);
 
@@ -331,9 +347,10 @@ describe('updateBenchmark', () => {
   it('applies partial updates and relinks to a new training', async () => {
     const doc = benchmarkDoc();
     mockedBenchmark.findOne.mockResolvedValue(doc);
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedTraining.findById.mockResolvedValue(trainingDoc('t1'));
     const newTraining = trainingDoc('t2');
-    mockedTraining.findOne.mockResolvedValue(newTraining);
+    mockedTraining.findOne.mockResolvedValueOnce(trainingDoc('t1')).mockResolvedValueOnce(trainingDoc('t1')).mockResolvedValue(newTraining);
 
     await updateBenchmark(
       'b1',
@@ -372,6 +389,7 @@ describe('updateBenchmark', () => {
   it('unlinks the training when training_uuid is cleared', async () => {
     const doc = benchmarkDoc({ training_id: 'old' });
     mockedBenchmark.findOne.mockResolvedValue(doc);
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedTraining.findById.mockResolvedValue(trainingDoc('t1'));
 
     await updateBenchmark('b1', { training_uuid: '' }, 'u1', undefined);
@@ -379,15 +397,13 @@ describe('updateBenchmark', () => {
     expect(doc.training_id).toBeNull();
   });
 
-  it('keeps the old link when the new training lookup fails', async () => {
+  it('rejects a failed parent lookup without saving', async () => {
     const doc = benchmarkDoc({ training_id: null });
     mockedBenchmark.findOne.mockResolvedValue(doc);
     mockedTraining.findOne.mockRejectedValue(new Error('db'));
 
-    await updateBenchmark('b1', { training_uuid: 'uuid-t2' }, 'u1', undefined);
-
-    expect(doc.training_uuid).toBe('uuid-t2');
-    expect(doc.save).toHaveBeenCalled();
+    await expect(updateBenchmark('b1', { training_uuid: 'uuid-t2' }, 'u1', undefined)).rejects.toThrow('db');
+    expect(doc.save).not.toHaveBeenCalled();
   });
 });
 
@@ -400,6 +416,7 @@ describe('deleteBenchmark', () => {
 
   it('403s when the training is out of reach or scope', async () => {
     mockedBenchmark.findOne.mockResolvedValue(benchmarkDoc());
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
     mockedTraining.findById.mockResolvedValue(trainingDoc('t1'));
     mockedTokenScope.mockReturnValue(false);
 

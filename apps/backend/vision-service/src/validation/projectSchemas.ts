@@ -14,6 +14,7 @@ export type GetProjectsQuery = z.infer<typeof getProjectsQuerySchema>;
 export const createProjectBodySchema = z.object({
   name: z.string().trim().min(1, 'Project name is required'),
   description: z.string().optional(),
+  editorGroupIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/).transform(id => id.toLowerCase())).max(100).optional(),
   isPublic: z.coerce.boolean().default(false),
   taxonomy: taxonomySchema.optional(),
   costing: costingSchema.optional()
@@ -22,6 +23,7 @@ export const createProjectBodySchema = z.object({
 export const updateProjectBodySchema = z.object({
   name: z.string().trim().min(1).optional(),
   description: z.string().optional(),
+  editorGroupIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/).transform(id => id.toLowerCase())).max(100).optional(),
   isPublic: z.boolean().optional(),
   slug: z.string().optional(),
   taxonomy: taxonomySchema.optional(),

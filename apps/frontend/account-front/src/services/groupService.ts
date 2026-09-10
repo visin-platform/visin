@@ -36,21 +36,29 @@ export const groupService = {
   deleteForever: (groupId: string): Promise<void> =>
     groupApi.delete<void>(`/api/groups/${groupId}/permanent`),
 
-  addMember: async (groupId: string, email: string, role: GroupRole): Promise<Group> =>
-    unwrap(await groupApi.post<ApiResponse<Group>>(`/api/groups/${groupId}/members`, { email, role })),
+  createInvitation: async (groupId: string, role: GroupRole): Promise<{ token: string; expiresAt: string; role: GroupRole }> =>
+    unwrap(await groupApi.post(`/api/groups/${groupId}/invitations`, { role })),
 
-  updateMemberRole: async (groupId: string, email: string, role: GroupRole): Promise<Group> =>
+  revokeInvitations: (groupId: string): Promise<void> => groupApi.delete(`/api/groups/${groupId}/invitations`),
+
+  previewInvitation: async (token: string): Promise<{ groupId: string; name: string; role: GroupRole; expiresAt: string }> =>
+    unwrap(await groupApi.post('/api/groups/invitations/preview', { token })),
+
+  acceptInvitation: async (token: string): Promise<Group> =>
+    unwrap(await groupApi.post('/api/groups/invitations/accept', { token })),
+
+  updateMemberRole: async (groupId: string, userId: string, role: GroupRole): Promise<Group> =>
     unwrap(
       await groupApi.patch<ApiResponse<Group>>(
-        `/api/groups/${groupId}/members/${encodeURIComponent(email)}`,
+        `/api/groups/${groupId}/members/${encodeURIComponent(userId)}`,
         { role }
       )
     ),
 
-  removeMember: async (groupId: string, email: string): Promise<Group> =>
+  removeMember: async (groupId: string, userId: string): Promise<Group> =>
     unwrap(
       await groupApi.delete<ApiResponse<Group>>(
-        `/api/groups/${groupId}/members/${encodeURIComponent(email)}`
+        `/api/groups/${groupId}/members/${encodeURIComponent(userId)}`
       )
     )
 };
