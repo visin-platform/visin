@@ -2,22 +2,28 @@
 
 Authentication API for Google sign-in, JWT cookies, profile lookup, and group refresh.
 
-## Google account linking
+## Google sign-in and linking
 
-Google sign-in selects an account exclusively by `User.googleSubject`, the Google
-ID token's immutable `sub`. An email match never links or creates an account.
-Sign in with a password, then open the auth page's **Link Google sign-in** form.
-It requires the current account password and a Google account choice. The protected
-`POST /auth/profile/google` endpoint accepts `currentPassword` and `idToken`, binds
-only the authenticated account, and issues a new session after incrementing its
-token version. Existing bindings cannot be overwritten through this endpoint.
+Google sign-in identifies an account by `User.googleSubject`, the Google ID token's
+immutable `sub`, in this order:
 
-Existing Google accounts need an operator-managed subject-ID migration before
-Google login works. Map authoritative provider subjects to the intended immutable
-Visin user IDs; do not infer the binding from matching emails. Accounts without a
-password cannot use password-confirmed linking until they have a valid session
-and set a password. The unique subject index is created by the existing startup
-index check. No new configuration or verification-email flow is required.
+1. The account already bound to that subject signs in, whatever email Google reports now.
+2. An account created by Google sign-up before subjects were stored (`signupMethod:
+   'google'`, no subject, no password) is bound to the subject on its first Google
+   sign-in. Its address came from a Google-verified token, so no password
+   registration can have claimed it.
+3. Otherwise Google sign-up creates an account bound to the subject, behind the same
+   gate as password registration (closed until initial setup).
+
+Steps 2 and 3 require Google to report the email as verified. Any other account with
+that email (a password account, a Google sign-up that has since set a password, or
+one bound to a different subject) is refused with 409: an email match never grants
+Google access to it. Its owner signs in with the password and uses the auth page's
+**Link Google sign-in** form, which requires the current password and a Google account
+choice. The protected `POST /auth/profile/google` endpoint accepts `currentPassword`
+and `idToken`, binds only the authenticated account, and issues a new session after
+incrementing its token version. Existing bindings cannot be overwritten through this
+endpoint. The unique subject index is created by the existing startup index check.
 
 ## Local Development
 

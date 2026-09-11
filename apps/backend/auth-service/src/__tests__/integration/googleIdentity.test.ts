@@ -37,7 +37,7 @@ describe('Google account authority with in-memory MongoDB', () => {
     base = `http://127.0.0.1:${(server.address() as { port: number }).port}/auth`;
   }, 120_000);
   beforeEach(() => {
-    google.mockReset().mockResolvedValue({ sub: 'subject-1', email: 'victim@example.test', name: 'Google User' });
+    google.mockReset().mockResolvedValue({ sub: 'subject-1', email: 'victim@example.test', email_verified: true, name: 'Google User' });
   });
   afterEach(async () => {
     jest.restoreAllMocks();
@@ -60,7 +60,7 @@ describe('Google account authority with in-memory MongoDB', () => {
 
   it('does not grant Google the authority of a same-email password account', async () => {
     const user = await account();
-    expect((await post('/validate', { idToken: 'google-token' })).status).toBe(404);
+    expect((await post('/validate', { idToken: 'google-token' })).status).toBe(409);
     expect((await post('/login', { email: user.email, password })).status).toBe(200);
     expect(await User.countDocuments()).toBe(1);
     expect((await User.findById(user.id).select('+googleSubject'))!.googleSubject).toBeUndefined();
@@ -146,5 +146,70 @@ describe('Google account authority with in-memory MongoDB', () => {
     await expect(linkGoogleAccount(user.id, user.tokenVersion, password, 'google-token')).rejects.toThrow('database unavailable');
     await User.deleteOne({ _id: user.id });
     await expect(linkGoogleAccount(user.id, user.tokenVersion, password, 'google-token')).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  const legacyGoogleAccount = (email = 'victim@example.test', extra = {}) => User.create({ email, signupMethod: 'google', roles: [], ...extra });
+  const signIn = async () => {
+    const response = await post('/validate', { idToken: 'google-token' });
+    return { status: response.status, body: await response.json() };
+  };
+
+  it('signs up a new Google user bound to its subject once setup is complete', async () => {
+    await account('admin@example.test');
+    google.mockResolvedValue({ sub: 'subject-1', email: 'New.User@example.test', email_verified: true, given_name: 'New', family_name: 'User' });
+    const first = await signIn();
+    expect(first.status).toBe(200);
+    const created = (await User.findOne({ email: 'new.user@example.test' }).select('+googleSubject +passwordHash'))!;
+    expect(created).toMatchObject({ signupMethod: 'google', googleSubject: 'subject-1', roles: [], firstName: 'New', lastName: 'User' });
+    expect(created.passwordHash).toBeUndefined();
+    expect(verifyJWT(first.body.token)).toMatchObject({ id: created.id, email: 'new.user@example.test', tokenVersion: 1 });
+    // Later sign-ins find the account by subject, even after Google reports another email.
+    google.mockResolvedValue({ sub: 'subject-1', email: 'renamed@example.test', email_verified: true });
+    expect(verifyJWT((await signIn()).body.token).id).toBe(created.id);
+    expect(await User.countDocuments()).toBe(2);
+  });
+
+  it('keeps Google sign-up closed until initial setup has created the owner', async () => {
+    expect((await signIn()).status).toBe(409);
+    expect(await User.countDocuments()).toBe(0);
+  });
+
+  it('refuses an email Google has not verified, without creating or binding anything', async () => {
+    await account('admin@example.test');
+    const legacy = await legacyGoogleAccount();
+    google.mockResolvedValue({ sub: 'subject-1', email: 'victim@example.test', email_verified: false });
+    expect((await signIn()).status).toBe(401);
+    google.mockResolvedValue({ sub: 'subject-2', email: 'someone@example.test' });
+    expect((await signIn()).status).toBe(401);
+    expect(await User.countDocuments()).toBe(2);
+    expect((await User.findById(legacy.id).select('+googleSubject'))!.googleSubject).toBeUndefined();
+  });
+
+  it('binds a Google sign-up account from before subjects on first use, keeping its identity', async () => {
+    const legacy = await legacyGoogleAccount('victim@example.test', { tokenVersion: 4 });
+    const { status, body } = await signIn();
+    expect(status).toBe(200);
+    expect(verifyJWT(body.token)).toMatchObject({ id: legacy.id, tokenVersion: 4 });
+    expect((await User.findById(legacy.id).select('+googleSubject'))!.googleSubject).toBe('subject-1');
+    // Bound now: another Google account reporting the same address cannot enter it.
+    google.mockResolvedValue({ sub: 'subject-2', email: 'victim@example.test', email_verified: true });
+    expect((await signIn()).status).toBe(409);
+    expect(await User.countDocuments()).toBe(1);
+  });
+
+  it('never binds a Google sign-up account that has a password; its owner links deliberately', async () => {
+    const legacy = await legacyGoogleAccount('victim@example.test', { passwordHash });
+    expect((await signIn()).status).toBe(409);
+    expect((await User.findById(legacy.id).select('+googleSubject'))!.googleSubject).toBeUndefined();
+    expect((await post('/profile/google', linkBody, token(legacy))).status).toBe(200);
+    expect((await signIn()).status).toBe(200);
+  });
+
+  it('creates a single account for concurrent first sign-ins', async () => {
+    await account('admin@example.test');
+    const results = await Promise.all([signIn(), signIn(), signIn()]);
+    expect(results.map(result => result.status)).toEqual([200, 200, 200]);
+    expect(new Set(results.map(result => verifyJWT(result.body.token).id)).size).toBe(1);
+    expect(await User.countDocuments({ googleSubject: 'subject-1' })).toBe(1);
   });
 });

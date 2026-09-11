@@ -204,6 +204,16 @@ describe('LoginPage Google availability', () => {
     expect(document.getElementById('google-signin-button')).not.toBeNull();
   });
 
+  it('offers Google on the registration form too, since signing in with Google signs new users up', async () => {
+    render(<LoginPage />);
+    await screen.findByRole('heading', { name: /^sign in$/i });
+    fireEvent.click(screen.getByRole('button', { name: /create one/i }));
+    await screen.findByRole('heading', { name: /create an account/i });
+
+    expect(document.getElementById('google-signin-button')).not.toBeNull();
+    await waitFor(() => expect(initializeGoogleSignIn).toHaveBeenCalledTimes(2));
+  });
+
   it('hides Google entirely when the server has no client id', async () => {
     api.getSetupStatus.mockResolvedValue({ needsSetup: false, googleEnabled: false });
     render(<LoginPage />);

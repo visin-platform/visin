@@ -3,6 +3,7 @@ useMongo();
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { BadRequestError } from '@visin/backend-core';
 
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),
@@ -54,6 +55,11 @@ describe('resolvePath', () => {
 
   it('rejects nested traversal that escapes the data dir', async () => {
     expect(() => resolvePath('group/../../outside.txt')).toThrow('escapes data directory');
+  });
+
+  it('reports rejected paths as client errors, including the reserved upload namespace', async () => {
+    expect(() => resolvePath('../outside.txt')).toThrow(BadRequestError);
+    expect(() => resolvePath('.uploads/state')).toThrow(BadRequestError);
   });
 
   it('allows a path that resolves to the data dir itself', async () => {

@@ -3,6 +3,9 @@ import type { Request, Response } from 'express';
 jest.mock('../../services/googleAuthService', () => ({
   verifyGoogleToken: jest.fn(),
 }));
+jest.mock('../../services/googleSignInService', () => ({
+  signInWithGoogle: jest.fn(),
+}));
 jest.mock('../../models/User', () => ({
   User: {
     findOne: jest.fn(),
@@ -25,10 +28,12 @@ import {
   listUsers,
 } from '../../controllers/authController';
 import { verifyGoogleToken } from '../../services/googleAuthService';
+import { signInWithGoogle } from '../../services/googleSignInService';
 import { verifyJWT } from '../../services/jwtService';
 import { User } from '../../models/User';
 
 const mockedVerifyGoogleToken = verifyGoogleToken as jest.Mock;
+const mockedSignIn = signInWithGoogle as jest.Mock;
 const mockedUser = User as unknown as Record<string, jest.Mock>;
 
 type MockRes = Response & { json: jest.Mock; cookie: jest.Mock; clearCookie: jest.Mock };
@@ -99,19 +104,19 @@ describe('validateToken', () => {
     );
   });
 
-  it('rejects when no user exists for the subject', async () => {
+  it('propagates a refused sign-in without issuing a session', async () => {
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
-    mockedUser.findOne.mockResolvedValue(null);
+    mockedSignIn.mockRejectedValue(new Error('An account with this email already exists'));
+    const res = makeRes();
 
-    await expect(validateToken(makeReq({ body: { idToken: 'x' } }), makeRes())).rejects.toThrow(
-      'Google account is not linked'
-    );
-    expect(mockedUser.findOne).toHaveBeenCalledWith({ googleSubject: 'google-subject-1' });
+    await expect(validateToken(makeReq({ body: { idToken: 'x' } }), res)).rejects.toThrow('already exists');
+    expect(mockedSignIn).toHaveBeenCalledWith(googlePayload);
+    expect(res.cookie).not.toHaveBeenCalled();
   });
 
   it('sets the access_token cookie and returns the user on success', async () => {
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
-    mockedUser.findOne.mockResolvedValue(dbUser);
+    mockedSignIn.mockResolvedValue(dbUser);
     mockedUser.updateOne.mockResolvedValue({});
     const res = makeRes();
 
@@ -136,7 +141,7 @@ describe('validateToken', () => {
 
   it('defaults tokenVersion to 1 when the db user has none', async () => {
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
-    mockedUser.findOne.mockResolvedValue({ ...dbUser, tokenVersion: undefined });
+    mockedSignIn.mockResolvedValue({ ...dbUser, tokenVersion: undefined });
     mockedUser.updateOne.mockResolvedValue({});
     const res = makeRes();
 
@@ -149,7 +154,7 @@ describe('validateToken', () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
-    mockedUser.findOne.mockResolvedValue(dbUser);
+    mockedSignIn.mockResolvedValue(dbUser);
     mockedUser.updateOne.mockResolvedValue({});
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,

@@ -7,6 +7,7 @@ import {
   logger
 } from '@visin/backend-core';
 import { verifyGoogleToken } from '../services/googleAuthService';
+import { signInWithGoogle } from '../services/googleSignInService';
 import { generateJWT, UserPayload } from '../services/jwtService';
 import { hashPassword, verifyPassword } from '../services/passwordService';
 import {
@@ -124,12 +125,8 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
     throw new UnauthorizedError('Subject not present in Google token');
   }
 
-  // No email fallback: a password account may have registered someone else's address.
-  const dbUser = await User.findOne({ googleSubject: googleUser.sub });
-
-  if (!dbUser) {
-    throw new NotFoundError('Google account is not linked. Sign in with your password to link it.');
-  }
+  // An email match alone never enters an existing account: see signInWithGoogle.
+  const dbUser = await signInWithGoogle(googleUser);
 
   // Update last login
   await User.updateOne({ _id: dbUser._id }, { $set: { lastLoginAt: new Date() } });

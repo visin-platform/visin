@@ -3,11 +3,15 @@ import { BadRequestError } from '../errors/HttpError';
 export type UploadFormat = 'zip' | 'gzip' | 'tar' | 'png' | 'jpeg' | 'gif' | 'webp' | 'mp4' | 'mov' | 'pdf';
 export interface UploadPolicy { format: UploadFormat; maxBytes: number }
 const MiB = 1024 ** 2;
+// Browsers take these from the OS MIME database: Linux reports .tar.gz/.tgz as
+// x-compressed-tar and Windows reports .tgz as x-compressed. Content is still
+// checked against the format's magic bytes when the upload completes.
+const GZIP_MIME = ['application/gzip', 'application/x-gzip', 'application/x-gzip-compressed', 'application/x-compressed-tar', 'application/x-compressed'];
 const formats: Record<string, { format: UploadFormat; mime: string[]; maxBytes: number }> = {
   zip: { format: 'zip', mime: ['application/zip', 'application/x-zip-compressed'], maxBytes: 10 * 1024 ** 3 },
-  gz: { format: 'gzip', mime: ['application/gzip', 'application/x-gzip'], maxBytes: 10 * 1024 ** 3 },
-  tgz: { format: 'gzip', mime: ['application/gzip', 'application/x-gzip'], maxBytes: 10 * 1024 ** 3 },
-  tar: { format: 'tar', mime: ['application/x-tar'], maxBytes: 10 * 1024 ** 3 },
+  gz: { format: 'gzip', mime: GZIP_MIME, maxBytes: 10 * 1024 ** 3 },
+  tgz: { format: 'gzip', mime: GZIP_MIME, maxBytes: 10 * 1024 ** 3 },
+  tar: { format: 'tar', mime: ['application/x-tar', 'application/x-gtar'], maxBytes: 10 * 1024 ** 3 },
   png: { format: 'png', mime: ['image/png'], maxBytes: 50 * MiB },
   jpg: { format: 'jpeg', mime: ['image/jpeg'], maxBytes: 50 * MiB },
   jpeg: { format: 'jpeg', mime: ['image/jpeg'], maxBytes: 50 * MiB },
