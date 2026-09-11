@@ -1,4 +1,11 @@
 # Visin Changelog
+### [1.4.1](https://github.com/visin-platform/visin/compare/v1.4.0...v1.4.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* type for newer mongoose queries ([87f50ec](https://github.com/visin-platform/visin/commit/87f50ec369b1d749f1f4c846c3c114bd4c6175e1))
+
 ## [1.4.0](https://github.com/visin-platform/visin/compare/v1.3.0...v1.4.0) (2026-09-11)
 
 
