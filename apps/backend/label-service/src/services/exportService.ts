@@ -342,7 +342,8 @@ export const exportManifest = async (job: ILabelJob): Promise<JobManifest> => {
   }
 
   const inJob = new Map<string, Map<string, number>>();
-  const tasks = await LabelTask.find({ jobId: job._id }, { 'payload.maskMap.masks': 1 });
+  // Name the document type: newer mongoose infers a nested projection as selecting no fields.
+  const tasks = await LabelTask.find<ILabelTask>({ jobId: job._id }, { 'payload.maskMap.masks': 1 });
   for (const task of tasks) {
     for (const mask of task.payload?.maskMap?.masks || []) {
       for (const [field, value] of Object.entries(mask)) {

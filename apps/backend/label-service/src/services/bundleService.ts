@@ -1,7 +1,7 @@
 import { BadGatewayError, BadRequestError, ConflictError, NotFoundError, UserPayload, logger } from '@visin/backend-core';
 import { LabelBundle, ILabelBundle } from '../models/LabelBundle';
 import { ImportJob, IImportJob } from '../models/ImportJob';
-import { LabelImage } from '../models/LabelImage';
+import { LabelImage, ILabelImage } from '../models/LabelImage';
 import { LabelJob } from '../models/LabelJob';
 import { LabelTask } from '../models/LabelTask';
 import { LabelAnswer } from '../models/LabelAnswer';
@@ -70,7 +70,8 @@ export interface MaskField {
  * unique per mask, and neither is something to group a job by.
  */
 export const maskFields = async (bundleId: string, annotationSet: string): Promise<MaskField[]> => {
-  const idmaps = await LabelImage.find(
+  // Name the document type: newer mongoose infers a nested projection as selecting no fields.
+  const idmaps = await LabelImage.find<ILabelImage>(
     { bundleId, kind: 'idmap', annotationSet },
     { 'metadata.masks': 1 }
   );
