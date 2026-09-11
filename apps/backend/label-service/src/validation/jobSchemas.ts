@@ -23,6 +23,8 @@ export const createJobBodySchema = z.object({
 
 export type CreateJobBody = z.infer<typeof createJobBodySchema>;
 
+export const jobVisibilityBodySchema = z.object({ isPublic: z.boolean() });
+
 export const listJobsQuerySchema = z.object({
   role: z.enum(['worker', 'admin']).default('worker')
 });

@@ -16,15 +16,9 @@ declare global {
 }
 
 /**
- * Deliberately not folded into @visin/backend-core's authenticateToken, even
- * though both now extract the token the same way (cookie, then Authorization
- * header): this one layers a tokenVersion check against the User collection
- * on every request, so a password/security-relevant change can invalidate
- * every outstanding JWT immediately instead of waiting for expiry. That
- * requires a DB round-trip and this service's User model — a cost/dependency
- * the other three services (group/file/vision) don't need for their own
- * routes, so the shared middleware stays a pure, stateless JWT verify and
- * this one stays local.
+ * Auth-service loads its full local User model for role checks. Other services
+ * perform the same identity/version check through backend-core's projected read
+ * of the shared users collection. Neither path caches sessions across requests.
  */
 export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -34,9 +28,17 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
       return;
     }
     const decoded = verifyJWT(token);
+    if (typeof decoded.id !== 'string' || !decoded.id) {
+      res.status(401).json({ success: false, message: 'Invalid account identity' });
+      return;
+    }
 
     // Check if token version is valid
-    const dbUser = await User.findOne({ email: decoded.email.toLowerCase() });
+    const dbUser = await User.findOne(
+      { _id: decoded.id, email: decoded.email.toLowerCase() },
+      undefined,
+      { readPreference: 'primary', maxTimeMS: 3000 }
+    );
     if (!dbUser) {
       res.status(401).json({ success: false, message: 'User not found' });
       return;
@@ -66,7 +68,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
       const decoded = verifyJWT(token);
       // A retained session must not recreate a deleted user or consume setup.
       // Matching identity and version in the update also rejects revoked tokens.
-      if (decoded.tokenVersion != null) {
+      if (typeof decoded.id === 'string' && decoded.id && decoded.tokenVersion != null) {
         const dbUser = await User.findOneAndUpdate(
           { _id: decoded.id, email: decoded.email.toLowerCase(), tokenVersion: decoded.tokenVersion },
           { $set: { lastLoginAt: new Date() } },

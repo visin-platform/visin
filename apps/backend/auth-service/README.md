@@ -2,6 +2,29 @@
 
 Authentication API for Google sign-in, JWT cookies, profile lookup, and group refresh.
 
+## Google sign-in and linking
+
+Google sign-in identifies an account by `User.googleSubject`, the Google ID token's
+immutable `sub`, in this order:
+
+1. The account already bound to that subject signs in, whatever email Google reports now.
+2. An account created by Google sign-up before subjects were stored (`signupMethod:
+   'google'`, no subject, no password) is bound to the subject on its first Google
+   sign-in. Its address came from a Google-verified token, so no password
+   registration can have claimed it.
+3. Otherwise Google sign-up creates an account bound to the subject, behind the same
+   gate as password registration (closed until initial setup).
+
+Steps 2 and 3 require Google to report the email as verified. Any other account with
+that email (a password account, a Google sign-up that has since set a password, or
+one bound to a different subject) is refused with 409: an email match never grants
+Google access to it. Its owner signs in with the password and uses the auth page's
+**Link Google sign-in** form, which requires the current password and a Google account
+choice. The protected `POST /auth/profile/google` endpoint accepts `currentPassword`
+and `idToken`, binds only the authenticated account, and issues a new session after
+incrementing its token version. Existing bindings cannot be overwritten through this
+endpoint. The unique subject index is created by the existing startup index check.
+
 ## Local Development
 
 ```bash

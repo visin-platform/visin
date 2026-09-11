@@ -3,6 +3,7 @@ import * as svc from '../services/jobService';
 import * as materialization from '../services/materializationService';
 import * as exportSvc from '../services/exportService';
 import { assertAdmin, requireUser } from '../services/groupAccessService';
+import { getJobReadAccess } from '../services/jobAccessService';
 import { JobAction } from '../services/jobService';
 
 export const createJob = async (req: Request, res: Response): Promise<void> => {
@@ -13,7 +14,7 @@ export const createJob = async (req: Request, res: Response): Promise<void> => {
 };
 
 /**
- * Anonymous callers get the public listing — every active job — so progress can
+ * Anonymous callers get explicitly published active jobs, so progress can
  * be shared without an account. `role=admin` is a question about groups the
  * caller administers, which is nothing when there is no caller, so it answers
  * with an empty list rather than the public one.
@@ -29,12 +30,15 @@ export const listJobs = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: jobs });
 };
 
-/** Public: a job's definition and progress are what a shared link shows. */
+/** Resolve visibility before reading or returning job content and progress. */
 export const getJob = async (req: Request, res: Response): Promise<void> => {
   const job = await svc.getJob(req.params.id as string);
+  const access = await getJobReadAccess(job, req.user?.id);
   const progress = await svc.getJobProgress(job, req.user?.id || '');
-  const body = req.user?.id ? job.toObject() : svc.withoutCreatorIdentity(job);
-  res.json({ success: true, data: { ...body, progress } });
+  const body = access.member ? job.toObject() : svc.withoutCreatorIdentity(job);
+  res.json({ success: true, data: { ...body, progress,
+    canLabel: access.member && (job.status === 'active' || job.status === 'completed')
+  } });
 };
 
 const transition = (action: JobAction) => async (req: Request, res: Response): Promise<void> => {
@@ -48,6 +52,12 @@ export const activateJob = transition('activate');
 export const pauseJob = transition('pause');
 export const resumeJob = transition('resume');
 export const archiveJob = transition('archive');
+
+export const setJobVisibility = async (req: Request, res: Response): Promise<void> => {
+  const job = await svc.getJob(req.params.id as string);
+  await assertAdmin(req, job.groupId);
+  res.json({ success: true, data: await svc.setJobVisibility(job._id.toString(), req.body.isPublic) });
+};
 
 /** Irreversible: the job, its tasks and every answer collected against it. */
 export const deleteJob = async (req: Request, res: Response): Promise<void> => {
@@ -94,17 +104,19 @@ export const exportJob = async (req: Request, res: Response): Promise<void> => {
 };
 
 /**
- * Public, minus the names: totals, agreement and per-stratum breakdown are the
- * progress this is shared to show, but `perUser` is a list of labelers' email
- * addresses and is dropped for a caller with no identity of their own.
+ * Aggregates follow job visibility. Labeler names/emails require owner/admin membership in
+ * the job's group, matching the identity-bearing exports.
  */
 export const jobStats = async (req: Request, res: Response): Promise<void> => {
   const job = await svc.getJob(req.params.id as string);
+  const { isAdmin: includeIdentities } = await getJobReadAccess(job, req.user?.id);
   const stats = await exportSvc.jobStats(job);
-  if (!req.user?.id) {
-    const { perUser: _perUser, ...publicStats } = stats;
-    res.json({ success: true, data: publicStats });
-    return;
-  }
-  res.json({ success: true, data: stats });
+  res.json({ success: true, data: {
+    tasks: stats.tasks,
+    completed: stats.completed,
+    answers: stats.answers,
+    perStratum: stats.perStratum,
+    agreement: stats.agreement,
+    ...(includeIdentities ? { perUser: stats.perUser } : {})
+  } });
 };

@@ -43,7 +43,7 @@ const WorkbenchPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const { isAuthenticated, isLoading: authLoading, login } = useAuth();
-  const { data: job } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
+  const { data: job, error: jobError } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
   // Read once: the param is rewritten as the labeler advances, and re-reading it
   // would restart the queue on every frame.
   const [startTaskId] = useState(() => searchParams.get('task'));
@@ -52,9 +52,9 @@ const WorkbenchPage: React.FC = () => {
   const [startBrowsing] = useState(() => searchParams.get('browse') === '1');
   // Pulling takes a lease, which needs a signed-in labeler and a job that is
   // actually taking answers; anyone else opens straight into browse mode.
-  const canPull = isAuthenticated && job?.status === 'active';
+  const canPull = isAuthenticated && job?.canLabel === true && job.status === 'active';
   // A completed job stopped handing out work, but its answers stay correctable.
-  const canLabel = isAuthenticated && (job?.status === 'active' || job?.status === 'completed');
+  const canLabel = isAuthenticated && job?.canLabel === true && (job.status === 'active' || job.status === 'completed');
   const queue = useWorkQueue(jobId, {
     startTaskId,
     canPull,
@@ -296,6 +296,7 @@ const WorkbenchPage: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [task, isMaskToggle, canLabel, focusedIdx, masks, rejected, job, queue, step, submit, toggleMask, walkTo]);
 
+  if (jobError) return <Alert severity="error">{jobError.message}</Alert>;
   if (!job || queue.status === 'loading') {
     return <Loader message="Loading workbench..." />;
   }

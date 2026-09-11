@@ -6,6 +6,7 @@ vi.mock('../services/jobService', () => ({
   getJobStats: vi.fn(),
   listJobs: vi.fn(),
   transitionJob: vi.fn(),
+  setJobVisibility: vi.fn(),
   downloadExport: vi.fn(),
   deleteJob: vi.fn(),
 }));
@@ -16,7 +17,7 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => authState,
 }));
 
-import { deleteJob, downloadExport, getJob, getJobStats, listJobs, transitionJob } from '../services/jobService';
+import { deleteJob, downloadExport, getJob, getJobStats, listJobs, transitionJob, setJobVisibility } from '../services/jobService';
 import JobDetailPage from './JobDetailPage';
 import { renderWithProviders } from '../test/renderWithProviders';
 
@@ -31,6 +32,7 @@ const job = (overrides: Record<string, unknown> = {}) => ({
   _id: 'j1',
   name: 'Mask check',
   status: 'active',
+  canLabel: true,
   taskType: 'mask_toggle',
   redundancy: 2,
   question: { prompt: 'Mark all incorrect masks' },
@@ -156,4 +158,40 @@ describe('JobDetailPage transitions', () => {
     expect(mockedDelete).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
+});
+
+it('lets administrators explicitly publish and stop sharing', async () => {
+  mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
+  vi.mocked(setJobVisibility).mockImplementation(async (_id, isPublic) => {
+    mockedGetJob.mockResolvedValue(job({ isPublic }));
+    return job({ isPublic }) as Awaited<ReturnType<typeof setJobVisibility>>;
+  });
+  renderPage();
+  fireEvent.click(await screen.findByRole('button', { name: 'Enable public sharing' }));
+  await waitFor(() => expect(setJobVisibility).toHaveBeenCalledWith('j1', true));
+  fireEvent.click(await screen.findByRole('button', { name: 'Stop public sharing' }));
+  await waitFor(() => expect(setJobVisibility).toHaveBeenCalledWith('j1', false));
+});
+
+it('surfaces sharing failures', async () => {
+  mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
+  vi.mocked(setJobVisibility).mockRejectedValue(new Error('Group owner/admin required'));
+  renderPage();
+  fireEvent.click(await screen.findByRole('button', { name: 'Enable public sharing' }));
+  expect(await screen.findByText('Group owner/admin required')).toBeInTheDocument();
+});
+
+it('shows an access error instead of an endless job loader', async () => {
+  mockedGetJob.mockRejectedValue(new Error('Group membership required'));
+  renderPage();
+  expect(await screen.findByText('Group membership required')).toBeInTheDocument();
+});
+
+it('keeps a signed-in public visitor in browse mode', async () => {
+  authState.isAuthenticated = true;
+  mockedGetJob.mockResolvedValue(job({ isPublic: true, canLabel: false }));
+  renderPage();
+  await screen.findByText('Mask check');
+  expect(screen.queryByRole('button', { name: 'Start labeling' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Enable public sharing' })).not.toBeInTheDocument();
 });

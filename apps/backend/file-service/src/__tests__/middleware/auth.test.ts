@@ -77,7 +77,7 @@ describe('requireSignedToken', () => {
   const signedReq = (expiresMs: number, token?: string) =>
     makeReq({
       params: { fileId: fileId.split('/') },
-      query: { token: token ?? signToken('upload', fileId, expiresMs), expires: String(expiresMs) },
+      query: { token: token ?? signToken('upload', fileId, expiresMs, '00000000-0000-0000-0000-000000000000'), expires: String(expiresMs), reservation: '00000000-0000-0000-0000-000000000000' },
     });
 
   it('rejects when token or expires is missing', () => {

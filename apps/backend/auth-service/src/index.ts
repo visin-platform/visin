@@ -56,6 +56,7 @@ const passwordLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHe
 app.use('/auth/login', passwordLimiter);
 app.use('/auth/register', passwordLimiter);
 app.use('/auth/setup', passwordLimiter);
+app.use('/auth/profile/google', passwordLimiter);
 
 // Serve static documentation files
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));

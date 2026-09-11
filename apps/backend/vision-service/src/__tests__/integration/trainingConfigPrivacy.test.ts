@@ -12,6 +12,9 @@ import Project from '../../models/Project';
 import Training from '../../models/Training';
 import Config from '../../models/Config';
 
+const OWNER = '000000000000000000000001';
+const STRANGER = '000000000000000000000002';
+
 describe('training-config privacy with shared public configs', () => {
   let mongo: MongoMemoryServer;
   let server: Server;
@@ -37,8 +40,9 @@ describe('training-config privacy with shared public configs', () => {
   }, 120_000);
 
   beforeEach(async () => {
-    const project = await Project.create({ name: 'Private', ownerId: 'owner' });
-    const publicProject = await Project.create({ name: 'Public', ownerId: 'owner', isPublic: true });
+    await mongoose.connection.collection('users').insertMany([OWNER, STRANGER].map(id => ({ _id: new mongoose.Types.ObjectId(id), email: `${id}@example.test`, tokenVersion: 1 })));
+    const project = await Project.create({ name: 'Private', ownerId: OWNER });
+    const publicProject = await Project.create({ name: 'Public', ownerId: OWNER, isPublic: true });
     configId = String((await Config.create({ config_uuid: 'shared', summary: 'Public fixture', config_data: { learning_rate: 0.01 } }))._id);
     const trainings = await Training.create([
       { name: 'Private run', uuid: 'private-run', projectId: String(project._id), configId },
@@ -58,21 +62,21 @@ describe('training-config privacy with shared public configs', () => {
   });
 
   const get = async (path: string, userId?: string) => {
-    const payload = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, exp: Math.floor(Date.now() / 1000) + 60 }]
+    const payload = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, exp: Math.floor(Date.now() / 1000) + 60 }]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
     const token = `${payload}.${createHmac('sha256', secret).update(payload).digest('base64url')}`;
     const response = await fetch(`${baseUrl}/${path}`, { headers: userId ? { Authorization: `Bearer ${token}` } : {} });
     return { status: response.status, body: await response.json() as { data: Record<string, unknown> } };
   };
 
-  it.each([undefined, 'stranger'])('denies private associations to %s', async userId => {
+  it.each([undefined, STRANGER])('denies private associations to %s', async userId => {
     expect((await get(`trainings/${privateId}/configs`, userId)).status).toBe(403);
     await Training.updateOne({ _id: privateId }, { $unset: { configId: 1 } });
     expect((await get(`trainings/${privateId}/configs`, userId)).status).toBe(403);
   });
 
   it('allows the private owner and public viewers to read the same config association', async () => {
-    for (const [id, user] of [[privateId, 'owner'], [publicId, undefined], [publicId, 'stranger']]) {
+    for (const [id, user] of [[privateId, OWNER], [publicId, undefined], [publicId, STRANGER]]) {
       const response = await get(`trainings/${id}/configs`, user);
       expect(response.status).toBe(200);
       expect(response.body.data).toMatchObject({ total: 1, configs: [expect.objectContaining({ _id: configId })] });
@@ -81,9 +85,9 @@ describe('training-config privacy with shared public configs', () => {
 
   it('hides deleted and absent trainings, including from their owner', async () => {
     await Training.updateMany({}, { deletedAt: new Date() });
-    expect((await get(`trainings/${privateId}/configs`, 'owner')).status).toBe(404);
+    expect((await get(`trainings/${privateId}/configs`, OWNER)).status).toBe(404);
     expect((await get(`trainings/${publicId}/configs`)).status).toBe(404);
-    expect((await get(`trainings/${new mongoose.Types.ObjectId()}/configs`, 'owner')).status).toBe(404);
+    expect((await get(`trainings/${new mongoose.Types.ObjectId()}/configs`, OWNER)).status).toBe(404);
   });
 
   it('preserves public library contents without exposing a private training association', async () => {
@@ -102,14 +106,14 @@ describe('training-config privacy with shared public configs', () => {
     expect((await get(`trainings/${privateId}/configs`)).status).toBe(200);
     await Project.updateOne({ _id: training!.projectId }, { isPublic: false });
     expect((await get(`trainings/${privateId}/configs`)).status).toBe(403);
-    expect((await get(`trainings/${privateId}/configs`, 'owner')).status).toBe(200);
+    expect((await get(`trainings/${privateId}/configs`, OWNER)).status).toBe(200);
   });
 
   it('preserves empty responses and standalone training access', async () => {
     await Training.updateOne({ _id: publicId }, { $unset: { projectId: 1 } });
     expect((await get(`trainings/${publicId}/configs`)).status).toBe(200);
     await Config.deleteOne({ _id: configId });
-    expect((await get(`trainings/${privateId}/configs`, 'owner')).body.data).toEqual({ configs: [], total: 0 });
+    expect((await get(`trainings/${privateId}/configs`, OWNER)).body.data).toEqual({ configs: [], total: 0 });
     await Training.updateOne({ _id: publicId }, { $unset: { configId: 1 } });
     expect((await get(`trainings/${publicId}/configs`)).body.data).toEqual({ configs: [], total: 0 });
   });

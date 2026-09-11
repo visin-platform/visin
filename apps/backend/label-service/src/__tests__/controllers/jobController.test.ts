@@ -12,6 +12,7 @@ jest.mock('../../services/jobService', () => ({
   deleteJob: jest.fn(),
   getJobProgress: jest.fn(),
   transitionJob: jest.fn(),
+  setJobVisibility: jest.fn(),
 }));
 jest.mock('../../services/materializationService', () => ({
   materializeTasks: jest.fn(),
@@ -26,7 +27,11 @@ jest.mock('../../services/groupAccessService', () => ({
   requireUser: jest.fn((req: Request) => req.user),
   assertMember: jest.fn(),
   assertAdmin: jest.fn(),
+  isGroupAdmin: jest.fn(),
 }));
+
+jest.mock('../../services/jobAccessService', () => ({ getJobReadAccess: jest.fn() }));
+import { getJobReadAccess } from '../../services/jobAccessService';
 
 import * as ctrl from '../../controllers/jobController';
 import * as svc from '../../services/jobService';
@@ -60,6 +65,7 @@ const job = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedSvc.getJob.mockResolvedValue(job);
+  (getJobReadAccess as jest.Mock).mockImplementation(async (_job, userId) => ({ member: Boolean(userId), isAdmin: false }));
 });
 
 describe('createJob', () => {
@@ -132,7 +138,7 @@ describe('getJob', () => {
     expect(mockedSvc.getJobProgress).toHaveBeenCalledWith(job, 'u1');
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { _id: 'j1', groupId: 'g1', createdBy: { email: 'owner@x.com' }, progress: { tasks: 3 } },
+      data: { canLabel: false, _id: 'j1', groupId: 'g1', createdBy: { email: 'owner@x.com' }, progress: { tasks: 3 } },
     });
   });
 
@@ -149,7 +155,7 @@ describe('getJob', () => {
     expect(mockedMember).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { _id: 'j1', groupId: 'g1', progress: { tasks: 3, myAnswers: 0 } },
+      data: { canLabel: false, _id: 'j1', groupId: 'g1', progress: { tasks: 3, myAnswers: 0 } },
     });
   });
 });
@@ -242,7 +248,8 @@ describe('exportJob', () => {
 });
 
 describe('jobStats', () => {
-  it('gives a signed-in caller the per-labeler breakdown', async () => {
+  it('gives an authorized group administrator the per-labeler breakdown', async () => {
+    (getJobReadAccess as jest.Mock).mockResolvedValue({ member: true, isAdmin: true });
     mockedExport.jobStats.mockResolvedValue({ tasks: 1, perUser: [{ userEmail: 'w@x.com', answered: 1 }] });
     const res = makeRes();
 

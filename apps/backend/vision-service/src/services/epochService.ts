@@ -48,11 +48,12 @@ const assertTrainingAccess = async (
   tokenProjectId?: string,
   tokenScopeMessage = false
 ) => {
-  if (!(await checkProjectAccess(userId, training?.projectId))) {
+  // Only an existing live training may use the public standalone policy.
+  if (!training || training.deletedAt || !(await checkProjectAccess(userId, training.projectId))) {
     throw new ForbiddenError();
   }
 
-  if (!isWithinTokenScope(tokenProjectId, training?.projectId)) {
+  if (!isWithinTokenScope(tokenProjectId, training.projectId)) {
     throw new ForbiddenError(tokenScopeMessage ? 'Training does not belong to the token\'s project' : undefined);
   }
 };
@@ -68,7 +69,7 @@ const getTrainingByIdOrThrow = async (trainingId: string, message = 'Training no
 const getEpochByIdOrThrow = async (id: string) => {
   const epoch = await Epoch.findById(id);
 
-  if (!epoch) {
+  if (!epoch || epoch.deletedAt) {
     throw new NotFoundError('Epoch not found');
   }
 
@@ -83,7 +84,8 @@ export const getEpochsByTraining = async (
   const training = await getTrainingByIdOrThrow(trainingId);
   await assertTrainingAccess(training, userId);
 
-  let query = Epoch.find({ trainingId }).sort({ [sortBy]: order });
+  const filter = { trainingId, deletedAt: null };
+  let query = Epoch.find(filter).sort({ [sortBy]: order });
 
   if (page && limit) {
     const numericPage = Number(page);
@@ -93,7 +95,7 @@ export const getEpochsByTraining = async (
 
     const [epochs, total] = await Promise.all([
       query,
-      Epoch.countDocuments({ trainingId })
+      Epoch.countDocuments(filter)
     ]);
 
     return {
@@ -124,7 +126,7 @@ export const getEpochById = async (id: string, userId: string | undefined) => {
 export const getEpochByUuid = async (uuid: string, userId: string | undefined) => {
   const epoch = await Epoch.findOne({ epoch_uuid: uuid });
 
-  if (!epoch) {
+  if (!epoch || epoch.deletedAt) {
     throw new NotFoundError('Epoch not found');
   }
 

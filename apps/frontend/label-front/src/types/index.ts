@@ -33,6 +33,8 @@ export interface LabelJob {
   annotationSets: string[];
   redundancy: number;
   status: JobStatus;
+  isPublic?: boolean;
+  canLabel?: boolean; // current membership capability, present on job detail
   tasksCount: number;
   createdBy: { userId: string; email: string; name?: string };
   createdAt: string;

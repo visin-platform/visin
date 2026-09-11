@@ -1,9 +1,9 @@
-import { createBaseApp, errorHandler, logger, createHealthCheckHandler, assertRequiredEnv } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, createHealthCheckHandler, assertRequiredEnv, connectDb } from '@visin/backend-core';
 import routes from './routes/routes';
 
 // API key authenticates internal callers; HMAC secret signs the browser-direct
 // upload/download URLs.
-assertRequiredEnv(['FILE_SERVICE_API_KEY', 'FILE_SERVICE_HMAC_SECRET']);
+assertRequiredEnv(['MONGODB_URI', 'FILE_SERVICE_API_KEY', 'FILE_SERVICE_HMAC_SECRET']);
 
 const PORT = process.env.PORT || 5002;
 
@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 5002;
 const app = createBaseApp({ json: false });
 
 // Health check
-app.get('/health', createHealthCheckHandler({ serviceName: 'file-service' }));
+app.get('/health', createHealthCheckHandler({ serviceName: 'file-service', checkMongo: true }));
 
 // All file routes
 app.use('/', routes);
@@ -24,6 +24,8 @@ app.use('/', routes);
 // Must be mounted last, after all routes
 app.use(errorHandler);
 
-app.listen(PORT, () => logger.info(`File service started on port ${PORT}`));
+connectDb({ serviceName: 'file-service' }).then(() => {
+  app.listen(PORT, () => logger.info(`File service started on port ${PORT}`));
+}).catch(() => process.exit(1));
 
 export default app;

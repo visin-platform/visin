@@ -26,6 +26,10 @@ export const validateTokenBodySchema = z.object({
   idToken: z.string().min(1, 'Token is required')
 });
 
+export const linkGoogleBodySchema = validateTokenBodySchema.extend({
+  currentPassword: z.string().min(1).max(MAX_PASSWORD_LENGTH)
+});
+
 export const invalidateUserTokensBodySchema = z.object({
   email: z.string().min(1, 'Email is required')
 });

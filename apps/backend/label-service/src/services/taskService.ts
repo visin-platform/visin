@@ -6,6 +6,8 @@ import { LabelAnswer, ILabelAnswer } from '../models/LabelAnswer';
 import { LabelImage } from '../models/LabelImage';
 import * as files from '../clients/fileServiceClient';
 import { AnswerBody } from '../validation/taskSchemas';
+import { getJobReadAccess } from './jobAccessService';
+import { getJob } from './jobService';
 
 const LEASE_MINUTES = Number(process.env.TASK_LEASE_MINUTES || 5);
 
@@ -29,8 +31,7 @@ export interface AnswerSnapshot {
  *
  * `latest` is deliberately anonymous: a visitor following a shared link should
  * see that a frame was labeled and how, without being handed the labelers'
- * email addresses. Identity stays in the export and the per-labeler stats,
- * both of which remain admin-only.
+ * email addresses. Service-managed labeler identity is omitted from this response.
  */
 export interface TaskAnswerState {
   count: number;
@@ -46,8 +47,11 @@ export interface TaskPosition {
   total: number;
 }
 
+/** Public task content; ownership, leases and persistence fields stay internal. */
+export type TaskView = Pick<ILabelTask, '_id' | 'jobId' | 'labelImageId' | 'order' | 'stratum' | 'payload'>;
+
 export interface TaskItem {
-  task: ILabelTask;
+  task: TaskView;
   images: TaskImages;
   position: TaskPosition;
   answer: TaskAnswerState;
@@ -122,7 +126,17 @@ const buildTaskItem = async (task: ILabelTask, userId?: string, total?: number):
     positionFor(task, total),
     answerStateFor(task._id, userId)
   ]);
-  return { task, images, position, answer };
+  // Construct an allowlist rather than serializing the document or deleting known
+  // private fields: newly added model fields must not become public automatically.
+  const view: TaskView = {
+    _id: task._id,
+    jobId: task.jobId,
+    labelImageId: task.labelImageId,
+    order: task.order,
+    stratum: task.stratum,
+    payload: task.payload
+  };
+  return { task: view, images, position, answer };
 };
 
 /**
@@ -165,10 +179,8 @@ export const nextTask = async (
  * of the queue for whoever was about to be handed it.
  */
 export const getTaskItem = async (taskId: string, userId?: string): Promise<TaskItem> => {
-  const task = await LabelTask.findById(taskId);
-  if (!task) {
-    throw new NotFoundError('Task not found');
-  }
+  const { task, job } = await getTaskWithJob(taskId);
+  await getJobReadAccess(job, userId);
   return buildTaskItem(task, userId);
 };
 
@@ -185,6 +197,8 @@ export const getTaskItemAtIndex = async (
   index: number,
   userId?: string
 ): Promise<TaskItem | null> => {
+  const job = await getJob(jobId);
+  await getJobReadAccess(job, userId);
   const task = await LabelTask.findOne({ jobId }).sort({ order: 1 }).skip(index);
   return task ? buildTaskItem(task, userId) : null;
 };

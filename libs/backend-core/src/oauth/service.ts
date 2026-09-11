@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
-import { AuthorizationCode, IAuthorizationCode, OAuthClient, RefreshToken } from './models';
+import { AuthorizationCode, IAuthorizationCode, OAuthClient, OAuthGrant, RefreshToken } from './models';
 import type { ApiKeyScope } from '../apiKeys/types';
 
 /** How long a user has between approving and the client exchanging the code. */
@@ -167,13 +167,22 @@ export const issueRefreshToken = async (input: {
   scopes: ApiKeyScope[];
   resource: string;
 }): Promise<IssuedRefreshToken> => {
-  await RefreshToken.updateMany(
-    { userId: input.userId, clientId: input.clientId, revokedAt: { $exists: false } },
-    { $set: { revokedAt: new Date() } }
-  );
-
   const token = randomBytes(32).toString('base64url');
-  await RefreshToken.create({ ...input, tokenHash: sha256(token) });
+  const tokenHash = sha256(token);
+  const grantId = sha256(JSON.stringify([input.userId, input.clientId]));
+  const generation = randomBytes(32).toString('hex');
+  // Prepare history first. A crash here leaves an inert row, not a live token.
+  await RefreshToken.create({ tokenHash, clientId: input.clientId, grantId, generation });
+  // The single document is the authority. Concurrent reconnect/disconnect writes
+  // take effect in their atomic write order; old refreshes cannot overwrite it.
+  await OAuthGrant.findOneAndUpdate(
+    { _id: grantId },
+    {
+      $set: { ...input, generation, currentTokenHash: tokenHash, grantedAt: new Date() },
+      $unset: { revokedAt: 1, lastUsedAt: 1 }
+    },
+    { upsert: true, returnDocument: 'after' }
+  );
   return { token };
 };
 
@@ -207,42 +216,48 @@ export const redeemRefreshToken = async (
   token: string,
   clientId: string
 ): Promise<RefreshRedemption> => {
-  const record = await RefreshToken.findOne({ tokenHash: sha256(token), clientId });
-  if (!record) return { ok: false };
+  const tokenHash = sha256(token);
+  const record = await RefreshToken.findOne(
+    { tokenHash, clientId }, undefined, { readPreference: 'primary' }
+  );
+  // Legacy records without a grant generation must never gain authority.
+  if (!record?.grantId || !record.generation) return { ok: false };
 
-  if (record.revokedAt) {
-    // Already rotated or explicitly revoked. If something is still presenting
-    // it, a copy is loose — cut every token in this grant.
-    await RefreshToken.updateMany(
-      { userId: record.userId, clientId, revokedAt: { $exists: false } },
-      { $set: { revokedAt: new Date() } }
-    );
-    return { ok: false, reused: true };
-  }
-
-  record.revokedAt = new Date();
-  record.lastUsedAt = new Date();
-  await record.save();
+  const identity = { _id: record.grantId, generation: record.generation };
+  const grant = await OAuthGrant.findOne(identity, undefined, { readPreference: 'primary' });
+  if (!grant || grant.revokedAt) return { ok: false };
+  if (grant.currentTokenHash !== tokenHash) return revokeReplayedGrant(identity);
 
   const rotated = randomBytes(32).toString('base64url');
+  const rotatedHash = sha256(rotated);
+  // Preparation failure leaves the old token usable. A prepared row is inert
+  // unless the conditional grant update below commits.
   await RefreshToken.create({
-    tokenHash: sha256(rotated),
-    clientId,
-    userId: record.userId,
-    scopes: record.scopes,
-    resource: record.resource,
-    // Carried, not reset: this is still the grant the user approved, and
-    // resetting it would tell them they connected the app a minute ago.
-    grantedAt: record.grantedAt ?? record.createdAt
+    tokenHash: rotatedHash, clientId, grantId: record.grantId, generation: record.generation
   });
+  const claimed = await OAuthGrant.findOneAndUpdate(
+    { ...identity, currentTokenHash: tokenHash, revokedAt: { $exists: false } },
+    { $set: { currentTokenHash: rotatedHash, lastUsedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  if (!claimed) return revokeReplayedGrant(identity);
 
   return {
     ok: true,
-    userId: record.userId,
-    scopes: record.scopes,
-    resource: record.resource,
+    userId: claimed.userId,
+    scopes: claimed.scopes,
+    resource: claimed.resource,
     rotatedToken: rotated
   };
+};
+
+/** Never let replay from an older generation revoke a newly approved connection. */
+const revokeReplayedGrant = async (identity: { _id: string; generation: string }): Promise<RefreshRedemption> => {
+  await OAuthGrant.updateOne(
+    { ...identity, revokedAt: { $exists: false } },
+    { $set: { revokedAt: new Date() } }
+  );
+  return { ok: false, reused: true };
 };
 
 /** Cut off an assistant: without a refresh token it can obtain nothing new. */
@@ -253,7 +268,7 @@ export const revokeRefreshTokensForUser = async (
   const filter: Record<string, unknown> = { userId, revokedAt: { $exists: false } };
   if (clientId) filter.clientId = clientId;
 
-  const result = await RefreshToken.updateMany(filter, { $set: { revokedAt: new Date() } });
+  const result = await OAuthGrant.updateMany(filter, { $set: { revokedAt: new Date() } });
   return result.modifiedCount;
 };
 
@@ -270,24 +285,23 @@ export interface Connection {
 /**
  * The assistants a user has connected.
  *
- * Read from refresh tokens rather than a separate record, because a refresh
- * token *is* the connection: while one is live the assistant can keep minting
- * access tokens, and once it is gone the connection is over.
+ * Read the authoritative grants, not prepared or retired token history. Each
+ * client has one connection, even after many rotations or reauthorizations.
  */
 export const listConnections = async (userId: string): Promise<Connection[]> => {
-  const tokens = await RefreshToken.find({ userId }).sort({ createdAt: -1 });
-  const clients = await OAuthClient.find({ clientId: { $in: tokens.map((t) => t.clientId) } });
+  const grants = await OAuthGrant.find({ userId }).sort({ grantedAt: -1 });
+  const clients = await OAuthClient.find({ clientId: { $in: grants.map((grant) => grant.clientId) } });
   const nameById = new Map(clients.map((client) => [client.clientId, client.clientName]));
 
-  return tokens.map((token) => ({
-    id: String(token._id),
-    clientId: token.clientId,
-    clientName: nameById.get(token.clientId) ?? 'Unknown app',
-    scopes: token.scopes,
-    createdAt: (token.grantedAt ?? token.createdAt).toISOString(),
+  return grants.map((grant) => ({
+    id: String(grant._id),
+    clientId: grant.clientId,
+    clientName: nameById.get(grant.clientId) ?? 'Unknown app',
+    scopes: grant.scopes,
+    createdAt: grant.grantedAt.toISOString(),
     // Set when the refresh token is exchanged, not when a tool runs — access
     // tokens are validated statelessly, so the server never sees ordinary use.
-    lastRenewedAt: token.lastUsedAt?.toISOString() ?? null,
-    revokedAt: token.revokedAt?.toISOString() ?? null
+    lastRenewedAt: grant.lastUsedAt?.toISOString() ?? null,
+    revokedAt: grant.revokedAt?.toISOString() ?? null
   }));
 };

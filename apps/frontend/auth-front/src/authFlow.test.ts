@@ -36,6 +36,18 @@ afterEach(() => {
 });
 
 describe('initializeGoogleSignIn', () => {
+  it('uses the explicit linking callback without starting a login request', async () => {
+    const initialize = vi.fn();
+    const callback = vi.fn();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    window.google = { accounts: { id: { initialize, renderButton: vi.fn() } } };
+    initializeGoogleSignIn(CLIENT_ID, REDIRECT_URI, callback);
+    await vi.advanceTimersByTimeAsync(0);
+    initialize.mock.calls[0][0].callback({ credential: 'google-link-token' });
+    expect(callback).toHaveBeenCalledWith({ credential: 'google-link-token' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it('initializes Google Sign-In and renders the button', async () => {
     const initialize = vi.fn();
     const renderButton = vi.fn();
@@ -132,6 +144,18 @@ describe('initializeGoogleSignIn', () => {
   });
 
   describe('handleCredentialResponse (exercised via the captured Google callback)', () => {
+    it.each([true, false])('handles unsuccessful JSON and non-JSON responses (json=%s)', async validJson => {
+      const initialize = vi.fn();
+      window.google = { accounts: { id: { initialize, renderButton: vi.fn() } } };
+      initializeGoogleSignIn(CLIENT_ID, REDIRECT_URI);
+      await vi.advanceTimersByTimeAsync(0);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404,
+        json: () => validJson ? Promise.resolve({ message: 'Google account is not linked' }) : Promise.reject(new Error('not JSON'))
+      }));
+      initialize.mock.calls[0][0].callback({ credential: 'google-token' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(decodeURIComponent(window.location.href)).toContain(validJson ? 'Google account is not linked' : 'HTTP error! status: 404');
+    });
     const setup = async () => {
       const initialize = vi.fn();
       const renderButton = vi.fn();

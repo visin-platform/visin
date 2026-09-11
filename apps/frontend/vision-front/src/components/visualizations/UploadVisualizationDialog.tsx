@@ -113,7 +113,7 @@ const UploadVisualizationDialog: React.FC<UploadVisualizationDialogProps> = ({
             <input
               type="file"
               hidden
-              accept="image/*"
+              accept=".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp"
               onChange={handleFileSelect}
             />
             <CloudUploadIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />

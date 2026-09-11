@@ -46,6 +46,10 @@ jest.mock('../../services/fileServiceClient', () => ({
   deleteFile: jest.fn(async () => true),
 }));
 
+const OWNER = '000000000000000000000001';
+const STRANGER = '000000000000000000000002';
+const EDITOR = '000000000000000000000003';
+
 describe('public reads and authorized writes with in-memory MongoDB', () => {
   let mongo: MongoMemoryServer;
   let server: Server;
@@ -77,10 +81,11 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
   }, 120_000);
 
   beforeEach(async () => {
+    await mongoose.connection.collection('users').insertMany([OWNER, STRANGER, EDITOR].map(id => ({ _id: new mongoose.Types.ObjectId(id), email: `${id}@example.test`, tokenVersion: 1 })));
     jest.clearAllMocks();
     jest.mocked(getUserGroups).mockResolvedValue([]);
     jest.mocked(files.getFileMetadata).mockResolvedValue({ size: 10 } as Awaited<ReturnType<typeof files.getFileMetadata>>);
-    projectId = String((await Project.create({ name: 'Public', ownerId: 'owner', isPublic: true }))._id);
+    projectId = String((await Project.create({ name: 'Public', ownerId: OWNER, isPublic: true }))._id);
     trainingId = String((await Training.create({ name: 'Public run', uuid: 'public-run', projectId }))._id);
     await Epoch.create({ timestamp: new Date(), trainingId, training_uuid: 'public-run', epoch_uuid: 'public-epoch', epoch: 1, results: {} });
     legacyId = String((await Training.create({ name: 'Legacy run', uuid: 'legacy-run' }))._id);
@@ -96,8 +101,8 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
   });
 
-  const request = async (path: string, method = 'GET', body?: unknown, userId: string | undefined = 'owner') => {
-    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, exp: Math.floor(Date.now() / 1000) + 60 }]
+  const request = async (path: string, method = 'GET', body?: unknown, userId: string | undefined = OWNER) => {
+    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, exp: Math.floor(Date.now() / 1000) + 60 }]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
     const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
     const response = await fetch(`${baseUrl}/${path}`, { method,
@@ -108,8 +113,8 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
   };
 
   it('denies a stranger public training mutation while preserving public reads and owner writes', async () => {
-    expect((await request(`trainings/${trainingId}`, 'GET', undefined, 'stranger')).status).toBe(200);
-    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Attacker' }, 'stranger')).status).toBe(403);
+    expect((await request(`trainings/${trainingId}`, 'GET', undefined, STRANGER)).status).toBe(200);
+    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Attacker' }, STRANGER)).status).toBe(403);
     expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Owner update' })).status).toBe(200);
   });
 
@@ -127,31 +132,43 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
   });
   const benchmarkBody = { timestamp: new Date().toISOString(), system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }, results: [] };
   const epochBody = () => ({ trainingId, training_uuid: 'public-run', epoch: 2, results: {} });
-  const archive = async (user = 'owner', dataset?: string) => {
+  const archive = async (user = OWNER, dataset?: string) => {
     const result = await request('analysis/upload-url', 'POST', { filename: 'data.zip', mimetype: 'application/zip', dataset }, user);
     expect(result.status).toBe(201);
     return result.body.data as { fileId: string; analysisId?: string };
   };
 
+  it('rejects missing or oversized attachments against the reserved byte allowance', async () => {
+    const issued = await archive(OWNER, 'Bounded attachment');
+    const reservation = await UploadReservation.findOne({ fileId: issued.fileId });
+    expect(reservation?.maxBytes).toBe(10 * 1024 ** 3);
+    jest.mocked(files.getFileMetadata).mockRejectedValueOnce(new Error('Not published'));
+    expect((await request(`analysis/${issued.analysisId}/complete`, 'POST', {})).status).toBe(400);
+    jest.mocked(files.getFileMetadata).mockResolvedValueOnce({ size: reservation!.maxBytes! + 1 } as Awaited<ReturnType<typeof files.getFileMetadata>>);
+    expect((await request(`analysis/${issued.analysisId}/complete`, 'POST', {})).status).toBe(400);
+    expect((await DatasetAnalysis.findById(issued.analysisId))?.status).toBe('pending');
+    expect((await request(`analysis/${issued.analysisId}/complete`, 'POST', {})).status).toBe(200);
+  });
+
   it('stamps new standalone records and does not accept an injected owner', async () => {
-    const created = await request('trainings', 'POST', { name: 'Mine', ownerId: 'stranger' });
+    const created = await request('trainings', 'POST', { name: 'Mine', ownerId: STRANGER });
     expect(created.status).toBe(201);
     const id = String(created.body.data._id);
-    expect((await Training.findById(id))?.ownerId).toBe('owner');
-    expect((await request(`trainings/${id}`, 'PUT', { name: 'Changed', ownerId: 'stranger' })).status).toBe(200);
-    expect((await request(`trainings/${id}`, 'DELETE', undefined, 'stranger')).status).toBe(403);
+    expect((await Training.findById(id))?.ownerId).toBe(OWNER);
+    expect((await request(`trainings/${id}`, 'PUT', { name: 'Changed', ownerId: STRANGER })).status).toBe(200);
+    expect((await request(`trainings/${id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
     expect((await request(`trainings/${id}`, 'DELETE')).status).toBe(200);
-    expect((await request('trainings', 'POST', { name: 'Injected', projectId }, 'stranger')).status).toBe(403);
+    expect((await request('trainings', 'POST', { name: 'Injected', projectId }, STRANGER)).status).toBe(403);
     expect((await request('trainings', 'POST', { name: 'Anonymous' }, '')).status).toBe(401);
   });
 
   it('checks epoch normal/upload/update and every batch parent before writing', async () => {
     const epoch = await Epoch.findOne({ epoch_uuid: 'public-epoch' });
     for (const path of ['epochs', 'epochs/upload']) {
-      expect((await request(path, 'POST', epochBody(), 'stranger')).status).toBe(403);
+      expect((await request(path, 'POST', epochBody(), STRANGER)).status).toBe(403);
       expect((await request(path, 'POST', epochBody())).status).toBe(201);
     }
-    expect((await request(`epochs/${epoch!._id}`, 'PUT', { results: { changed: true } }, 'stranger')).status).toBe(403);
+    expect((await request(`epochs/${epoch!._id}`, 'PUT', { results: { changed: true } }, STRANGER)).status).toBe(403);
     expect((await request(`epochs/${epoch!._id}`, 'PUT', { results: { changed: true } })).status).toBe(200);
     const count = await Epoch.countDocuments();
     expect((await request('epochs/batch', 'POST', { epochs: [epochBody(), { ...epochBody(), trainingId: legacyId }] })).status).toBe(403);
@@ -164,51 +181,51 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
   it('checks test-result old and replacement parents and rejects orphan ingestion', async () => {
     const body = { epoch: 1, epoch_uuid: 'public-epoch', test_results: { day: { overall: { score: 1 } } } };
     for (const path of ['test-results', 'test-results/upload']) {
-      expect((await request(path, 'POST', body, 'stranger')).status).toBe(403);
+      expect((await request(path, 'POST', body, STRANGER)).status).toBe(403);
       expect((await request(path, 'POST', { ...body, epoch_uuid: 'missing' })).status).toBe(403);
       expect((await request(path, 'POST', body)).status).toBe(201);
     }
     const test = await TestResult.findOne();
     await Epoch.create({ timestamp: new Date(), trainingId: legacyId, training_uuid: 'legacy-run', epoch_uuid: 'legacy-epoch', epoch: 1, results: {} });
     expect((await request(`test-results/${test!._id}`, 'PUT', { epoch_uuid: 'legacy-epoch' })).status).toBe(403);
-    expect((await request(`test-results/${test!._id}`, 'PUT', { epoch: 2 }, 'stranger')).status).toBe(403);
-    expect((await request(`test-results/${test!._id}`, 'DELETE', undefined, 'stranger')).status).toBe(403);
+    expect((await request(`test-results/${test!._id}`, 'PUT', { epoch: 2 }, STRANGER)).status).toBe(403);
+    expect((await request(`test-results/${test!._id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
     expect((await request(`test-results/${test!._id}`, 'PUT', { epoch: 2 })).status).toBe(200);
     expect((await request(`test-results/${test!._id}`, 'DELETE')).status).toBe(200);
   });
 
   it('protects project and standalone benchmarks including stale and conflicting parent references', async () => {
     for (const path of ['benchmarks', 'benchmarks/upload']) {
-      expect((await request(path, 'POST', { ...benchmarkBody, training_uuid: 'public-run' }, 'stranger')).status).toBe(403);
+      expect((await request(path, 'POST', { ...benchmarkBody, training_uuid: 'public-run' }, STRANGER)).status).toBe(403);
       expect((await request(path, 'POST', { ...benchmarkBody, training_uuid: 'missing' })).status).toBe(403);
       expect((await request(path, 'POST', { ...benchmarkBody, epoch_uuid: 'public-epoch' })).status).toBe(201);
     }
     const linked = await Benchmark.findOne();
     expect(linked?.training_id?.toString()).toBe(trainingId);
     expect((await request(`benchmarks/${linked!._id}`, 'PUT', { training_uuid: 'legacy-run' })).status).toBe(403);
-    expect((await request(`benchmarks/${linked!._id}`, 'DELETE', undefined, 'stranger')).status).toBe(403);
+    expect((await request(`benchmarks/${linked!._id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
     expect((await request(`benchmarks/${linked!._id}`, 'PUT', { epoch: 3 })).status).toBe(200);
     const standalone = await request('benchmarks', 'POST', benchmarkBody);
     expect(standalone.status).toBe(201);
     expect((await request(`benchmarks/${standalone.body.data._id}`, 'DELETE')).status).toBe(200);
     const legacy = await Benchmark.create(benchmarkBody);
     expect((await request(`benchmarks/${legacy._id}`, 'DELETE')).status).toBe(403);
-    const orphan = await Benchmark.create({ ...benchmarkBody, ownerId: 'owner', training_uuid: 'missing' });
+    const orphan = await Benchmark.create({ ...benchmarkBody, ownerId: OWNER, training_uuid: 'missing' });
     expect((await request(`benchmarks/${orphan._id}`, 'DELETE')).status).toBe(403);
-    const own = await Training.create({ name: 'Other', uuid: 'other', ownerId: 'owner' });
+    const own = await Training.create({ name: 'Other', uuid: 'other', ownerId: OWNER });
     await Epoch.create({ timestamp: new Date(), trainingId: own._id.toString(), training_uuid: 'other', epoch_uuid: 'other-epoch', epoch: 1, results: {} });
     expect((await request('benchmarks', 'POST', { ...benchmarkBody, training_uuid: 'public-run', epoch_uuid: 'other-epoch' })).status).toBe(403);
   });
 
   it('protects comparisons and leaves another owner’s comparison intact on training deletion', async () => {
     const body = { name: 'Comparison', type: 'trainings', itemIds: [trainingId] };
-    expect((await request('comparisons', 'POST', { ...body, projectId }, 'stranger')).status).toBe(403);
+    expect((await request('comparisons', 'POST', { ...body, projectId }, STRANGER)).status).toBe(403);
     const mine = await request('comparisons', 'POST', body);
-    const theirs = await request('comparisons', 'POST', body, 'stranger');
+    const theirs = await request('comparisons', 'POST', body, STRANGER);
     expect(mine.status).toBe(201);
     expect(theirs.status).toBe(201);
-    expect((await request(`comparisons/${mine.body.data._id}`, 'PUT', { name: 'Hijack' }, 'stranger')).status).toBe(403);
-    expect((await request(`comparisons/${mine.body.data._id}`, 'DELETE', undefined, 'stranger')).status).toBe(403);
+    expect((await request(`comparisons/${mine.body.data._id}`, 'PUT', { name: 'Hijack' }, STRANGER)).status).toBe(403);
+    expect((await request(`comparisons/${mine.body.data._id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
     expect((await request(`comparisons/${mine.body.data._id}`, 'PUT', { name: 'Updated' })).status).toBe(200);
     expect((await request(`trainings/${trainingId}`, 'DELETE')).status).toBe(200);
     expect((await Comparison.findById(theirs.body.data._id))?.itemIds).toEqual([trainingId]);
@@ -218,24 +235,24 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
 
   it('protects visualization upload/create/delete and verifies issued files', async () => {
     const body = { epoch_uuid: 'public-epoch', filename: 'plot.png', type: 'plot', mimetype: 'image/png' };
-    expect((await request('visualizations/upload-url', 'POST', body, 'stranger')).status).toBe(403);
+    expect((await request('visualizations/upload-url', 'POST', body, STRANGER)).status).toBe(403);
     const issued = await request('visualizations/upload-url', 'POST', body);
     expect(issued.status).toBe(200);
     const create = { ...body, ...issued.body.data, size: 10 };
-    expect((await request('visualizations', 'POST', create, 'stranger')).status).toBe(403);
+    expect((await request('visualizations', 'POST', create, STRANGER)).status).toBe(403);
     expect((await request('visualizations', 'POST', { ...create, fileId: 'foreign.png' })).status).toBe(403);
     expect((await request('visualizations', 'POST', create)).status).toBe(201);
     const uuid = String(issued.body.data.visualization_uuid);
     expect((await request(`visualizations/${uuid}`, 'GET', undefined, '')).status).toBe(200);
-    expect((await request(`visualizations/${uuid}`, 'DELETE', undefined, 'stranger')).status).toBe(403);
+    expect((await request(`visualizations/${uuid}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
     expect((await request(`visualizations/${uuid}`, 'DELETE')).status).toBe(200);
   });
 
   it('verifies pending archives before completion, enforces creator ownership, and retains unverified legacy bytes', async () => {
-    const issued = await archive('owner', 'New analysis');
+    const issued = await archive(OWNER, 'New analysis');
     const id = issued.analysisId!;
-    expect((await DatasetAnalysis.findById(id))?.ownerId).toBe('owner');
-    expect((await request(`analysis/${id}/complete`, 'POST', {}, 'stranger')).status).toBe(403);
+    expect((await DatasetAnalysis.findById(id))?.ownerId).toBe(OWNER);
+    expect((await request(`analysis/${id}/complete`, 'POST', {}, STRANGER)).status).toBe(403);
     jest.mocked(files.getFileMetadata).mockRejectedValueOnce(new Error('not uploaded'));
     expect((await request(`analysis/${id}/complete`, 'POST', {})).status).toBe(400);
     expect((await DatasetAnalysis.findById(id))?.status).toBe('pending');
@@ -245,10 +262,10 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     const replacement = await archive();
     expect((await request(`analysis/${id}`, 'PUT', { fileId: replacement.fileId })).status).toBe(200);
     expect(files.deleteFile).toHaveBeenCalledWith(issued.fileId);
-    expect((await request(`analysis/${id}`, 'DELETE', undefined, 'stranger')).status).toBe(403);
+    expect((await request(`analysis/${id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
     expect((await request(`analysis/${id}`, 'DELETE')).status).toBe(200);
     expect(files.deleteFile).toHaveBeenCalledWith(replacement.fileId);
-    const legacy = await DatasetAnalysis.create({ ownerId: 'owner', dataset: 'Legacy assigned', fileId: 'datasets/legacy/shared.zip' });
+    const legacy = await DatasetAnalysis.create({ ownerId: OWNER, dataset: 'Legacy assigned', fileId: 'datasets/legacy/shared.zip' });
     jest.mocked(files.deleteFile).mockClear();
     expect((await request(`analysis/${legacy._id}`, 'DELETE')).status).toBe(200);
     expect(files.deleteFile).not.toHaveBeenCalled();
@@ -257,8 +274,8 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
   it('rejects stolen, expired, replayed, and nested archive references', async () => {
     const issued = await archive();
     const body = { dataset: 'Data', fileId: issued.fileId };
-    expect((await request('analysis/upload', 'POST', body, 'stranger')).status).toBe(403);
-    expect((await request('analysis/upload', 'POST', { dataset: 'Data', data: { downloadUrl: issued.fileId } }, 'stranger')).status).toBe(403);
+    expect((await request('analysis/upload', 'POST', body, STRANGER)).status).toBe(403);
+    expect((await request('analysis/upload', 'POST', { dataset: 'Data', data: { downloadUrl: issued.fileId } }, STRANGER)).status).toBe(403);
     expect((await request('analysis/upload', 'POST', { ...body, data: { downloadUrl: 'datasets/foreign/file.zip' } })).status).toBe(400);
     const created = await request('analysis/upload', 'POST', body);
     expect(created.status).toBe(201);
@@ -289,14 +306,14 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect(category.status).toBe(201);
     const categoryId = String(category.body.data._id);
     const body = { filename: 'car.png', mimetype: 'image/png', datasetId, categoryId };
-    expect((await request('image-categories', 'POST', { name: 'Foreign', datasetId }, 'stranger')).status).toBe(403);
-    expect((await request(`image-categories/${categoryId}`, 'PUT', { color: 'red' }, 'stranger')).status).toBe(403);
+    expect((await request('image-categories', 'POST', { name: 'Foreign', datasetId }, STRANGER)).status).toBe(403);
+    expect((await request(`image-categories/${categoryId}`, 'PUT', { color: 'red' }, STRANGER)).status).toBe(403);
     expect((await request(`image-categories/${categoryId}`, 'PUT', { color: 'red' })).status).toBe(200);
-    expect((await request('dataset-images/upload-url', 'POST', body, 'stranger')).status).toBe(403);
+    expect((await request('dataset-images/upload-url', 'POST', body, STRANGER)).status).toBe(403);
     const issued = await request('dataset-images/upload-url', 'POST', body);
     expect(issued.status).toBe(200);
     const create = { ...body, originalName: 'car.png', fileId: issued.body.data.fileId, size: 10 };
-    expect((await request('dataset-images', 'POST', create, 'stranger')).status).toBe(403);
+    expect((await request('dataset-images', 'POST', create, STRANGER)).status).toBe(403);
     expect((await request('dataset-images', 'POST', { ...create, fileId: 'foreign/path.png' })).status).toBe(403);
     expect((await request('dataset-images', 'POST', { ...create, size: 11 })).status).toBe(400);
     const image = await request('dataset-images', 'POST', create);
@@ -307,12 +324,12 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect(fetched.body.data.datasetId).toMatchObject({ _id: datasetId, dataset: 'Images' });
     const otherCategory = await ImageCategory.create({ name: 'Other', datasetId: analysisId });
     expect((await request(`dataset-images/${id}`, 'PUT', { categoryId: String(otherCategory._id) })).status).toBe(400);
-    expect((await request(`dataset-images/${id}`, 'PUT', { title: 'Hijack' }, 'stranger')).status).toBe(403);
+    expect((await request(`dataset-images/${id}`, 'PUT', { title: 'Hijack' }, STRANGER)).status).toBe(403);
     expect((await request(`dataset-images/${id}`, 'PUT', { title: 'Good', categoryId: null })).status).toBe(200);
-    expect((await request(`dataset-images/${id}`, 'DELETE', undefined, 'stranger')).status).toBe(403);
+    expect((await request(`dataset-images/${id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
     expect((await request(`dataset-images/${id}`, 'DELETE')).status).toBe(200);
     expect(files.deleteFile).toHaveBeenCalledWith(create.fileId);
-    expect((await request(`image-categories/${categoryId}`, 'DELETE', undefined, 'stranger')).status).toBe(403);
+    expect((await request(`image-categories/${categoryId}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
     expect((await request(`image-categories/${categoryId}`, 'DELETE')).status).toBe(200);
   });
 
@@ -328,10 +345,10 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
 
   it('stamps library creators and prevents new datasets from manufacturing stored-file downloads', async () => {
     expect((await request('configs', 'POST', { summary: 'Config', config_data: {} })).status).toBe(201);
-    expect((await Config.findOne())?.ownerId).toBe('owner');
+    expect((await Config.findOne())?.ownerId).toBe(OWNER);
     const result = await request('datasets', 'POST', { name: 'New dataset' });
     expect(result.status).toBe(201);
-    expect((await Dataset.findById(result.body.data._id))?.ownerId).toBe('owner');
+    expect((await Dataset.findById(result.body.data._id))?.ownerId).toBe(OWNER);
     expect((await request(`datasets/download/${result.body.data.uuid}`)).status).toBe(404);
     expect((await request('datasets', 'POST', { name: 'Stolen', downloadUrl: 'datasets/private.zip' })).status).toBe(403);
     const issued = await archive();
@@ -343,10 +360,10 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     const ids = [trainingId, legacyId, new mongoose.Types.ObjectId().toString()].join(',');
     const url = `write-capabilities?kind=training&ids=${ids}`;
     expect((await request(url)).body.data).toEqual({ [trainingId]: true, [legacyId]: false, [ids.split(',')[2]]: false });
-    expect((await request(url, 'GET', undefined, 'stranger')).body.data[trainingId]).toBe(false);
+    expect((await request(url, 'GET', undefined, STRANGER)).body.data[trainingId]).toBe(false);
     expect((await request(url, 'GET', undefined, '')).body.data[trainingId]).toBe(false);
     expect((await request('write-capabilities?kind=training&ids=invalid')).status).toBe(400);
-    await Project.updateOne({ _id: projectId }, { ownerId: 'stranger' });
+    await Project.updateOne({ _id: projectId }, { ownerId: STRANGER });
     expect((await request(url)).body.data[trainingId]).toBe(false);
     expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'No longer owner' })).status).toBe(403);
   });
@@ -358,11 +375,11 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     const comparison = await Comparison.create({ uuid: 'cap-comparison', name: 'Comparison', type: 'trainings', itemIds: [], projectId });
     const benchmark = await Benchmark.create({ ...benchmarkBody, training_id: trainingId });
     const test = await TestResult.create({ test_uuid: 'cap-test', epoch_uuid: 'public-epoch', epoch: 1, timestamp: new Date(), test_results: { day: { overall: { score: 1 } } } });
-    const analysis = await DatasetAnalysis.create({ dataset: 'Owned', ownerId: 'owner' });
+    const analysis = await DatasetAnalysis.create({ dataset: 'Owned', ownerId: OWNER });
     for (const [kind, id] of [['project', projectId], ['comparison', comparison._id], ['benchmark', benchmark._id], ['test-result', test._id], ['analysis', analysis._id], ['dataset', analysis._id]]) {
       const path = `write-capabilities?kind=${kind}&ids=${id},${missing}`;
       expect((await request(path)).body.data).toEqual({ [String(id)]: true, [missing]: false });
-      expect((await request(path, 'GET', undefined, 'stranger')).body.data).toEqual({ [String(id)]: false, [missing]: false });
+      expect((await request(path, 'GET', undefined, STRANGER)).body.data).toEqual({ [String(id)]: false, [missing]: false });
       expect((await request(path, 'GET', undefined, '')).body.data).toEqual({ [String(id)]: false, [missing]: false });
     }
     await Training.updateOne({ _id: trainingId }, { deletedAt: new Date() });
@@ -370,7 +387,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     const groupId = new mongoose.Types.ObjectId().toString();
     await Project.updateOne({ _id: projectId }, { editorGroupIds: [groupId] });
     jest.mocked(getUserGroups).mockRejectedValueOnce(new Error('Membership lookup failed'));
-    expect((await request(`write-capabilities?kind=project&ids=${projectId}`, 'GET', undefined, 'editor')).status).toBe(500);
+    expect((await request(`write-capabilities?kind=project&ids=${projectId}`, 'GET', undefined, EDITOR)).status).toBe(500);
     jest.mocked(getUserGroups).mockResolvedValue([{ id: groupId, name: 'Researchers' }]);
     expect((await request('write-capabilities/groups')).body.data).toEqual([{ id: groupId, name: 'Researchers' }]);
     expect((await request('write-capabilities/groups', 'GET', undefined, '')).status).toBe(401);
@@ -378,46 +395,46 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
 
   it('lets assigned group members read private projects and create and modify all their trainings', async () => {
     const groupId = new mongoose.Types.ObjectId().toString();
-    const members = new Set(['owner', 'editor']);
+    const members = new Set([OWNER, EDITOR]);
     jest.mocked(getUserGroups).mockImplementation(async userId => userId && members.has(userId) ? [{ id: groupId, name: 'Researchers' }] : []);
     const project = await request('projects', 'POST', { name: 'Team project', isPublic: false, editorGroupIds: [groupId] });
     expect(project.status).toBe(201);
     const teamId = String(project.body.data._id);
-    expect((await request(`projects/${teamId}`, 'GET', undefined, 'editor')).status).toBe(200);
-    expect((await request(`projects/${teamId}`, 'GET', undefined, 'stranger')).status).toBe(403);
-    const created = await request('trainings', 'POST', { name: 'Team run', projectId: teamId }, 'editor');
+    expect((await request(`projects/${teamId}`, 'GET', undefined, EDITOR)).status).toBe(200);
+    expect((await request(`projects/${teamId}`, 'GET', undefined, STRANGER)).status).toBe(403);
+    const created = await request('trainings', 'POST', { name: 'Team run', projectId: teamId }, EDITOR);
     expect(created.status).toBe(201);
     const id = String(created.body.data._id);
-    expect((await request(`trainings/${id}`, 'PUT', { name: 'Edited by teammate' }, 'editor')).status).toBe(200);
-    const epoch = await request('epochs', 'POST', { trainingId: id, training_uuid: String(created.body.data.uuid), epoch_uuid: 'team-epoch', epoch: 1, results: {} }, 'editor');
+    expect((await request(`trainings/${id}`, 'PUT', { name: 'Edited by teammate' }, EDITOR)).status).toBe(200);
+    const epoch = await request('epochs', 'POST', { trainingId: id, training_uuid: String(created.body.data.uuid), epoch_uuid: 'team-epoch', epoch: 1, results: {} }, EDITOR);
     expect(epoch.status).toBe(201);
-    expect((await request('test-results', 'POST', { epoch_uuid: 'team-epoch', epoch: 1, test_results: {} }, 'editor')).status).toBe(201);
-    expect((await request('benchmarks', 'POST', { ...benchmarkBody, epoch_uuid: 'team-epoch' }, 'editor')).status).toBe(201);
-    expect((await request('comparisons', 'POST', { name: 'Team comparison', type: 'trainings', itemIds: [id], projectId: teamId }, 'editor')).status).toBe(201);
-    const list = await request('trainings', 'GET', undefined, 'editor');
+    expect((await request('test-results', 'POST', { epoch_uuid: 'team-epoch', epoch: 1, test_results: {} }, EDITOR)).status).toBe(201);
+    expect((await request('benchmarks', 'POST', { ...benchmarkBody, epoch_uuid: 'team-epoch' }, EDITOR)).status).toBe(201);
+    expect((await request('comparisons', 'POST', { name: 'Team comparison', type: 'trainings', itemIds: [id], projectId: teamId }, EDITOR)).status).toBe(201);
+    const list = await request('trainings', 'GET', undefined, EDITOR);
     expect(JSON.stringify(list.body)).toContain(id);
-    expect((await request(`write-capabilities?kind=training&ids=${id}`, 'GET', undefined, 'editor')).body.data[id]).toBe(true);
+    expect((await request(`write-capabilities?kind=training&ids=${id}`, 'GET', undefined, EDITOR)).body.data[id]).toBe(true);
     // Editing data does not confer project administration or permission grants.
-    expect((await request(`projects/${teamId}`, 'PUT', { editorGroupIds: [] }, 'editor')).status).toBe(403);
-    expect((await request(`projects/${teamId}`, 'DELETE', undefined, 'editor')).status).toBe(403);
-    members.delete('editor');
-    expect((await request(`trainings/${id}`, 'PUT', { name: 'Removed member' }, 'editor')).status).toBe(403);
-    expect((await request(`trainings/${id}`, 'GET', undefined, 'editor')).status).toBe(403);
-    members.add('editor');
-    expect((await request(`trainings/${id}`, 'DELETE', undefined, 'editor')).status).toBe(200);
+    expect((await request(`projects/${teamId}`, 'PUT', { editorGroupIds: [] }, EDITOR)).status).toBe(403);
+    expect((await request(`projects/${teamId}`, 'DELETE', undefined, EDITOR)).status).toBe(403);
+    members.delete(EDITOR);
+    expect((await request(`trainings/${id}`, 'PUT', { name: 'Removed member' }, EDITOR)).status).toBe(403);
+    expect((await request(`trainings/${id}`, 'GET', undefined, EDITOR)).status).toBe(403);
+    members.add(EDITOR);
+    expect((await request(`trainings/${id}`, 'DELETE', undefined, EDITOR)).status).toBe(200);
   });
 
   it('allows the owner to add and remove groups but rejects arbitrary group IDs and membership failures', async () => {
     const groupId = new mongoose.Types.ObjectId().toString();
-    jest.mocked(getUserGroups).mockImplementation(async userId => ['owner', 'editor'].includes(userId || '') ? [{ id: groupId, name: 'Researchers' }] : []);
+    jest.mocked(getUserGroups).mockImplementation(async userId => [OWNER, EDITOR].includes(userId || '') ? [{ id: groupId, name: 'Researchers' }] : []);
     expect((await request(`projects/${projectId}`, 'PUT', { editorGroupIds: [new mongoose.Types.ObjectId().toString()] })).status).toBe(403);
     expect((await request(`projects/${projectId}`, 'PUT', { editorGroupIds: [groupId] })).status).toBe(200);
-    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Team edited' }, 'editor')).status).toBe(200);
+    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Team edited' }, EDITOR)).status).toBe(200);
     jest.mocked(getUserGroups).mockRejectedValueOnce(new Error('Membership service unavailable'));
-    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'No verified membership' }, 'editor')).status).toBe(500);
+    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'No verified membership' }, EDITOR)).status).toBe(500);
     expect((await Training.findById(trainingId))?.name).toBe('Team edited');
     expect((await request(`projects/${projectId}`, 'PUT', { editorGroupIds: [] })).status).toBe(200);
-    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Group removed' }, 'editor')).status).toBe(403);
+    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Group removed' }, EDITOR)).status).toBe(403);
   });
 
   it.each(['external', 'stored', 'both'])('replaces an archive with a supported %s download reference', async source => {
@@ -435,7 +452,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
 
   describe('read privacy regressions', () => {
     async function privateResults() {
-      const project = await Project.create({ name: 'Secret', ownerId: 'owner', isPublic: false, editorGroupIds: ['a'.repeat(24)] });
+      const project = await Project.create({ name: 'Secret', ownerId: OWNER, isPublic: false, editorGroupIds: ['a'.repeat(24)] });
       const training = await Training.create({ name: 'Secret run', uuid: 'secret-run', projectId: String(project._id) });
       await Epoch.create({ timestamp: new Date(), trainingId: String(training._id), training_uuid: training.uuid, epoch_uuid: 'secret-epoch', epoch: 73, results: {} });
       const result = await TestResult.create({ epoch: 73, epoch_uuid: 'secret-epoch', test_uuid: 'secret-test', timestamp: new Date(), test_results: { secret: { object: { iou: 1 } } } });
@@ -443,7 +460,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
       const benchmark = await Benchmark.create({ ...benchmarkBody, training_id: training._id, training_uuid: training.uuid });
       return { training, result, benchmark };
     }
-    it.each(['', 'stranger'])('does not expose private results through epoch filters (%s)', async actor => {
+    it.each(['', STRANGER])('does not expose private results through epoch filters (%s)', async actor => {
       await privateResults();
       for (const query of ['epoch=73', 'epoch_uuids=secret-epoch', `projectId=${projectId}&epoch_uuids=secret-epoch`, 'training_uuid=public-run&epoch_uuids=secret-epoch']) {
         const response = await request(`test-results?${query}&page=1&limit=1`, 'GET', undefined, actor);
@@ -452,24 +469,24 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
       }
       expect(JSON.stringify((await request('test-results/epochs', 'GET', undefined, actor)).body)).not.toContain('73');
       expect(JSON.stringify((await request('visualizations/types', 'GET', undefined, actor)).body)).not.toContain('secret-type');
-      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, 'owner')).body)).toContain('secret-test');
-      expect(JSON.stringify((await request('test-results/epochs', 'GET', undefined, 'owner')).body)).toContain('73');
+      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, OWNER)).body)).toContain('secret-test');
+      expect(JSON.stringify((await request('test-results/epochs', 'GET', undefined, OWNER)).body)).toContain('73');
     });
     it('serves the frontend epoch-results route for public and authorized private epochs', async () => {
       await privateResults();
       await TestResult.create({ epoch: 1, epoch_uuid: 'public-epoch', test_uuid: 'public-test', timestamp: new Date(), test_results: {} });
-      for (const actor of ['', 'owner', 'stranger']) {
+      for (const actor of ['', OWNER, STRANGER]) {
         const response = await request('epochs/uuid/public-epoch/test-results', 'GET', undefined, actor);
         expect(response.status).toBe(200);
         expect(JSON.stringify(response.body)).toContain('public-test');
       }
       expect((await request('epochs/uuid/secret-epoch/test-results')).status).toBe(200);
-      expect((await request('epochs/uuid/secret-epoch/test-results', 'GET', undefined, 'stranger')).status).toBe(403);
-      jest.mocked(getUserGroups).mockImplementation(async userId => userId === 'editor' ? [{ id: 'a'.repeat(24), name: 'Editors' }] : []);
-      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, 'editor')).body)).toContain('secret-test');
-      expect((await request('epochs/uuid/secret-epoch/test-results', 'GET', undefined, 'editor')).status).toBe(200);
+      expect((await request('epochs/uuid/secret-epoch/test-results', 'GET', undefined, STRANGER)).status).toBe(403);
+      jest.mocked(getUserGroups).mockImplementation(async userId => userId === EDITOR ? [{ id: 'a'.repeat(24), name: 'Editors' }] : []);
+      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, EDITOR)).body)).toContain('secret-test');
+      expect((await request('epochs/uuid/secret-epoch/test-results', 'GET', undefined, EDITOR)).status).toBe(200);
       jest.mocked(getUserGroups).mockResolvedValue([]);
-      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, 'editor')).body)).not.toContain('secret-test');
+      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, EDITOR)).body)).not.toContain('secret-test');
 
     });
     it('intersects filters and counts all matching authorized results across pages', async () => {
@@ -485,7 +502,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
       if (action === 'soft-delete') await Training.updateOne({ _id: training._id }, { deletedAt: new Date() });
       else await Training.deleteOne({ _id: training._id });
       for (const path of ['visualizations/training/secret-run?includeUrls=true', 'visualizations/types?training_uuid=secret-run', 'visualizations/secret-viz', 'visualizations/epoch/secret-epoch', 'benchmarks?training_uuid=secret-run', 'benchmarks/stats?training_uuid=secret-run', `benchmarks/${benchmark._id}`, `test-results/${result._id}`]) {
-        const response = await request(path, 'GET', undefined, 'stranger');
+        const response = await request(path, 'GET', undefined, STRANGER);
         expect([403, 404]).toContain(response.status);
       }
       expect(files.getSignedUrl).not.toHaveBeenCalled();
@@ -500,4 +517,86 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
       expect((await request('benchmarks/stats', 'GET', undefined, '')).body).toMatchObject({ data: { totalBenchmarks: 1 } });
     });
   });
+  describe('epoch lifecycle privacy', () => {
+    it.each(['epoch-deleted', 'parent-deleted', 'parent-missing'])('denies direct ID and UUID access when %s', async state => {
+      const epoch = await Epoch.findOne({ epoch_uuid: 'public-epoch' });
+      await Epoch.updateOne({ _id: epoch!._id }, { results: { secret: 'removed-result-marker' } });
+      if (state === 'epoch-deleted') await Epoch.updateOne({ _id: epoch!._id }, { deletedAt: new Date() });
+      if (state === 'parent-deleted') await Training.updateOne({ _id: trainingId }, { deletedAt: new Date() });
+      if (state === 'parent-missing') {
+        await Project.updateOne({ _id: projectId }, { isPublic: false });
+        expect((await request(`epochs/${epoch!._id}`, 'GET', undefined, '')).status).toBe(403);
+        await Training.deleteOne({ _id: trainingId });
+      }
+      for (const actor of ['', STRANGER, OWNER]) {
+        for (const path of [`epochs/${epoch!._id}`, 'epochs/uuid/public-epoch']) {
+          const response = await request(path, 'GET', undefined, actor);
+          expect(response.status).toBe(state === 'epoch-deleted' ? 404 : 403);
+          expect(JSON.stringify(response.body)).not.toContain('removed-result-marker');
+        }
+      }
+    });
+
+    it('excludes deleted epochs from list pages and their counts', async () => {
+      await Epoch.updateOne({ epoch_uuid: 'public-epoch' }, { deletedAt: new Date() });
+      await Epoch.create([2, 3].map(epoch => ({ trainingId, training_uuid: 'public-run', epoch_uuid: `live-${epoch}`, epoch, timestamp: new Date(), results: {} })));
+      const all = await request(`epochs/training/${trainingId}`, 'GET', undefined, '');
+      expect(all.body.data).toMatchObject({ total: 2, epochs: [expect.objectContaining({ epoch_uuid: 'live-2' }), expect.objectContaining({ epoch_uuid: 'live-3' })] });
+      const page = await request(`epochs/training/${trainingId}?page=2&limit=1`, 'GET', undefined, STRANGER);
+      expect(page.body.data).toMatchObject({ epochs: [expect.objectContaining({ epoch_uuid: 'live-3' })], pagination: { total: 2, pages: 2, page: 2, limit: 1 } });
+    });
+
+    it('denies list access after parent deletion even before child cleanup', async () => {
+      await Training.updateOne({ _id: trainingId }, { deletedAt: new Date() });
+      for (const actor of ['', OWNER]) {
+        expect((await request(`epochs/training/${trainingId}`, 'GET', undefined, actor)).status).toBe(403);
+        expect((await request(`epochs/training/${trainingId}?page=1&limit=10`, 'GET', undefined, actor)).status).toBe(403);
+      }
+      await Training.deleteOne({ _id: trainingId });
+      expect((await request(`epochs/training/${trainingId}`)).status).toBe(404);
+    });
+
+    it('preserves live standalone, public and authorized private epoch reads', async () => {
+      const epoch = await Epoch.findOne({ epoch_uuid: 'public-epoch' });
+      const read = (actor: string) => request(`epochs/${epoch!._id}`, 'GET', undefined, actor);
+      expect((await read('')).status).toBe(200);
+      await Project.updateOne({ _id: projectId }, { isPublic: false, editorGroupIds: ['editors'] });
+      (getUserGroups as jest.Mock).mockImplementation(async actor => actor === EDITOR ? [{ id: 'editors', role: 'member' }] : []);
+      expect((await read(OWNER)).status).toBe(200);
+      expect((await read(EDITOR)).status).toBe(200);
+      expect((await read(STRANGER)).status).toBe(403);
+      expect((await read('')).status).toBe(403);
+      await Training.updateOne({ _id: trainingId }, { $unset: { projectId: 1 } });
+      expect((await read('')).status).toBe(200);
+      expect((await request('epochs/uuid/public-epoch', 'GET', undefined, '')).status).toBe(200);
+    });
+
+    it('rejects updates to tombstoned epochs without changing their results', async () => {
+      const epoch = await Epoch.findOneAndUpdate({ epoch_uuid: 'public-epoch' }, { deletedAt: new Date(), results: { preserved: true } }, { returnDocument: 'after' });
+      expect((await request(`epochs/${epoch!._id}`, 'PUT', { results: { overwritten: true } })).status).toBe(404);
+      expect((await Epoch.findById(epoch!._id))!.results).toEqual({ preserved: true });
+    });
+
+    it('keeps deleted UUIDs reserved and rejects deleted parents across upload/batch paths', async () => {
+      await Epoch.updateOne({ epoch_uuid: 'public-epoch' }, { deletedAt: new Date() });
+      const body = { trainingId, training_uuid: 'public-run', epoch_uuid: 'public-epoch', epoch: 2, results: {} };
+      expect((await request('epochs/upload', 'POST', body)).status).toBe(409);
+      await Training.updateOne({ _id: trainingId }, { deletedAt: new Date() });
+      expect((await request('epochs/upload', 'POST', { training_uuid: 'public-run', epoch: 2, results: {} })).status).toBe(403);
+      await Training.updateOne({ _id: legacyId }, { ownerId: OWNER });
+      expect((await request('epochs/batch', 'POST', { epochs: [{ ...body, trainingId: legacyId, epoch_uuid: 'would-be-live' }, { ...body, epoch_uuid: 'would-be-deleted' }] })).status).toBe(403);
+      expect(await Epoch.countDocuments()).toBe(1);
+    });
+  });
+
+  it('stops a revoked session from reading private projects or writing public work', async () => {
+    await Project.updateOne({ _id: projectId }, { isPublic: false });
+    expect((await request(`trainings/${trainingId}`)).status).toBe(200);
+    await mongoose.connection.collection('users').updateOne({ _id: new mongoose.Types.ObjectId(OWNER) }, { $inc: { tokenVersion: 1 } });
+    expect((await request(`trainings/${trainingId}`)).status).toBe(403);
+    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Revoked write' })).status).toBe(401);
+    await Project.updateOne({ _id: projectId }, { isPublic: true });
+    expect((await request(`trainings/${trainingId}`)).status).toBe(200);
+  });
+
 });

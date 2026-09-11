@@ -7,6 +7,7 @@ import {
   logger
 } from '@visin/backend-core';
 import { verifyGoogleToken } from '../services/googleAuthService';
+import { signInWithGoogle } from '../services/googleSignInService';
 import { generateJWT, UserPayload } from '../services/jwtService';
 import { hashPassword, verifyPassword } from '../services/passwordService';
 import {
@@ -120,17 +121,12 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
     throw new UnauthorizedError('Invalid Google token');
   }
 
-  const userEmail = googleUser.email || '';
-  if (!userEmail) {
-    throw new UnauthorizedError('Email not present in Google token');
+  if (typeof googleUser.sub !== 'string' || !googleUser.sub) {
+    throw new UnauthorizedError('Subject not present in Google token');
   }
 
-  // Find existing user only
-  const dbUser = await User.findOne({ email: userEmail.toLowerCase() });
-
-  if (!dbUser) {
-    throw new NotFoundError('User not found');
-  }
+  // An email match alone never enters an existing account: see signInWithGoogle.
+  const dbUser = await signInWithGoogle(googleUser);
 
   // Update last login
   await User.updateOne({ _id: dbUser._id }, { $set: { lastLoginAt: new Date() } });
@@ -138,7 +134,7 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
   // Update userPayload to use database user ID instead of Google sub
   const userPayload: UserPayload = {
     id: dbUser._id.toString(), // Use MongoDB _id instead of Google sub
-    email: googleUser.email || '',
+    email: dbUser.email,
     name: googleUser.name || '',
     picture: googleUser.picture,
     tokenVersion: dbUser.tokenVersion || 1

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('./labelApiClient', () => ({
-  labelApi: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  labelApi: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
 }));
 vi.mock('../config/ConfigProvider', () => ({
   getGlobalConfig: () => ({ LABEL_SERVICE_URL: 'http://label.test' }),
@@ -22,10 +22,11 @@ import {
   nextTask,
   submitAnswer,
   transitionJob,
+  setJobVisibility,
   undoAnswer,
 } from './jobService';
 
-const mockedApi = labelApi as unknown as { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+const mockedApi = labelApi as unknown as { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -158,4 +159,10 @@ describe('downloadExport', () => {
     expect(await deleteJob('j1')).toEqual({ tasks: 3, answers: 4 });
     expect(mockedApi.delete).toHaveBeenCalledWith('/jobs/j1');
   });
+});
+
+it('sets visibility through the authenticated client', async () => {
+  mockedApi.put.mockResolvedValue({ data: { isPublic: true } });
+  expect(await setJobVisibility('j1', true)).toEqual({ isPublic: true });
+  expect(mockedApi.put).toHaveBeenCalledWith('/jobs/j1/visibility', { isPublic: true });
 });

@@ -69,6 +69,7 @@ const maskJob = (overrides: Record<string, unknown> = {}) => ({
   _id: 'j1',
   name: 'Mask check',
   status: 'active',
+  canLabel: true,
   taskType: 'mask_toggle',
   redundancy: 1,
   tasksCount: 10,
@@ -483,4 +484,16 @@ describe('WorkbenchPage on a job that stopped taking work', () => {
     expect(screen.getByRole('button', { name: /Submit \(0 incorrect\)/ })).toBeInTheDocument();
     expect(useWorkQueue).toHaveBeenLastCalledWith('j1', expect.objectContaining({ canPull: false }));
   });
+});
+
+it('shows denied job access instead of an endless workbench loader', async () => {
+  mockedGetJob.mockRejectedValue(new Error('Group membership required'));
+  renderPage();
+  expect(await screen.findByText('Group membership required')).toBeInTheDocument();
+});
+
+it('does not lease tasks for a signed-in public visitor', async () => {
+  mockedGetJob.mockResolvedValue(maskJob({ isPublic: true, canLabel: false }));
+  renderPage();
+  await waitFor(() => expect(useWorkQueue).toHaveBeenLastCalledWith('j1', expect.objectContaining({ enabled: true, canPull: false })));
 });

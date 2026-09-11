@@ -248,13 +248,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ datasetId, categoryId, open, on
           <Typography variant="body2" sx={{
             color: "text.secondary"
           }}>
-            Supports: JPG, PNG, GIF, WebP, and other image formats
+            Supports: JPG, PNG, GIF and WebP
           </Typography>
           <input
             id="file-input"
             type="file"
             multiple
-            accept="image/*"
+            accept=".png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp"
             style={{ display: 'none' }}
             onChange={handleFileSelect}
           />

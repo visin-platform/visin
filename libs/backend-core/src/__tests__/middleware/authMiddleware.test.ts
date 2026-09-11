@@ -1,3 +1,5 @@
+jest.mock('../../auth/session', () => ({ isCurrentSession: jest.fn() }));
+import { isCurrentSession } from '../../auth/session';
 import jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
 import { authenticateToken, optionalAuth } from '../../middleware/authMiddleware';
@@ -24,6 +26,7 @@ const next = jest.fn() as unknown as NextFunction;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  (isCurrentSession as jest.Mock).mockResolvedValue(true);
   process.env.JWT_SECRET = SECRET;
 });
 
@@ -32,83 +35,83 @@ afterAll(() => {
 });
 
 describe('authenticateToken', () => {
-  it('rejects with 401 when no Authorization header is present', () => {
+  it('rejects with 401 when no Authorization header is present', async () => {
     const req = makeReq();
     const res = makeRes();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Access token required' });
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('rejects with 401 for a forged/unsigned token', () => {
+  it('rejects with 401 for a forged/unsigned token', async () => {
     const forged = `${Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url')}.${Buffer.from(
       JSON.stringify(PAYLOAD)
     ).toString('base64url')}.fake`;
     const req = makeReq(`Bearer ${forged}`);
     const res = makeRes();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Invalid or expired token' });
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('attaches req.user and calls next() for a validly signed token', () => {
+  it('attaches req.user and calls next() for a validly signed token', async () => {
     const token = jwt.sign(PAYLOAD, SECRET);
     const req = makeReq(`Bearer ${token}`);
     const res = makeRes();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
     expect(req.user).toMatchObject(PAYLOAD);
   });
 
-  it('skips re-verification when req.user is already set', () => {
+  it('skips re-verification when req.user is already set', async () => {
     const req = makeReq();
     req.user = PAYLOAD;
     const res = makeRes();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
   });
 
-  it('accepts the shared access_token cookie when there is no Authorization header', () => {
+  it('accepts the shared access_token cookie when there is no Authorization header', async () => {
     const token = jwt.sign(PAYLOAD, SECRET);
     const req = makeReq(undefined, { access_token: token });
     const res = makeRes();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
     expect(req.user).toMatchObject(PAYLOAD);
   });
 
-  it('prefers the access_token cookie over the Authorization header when both are present', () => {
+  it('prefers the access_token cookie over the Authorization header when both are present', async () => {
     const cookieToken = jwt.sign({ ...PAYLOAD, id: 'from-cookie' }, SECRET);
     const headerToken = jwt.sign({ ...PAYLOAD, id: 'from-header' }, SECRET);
     const req = makeReq(`Bearer ${headerToken}`, { access_token: cookieToken });
     const res = makeRes();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
 
     expect((req.user as UserPayload).id).toBe('from-cookie');
   });
 
-  it('falls back to the Authorization header (e.g. a vision-service API token) when no cookie is present', () => {
+  it('falls back to the Authorization header (e.g. a vision-service API token) when no cookie is present', async () => {
     const token = jwt.sign(PAYLOAD, SECRET);
     const req = makeReq(`Bearer ${token}`);
     const res = makeRes();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(req.user).toMatchObject(PAYLOAD);
@@ -116,34 +119,34 @@ describe('authenticateToken', () => {
 });
 
 describe('optionalAuth', () => {
-  it('proceeds anonymously when no token is present', () => {
+  it('proceeds anonymously when no token is present', async () => {
     const req = makeReq();
     const res = makeRes();
 
-    optionalAuth(req, res, next);
+    await optionalAuth(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
     expect(req.user).toBeUndefined();
   });
 
-  it('proceeds anonymously (does not block) for a forged/invalid token', () => {
+  it('proceeds anonymously (does not block) for a forged/invalid token', async () => {
     const req = makeReq('Bearer not-a-real-token');
     const res = makeRes();
 
-    optionalAuth(req, res, next);
+    await optionalAuth(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
     expect(req.user).toBeUndefined();
   });
 
-  it('attaches req.user for a validly signed token', () => {
+  it('attaches req.user for a validly signed token', async () => {
     const token = jwt.sign(PAYLOAD, SECRET);
     const req = makeReq(`Bearer ${token}`);
     const res = makeRes();
 
-    optionalAuth(req, res, next);
+    await optionalAuth(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(req.user).toMatchObject(PAYLOAD);
@@ -173,35 +176,64 @@ describe('MCP access tokens are not sessions', () => {
     }).accessToken;
   };
 
-  it('authenticateToken refuses one rather than reading it as a user', () => {
+  it('authenticateToken refuses one rather than reading it as a user', async () => {
     const req = makeReq(`Bearer ${mcpToken()}`);
     const res = makeRes();
 
-    authenticateToken(req, res, next);
+    await authenticateToken(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(req.user).toBeUndefined();
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('optionalAuth proceeds anonymously rather than with a user that has no id', () => {
+  it('optionalAuth proceeds anonymously rather than with a user that has no id', async () => {
     const req = makeReq(`Bearer ${mcpToken()}`);
 
-    optionalAuth(req, makeRes(), next);
+    await optionalAuth(req, makeRes(), next);
 
     expect(req.user).toBeUndefined();
     expect(next).toHaveBeenCalled();
   });
 
-  it('still accepts an ordinary session on both', () => {
+  it('still accepts an ordinary session on both', async () => {
     const token = jwt.sign(PAYLOAD, SECRET);
 
     const strict = makeReq(`Bearer ${token}`);
-    authenticateToken(strict, makeRes(), next);
+    await authenticateToken(strict, makeRes(), next);
     expect(strict.user).toMatchObject({ id: 'u1' });
 
     const optional = makeReq(`Bearer ${token}`);
-    optionalAuth(optional, makeRes(), next);
+    await optionalAuth(optional, makeRes(), next);
     expect(optional.user).toMatchObject({ id: 'u1' });
+  });
+});
+
+describe('session revocation boundary', () => {
+  it.each([false, 'database failure'])('refuses required auth when the current account check fails (%s)', async result => {
+    if (result === false) (isCurrentSession as jest.Mock).mockResolvedValue(false);
+    else (isCurrentSession as jest.Mock).mockRejectedValue(new Error(String(result)));
+    const req = makeReq(`Bearer ${jwt.sign(PAYLOAD, SECRET)}`);
+    const res = makeRes();
+    await authenticateToken(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(req.user).toBeUndefined();
+    expect(next).not.toHaveBeenCalled();
+  });
+  it.each([false, 'database failure'])('optional auth continues only anonymously on failed session check (%s)', async result => {
+    if (result === false) (isCurrentSession as jest.Mock).mockResolvedValue(false);
+    else (isCurrentSession as jest.Mock).mockRejectedValue(new Error(String(result)));
+    const req = makeReq(`Bearer ${jwt.sign(PAYLOAD, SECRET)}`);
+    await optionalAuth(req, makeRes(), next);
+    expect(req.user).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+  it('preserves a verified non-session credential on optional auth', async () => {
+    const req = makeReq();
+    req.user = PAYLOAD;
+    await optionalAuth(req, makeRes(), next);
+    expect(isCurrentSession).not.toHaveBeenCalled();
+    expect(req.user).toBe(PAYLOAD);
+    expect(next).toHaveBeenCalledTimes(1);
   });
 });

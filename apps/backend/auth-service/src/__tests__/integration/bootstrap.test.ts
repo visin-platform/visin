@@ -150,7 +150,7 @@ describe('first-run setup with in-memory MongoDB', () => {
 
   it('does not recreate a missing account from an old OAuth browser session', async () => {
     const token = generateJWT({ id: new mongoose.Types.ObjectId().toString(), email: credentials.email, name: 'Old user', tokenVersion: 1 });
-    const req = { cookies: { access_token: token }, headers: {} } as Request;
+    const req = { cookies: { access_token: token }, headers: {} } as unknown as Request;
     const next = jest.fn();
 
     await optionalAuth(req, response(), next);

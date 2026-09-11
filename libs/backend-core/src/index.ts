@@ -84,8 +84,8 @@ export type {
 // OAuth 2.1 — the flow that lets an assistant connect over MCP without a
 // long-lived key. Access tokens are short JWTs; revocation acts on the refresh
 // token, which is the half that persists.
-export { OAuthClient, AuthorizationCode, RefreshToken } from './oauth/models';
-export type { IOAuthClient, IAuthorizationCode, IRefreshToken } from './oauth/models';
+export { OAuthClient, AuthorizationCode, OAuthGrant, RefreshToken } from './oauth/models';
+export type { IOAuthClient, IAuthorizationCode, IOAuthGrant, IRefreshToken } from './oauth/models';
 export {
   registerClient,
   findClient,
@@ -139,3 +139,6 @@ export type { CreateBaseAppOptions } from './app/createBaseApp';
 // Health check
 export { createHealthCheckHandler } from './health/createHealthCheckHandler';
 export type { CreateHealthCheckHandlerOptions } from './health/createHealthCheckHandler';
+
+export { getUploadPolicy } from './uploads/policy';
+export type { UploadPolicy, UploadFormat } from './uploads/policy';

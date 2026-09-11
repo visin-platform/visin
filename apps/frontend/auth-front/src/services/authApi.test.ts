@@ -18,6 +18,25 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('linkGoogle', () => {
+  it('sends both proofs with the session cookie', async () => {
+    const fetchMock = stubFetch({ success: true });
+    await authApi.linkGoogle('current-password', 'google-token');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://auth-api.test/auth/profile/google');
+    expect(init.credentials).toBe('include');
+    expect(JSON.parse(init.body)).toEqual({ currentPassword: 'current-password', idToken: 'google-token' });
+  });
+  it('surfaces controlled linking failures', async () => {
+    stubFetch({ message: 'Already linked' }, 409);
+    await expect(authApi.linkGoogle('pw', 'token')).rejects.toThrow('Already linked');
+  });
+  it('handles a transport failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    await expect(authApi.linkGoogle('pw', 'token')).rejects.toThrow('Could not link Google');
+  });
+});
+
 describe('getSetupStatus', () => {
   it('reads both flags from the server', async () => {
     const fetchMock = stubFetch({ success: true, needsSetup: true, googleEnabled: false });

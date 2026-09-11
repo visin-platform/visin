@@ -43,12 +43,12 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
   let trainingA: string;
   let tokenId: string;
   let fixtures: Record<string, { project?: string; training: string; epoch: string; test: string; benchmark: string; comparison: string; finding?: string }>;
-  const owner = 'same-owner';
+  const owner = '000000000000000000000001';
   const rawToken = 'a'.repeat(64);
   const secret = 'project-token-integration-secret';
   const oldSecret = process.env.JWT_SECRET;
   const sessionToken = () => {
-    const unsigned = [ { alg: 'HS256', typ: 'JWT' }, { id: owner, exp: Math.floor(Date.now() / 1000) + 60 } ]
+    const unsigned = [ { alg: 'HS256', typ: 'JWT' }, { id: owner, email: 'owner@example.test', tokenVersion: 1, exp: Math.floor(Date.now() / 1000) + 60 } ]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
     return `${unsigned}.${crypto.createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
   };
@@ -72,6 +72,7 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
   }, 120_000);
 
   beforeEach(async () => {
+    await mongoose.connection.collection('users').insertOne({ _id: new mongoose.Types.ObjectId(owner), email: 'owner@example.test', tokenVersion: 1 });
     const projects = await Project.create([
       { name: 'A', slug: 'a', ownerId: owner },
       { name: 'B', slug: 'b', ownerId: owner },

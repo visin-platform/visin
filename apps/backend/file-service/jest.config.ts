@@ -10,6 +10,7 @@ const config: Config = {
     'src/**/*.ts',
     '!src/index.ts',
     '!src/**/*.d.ts',
+    '!src/**/__tests__/**',
   ],
   coverageReporters: ['text', 'lcov'],
   coverageDirectory: 'coverage',

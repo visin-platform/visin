@@ -5,10 +5,25 @@ jobs, tasks, answers, and export.
 
 - Port: `5008`
 - Stack: Express + TypeScript + Mongoose, bootstrapped from `@visin/backend-core`
-- Auth: every `/api` route requires a signed-in user (JWT `access_token` cookie or
-  `Authorization: Bearer`); there are no anonymous or public data routes.
+- Auth: JWT `access_token` cookie or `Authorization: Bearer`. Group members can
+  read their jobs; outsiders can read only explicitly published, active jobs.
 - Storage: image/zip bytes live on disk behind file-service (internal API); this
-  service stores metadata only.
+  service persists metadata and uses bounded temporary files while importing archives.
+
+## Job visibility
+
+New jobs are group-private, including after activation. Group owners/admins can
+change sharing with `PUT /api/jobs/:id/visibility` and `{ "isPublic": true }` or
+`false`, also available on the job detail page. Missing publication state is private.
+Public jobs expose their definition, progress, anonymous results, and frames only
+while active. Pausing, completing, archiving, or disabling sharing closes public
+reads. Members retain review access to all statuses; completed-job answer revisions
+and undo keep their existing rules. Labeling still requires current membership.
+
+Detail, statistics, direct task IDs, and frame indices enforce the same rule before
+reading content or issuing image URLs. Revocation is checked again on each request.
+Previously issued signed image URLs remain usable until their existing expiry
+(up to one hour); downloaded/cached content cannot be recalled.
 
 ## Bundle import
 
@@ -27,6 +42,26 @@ client shows that as the mapping table and posts back an `ImportMapping`
 so a conventional bundle needs no mapping at all. Both paths run through
 `utils/bundlePaths.ts`, the single definition of what a zip entry means.
 
+### Archive resource limits
+
+Ingest downloads compressed input to a private temporary file and expands entries
+one at a time. Defaults are 50 MiB per expanded entry, 10 GiB compressed input,
+10 GiB total expanded data, 100,000 entries, 16 MiB of central-directory records,
+and 8 MiB of combined manifest/mask JSON input retained during an import.
+Per-file diagnostics stop at 1,000 records or 1 MiB of path/reason text so the
+terminal report stays small enough to persist. All
+entries count, including ignored paths and directory payloads. Existing
+`INGEST_MAX_ENTRY_BYTES` and `INGEST_MAX_ENTRIES` overrides must be positive safe
+integers; no additional environment variables are required.
+
+Exceeding a limit stops the entire import without retrying the same archive.
+Previously stored images remain available for the existing resume workflow.
+Download progress refreshes the import heartbeat before extraction starts.
+Streams are closed and the temporary file is removed on completion, failure, or
+consumer cancellation. Each concurrent import may temporarily use up to 10 GiB of
+local disk; these per-import limits do not enforce file-service upload quotas.
+Abrupt process termination can leave temporary files for operational cleanup.
+
 ### The import queue
 
 `POST /api/bundles/:id/import` creates the `ImportJob` document and hands the id to a
@@ -42,7 +77,7 @@ somewhere durable rather than dropping it.
   `runImport` therefore records a fatal error and rethrows rather than marking the job
   failed — the worker owns that verdict, because flipping the document to `failed`
   between attempts would tell the polling client the import is over when it isn't.
-  A structurally bad zip throws `NonRetryableIngestError`, which the worker turns into
+  An archive limit violation throws `NonRetryableIngestError`, which the worker turns into
   BullMQ's `UnrecoverableError` so the budget isn't spent re-downloading it.
 - **Crashes**: BullMQ redelivers a job whose worker died (twice, then it fails for
   good). The `updatedAt` heartbeat and the `IMPORT_STALE_MINUTES` window in

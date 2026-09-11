@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import { NotFoundError, logger } from '@visin/backend-core';
 import {
-  createWriteStream,
-  createReadStream,
+  openRead,
   deleteFile,
   deleteByPrefix,
   fileExists,
@@ -10,47 +9,14 @@ import {
   listFiles
 } from '../utils/storage';
 
-/**
- * PUT /internal/files/:fileId
- * Server-to-server raw buffer upload.
- * Accepts raw binary body.
- *
- * Stream errors surface via event callbacks, not thrown exceptions/rejected
- * promises, so Express's automatic error forwarding doesn't reach them —
- * these still need to respond manually.
- */
-export const internalUpload = (req: Request, res: Response): void => {
+import { uploadFile, parseContentLength } from '../services/uploadService';
+
+export const internalUpload = async (req: Request, res: Response): Promise<void> => {
   const fileId = [req.params.fileId].flat().join('/');
-  const output = createWriteStream(fileId);
-  let uploadedBytes = 0;
-  let responded = false;
-
-  const fail = (message: string, err: unknown): void => {
-    if (responded) return;
-    responded = true;
-    logger.error(message, { fileId, error: err instanceof Error ? err.message : String(err) });
-    if (!res.headersSent) {
-      res.status(500).json({ success: false, message: 'Upload failed' });
-    } else {
-      res.destroy();
-    }
-  };
-
-  req.on('data', (chunk: Buffer) => {
-    uploadedBytes += chunk.length;
-  });
-
-  req.on('error', (err) => fail('Internal upload request stream error', err));
-  req.on('aborted', () => fail('Internal upload aborted', new Error('Client aborted request')));
-
-  output.on('error', (err) => fail('Internal upload file write stream error', err));
-  output.on('finish', () => {
-    if (responded) return;
-    responded = true;
-    res.status(200).json({ success: true, fileId, size: uploadedBytes });
-  });
-
-  req.pipe(output);
+  res.setHeader('Connection', 'close');
+  res.once('finish', () => req.destroy());
+  const result = await uploadFile(fileId, req, { internal: true, contentLength: parseContentLength(req.headers['content-length']) });
+  res.status(200).json({ success: true, fileId, size: result.size });
 };
 
 /** `bytes=<start>-<end>`, end optional. Anything else is ignored (full body). */
@@ -72,16 +38,14 @@ const parseRange = (header: string | undefined, size: number): { start: number; 
  * directory (a few hundred KB at the tail) instead of streaming the whole
  * multi-hundred-MB archive just to list its entries.
  */
-export const internalDownload = (req: Request, res: Response): void => {
+export const internalDownload = async (req: Request, res: Response): Promise<void> => {
   const fileId = [req.params.fileId].flat().join('/');
 
-  if (!fileExists(fileId)) {
+  if (!await fileExists(fileId)) {
     throw new NotFoundError('File not found');
   }
 
-  const meta = getMetadata(fileId);
-  const range = parseRange(req.headers.range, meta.size);
-  const stream = createReadStream(fileId, range ?? undefined);
+  const { stream, range, ...meta } = await openRead(fileId, size => parseRange(req.headers.range, size));
 
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', 'application/octet-stream');
@@ -110,9 +74,9 @@ export const internalDownload = (req: Request, res: Response): void => {
  * HEAD /internal/files/:fileId
  * Check file existence.
  */
-export const internalExists = (req: Request, res: Response): void => {
+export const internalExists = async (req: Request, res: Response): Promise<void> => {
   const fileId = [req.params.fileId].flat().join('/');
-  if (fileExists(fileId)) {
+  if (await fileExists(fileId)) {
     res.status(200).end();
   } else {
     res.status(404).end();
@@ -123,14 +87,14 @@ export const internalExists = (req: Request, res: Response): void => {
  * GET /internal/meta/:fileId
  * Returns size and lastModified.
  */
-export const internalMetadata = (req: Request, res: Response): void => {
+export const internalMetadata = async (req: Request, res: Response): Promise<void> => {
   const fileId = [req.params.fileId].flat().join('/');
 
-  if (!fileExists(fileId)) {
+  if (!await fileExists(fileId)) {
     throw new NotFoundError('File not found');
   }
 
-  const meta = getMetadata(fileId);
+  const meta = await getMetadata(fileId);
   res.json({ success: true, data: meta });
 };
 
@@ -138,9 +102,9 @@ export const internalMetadata = (req: Request, res: Response): void => {
  * DELETE /internal/files/:fileId
  * Delete a single file.
  */
-export const internalDelete = (req: Request, res: Response): void => {
+export const internalDelete = async (req: Request, res: Response): Promise<void> => {
   const fileId = [req.params.fileId].flat().join('/');
-  deleteFile(fileId);
+  await deleteFile(fileId);
   res.json({ success: true, message: 'File deleted' });
 };
 
@@ -149,9 +113,9 @@ export const internalDelete = (req: Request, res: Response): void => {
  * Body: { prefix: string }
  * Delete all files matching a path prefix (folder delete).
  */
-export const internalDeleteFolder = (req: Request, res: Response): void => {
+export const internalDeleteFolder = async (req: Request, res: Response): Promise<void> => {
   const { prefix } = req.body as { prefix: string };
-  const count = deleteByPrefix(prefix);
+  const count = await deleteByPrefix(prefix);
   res.json({ success: true, message: `Deleted ${count} file(s)`, count });
 };
 
@@ -159,12 +123,12 @@ export const internalDeleteFolder = (req: Request, res: Response): void => {
  * GET /internal/files?prefix=...&maxKeys=...
  * List files.
  */
-export const internalList = (req: Request, res: Response): void => {
+export const internalList = async (req: Request, res: Response): Promise<void> => {
   const { prefix, maxKeys, recursive } = req.query as unknown as {
     prefix?: string;
     maxKeys: number;
     recursive: boolean;
   };
-  const files = listFiles(prefix, maxKeys, recursive);
+  const files = await listFiles(prefix, maxKeys, recursive);
   res.json({ success: true, data: files });
 };

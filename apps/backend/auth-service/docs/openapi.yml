@@ -440,7 +440,10 @@ paths:
       tags: [Authentication]
       summary: Validate Google OAuth token and authenticate user
       description: |
-        Validates a Google OAuth ID token and authenticates an existing user.
+        Validates a Google OAuth ID token and signs in the account bound to its subject.
+        A Google sign-up account from before subjects were stored, without a password,
+        is bound on first use. An unknown Google identity with a verified email signs
+        up a new account once initial setup is complete.
         This endpoint is public and used for initial login/authentication.
         On success, returns a JWT token and sets an HTTP-only cookie.
 
@@ -466,7 +469,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: Invalid Google token
+          description: Invalid Google token, or an email Google has not verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The email belongs to an account Google cannot enter (sign in with its password and link Google), or initial setup is incomplete
           content:
             application/json:
               schema:

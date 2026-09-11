@@ -24,7 +24,8 @@ export const createJob = async (user: UserPayload, data: CreateJobBody): Promise
       email: (user.email || '').toLowerCase(),
       name: user.name
     },
-    status: 'draft'
+    status: 'draft',
+    isPublic: false
   });
 };
 
@@ -68,15 +69,10 @@ export const withoutCreatorIdentity = (job: ILabelJob): Record<string, unknown> 
 };
 
 /**
- * What an anonymous visitor sees: every active job, whatever group owns it.
- *
- * Active is the whole filter on purpose — a job is only active because someone
- * deliberately activated it, and drafts/paused/archived ones are work in a state
- * nobody chose to show. `myAnswers` is 0 for a caller with no identity, which is
- * exactly what the empty userId yields.
+ * Only deliberately published, active jobs are visible outside their group.
  */
 export const listPublicJobs = async (): Promise<JobWithProgress[]> => {
-  const jobs = await LabelJob.find({ status: 'active' }).sort({ updatedAt: -1 });
+  const jobs = await LabelJob.find({ status: 'active', isPublic: true }).sort({ updatedAt: -1 });
   const progress = await progressForJobs(jobs, '');
   return jobs.map((job) => ({
     ...withoutCreatorIdentity(job),
@@ -89,6 +85,12 @@ export const getJob = async (jobId: string): Promise<ILabelJob> => {
   if (!job) {
     throw new NotFoundError('Job not found');
   }
+  return job;
+};
+
+export const setJobVisibility = async (jobId: string, isPublic: boolean): Promise<ILabelJob> => {
+  const job = await LabelJob.findByIdAndUpdate(jobId, { $set: { isPublic } }, { new: true });
+  if (!job) throw new NotFoundError('Job not found');
   return job;
 };
 

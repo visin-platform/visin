@@ -33,9 +33,10 @@ function handleCredentialResponse(response: { credential: string }, redirectUri:
     body: JSON.stringify({ idToken }),
     credentials: 'include' // Include cookies in the request
   })
-    .then((res) => {
+    .then(async (res) => {
       if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || `HTTP error! status: ${res.status}`);
       }
       return res.json();
     })
@@ -58,7 +59,7 @@ function handleCredentialResponse(response: { credential: string }, redirectUri:
     });
 }
 
-export function initializeGoogleSignIn(clientId: string, redirectUri: string) {
+export function initializeGoogleSignIn(clientId: string, redirectUri: string, onCredential?: (response: { credential: string }) => void) {
   let retryCount = 0;
   const maxRetries = 100; // Wait up to 10 seconds
   let googleInitialized = false;
@@ -110,7 +111,7 @@ export function initializeGoogleSignIn(clientId: string, redirectUri: string) {
       try {
         window.google.accounts.id.initialize({
           client_id: clientId,
-          callback: (response: { credential: string }) => handleCredentialResponse(response, redirectUri)
+          callback: onCredential || ((response: { credential: string }) => handleCredentialResponse(response, redirectUri))
         });
         googleInitialized = true;
       } catch (error) {

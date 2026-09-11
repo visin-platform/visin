@@ -3,6 +3,7 @@ import { Box, Button, CircularProgress, Divider, Grid, Paper, Typography } from 
 import { createAuthService, type AuthUser } from '@visin/frontend-core';
 import { initializeGoogleSignIn } from '../authFlow';
 import LoggedInUser from '../components/LoggedInUser';
+import GoogleLinkForm from '../components/GoogleLinkForm';
 import CredentialsForm, { type CredentialsValues, type CredentialsMode } from '../components/CredentialsForm';
 import * as authApi from '../services/authApi';
 import { useConfig } from '../config/useConfig';
@@ -73,9 +74,10 @@ const LoginPage: React.FC = () => {
   }, [authService, config.GOOGLE_CLIENT_ID]);
 
   // Google renders its button into a DOM node, so it can only be initialised
-  // once that node exists — i.e. after the form phase has rendered.
+  // once that node exists — i.e. after the form phase has rendered. Signing in
+  // with an unknown Google account creates one, so registration offers it too.
   useEffect(() => {
-    if (phase !== 'form' || mode !== 'login' || !googleEnabled || !config.GOOGLE_CLIENT_ID) return;
+    if (phase !== 'form' || mode === 'setup' || !googleEnabled || !config.GOOGLE_CLIENT_ID) return;
     try {
       initializeGoogleSignIn(config.GOOGLE_CLIENT_ID, redirectUri());
     } catch (err) {
@@ -192,6 +194,7 @@ const LoginPage: React.FC = () => {
                 }}
                 onLogout={handleLogout}
               />
+              {config.GOOGLE_CLIENT_ID && <GoogleLinkForm clientId={config.GOOGLE_CLIENT_ID} />}
             </>
           )}
 
@@ -206,7 +209,7 @@ const LoginPage: React.FC = () => {
 
               <CredentialsForm mode={mode} busy={busy} error={error} onSubmit={handleSubmit} />
 
-              {mode === 'login' && googleEnabled && (
+              {mode !== 'setup' && googleEnabled && (
                 <>
                   <Divider sx={{ my: 3, color: 'text.secondary', fontSize: '0.8rem' }}>OR</Divider>
                   <Box id="google-signin-button" sx={{ display: 'flex', justifyContent: 'center', minHeight: 44 }} />

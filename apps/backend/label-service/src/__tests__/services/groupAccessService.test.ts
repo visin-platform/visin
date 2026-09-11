@@ -84,3 +84,8 @@ it('does not require an email for membership', async () => {
   await assertMember({ user: { id: 'Id-Only' } } as Request, 'g1');
   expect(mockedCheck).toHaveBeenCalledWith('g1', 'Id-Only');
 });
+
+it('preserves Unauthorized for anonymous administrator assertions', async () => {
+  await expect(assertAdmin({} as Request, 'g1')).rejects.toThrow(UnauthorizedError);
+  expect(mockedCheck).not.toHaveBeenCalled();
+});

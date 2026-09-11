@@ -3,6 +3,9 @@ import type { Request, Response } from 'express';
 jest.mock('../../services/googleAuthService', () => ({
   verifyGoogleToken: jest.fn(),
 }));
+jest.mock('../../services/googleSignInService', () => ({
+  signInWithGoogle: jest.fn(),
+}));
 jest.mock('../../models/User', () => ({
   User: {
     findOne: jest.fn(),
@@ -25,10 +28,12 @@ import {
   listUsers,
 } from '../../controllers/authController';
 import { verifyGoogleToken } from '../../services/googleAuthService';
+import { signInWithGoogle } from '../../services/googleSignInService';
 import { verifyJWT } from '../../services/jwtService';
 import { User } from '../../models/User';
 
 const mockedVerifyGoogleToken = verifyGoogleToken as jest.Mock;
+const mockedSignIn = signInWithGoogle as jest.Mock;
 const mockedUser = User as unknown as Record<string, jest.Mock>;
 
 type MockRes = Response & { json: jest.Mock; cookie: jest.Mock; clearCookie: jest.Mock };
@@ -73,7 +78,7 @@ beforeEach(() => {
 });
 
 describe('validateToken', () => {
-  const googlePayload = { email: 'Test@Example.com', name: 'Test User', picture: 'pic.png' };
+  const googlePayload = { sub: 'google-subject-1', email: 'Test@Example.com', name: 'Test User', picture: 'pic.png' };
 
   it('rejects when Google verification throws', async () => {
     mockedVerifyGoogleToken.mockRejectedValue(new Error('bad token'));
@@ -91,27 +96,27 @@ describe('validateToken', () => {
     );
   });
 
-  it('rejects when the Google payload has no email', async () => {
+  it('rejects when the Google payload has no subject', async () => {
     mockedVerifyGoogleToken.mockResolvedValue({ name: 'No Email' });
 
     await expect(validateToken(makeReq({ body: { idToken: 'x' } }), makeRes())).rejects.toThrow(
-      'Email not present in Google token'
+      'Subject not present in Google token'
     );
   });
 
-  it('rejects when no user exists for the email', async () => {
+  it('propagates a refused sign-in without issuing a session', async () => {
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
-    mockedUser.findOne.mockResolvedValue(null);
+    mockedSignIn.mockRejectedValue(new Error('An account with this email already exists'));
+    const res = makeRes();
 
-    await expect(validateToken(makeReq({ body: { idToken: 'x' } }), makeRes())).rejects.toThrow(
-      'User not found'
-    );
-    expect(mockedUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' });
+    await expect(validateToken(makeReq({ body: { idToken: 'x' } }), res)).rejects.toThrow('already exists');
+    expect(mockedSignIn).toHaveBeenCalledWith(googlePayload);
+    expect(res.cookie).not.toHaveBeenCalled();
   });
 
   it('sets the access_token cookie and returns the user on success', async () => {
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
-    mockedUser.findOne.mockResolvedValue(dbUser);
+    mockedSignIn.mockResolvedValue(dbUser);
     mockedUser.updateOne.mockResolvedValue({});
     const res = makeRes();
 
@@ -129,14 +134,14 @@ describe('validateToken', () => {
     const body = res.json.mock.calls[0][0];
     expect(body.success).toBe(true);
     expect(body.user).toEqual(
-      expect.objectContaining({ id: 'db-id-1', email: 'Test@Example.com', tokenVersion: 3 })
+      expect.objectContaining({ id: 'db-id-1', email: 'test@example.com', tokenVersion: 3 })
     );
-    expect(verifyJWT(body.token).email).toBe('Test@Example.com');
+    expect(verifyJWT(body.token).email).toBe('test@example.com');
   });
 
   it('defaults tokenVersion to 1 when the db user has none', async () => {
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
-    mockedUser.findOne.mockResolvedValue({ ...dbUser, tokenVersion: undefined });
+    mockedSignIn.mockResolvedValue({ ...dbUser, tokenVersion: undefined });
     mockedUser.updateOne.mockResolvedValue({});
     const res = makeRes();
 
@@ -149,7 +154,7 @@ describe('validateToken', () => {
     process.env.GROUP_SERVICE_URL = 'http://group';
     process.env.INTERNAL_SERVICE_TOKEN = 'internal';
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
-    mockedUser.findOne.mockResolvedValue(dbUser);
+    mockedSignIn.mockResolvedValue(dbUser);
     mockedUser.updateOne.mockResolvedValue({});
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
