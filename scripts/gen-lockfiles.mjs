@@ -82,7 +82,7 @@ for (const rel of targets) {
   const tmp = mkdtempSync(join(tmpdir(), 'visin-lock-'));
   try {
     copyFileSync(pkgPath, join(tmp, 'package.json'));
-    execFileSync('npm', ['install', '--package-lock-only', '--ignore-scripts'], {
+    execFileSync('npm', ['install', '--package-lock-only', '--ignore-scripts', '--prefer-online'], {
       cwd: tmp,
       stdio: 'pipe'
     });

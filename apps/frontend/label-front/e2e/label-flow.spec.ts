@@ -16,6 +16,9 @@ const job = {
   _id: 'j1',
   name: 'Frame quality',
   status: 'active',
+  // Job detail tells a group member they may label; without it the workbench
+  // opens read-only in browse mode and never pulls work.
+  canLabel: true,
   taskType: 'single_choice',
   redundancy: 1,
   tasksCount: 3,

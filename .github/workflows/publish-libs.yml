@@ -34,11 +34,12 @@ on:
           - backend-core
           - frontend-core
       release-type:
-        description: 'Version bump'
+        description: 'Version bump. auto derives it from the commits that touched the library.'
         required: true
-        default: patch
+        default: auto
         type: choice
         options:
+          - auto
           - patch
           - minor
           - major
@@ -79,9 +80,34 @@ jobs:
       # standard-version here only rewrites package.json: each lib's own
       # .versionrc.json skips changelog, commit and tag, so this cannot collide
       # with the monorepo's vX.Y.Z tags.
+      #
+      # `auto` reads the conventional commits that touched this library since its
+      # version last changed: a breaking change is major, a feat minor, anything
+      # else patch. Picking a type overrides that.
       - name: Bump version
         working-directory: libs/${{ inputs.library }}
-        run: npx standard-version --release-as ${{ inputs.release-type }}
+        env:
+          RELEASE_TYPE: ${{ inputs.release-type }}
+        run: |
+          if [ "$RELEASE_TYPE" = "auto" ]; then
+            BASE=$(git log -1 --format=%H -G'"version"' -- package.json)
+            RANGE=${BASE:+$BASE..}HEAD
+            COMMITS=$(git rev-list --count "$RANGE" -- .)
+            if [ "$COMMITS" -eq 0 ]; then
+              echo "::error::No commits touched libs/${{ inputs.library }} since its last version change"
+              exit 1
+            fi
+            LOG=$(git log --format='%s%n%b' "$RANGE" -- .)
+            if printf '%s\n' "$LOG" | grep -qE '^BREAKING[ -]CHANGE:|^[a-z]+(\([^)]*\))?!:'; then
+              RELEASE_TYPE=major
+            elif printf '%s\n' "$LOG" | grep -qE '^feat(\([^)]*\))?:'; then
+              RELEASE_TYPE=minor
+            else
+              RELEASE_TYPE=patch
+            fi
+            echo "Derived a $RELEASE_TYPE release from $COMMITS commit(s)"
+          fi
+          npx standard-version --release-as "$RELEASE_TYPE"
 
       - name: Refuse to republish an existing version
         id: version
@@ -132,6 +158,25 @@ jobs:
             npm publish --access public
           fi
 
+      # A fresh publish is not immediately resolvable: registry metadata can lag
+      # by seconds, and `npm ci` above cached this lib's metadata from before the
+      # publish. Resolving consumers any earlier fails with ETARGET — after the
+      # version is already out, which a re-run cannot repeat.
+      - name: Wait for the registry to serve the new version
+        env:
+          NAME: ${{ steps.version.outputs.name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          for attempt in $(seq 1 30); do
+            if npm view "$NAME@$VERSION" version --prefer-online >/dev/null 2>&1; then
+              echo "$NAME@$VERSION is resolvable"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::$NAME@$VERSION is published but not yet resolvable; re-pin consumers and regenerate lockfiles by hand"
+          exit 1
+
       # Consumers pin the lib exactly, so every one of them has to move before a
       # service image can pick the new version up. Leaving this out is the
       # failure the sync script exists to prevent: Docker restores a cached
@@ -145,7 +190,7 @@ jobs:
       # has been tagged and there is nothing to roll back to.
       - name: Regenerate lockfiles
         run: |
-          npm install --package-lock-only --ignore-scripts
+          npm install --package-lock-only --ignore-scripts --prefer-online
           node scripts/gen-lockfiles.mjs
 
       - name: Commit the bump
