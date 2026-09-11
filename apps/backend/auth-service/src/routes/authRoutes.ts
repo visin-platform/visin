@@ -12,6 +12,7 @@ import {
   listUsers
 } from '../controllers/authController';
 import { getProfile, updateProfile, changePassword } from '../controllers/profileController';
+import { linkGoogle } from '../controllers/googleLinkController';
 import { createKey, listKeys, revealKey, revokeKey, removeKey } from '../controllers/apiKeyController';
 import { getToolCalls, getToolUsage } from '../controllers/auditController';
 import { authenticateToken, requireRole } from '../middleware/authMiddleware';
@@ -19,6 +20,7 @@ import { requireInternalServiceToken } from '../middleware/internalServiceAuth';
 import { createRateLimiter, validateRequest } from '@visin/backend-core';
 import {
   validateTokenBodySchema,
+  linkGoogleBodySchema,
   invalidateUserTokensBodySchema,
   updateProfileBodySchema,
   changePasswordBodySchema,
@@ -58,6 +60,7 @@ router.post('/logout', authenticateToken, logout);
 
 // Protected routes
 router.get('/profile', authenticateToken, getProfile);
+router.post('/profile/google', authenticateToken, validateRequest({ body: linkGoogleBodySchema }), linkGoogle);
 router.put('/profile', authenticateToken, validateRequest({ body: updateProfileBodySchema }), updateProfile);
 router.post(
   '/profile/password',

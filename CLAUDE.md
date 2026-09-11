@@ -64,16 +64,18 @@ that depends on them.
 
 `auth-service` issues a JWT as an httpOnly `access_token` cookie on Google sign-in (`COOKIE_DOMAIN` is a shared
 parent domain across every Visin subdomain in production, e.g. `.visin.eu`, so the cookie reaches every service).
-`libs/backend-core`'s `authenticateToken`/`optionalAuth` middleware (used directly or wrapped by group/file/vision-
+`libs/backend-core`'s `authenticateToken`/`optionalAuth` middleware (used directly or wrapped by group/vision/label-
 service) reads `req.cookies?.access_token` first, falling back to the `Authorization: Bearer` header — the header
 path exists for non-browser callers, notably vision-service's project-scoped API tokens (`apiTokenMiddleware`),
 which are a *different* credential (opaque hex token, DB-checked) from a user JWT and are matched by a
 "contains no dot" heuristic before the JWT middleware ever runs.
 
-`auth-service` layers its own `authenticateToken` (in its own `middleware/authMiddleware.ts`, not backend-core's)
-on top of the same cookie/header extraction, adding a `tokenVersion` check against the `User` collection so a
-security-relevant change can invalidate every outstanding JWT immediately — that DB dependency is why it isn't
-folded into the shared, stateless backend-core version.
+Both shared middleware and auth-service check the account ID, email and `tokenVersion` against the existing
+shared `users` collection before attaching a session identity. Backend-core uses a projected native collection
+read on the primary; auth-service loads its local User model to support account role checks. Checks are not
+cached between requests. Once a version increment is acknowledged, subsequent authorization checks reject
+older sessions. Required auth fails closed on database failure; optional auth continues anonymously. Already
+verified project/API-key/OAuth credentials retain their separate verification paths.
 
 Frontends never touch the JWT directly: `libs/frontend-core`'s `createApiClient` defaults every request to
 `credentials: 'include'`, and `createAuthService`/`createAuthContext` (wrapping it) is what every front's own

@@ -26,7 +26,8 @@ import {
   getJob,
   getJobStats,
   listJobs,
-  transitionJob
+  transitionJob,
+  setJobVisibility
 } from '../services/jobService';
 
 const STATUS_COLORS: Record<string, 'default' | 'success' | 'warning' | 'info'> = {
@@ -44,7 +45,7 @@ const JobDetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const { data: job, isLoading } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
+  const { data: job, isLoading, error: jobError } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
   const { data: stats } = useQuery({ queryKey: ['job-stats', jobId], queryFn: () => getJobStats(jobId) });
   // Admin controls appear when this job shows up in the caller's admin listing.
   const { data: adminJobs } = useQuery({ queryKey: ['jobs', 'admin'], queryFn: () => listJobs('admin') });
@@ -65,6 +66,15 @@ const JobDetailPage: React.FC = () => {
     onError: (err) => setActionError((err as Error).message)
   });
 
+  const visibility = useMutation({
+    mutationFn: (isPublic: boolean) => setJobVisibility(jobId, isPublic),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+    onError: (err) => setActionError((err as Error).message)
+  });
+
   // Nothing below this is recoverable, and the answers are the labeling effort
   // itself — so the count goes in the prompt rather than a bare "are you sure".
   const confirmDelete = (): void => {
@@ -75,6 +85,7 @@ const JobDetailPage: React.FC = () => {
     }
   };
 
+  if (jobError) return <Alert severity="error">{jobError.message}</Alert>;
   if (isLoading || !job) {
     return <Loader message="Loading job..." />;
   }
@@ -90,6 +101,7 @@ const JobDetailPage: React.FC = () => {
             {job.name}
           </Typography>
           <Chip label={job.status} color={STATUS_COLORS[job.status]} size="small" />
+          <Chip label={job.isPublic ? 'Public sharing enabled' : 'Group only'} size="small" />
           <Chip label={job.taskType} size="small" variant="outlined" />
           <Chip label={`K=${job.redundancy}`} size="small" variant="outlined" />
         </Stack>
@@ -119,7 +131,7 @@ const JobDetailPage: React.FC = () => {
         )}
 
         <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }}>
-          {job.status === 'active' && isAuthenticated && (
+          {job.status === 'active' && isAuthenticated && job.canLabel && (
             <Button component={Link} to={`/jobs/${jobId}/work`} variant="contained">
               Start labeling
             </Button>
@@ -157,6 +169,9 @@ const JobDetailPage: React.FC = () => {
           )}
           {isAdmin && (
             <>
+              <Button disabled={visibility.isPending} onClick={() => visibility.mutate(!job.isPublic)}>
+                {job.isPublic ? 'Stop public sharing' : 'Enable public sharing'}
+              </Button>
               <Button variant="text" onClick={() => downloadExport(jobId, 'jsonl').catch((err) => setActionError(err.message))}>
                 Export JSONL
               </Button>
@@ -177,6 +192,10 @@ const JobDetailPage: React.FC = () => {
             </>
           )}
         </Stack>
+        {isAdmin && <Typography variant="body2" sx={{ mt: 2 }}>
+          Public sharing lets anyone view an active job, its frames, and anonymous results.
+          Turning it off stops new image links; links already issued expire within one hour.
+        </Typography>}
       </Paper>
 
       {stats && (

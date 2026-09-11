@@ -17,6 +17,7 @@ export const listFilesQuerySchema = z.object({
 export const generateUploadUrlBodySchema = z.object({
   fileId: z.string().min(1, 'fileId is required'),
   mimetype: z.string().optional(),
+  maxBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
   expiresInMinutes: z.coerce.number().int().positive().default(15)
 });
 

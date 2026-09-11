@@ -16,8 +16,8 @@ export const nextTask = async (req: Request, res: Response): Promise<void> => {
 };
 
 /**
- * Open one task by id — the target of a copied workbench link. Public: the link
- * is the point, and the response carries verdicts without labeler identity.
+ * Open a copied workbench link after checking the actual parent job visibility.
+ * The response carries verdicts without labeler identity.
  */
 export const getTask = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await tasks.getTaskItem(req.params.id as string, req.user?.id) });

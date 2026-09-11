@@ -1,29 +1,39 @@
 import fs from 'fs';
 import path from 'path';
-import { logger } from '@visin/backend-core';
+import { logger, NotFoundError } from '@visin/backend-core';
 
-const DATA_DIR = (): string => process.env.FILE_SERVICE_DATA_DIR || '/data';
+import { dataDir, CONTROL_DIRECTORY, resolvePath } from './paths';
+import { openUploadStore, pendingFileIds, readUploadState, uploadLocation } from '../services/uploadStore';
+import { FileUpload } from '../models/FileUpload';
+export { resolvePath } from './paths';
+const DATA_DIR = dataDir;
+const resolveSafePath = resolvePath;
 
-/**
- * Resolve a path under DATA_DIR, rejecting anything that escapes it.
- * Checking the resolved path is a construction-proof guard against path
- * traversal (../, absolute paths, ..%2f-style tricks after decoding, etc.),
- * unlike stripping leading ".." segments with a regex.
- */
-const resolveSafePath = (relativePath: string): string => {
-  const dataDir = path.resolve(DATA_DIR());
-  const resolved = path.resolve(dataDir, relativePath);
-  if (resolved !== dataDir && !resolved.startsWith(dataDir + path.sep)) {
-    throw new Error(`Invalid path: escapes data directory (${relativePath})`);
+/** Resolve Mongo's pointer, then open a single descriptor. Once open, an
+ * overlapping replacement/collection cannot mix metadata and file contents. */
+async function openPublished(fileId: string): Promise<number> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const state = await readUploadState(fileId);
+    if (state?.status === 'retired' || (state?.mode === 'public' && !state.published)) throw new NotFoundError('File not found');
+    const target = state?.published
+      ? path.join(uploadLocation(fileId).directory, state.published.id)
+      : resolvePath(fileId);
+    try { return fs.openSync(target, 'r'); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   }
-  return resolved;
-};
-
-/**
- * Resolve the absolute path for a fileId.
- * fileId is already a path like "groupId/albumId/fileId/original.jpg"
- */
-export const resolvePath = (fileId: string): string => resolveSafePath(fileId);
+  throw new NotFoundError('File not found');
+}
+export async function openRead(fileId: string, selectRange?: (size: number) => { start: number; end: number } | null) {
+  const fd = await openPublished(fileId);
+  try {
+    const stat = fs.fstatSync(fd);
+    const range = selectRange?.(stat.size) ?? null;
+    const stream = fs.createReadStream('', { fd, autoClose: true, ...(range ?? {}) });
+    return { size: stat.size, lastModified: stat.mtime, stream, range };
+  } catch (error) { fs.closeSync(fd); throw error; }
+}
 
 /**
  * Ensure the directory for a file path exists.
@@ -78,105 +88,87 @@ export const truncateFile = (fileId: string, size: number): void => {
 /**
  * Read a file from disk and return a Buffer.
  */
-export const readFile = (fileId: string): Buffer => {
-  const filePath = resolvePath(fileId);
-  return fs.readFileSync(filePath);
+export const readFile = async (fileId: string): Promise<Buffer> => {
+  const fd = await openPublished(fileId);
+  try { return fs.readFileSync(fd); } finally { fs.closeSync(fd); }
 };
 
-/**
- * Create a readable stream for a file.
- */
-export const createReadStream = (fileId: string, range?: { start: number; end: number }): fs.ReadStream => {
-  const filePath = resolvePath(fileId);
-  return fs.createReadStream(filePath, range);
+export const createReadStream = async (fileId: string, range?: { start: number; end: number }): Promise<fs.ReadStream> => {
+  return (await openRead(fileId, () => range ?? null)).stream;
 };
 
-/**
- * Check if a file exists.
- */
-export const fileExists = (fileId: string): boolean => {
+export const fileExists = async (fileId: string): Promise<boolean> => {
   try {
-    return fs.statSync(resolvePath(fileId)).isFile();
-  } catch {
-    return false;
+    const fd = await openPublished(fileId);
+    try { return fs.fstatSync(fd).isFile(); } finally { fs.closeSync(fd); }
+  } catch (error) {
+    if (error instanceof NotFoundError) return false;
+    throw error;
   }
 };
 
-/**
- * Get file metadata.
- */
-export const getMetadata = (fileId: string): { size: number; lastModified: Date } => {
-  const stat = fs.statSync(resolvePath(fileId));
-  return { size: stat.size, lastModified: stat.mtime };
+export const getMetadata = async (fileId: string): Promise<{ size: number; lastModified: Date }> => {
+  const fd = await openPublished(fileId);
+  try { const stat = fs.fstatSync(fd); return { size: stat.size, lastModified: stat.mtime }; }
+  finally { fs.closeSync(fd); }
 };
 
 /**
  * Delete a single file.
  */
-export const deleteFile = (fileId: string): void => {
-  const filePath = resolvePath(fileId);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-    logger.info('File deleted', { fileId });
-  }
+export const deleteFile = async (fileId: string): Promise<void> => {
+  const store = await openUploadStore(fileId);
+  try {
+    const state = store.read();
+    await store.save({ ...(state ?? { fileId: store.fileId, mode: 'internal', offset: 0, total: null }), parts: [], published: undefined, status: 'retired' });
+    fs.rmSync(resolvePath(fileId), { force: true });
+    for (const id of new Set([...(state?.parts ?? []).map(part => part.id), state?.published?.id])) {
+      if (id) fs.rmSync(store.path(id), { force: true });
+    }
+  } finally { await store.close(); }
 };
 
-/**
- * Delete all files whose relative path starts with prefix (folder delete).
- */
-export const deleteByPrefix = (prefix: string): number => {
+/** Cancel pending reservations as well as published files; retain tombstones so
+ * deleting a resource cannot make an old upload capability writable again. */
+export const deleteByPrefix = async (prefix: string): Promise<number> => {
   const base = resolveSafePath(prefix);
-  let count = 0;
-
-  const removeDir = (dir: string): void => {
-    if (!fs.existsSync(dir)) return;
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        removeDir(full);
-      } else {
-        fs.unlinkSync(full);
-        count++;
-      }
+  const normalized = path.relative(dataDir(), base);
+  const pending = await pendingFileIds();
+  const directoryPrefix = pending.some(fileId => fileId.startsWith(normalized + path.sep)) || prefix.endsWith('/') || (fs.existsSync(base) && fs.statSync(base).isDirectory());
+  const matches = (fileId: string): boolean => !normalized || (directoryPrefix
+    ? fileId.startsWith(normalized + path.sep)
+    : path.dirname(fileId) === path.dirname(normalized) && path.basename(fileId).startsWith(path.basename(normalized)));
+  const published = (await listFiles(directoryPrefix ? normalized : path.dirname(normalized), Number.MAX_SAFE_INTEGER, directoryPrefix))
+    .filter(file => matches(file.name)).map(file => file.name);
+  for (const fileId of new Set([...published, ...pending.filter(matches)])) await deleteFile(fileId);
+  // Preserve folder-delete behavior without ever walking the control namespace.
+  const prune = (directory: string): void => {
+    if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) return;
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const child = path.join(directory, entry.name);
+      if (child !== path.join(dataDir(), CONTROL_DIRECTORY) && entry.isDirectory()) prune(child);
     }
-    // Remove the now-empty directory
-    try { fs.rmdirSync(dir); } catch { /* ignore non-empty */ }
+    if (directory !== dataDir() && fs.readdirSync(directory).length === 0) fs.rmdirSync(directory);
   };
-
-  // If prefix points to a directory, remove the whole subtree.
-  // If it points to a file prefix (no trailing slash), remove matching files.
-  const stat = fs.existsSync(base) ? fs.statSync(base) : null;
-  if (stat?.isDirectory()) {
-    removeDir(base);
-  } else {
-    // Treat as filename prefix — walk parent dir and delete matches
-    const parentDir = path.dirname(base);
-    const filePrefix = path.basename(base);
-    if (fs.existsSync(parentDir)) {
-      for (const name of fs.readdirSync(parentDir)) {
-        if (name.startsWith(filePrefix)) {
-          fs.unlinkSync(path.join(parentDir, name));
-          count++;
-        }
-      }
-    }
-  }
-
-  logger.info('Deleted files under prefix', { count, prefix });
-  return count;
+  prune(base);
+  return published.length;
 };
 
 /**
  * List all files under an optional prefix, up to maxKeys.
  */
-export const listFiles = (
+export const listFiles = async (
   prefix?: string,
   maxKeys = 1000,
   recursive = true
-): Array<{ name: string; size: number; lastModified: Date }> => {
+): Promise<Array<{ name: string; size: number; lastModified: Date }>> => {
   const baseDir = prefix ? resolveSafePath(prefix) : path.resolve(DATA_DIR());
 
+  const normalized = path.relative(dataDir(), baseDir);
+  const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = (normalized ? `^${escaped}/` : '^') + (recursive ? '' : '[^/]+$');
+  const managed = await FileUpload.find({ fileId: { $regex: pattern } }, { fileId: 1, 'state.published': 1, 'state.mode': 1, 'state.status': 1 }).readConcern('majority').lean();
+  const managedIds = new Set(managed.filter(row => row.state?.published || row.state?.mode === 'public' || row.state?.status === 'retired').map(row => row.fileId));
   const results: Array<{ name: string; size: number; lastModified: Date }> = [];
 
   const walk = (dir: string): void => {
@@ -185,6 +177,7 @@ export const listFiles = (
     for (const entry of entries) {
       if (results.length >= maxKeys) break;
       const full = path.join(dir, entry.name);
+      if (full === path.join(dataDir(), CONTROL_DIRECTORY)) continue;
       if (entry.isDirectory()) {
         // Shallow listing exists so a caller can find the handful of files
         // directly under a folder without paging past everything beneath it —
@@ -194,6 +187,7 @@ export const listFiles = (
           walk(full);
         }
       } else {
+        if (managedIds.has(path.relative(DATA_DIR(), full))) continue;
         const stat = fs.statSync(full);
         results.push({ name: path.relative(DATA_DIR(), full), size: stat.size, lastModified: stat.mtime });
       }
@@ -201,5 +195,11 @@ export const listFiles = (
   };
 
   walk(baseDir);
+  for (const row of managed) {
+    if (results.length >= maxKeys) break;
+    if (!recursive && path.dirname(row.fileId) !== (normalized || '.')) continue;
+    if (row.state?.status === 'retired' || !row.state?.published) continue;
+    results.push({ name: row.fileId, size: row.state.published.size, lastModified: new Date(row.state.published.lastModified) });
+  }
   return results;
 };

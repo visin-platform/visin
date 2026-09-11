@@ -52,3 +52,11 @@ export const login = async (email: string, password: string): Promise<void> => {
     throw new Error(messageFor(error, 'Could not sign in'), { cause: error });
   }
 };
+
+export const linkGoogle = async (currentPassword: string, idToken: string): Promise<void> => {
+  try {
+    await client.post('/auth/profile/google', { currentPassword, idToken }, { skipAuthRedirect: true });
+  } catch (error) {
+    throw new Error(messageFor(error, 'Could not link Google'), { cause: error });
+  }
+};

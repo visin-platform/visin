@@ -1,3 +1,4 @@
+jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(async () => ({ member: true, role: 'member' })) }));
 jest.mock('../../models/LabelTask', () => ({
   LabelTask: {
     findOneAndUpdate: jest.fn(),
@@ -42,6 +43,7 @@ const activeJob = (overrides: Record<string, unknown> = {}): ILabelJob =>
   ({
     _id: 'j1',
     status: 'active',
+    isPublic: true,
     redundancy: 2,
     taskType: 'mask_toggle',
     question: { prompt: 'p' },
@@ -67,6 +69,7 @@ const answersOnTask = (answers: Record<string, unknown>[] = []) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedJob.findById.mockResolvedValue(activeJob());
   answersOnTask();
   mockedAnswer.findOne.mockResolvedValue(null);
   mockedAnswer.findOneAndUpdate.mockResolvedValue(null);
@@ -404,5 +407,82 @@ describe('answer schema/type mismatch', () => {
     await expect(svc.submitAnswer(task, activeJob(), user, { rejectedMaskIds: [1] })).rejects.toThrow(
       BadRequestError
     );
+  });
+});
+
+describe('task response privacy', () => {
+  const cases = [
+    { path: 'id', caller: undefined },
+    { path: 'id', caller: 'viewer' },
+    { path: 'index', caller: undefined },
+    { path: 'index', caller: 'viewer' },
+    { path: 'next', caller: 'viewer' },
+  ];
+
+  it.each(cases)('omits internal identity for $path / $caller without changing stored state', async ({ path, caller }) => {
+    const { LabelTask: TaskModel } = jest.requireActual<typeof import('../../models/LabelTask')>('../../models/LabelTask');
+    const document = new TaskModel({
+      jobId: '000000000000000000000001',
+      labelImageId: '000000000000000000000002',
+      order: 3,
+      stratum: 'night',
+      answersCount: 1,
+      answeredBy: ['private-answerer'],
+      leasedBy: 'private-lessee',
+      leaseExpiresAt: new Date('2026-09-12'),
+      payload: {
+        layers: [{ set: 'model-a', imageId: '000000000000000000000003' }],
+        maskMap: {
+          imageId: '000000000000000000000004',
+          masks: [{ id: 9, class: 'vehicle', bbox: [1, 2, 3, 4], confidence: 0.8, source: { model: 'example' } }],
+        },
+      },
+    });
+    // Schema additions must not silently become public response fields.
+    document.set('internalAudit', 'private-audit-marker', { strict: false });
+    const before = JSON.stringify(document);
+    mockedTask.findById.mockResolvedValue(document);
+    mockedTask.findOne.mockReturnValue({ sort: () => ({ skip: jest.fn().mockResolvedValue(document) }) });
+    mockedTask.findOneAndUpdate.mockResolvedValue(document);
+    mockedTask.countDocuments.mockResolvedValue(4);
+    mockedImage.find.mockResolvedValue([
+      { _id: document.labelImageId, fileId: 'frame', width: 100, height: 50, stem: 'frame-1' },
+      { _id: document.payload!.layers![0].imageId, fileId: 'layer' },
+      { _id: document.payload!.maskMap!.imageId, fileId: 'map' },
+    ]);
+    mockedFiles.getDownloadUrl.mockImplementation(async (fileId: string) => ({ url: `signed:${fileId}` }));
+    const updatedAt = new Date('2026-09-11');
+    answersOnTask([
+      { userId: 'private-answerer', userEmail: 'private@example.test', rejectedMaskIds: [9], updatedAt },
+      { userId: 'viewer', choiceKey: 'good', updatedAt },
+    ]);
+
+    const result = path === 'id'
+      ? await svc.getTaskItem(document.id, caller)
+      : path === 'index'
+        ? await svc.getTaskItemAtIndex(document.jobId.toString(), 3, caller)
+        : await svc.nextTask(activeJob({ tasksCount: 4 }), { ...user, id: caller! });
+    const response = JSON.parse(JSON.stringify(result));
+    expect(response.task).toEqual({
+      _id: document.id,
+      jobId: document.jobId.toString(),
+      labelImageId: document.labelImageId.toString(),
+      order: 3,
+      stratum: 'night',
+      payload: JSON.parse(JSON.stringify(document.payload)),
+    });
+    expect(JSON.stringify(response)).not.toMatch(/private-answerer|private-lessee|private-audit-marker|private@example.test/);
+    expect(response.answer).toEqual({
+      count: 2,
+      mine: caller ? { choiceKey: 'good', updatedAt: updatedAt.toISOString() } : null,
+      latest: { rejectedMaskIds: [9], updatedAt: updatedAt.toISOString() },
+    });
+    expect(response.images).toEqual({
+      frame: { url: 'signed:frame', width: 100, height: 50, stem: 'frame-1' },
+      layers: [{ set: 'model-a', url: 'signed:layer' }],
+      idmap: { url: 'signed:map' },
+    });
+    expect(response.position).toEqual({ index: 4, total: 4 });
+    expect(JSON.stringify(document)).toBe(before);
   });
 });

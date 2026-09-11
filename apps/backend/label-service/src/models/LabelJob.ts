@@ -40,6 +40,7 @@ export interface ILabelJob extends Document {
   redundancy: number;
   selection?: IJobSelection;
   status: JobStatus;
+  isPublic: boolean;
   tasksCount: number; // denormalized at materialization
   createdAt: Date;
   updatedAt: Date;
@@ -78,6 +79,7 @@ const LabelJobSchema = new Schema<ILabelJob>(
       default: undefined
     },
     status: { type: String, enum: JOB_STATUSES, default: 'draft', index: true },
+    isPublic: { type: Boolean, default: false },
     tasksCount: { type: Number, default: 0 }
   },
   { timestamps: true }

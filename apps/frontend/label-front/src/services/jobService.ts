@@ -42,6 +42,9 @@ export type JobAction = 'activate' | 'pause' | 'resume' | 'archive';
 export const transitionJob = async (jobId: string, action: JobAction): Promise<LabelJob> =>
   (await labelApi.post<ApiResponse<LabelJob>>(`/jobs/${jobId}/${action}`)).data;
 
+export const setJobVisibility = async (jobId: string, isPublic: boolean): Promise<LabelJob> =>
+  (await labelApi.put<ApiResponse<LabelJob>>(`/jobs/${jobId}/visibility`, { isPublic })).data;
+
 /** Irreversible: removes the job, its tasks and every answer. Export first. */
 export const deleteJob = async (jobId: string): Promise<{ tasks: number; answers: number }> =>
   (await labelApi.delete<ApiResponse<{ tasks: number; answers: number }>>(`/jobs/${jobId}`)).data;

@@ -73,7 +73,7 @@ beforeEach(() => {
 });
 
 describe('validateToken', () => {
-  const googlePayload = { email: 'Test@Example.com', name: 'Test User', picture: 'pic.png' };
+  const googlePayload = { sub: 'google-subject-1', email: 'Test@Example.com', name: 'Test User', picture: 'pic.png' };
 
   it('rejects when Google verification throws', async () => {
     mockedVerifyGoogleToken.mockRejectedValue(new Error('bad token'));
@@ -91,22 +91,22 @@ describe('validateToken', () => {
     );
   });
 
-  it('rejects when the Google payload has no email', async () => {
+  it('rejects when the Google payload has no subject', async () => {
     mockedVerifyGoogleToken.mockResolvedValue({ name: 'No Email' });
 
     await expect(validateToken(makeReq({ body: { idToken: 'x' } }), makeRes())).rejects.toThrow(
-      'Email not present in Google token'
+      'Subject not present in Google token'
     );
   });
 
-  it('rejects when no user exists for the email', async () => {
+  it('rejects when no user exists for the subject', async () => {
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
     mockedUser.findOne.mockResolvedValue(null);
 
     await expect(validateToken(makeReq({ body: { idToken: 'x' } }), makeRes())).rejects.toThrow(
-      'User not found'
+      'Google account is not linked'
     );
-    expect(mockedUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' });
+    expect(mockedUser.findOne).toHaveBeenCalledWith({ googleSubject: 'google-subject-1' });
   });
 
   it('sets the access_token cookie and returns the user on success', async () => {
@@ -129,9 +129,9 @@ describe('validateToken', () => {
     const body = res.json.mock.calls[0][0];
     expect(body.success).toBe(true);
     expect(body.user).toEqual(
-      expect.objectContaining({ id: 'db-id-1', email: 'Test@Example.com', tokenVersion: 3 })
+      expect.objectContaining({ id: 'db-id-1', email: 'test@example.com', tokenVersion: 3 })
     );
-    expect(verifyJWT(body.token).email).toBe('Test@Example.com');
+    expect(verifyJWT(body.token).email).toBe('test@example.com');
   });
 
   it('defaults tokenVersion to 1 when the db user has none', async () => {

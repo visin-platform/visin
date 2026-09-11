@@ -83,7 +83,7 @@ describe('listJobsForUser', () => {
     expect(mockedJob.find).toHaveBeenCalledWith({ groupId: { $in: ['g1', 'g2'] }, status: 'active' });
   });
 
-  it('public: every active job, whatever group owns it, minus who set it up', async () => {
+  it('public: explicitly published active jobs, minus who set it up', async () => {
     const job = {
       _id: 'j1',
       redundancy: 1,
@@ -96,7 +96,7 @@ describe('listJobsForUser', () => {
 
     // No group filter at all — a visitor has no groups to scope to. Active only:
     // a job is active because someone deliberately activated it.
-    expect(mockedJob.find).toHaveBeenCalledWith({ status: 'active' });
+    expect(mockedJob.find).toHaveBeenCalledWith({ status: 'active', isPublic: true });
     expect(mockedGroups.getMyGroups).not.toHaveBeenCalled();
     // Nobody's own answers, since there is nobody.
     expect(jobs[0].progress.myAnswers).toBe(0);

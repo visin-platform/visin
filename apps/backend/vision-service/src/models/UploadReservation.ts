@@ -9,6 +9,7 @@ const schema = new Schema({
   parentId: { type: String, required: true },
   allocationId: { type: String, required: true },
   mimetype: { type: String, required: true },
+  maxBytes: { type: Number, required: true },
   expiresAt: { type: Date, required: true },
   resourceId: String,
   resourceKind: String,

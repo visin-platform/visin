@@ -21,9 +21,8 @@ app.get('/health', createHealthCheckHandler({
   checkMongo: true
 }));
 
-// Reading a job — its definition, its progress, its frames — is anonymous, so a
-// link to a job in flight can be shared with someone who has no account. Writing
-// never is. `optionalAuth` only attaches `req.user` when a valid cookie is
+// Job reads enforce group membership or explicit active publication. Writing
+// always requires authentication. `optionalAuth` only attaches `req.user` when a valid cookie is
 // there; the routers that must have one apply `authenticateToken` themselves,
 // per-route in jobs/tasks (mixed) and wholesale here for bundles and /me, which
 // have no public surface at all.

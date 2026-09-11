@@ -1,4 +1,4 @@
-jest.mock('unzipper', () => ({ Parse: jest.fn(() => 'PARSER') }));
+jest.mock('../../utils/boundedZip', () => ({ ...jest.requireActual('../../utils/boundedZip'), readZipEntries: jest.fn() }));
 jest.mock('sharp', () => {
   const instance = {
     metadata: jest.fn().mockResolvedValue({ width: 64, height: 32 }),
@@ -35,7 +35,7 @@ jest.mock('@visin/backend-core', () => ({
 }));
 
 import sharp from 'sharp';
-import unzipper from 'unzipper';
+import { readZipEntries } from '../../utils/boundedZip';
 import { runImport, markImportFailed, bundleFileId, NonRetryableIngestError } from '../../services/ingestService';
 import { ImportJob } from '../../models/ImportJob';
 import { LabelBundle } from '../../models/LabelBundle';
@@ -54,20 +54,11 @@ interface FakeEntry {
   content?: Buffer;
 }
 
-const makeEntry = (entry: FakeEntry) => ({
-  path: entry.path,
-  type: entry.type,
-  buffer: jest.fn().mockResolvedValue(entry.content ?? Buffer.from('bytes')),
-  autodrain: jest.fn(() => ({ promise: jest.fn().mockResolvedValue(undefined) })),
-});
-
 const stubZip = (entries: FakeEntry[]) => {
-  const iterable = {
-    async *[Symbol.asyncIterator]() {
-      for (const entry of entries) yield makeEntry(entry);
-    },
-  };
-  mockedFiles.getFileStream.mockResolvedValue({ on: jest.fn(), pipe: jest.fn(() => iterable) });
+  (readZipEntries as jest.Mock).mockImplementation(async function* () {
+    for (const entry of entries) yield { ...entry, data: entry.content ?? Buffer.from('bytes') };
+  });
+  mockedFiles.getFileStream.mockResolvedValue({});
 };
 
 const makeImportJob = (overrides: Record<string, unknown> = {}) => {
@@ -258,40 +249,17 @@ describe('runImport', () => {
     ]);
   });
 
-  it('fails the import — not the process — when the zip stream errors mid-read', async () => {
+  it('persists partial progress when reading the archive fails', async () => {
     const importJob = makeImportJob();
     mockedImport.findById.mockResolvedValue(importJob);
-
-    // A read aborted partway (peer restart, expired deadline) emits 'error' on
-    // the source. `pipe` doesn't forward that, so without the handler it was an
-    // unhandled 'error' event and the whole service exited.
-    const handlers: Record<string, (err: Error) => void> = {};
-    const parserFailure = new Error('The operation was aborted due to timeout');
-    const parser = {
-      destroy: jest.fn((err: Error) => {
-        parser.destroyedWith = err;
-      }),
-      destroyedWith: undefined as Error | undefined,
-      async *[Symbol.asyncIterator]() {
-        yield makeEntry({ path: 'frames/a.png', type: 'File' });
-        handlers.error?.(parserFailure); // the source dies mid-iteration…
-        throw parser.destroyedWith ?? new Error('parser was never destroyed');
-      },
-    };
-    (unzipper.Parse as unknown as jest.Mock).mockReturnValue(parser);
-    mockedFiles.getFileStream.mockResolvedValue({
-      on: jest.fn((event: string, handler: (err: Error) => void) => {
-        handlers[event] = handler;
-      }),
-      pipe: jest.fn(() => parser),
+    mockedFiles.getFileStream.mockResolvedValue({});
+    (readZipEntries as jest.Mock).mockImplementation(async function* () {
+      yield { path: 'frames/a.png', type: 'File', data: Buffer.from('bytes') };
+      throw new Error('archive read failed');
     });
-
-    await expect(runImport('i1')).rejects.toThrow(parserFailure.message);
-
-    // …and the handler forwards it to the parser, which is what turns an
-    // unhandled 'error' event into an ordinary failed import.
-    expect(parser.destroy).toHaveBeenCalledWith(parserFailure);
-    expect(importJob.fileErrors).toContainEqual({ path: '(zip)', reason: parserFailure.message });
+    await expect(runImport('i1')).rejects.toThrow('archive read failed');
+    expect(importJob.processed).toBe(1);
+    expect(importJob.fileErrors).toContainEqual({ path: '(zip)', reason: 'archive read failed' });
   });
 
   it('records and rethrows a fatal error, leaving the verdict to the queue', async () => {
@@ -309,20 +277,16 @@ describe('runImport', () => {
     expect(mockedBundle.updateOne).toHaveBeenLastCalledWith({ _id: 'b1' }, { $set: { status: 'importing' } });
   });
 
-  it('flags a zip over the entry cap as non-retryable', async () => {
-    const importJob = makeImportJob();
-    mockedImport.findById.mockResolvedValue(importJob);
-    process.env.INGEST_MAX_ENTRIES = '1';
-    stubZip([
-      { path: 'frames/a.png', type: 'File' },
-      { path: 'frames/b.png', type: 'File' },
-    ]);
-
+  it('rejects invalid limits before downloading the archive', async () => {
+    mockedImport.findById.mockResolvedValue(makeImportJob());
+    const previous = process.env.INGEST_MAX_ENTRIES;
+    process.env.INGEST_MAX_ENTRIES = '0';
     try {
-      // Non-retryable: re-downloading the same zip cannot make it smaller.
-      await expect(runImport('i1')).rejects.toThrow(NonRetryableIngestError);
+      await expect(runImport('i1')).rejects.toThrow('positive safe integers');
+      expect(mockedFiles.getFileStream).not.toHaveBeenCalled();
     } finally {
-      delete process.env.INGEST_MAX_ENTRIES;
+      if (previous === undefined) delete process.env.INGEST_MAX_ENTRIES;
+      else process.env.INGEST_MAX_ENTRIES = previous;
     }
   });
 
@@ -336,20 +300,16 @@ describe('runImport', () => {
     expect(importJob.status).toBe('failed');
   });
 
-  it('rejects oversized entries', async () => {
+  it('bounds cumulative retained mask and manifest input before parsing it', async () => {
     const importJob = makeImportJob();
     mockedImport.findById.mockResolvedValue(importJob);
     stubZip([
-      { path: 'frames/huge.png', type: 'File', content: Buffer.alloc(51 * 1024 * 1024) },
-      { path: 'frames/ok.png', type: 'File' },
+      { path: 'manifest.csv', type: 'File', content: Buffer.from('filename,stratum\na.png,v') },
+      { path: 'annotations/setA/a.masks.json', type: 'File', content: Buffer.from('[]' + ' '.repeat(8 * 1024 * 1024)) },
     ]);
-
-    await runImport('i1');
-
-    expect(importJob.fileErrors).toEqual([
-      { path: 'frames/huge.png', reason: expect.stringContaining('exceeds') },
-    ]);
-    expect(importJob.processed).toBe(1);
+    await expect(runImport('i1')).rejects.toThrow(NonRetryableIngestError);
+    expect(importJob.fileErrors).toContainEqual({ path: '(zip)', reason: expect.stringContaining('metadata exceeds') });
+    expect(mockedImage.updateOne).not.toHaveBeenCalled();
   });
 
   it('throws when the ImportJob does not exist', async () => {

@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { requireEnv } from '../config/env';
 import { UserPayload } from '../types/auth';
 import { isAccessTokenClaims } from '../oauth/tokens';
+import { isCurrentSession } from '../auth/session';
 
 /**
  * Cookie first: browser requests carry the shared `access_token` SSO cookie
@@ -21,11 +22,10 @@ function extractToken(req: Request): string | undefined {
  * decoded payload to `req.user`. Rejects with 401 if the token is missing
  * or fails signature verification.
  *
- * Unlike auth-service's own authMiddleware, this doesn't layer a
- * tokenVersion invalidation check on top — see
- * auth-service/src/middleware/authMiddleware.ts for that.
+ * Checks the account's current token version on the existing shared MongoDB
+ * connection. No cross-request cache: a revoked session cannot regain authority.
  */
-export function authenticateToken(req: Request, res: Response, next: NextFunction): void {
+export async function authenticateToken(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (req.user) {
     return next();
   }
@@ -52,6 +52,10 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
       return;
     }
 
+    if (!await isCurrentSession(claims)) {
+      res.status(401).json({ success: false, message: 'Invalid or expired token' });
+      return;
+    }
     req.user = claims as UserPayload;
     next();
   } catch {
@@ -65,7 +69,7 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
  * that serve public + private data (e.g. public projects for anonymous
  * visitors, plus the caller's own private ones when logged in).
  */
-export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+export async function optionalAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   if (req.user) {
     return next();
   }
@@ -79,7 +83,7 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
     const claims = jwt.verify(token, requireEnv('JWT_SECRET'));
     // Same reasoning as authenticateToken: an access token is not a session.
     // Proceeding anonymously is this route's way of refusing.
-    if (!isAccessTokenClaims(claims)) {
+    if (!isAccessTokenClaims(claims) && await isCurrentSession(claims)) {
       req.user = claims as UserPayload;
     }
   } catch {

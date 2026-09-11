@@ -1,9 +1,12 @@
 import { PassThrough } from 'stream';
 import type { Request, Response } from 'express';
 
+jest.mock('../../services/uploadService', () => ({ ...jest.requireActual('../../services/uploadService'), uploadFile: jest.fn() }));
+import { uploadFile } from '../../services/uploadService';
+
 jest.mock('../../utils/storage', () => ({
   createWriteStream: jest.fn(),
-  createReadStream: jest.fn(),
+  openRead: jest.fn(),
   deleteFile: jest.fn(),
   deleteByPrefix: jest.fn(),
   fileExists: jest.fn(),
@@ -60,6 +63,7 @@ const makeRes = (): MockRes => {
 const makeStreamReq = (fileId: string | string[]): Request & PassThrough => {
   const req = new PassThrough() as PassThrough & { params: Record<string, unknown> };
   req.params = { fileId };
+  Object.assign(req, { headers: {} });
   return req as unknown as Request & PassThrough;
 };
 
@@ -73,111 +77,23 @@ beforeEach(() => {
 });
 
 describe('internalUpload', () => {
-  it('pipes the request body to storage and reports the size', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
+  it('delegates streaming and reports committed size', async () => {
+    (uploadFile as jest.Mock).mockResolvedValue({ size: 11, complete: true });
     const req = makeStreamReq(['grp', 'file.bin']);
     const res = makeRes();
-
-    internalUpload(req, res);
-    req.end(Buffer.from('hello world'));
-    await flush();
-
-    expect(mockedStorage.createWriteStream).toHaveBeenCalledWith('grp/file.bin');
-    expect(res.status).toHaveBeenCalledWith(200);
+    await internalUpload(req, res);
+    expect(uploadFile).toHaveBeenCalledWith('grp/file.bin', req, { internal: true, contentLength: undefined });
     expect(res.json).toHaveBeenCalledWith({ success: true, fileId: 'grp/file.bin', size: 11 });
-  });
-
-  it('responds 500 when the write stream errors before headers are sent', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    const req = makeStreamReq('file.bin');
-    const res = makeRes();
-
-    internalUpload(req, res);
-    output.emit('error', new Error('disk full'));
-    await flush();
-
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Upload failed' });
-  });
-
-  it('destroys the response when the stream errors after headers were sent', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    const req = makeStreamReq('file.bin');
-    const res = makeRes();
-    res.headersSent = true;
-
-    internalUpload(req, res);
-    req.emit('error', new Error('conn reset'));
-    await flush();
-
-    expect(res.destroy).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
-  });
-
-  it('responds 500 when the client aborts', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    const req = makeStreamReq('file.bin');
-    const res = makeRes();
-
-    internalUpload(req, res);
-    req.emit('aborted');
-    await flush();
-
-    expect(res.status).toHaveBeenCalledWith(500);
-  });
-
-  it('responds only once when multiple failure events fire', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    const req = makeStreamReq('file.bin');
-    const res = makeRes();
-
-    internalUpload(req, res);
-    req.emit('aborted');
-    output.emit('error', new Error('late error'));
-    await flush();
-
-    expect(res.status).toHaveBeenCalledTimes(1);
-  });
-
-  it('stringifies non-Error failure values for logging', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    const req = makeStreamReq('file.bin');
-    const res = makeRes();
-
-    internalUpload(req, res);
-    req.emit('error', 'plain string failure');
-    await flush();
-
-    expect(res.status).toHaveBeenCalledWith(500);
-  });
-
-  it('does not double-respond when finish fires after a failure', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    const req = makeStreamReq('file.bin');
-    const res = makeRes();
-
-    internalUpload(req, res);
-    req.emit('aborted');
-    output.end(); // triggers 'finish' after the failure already responded
-    await flush();
-
-    expect(res.status).toHaveBeenCalledTimes(1);
-    expect(res.status).toHaveBeenCalledWith(500);
+    (res.once as jest.Mock).mock.calls[0][1]();
+    expect(req.destroyed).toBe(true);
   });
 });
 
 describe('internalDownload', () => {
-  it('throws NotFound when the file is missing', () => {
+  it('throws NotFound when the file is missing', async () => {
     mockedStorage.fileExists.mockReturnValue(false);
 
-    expect(() => internalDownload(makeReq({ params: { fileId: 'nope.bin' } }), makeRes())).toThrow(
+    await expect(internalDownload(makeReq({ params: { fileId: 'nope.bin' } }), makeRes())).rejects.toThrow(
       'File not found'
     );
   });
@@ -186,54 +102,54 @@ describe('internalDownload', () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size: 42, lastModified: new Date() });
     const stream = new PassThrough();
-    mockedStorage.createReadStream.mockReturnValue(stream);
+    mockedStorage.openRead.mockImplementation((_fileId, range) => ({ stream, size: 42, range: range?.(42) ?? null }));
     const res = makeRes();
 
-    internalDownload(makeReq({ params: { fileId: ['grp', 'file.bin'] } }), res);
+    (await internalDownload(makeReq({ params: { fileId: ['grp', 'file.bin'] } }), res));
 
     expect(res.setHeader).toHaveBeenCalledWith('Content-Length', 42);
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/octet-stream');
-    expect(mockedStorage.createReadStream).toHaveBeenCalledWith('grp/file.bin', undefined);
+    expect(mockedStorage.openRead).toHaveBeenCalledWith('grp/file.bin', expect.any(Function));
     expect(res.setHeader).toHaveBeenCalledWith('Accept-Ranges', 'bytes');
   });
 
-  it('serves a byte range as 206 so a zip index can be read without the whole file', () => {
+  it('serves a byte range as 206 so a zip index can be read without the whole file', async () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size: 1000, lastModified: new Date() });
-    mockedStorage.createReadStream.mockReturnValue(new PassThrough());
+    mockedStorage.openRead.mockImplementation((_fileId, range) => ({ stream: new PassThrough(), size: 1000, range: range?.(1000) ?? null }));
     const res = makeRes();
 
-    internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=900-949' } }), res);
+    (await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=900-949' } }), res));
 
-    expect(mockedStorage.createReadStream).toHaveBeenCalledWith('big.zip', { start: 900, end: 949 });
+    expect(mockedStorage.openRead.mock.results.at(-1)?.value.range).toEqual({ start: 900, end: 949 });
     expect(res.status).toHaveBeenCalledWith(206);
     expect(res.setHeader).toHaveBeenCalledWith('Content-Range', 'bytes 900-949/1000');
     expect(res.setHeader).toHaveBeenCalledWith('Content-Length', 50);
   });
 
-  it('clamps an open-ended range and falls back to the whole file on a bad one', () => {
+  it('clamps an open-ended range and falls back to the whole file on a bad one', async () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size: 1000, lastModified: new Date() });
-    mockedStorage.createReadStream.mockReturnValue(new PassThrough());
+    mockedStorage.openRead.mockImplementation((_fileId, range) => ({ stream: new PassThrough(), size: 1000, range: range?.(1000) ?? null }));
 
-    internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=990-' } }), makeRes());
-    expect(mockedStorage.createReadStream).toHaveBeenLastCalledWith('big.zip', { start: 990, end: 999 });
+    (await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=990-' } }), makeRes()));
+    expect(mockedStorage.openRead.mock.results.at(-1)?.value.range).toEqual({ start: 990, end: 999 });
 
-    internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=2000-3000' } }), makeRes());
-    expect(mockedStorage.createReadStream).toHaveBeenLastCalledWith('big.zip', undefined);
+    (await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'bytes=2000-3000' } }), makeRes()));
+    expect(mockedStorage.openRead.mock.results.at(-1)?.value.range).toBeNull();
 
-    internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'rubbish' } }), makeRes());
-    expect(mockedStorage.createReadStream).toHaveBeenLastCalledWith('big.zip', undefined);
+    (await internalDownload(makeReq({ params: { fileId: 'big.zip' }, headers: { range: 'rubbish' } }), makeRes()));
+    expect(mockedStorage.openRead.mock.results.at(-1)?.value.range).toBeNull();
   });
 
   it('responds 500 when the read stream errors before headers are sent', async () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size: 42, lastModified: new Date() });
     const stream = new PassThrough();
-    mockedStorage.createReadStream.mockReturnValue(stream);
+    mockedStorage.openRead.mockImplementation((_fileId, range) => ({ stream, size: 42, range: range?.(42) ?? null }));
     const res = makeRes();
 
-    internalDownload(makeReq({ params: { fileId: 'file.bin' } }), res);
+    (await internalDownload(makeReq({ params: { fileId: 'file.bin' } }), res));
     stream.emit('error', new Error('io error'));
     await flush();
 
@@ -245,11 +161,11 @@ describe('internalDownload', () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size: 42, lastModified: new Date() });
     const stream = new PassThrough();
-    mockedStorage.createReadStream.mockReturnValue(stream);
+    mockedStorage.openRead.mockImplementation((_fileId, range) => ({ stream, size: 42, range: range?.(42) ?? null }));
     const res = makeRes();
     res.headersSent = true;
 
-    internalDownload(makeReq({ params: { fileId: 'file.bin' } }), res);
+    (await internalDownload(makeReq({ params: { fileId: 'file.bin' } }), res));
     const err = new Error('io error');
     stream.emit('error', err);
     await flush();
@@ -260,11 +176,11 @@ describe('internalDownload', () => {
 });
 
 describe('internalExists', () => {
-  it('returns 200 when the file exists', () => {
+  it('returns 200 when the file exists', async () => {
     mockedStorage.fileExists.mockReturnValue(true);
     const res = makeRes();
 
-    internalExists(makeReq({ params: { fileId: 'yes.bin' } }), res);
+    (await internalExists(makeReq({ params: { fileId: 'yes.bin' } }), res));
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.end).toHaveBeenCalled();
@@ -273,62 +189,62 @@ describe('internalExists', () => {
   // Callers needing a size must use /internal/meta — this probe deliberately
   // sends no body and no Content-Length, and label-service once read it as a
   // size, which broke bundle import with an opaque 500.
-  it('sends no Content-Length, so it cannot be used as a size probe', () => {
+  it('sends no Content-Length, so it cannot be used as a size probe', async () => {
     mockedStorage.fileExists.mockReturnValue(true);
     const res = makeRes();
 
-    internalExists(makeReq({ params: { fileId: 'a.zip' } }), res);
+    (await internalExists(makeReq({ params: { fileId: 'a.zip' } }), res));
 
     expect(res.setHeader).not.toHaveBeenCalledWith('Content-Length', expect.anything());
     expect(res.end).toHaveBeenCalled();
   });
 
-  it('returns 404 when it does not', () => {
+  it('returns 404 when it does not', async () => {
     mockedStorage.fileExists.mockReturnValue(false);
     const res = makeRes();
 
-    internalExists(makeReq({ params: { fileId: 'no.bin' } }), res);
+    (await internalExists(makeReq({ params: { fileId: 'no.bin' } }), res));
 
     expect(res.status).toHaveBeenCalledWith(404);
   });
 });
 
 describe('internalMetadata', () => {
-  it('throws NotFound for a missing file', () => {
+  it('throws NotFound for a missing file', async () => {
     mockedStorage.fileExists.mockReturnValue(false);
 
-    expect(() => internalMetadata(makeReq({ params: { fileId: 'no.bin' } }), makeRes())).toThrow(
+    await expect(internalMetadata(makeReq({ params: { fileId: 'no.bin' } }), makeRes())).rejects.toThrow(
       'File not found'
     );
   });
 
-  it('returns metadata for an existing file', () => {
+  it('returns metadata for an existing file', async () => {
     const meta = { size: 5, lastModified: new Date() };
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue(meta);
     const res = makeRes();
 
-    internalMetadata(makeReq({ params: { fileId: 'yes.bin' } }), res);
+    (await internalMetadata(makeReq({ params: { fileId: 'yes.bin' } }), res));
 
     expect(res.json).toHaveBeenCalledWith({ success: true, data: meta });
   });
 });
 
 describe('internalList shallow mode', () => {
-  it('passes recursive=false through, so a caller can list just a folder\'s own files', () => {
+  it('passes recursive=false through, so a caller can list just a folder\'s own files', async () => {
     mockedStorage.listFiles.mockReturnValue([]);
 
-    internalList(makeReq({ query: { prefix: 'label-bundles/b1', maxKeys: 1000, recursive: false } }), makeRes());
+    (await internalList(makeReq({ query: { prefix: 'label-bundles/b1', maxKeys: 1000, recursive: false } }), makeRes()));
 
     expect(mockedStorage.listFiles).toHaveBeenCalledWith('label-bundles/b1', 1000, false);
   });
 });
 
 describe('internalDelete', () => {
-  it('deletes the file and confirms', () => {
+  it('deletes the file and confirms', async () => {
     const res = makeRes();
 
-    internalDelete(makeReq({ params: { fileId: ['grp', 'file.bin'] } }), res);
+    (await internalDelete(makeReq({ params: { fileId: ['grp', 'file.bin'] } }), res));
 
     expect(mockedStorage.deleteFile).toHaveBeenCalledWith('grp/file.bin');
     expect(res.json).toHaveBeenCalledWith({ success: true, message: 'File deleted' });
@@ -336,11 +252,11 @@ describe('internalDelete', () => {
 });
 
 describe('internalDeleteFolder', () => {
-  it('deletes by prefix and reports the count', () => {
+  it('deletes by prefix and reports the count', async () => {
     mockedStorage.deleteByPrefix.mockReturnValue(3);
     const res = makeRes();
 
-    internalDeleteFolder(makeReq({ body: { prefix: 'grp/alb' } }), res);
+    (await internalDeleteFolder(makeReq({ body: { prefix: 'grp/alb' } }), res));
 
     expect(mockedStorage.deleteByPrefix).toHaveBeenCalledWith('grp/alb');
     expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Deleted 3 file(s)', count: 3 });
@@ -348,12 +264,12 @@ describe('internalDeleteFolder', () => {
 });
 
 describe('internalList', () => {
-  it('lists files under a prefix', () => {
+  it('lists files under a prefix', async () => {
     const files = [{ name: 'a.txt', size: 1 }];
     mockedStorage.listFiles.mockReturnValue(files);
     const res = makeRes();
 
-    internalList(makeReq({ query: { prefix: 'grp', maxKeys: 10, recursive: true } }), res);
+    (await internalList(makeReq({ query: { prefix: 'grp', maxKeys: 10, recursive: true } }), res));
 
     expect(mockedStorage.listFiles).toHaveBeenCalledWith('grp', 10, true);
     expect(res.json).toHaveBeenCalledWith({ success: true, data: files });

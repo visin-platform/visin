@@ -3,6 +3,7 @@ import { Box, Button, CircularProgress, Divider, Grid, Paper, Typography } from 
 import { createAuthService, type AuthUser } from '@visin/frontend-core';
 import { initializeGoogleSignIn } from '../authFlow';
 import LoggedInUser from '../components/LoggedInUser';
+import GoogleLinkForm from '../components/GoogleLinkForm';
 import CredentialsForm, { type CredentialsValues, type CredentialsMode } from '../components/CredentialsForm';
 import * as authApi from '../services/authApi';
 import { useConfig } from '../config/useConfig';
@@ -192,6 +193,7 @@ const LoginPage: React.FC = () => {
                 }}
                 onLogout={handleLogout}
               />
+              {config.GOOGLE_CLIENT_ID && <GoogleLinkForm clientId={config.GOOGLE_CLIENT_ID} />}
             </>
           )}
 

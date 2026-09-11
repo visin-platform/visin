@@ -11,6 +11,7 @@ services:
     environment:
       - PORT=5002
       - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
       - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}
       - FILE_SERVICE_HMAC_SECRET=${FILE_SERVICE_HMAC_SECRET}
       - FILE_SERVICE_URL=${FILE_SERVICE_URL}

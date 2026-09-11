@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { reserveFileUpload } from '../services/uploadService';
+import { resolvePath } from '../utils/paths';
 import { signToken } from '../utils/hmac';
 import type { z } from '@visin/backend-core';
 import type { generateUploadUrlBodySchema, generateDownloadUrlBodySchema } from '../validation/fileSchemas';
@@ -11,12 +13,13 @@ const FILE_SERVICE_URL = (): string =>
  * Body: { fileId, mimetype?, expiresInMinutes? }
  * Returns a signed PUT URL the browser can use to upload directly.
  */
-export const generateUploadUrl = (req: Request, res: Response): void => {
-  const { fileId, expiresInMinutes } = req.body as z.infer<typeof generateUploadUrlBodySchema>;
+export const generateUploadUrl = async (req: Request, res: Response): Promise<void> => {
+  const { fileId, expiresInMinutes, mimetype, maxBytes } = req.body as z.infer<typeof generateUploadUrlBodySchema>;
 
   const expiresMs = Date.now() + expiresInMinutes * 60 * 1000;
-  const token = signToken('upload', fileId, expiresMs);
-  const uploadUrl = `${FILE_SERVICE_URL()}/files/upload/${fileId}?token=${token}&expires=${expiresMs}`;
+  const reservation = await reserveFileUpload(fileId, mimetype, expiresMs, maxBytes);
+  const token = signToken('upload', fileId, expiresMs, reservation);
+  const uploadUrl = `${FILE_SERVICE_URL()}/files/upload/${fileId}?token=${token}&expires=${expiresMs}&reservation=${reservation}`;
 
   res.json({
     success: true,
@@ -38,6 +41,7 @@ export const generateDownloadUrl = (req: Request, res: Response): void => {
   const { fileId, expiresInMinutes } = req.body as z.infer<typeof generateDownloadUrlBodySchema>;
 
   const expiresMs = Date.now() + expiresInMinutes * 60 * 1000;
+  resolvePath(fileId);
   const token = signToken('download', fileId, expiresMs);
   const downloadUrl = `${FILE_SERVICE_URL()}/files/download/${fileId}?token=${token}&expires=${expiresMs}`;
 

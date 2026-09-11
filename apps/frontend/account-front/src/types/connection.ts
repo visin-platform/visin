@@ -3,9 +3,8 @@ import { ApiKeyScope } from './apiKey';
 /**
  * An assistant a user has connected through OAuth.
  *
- * Read from refresh tokens on the server: a refresh token *is* the connection.
- * While one is live the app can keep minting access tokens; once it is revoked
- * the connection is over.
+ * Read from the server's authoritative grant. Rotation keeps the same
+ * connection; revocation prevents it from refreshing again.
  */
 export interface Connection {
   id: string;

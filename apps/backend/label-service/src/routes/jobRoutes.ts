@@ -1,18 +1,19 @@
 import { Router } from 'express';
 import { asyncHandler, authenticateToken, validateRequest } from '@visin/backend-core';
-import { createJobBodySchema, listJobsQuerySchema, materializeBodySchema } from '../validation/jobSchemas';
+import { createJobBodySchema, listJobsQuerySchema, materializeBodySchema, jobVisibilityBodySchema } from '../validation/jobSchemas';
 import { nextBodySchema, taskAtParamsSchema } from '../validation/taskSchemas';
 import * as ctrl from '../controllers/jobController';
 import * as taskCtrl from '../controllers/taskController';
 
 const router = Router();
 
-// Reading a job is public (see index.ts); everything that changes one, leases a
+// Reads enforce job visibility; everything that changes one, leases a
 // task, or emits collected labels carries `authenticateToken` so an anonymous
 // caller is turned away at the door rather than inside a controller.
 router.post('/', authenticateToken, validateRequest({ body: createJobBodySchema }), asyncHandler(ctrl.createJob));
 router.get('/', validateRequest({ query: listJobsQuerySchema }), asyncHandler(ctrl.listJobs));
 router.get('/:id', asyncHandler(ctrl.getJob));
+router.put('/:id/visibility', authenticateToken, validateRequest({ body: jobVisibilityBodySchema }), asyncHandler(ctrl.setJobVisibility));
 // Destructive: job + tasks + answers. `archive` only hides a job from workers.
 router.delete('/:id', authenticateToken, asyncHandler(ctrl.deleteJob));
 router.post(

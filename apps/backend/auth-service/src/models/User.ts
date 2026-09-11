@@ -6,6 +6,8 @@ export interface IUser extends Document {
   firstName?: string;
   lastName?: string;
   signupMethod: string; // 'google' | 'password'
+  /** Google authentication binds to its immutable subject, never an email match. */
+  googleSubject?: string;
   /**
    * Only set for password accounts. `select: false` keeps it out of every
    * query that doesn't ask for it, so it can't leak through a controller that
@@ -27,6 +29,7 @@ const UserSchema = new Schema<IUser>(
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
     signupMethod: { type: String, required: true },
+    googleSubject: { type: String, select: false },
     passwordHash: { type: String, select: false },
     roles: { type: [String], default: [] },
     bootstrapSlot: { type: String, enum: ['initial-admin'], immutable: true, select: false },
@@ -42,6 +45,11 @@ UserSchema.index({ bootstrapSlot: 1 }, {
   name: 'unique_initial_admin',
   unique: true,
   partialFilterExpression: { bootstrapSlot: 'initial-admin' },
+});
+
+UserSchema.index({ googleSubject: 1 }, {
+  unique: true,
+  partialFilterExpression: { googleSubject: { $type: 'string' } }
 });
 
 export const User = model<IUser>('User', UserSchema);

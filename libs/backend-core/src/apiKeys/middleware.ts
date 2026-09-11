@@ -87,7 +87,7 @@ const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  *
  * Runs *before* `authenticateToken`/`optionalAuth` and cooperates with them
  * through the `if (req.user) return next()` guard both already begin with, so
- * the JWT path stays synchronous and untouched.
+ * an already verified API credential does not enter the session path.
  *
  * The required scope is derived from the HTTP method rather than declared per
  * route. Coarse, but a route added later is gated without its author having to

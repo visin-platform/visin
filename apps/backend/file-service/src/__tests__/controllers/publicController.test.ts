@@ -1,10 +1,13 @@
 import { PassThrough } from 'stream';
 import type { Request, Response } from 'express';
 
+jest.mock('../../services/uploadService', () => ({ ...jest.requireActual('../../services/uploadService'), uploadFile: jest.fn() }));
+import { uploadFile } from '../../services/uploadService';
+
 jest.mock('../../utils/storage', () => ({
   createWriteStream: jest.fn(),
   createWriteStreamAt: jest.fn(),
-  createReadStream: jest.fn(),
+  openRead: jest.fn(),
   fileExists: jest.fn(),
   getMetadata: jest.fn(),
   truncateFile: jest.fn(),
@@ -54,6 +57,7 @@ const makeStreamReq = (
   };
   req.params = { fileId };
   req.headers = headers;
+  Object.assign(req, { query: { reservation: 'reservation' } });
   return req as unknown as Request & PassThrough;
 };
 
@@ -67,190 +71,21 @@ beforeEach(() => {
 });
 
 describe('uploadPublic', () => {
-  it('stores the uploaded body and reports the byte count', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
+  it.each([
+    [{ size: 11, complete: true }, 200, 'File uploaded'],
+    [{ size: 5, complete: false }, 200, 'Chunk stored'],
+    [{ size: 5, complete: false, conflict: true }, 409, 'Chunk start does not match the committed size']
+  ])('returns committed progress from the service (%j)', async (result, status, message) => {
+    (uploadFile as jest.Mock).mockResolvedValue(result);
     const req = makeStreamReq(['grp', 'pic.jpg']);
     const res = makeRes();
-
-    uploadPublic(req, res);
-    req.end(Buffer.from('image-bytes'));
-    await flush();
-
-    expect(mockedStorage.createWriteStream).toHaveBeenCalledWith('grp/pic.jpg');
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({
-      success: true,
-      message: 'File uploaded',
-      fileId: 'grp/pic.jpg',
-      size: 11,
-    });
-  });
-
-  it('responds 500 when the write stream errors', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    const req = makeStreamReq('pic.jpg');
-    const res = makeRes();
-
-    uploadPublic(req, res);
-    output.emit('error', new Error('disk full'));
-    await flush();
-
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Upload failed' });
-  });
-
-  it('stringifies non-Error failure values for logging', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    const req = makeStreamReq('pic.jpg');
-    const res = makeRes();
-
-    uploadPublic(req, res);
-    req.emit('error', 'plain string failure');
-    await flush();
-
-    expect(res.status).toHaveBeenCalledWith(500);
-  });
-
-  it('does not double-respond when finish fires after a failure', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    const req = makeStreamReq('pic.jpg');
-    const res = makeRes();
-
-    uploadPublic(req, res);
-    req.emit('aborted');
-    output.end();
-    await flush();
-
-    expect(res.status).toHaveBeenCalledTimes(1);
-  });
-
-  it('destroys the response on abort after headers were sent', async () => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    const req = makeStreamReq('pic.jpg');
-    const res = makeRes();
-    res.headersSent = true;
-
-    uploadPublic(req, res);
-    req.emit('aborted');
-    await flush();
-
-    expect(res.destroy).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
-  });
-});
-
-describe('uploadPublic — chunked (Content-Range)', () => {
-  const chunked = (range: string, storedBytes?: number) => {
-    const output = new PassThrough();
-    mockedStorage.createWriteStream.mockReturnValue(output);
-    mockedStorage.createWriteStreamAt.mockReturnValue(output);
-    mockedStorage.fileExists.mockReturnValue(storedBytes !== undefined);
-    if (storedBytes !== undefined) {
-      mockedStorage.getMetadata.mockReturnValue({ size: storedBytes, lastModified: new Date() });
-    }
-    return { output, req: makeStreamReq('bundle/zip', { 'content-range': range }), res: makeRes() };
-  };
-
-  it('stores a first chunk with the truncating stream and reports it incomplete', async () => {
-    const { req, res } = chunked('bytes 0-4/11');
-
-    uploadPublic(req, res);
-    req.end(Buffer.from('image'));
-    await flush();
-
-    expect(mockedStorage.createWriteStream).toHaveBeenCalledWith('bundle/zip');
-    expect(mockedStorage.createWriteStreamAt).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({
-      success: true,
-      message: 'Chunk stored',
-      fileId: 'bundle/zip',
-      size: 5,
-      complete: false,
-    });
-  });
-
-  it('writes a later chunk at its own offset and reports completion on the last one', async () => {
-    const { req, res } = chunked('bytes 5-10/11', 5);
-
-    uploadPublic(req, res);
-    req.end(Buffer.from('-bytes'));
-    await flush();
-
-    expect(mockedStorage.createWriteStreamAt).toHaveBeenCalledWith('bundle/zip', 5);
-    expect(res.json).toHaveBeenCalledWith({
-      success: true,
-      message: 'File uploaded',
-      fileId: 'bundle/zip',
-      size: 11,
-      complete: true,
-    });
-  });
-
-  it('answers 409 with the stored size when the chunk starts at the wrong offset', () => {
-    const { req, res } = chunked('bytes 10-14/20', 5);
-
-    uploadPublic(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(409);
-    expect(res.json).toHaveBeenCalledWith({
-      success: false,
-      message: 'Chunk start does not match the stored size',
-      fileId: 'bundle/zip',
-      size: 5,
-    });
-    expect(mockedStorage.createWriteStreamAt).not.toHaveBeenCalled();
-  });
-
-  it('rolls the file back to the chunk start when the body length disagrees', async () => {
-    const { req, res } = chunked('bytes 5-10/11', 5);
-
-    uploadPublic(req, res);
-    req.end(Buffer.from('short'));
-    await flush();
-
-    expect(mockedStorage.truncateFile).toHaveBeenCalledWith('bundle/zip', 5);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({
-      success: false,
-      message: 'Chunk length does not match Content-Range',
-      fileId: 'bundle/zip',
-      size: 5,
-    });
-  });
-
-  it.each([
-    ['bytes 0-4', 'no total'],
-    ['0-4/11', 'no unit'],
-    ['bytes 4-2/11', 'end before start'],
-    ['bytes 0-11/11', 'end past total'],
-    ['items 0-4/11', 'wrong unit'],
-  ])('rejects %s (%s) before writing anything', (header) => {
-    const { req, res } = chunked(header);
-
-    expect(() => uploadPublic(req, res)).toThrow(/Content-Range/);
-    expect(mockedStorage.createWriteStream).not.toHaveBeenCalled();
-    expect(mockedStorage.createWriteStreamAt).not.toHaveBeenCalled();
-  });
-
-  it('destroys the write stream when a chunk aborts mid-flight', async () => {
-    const { output, req, res } = chunked('bytes 5-10/11', 5);
-    const destroy = jest.spyOn(output, 'destroy');
-
-    uploadPublic(req, res);
-    req.emit('aborted');
-    await flush();
-
-    expect(destroy).toHaveBeenCalled();
-    // No rollback: bytes already written are a valid prefix, so the client
-    // resumes from whatever the next 409 reports rather than re-sending more.
-    expect(mockedStorage.truncateFile).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(500);
+    await uploadPublic(req, res);
+    expect(uploadFile).toHaveBeenCalledWith('grp/pic.jpg', req, { reservationId: 'reservation', range: null, contentLength: undefined });
+    expect(res.status).toHaveBeenCalledWith(status);
+    expect(res.json).toHaveBeenCalledWith({ success: status === 200, fileId: 'grp/pic.jpg', size: result.size, complete: result.complete, message });
+    const finish = (res.once as jest.Mock).mock.calls[0][1];
+    finish();
+    expect(req.destroyed).toBe(true);
   });
 });
 
@@ -259,14 +94,14 @@ describe('downloadPublic', () => {
     mockedStorage.fileExists.mockReturnValue(true);
     mockedStorage.getMetadata.mockReturnValue({ size, lastModified: new Date() });
     const stream = new PassThrough();
-    mockedStorage.createReadStream.mockReturnValue(stream);
+    mockedStorage.openRead.mockReturnValue({ stream, size, lastModified: new Date() });
     return stream;
   };
 
-  it('throws NotFound when the file is missing', () => {
+  it('throws NotFound when the file is missing', async () => {
     mockedStorage.fileExists.mockReturnValue(false);
 
-    expect(() => downloadPublic(makeReq('missing.jpg'), makeRes())).toThrow('File not found');
+    await expect(downloadPublic(makeReq('missing.jpg'), makeRes())).rejects.toThrow('File not found');
   });
 
   it.each([
@@ -282,11 +117,11 @@ describe('downloadPublic', () => {
     ['doc.pdf', 'application/pdf'],
     ['data.unknownext', 'application/octet-stream'],
     ['no-extension', 'application/octet-stream'],
-  ])('serves %s with content type %s', (fileId, expectedType) => {
+  ])('serves %s with content type %s', async (fileId, expectedType) => {
     setupFile();
     const res = makeRes();
 
-    downloadPublic(makeReq(fileId), res);
+    (await downloadPublic(makeReq(fileId), res));
 
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', expectedType);
     expect(res.setHeader).toHaveBeenCalledWith('Content-Length', 42);
@@ -297,7 +132,7 @@ describe('downloadPublic', () => {
     const stream = setupFile();
     const res = makeRes();
 
-    downloadPublic(makeReq('photo.jpg'), res);
+    (await downloadPublic(makeReq('photo.jpg'), res));
     stream.emit('error', new Error('io error'));
     await flush();
 
@@ -310,7 +145,7 @@ describe('downloadPublic', () => {
     const res = makeRes();
     res.headersSent = true;
 
-    downloadPublic(makeReq('photo.jpg'), res);
+    (await downloadPublic(makeReq('photo.jpg'), res));
     const err = new Error('io error');
     stream.emit('error', err);
     await flush();

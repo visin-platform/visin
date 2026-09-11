@@ -272,7 +272,7 @@ export const getUploadSignedUrl = async (
         'X-Internal-Api-Key': FILE_SERVICE_API_KEY(),
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ fileId, expiresInMinutes }),
+      body: JSON.stringify({ fileId, expiresInMinutes, mimetype }),
       serviceName: 'file-service'
     });
 

@@ -470,7 +470,7 @@ export const token = async (req: Request, res: Response): Promise<void> => {
     const result = await redeemRefreshToken(refreshToken, clientId);
     if (!result.ok || !result.userId) {
       if (result.reused) {
-        logger.warn('Refresh token reuse detected; the grant has been revoked', { clientId });
+        logger.warn('Refresh token reuse detected', { clientId });
       }
       return tokenError(res, 'invalid_grant', 'The refresh token is not valid');
     }
@@ -507,9 +507,8 @@ export const token = async (req: Request, res: Response): Promise<void> => {
 /**
  * The assistants a user has connected.
  *
- * Read from refresh tokens rather than a separate record, because a refresh
- * token *is* the connection: while one is live the assistant can keep minting
- * access tokens, and once it is gone the connection is over.
+ * Connections come from authoritative grants; token history alone is never
+ * evidence that an assistant can refresh.
  */
 export const getConnections = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await listConnections(req.user!.id) });

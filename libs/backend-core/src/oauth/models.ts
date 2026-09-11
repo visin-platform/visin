@@ -82,27 +82,15 @@ export const AuthorizationCode = mongoose.models.AuthorizationCode
   ? (mongoose.models.AuthorizationCode as mongoose.Model<IAuthorizationCode>)
   : mongoose.model<IAuthorizationCode>('AuthorizationCode', AuthorizationCodeSchema);
 
-/**
- * A refresh token: the part that actually persists, and therefore the part
- * revocation acts on.
- *
- * Access tokens are unrevokable JWTs by design, kept short so that matters
- * little. Cutting off an assistant means revoking its refresh token, after
- * which it can obtain nothing new.
- */
-export interface IRefreshToken extends Document {
-  tokenHash: string;
+/** One authoritative connection per user/client; rotation changes only its current digest. */
+export interface IOAuthGrant extends Document<string> {
+  _id: string;
   clientId: string;
   userId: string;
+  generation: string;
+  currentTokenHash: string;
   scopes: ApiKeyScope[];
   resource: string;
-  /**
-   * When the user actually connected this assistant.
-   *
-   * Distinct from `createdAt`, which rotation resets on every refresh — showing
-   * that in the UI would tell someone they connected Claude an hour ago when
-   * they did it in March.
-   */
   grantedAt: Date;
   revokedAt?: Date;
   lastUsedAt?: Date;
@@ -110,21 +98,49 @@ export interface IRefreshToken extends Document {
   updatedAt: Date;
 }
 
+const OAuthGrantSchema = new Schema<IOAuthGrant>(
+  {
+    // Deterministic user/client identity uses MongoDB's built-in unique _id index.
+    _id: { type: String, required: true },
+    clientId: { type: String, required: true },
+    userId: { type: String, required: true, index: true },
+    generation: { type: String, required: true },
+    currentTokenHash: { type: String, required: true },
+    scopes: { type: [String], default: [] },
+    resource: { type: String, required: true },
+    grantedAt: { type: Date, required: true },
+    revokedAt: { type: Date },
+    lastUsedAt: { type: Date }
+  },
+  { timestamps: true, collection: 'oauth_grants' }
+);
+
+export const OAuthGrant = mongoose.models.OAuthGrant
+  ? (mongoose.models.OAuthGrant as mongoose.Model<IOAuthGrant>)
+  : mongoose.model<IOAuthGrant>('OAuthGrant', OAuthGrantSchema);
+
+/**
+ * Immutable digest history identifies replay's original grant generation.
+ * A row can be prepared before issuance commits, so it never grants authority
+ * by itself. Only OAuthGrant.currentTokenHash can authorize a refresh.
+ */
+export interface IRefreshToken extends Document {
+  tokenHash: string;
+  clientId: string;
+  grantId: string;
+  generation: string;
+  createdAt: Date;
+}
+
 const RefreshTokenSchema = new Schema<IRefreshToken>(
   {
     tokenHash: { type: String, required: true, unique: true, index: true },
     clientId: { type: String, required: true },
-    userId: { type: String, required: true, index: true },
-    scopes: { type: [String], default: [] },
-    resource: { type: String, required: true },
-    grantedAt: { type: Date, default: Date.now },
-    revokedAt: { type: Date },
-    lastUsedAt: { type: Date }
+    grantId: { type: String, required: true },
+    generation: { type: String, required: true }
   },
-  { timestamps: true, collection: 'oauth_refresh_tokens' }
+  { timestamps: { createdAt: true, updatedAt: false }, collection: 'oauth_refresh_tokens' }
 );
-
-RefreshTokenSchema.index({ userId: 1, createdAt: -1 });
 
 export const RefreshToken = mongoose.models.RefreshToken
   ? (mongoose.models.RefreshToken as mongoose.Model<IRefreshToken>)

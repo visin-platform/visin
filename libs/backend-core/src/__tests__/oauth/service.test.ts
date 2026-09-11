@@ -1,11 +1,12 @@
 jest.mock('../../oauth/models', () => ({
   OAuthClient: { findOne: jest.fn(), find: jest.fn(), create: jest.fn() },
   AuthorizationCode: { create: jest.fn(), findOneAndUpdate: jest.fn(), exists: jest.fn() },
-  RefreshToken: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), updateMany: jest.fn() }
+  RefreshToken: { findOne: jest.fn(), create: jest.fn() },
+  OAuthGrant: { findOne: jest.fn(), find: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn(), updateMany: jest.fn() }
 }));
 
 import { createHash } from 'crypto';
-import { AuthorizationCode, OAuthClient, RefreshToken } from '../../oauth/models';
+import { AuthorizationCode, OAuthClient, OAuthGrant, RefreshToken } from '../../oauth/models';
 import {
   findClient,
   isRegisteredRedirect,
@@ -21,6 +22,7 @@ import {
 const client = OAuthClient as unknown as Record<string, jest.Mock>;
 const code = AuthorizationCode as unknown as Record<string, jest.Mock>;
 const refresh = RefreshToken as unknown as Record<string, jest.Mock>;
+const grant = OAuthGrant as unknown as Record<string, jest.Mock>;
 
 const VERIFIER = 'a-code-verifier-long-enough-to-be-real';
 const CHALLENGE = createHash('sha256').update(VERIFIER).digest('base64url');
@@ -38,7 +40,7 @@ const storedCode = (over: Record<string, unknown> = {}) => ({
   ...over
 });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => jest.resetAllMocks());
 
 describe('registerClient', () => {
   it('reuses the client already registered for the same callback URLs', async () => {
@@ -213,184 +215,126 @@ describe('redeemAuthorizationCode', () => {
   });
 });
 
+const input = { clientId: 'vsn-client-abc', userId: 'u1', scopes: ['vision:read'] as const, resource: 'https://mcp.visin.eu' };
+const activeGrant = () => ({
+  _id: 'grant', generation: 'generation', currentTokenHash: sha256('the-token'),
+  ...input, grantedAt: new Date('2026-03-01T00:00:00.000Z')
+});
+
 describe('issueRefreshToken', () => {
-  it('revokes what the same client already held, so reconnecting is not a second grant', async () => {
-    refresh.updateMany.mockResolvedValue({ modifiedCount: 1 });
-    refresh.create.mockResolvedValue({});
-
-    const { token } = await issueRefreshToken({
-      clientId: 'vsn-client-abc',
-      userId: 'u1',
-      scopes: ['vision:read'],
-      resource: 'https://mcp.visin.eu'
-    });
-
-    expect(refresh.updateMany).toHaveBeenCalledWith(
-      { userId: 'u1', clientId: 'vsn-client-abc', revokedAt: { $exists: false } },
-      { $set: { revokedAt: expect.any(Date) } }
+  it('prepares only a digest and atomically replaces the authoritative grant on reconnect', async () => {
+    const { token } = await issueRefreshToken({ ...input, scopes: [...input.scopes] });
+    const history = refresh.create.mock.calls[0][0];
+    expect(history.tokenHash).toBe(sha256(token));
+    expect(JSON.stringify(history)).not.toContain(token);
+    expect(grant.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: sha256(JSON.stringify([input.userId, input.clientId])) },
+      {
+        $set: { ...input, generation: history.generation, currentTokenHash: sha256(token), grantedAt: expect.any(Date) },
+        $unset: { revokedAt: 1, lastUsedAt: 1 }
+      },
+      { upsert: true, returnDocument: 'after' }
     );
-    // Only the digest is stored.
-    expect(refresh.create.mock.calls[0][0].tokenHash).toBe(sha256(token));
-    expect(JSON.stringify(refresh.create.mock.calls[0][0])).not.toContain(token);
+    expect(refresh.create.mock.invocationCallOrder[0]).toBeLessThan(grant.findOneAndUpdate.mock.invocationCallOrder[0]);
+  });
+
+  it('does not replace a connection when history preparation fails', async () => {
+    refresh.create.mockRejectedValue(new Error('storage unavailable'));
+    await expect(issueRefreshToken({ ...input, scopes: [...input.scopes] })).rejects.toThrow('storage unavailable');
+    expect(grant.findOneAndUpdate).not.toHaveBeenCalled();
   });
 });
 
 describe('redeemRefreshToken', () => {
-  const stored = (over: Record<string, unknown> = {}) => ({
-    _id: 'rt1',
-    tokenHash: sha256('the-token'),
-    clientId: 'vsn-client-abc',
-    userId: 'u1',
-    scopes: ['vision:read'],
-    resource: 'https://mcp.visin.eu',
-    grantedAt: new Date('2026-03-01T00:00:00.000Z'),
-    createdAt: new Date('2026-09-01T00:00:00.000Z'),
-    revokedAt: undefined as Date | undefined,
-    lastUsedAt: undefined as Date | undefined,
-    save: jest.fn().mockResolvedValue(undefined),
-    ...over
+  beforeEach(() => {
+    refresh.findOne.mockResolvedValue({ tokenHash: sha256('the-token'), clientId: input.clientId, grantId: 'grant', generation: 'generation' });
+    grant.findOne.mockResolvedValue(activeGrant());
+    grant.findOneAndUpdate.mockResolvedValue(activeGrant());
   });
 
-  it('rotates: the presented token dies and a fresh one is issued', async () => {
-    const record = stored();
+  it('rotates once, preserving approved scopes/resource and the original grant date', async () => {
+    const result = await redeemRefreshToken('the-token', input.clientId);
+    expect(result).toEqual({ ok: true, userId: input.userId, scopes: input.scopes, resource: input.resource, rotatedToken: expect.any(String) });
+    expect(refresh.findOne).toHaveBeenCalledWith({ tokenHash: sha256('the-token'), clientId: input.clientId }, undefined, { readPreference: 'primary' });
+    expect(grant.findOne).toHaveBeenCalledWith({ _id: 'grant', generation: 'generation' }, undefined, { readPreference: 'primary' });
+    expect(refresh.create).toHaveBeenCalledWith({ tokenHash: sha256(result.rotatedToken!), clientId: input.clientId, grantId: 'grant', generation: 'generation' });
+    expect(grant.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'grant', generation: 'generation', currentTokenHash: sha256('the-token'), revokedAt: { $exists: false } },
+      { $set: { currentTokenHash: sha256(result.rotatedToken!), lastUsedAt: expect.any(Date) } },
+      { returnDocument: 'after' }
+    );
+    expect(refresh.create.mock.invocationCallOrder[0]).toBeLessThan(grant.findOneAndUpdate.mock.invocationCallOrder[0]);
+  });
+
+  it.each([null, {}, { grantId: 'grant' }])('rejects unknown or legacy history without revoking anything (%j)', async record => {
     refresh.findOne.mockResolvedValue(record);
-    refresh.create.mockResolvedValue({});
-
-    const result = await redeemRefreshToken('the-token', 'vsn-client-abc');
-
-    expect(result.ok).toBe(true);
-    expect(record.revokedAt).toBeInstanceOf(Date);
-    expect(record.save).toHaveBeenCalled();
-    expect(result.rotatedToken).toEqual(expect.any(String));
-    expect(refresh.create.mock.calls[0][0].tokenHash).toBe(sha256(result.rotatedToken as string));
+    await expect(redeemRefreshToken('the-token', 'other-client')).resolves.toEqual({ ok: false });
+    expect(grant.findOne).not.toHaveBeenCalled();
+    expect(grant.updateOne).not.toHaveBeenCalled();
   });
 
-  it('carries the original grant date through a rotation', async () => {
-    // Otherwise the connections page tells someone they connected Claude a
-    // minute ago when they did it in March.
-    refresh.findOne.mockResolvedValue(stored());
-    refresh.create.mockResolvedValue({});
-
-    await redeemRefreshToken('the-token', 'vsn-client-abc');
-
-    expect(refresh.create.mock.calls[0][0].grantedAt).toEqual(new Date('2026-03-01T00:00:00.000Z'));
+  it.each([null, { ...activeGrant(), revokedAt: new Date() }])('rejects missing, replaced or disconnected grants (%j)', async record => {
+    grant.findOne.mockResolvedValue(record);
+    await expect(redeemRefreshToken('the-token', input.clientId)).resolves.toEqual({ ok: false });
+    expect(refresh.create).not.toHaveBeenCalled();
+    expect(grant.updateOne).not.toHaveBeenCalled();
   });
 
-  it('carries the scopes through, rather than re-deriving them', async () => {
-    refresh.findOne.mockResolvedValue(stored({ scopes: ['vision:read', 'dataset:read'] }));
-    refresh.create.mockResolvedValue({});
-
-    const result = await redeemRefreshToken('the-token', 'vsn-client-abc');
-
-    expect(result.scopes).toEqual(['vision:read', 'dataset:read']);
-    expect(refresh.create.mock.calls[0][0].scopes).toEqual(['vision:read', 'dataset:read']);
-  });
-
-  it('treats reuse of a rotated token as theft and cuts the whole grant', async () => {
-    // The honest client and whoever copied the token now both hold tokens from
-    // the same grant, and there is no telling which just called.
-    refresh.findOne.mockResolvedValue(stored({ revokedAt: new Date() }));
-    refresh.updateMany.mockResolvedValue({ modifiedCount: 2 });
-
-    const result = await redeemRefreshToken('the-token', 'vsn-client-abc');
-
-    expect(result).toEqual({ ok: false, reused: true });
-    expect(refresh.updateMany).toHaveBeenCalledWith(
-      { userId: 'u1', clientId: 'vsn-client-abc', revokedAt: { $exists: false } },
+  it.each(['retired', 'concurrent'])('revokes only the original generation for %s replay', async mode => {
+    if (mode === 'retired') grant.findOne.mockResolvedValue({ ...activeGrant(), currentTokenHash: 'successor' });
+    else grant.findOneAndUpdate.mockResolvedValue(null);
+    await expect(redeemRefreshToken('the-token', input.clientId)).resolves.toEqual({ ok: false, reused: true });
+    expect(grant.updateOne).toHaveBeenCalledWith(
+      { _id: 'grant', generation: 'generation', revokedAt: { $exists: false } },
       { $set: { revokedAt: expect.any(Date) } }
     );
-    expect(refresh.create).not.toHaveBeenCalled();
+    if (mode === 'retired') expect(refresh.create).not.toHaveBeenCalled();
   });
 
-  it('rejects a token that does not belong to the presenting client', async () => {
-    refresh.findOne.mockResolvedValue(null);
-
-    await expect(redeemRefreshToken('the-token', 'another-client')).resolves.toEqual({ ok: false });
-    expect(refresh.findOne).toHaveBeenCalledWith({
-      tokenHash: sha256('the-token'),
-      clientId: 'another-client'
-    });
-  });
-
-  it('falls back to createdAt for a record predating grantedAt', async () => {
-    refresh.findOne.mockResolvedValue(stored({ grantedAt: undefined }));
-    refresh.create.mockResolvedValue({});
-
-    await redeemRefreshToken('the-token', 'vsn-client-abc');
-
-    expect(refresh.create.mock.calls[0][0].grantedAt).toEqual(new Date('2026-09-01T00:00:00.000Z'));
+  it('leaves the current token usable when successor preparation fails', async () => {
+    refresh.create.mockRejectedValue(new Error('storage unavailable'));
+    await expect(redeemRefreshToken('the-token', input.clientId)).rejects.toThrow('storage unavailable');
+    expect(grant.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(grant.updateOne).not.toHaveBeenCalled();
   });
 });
 
 describe('revokeRefreshTokensForUser', () => {
   it('cuts one app when given a client id', async () => {
-    refresh.updateMany.mockResolvedValue({ modifiedCount: 1 });
-
-    await expect(revokeRefreshTokensForUser('u1', 'vsn-client-abc')).resolves.toBe(1);
-    expect(refresh.updateMany.mock.calls[0][0]).toEqual({
-      userId: 'u1',
-      revokedAt: { $exists: false },
-      clientId: 'vsn-client-abc'
-    });
+    grant.updateMany.mockResolvedValue({ modifiedCount: 1 });
+    await expect(revokeRefreshTokensForUser('u1', input.clientId)).resolves.toBe(1);
+    expect(grant.updateMany).toHaveBeenCalledWith(
+      { userId: 'u1', revokedAt: { $exists: false }, clientId: input.clientId },
+      { $set: { revokedAt: expect.any(Date) } }
+    );
   });
 
   it('cuts every app when given none', async () => {
-    refresh.updateMany.mockResolvedValue({ modifiedCount: 3 });
-
+    grant.updateMany.mockResolvedValue({ modifiedCount: 3 });
     await expect(revokeRefreshTokensForUser('u1')).resolves.toBe(3);
-    expect(refresh.updateMany.mock.calls[0][0]).toEqual({
-      userId: 'u1',
-      revokedAt: { $exists: false }
-    });
+    expect(grant.updateMany.mock.calls[0][0]).toEqual({ userId: 'u1', revokedAt: { $exists: false } });
   });
 });
 
 describe('listConnections', () => {
-  it('names each app and reports when the grant was made, not when it last rotated', async () => {
-    refresh.find.mockReturnValue({
-      sort: jest.fn().mockResolvedValue([
-        {
-          _id: 'rt1',
-          clientId: 'vsn-client-abc',
-          scopes: ['vision:read'],
-          grantedAt: new Date('2026-03-01T00:00:00.000Z'),
-          createdAt: new Date('2026-09-01T00:00:00.000Z'),
-          lastUsedAt: new Date('2026-09-04T00:00:00.000Z'),
-          revokedAt: undefined
-        }
-      ])
-    });
-    client.find.mockResolvedValue([{ clientId: 'vsn-client-abc', clientName: 'Claude' }]);
-
-    const [connection] = await listConnections('u1');
-
-    expect(connection).toEqual({
-      id: 'rt1',
-      clientId: 'vsn-client-abc',
-      clientName: 'Claude',
-      scopes: ['vision:read'],
-      createdAt: '2026-03-01T00:00:00.000Z',
-      lastRenewedAt: '2026-09-04T00:00:00.000Z',
-      revokedAt: null
-    });
+  it('lists authoritative connections, their approval date and last refresh', async () => {
+    grant.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([
+      { ...activeGrant(), lastUsedAt: new Date('2026-09-04T00:00:00.000Z') }
+    ]) });
+    client.find.mockResolvedValue([{ clientId: input.clientId, clientName: 'Claude' }]);
+    expect(await listConnections('u1')).toEqual([{
+      id: 'grant', clientId: input.clientId, clientName: 'Claude', scopes: input.scopes,
+      createdAt: '2026-03-01T00:00:00.000Z', lastRenewedAt: '2026-09-04T00:00:00.000Z', revokedAt: null
+    }]);
+    expect(grant.find).toHaveBeenCalledWith({ userId: 'u1' });
   });
 
-  it('still lists a grant whose client record has gone', async () => {
-    refresh.find.mockReturnValue({
-      sort: jest.fn().mockResolvedValue([
-        {
-          _id: 'rt1',
-          clientId: 'vsn-client-gone',
-          scopes: [],
-          createdAt: new Date('2026-09-01T00:00:00.000Z'),
-          revokedAt: new Date('2026-09-05T00:00:00.000Z')
-        }
-      ])
-    });
+  it('still lists a disconnected grant whose client record has gone', async () => {
+    grant.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([
+      { ...activeGrant(), revokedAt: new Date('2026-09-05T00:00:00.000Z') }
+    ]) });
     client.find.mockResolvedValue([]);
-
     const [connection] = await listConnections('u1');
-
     expect(connection.clientName).toBe('Unknown app');
     expect(connection.lastRenewedAt).toBeNull();
     expect(connection.revokedAt).toBe('2026-09-05T00:00:00.000Z');

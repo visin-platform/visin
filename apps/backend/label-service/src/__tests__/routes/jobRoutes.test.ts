@@ -35,7 +35,9 @@ describe('jobRoutes', () => {
     expect(find('get', '/:id/export')).toBeDefined();
     expect(find('get', '/:id/stats')).toBeDefined();
     expect(find('delete', '/:id')).toBeDefined();
-    expect(routes).toHaveLength(13);
+    expect(find('put', '/:id/visibility')!.requiresAuth).toBe(true);
+    expect(find('put', '/:id/visibility')!.handlerCount).toBe(3);
+    expect(routes).toHaveLength(14);
   });
 
   it('validates bodies/queries where schemas exist', () => {

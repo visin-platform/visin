@@ -37,10 +37,17 @@ export const assertMember = async (req: Request, groupId: string): Promise<void>
   }
 };
 
+/** Read capabilities may fall back to public data for callers without this role. */
+export const isGroupAdmin = async (req: Request, groupId: string): Promise<boolean> => {
+  if (!req.user?.id) return false;
+  const { member, role } = await membershipFor(req, groupId);
+  return member === true && (role === 'owner' || role === 'admin');
+};
+
 /** Group owner/admin administers bundles and jobs. */
 export const assertAdmin = async (req: Request, groupId: string): Promise<void> => {
-  const { member, role } = await membershipFor(req, groupId);
-  if (!member || (role !== 'owner' && role !== 'admin')) {
+  requireUser(req);
+  if (!(await isGroupAdmin(req, groupId))) {
     throw new ForbiddenError('Group owner/admin required');
   }
 };

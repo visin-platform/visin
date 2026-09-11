@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import { logger } from '../logging/logger';
 import { HttpError } from '../errors/HttpError';
+import { safeRequestPath, redactRequestDiagnostic } from '../logging/requestDiagnostics';
 
 interface KnownError {
   statusCode: number;
@@ -46,9 +47,9 @@ export const errorHandler: ErrorRequestHandler = (
 
   if (known) {
     logger.warn('Request failed', {
-      error: known.message,
+      error: redactRequestDiagnostic(known.message, req.originalUrl),
       statusCode: known.statusCode,
-      url: req.originalUrl,
+      url: safeRequestPath(req.originalUrl),
       method: req.method
     });
     res.status(known.statusCode).json({ success: false, error: known.name, message: known.message });
@@ -56,9 +57,9 @@ export const errorHandler: ErrorRequestHandler = (
   }
 
   logger.error('Unhandled error', {
-    error: error.message,
-    stack: error.stack,
-    url: req.originalUrl,
+    error: redactRequestDiagnostic(error.message, req.originalUrl),
+    stack: redactRequestDiagnostic(error.stack, req.originalUrl),
+    url: safeRequestPath(req.originalUrl),
     method: req.method
   });
 

@@ -20,7 +20,8 @@
   },
   "dependencies": {
     "@visin/backend-core": "1.0.0",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "mongoose": "^9.7.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -33,6 +34,7 @@
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.62.1"
+    "typescript-eslint": "^8.62.1",
+    "mongodb-memory-server": "11.2.0"
   }
 }

@@ -1,4 +1,5 @@
-import unzipper from 'unzipper';
+import { ingestZipLimits, readZipEntries, ZipData, NonRetryableIngestError } from '../utils/boundedZip';
+export { NonRetryableIngestError } from '../utils/boundedZip';
 import sharp from 'sharp';
 import { logger } from '@visin/backend-core';
 import { ImportJob, IImportError } from '../models/ImportJob';
@@ -8,25 +9,13 @@ import { EntryClassification, createEntryClassifier } from '../utils/bundlePaths
 import { parseManifest } from '../utils/manifest';
 import * as files from '../clients/fileServiceClient';
 
-const MAX_ENTRY_BYTES = Number(process.env.INGEST_MAX_ENTRY_BYTES || 50 * 1024 * 1024);
-const maxEntries = (): number => Number(process.env.INGEST_MAX_ENTRIES || 100_000);
+// Metadata is retained until id maps are available; bound its cumulative input
+// separately from image bytes, which are stored one entry at a time.
+const MAX_METADATA_BYTES = 8 * 1024 * 1024;
 const THUMBNAIL_WIDTH = 320;
 
 export const bundleFileId = (bundleId: string, relativePath: string): string =>
   `label-bundles/${bundleId}/${relativePath}`;
-
-/**
- * A failure that re-running the import cannot fix (a structurally bad zip),
- * as opposed to a transient one (a dependency restart, an aborted transfer).
- * The queue worker turns this into a BullMQ `UnrecoverableError` so the attempt
- * budget isn't spent re-downloading a zip that will fail identically.
- */
-export class NonRetryableIngestError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NonRetryableIngestError';
-  }
-}
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   '.png': 'image/png',
@@ -40,14 +29,9 @@ const mimetypeFor = (relativePath: string): string => {
   return MIME_BY_EXTENSION[extension] || 'application/octet-stream';
 };
 
-interface ZipEntry {
-  path: string;
-  type: 'File' | 'Directory';
-  buffer(): Promise<Buffer>;
-  autodrain(): { promise(): Promise<void> };
-}
-
 interface IngestState {
+  metadataBytes: number;
+  errorBytes: number;
   processed: number;
   skipped: number;
   errors: IImportError[];
@@ -56,6 +40,17 @@ interface IngestState {
   // for error reporting, since with a mapping the folder name is the user's).
   masks: Map<string, { masks: IMaskMeta[]; path: string }>;
 }
+
+// Keep the terminal error report comfortably below MongoDB's document limit.
+// Abort rather than silently dropping diagnostics from a hostile archive.
+const recordError = (state: IngestState, error: IImportError): void => {
+  const bytes = Buffer.byteLength(error.path) + Buffer.byteLength(error.reason);
+  if (state.errors.length >= 1000 || state.errorBytes + bytes > 1024 * 1024) {
+    throw new NonRetryableIngestError('Zip exceeds the import diagnostic limit');
+  }
+  state.errorBytes += bytes;
+  state.errors.push(error);
+};
 
 const storeImage = async (
   bundleId: string,
@@ -80,7 +75,7 @@ const storeImage = async (
     width = meta.width;
     height = meta.height;
   } catch {
-    state.errors.push({ path: entryPath, reason: 'Not a readable image' });
+    recordError(state, { path: entryPath, reason: 'Not a readable image' });
     return;
   }
 
@@ -112,31 +107,30 @@ const storeImage = async (
 
 const handleEntry = async (
   bundleId: string,
-  entry: ZipEntry,
+  entry: ZipData,
   classify: (rawPath: string) => EntryClassification,
   state: IngestState
 ): Promise<void> => {
   if (entry.type === 'Directory') {
-    await entry.autodrain().promise();
     return;
   }
 
   const classified = classify(entry.path);
 
   if (classified.type === 'ignored') {
-    await entry.autodrain().promise();
     return;
   }
   if (classified.type === 'invalid') {
-    state.errors.push({ path: classified.path, reason: classified.reason });
-    await entry.autodrain().promise();
+    recordError(state, { path: classified.path, reason: classified.reason });
     return;
   }
 
-  const data = await entry.buffer();
-  if (data.length > MAX_ENTRY_BYTES) {
-    state.errors.push({ path: classified.path, reason: `File exceeds ${MAX_ENTRY_BYTES} bytes` });
-    return;
+  const { data } = entry;
+  if (classified.type === 'manifest' || classified.type === 'masksJson') {
+    state.metadataBytes += data.length;
+    if (state.metadataBytes > MAX_METADATA_BYTES) {
+      throw new NonRetryableIngestError(`Zip metadata exceeds ${MAX_METADATA_BYTES} bytes`);
+    }
   }
 
   if (classified.type === 'manifest') {
@@ -152,7 +146,7 @@ const handleEntry = async (
       state.masks.set(`${classified.set}\0${classified.stem}`, { masks, path: classified.path });
       state.processed += 1;
     } catch {
-      state.errors.push({ path: classified.path, reason: 'masks.json is not a JSON array' });
+      recordError(state, { path: classified.path, reason: 'masks.json is not a JSON array' });
     }
     return;
   }
@@ -168,7 +162,7 @@ const applyMaskMetadata = async (bundleId: string, state: IngestState): Promise<
       { $set: { 'metadata.masks': entry.masks } }
     );
     if (updated.matchedCount === 0) {
-      state.errors.push({ path: entry.path, reason: 'No matching .ids.png in this set' });
+      recordError(state, { path: entry.path, reason: 'No matching .ids.png in this set' });
     }
   }
 };
@@ -224,7 +218,7 @@ export const runImport = async (importJobId: string): Promise<void> => {
     throw new Error(`ImportJob ${importJobId} not found`);
   }
   const bundleId = importJob.bundleId.toString();
-  const state: IngestState = { processed: 0, skipped: 0, errors: [], masks: new Map() };
+  const state: IngestState = { metadataBytes: 0, errorBytes: 0, processed: 0, skipped: 0, errors: [], masks: new Map() };
   // No mapping on the job = the zip claims the default layout.
   const classify = createEntryClassifier(importJob.mapping || undefined);
 
@@ -234,33 +228,22 @@ export const runImport = async (importJobId: string): Promise<void> => {
   await LabelBundle.updateOne({ _id: bundleId }, { $set: { status: 'importing' } });
 
   try {
-    const zipStream = await files.getFileStream(importJob.zipFileId);
-    const parser = unzipper.Parse({ forceStream: true });
-    // `pipe` does not forward source errors, so a failed read (peer restart,
-    // aborted transfer) would emit an unhandled 'error' and take the whole
-    // process down with it. Hand it to the parser instead: the `for await`
-    // below then rejects and this import fails on its own, like any other.
-    zipStream.on('error', (err) => parser.destroy(err));
-    const entries = zipStream.pipe(parser);
-
-    const entryCap = maxEntries();
-    let entryCount = 0;
+    const limits = ingestZipLimits();
     let lastFlush = Date.now();
-    for await (const entry of entries as AsyncIterable<ZipEntry>) {
-      entryCount += 1;
-      if (entryCount > entryCap) {
-        throw new NonRetryableIngestError(`Zip exceeds ${entryCap} entries`);
-      }
-      await handleEntry(bundleId, entry, classify, state);
-      // Progress + heartbeat: `updatedAt` staleness is how a dead import is
-      // detected (see bundleService), so flush on a time interval, not just count.
-      if (state.processed % 25 === 0 || Date.now() - lastFlush > 5000) {
-        lastFlush = Date.now();
+    const flushProgress = async (force = false): Promise<void> => {
+      if (force || Date.now() - lastFlush > 5000) {
         await ImportJob.updateOne(
           { _id: importJob._id },
           { $set: { processed: state.processed, skipped: state.skipped } }
         );
+        lastFlush = Date.now();
       }
+    };
+    const zipStream = await files.getFileStream(importJob.zipFileId);
+    // Downloading a large archive must also keep the import heartbeat live.
+    for await (const entry of readZipEntries(zipStream, limits, flushProgress)) {
+      await handleEntry(bundleId, entry, classify, state);
+      await flushProgress(state.processed % 25 === 0);
     }
 
     await applyMaskMetadata(bundleId, state);

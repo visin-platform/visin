@@ -65,7 +65,10 @@ describe('authenticateToken', () => {
     await authenticateToken(req, makeRes(), next as unknown as NextFunction);
 
     expect(mockedVerifyJWT).toHaveBeenCalledWith('cookie-token');
-    expect(mockedUser.findOne).toHaveBeenCalledWith({ email: 'test@example.com' });
+    expect(mockedUser.findOne).toHaveBeenCalledWith(
+      { _id: 'db-id-1', email: 'test@example.com' }, undefined,
+      { readPreference: 'primary', maxTimeMS: 3000 }
+    );
     expect(req.user).toEqual(decoded);
     expect((req as unknown as { dbUser: unknown }).dbUser).toBe(dbUser);
     expect(next).toHaveBeenCalledTimes(1);

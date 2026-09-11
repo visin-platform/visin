@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '@visin/backend-core';
+import { resolvePath } from '../utils/paths';
 import { verifyToken, TokenOperation } from '../utils/hmac';
 
 /**
@@ -27,16 +28,20 @@ export const requireSignedToken = (operation: TokenOperation) =>
       throw new UnauthorizedError('Missing token or expires');
     }
 
-    const expiresMs = parseInt(expires, 10);
-    if (isNaN(expiresMs)) {
+    resolvePath(fileId);
+    const expiresMs = Number(expires);
+    if (typeof expires !== 'string' || !/^\d+$/.test(expires) || !Number.isSafeInteger(expiresMs)) {
       throw new BadRequestError('Invalid expires value');
     }
+
+    const reservation = operation === 'upload' ? req.query.reservation : '';
+    if (typeof reservation !== 'string' || (operation === 'upload' && !/^[a-f0-9-]{36}$/.test(reservation))) throw new ForbiddenError('Missing upload reservation');
 
     // A malformed token (wrong length/hex) makes crypto.timingSafeEqual throw;
     // treat that the same as a plain invalid token rather than a server error.
     let valid: boolean;
     try {
-      valid = verifyToken(operation, fileId, expiresMs, token);
+      valid = verifyToken(operation, fileId, expiresMs, token, reservation);
     } catch {
       valid = false;
     }

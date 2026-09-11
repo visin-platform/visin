@@ -9,16 +9,16 @@ const HMAC_SECRET = (): string => {
 export type TokenOperation = 'upload' | 'download';
 
 /**
- * Build the HMAC message string: "operation:fileId:expiresMs"
+ * Bind upload reservations without changing existing download capabilities.
  */
-const buildMessage = (operation: TokenOperation, fileId: string, expiresMs: number): string =>
-  `${operation}:${fileId}:${expiresMs}`;
+const buildMessage = (operation: TokenOperation, fileId: string, expiresMs: number, reservation = ''): string =>
+  operation === 'upload' ? JSON.stringify([operation, fileId, expiresMs, reservation]) : `${operation}:${fileId}:${expiresMs}`;
 
 /**
  * Sign a token for a given operation + fileId + expiry.
  */
-export const signToken = (operation: TokenOperation, fileId: string, expiresMs: number): string => {
-  const message = buildMessage(operation, fileId, expiresMs);
+export const signToken = (operation: TokenOperation, fileId: string, expiresMs: number, reservation = ''): string => {
+  const message = buildMessage(operation, fileId, expiresMs, reservation);
   return crypto.createHmac('sha256', HMAC_SECRET()).update(message).digest('hex');
 };
 
@@ -29,9 +29,10 @@ export const verifyToken = (
   operation: TokenOperation,
   fileId: string,
   expiresMs: number,
-  token: string
+  token: string,
+  reservation = ''
 ): boolean => {
   if (Date.now() > expiresMs) return false;
-  const expected = signToken(operation, fileId, expiresMs);
+  const expected = signToken(operation, fileId, expiresMs, reservation);
   return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(token, 'hex'));
 };
