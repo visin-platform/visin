@@ -1,4 +1,12 @@
 # Visin Changelog
+## [1.4.0](https://github.com/visin-platform/visin/compare/v1.3.0...v1.4.0) (2026-09-11)
+
+
+### Features
+
+* add session revocations and Google sign-up ([#2](https://github.com/visin-platform/visin/issues/2)) ([043da15](https://github.com/visin-platform/visin/commit/043da1509b7020d26e9f2f2cb8e7538793f8acd2))
+* derive library version from commits ([b217313](https://github.com/visin-platform/visin/commit/b2173131e21b0183495123482e85204f0a55e4a3))
+
 ## [1.3.0](https://github.com/visin-platform/visin/compare/v1.2.0...v1.3.0) (2026-09-10)
 
 
