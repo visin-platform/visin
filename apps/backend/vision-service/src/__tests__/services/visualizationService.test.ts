@@ -50,6 +50,7 @@ jest.mock('../../services/projectAccessService', () => ({
   checkProjectAccess: jest.fn(),
   getVisibleTrainingIds: jest.fn(),
   isWithinTokenScope: jest.fn(),
+  resolveProject: jest.fn(),
 }));
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),
@@ -73,6 +74,7 @@ import {
   checkProjectAccess,
   getVisibleTrainingIds,
   isWithinTokenScope,
+  resolveProject,
 } from '../../services/projectAccessService';
 
 const mockedViz = EpochVisualization as unknown as jest.Mock & Record<string, jest.Mock>;
@@ -82,6 +84,7 @@ const mockedFileService = fileService as unknown as Record<string, jest.Mock>;
 const mockedCheckAccess = checkProjectAccess as jest.Mock;
 const mockedVisibleTrainings = getVisibleTrainingIds as jest.Mock;
 const mockedTokenScope = isWithinTokenScope as jest.Mock;
+const mockedResolveProject = resolveProject as jest.Mock;
 
 // Escape hatch for asserting on dynamically-shaped service results in tests;
 // modeling every ad-hoc return shape as an interface here would add noise, not safety.
@@ -132,6 +135,7 @@ const mockEpochSelect = (docs: unknown[]) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedResolveProject.mockResolvedValue({ _id: { toString: () => 'p1' } });
   mockedTraining.findById.mockResolvedValue({ _id: 't1', projectId: 'p1' });
   mockedCheckAccess.mockResolvedValue(true);
   mockedTokenScope.mockReturnValue(true);
@@ -330,6 +334,17 @@ describe('getVisualizationsByTraining', () => {
     expect(result.trainings[0].visualizations[0].signedUrl).toBeUndefined();
     expect(result.trainings[1].visualizations).toEqual([]);
     expect(result.total).toBe(1);
+  });
+
+  it('resolves a slug filter to the project id trainings are stored under', async () => {
+    mockedResolveProject.mockResolvedValue({ _id: { toString: () => 'p-canonical' } });
+    const sort = jest.fn().mockResolvedValue([]);
+    mockedTraining.find.mockReturnValue({ select: jest.fn().mockReturnValue({ sort }) });
+
+    await getVisualizationsByTraining(undefined, { ...filters, projectId: 'my-slug' }, 'u1');
+
+    expect(mockedResolveProject).toHaveBeenCalledWith('my-slug');
+    expect(mockedTraining.find).toHaveBeenCalledWith({ projectId: 'p-canonical', deletedAt: null });
   });
 
   it('403s for an inaccessible project and empties for a project without trainings', async () => {

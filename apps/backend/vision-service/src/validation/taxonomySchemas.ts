@@ -36,8 +36,8 @@ export const taxonomySchema = z.object({
 export type TaxonomyInput = z.infer<typeof taxonomySchema>;
 
 /**
- * Per-project cost rates. Absent fields fall back to the platform defaults, so a
- * project that never sets these behaves exactly as before.
+ * Per-project cost rates. There are no platform defaults: a project reports money
+ * only once both rates are set (see models/costing.ts).
  */
 export const costingSchema = z.object({
   cpuRatePerHour: z.number().min(0).optional(),

@@ -391,6 +391,18 @@ describe('projectSchemas', () => {
     expect(createProjectBodySchema.safeParse({ name: 'P' }).success).toBe(true);
   });
 
+  it('updateProjectBodySchema lets an update clear the taxonomy and cost rates with null', () => {
+    // What the settings screens send when either editor is empty; rejecting it
+    // failed the whole save.
+    const parsed = updateProjectBodySchema.parse({ name: 'P', taxonomy: null, costing: null });
+    expect(parsed.taxonomy).toBeNull();
+    expect(parsed.costing).toBeNull();
+    expect(
+      updateProjectBodySchema.parse({ costing: { cpuRatePerHour: 1, gpuRatePerHour: 2, currency: 'usd' } }).costing
+    ).toEqual({ cpuRatePerHour: 1, gpuRatePerHour: 2, currency: 'USD' });
+    expect(updateProjectBodySchema.safeParse({ costing: { currency: 'EURO' } }).success).toBe(false);
+  });
+
   it('updateProjectBodySchema does not coerce isPublic', () => {
     expect(updateProjectBodySchema.safeParse({ isPublic: 'yes' }).success).toBe(false);
     expect(updateProjectBodySchema.parse({ slug: 's' }).slug).toBe('s');

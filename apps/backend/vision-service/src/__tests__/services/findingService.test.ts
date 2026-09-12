@@ -277,6 +277,18 @@ describe('resolving a project', () => {
 
     await expect(listFindings(OWNER, { project: 'not-an-id' })).rejects.toThrow(/Project not found/);
   });
+
+  it('treats an id-shaped identifier as an id, even when another project took it as a slug', async () => {
+    const id = 'ab'.repeat(12);
+    project.findOne.mockResolvedValue({ _id: { toString: () => 'squatter' } });
+    project.findById.mockResolvedValue({ _id: { toString: () => id } });
+    listReturns([]);
+
+    await listFindings(OWNER, { project: id });
+
+    expect(project.findOne).not.toHaveBeenCalled();
+    expect(finding.find.mock.calls[0][0].projectId).toBe(id);
+  });
 });
 
 describe('createFinding', () => {

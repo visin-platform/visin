@@ -427,16 +427,17 @@ export const trainingService = {
     training.deletedAt = now;
     await training.save();
 
-    // Mark all epochs of this training as deleted
-    await Epoch.updateMany({ trainingId: id }, { deletedAt: now });
+    // Only rows still live take this delete's timestamp, so the stamp names
+    // exactly what this delete removed — which is what restoreTraining puts back.
+    // Anything deleted on its own beforehand keeps its own time and stays deleted.
+    await Epoch.updateMany({ trainingId: id, deletedAt: null }, { deletedAt: now });
 
     // Get all epoch UUIDs for this training to mark test results as deleted
     const trainingEpochs = await Epoch.find({ trainingId: id }, 'epoch_uuid');
     const epochUuids = trainingEpochs.map(e => e.epoch_uuid);
 
     if (epochUuids.length > 0) {
-      // Mark all test results for these epochs as deleted
-      await TestResult.updateMany({ epoch_uuid: { $in: epochUuids } }, { deletedAt: now });
+      await TestResult.updateMany({ epoch_uuid: { $in: epochUuids }, deletedAt: null }, { deletedAt: now });
     }
 
     // Only edit comparisons this principal can write. Foreign references remain
@@ -451,6 +452,78 @@ export const trainingService = {
     );
 
     return true;
+  },
+
+  /**
+   * Deleted trainings this caller could put back, most recently deleted first.
+   *
+   * A delete has always been soft — the run, its epochs and its test results stay
+   * in the database with a `deletedAt` — but nothing could reach them again, so an
+   * accidental delete of a long run was permanent in every way that mattered.
+   * Listed by the rule the delete itself follows: runs in a project the caller may
+   * edit, or standalone runs they own.
+   */
+  async getDeletedTrainings(userId: string, pagination: PaginationOptions) {
+    const { page = 1, limit = 30 } = pagination;
+
+    const editableProjects = await getEditableProjectIds(userId);
+    const query: QueryFilter<ITraining> = {
+      deletedAt: { $ne: null },
+      $or: [
+        { projectId: { $in: editableProjects } },
+        // A project credential never reaches standalone runs.
+        ...(!tokenProjectId() ? [{ projectId: null, ownerId: userId }] : [])
+      ]
+    };
+
+    const [trainings, total] = await Promise.all([
+      Training.find(query)
+        .sort({ deletedAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      Training.countDocuments(query)
+    ]);
+
+    return {
+      trainings,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    };
+  },
+
+  /**
+   * Undo `deleteTraining`: the run comes back with the epochs and test results
+   * that delete took with it — and only those, matched on its exact timestamp.
+   *
+   * Comparisons are the one thing not restored. The delete pulled the run out of
+   * them without recording which, so it has to be added back by hand.
+   */
+  async restoreTraining(id: string, userId: string) {
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      throw new BadRequestError('Invalid training ID format');
+    }
+
+    const training = await Training.findOne({ _id: id, deletedAt: { $ne: null } });
+    if (!training) {
+      throw new NotFoundError('Deleted training not found');
+    }
+
+    // Judged as if the run were live: the write policy refuses anything deleted,
+    // which is right for every other write and exactly wrong for this one.
+    await assertResourceWrite({ ownerId: training.ownerId, projectId: training.projectId }, userId);
+
+    const deletedAt = training.deletedAt!;
+    training.deletedAt = undefined;
+    await training.save();
+
+    await Epoch.updateMany({ trainingId: id, deletedAt }, { $unset: { deletedAt: 1 } });
+
+    const trainingEpochs = await Epoch.find({ trainingId: id }, 'epoch_uuid');
+    const epochUuids = trainingEpochs.map(e => e.epoch_uuid);
+    if (epochUuids.length > 0) {
+      await TestResult.updateMany({ epoch_uuid: { $in: epochUuids }, deletedAt }, { $unset: { deletedAt: 1 } });
+    }
+
+    return training;
   },
 
   async getTrainingStats(userId: string | undefined, filters: TrainingFilters) {
@@ -482,9 +555,11 @@ export const trainingService = {
       // see — otherwise these aggregate stats are computed across every
       // project regardless of privacy.
       const visibleProjectIds = await getVisibleProjectIds(userId);
+      // Same set getTrainings lists, explicit-null standalone runs included.
       matchQuery.$or = [
         { projectId: { $in: visibleProjectIds } },
-        { projectId: { $exists: false } }
+        { projectId: { $exists: false } },
+        { projectId: null }
       ];
     }
 

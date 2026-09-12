@@ -64,6 +64,25 @@ describe('errorHandler', () => {
     expect(res.json).toHaveBeenCalledWith({ success: false, error: name, message: 'bad input' });
   });
 
+  it('maps a duplicate-key error to 409 without echoing the index or key', () => {
+    const error = Object.assign(
+      new Error('E11000 duplicate key error collection: visin.training_epoches index: epoch_uuid_1 dup key: { epoch_uuid: "e1" }'),
+      { name: 'MongoServerError', code: 11000 }
+    );
+    const res = makeRes();
+
+    errorHandler(error, makeReq(), res, next);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({
+      success: false,
+      error: 'ConflictError',
+      message: 'A resource with this identifier already exists'
+    });
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('dup key');
+  });
+
   it('treats an unrecognized error as a 500 and logs it with its stack', () => {
     const res = makeRes();
     const error = new Error('db exploded');

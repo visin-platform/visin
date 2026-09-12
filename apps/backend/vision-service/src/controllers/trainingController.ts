@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { trainingService } from '../services/trainingService';
 import type {
+  GetDeletedTrainingsQuery,
   GetTrainingsQuery,
   GetTrainingStatsQuery,
   GetTrainingWithEpochsQuery
@@ -107,6 +108,29 @@ export const deleteTraining = async (req: AuthRequest, res: Response): Promise<v
   res.json({
     success: true,
     message: 'Training and associated data deleted successfully'
+  });
+};
+
+// Get deleted trainings the caller could restore
+export const getDeletedTrainings = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { page, limit } = req.query as unknown as GetDeletedTrainingsQuery;
+  const result = await trainingService.getDeletedTrainings(req.user!.id, { page, limit });
+
+  res.json({
+    success: true,
+    data: result
+  });
+};
+
+// Restore a deleted training with the epochs and test results its delete removed
+export const restoreTraining = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const training = await trainingService.restoreTraining(id as string, req.user!.id);
+
+  res.json({
+    success: true,
+    message: 'Training restored successfully',
+    data: training
   });
 };
 

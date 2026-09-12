@@ -3,6 +3,7 @@ import { randomUUID as uuidv4 } from 'crypto';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Epoch from '../models/Epoch';
 import Training, { ITraining } from '../models/Training';
+import TestResult from '../models/TestResult';
 import { checkProjectAccess, isWithinTokenScope } from './projectAccessService';
 import type { z } from '@visin/backend-core';
 import type { GetEpochsByTrainingQuery, createEpochsBatchBodySchema } from '../validation/epochSchemas';
@@ -181,6 +182,31 @@ export const updateEpoch = async (
   if (updateData.metadata !== undefined) epoch.metadata = updateData.metadata;
 
   return epoch.save();
+};
+
+/**
+ * Soft-delete one epoch together with the test results recorded against it.
+ *
+ * vision-front's per-epoch delete calls this route, which did not exist, so the
+ * action could only ever fail. The results share the epoch's timestamp, and only
+ * live ones take it — the same rule a training delete follows, so restoring that
+ * training later leaves this epoch deleted.
+ */
+export const deleteEpoch = async (
+  id: string,
+  userId: string | undefined,
+  tokenProjectId?: string
+) => {
+  const epoch = await getEpochByIdOrThrow(id);
+  const training = await Training.findById(epoch.trainingId);
+  await assertTrainingAccess(training, userId, tokenProjectId, true);
+  await assertResourceWrite(training, userId);
+
+  const now = new Date();
+  epoch.deletedAt = now;
+  await epoch.save();
+  await TestResult.updateMany({ epoch_uuid: epoch.epoch_uuid, deletedAt: null }, { deletedAt: now });
+  await Training.findByIdAndUpdate(epoch.trainingId, { updatedAt: now });
 };
 
 export const createEpochFromJson = async (

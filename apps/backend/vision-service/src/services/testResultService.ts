@@ -10,7 +10,8 @@ import {
   checkProjectAccess,
   createProjectAccessChecker,
   getVisibleTrainingIds,
-  isWithinTokenScope
+  isWithinTokenScope,
+  resolveProject
 } from './projectAccessService';
 import type { z } from '@visin/backend-core';
 import type { createTestResultBodySchema, updateTestResultBodySchema } from '../validation/testResultSchemas';
@@ -62,7 +63,10 @@ export const testResultService = {
     ];
     if (projectId) {
       if (!(await checkProjectAccess(userId, projectId))) throw new ForbiddenError('Access denied to project');
-      const trainings = await Training.find({ projectId, deletedAt: null });
+      // The filter may name a slug; trainings store the canonical id.
+      const project = await resolveProject(projectId);
+      if (!project) throw new NotFoundError('Project not found');
+      const trainings = await Training.find({ projectId: project._id.toString(), deletedAt: null });
       const epochs = await Epoch.find(
         { trainingId: { $in: trainings.map((row) => row._id.toString()) }, deletedAt: null },
         'epoch_uuid'

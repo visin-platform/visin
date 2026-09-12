@@ -41,6 +41,7 @@ jest.mock('../../services/projectAccessService', () => {
       checkProjectAccess(userId, projectId),
     getVisibleTrainingIds: jest.fn(),
     isWithinTokenScope: jest.fn(),
+    resolveProject: jest.fn(),
   };
 });
 jest.mock('@visin/backend-core', () => ({
@@ -56,6 +57,7 @@ import {
   checkProjectAccess,
   getVisibleTrainingIds,
   isWithinTokenScope,
+  resolveProject,
 } from '../../services/projectAccessService';
 
 const mockedTestResult = TestResult as unknown as jest.Mock & Record<string, jest.Mock>;
@@ -64,6 +66,7 @@ const mockedTraining = Training as unknown as Record<string, jest.Mock>;
 const mockedCheckAccess = checkProjectAccess as jest.Mock;
 const mockedVisibleTrainings = getVisibleTrainingIds as jest.Mock;
 const mockedTokenScope = isWithinTokenScope as jest.Mock;
+const mockedResolveProject = resolveProject as jest.Mock;
 
 // Escape hatch for asserting on dynamically-shaped service results in tests;
 // modeling every ad-hoc return shape as an interface here would add noise, not safety.
@@ -124,6 +127,7 @@ const pagination = { sortBy: 'timestamp', order: -1 as const };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedResolveProject.mockResolvedValue({ _id: { toString: () => 'p1' } });
   mockedVisibleTrainings.mockResolvedValue([]);
   mockedEpoch.find.mockResolvedValue([]);
   mockedTraining.find.mockResolvedValue([]);
@@ -174,6 +178,16 @@ describe('getTestResults', () => {
     await expect(
       testResultService.getTestResults('u1', { projectId: 'p-private' }, pagination)
     ).rejects.toThrow('Access denied to project');
+  });
+
+  it('resolves a slug filter to the project id trainings are stored under', async () => {
+    mockedTestResult.find.mockReturnValue(makeQuery([]));
+    mockedResolveProject.mockResolvedValue({ _id: { toString: () => 'p-canonical' } });
+
+    await testResultService.getTestResults('u1', { projectId: 'my-slug' }, pagination);
+
+    expect(mockedResolveProject).toHaveBeenCalledWith('my-slug');
+    expect(mockedTraining.find).toHaveBeenCalledWith({ projectId: 'p-canonical', deletedAt: null });
   });
 
   it('returns empty for a project with no trainings', async () => {

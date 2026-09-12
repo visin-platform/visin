@@ -6,6 +6,7 @@ import {
   createEpoch,
   createEpochFromJson,
   updateEpoch,
+  deleteEpoch,
   createEpochsBatch
 } from '../controllers/epochController';
 import { getTestResultsByEpochUuid } from '../controllers/testResultController';
@@ -42,5 +43,6 @@ router.post('/', authMiddleware, validateRequest({ body: createEpochBodySchema }
 router.post('/upload', authMiddleware, validateRequest({ body: createEpochFromJsonBodySchema }), createEpochFromJson);
 router.post('/batch', authMiddleware, validateRequest({ body: createEpochsBatchBodySchema }), createEpochsBatch);
 router.put('/:id', authMiddleware, validateRequest({ body: updateEpochBodySchema }), updateEpoch);
+router.delete('/:id', authMiddleware, deleteEpoch);
 
 export default router;

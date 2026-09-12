@@ -33,6 +33,7 @@ jest.mock('../../services/projectAccessService', () => ({
   checkProjectAccess: jest.fn(),
   getVisibleTrainingIds: jest.fn(),
   isWithinTokenScope: jest.fn(),
+  resolveProject: jest.fn(),
 }));
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),
@@ -54,6 +55,7 @@ import {
   checkProjectAccess,
   getVisibleTrainingIds,
   isWithinTokenScope,
+  resolveProject,
 } from '../../services/projectAccessService';
 import type { CreateBenchmarkBody } from '../../validation/benchmarkSchemas';
 
@@ -62,6 +64,7 @@ const mockedTraining = Training as unknown as Record<string, jest.Mock>;
 const mockedCheckAccess = checkProjectAccess as jest.Mock;
 const mockedVisibleTrainings = getVisibleTrainingIds as jest.Mock;
 const mockedTokenScope = isWithinTokenScope as jest.Mock;
+const mockedResolveProject = resolveProject as jest.Mock;
 
 // Escape hatch for asserting on dynamically-shaped service results in tests;
 // modeling every ad-hoc return shape as an interface here would add noise, not safety.
@@ -109,6 +112,7 @@ const baseFilters = { sortBy: 'timestamp' as const, order: -1 as const };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedResolveProject.mockResolvedValue({ _id: { toString: () => 'p1' } });
   mockedCheckAccess.mockResolvedValue(true);
   mockedTokenScope.mockReturnValue(true);
 });
@@ -143,6 +147,16 @@ describe('getBenchmarks', () => {
     const result = await getBenchmarks({ ...baseFilters, projectId: 'p-x' }, 'u1');
     expect(result.benchmarks).toEqual([]);
     expect(result.pagination.total).toBe(0);
+  });
+
+  it('resolves a slug filter to the project id trainings are stored under', async () => {
+    mockedResolveProject.mockResolvedValue({ _id: { toString: () => 'p-canonical' } });
+    mockedTraining.find.mockResolvedValueOnce([]);
+
+    await getBenchmarks({ ...baseFilters, projectId: 'my-slug' }, 'u1');
+
+    expect(mockedResolveProject).toHaveBeenCalledWith('my-slug');
+    expect(mockedTraining.find).toHaveBeenCalledWith({ projectId: 'p-canonical', deletedAt: null });
   });
 
   it('filters by project training ids when the project has trainings', async () => {

@@ -59,6 +59,19 @@ describe('requireApiKey', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it('rejects a same-length wrong key, and every key when none is configured', () => {
+    const withKey = (key: string) =>
+      statusOf(() =>
+        requireApiKey(makeReq({ headers: { 'x-internal-api-key': key } }), makeRes(), next as unknown as NextFunction)
+      );
+
+    expect(withKey('x'.repeat(API_KEY.length))).toBe(401);
+    delete process.env.FILE_SERVICE_API_KEY;
+    expect(withKey('')).toBe(401);
+    expect(withKey(API_KEY)).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it('passes with the correct key', () => {
     requireApiKey(
       makeReq({ headers: { 'x-internal-api-key': API_KEY } }),

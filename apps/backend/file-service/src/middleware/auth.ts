@@ -1,15 +1,23 @@
+import { timingSafeEqual } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '@visin/backend-core';
 import { resolvePath } from '../utils/paths';
 import { verifyToken, TokenOperation } from '../utils/hmac';
+
+/** Constant-time, so response timing cannot recover the key a byte at a time. */
+const matchesApiKey = (provided: string | string[] | undefined, expected: string | undefined): boolean => {
+  if (typeof provided !== 'string' || !expected) return false;
+  const given = Buffer.from(provided);
+  const wanted = Buffer.from(expected);
+  return given.length === wanted.length && timingSafeEqual(given, wanted);
+};
 
 /**
  * Middleware: internal API key authentication.
  * Services communicate with X-Internal-Api-Key header.
  */
 export const requireApiKey = (req: Request, _res: Response, next: NextFunction): void => {
-  const key = req.headers['x-internal-api-key'];
-  if (!key || key !== process.env.FILE_SERVICE_API_KEY) {
+  if (!matchesApiKey(req.headers['x-internal-api-key'], process.env.FILE_SERVICE_API_KEY)) {
     throw new UnauthorizedError('Unauthorized');
   }
   next();

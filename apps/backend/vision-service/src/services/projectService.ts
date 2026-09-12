@@ -143,6 +143,11 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
   if (isPublic !== undefined) project.isPublic = isPublic;
   if (slug !== undefined) {
     if (slug.trim()) {
+      // An id-shaped slug is ambiguous with the project that id names, and a
+      // lookup that tried slugs first would hand one project's records to another.
+      if (/^[0-9a-fA-F]{24}$/.test(slug.trim())) {
+        throw new BadRequestError('Slug cannot look like a project id');
+      }
       // Check if slug is unique
       const existingProject = await Project.findOne({ slug: slug.trim(), _id: { $ne: id } });
       if (existingProject) {
@@ -158,7 +163,7 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
   if (taxonomy !== undefined) {
     project.taxonomy = taxonomy === null ? undefined : applyTaskTypePresets(taxonomy);
   }
-  // null clears the rates and returns the project to the platform defaults
+  // null clears the rates: there are no defaults, so the project reports no cost
   if (costing !== undefined) {
     project.costing = costing === null ? undefined : costing;
   }
@@ -273,7 +278,17 @@ export const getProjectDashboardStats = async (
   const countByEpoch = (collection: string) =>
     Epoch.aggregate([
       { $match: { trainingId: { $in: trainingIds }, $or: NOT_DELETED } },
-      { $lookup: { from: collection, localField: 'epoch_uuid', foreignField: 'epoch_uuid', as: 'joined' } },
+      // Live rows only: a test result deleted on its own stays in the collection
+      // with a `deletedAt`. Visualizations carry no such field, which this matches.
+      {
+        $lookup: {
+          from: collection,
+          localField: 'epoch_uuid',
+          foreignField: 'epoch_uuid',
+          pipeline: [{ $match: { $or: NOT_DELETED } }],
+          as: 'joined'
+        }
+      },
       { $group: { _id: null, count: { $sum: { $size: '$joined' } } } }
     ]);
 

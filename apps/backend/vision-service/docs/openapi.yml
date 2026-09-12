@@ -1643,6 +1643,91 @@ paths:
               schema:
                 $ref: '#/components/schemas/Success'
 
+  /trainings/deleted:
+    get:
+      tags: [Trainings]
+      summary: List deleted trainings the caller can restore
+      description: >
+        Most recently deleted first: runs in projects the caller may edit, and
+        standalone runs they own. Requires a signed-in caller.
+      security:
+        - ApiToken: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      trainings:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Training'
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                          limit:
+                            type: integer
+                          total:
+                            type: integer
+                          pages:
+                            type: integer
+
+  /trainings/{id}/restore:
+    post:
+      tags: [Trainings]
+      summary: Restore a deleted training
+      description: >
+        Brings the training back with the epochs and test results its delete
+        removed. Rows deleted separately beforehand stay deleted, and the training
+        is not re-added to comparisons it was removed from.
+      security:
+        - ApiToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Training restored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Training'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /trainings/uuid/{uuid}:
     get:
       tags: [Trainings]
@@ -1969,6 +2054,27 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Epoch'
+    delete:
+      tags: [Epochs]
+      summary: Delete epoch
+      description: Soft-deletes the epoch together with the test results recorded against it.
+      security:
+        - ApiToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Epoch deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /epochs/uuid/{uuid}:
     get:

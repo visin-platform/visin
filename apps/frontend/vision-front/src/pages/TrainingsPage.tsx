@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Box,
   Container,
   Alert
 } from '@mui/material';
@@ -11,6 +12,7 @@ import { useTrainingsPage } from '../hooks/useTrainingsPage';
 import BulkActionsBar from '../components/trainings/BulkActionsBar';
 import DeleteTrainingDialog from '../components/trainings/DeleteTrainingDialog';
 import DeleteMultipleTrainingsDialog from '../components/trainings/DeleteMultipleTrainingsDialog';
+import DeletedTrainings from '../components/trainings/DeletedTrainings';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
 const TrainingsPage: React.FC = () => {
@@ -128,6 +130,12 @@ const TrainingsPage: React.FC = () => {
         onSort={handleSort}
         isAuthenticated={isAuthenticated}
       />
+
+      {isAuthenticated && (
+        <Box sx={{ mt: 3 }}>
+          <DeletedTrainings />
+        </Box>
+      )}
 
       {/* Create/Edit Training Modal */}
       <TrainingFormDialog

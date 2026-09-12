@@ -26,6 +26,8 @@ export const updateProjectBodySchema = z.object({
   editorGroupIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/).transform(id => id.toLowerCase())).max(100).optional(),
   isPublic: z.boolean().optional(),
   slug: z.string().optional(),
-  taxonomy: taxonomySchema.optional(),
-  costing: costingSchema.optional()
+  // null clears either one — what the settings screens send when the editor is
+  // empty. Rejecting it failed the whole save, not just the cleared field.
+  taxonomy: taxonomySchema.nullable().optional(),
+  costing: costingSchema.nullable().optional()
 });

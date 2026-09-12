@@ -5,7 +5,7 @@ import { ForbiddenError, NotFoundError, logger } from '@visin/backend-core';
 import Benchmark, { IBenchmark } from '../models/Benchmark';
 import Epoch from '../models/Epoch';
 import Training, { ITraining } from '../models/Training';
-import { checkProjectAccess, getVisibleTrainingIds, isWithinTokenScope } from './projectAccessService';
+import { checkProjectAccess, getVisibleTrainingIds, isWithinTokenScope, resolveProject } from './projectAccessService';
 import type { GetBenchmarksQuery, CreateBenchmarkBody, UpdateBenchmarkBody } from '../validation/benchmarkSchemas';
 
 interface BenchmarksPage {
@@ -29,8 +29,11 @@ export const getBenchmarks = async (
     if (!(await checkProjectAccess(userId, projectId))) {
       throw new ForbiddenError();
     }
+    // The filter may name a slug; trainings store the canonical id.
+    const project = await resolveProject(projectId);
+    if (!project) throw new NotFoundError('Project not found');
 
-    const trainings = await Training.find({ projectId, deletedAt: null });
+    const trainings = await Training.find({ projectId: project._id.toString(), deletedAt: null });
     if (trainings.length === 0) {
       return { benchmarks: [], pagination: { page, limit, total: 0, pages: 0 } };
     }

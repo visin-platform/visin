@@ -76,6 +76,10 @@ vi.mock('../../components/common/PageBreadcrumbs', () => ({
   default: () => <div data-testid="breadcrumbs" />
 }));
 
+vi.mock('../../components/trainings/DeletedTrainings', () => ({
+  default: () => <div data-testid="deleted-trainings" />
+}));
+
 import TrainingsPage from '../TrainingsPage';
 
 const baseHookReturn = () => ({
@@ -149,6 +153,16 @@ describe('TrainingsPage', () => {
   it('renders an empty trainings table by default', () => {
     render(<TrainingsPage />);
     expect(screen.getByTestId('trainings-count').textContent).toBe('0');
+  });
+
+  it('offers the deleted-trainings recovery panel only to signed-in users', () => {
+    const { unmount } = render(<TrainingsPage />);
+    expect(screen.getByTestId('deleted-trainings')).toBeInTheDocument();
+    unmount();
+
+    useTrainingsPageMock.mockReturnValue({ ...baseHookReturn(), isAuthenticated: false });
+    render(<TrainingsPage />);
+    expect(screen.queryByTestId('deleted-trainings')).not.toBeInTheDocument();
   });
 
   it('shows a loading state on the table', () => {

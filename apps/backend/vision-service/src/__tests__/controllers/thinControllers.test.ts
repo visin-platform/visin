@@ -15,6 +15,8 @@ jest.mock('../../services/trainingService', () => ({
     deleteTraining: jest.fn(),
     getTrainingStats: jest.fn(),
     compareTrainings: jest.fn(),
+    getDeletedTrainings: jest.fn(),
+    restoreTraining: jest.fn(),
   },
 }));
 jest.mock('../../services/testResultService', () => ({
@@ -168,6 +170,25 @@ describe('trainingController', () => {
       'u1',
       expect.objectContaining({ projectId: 'p-body' })
     );
+  });
+
+  it('getDeletedTrainings / restoreTraining act for the signed-in caller', async () => {
+    mockedTrainingSvc.getDeletedTrainings.mockResolvedValue({ trainings: [] });
+    mockedTrainingSvc.restoreTraining.mockResolvedValue('restored');
+    const listRes = makeRes();
+    const restoreRes = makeRes();
+
+    await trainingCtrl.getDeletedTrainings(makeReq({ query: { page: 2, limit: 10 } }), listRes);
+    expect(mockedTrainingSvc.getDeletedTrainings).toHaveBeenCalledWith('u1', { page: 2, limit: 10 });
+    expect(listRes.json).toHaveBeenCalledWith({ success: true, data: { trainings: [] } });
+
+    await trainingCtrl.restoreTraining(makeReq({ params: { id: 'i1' } }), restoreRes);
+    expect(mockedTrainingSvc.restoreTraining).toHaveBeenCalledWith('i1', 'u1');
+    expect(restoreRes.json).toHaveBeenCalledWith({
+      success: true,
+      message: 'Training restored successfully',
+      data: 'restored'
+    });
   });
 
   it('update / delete / stats / compare delegate', async () => {
@@ -406,5 +427,18 @@ describe('projectController', () => {
 
     await projectCtrl.getProjectDashboardStats(makeReq({ params: { id: 'i' } }), makeRes());
     expect(mockedProjectSvc.getProjectDashboardStats).toHaveBeenCalledWith('i', 'u1');
+  });
+
+  it('forwards cost rates on create and update instead of dropping them', async () => {
+    const costing = { cpuRatePerHour: 0.5, gpuRatePerHour: 2, currency: 'USD' };
+    mockedProjectSvc.createProject.mockResolvedValue('new');
+    mockedProjectSvc.updateProject.mockResolvedValue('upd');
+
+    await projectCtrl.createProject(makeReq({ body: { name: 'N', costing } }), makeRes());
+    expect(mockedProjectSvc.createProject).toHaveBeenCalledWith('u1', expect.objectContaining({ costing }));
+
+    // null is how the settings screen clears the rates
+    await projectCtrl.updateProject(makeReq({ params: { id: 'i' }, body: { costing: null } }), makeRes());
+    expect(mockedProjectSvc.updateProject).toHaveBeenCalledWith('i', 'u1', expect.objectContaining({ costing: null }));
   });
 });

@@ -7,7 +7,7 @@ import EpochVisualization, { IEpochVisualization } from '../models/EpochVisualiz
 import Epoch from '../models/Epoch';
 import Training from '../models/Training';
 import { getSignedUrl, getUploadSignedUrl, type SignedUrlData } from './fileServiceClient';
-import { checkProjectAccess, getVisibleTrainingIds } from './projectAccessService';
+import { checkProjectAccess, getVisibleTrainingIds, resolveProject } from './projectAccessService';
 import type { GetVisualizationsByTrainingQuery } from '../validation/visualizationSchemas';
 
 import { checkEpochAccess } from './epochAccessService';
@@ -270,8 +270,13 @@ export const getVisualizationsByTraining = async (
     if (!(await checkProjectAccess(userId, projectId))) {
       throw new ForbiddenError();
     }
+    // The filter may name a slug; trainings store the canonical id.
+    const project = await resolveProject(projectId);
+    if (!project) throw new NotFoundError('Project not found');
 
-    const trainings = await Training.find({ projectId, deletedAt: null }).select('uuid name').sort({ createdAt: -1 });
+    const trainings = await Training.find({ projectId: project._id.toString(), deletedAt: null })
+      .select('uuid name')
+      .sort({ createdAt: -1 });
 
     if (trainings.length === 0) {
       return { trainings: [], total: 0 };

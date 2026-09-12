@@ -14,7 +14,8 @@ interface KnownError {
  * controller having to catch and re-throw them: our own typed HttpError
  * hierarchy, plus Mongoose's ValidationError (failed schema validation)
  * and CastError (e.g. an invalid ObjectId string) — both client mistakes,
- * not server bugs, but thrown as plain Mongoose error classes.
+ * not server bugs, but thrown as plain Mongoose error classes — and the
+ * driver's duplicate-key error.
  */
 function classifyError(error: Error): KnownError | null {
   if (error instanceof HttpError) {
@@ -22,6 +23,14 @@ function classifyError(error: Error): KnownError | null {
   }
   if (error.name === 'ValidationError' || error.name === 'CastError') {
     return { statusCode: 400, name: error.name, message: error.message };
+  }
+  // A unique index refusing a second copy (E11000, from a single or a bulk
+  // insert) is a client sending something that already exists — typically a
+  // pipeline retrying a POST whose response it never saw — not a server fault.
+  // The driver's message names the index and the duplicate key's value, so a
+  // fixed message goes out instead.
+  if ((error as { code?: unknown }).code === 11000) {
+    return { statusCode: 409, name: 'ConflictError', message: 'A resource with this identifier already exists' };
   }
   return null;
 }

@@ -72,6 +72,7 @@ import Project from '../../models/Project';
 import Comparison from '../../models/Comparison';
 import { testResultService } from '../../services/testResultService';
 import { checkProjectAccess, getVisibleProjectIds } from '../../services/projectAccessService';
+import { projectTokenContext } from '../../middleware/projectTokenContext';
 
 const mockedTraining = Training as unknown as jest.Mock & Record<string, jest.Mock>;
 const mockedEpoch = Epoch as unknown as Record<string, jest.Mock>;
@@ -511,13 +512,14 @@ describe('deleteTraining', () => {
     await expect(trainingService.deleteTraining(VALID_ID, 'u1')).resolves.toBe(true);
 
     expect(doc.deletedAt).toBeInstanceOf(Date);
+    // Only live rows take the stamp, so it names exactly what this delete removed.
     expect(mockedEpoch.updateMany).toHaveBeenCalledWith(
-      { trainingId: VALID_ID },
-      { deletedAt: expect.any(Date) }
+      { trainingId: VALID_ID, deletedAt: null },
+      { deletedAt: doc.deletedAt }
     );
     expect(mockedTestResult.updateMany).toHaveBeenCalledWith(
-      { epoch_uuid: { $in: ['e1', 'e2'] } },
-      { deletedAt: expect.any(Date) }
+      { epoch_uuid: { $in: ['e1', 'e2'] }, deletedAt: null },
+      { deletedAt: doc.deletedAt }
     );
     expect(mockedComparison.updateMany).toHaveBeenCalledWith(
       { itemIds: VALID_ID, $or: [{ projectId: { $in: ['p1'] } }, { projectId: null, ownerId: 'u1' }] },
@@ -534,6 +536,83 @@ describe('deleteTraining', () => {
     await trainingService.deleteTraining(VALID_ID, 'u1');
 
     expect(mockedTestResult.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('getDeletedTrainings', () => {
+  it('lists deleted runs the caller could restore, most recent deletion first', async () => {
+    const chain = mockFindChain([trainingDoc('t1')]);
+    mockedTraining.countDocuments.mockResolvedValue(41);
+
+    const result = await trainingService.getDeletedTrainings('u1', { page: 2, limit: 20 });
+
+    const query = {
+      deletedAt: { $ne: null },
+      $or: [{ projectId: { $in: ['p1'] } }, { projectId: null, ownerId: 'u1' }],
+    };
+    expect(mockedTraining.find).toHaveBeenCalledWith(query);
+    expect(mockedTraining.countDocuments).toHaveBeenCalledWith(query);
+    expect(chain.sort).toHaveBeenCalledWith({ deletedAt: -1 });
+    expect(chain.skip).toHaveBeenCalledWith(20);
+    expect(result.pagination).toEqual({ page: 2, limit: 20, total: 41, pages: 3 });
+  });
+
+  it('never offers a project credential standalone runs', async () => {
+    mockFindChain([]);
+    mockedTraining.countDocuments.mockResolvedValue(0);
+
+    await projectTokenContext.run({ projectId: 'p1', userId: 'u1' }, () =>
+      trainingService.getDeletedTrainings('u1', {})
+    );
+
+    expect(mockedTraining.find).toHaveBeenCalledWith({
+      deletedAt: { $ne: null },
+      $or: [{ projectId: { $in: ['p1'] } }],
+    });
+  });
+});
+
+describe('restoreTraining', () => {
+  it('rejects malformed ids and runs that are not deleted', async () => {
+    await expect(trainingService.restoreTraining('short', 'u1')).rejects.toThrow('Invalid training ID format');
+
+    mockedTraining.findOne.mockResolvedValue(null);
+    await expect(trainingService.restoreTraining(VALID_ID, 'u1')).rejects.toThrow('Deleted training not found');
+    expect(mockedTraining.findOne).toHaveBeenCalledWith({ _id: VALID_ID, deletedAt: { $ne: null } });
+  });
+
+  it('judges write access as if the run were live, and changes nothing when refused', async () => {
+    const doc = trainingDoc('t1', { ownerId: 'owner', deletedAt: new Date('2026-09-01T00:00:00Z') });
+    mockedTraining.findOne.mockResolvedValue(doc);
+    (assertResourceWrite as jest.Mock).mockRejectedValueOnce(new ForbiddenError());
+
+    await expect(trainingService.restoreTraining(VALID_ID, 'u1')).rejects.toThrow(ForbiddenError);
+
+    expect(assertResourceWrite).toHaveBeenCalledWith({ ownerId: 'owner', projectId: 'p1' }, 'u1');
+    expect(doc.save).not.toHaveBeenCalled();
+    expect(mockedEpoch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('brings back only the epochs and test results carrying that delete\'s stamp', async () => {
+    const stamp = new Date('2026-09-01T00:00:00Z');
+    const doc = trainingDoc('t1', { deletedAt: stamp });
+    mockedTraining.findOne.mockResolvedValue(doc);
+    mockedEpoch.updateMany.mockResolvedValue({});
+    mockedEpoch.find.mockResolvedValue([{ epoch_uuid: 'e1' }, { epoch_uuid: 'e2' }]);
+    mockedTestResult.updateMany.mockResolvedValue({});
+
+    await expect(trainingService.restoreTraining(VALID_ID, 'u1')).resolves.toBe(doc);
+
+    expect(doc.deletedAt).toBeUndefined();
+    expect(doc.save).toHaveBeenCalled();
+    expect(mockedEpoch.updateMany).toHaveBeenCalledWith(
+      { trainingId: VALID_ID, deletedAt: stamp },
+      { $unset: { deletedAt: 1 } }
+    );
+    expect(mockedTestResult.updateMany).toHaveBeenCalledWith(
+      { epoch_uuid: { $in: ['e1', 'e2'] }, deletedAt: stamp },
+      { $unset: { deletedAt: 1 } }
+    );
   });
 });
 
@@ -623,7 +702,7 @@ describe('getTrainingStats', () => {
         deletedAt: null,
         status: 'completed',
         tags: { $all: ['a', 'b'] },
-        $or: [{ projectId: { $in: ['p1'] } }, { projectId: { $exists: false } }],
+        $or: [{ projectId: { $in: ['p1'] } }, { projectId: { $exists: false } }, { projectId: null }],
       })
     );
     expect(stats.totalTrainings).toBe(3);

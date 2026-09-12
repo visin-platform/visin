@@ -16,6 +16,8 @@ export interface Training {
   metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  /** Present only on runs from the deleted-trainings listing */
+  deletedAt?: string;
   metrics?: {
     totalTime: number;
     epochCount: number;
@@ -41,6 +43,19 @@ export interface CreateTrainingData {
   startTime?: string;
   endTime?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface DeletedTrainingsResponse {
+  success: boolean;
+  data: {
+    trainings: Training[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  };
 }
 
 export interface TrainingsPaginatedResponse extends PaginatedResponse<Training> {

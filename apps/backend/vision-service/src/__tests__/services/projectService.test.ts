@@ -225,6 +225,17 @@ describe('updateProject', () => {
     );
   });
 
+  it('refuses a slug shaped like a project id', async () => {
+    const doc = projectDoc();
+    mockedProject.findById.mockResolvedValue(doc);
+    mockedProject.findOne.mockResolvedValue(null);
+
+    await expect(updateProject('p1', 'owner-1', { slug: 'ABCDEF0123456789abcdef01' })).rejects.toThrow(
+      'Slug cannot look like a project id'
+    );
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
   it('replaces the taxonomy and clears it with null', async () => {
     const doc = projectDoc();
     mockedProject.findById.mockResolvedValue(doc);
@@ -351,6 +362,11 @@ describe('getProjectDashboardStats', () => {
     expect(testResults[0].$match.trainingId).toEqual({ $in: ['t1', 't2'] });
     expect(testResults[1].$lookup.from).toBe('test_results');
     expect(visualizations[1].$lookup.from).toBe('epoch_visualizations');
+    // A test result deleted on its own is not counted; visualizations, which have
+    // no deletedAt at all, still match.
+    expect(testResults[1].$lookup.pipeline).toEqual([
+      { $match: { $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] } },
+    ]);
     // Summed inside the group; nothing is unwound.
     expect(JSON.stringify(testResults)).not.toContain('$unwind');
   });

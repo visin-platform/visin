@@ -42,11 +42,11 @@ describe('vision-service routers', () => {
     ['configRoutes', configRoutes, 5],
     ['datasetImageRoutes', datasetImageRoutes, 8],
     ['datasetRoutes', datasetRoutes, 6],
-    ['epochRoutes', epochRoutes, 8],
+    ['epochRoutes', epochRoutes, 9],
     ['imageCategoryRoutes', imageCategoryRoutes, 6],
     ['projectRoutes', projectRoutes, 6],
     ['testResultRoutes', testResultRoutes, 10],
-    ['trainingRoutes', trainingRoutes, 10],
+    ['trainingRoutes', trainingRoutes, 12],
     ['visualizationRoutes', visualizationRoutes, 8],
   ];
 
@@ -76,6 +76,25 @@ describe('vision-service routers', () => {
     expect(del.handlerCount).toBe(2);
     // optionalAuth + validate + controller
     expect(list.handlerCount).toBe(3);
+  });
+
+  it('trainingRoutes keeps deleted runs behind auth, ahead of the /:id wildcard', () => {
+    const { routes } = describeRouter(trainingRoutes);
+    const deleted = routes.find((r) => r.path === '/deleted' && r.methods.includes('get'))!;
+    const restore = routes.find((r) => r.path === '/:id/restore' && r.methods.includes('post'))!;
+    const gets = routes.filter((r) => r.methods.includes('get')).map((r) => r.path);
+
+    // auth + validate + controller: a recovery list is never public
+    expect(deleted.handlerCount).toBe(3);
+    // auth + controller
+    expect(restore.handlerCount).toBe(2);
+    expect(gets.indexOf('/deleted')).toBeLessThan(gets.indexOf('/:id'));
+  });
+
+  it('epochRoutes deletes behind auth', () => {
+    const { routes } = describeRouter(epochRoutes);
+    const del = routes.find((r) => r.path === '/:id' && r.methods.includes('delete'))!;
+    expect(del.handlerCount).toBe(2);
   });
 });
 

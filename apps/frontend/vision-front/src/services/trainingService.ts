@@ -5,7 +5,8 @@ import {
   TrainingWithEpochs,
   ApiResponse,
   TrainingsPaginatedResponse,
-  TrainingComparisonResponse
+  TrainingComparisonResponse,
+  DeletedTrainingsResponse
 } from '../types';
 
 export interface CurrencyCostTotal {
@@ -115,5 +116,17 @@ export const trainingService = {
   async deleteTraining(id: string): Promise<ApiResponse<void>> {
     const response = await visionApi.delete(`/trainings/${id}`);
     return response.data as ApiResponse<void>;
+  },
+
+  // Deleted trainings the caller could restore, most recently deleted first
+  async getDeletedTrainings(params?: { page?: number; limit?: number }): Promise<DeletedTrainingsResponse> {
+    const response = await visionApi.get('/trainings/deleted', { params });
+    return response.data as DeletedTrainingsResponse;
+  },
+
+  // Restore a deleted training with the epochs and test results its delete removed
+  async restoreTraining(id: string): Promise<ApiResponse<Training>> {
+    const response = await visionApi.post(`/trainings/${id}/restore`);
+    return response.data as ApiResponse<Training>;
   }
 };

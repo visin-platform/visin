@@ -65,6 +65,17 @@ export const updateEpoch = async (req: Request, res: Response): Promise<void> =>
   });
 };
 
+// Delete epoch (soft delete, with its test results)
+export const deleteEpoch = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params as { id: string };
+  await epochService.deleteEpoch(id, req.user?.id, req.projectId);
+
+  res.json({
+    success: true,
+    message: 'Epoch deleted successfully'
+  });
+};
+
 // Create epoch from JSON file (accepts training_uuid and looks up trainingId, or accepts trainingId directly)
 export const createEpochFromJson = async (req: Request, res: Response): Promise<void> => {
   const savedEpoch = await epochService.createEpochFromJson(req.body, req.user?.id, req.projectId);

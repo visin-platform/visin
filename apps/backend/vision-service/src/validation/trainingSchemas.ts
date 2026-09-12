@@ -36,6 +36,12 @@ export const getTrainingStatsQuerySchema = z.object({
 });
 export type GetTrainingStatsQuery = z.infer<typeof getTrainingStatsQuerySchema>;
 
+export const getDeletedTrainingsQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(30)
+});
+export type GetDeletedTrainingsQuery = z.infer<typeof getDeletedTrainingsQuerySchema>;
+
 export const getTrainingWithEpochsQuerySchema = z.object({
   sortBy: z.enum(EPOCH_SORT_FIELDS).default('epoch'),
   order: sortOrderSchema('asc'),

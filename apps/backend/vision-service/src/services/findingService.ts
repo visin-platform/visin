@@ -5,7 +5,7 @@ import Training from '../models/Training';
 import Epoch from '../models/Epoch';
 import Project from '../models/Project';
 import { ExportOptions, ExportRun, findingToLatex } from './latexExport';
-import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from './projectAccessService';
+import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds, resolveProject } from './projectAccessService';
 import { tokenProjectId } from '../middleware/projectTokenContext';
 import { parseFindingCursor } from './findingCursor';
 
@@ -18,15 +18,19 @@ import { parseFindingCursor } from './findingCursor';
  * itself, or it becomes a side channel describing work nobody may see.
  */
 
-/** Resolve a slug or id to the project's id, or fail the way the caller expects. */
+/**
+ * Resolve a slug or id to the project's id, or fail the way the caller expects.
+ *
+ * Through `resolveProject` rather than a slug-first lookup of its own: an
+ * id-shaped identifier is an id. Slugs are free text, so slug-first let any
+ * owner name their project after someone else's project id — and every listing
+ * for that id, including the victim's own assistant's, then read the squatter's
+ * findings as the victim project's record.
+ */
 async function resolveProjectId(identifier: string): Promise<string> {
-  const bySlug = await Project.findOne({ slug: identifier });
-  if (bySlug) return bySlug._id.toString();
-
-  const byId = await Project.findById(identifier).catch(() => null);
-  if (byId) return byId._id.toString();
-
-  throw new NotFoundError('Project not found');
+  const project = await resolveProject(identifier);
+  if (!project) throw new NotFoundError('Project not found');
+  return project._id.toString();
 }
 
 /**

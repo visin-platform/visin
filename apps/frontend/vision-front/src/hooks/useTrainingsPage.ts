@@ -1,6 +1,6 @@
 import { useWriteCapabilities } from './useWriteCapabilities';
 import React, { useState, useEffect, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { trainingService } from '../services/trainingService';
 import { projectService } from '../services/projectService';
@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 export const useTrainingsPage = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -302,6 +303,7 @@ export const useTrainingsPage = () => {
       setCreating(true);
       await trainingService.deleteTraining(deleteTrainingId);
       setCreateSuccess('Training deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['trainings-deleted'] });
       setDeleteDialogOpen(false);
       setDeleteTrainingId(null);
       setTimeout(() => {
@@ -351,6 +353,7 @@ export const useTrainingsPage = () => {
       }
       
       setCreateSuccess(`${trainingsToDelete.length} training(s) deleted successfully!`);
+      queryClient.invalidateQueries({ queryKey: ['trainings-deleted'] });
       setDeleteMultipleDialogOpen(false);
       setSelectedTrainingIds(new Set());
       setTimeout(() => {
