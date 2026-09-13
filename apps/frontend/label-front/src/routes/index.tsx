@@ -13,14 +13,16 @@ const AppRoutes = () => {
       <Route path="" element={<Navigate to="jobs" replace />} />
       <Route path="login" element={<LoginRedirect />} />
       {/* Looking at a job — its progress and its frames — needs no account, so
-          a job in flight can be shared with a link. Creating one, and anything
-          under bundles, still does. Answering is gated inside the workbench
-          rather than at the route, since the frames themselves are public. */}
+          a job in flight can be shared with a link. Neither does the bundles
+          list: a visitor sees the bundles behind such shared jobs, read-only.
+          Creating a job still needs one. Answering and changing a bundle are
+          gated inside their pages rather than at the route, since what they
+          show is public. */}
       <Route path="jobs" element={<JobsPage />} />
       <Route path="jobs/new" element={<ProtectedRoute><NewJobPage /></ProtectedRoute>} />
       <Route path="jobs/:id" element={<JobDetailPage />} />
       <Route path="jobs/:id/work" element={<WorkbenchPage />} />
-      <Route path="bundles" element={<ProtectedRoute><BundlesPage /></ProtectedRoute>} />
+      <Route path="bundles" element={<BundlesPage />} />
     </Routes>
   );
 };

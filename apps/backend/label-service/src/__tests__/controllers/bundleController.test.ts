@@ -3,6 +3,9 @@ import type { Request, Response } from 'express';
 jest.mock('../../services/bundleService', () => ({
   createBundle: jest.fn(),
   listBundlesForUser: jest.fn(),
+  listPublicBundles: jest.fn(),
+  isBundlePublic: jest.fn(),
+  withoutCreatorIdentity: jest.fn(),
   getBundle: jest.fn(),
   updateBundle: jest.fn(),
   createUploadUrl: jest.fn(),
@@ -18,15 +21,18 @@ jest.mock('../../services/groupAccessService', () => ({
   requireUser: jest.fn((req: Request) => req.user),
   assertMember: jest.fn(),
   assertAdmin: jest.fn(),
+  isMember: jest.fn(),
 }));
 
+import { ForbiddenError } from '@visin/backend-core';
 import * as ctrl from '../../controllers/bundleController';
 import * as svc from '../../services/bundleService';
-import { assertAdmin, assertMember } from '../../services/groupAccessService';
+import { assertAdmin, assertMember, isMember } from '../../services/groupAccessService';
 
 const mockedSvc = svc as unknown as Record<string, jest.Mock>;
 const mockedAdmin = assertAdmin as jest.Mock;
 const mockedMember = assertMember as jest.Mock;
+const mockedIsMember = isMember as jest.Mock;
 
 type MockRes = Response & { json: jest.Mock; status: jest.Mock };
 
@@ -80,16 +86,55 @@ describe('listBundles', () => {
     await ctrl.listBundles(makeReq(), makeRes());
 
     expect(mockedSvc.listBundlesForUser).toHaveBeenCalledWith('u1');
+    expect(mockedSvc.listPublicBundles).not.toHaveBeenCalled();
+  });
+
+  it('lists publicly shared bundles for an anonymous caller', async () => {
+    mockedSvc.listPublicBundles.mockResolvedValue([{ _id: 'b1' }]);
+    const res = makeRes();
+
+    await ctrl.listBundles(makeReq({ user: undefined }), res);
+
+    expect(mockedSvc.listBundlesForUser).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ _id: 'b1' }] });
   });
 });
 
 describe('getBundle', () => {
-  it('is member-visible', async () => {
+  it('returns the whole bundle to a group member', async () => {
+    mockedIsMember.mockResolvedValue(true);
     const req = makeReq({ params: { id: 'b1' } });
+    const res = makeRes();
 
-    await ctrl.getBundle(req, makeRes());
+    await ctrl.getBundle(req, res);
 
-    expect(mockedMember).toHaveBeenCalledWith(req, 'g1');
+    expect(mockedIsMember).toHaveBeenCalledWith(req, 'g1');
+    expect(mockedSvc.isBundlePublic).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: bundle });
+  });
+
+  it('returns a publicly shared bundle to anyone, without its uploader', async () => {
+    mockedIsMember.mockResolvedValue(false);
+    mockedSvc.isBundlePublic.mockResolvedValue(true);
+    mockedSvc.withoutCreatorIdentity.mockReturnValue({ _id: 'b1' });
+    const res = makeRes();
+
+    await ctrl.getBundle(makeReq({ params: { id: 'b1' }, user: undefined }), res);
+
+    expect(mockedSvc.isBundlePublic).toHaveBeenCalledWith('b1');
+    expect(mockedSvc.withoutCreatorIdentity).toHaveBeenCalledWith(bundle);
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { _id: 'b1' } });
+  });
+
+  it('refuses a private bundle to anyone outside its group', async () => {
+    mockedIsMember.mockResolvedValue(false);
+    mockedSvc.isBundlePublic.mockResolvedValue(false);
+    const res = makeRes();
+
+    await expect(ctrl.getBundle(makeReq({ params: { id: 'b1' }, user: undefined }), res)).rejects.toBeInstanceOf(
+      ForbiddenError
+    );
+    expect(res.json).not.toHaveBeenCalled();
   });
 });
 

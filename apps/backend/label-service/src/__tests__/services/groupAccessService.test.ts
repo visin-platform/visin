@@ -4,7 +4,7 @@ jest.mock('../../clients/groupServiceClient', () => ({
   checkMembership: jest.fn(),
 }));
 
-import { assertMember, assertAdmin, requireUser } from '../../services/groupAccessService';
+import { assertMember, assertAdmin, isMember, requireUser } from '../../services/groupAccessService';
 import { checkMembership } from '../../clients/groupServiceClient';
 import { ForbiddenError, UnauthorizedError } from '@visin/backend-core';
 
@@ -40,6 +40,23 @@ describe('assertMember', () => {
     mockedCheck.mockResolvedValue({ member: false, role: null });
 
     await expect(assertMember(makeReq(), 'g1')).rejects.toThrow(ForbiddenError);
+  });
+});
+
+describe('isMember', () => {
+  it.each([
+    [true, true],
+    [false, false],
+  ])('answers %s for membership %s without throwing', async (member, expected) => {
+    mockedCheck.mockResolvedValue({ member, role: member ? 'member' : null });
+
+    await expect(isMember(makeReq(), 'g1')).resolves.toBe(expected);
+  });
+
+  // Public reads fall back rather than fail, so no caller is not an error.
+  it('answers false for an anonymous caller without asking group-service', async () => {
+    await expect(isMember({} as Request, 'g1')).resolves.toBe(false);
+    expect(mockedCheck).not.toHaveBeenCalled();
   });
 });
 

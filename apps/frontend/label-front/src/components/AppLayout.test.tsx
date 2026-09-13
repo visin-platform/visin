@@ -13,6 +13,10 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ user: mockUser, logout: mockLogout }),
 }));
 
+vi.mock('../config/ConfigProvider', () => ({
+  getGlobalConfig: () => ({ VISION_FRONT_URL: 'https://vision.test' }),
+}));
+
 const renderAt = (path: string) =>
   render(
     <MemoryRouter initialEntries={[path]}>
@@ -34,6 +38,15 @@ describe('AppLayout', () => {
     expect(screen.getAllByText('Visin').length).toBeGreaterThan(0);
     expect(screen.getByText('page content')).toBeInTheDocument();
     expect(screen.getAllByText('Jobs').length).toBeGreaterThan(0);
+  });
+
+  it('shows the same menu as vision-front, with the Vision sections linking across', () => {
+    renderAt('/jobs');
+
+    // Identical contents in both apps: crossing over changes the highlight, not the menu.
+    expect(screen.getAllByText('Datasets')[0].closest('a')).toHaveAttribute('href', 'https://vision.test/datasets');
+    expect(screen.getAllByText('Bundles')[0].closest('a')).toHaveAttribute('href', '/bundles');
+    expect(screen.getAllByText('Jobs')[0].closest('.MuiListItemButton-root')?.className).toContain('Mui-selected');
   });
 
   it('shows the active section title in the desktop header', () => {

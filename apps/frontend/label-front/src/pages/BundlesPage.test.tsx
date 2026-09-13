@@ -12,6 +12,10 @@ vi.mock('../services/jobService', () => ({
   getMyGroups: vi.fn(),
   listJobs: vi.fn(),
 }));
+const authState = { isAuthenticated: true };
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: () => authState,
+}));
 
 const uploadStart = vi.fn();
 const uploadFromExisting = vi.fn();
@@ -55,6 +59,7 @@ const bundle = (overrides: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  authState.isAuthenticated = true;
   uploadState = { ...idleState };
   mockedList.mockResolvedValue([bundle()]);
   mockedUploads.mockResolvedValue([]);
@@ -297,12 +302,13 @@ describe('BundlesPage upload phases and dialog', () => {
     expect(await screen.findByText('Zip upload cancelled')).toBeInTheDocument();
   });
 
-  it('disables New bundle without an admin group and cancels the dialog', async () => {
+  it('offers New bundle only to someone who administers a group', async () => {
     mockedGroups.mockResolvedValue([{ groupId: 'g2', name: 'Other', role: 'member' }]);
     renderWithProviders(<BundlesPage />);
 
     await screen.findByText('Paper set');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'New bundle' })).toBeDisabled());
+    await waitFor(() => expect(mockedGroups).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'New bundle' })).not.toBeInTheDocument();
   });
 
   it('shows the inspecting phase while the zip is being read', async () => {
@@ -365,5 +371,58 @@ describe('BundlesPage upload phases and dialog', () => {
     renderWithProviders(<BundlesPage />);
 
     expect(await screen.findByText('No bundles yet')).toBeInTheDocument();
+  });
+});
+
+describe('BundlesPage for someone who cannot change a bundle', () => {
+  const modifyingButtons = ['New bundle', 'Upload zip', 'Map & import', 'Edit', 'Delete'];
+
+  it('shows an anonymous visitor the shared bundles with nothing to modify', async () => {
+    authState.isAuthenticated = false;
+    mockedJobs.mockResolvedValue([{ _id: 'j1', name: 'Shared triage', bundleId: 'b1', status: 'active' }]);
+    renderWithProviders(<BundlesPage />);
+
+    expect(await screen.findByText('Paper set')).toBeInTheDocument();
+    // The shared job that made the bundle visible is the way in.
+    expect(await screen.findByRole('link', { name: 'Shared triage · active' })).toHaveAttribute('href', '/jobs/j1');
+    expect(mockedJobs).toHaveBeenCalledWith('worker');
+    for (const name of modifyingButtons) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText(/How to upload a bundle/)).not.toBeInTheDocument();
+    // Admin-only questions would only come back as 401s.
+    expect(mockedGroups).not.toHaveBeenCalled();
+    expect(mockedUploads).not.toHaveBeenCalled();
+  });
+
+  it('tells an anonymous visitor what would appear when nothing is shared', async () => {
+    authState.isAuthenticated = false;
+    mockedList.mockResolvedValue([]);
+    renderWithProviders(<BundlesPage />);
+
+    expect(await screen.findByText('Bundles behind publicly shared jobs will appear here.')).toBeInTheDocument();
+  });
+
+  it('gives a plain member of the bundle group no actions and no job-wizard link', async () => {
+    mockedList.mockResolvedValue([bundle({ _id: 'b2', name: 'Member set', groupId: 'g2' })]);
+    renderWithProviders(<BundlesPage />);
+
+    expect(await screen.findByText('Member set')).toBeInTheDocument();
+    // Administers g1, so groups have resolved once this appears — but not g2.
+    expect(await screen.findByRole('button', { name: 'New bundle' })).toBeInTheDocument();
+    for (const name of modifyingButtons.slice(1)) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.getByText('No jobs yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'create one' })).not.toBeInTheDocument();
+    expect(mockedUploads).not.toHaveBeenCalled();
+  });
+
+  it('tells a signed-in user without an admin group where bundles come from', async () => {
+    mockedList.mockResolvedValue([]);
+    mockedGroups.mockResolvedValue([{ groupId: 'g2', name: 'Other', role: 'member' }]);
+    renderWithProviders(<BundlesPage />);
+
+    expect(await screen.findByText('Bundles in your groups will appear here.')).toBeInTheDocument();
   });
 });

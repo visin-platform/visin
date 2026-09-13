@@ -25,6 +25,7 @@ import {
 } from '@mui/material';
 import { Inventory2Outlined, UploadFile, Delete, EditOutlined, TuneOutlined } from '@mui/icons-material';
 import { Loader } from '@visin/frontend-core';
+import { useAuth } from '../contexts/AuthContext';
 import { createBundle, deleteBundle, listBundles, listUploads, updateBundle } from '../services/bundleService';
 import { getMyGroups, listJobs } from '../services/jobService';
 import { useBundleUpload } from '../hooks/useBundleUpload';
@@ -112,11 +113,17 @@ const EditBundleDialog: React.FC<{ bundle: LabelBundle; onClose: () => void; onS
  * question you have while looking at it — and the answer is what the delete
  * confirmation is really warning about.
  */
-const BundleJobs: React.FC<{ jobs: LabelJob[] }> = ({ jobs }) => {
+const BundleJobs: React.FC<{ jobs: LabelJob[]; canCreateJob: boolean }> = ({ jobs, canCreateJob }) => {
   if (jobs.length === 0) {
     return (
       <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-        No jobs yet — <MuiLink component={Link} to="/jobs/new">create one</MuiLink> to start labeling this bundle.
+        {canCreateJob ? (
+          <>
+            No jobs yet — <MuiLink component={Link} to="/jobs/new">create one</MuiLink> to start labeling this bundle.
+          </>
+        ) : (
+          'No jobs yet.'
+        )}
       </Typography>
     );
   }
@@ -141,9 +148,16 @@ const BundleJobs: React.FC<{ jobs: LabelJob[] }> = ({ jobs }) => {
   );
 };
 
-const BundleCard: React.FC<{ bundle: LabelBundle; jobs: LabelJob[]; onChanged: () => void }> = ({
+/**
+ * `canManage` is group owner/admin on this bundle's group. Anyone else — an
+ * anonymous visitor looking at a shared job's bundle, or a plain member — gets
+ * the card without its actions: the server refuses those writes regardless, so
+ * offering them would only produce errors.
+ */
+const BundleCard: React.FC<{ bundle: LabelBundle; jobs: LabelJob[]; canManage: boolean; onChanged: () => void }> = ({
   bundle,
   jobs,
+  canManage,
   onChanged
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -152,9 +166,11 @@ const BundleCard: React.FC<{ bundle: LabelBundle; jobs: LabelJob[]; onChanged: (
   const [editOpen, setEditOpen] = useState(false);
   const [uploadsAnchor, setUploadsAnchor] = useState<HTMLElement | null>(null);
   // Uploaded zips survive a failed import, so re-importing never re-sends them.
+  // Admin-only on the server, so nobody else asks.
   const uploads = useQuery({
     queryKey: ['bundle-uploads', bundle._id],
-    queryFn: () => listUploads(bundle._id)
+    queryFn: () => listUploads(bundle._id),
+    enabled: canManage
   });
   const uploadList = uploads.data ?? [];
   const busy = state.phase === 'uploading' || state.phase === 'inspecting' || state.phase === 'importing';
@@ -197,7 +213,7 @@ const BundleCard: React.FC<{ bundle: LabelBundle; jobs: LabelJob[]; onChanged: (
           {bundle.manifest && <> · manifest ({bundle.manifest.length} rows)</>}
         </Typography>
 
-        <BundleJobs jobs={jobs} />
+        <BundleJobs jobs={jobs} canCreateJob={canManage} />
 
         {state.phase === 'uploading' && (
           <Box sx={{ mt: 1.5 }}>
@@ -236,76 +252,78 @@ const BundleCard: React.FC<{ bundle: LabelBundle; jobs: LabelJob[]; onChanged: (
           </Alert>
         )}
       </CardContent>
-      <CardActions>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".zip"
-          hidden
-          data-testid={`zip-input-${bundle._id}`}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) start(file);
-            event.target.value = '';
-          }}
-        />
-        <Button
-          size="small"
-          startIcon={<UploadFile />}
-          disabled={busy}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          Upload zip
-        </Button>
-        <Tooltip
-          title={
-            uploadList.length === 0
-              ? 'Upload a zip first'
-              : 'Set which zip folders are frames and annotation sets, then import. The zip stays on the server, so this never re-uploads it.'
-          }
-        >
-          {/* A disabled button swallows pointer events, so the tooltip needs a live wrapper. */}
-          <span>
-            <Button
-              size="small"
-              startIcon={<TuneOutlined />}
-              disabled={busy || uploadList.length === 0}
-              onClick={(event) => {
-                // One upload is the common case — go straight to mapping rather
-                // than making the user pick from a menu of one.
-                if (uploadList.length === 1) {
-                  startFromUpload(uploadList[0].zipFileId);
-                } else {
-                  setUploadsAnchor(event.currentTarget);
-                }
-              }}
-            >
-              Map &amp; import
-            </Button>
-          </span>
-        </Tooltip>
-        <Menu anchorEl={uploadsAnchor} open={Boolean(uploadsAnchor)} onClose={() => setUploadsAnchor(null)}>
-          <ListSubheader>Which upload?</ListSubheader>
-          {uploadList.map((upload, index) => (
-            <MenuItem
-              key={upload.zipFileId}
-              onClick={() => {
-                setUploadsAnchor(null);
-                startFromUpload(upload.zipFileId);
-              }}
-            >
-              {new Date(upload.uploadedAt).toLocaleString()} · {(upload.size / 1024 ** 2).toFixed(0)} MB
-              {index === 0 ? ' (latest)' : ''}
-            </MenuItem>
-          ))}
-        </Menu>
-        <Button size="small" startIcon={<EditOutlined />} onClick={() => setEditOpen(true)}>
-          Edit
-        </Button>
-        <Button size="small" color="error" startIcon={<Delete />} onClick={confirmDelete}>
-          Delete
-        </Button>
-      </CardActions>
+      {canManage && (
+        <CardActions>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".zip"
+            hidden
+            data-testid={`zip-input-${bundle._id}`}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) start(file);
+              event.target.value = '';
+            }}
+          />
+          <Button
+            size="small"
+            startIcon={<UploadFile />}
+            disabled={busy}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Upload zip
+          </Button>
+          <Tooltip
+            title={
+              uploadList.length === 0
+                ? 'Upload a zip first'
+                : 'Set which zip folders are frames and annotation sets, then import. The zip stays on the server, so this never re-uploads it.'
+            }
+          >
+            {/* A disabled button swallows pointer events, so the tooltip needs a live wrapper. */}
+            <span>
+              <Button
+                size="small"
+                startIcon={<TuneOutlined />}
+                disabled={busy || uploadList.length === 0}
+                onClick={(event) => {
+                  // One upload is the common case — go straight to mapping rather
+                  // than making the user pick from a menu of one.
+                  if (uploadList.length === 1) {
+                    startFromUpload(uploadList[0].zipFileId);
+                  } else {
+                    setUploadsAnchor(event.currentTarget);
+                  }
+                }}
+              >
+                Map &amp; import
+              </Button>
+            </span>
+          </Tooltip>
+          <Menu anchorEl={uploadsAnchor} open={Boolean(uploadsAnchor)} onClose={() => setUploadsAnchor(null)}>
+            <ListSubheader>Which upload?</ListSubheader>
+            {uploadList.map((upload, index) => (
+              <MenuItem
+                key={upload.zipFileId}
+                onClick={() => {
+                  setUploadsAnchor(null);
+                  startFromUpload(upload.zipFileId);
+                }}
+              >
+                {new Date(upload.uploadedAt).toLocaleString()} · {(upload.size / 1024 ** 2).toFixed(0)} MB
+                {index === 0 ? ' (latest)' : ''}
+              </MenuItem>
+            ))}
+          </Menu>
+          <Button size="small" startIcon={<EditOutlined />} onClick={() => setEditOpen(true)}>
+            Edit
+          </Button>
+          <Button size="small" color="error" startIcon={<Delete />} onClick={confirmDelete}>
+            Delete
+          </Button>
+        </CardActions>
+      )}
 
       {editOpen && <EditBundleDialog bundle={bundle} onClose={() => setEditOpen(false)} onSaved={onChanged} />}
 
@@ -325,11 +343,18 @@ const BundleCard: React.FC<{ bundle: LabelBundle; jobs: LabelJob[]; onChanged: (
 
 const BundlesPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
+  // Anonymously this is the bundles behind publicly shared jobs; signed in, your groups' bundles.
   const { data: bundles, isLoading } = useQuery({ queryKey: ['bundles'], queryFn: listBundles });
-  const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups });
-  // Admin role: a bundle's jobs include drafts and paused ones, which the worker
-  // list omits — and those are exactly the ones you come here to find again.
-  const { data: jobs } = useQuery({ queryKey: ['jobs', 'admin'], queryFn: () => listJobs('admin') });
+  // "My groups" is a question only a signed-in caller can ask; asking it
+  // anonymously would just be a 401.
+  const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups, enabled: isAuthenticated });
+  // Signed in, the admin role: a bundle's jobs include drafts and paused ones,
+  // which the worker list omits — and those are exactly the ones you come here to
+  // find again. Anonymously the admin list is always empty, and the publicly
+  // shared jobs are what made these bundles visible in the first place.
+  const jobsRole = isAuthenticated ? 'admin' : 'worker';
+  const { data: jobs } = useQuery({ queryKey: ['jobs', jobsRole], queryFn: () => listJobs(jobsRole) });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -337,6 +362,11 @@ const BundlesPage: React.FC = () => {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const adminGroups = (groups || []).filter((group) => group.role === 'owner' || group.role === 'admin');
+  const adminGroupIds = new Set(adminGroups.map((group) => group.groupId));
+  // Creating needs a group you administer; without one the dialog's group picker
+  // would be empty, so the button and the upload guide appear only where they can
+  // be used.
+  const canCreate = adminGroups.length > 0;
   const jobsByBundle = useMemo(() => {
     const byBundle = new Map<string, LabelJob[]>();
     for (const job of jobs || []) {
@@ -368,13 +398,16 @@ const BundlesPage: React.FC = () => {
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="body1" sx={{ color: 'text.secondary' }}>
           Bundles are uploaded image sets (frames + annotation layers) that jobs draw from.
+          {!isAuthenticated && ' These are the ones behind publicly shared jobs.'}
         </Typography>
-        <Button variant="contained" onClick={() => setDialogOpen(true)} disabled={adminGroups.length === 0}>
-          New bundle
-        </Button>
+        {canCreate && (
+          <Button variant="contained" onClick={() => setDialogOpen(true)}>
+            New bundle
+          </Button>
+        )}
       </Stack>
 
-      <BundleFormatHelp />
+      {canCreate && <BundleFormatHelp />}
 
       {(!bundles || bundles.length === 0) && (
         <Box sx={{ textAlign: 'center', py: 6 }}>
@@ -383,7 +416,15 @@ const BundlesPage: React.FC = () => {
             No bundles yet
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Create one, then upload a zip — see <strong>How to upload a bundle</strong> above for the layout.
+            {canCreate ? (
+              <>
+                Create one, then upload a zip — see <strong>How to upload a bundle</strong> above for the layout.
+              </>
+            ) : isAuthenticated ? (
+              'Bundles in your groups will appear here.'
+            ) : (
+              'Bundles behind publicly shared jobs will appear here.'
+            )}
           </Typography>
         </Box>
       )}
@@ -393,6 +434,7 @@ const BundlesPage: React.FC = () => {
           key={bundle._id}
           bundle={bundle}
           jobs={jobsByBundle.get(bundle._id) || []}
+          canManage={adminGroupIds.has(bundle.groupId)}
           onChanged={refresh}
         />
       ))}

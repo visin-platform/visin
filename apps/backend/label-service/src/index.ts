@@ -21,13 +21,14 @@ app.get('/health', createHealthCheckHandler({
   checkMongo: true
 }));
 
-// Job reads enforce group membership or explicit active publication. Writing
-// always requires authentication. `optionalAuth` only attaches `req.user` when a valid cookie is
+// Job and bundle reads enforce group membership or explicit active publication
+// (a bundle is public while a job built on it is). Writing always requires
+// authentication. `optionalAuth` only attaches `req.user` when a valid cookie is
 // there; the routers that must have one apply `authenticateToken` themselves,
-// per-route in jobs/tasks (mixed) and wholesale here for bundles and /me, which
-// have no public surface at all.
+// per-route in jobs/tasks/bundles (mixed) and wholesale here for /me, which has
+// no public surface at all.
 app.use('/api', optionalAuth);
-app.use('/api/bundles', authenticateToken, bundleRoutes);
+app.use('/api/bundles', bundleRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/me', authenticateToken, meRoutes);

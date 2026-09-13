@@ -37,8 +37,11 @@ const COLLAPSED_DRAWER_WIDTH = 88;
 interface NavItemBase {
   text: string;
   icon: ReactNode;
-  /** Draws a divider above this item, to separate groups of sections. */
-  dividerBefore?: boolean;
+  /**
+   * Heading this item is listed under. Consecutive items sharing a group are
+   * drawn together beneath one heading; an item without one gets no heading.
+   */
+  group?: string;
 }
 
 /** A section of the current app, navigated to client-side. */
@@ -55,12 +58,6 @@ export interface AppLayoutExternalNavItem extends NavItemBase {
 
 export type AppLayoutNavItem = AppLayoutInternalNavItem | AppLayoutExternalNavItem;
 
-export interface AppLayoutFooterLink {
-  text: string;
-  icon: ReactNode;
-  href: string;
-}
-
 export interface AppLayoutUser {
   name?: string;
   email?: string;
@@ -76,8 +73,6 @@ export interface AppLayoutProps {
   navItems: AppLayoutNavItem[];
   user: AppLayoutUser | null;
   onLogout: () => void;
-  /** Optional link pinned below the nav list, e.g. "Back to Vision". */
-  footerLink?: AppLayoutFooterLink;
   /** Max width of the centered content column. Defaults to 800. */
   maxContentWidth?: number;
   /**
@@ -117,7 +112,6 @@ export function AppLayout({
   navItems,
   user,
   onLogout,
-  footerLink,
   maxContentWidth = 800,
   isAuthenticated = true,
   onLogin,
@@ -186,19 +180,43 @@ export function AppLayout({
           )}
         </Box>
 
-        <List sx={{ px: 2, flexGrow: 1 }}>
-          {navItems.map((item) => {
+        <List sx={{ px: 2, flexGrow: 1, overflowY: 'auto' }}>
+          {navItems.map((item, index) => {
             const active = isActive(item);
             // An external item is a plain anchor: it belongs to a sibling app,
-            // so it needs a full page load, not a client-side route change.
+            // so it needs a full page load, not a client-side route change. It
+            // is otherwise drawn exactly like a local one — the menu is one
+            // product, not a list of apps.
             const linkProps =
               item.path !== undefined
                 ? { component: Link, to: item.path }
                 : { component: 'a' as const, href: item.href };
+            const startsGroup = item.group !== undefined && item.group !== navItems[index - 1]?.group;
 
             return (
               <ListItem key={item.text} disablePadding sx={{ mb: 0.5, display: 'block' }}>
-                {item.dividerBefore && <Divider sx={{ my: 1.5, mx: 1, borderColor: 'rgba(255,255,255,0.1)' }} />}
+                {startsGroup &&
+                  (collapsed ? (
+                    // The icon rail has no room for a label; a rule still shows
+                    // where one group ends.
+                    index > 0 && <Divider sx={{ my: 1.5, mx: 1, borderColor: 'rgba(255,255,255,0.1)' }} />
+                  ) : (
+                    <Typography
+                      component="div"
+                      sx={{
+                        px: 2,
+                        pt: index > 0 ? 2 : 0,
+                        pb: 1,
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        color: 'rgba(255,255,255,0.4)'
+                      }}
+                    >
+                      {item.group}
+                    </Typography>
+                  ))}
                 <ListItemButton
                   {...linkProps}
                   selected={active}
@@ -249,40 +267,6 @@ export function AppLayout({
             );
           })}
         </List>
-
-        {footerLink && (
-          <List sx={{ px: 2 }}>
-            <ListItem disablePadding>
-              <ListItemButton
-                component="a"
-                href={footerLink.href}
-                sx={{
-                  borderRadius: 2,
-                  py: 1.2,
-                  justifyContent: collapsed ? 'center' : 'initial',
-                  color: 'rgba(255,255,255,0.5)',
-                  '&:hover': {
-                    bgcolor: 'rgba(255,255,255,0.05)',
-                    color: '#fff',
-                    '& .MuiListItemIcon-root': {
-                      color: '#fff'
-                    }
-                  }
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: collapsed ? 0 : 40, justifyContent: 'center', color: 'inherit' }}>
-                  {footerLink.icon}
-                </ListItemIcon>
-                {!collapsed && (
-                  <ListItemText
-                    primary={footerLink.text}
-                    slotProps={{ primary: { sx: { fontWeight: 500, fontSize: '0.925rem' } } }}
-                  />
-                )}
-              </ListItemButton>
-            </ListItem>
-          </List>
-        )}
 
         <Divider sx={{ mx: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
 

@@ -6,7 +6,8 @@ jobs, tasks, answers, and export.
 - Port: `5008`
 - Stack: Express + TypeScript + Mongoose, bootstrapped from `@visin/backend-core`
 - Auth: JWT `access_token` cookie or `Authorization: Bearer`. Group members can
-  read their jobs; outsiders can read only explicitly published, active jobs.
+  read their jobs and bundles; outsiders can read only explicitly published, active
+  jobs, and the bundles those jobs are built on.
 - Storage: image/zip bytes live on disk behind file-service (internal API); this
   service persists metadata and uses bounded temporary files while importing archives.
 
@@ -24,6 +25,13 @@ Detail, statistics, direct task IDs, and frame indices enforce the same rule bef
 reading content or issuing image URLs. Revocation is checked again on each request.
 Previously issued signed image URLs remain usable until their existing expiry
 (up to one hour); downloaded/cached content cannot be recalled.
+
+A bundle has no sharing flag of its own. `GET /api/bundles` and `GET /api/bundles/:id`
+serve a non-member exactly the bundles behind a public, active job — the job has
+already made those frames public — with the uploader's `createdBy` removed. Closing
+the last such job makes the bundle private again. Every other bundle route
+(create, edit, upload, import, delete, mask fields) requires sign-in and group
+owner/admin (mask fields: membership).
 
 ## Bundle import
 

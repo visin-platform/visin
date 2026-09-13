@@ -58,10 +58,11 @@ describe('AppLayout', () => {
     expect(screen.getAllByText('Projects').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Trainings').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Datasets').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Labeling').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Jobs').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bundles').length).toBeGreaterThan(0);
   });
 
-  it('shows one Labeling entry, not label-front own sections', () => {
+  it('shows label-front sections under a Labeling heading, as label-front itself does', () => {
     mockedUseAuth.mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -71,13 +72,14 @@ describe('AppLayout', () => {
 
     renderLayout();
 
-    // Jobs and Bundles belong in label-front's sidebar, not Vision's.
-    expect(screen.queryByText('Jobs')).not.toBeInTheDocument();
-    expect(screen.queryByText('Bundles')).not.toBeInTheDocument();
+    // The menu is identical in both apps, so following a link across does not
+    // swap it out; "New job" is an action on the Jobs list, not a section.
+    expect(screen.getAllByText('Vision').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Labeling').length).toBeGreaterThan(0);
     expect(screen.queryByText('New job')).not.toBeInTheDocument();
   });
 
-  it('sends Labeling straight to label-front', () => {
+  it('sends label-front sections straight to label-front', () => {
     mockedUseAuth.mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -87,14 +89,15 @@ describe('AppLayout', () => {
 
     renderLayout();
 
-    // No interstitial page in between — the menu item is the label-front URL.
-    expect(screen.getAllByText('Labeling')[0].closest('a')).toHaveAttribute(
+    // No interstitial page in between — each menu item is the label-front URL.
+    expect(screen.getAllByText('Jobs')[0].closest('a')).toHaveAttribute('href', 'https://label.example.com/jobs');
+    expect(screen.getAllByText('Bundles')[0].closest('a')).toHaveAttribute(
       'href',
-      'https://label.example.com/jobs'
+      'https://label.example.com/bundles'
     );
   });
 
-  it('drops the Labeling entry when label-front is unconfigured', () => {
+  it('drops the Labeling group when label-front is unconfigured', () => {
     mockedGetGlobalConfig.mockReturnValue({} as any);
     mockedUseAuth.mockReturnValue({
       user: null,
@@ -105,8 +108,9 @@ describe('AppLayout', () => {
 
     renderLayout();
 
-    // Better an absent entry than one that 404s inside Vision.
+    // Better absent entries than ones that 404 inside Vision.
     expect(screen.queryByText('Labeling')).not.toBeInTheDocument();
+    expect(screen.queryByText('Jobs')).not.toBeInTheDocument();
     expect(screen.getAllByText('Projects').length).toBeGreaterThan(0);
   });
 

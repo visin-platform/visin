@@ -42,6 +42,31 @@ export const listBundlesForUser = async (userId: string): Promise<ILabelBundle[]
   return LabelBundle.find({ groupId: { $in: groupIds } }).sort({ updatedAt: -1 });
 };
 
+/**
+ * A bundle is visible outside its group while a job built on it is shared
+ * publicly — the same rule that makes the job's frames public, so exposing the
+ * bundle's metadata shares nothing the job has not already shared. There is no
+ * separate flag to forget to clear: pausing, archiving or unsharing the last
+ * such job makes the bundle private again.
+ */
+const PUBLIC_JOB_FILTER = { status: 'active', isPublic: true } as const;
+
+/** A bundle as an outsider may see it: everything except who uploaded it. */
+export const withoutCreatorIdentity = (bundle: ILabelBundle): Record<string, unknown> => {
+  const { createdBy: _createdBy, ...rest } = bundle.toObject();
+  return rest;
+};
+
+/** Bundles behind at least one publicly shared job — what an anonymous caller lists. */
+export const listPublicBundles = async (): Promise<Record<string, unknown>[]> => {
+  const bundleIds = await LabelJob.distinct('bundleId', PUBLIC_JOB_FILTER);
+  const bundles = await LabelBundle.find({ _id: { $in: bundleIds } }).sort({ updatedAt: -1 });
+  return bundles.map(withoutCreatorIdentity);
+};
+
+export const isBundlePublic = async (bundleId: string): Promise<boolean> =>
+  (await LabelJob.exists({ bundleId, ...PUBLIC_JOB_FILTER })) !== null;
+
 export const getBundle = async (bundleId: string): Promise<ILabelBundle> => {
   const bundle = await LabelBundle.findById(bundleId);
   if (!bundle) {

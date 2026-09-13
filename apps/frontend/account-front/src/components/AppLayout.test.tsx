@@ -14,7 +14,7 @@ vi.mock('../contexts/AuthContext', () => ({
 }));
 
 vi.mock('../config/ConfigProvider', () => ({
-  getGlobalConfig: () => ({ VISION_FRONT_URL: 'https://vision.test' }),
+  getGlobalConfig: () => ({ VISION_FRONT_URL: 'https://vision.test', LABEL_FRONT_URL: 'https://label.test' }),
 }));
 
 const renderAt = (path: string) =>
@@ -54,14 +54,24 @@ describe('AppLayout', () => {
     expect(screen.getByRole('heading', { level: 4, name: 'Account' })).toBeInTheDocument();
   });
 
-  it('links "Back to Vision" to the configured VISION_FRONT_URL', () => {
+  it('shows the same Vision and Labeling sections as the other apps, linking across', () => {
     renderAt('/account/profile');
 
-    const links = screen.getAllByText('Back to Vision').map((el) => el.closest('a'));
-    expect(links.every((link) => link?.getAttribute('href') === 'https://vision.test')).toBe(true);
+    expect(screen.getAllByText('Datasets')[0].closest('a')).toHaveAttribute('href', 'https://vision.test/datasets');
+    expect(screen.getAllByText('Bundles')[0].closest('a')).toHaveAttribute('href', 'https://label.test/bundles');
   });
 
-  it('falls back to the default Vision URL when unconfigured', async () => {
+  it('lists its own sections under an Account heading, after the shared groups', () => {
+    const { container } = renderAt('/account/profile');
+    const texts = Array.from(container.querySelector('nav')!.querySelectorAll('li')).map((li) => li.textContent);
+
+    expect(texts.findIndex((t) => t?.includes('Bundles'))).toBeLessThan(
+      texts.findIndex((t) => t?.includes('Profile'))
+    );
+    expect(texts.find((t) => t?.includes('Profile'))).toContain('Account');
+  });
+
+  it('drops a group whose app is unconfigured rather than guessing a URL', async () => {
     vi.doMock('../config/ConfigProvider', () => ({ getGlobalConfig: () => ({}) }));
     vi.resetModules();
     const { default: FreshAppLayout } = await import('./AppLayout');
@@ -74,8 +84,9 @@ describe('AppLayout', () => {
       </MemoryRouter>
     );
 
-    const links = screen.getAllByText('Back to Vision').map((el) => el.closest('a'));
-    expect(links.every((link) => link?.getAttribute('href') === 'https://app.visin.eu')).toBe(true);
+    expect(screen.queryByText('Projects')).not.toBeInTheDocument();
+    expect(screen.queryByText('Jobs')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Profile').length).toBeGreaterThan(0);
 
     vi.doUnmock('../config/ConfigProvider');
   });

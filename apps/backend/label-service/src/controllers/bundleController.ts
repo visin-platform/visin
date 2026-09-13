@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
+import { ForbiddenError } from '@visin/backend-core';
 import * as svc from '../services/bundleService';
-import { assertAdmin, assertMember, requireUser } from '../services/groupAccessService';
+import { assertAdmin, assertMember, isMember, requireUser } from '../services/groupAccessService';
 
 export const createBundle = async (req: Request, res: Response): Promise<void> => {
   const user = requireUser(req);
@@ -9,16 +10,30 @@ export const createBundle = async (req: Request, res: Response): Promise<void> =
   res.status(201).json({ success: true, data: bundle });
 };
 
+/**
+ * Anonymous callers get the bundles behind publicly shared jobs; a signed-in
+ * caller gets their groups' bundles, as with the jobs list.
+ */
 export const listBundles = async (req: Request, res: Response): Promise<void> => {
-  const user = requireUser(req);
-  const bundles = await svc.listBundlesForUser(user.id);
+  if (!req.user?.id) {
+    res.json({ success: true, data: await svc.listPublicBundles() });
+    return;
+  }
+  const bundles = await svc.listBundlesForUser(req.user.id);
   res.json({ success: true, data: bundles });
 };
 
+/** Members see the whole bundle; anyone else only a publicly shared one, minus its uploader. */
 export const getBundle = async (req: Request, res: Response): Promise<void> => {
   const bundle = await svc.getBundle(req.params.id as string);
-  await assertMember(req, bundle.groupId);
-  res.json({ success: true, data: bundle });
+  if (await isMember(req, bundle.groupId)) {
+    res.json({ success: true, data: bundle });
+    return;
+  }
+  if (!(await svc.isBundlePublic(bundle._id.toString()))) {
+    throw new ForbiddenError('This bundle is not shared publicly. Group membership is required.');
+  }
+  res.json({ success: true, data: svc.withoutCreatorIdentity(bundle) });
 };
 
 export const updateBundle = async (req: Request, res: Response): Promise<void> => {

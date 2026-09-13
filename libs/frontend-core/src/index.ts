@@ -13,7 +13,6 @@ export type {
   AppLayoutNavItem,
   AppLayoutInternalNavItem,
   AppLayoutExternalNavItem,
-  AppLayoutFooterLink,
   AppLayoutUser
 } from './components/AppLayout';
 export { createVisinNavItems } from './navigation';

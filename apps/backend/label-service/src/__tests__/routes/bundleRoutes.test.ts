@@ -1,7 +1,7 @@
 import router from '../../routes/bundleRoutes';
 
 type Layer = {
-  route?: { path: string; methods: Record<string, boolean>; stack: unknown[] };
+  route?: { path: string; methods: Record<string, boolean>; stack: { name?: string }[] };
 };
 
 const routes = (router.stack as Layer[])
@@ -10,6 +10,9 @@ const routes = (router.stack as Layer[])
     path: layer.route!.path,
     methods: Object.keys(layer.route!.methods),
     handlerCount: layer.route!.stack.length,
+    // The service mounts `optionalAuth` globally, so a route demands a signed-in
+    // caller only by naming `authenticateToken` in its own stack.
+    requiresAuth: layer.route!.stack.some((handler) => handler.name === 'authenticateToken'),
   }));
 
 const find = (method: string, path: string) =>
@@ -33,9 +36,32 @@ describe('bundleRoutes', () => {
   });
 
   it('validates bodies on create and import', () => {
-    expect(find('post', '/')!.handlerCount).toBe(2);
-    expect(find('post', '/:id/import')!.handlerCount).toBe(2);
-    expect(find('post', '/:id/import/preview')!.handlerCount).toBe(2);
-    expect(find('patch', '/:id')!.handlerCount).toBe(2);
+    // authenticateToken + validateRequest + controller
+    expect(find('post', '/')!.handlerCount).toBe(3);
+    expect(find('post', '/:id/import')!.handlerCount).toBe(3);
+    expect(find('post', '/:id/import/preview')!.handlerCount).toBe(3);
+    expect(find('patch', '/:id')!.handlerCount).toBe(3);
+  });
+
+  it('serves reading bundles anonymously and gates everything else', () => {
+    // Visibility is decided in the controller: a publicly shared job's bundle.
+    expect(find('get', '/')!.requiresAuth).toBe(false);
+    expect(find('get', '/:id')!.requiresAuth).toBe(false);
+
+    const gated: [string, string][] = [
+      ['post', '/'],
+      ['patch', '/:id'],
+      ['get', '/:id/mask-fields'],
+      ['post', '/:id/upload-url'],
+      ['get', '/:id/uploads'],
+      ['post', '/:id/import/preview'],
+      ['post', '/:id/import'],
+      ['get', '/:id/import/:importId'],
+      ['delete', '/:id/import/:importId'],
+      ['delete', '/:id'],
+    ];
+    for (const [method, path] of gated) {
+      expect({ method, path, requiresAuth: find(method, path)!.requiresAuth }).toEqual({ method, path, requiresAuth: true });
+    }
   });
 });

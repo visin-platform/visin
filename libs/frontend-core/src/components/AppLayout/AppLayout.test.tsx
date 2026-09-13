@@ -1,18 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { AppLayout, type AppLayoutNavItem, type AppLayoutFooterLink, type AppLayoutUser } from './AppLayout';
+import { AppLayout, type AppLayoutNavItem, type AppLayoutUser } from './AppLayout';
 
 const navItems: AppLayoutNavItem[] = [
   { text: 'Jobs', icon: <span>jobs-icon</span>, path: '/jobs' },
   { text: 'New job', icon: <span>new-job-icon</span>, path: '/jobs/new' }
 ];
-
-const footerLink: AppLayoutFooterLink = {
-  text: 'Back to Vision',
-  icon: <span>back-icon</span>,
-  href: 'https://app.visin.eu'
-};
 
 const onLogout = vi.fn();
 
@@ -128,31 +122,53 @@ describe('AppLayout', () => {
     expect(screen.getAllByText('Jobs').length).toBeGreaterThan(0);
   });
 
-  it('omits the footer link section by default', () => {
-    renderAt('/jobs');
+  describe('grouped nav items', () => {
+    const groupedNav: AppLayoutNavItem[] = [
+      { text: 'Projects', icon: <span>p</span>, path: '/projects', group: 'Vision' },
+      { text: 'Datasets', icon: <span>d</span>, path: '/datasets', group: 'Vision' },
+      { text: 'Jobs', icon: <span>j</span>, href: 'https://label.test/jobs', group: 'Labeling' }
+    ];
 
-    expect(screen.queryByText('Back to Vision')).not.toBeInTheDocument();
-  });
+    const renderGrouped = (extraProps: Partial<React.ComponentProps<typeof AppLayout>> = {}) =>
+      render(
+        <MemoryRouter initialEntries={['/projects']}>
+          <AppLayout appName="Vision" subtitle="s" navItems={groupedNav} user={null} onLogout={onLogout} {...extraProps}>
+            <div>page content</div>
+          </AppLayout>
+        </MemoryRouter>
+      );
 
-  it('renders an optional footer link', () => {
-    render(
-      <MemoryRouter initialEntries={['/jobs']}>
-        <AppLayout
-          appName="Jobs App"
-          subtitle="Manage jobs."
-          navItems={navItems}
-          user={{ name: 'Test User' }}
-          onLogout={onLogout}
-          footerLink={footerLink}
-        >
-          <div>page content</div>
-        </AppLayout>
-      </MemoryRouter>
-    );
+    it('draws one heading per group, above its first item', () => {
+      const { container } = renderGrouped();
+      const nav = within(container.querySelector('nav')!);
 
-    const links = screen.getAllByText('Back to Vision').map((el) => el.closest('a'));
-    expect(links.length).toBeGreaterThan(0);
-    links.forEach((link) => expect(link).toHaveAttribute('href', 'https://app.visin.eu'));
+      expect(nav.getAllByText('Vision')).toHaveLength(1);
+      expect(nav.getAllByText('Labeling')).toHaveLength(1);
+      // The heading precedes the group's first item in document order.
+      const heading = nav.getByText('Labeling');
+      const jobs = nav.getByText('Jobs');
+      expect(heading.compareDocumentPosition(jobs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('draws no headings for ungrouped items', () => {
+      const { container } = renderAt('/jobs');
+
+      expect(container.querySelector('nav')!.querySelectorAll('.MuiDivider-root')).toHaveLength(1);
+      expect(within(container.querySelector('nav')!).queryByText('Jobs App')).not.toBeInTheDocument();
+    });
+
+    it('swaps headings for a rule between groups on the collapsed rail', () => {
+      const { container } = renderGrouped({ collapsible: true });
+      const nav = () => container.querySelector('nav')!;
+      const dividers = () => nav().querySelectorAll('.MuiDivider-root').length;
+      const before = dividers();
+
+      fireEvent.click(screen.getByLabelText('collapse navigation'));
+
+      expect(within(nav()).queryByText('Labeling')).not.toBeInTheDocument();
+      // One rule between the two groups, none above the first.
+      expect(dividers()).toBe(before + 1);
+    });
   });
 
   it('applies a custom max content width', () => {
@@ -177,11 +193,11 @@ describe('AppLayout', () => {
   describe('external nav items', () => {
     const mixedNav: AppLayoutNavItem[] = [
       { text: 'Datasets', icon: <span>d</span>, path: '/datasets' },
-      { text: 'Jobs', icon: <span>j</span>, href: 'https://label.test/jobs', dividerBefore: true }
+      { text: 'Jobs', icon: <span>j</span>, href: 'https://label.test/jobs' }
     ];
 
     it('renders a sibling app section as a plain anchor', () => {
-      const { container } = render(
+      render(
         <MemoryRouter initialEntries={['/datasets']}>
           <AppLayout appName="Vision" subtitle="s" navItems={mixedNav} user={null} onLogout={onLogout}>
             <div>page content</div>
@@ -194,7 +210,6 @@ describe('AppLayout', () => {
         'href',
         'https://label.test/jobs'
       );
-      expect(container.querySelectorAll('.MuiDivider-root').length).toBeGreaterThan(0);
     });
 
     it('never marks an external item active', () => {

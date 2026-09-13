@@ -8,7 +8,7 @@ jest.mock('../../models/LabelImage', () => ({
   LabelImage: { deleteMany: jest.fn(), find: jest.fn() },
 }));
 jest.mock('../../models/LabelJob', () => ({
-  LabelJob: { countDocuments: jest.fn(), find: jest.fn(), deleteMany: jest.fn() },
+  LabelJob: { countDocuments: jest.fn(), find: jest.fn(), deleteMany: jest.fn(), distinct: jest.fn(), exists: jest.fn() },
 }));
 jest.mock('../../models/LabelTask', () => ({
   LabelTask: { deleteMany: jest.fn() },
@@ -110,6 +110,40 @@ describe('listBundlesForUser', () => {
     await svc.listBundlesForUser('user@x.com');
 
     expect(mockedBundle.find).toHaveBeenCalledWith({ groupId: { $in: ['g1', 'g2'] } });
+  });
+});
+
+describe('public bundles', () => {
+  const doc = (fields: Record<string, unknown>) => ({ toObject: () => fields });
+  const uploader = { userId: 'u1', email: 'uploader@x.com' };
+
+  it('lists the bundles behind active, publicly shared jobs, without their uploader', async () => {
+    mockedJob.distinct.mockResolvedValue(['b1', 'b2']);
+    const sort = jest.fn().mockResolvedValue([doc({ _id: 'b1', name: 'A', createdBy: uploader })]);
+    mockedBundle.find.mockReturnValue({ sort });
+
+    const result = await svc.listPublicBundles();
+
+    expect(mockedJob.distinct).toHaveBeenCalledWith('bundleId', { status: 'active', isPublic: true });
+    expect(mockedBundle.find).toHaveBeenCalledWith({ _id: { $in: ['b1', 'b2'] } });
+    expect(sort).toHaveBeenCalledWith({ updatedAt: -1 });
+    expect(result).toEqual([{ _id: 'b1', name: 'A' }]);
+  });
+
+  it.each([
+    [{ _id: 'j1' }, true],
+    [null, false],
+  ])('treats a bundle as public exactly while such a job exists (%p → %s)', async (found, expected) => {
+    mockedJob.exists.mockResolvedValue(found);
+
+    await expect(svc.isBundlePublic('b1')).resolves.toBe(expected);
+    expect(mockedJob.exists).toHaveBeenCalledWith({ bundleId: 'b1', status: 'active', isPublic: true });
+  });
+
+  it('strips only the uploader identity', () => {
+    const bundle = doc({ _id: 'b1', name: 'A', groupId: 'g1', createdBy: uploader });
+
+    expect(svc.withoutCreatorIdentity(bundle as never)).toEqual({ _id: 'b1', name: 'A', groupId: 'g1' });
   });
 });
 

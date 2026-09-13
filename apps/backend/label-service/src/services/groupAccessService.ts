@@ -37,6 +37,13 @@ export const assertMember = async (req: Request, groupId: string): Promise<void>
   }
 };
 
+/** Like `assertMember`, but answers rather than throws — for reads that fall back to public data. */
+export const isMember = async (req: Request, groupId: string): Promise<boolean> => {
+  if (!req.user?.id) return false;
+  const { member } = await membershipFor(req, groupId);
+  return member === true;
+};
+
 /** Read capabilities may fall back to public data for callers without this role. */
 export const isGroupAdmin = async (req: Request, groupId: string): Promise<boolean> => {
   if (!req.user?.id) return false;
