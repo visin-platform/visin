@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.7.0](https://github.com/visin-platform/visin/compare/v1.6.0...v1.7.0) (2026-09-13)
+
+
+### Features
+
+* rework release pipeline ([7786c1d](https://github.com/visin-platform/visin/commit/7786c1d7001ccbd17aee151f82e3c106bc786eda))
+
 ## [1.6.0](https://github.com/visin-platform/visin/compare/v1.5.0...v1.6.0) (2026-09-13)
 
 
