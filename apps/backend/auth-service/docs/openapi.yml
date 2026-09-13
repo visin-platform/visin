@@ -8,8 +8,12 @@ info:
 servers:
   - url: http://localhost:5001
     description: Development server
-  - url: https://auth-api.visin.eu
-    description: Production server
+  - url: https://{host}
+    description: Your deployment's auth-service
+    variables:
+      host:
+        default: auth-api.example.com
+        description: Public hostname of auth-service (AUTH_SERVICE_PUBLIC_URL)
 
 tags:
   - name: Authentication

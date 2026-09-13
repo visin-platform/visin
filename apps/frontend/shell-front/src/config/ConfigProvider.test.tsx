@@ -1,0 +1,49 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+
+// The provider keeps the first config it resolves, so each test gets a fresh module.
+const renderProvider = async () => {
+  vi.resetModules();
+  const { ConfigProvider, getGlobalConfig } = await import('./ConfigProvider');
+  render(
+    <ConfigProvider>
+      <div>shell</div>
+    </ConfigProvider>
+  );
+  await screen.findByText('shell');
+  return getGlobalConfig();
+};
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe('shell ConfigProvider', () => {
+  // `npm run dev` starts each app on its fixed port; the shell must find them
+  // without anyone writing an .env for it.
+  it('finds every app on its local dev port when nothing is configured', async () => {
+    for (const name of [
+      'VITE_AUTH_SERVICE_URL',
+      'VITE_AUTH_FRONT_URL',
+      'VITE_VISION_FRONT_URL',
+      'VITE_LABEL_FRONT_URL',
+      'VITE_ACCOUNT_FRONT_URL',
+    ]) {
+      vi.stubEnv(name, '');
+    }
+
+    expect(await renderProvider()).toEqual({
+      AUTH_SERVICE_URL: 'http://localhost:5001',
+      AUTH_FRONT_URL: 'http://localhost:3004',
+      VISION_FRONT_URL: 'http://localhost:3012',
+      LABEL_FRONT_URL: 'http://localhost:3008',
+      ACCOUNT_FRONT_URL: 'http://localhost:3007',
+    });
+  });
+
+  it('lets a VITE_ variable point an app somewhere else', async () => {
+    vi.stubEnv('VITE_LABEL_FRONT_URL', 'http://label.dev.test');
+
+    expect(await renderProvider()).toEqual(expect.objectContaining({ LABEL_FRONT_URL: 'http://label.dev.test' }));
+  });
+});

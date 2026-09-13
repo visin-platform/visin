@@ -7,7 +7,7 @@ import {
   ListResourcesRequestSchema,
   ListToolsRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
-import { logger, looksLikeApiKey, verifyAccessToken, verifyApiKey } from '@visin/backend-core';
+import { logger, looksLikeApiKey, requireEnv, verifyAccessToken, verifyApiKey } from '@visin/backend-core';
 import type { ApiKeyScope } from '@visin/backend-core';
 import { SERVED_SCOPES, registerTools } from './tools';
 
@@ -83,13 +83,14 @@ const SERVER_INSTRUCTIONS = [
   'anyone. Quote them as approximate.'
 ].join('\n');
 
-/** Where a client is told to go when it presents nothing usable. */
-const canonicalUrl = (): string =>
-  (process.env.MCP_PUBLIC_URL || 'https://mcp.visin.eu').replace(/\/$/, '');
+/**
+ * Where a client is told to go when it presents nothing usable. Asserted at
+ * startup (index.ts): it is this deployment's own address, so there is no default.
+ */
+const canonicalUrl = (): string => requireEnv('MCP_PUBLIC_URL').replace(/\/$/, '');
 
-/** The authorization server that issues access tokens for this resource. */
-const authorizationServer = (): string =>
-  (process.env.AUTH_SERVICE_URL || 'https://auth-api.visin.eu').replace(/\/$/, '');
+/** The authorization server that issues access tokens for this resource; asserted at startup too. */
+const authorizationServer = (): string => requireEnv('AUTH_SERVICE_URL').replace(/\/$/, '');
 
 /**
  * Answer the listings this server has nothing to offer for.

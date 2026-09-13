@@ -168,8 +168,8 @@ describe('MCP access tokens are not sessions', () => {
       userId: 'u1',
       email: 'a@b.com',
       name: 'A B',
-      resource: 'https://mcp.visin.eu',
-      issuer: 'https://auth-api.visin.eu',
+      resource: 'https://mcp.example.test',
+      issuer: 'https://auth-api.example.test',
       scopes: ['vision:read'],
       clientId: 'vsn-client-abc',
       clientName: 'Claude'

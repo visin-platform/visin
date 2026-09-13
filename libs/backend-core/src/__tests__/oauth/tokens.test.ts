@@ -9,8 +9,8 @@ import {
 } from '../../oauth/tokens';
 
 const SECRET = 'test-secret';
-const RESOURCE = 'https://mcp.visin.eu';
-const ISSUER = 'https://auth-api.visin.eu';
+const RESOURCE = 'https://mcp.example.test';
+const ISSUER = 'https://auth-api.example.test';
 
 const mint = (over: Partial<Parameters<typeof mintAccessToken>[0]> = {}) =>
   mintAccessToken({

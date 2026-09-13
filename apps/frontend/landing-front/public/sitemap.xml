@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  visin.eu is the public marketing site and is a single page; its sections are
-  in-page anchors, which belong to the same URL. The app, auth and account
-  subdomains are behind sign-in and are deliberately not listed.
+  The landing page is a single page; its sections are in-page anchors, which
+  belong to the same URL. The app, auth and account frontends are behind
+  sign-in and are deliberately not listed. The address is filled in from
+  LANDING_FRONT_URL by docker-entrypoint.sh, which removes this file when that
+  is unset.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://visin.eu/</loc>
+    <loc>__LANDING_FRONT_URL__/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>

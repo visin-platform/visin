@@ -12,7 +12,7 @@ const response = (body: unknown, ok = true) => ({ ok, json: async () => body }) 
 const inRequest = <T>(callback: () => T, identity = user) => requestIdentityContext.run({ request: { user: identity } as Request }, callback);
 const previous = { secret: process.env.JWT_SECRET, nodeEnv: process.env.NODE_ENV };
 
-beforeEach(() => { jest.resetAllMocks(); process.env.JWT_SECRET = 'test-secret'; process.env.NODE_ENV = 'test'; fetchMock.mockResolvedValue(response({ data: [group] })); });
+beforeEach(() => { jest.resetAllMocks(); process.env.JWT_SECRET = 'test-secret'; process.env.NODE_ENV = 'test'; delete process.env.GROUP_SERVICE_URL; fetchMock.mockResolvedValue(response({ data: [group] })); });
 afterAll(() => {
   if (previous.secret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = previous.secret;
   if (previous.nodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous.nodeEnv;
@@ -40,10 +40,16 @@ it('signs only the verified identity and caches membership only within a request
   await inRequest(() => getUserGroups('u1'));
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
-it('uses the accepted production endpoint without additional configuration', async () => {
+it('requires GROUP_SERVICE_URL in production rather than assuming a hosted address', async () => {
   process.env.NODE_ENV = 'production';
+  await expect(inRequest(() => getUserGroups('u1'))).rejects.toThrow('GROUP_SERVICE_URL');
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+it('calls the configured group-service', async () => {
+  process.env.NODE_ENV = 'production';
+  process.env.GROUP_SERVICE_URL = 'http://group-service:5006';
   await inRequest(() => getUserGroups('u1'));
-  expect(fetchMock.mock.calls[0][0]).toBe('https://group-api.visin.eu/api/internal/project-groups');
+  expect(fetchMock.mock.calls[0][0]).toBe('http://group-service:5006/api/internal/project-groups');
 });
 it.each([null, 'invalid', {}, { data: null }, { data: [null] }, { data: [{ id: 'invalid', name: 'Group' }] }, { data: [{ id: group.id, name: 2 }] }])('fails closed on malformed responses (%j)', async body => {
   fetchMock.mockResolvedValue(response(body));

@@ -1,4 +1,4 @@
-import { CssBaseline } from '@mui/material';
+import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { createConfigProvider } from '@visin/frontend-core';
 
 export interface AppConfig {
@@ -19,13 +19,20 @@ function createDevConfig(): AppConfig {
   };
 }
 
+// Vision's pages were built on MUI's default theme. Standalone that was implied;
+// inside shell-front they would inherit the shell's theme instead, so it is
+// stated here.
+const theme = createTheme();
+
 export const { ConfigProvider, ConfigContext, useConfig, getGlobalConfig } = createConfigProvider<AppConfig>({
   createDevConfig,
   isDev: import.meta.env.DEV,
+  // This app's own config.json, even when shell-front's page is the one running it.
+  configUrl: new URL(/* @vite-ignore */ '/config.json', import.meta.url).href,
   renderChildren: (children) => (
-    <>
+    <ThemeProvider theme={theme}>
       <CssBaseline />
       {children}
-    </>
+    </ThemeProvider>
   )
 });

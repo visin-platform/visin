@@ -1,16 +1,7 @@
 import { ReactNode } from 'react';
-import { Person, Groups, Key, Link as LinkIcon, Insights } from '@mui/icons-material';
-import { AppLayout as SharedAppLayout, createVisinNavItems, type AppLayoutNavItem } from '@visin/frontend-core';
+import { AppLayout as SharedAppLayout, createAccountNavItems, createVisinNavItems } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { getGlobalConfig } from '../config/ConfigProvider';
-
-const accountItems: AppLayoutNavItem[] = [
-  { text: 'Profile', icon: <Person />, path: '/account/profile', group: 'Account' },
-  { text: 'Groups', icon: <Groups />, path: '/account/groups', group: 'Account' },
-  { text: 'API keys', icon: <Key />, path: '/account/api-keys', group: 'Account' },
-  { text: 'Connected apps', icon: <LinkIcon />, path: '/account/connections', group: 'Account' },
-  { text: 'Assistant activity', icon: <Insights />, path: '/account/activity', group: 'Account' }
-];
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -26,7 +17,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   // menu changed shape on the way in and out.
   const navItems = [
     ...createVisinNavItems(null, { vision: config.VISION_FRONT_URL, label: config.LABEL_FRONT_URL }),
-    ...accountItems
+    ...createAccountNavItems()
   ];
 
   return (

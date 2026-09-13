@@ -1,6 +1,7 @@
 import { Box, Chip, Container, Grid, Stack, Typography } from '@mui/material';
 import { AutoAwesome, CheckCircleOutlined, InfoOutlined } from '@mui/icons-material';
-import { ASK_CONVERSATION, ASSISTANT_LIMITS, CONNECT_STEPS, MCP_ENDPOINT, type ChatTurn } from '../content';
+import { ASK_CONVERSATION, ASSISTANT_LIMITS, CONNECT_STEPS, type ChatTurn } from '../content';
+import { useConfig } from '../config/ConfigProvider';
 import { INK } from '../theme';
 
 /**
@@ -121,6 +122,11 @@ function Turn({ turn }: { turn: ChatTurn }) {
  * someone has connected one.
  */
 export default function Assistant() {
+  // This deployment's own MCP server. Visin runs on its operator's domain, so
+  // the address comes from config; with none configured there is nothing to paste.
+  const mcpBase = useConfig().MCP_PUBLIC_URL;
+  const mcpEndpoint = mcpBase ? `${mcpBase.replace(/\/$/, '')}/mcp` : null;
+
   return (
     <Box
       component="section"
@@ -197,30 +203,32 @@ export default function Assistant() {
               Getting it connected
             </Typography>
 
-            <Box
-              sx={{
-                p: 2,
-                mb: 3,
-                borderRadius: 2,
-                bgcolor: 'rgba(0,0,0,0.35)',
-                border: '1px solid rgba(255,255,255,0.12)'
-              }}
-            >
-              <Typography sx={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem', mb: 0.5 }}>
-                MCP endpoint
-              </Typography>
-              <Typography
-                component="code"
+            {mcpEndpoint && (
+              <Box
                 sx={{
-                  color: 'primary.light',
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  fontSize: '0.9rem',
-                  wordBreak: 'break-all'
+                  p: 2,
+                  mb: 3,
+                  borderRadius: 2,
+                  bgcolor: 'rgba(0,0,0,0.35)',
+                  border: '1px solid rgba(255,255,255,0.12)'
                 }}
               >
-                {MCP_ENDPOINT}
-              </Typography>
-            </Box>
+                <Typography sx={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem', mb: 0.5 }}>
+                  MCP endpoint
+                </Typography>
+                <Typography
+                  component="code"
+                  sx={{
+                    color: 'primary.light',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontSize: '0.9rem',
+                    wordBreak: 'break-all'
+                  }}
+                >
+                  {mcpEndpoint}
+                </Typography>
+              </Box>
+            )}
 
             <Stack spacing={2.5} sx={{ mb: 4 }}>
               {CONNECT_STEPS.map((step) => (

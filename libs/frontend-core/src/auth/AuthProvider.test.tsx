@@ -110,6 +110,27 @@ describe('createAuthContext', () => {
     await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('Test User'));
   });
 
+  // shell-front mounts a remote's provider on every visit to that app; its
+  // protected pages must not flash "Checking authentication..." each time.
+  it('starts a remounted provider from the last known session, and still re-checks it', async () => {
+    const service = makeAuthService();
+    const { AuthProvider, useAuth } = createAuthContext(service);
+    const tree = (
+      <AuthProvider>
+        <Consumer useAuth={useAuth} />
+      </AuthProvider>
+    );
+    const { unmount } = render(tree);
+    await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('Test User'));
+    unmount();
+
+    render(tree);
+
+    expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    expect(screen.getByTestId('user')).toHaveTextContent('Test User');
+    await waitFor(() => expect(service.checkAuth).toHaveBeenCalledTimes(2));
+  });
+
   it('useAuth throws when used outside its AuthProvider', () => {
     const { useAuth } = createAuthContext(makeAuthService());
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});

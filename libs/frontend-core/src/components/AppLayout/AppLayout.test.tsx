@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { AppLayout, type AppLayoutNavItem, type AppLayoutUser } from './AppLayout';
 
 const navItems: AppLayoutNavItem[] = [
@@ -256,6 +256,31 @@ describe('AppLayout', () => {
 
       expect(window.location.href).toBe('https://account.test');
       expect(assign).not.toHaveBeenCalled();
+    });
+
+    // An app that serves Account itself routes there instead of loading a page.
+    it('routes client-side to an accountPath, in preference to accountUrl', () => {
+      const Path = () => <div data-testid="path">{useLocation().pathname}</div>;
+      render(
+        <MemoryRouter initialEntries={['/jobs']}>
+          <AppLayout
+            appName="Shell"
+            subtitle="s"
+            navItems={navItems}
+            user={{ name: 'Test User' }}
+            onLogout={onLogout}
+            accountPath="/account"
+            accountUrl="https://account.test"
+          >
+            <Path />
+          </AppLayout>
+        </MemoryRouter>
+      );
+
+      openUserMenu();
+      fireEvent.click(screen.getByText('Account'));
+
+      expect(screen.getByTestId('path')).toHaveTextContent('/account');
     });
   });
 

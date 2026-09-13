@@ -9,7 +9,7 @@ import {
 } from '@visin/backend-core';
 import { token } from '../../controllers/oauthController';
 
-const input = { userId: 'owner', clientId: 'client', scopes: ['vision:read' as const], resource: 'https://mcp.visin.eu' };
+const input = { userId: 'owner', clientId: 'client', scopes: ['vision:read' as const], resource: 'https://mcp.example.test' };
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const deferred = () => {
   let resolve!: () => void;
@@ -41,6 +41,10 @@ describe('OAuth refresh grant authority on standalone MongoDB', () => {
   const previous = { ...process.env };
   beforeAll(async () => {
     process.env.JWT_SECRET = 'oauth-rotation-test-secret';
+    // The token endpoint names its issuer and resource from configuration, as a
+    // deployment must: there is no hosted address to fall back on.
+    process.env.AUTH_SERVICE_PUBLIC_URL = 'https://auth-api.example.test';
+    process.env.MCP_PUBLIC_URL = input.resource;
     mongo = await MongoMemoryServer.create({ binary: { version: '8.2.11' } });
     await mongoose.connect(mongo.getUri());
     await Promise.all([OAuthGrant.init(), RefreshToken.init(), OAuthClient.init()]);

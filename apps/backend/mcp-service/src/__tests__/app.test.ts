@@ -28,8 +28,8 @@ afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
 beforeEach(() => {
   jest.clearAllMocks();
-  process.env.MCP_PUBLIC_URL = 'https://mcp.visin.eu';
-  process.env.AUTH_SERVICE_URL = 'https://auth-api.visin.eu';
+  process.env.MCP_PUBLIC_URL = 'https://mcp.example.test';
+  process.env.AUTH_SERVICE_URL = 'https://auth-api.example.test';
   verify.mockResolvedValue({
     ok: true,
     userId: 'u1',
@@ -86,7 +86,7 @@ describe('the pages that are not the protocol', () => {
 
     expect(body).toMatchObject({
       name: 'visin',
-      endpoint: 'https://mcp.visin.eu/mcp',
+      endpoint: 'https://mcp.example.test/mcp',
       transport: 'streamable-http'
     });
   });
@@ -106,8 +106,8 @@ describe('the pages that are not the protocol', () => {
     ).json()) as { scopes_supported: string[] };
 
     expect(body).toMatchObject({
-      resource: 'https://mcp.visin.eu',
-      authorization_servers: ['https://auth-api.visin.eu'],
+      resource: 'https://mcp.example.test',
+      authorization_servers: ['https://auth-api.example.test'],
       bearer_methods_supported: ['header']
     });
     expect([...body.scopes_supported].sort()).toEqual([
@@ -134,7 +134,7 @@ describe('authentication', () => {
 
     expect(response.status).toBe(401);
     expect(response.headers.get('www-authenticate')).toContain(
-      'resource_metadata="https://mcp.visin.eu/.well-known/oauth-protected-resource"'
+      'resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource"'
     );
     expect(body.error.message).toContain('API key');
   });
@@ -154,7 +154,7 @@ describe('authentication', () => {
 
     expect(response.status).toBe(200);
     expect(body.result.tools.map((tool: { name: string }) => tool.name)).toContain('list_projects');
-    expect(verifyToken).toHaveBeenCalledWith('header.payload.signature', 'https://mcp.visin.eu');
+    expect(verifyToken).toHaveBeenCalledWith('header.payload.signature', 'https://mcp.example.test');
   });
 
   it('routes by prefix, so a JWT never costs a database lookup', async () => {

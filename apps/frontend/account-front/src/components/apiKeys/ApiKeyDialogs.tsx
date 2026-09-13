@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import { ContentCopy } from '@mui/icons-material';
 import { API_KEY_SCOPES, ApiKeyScope, SCOPE_DESCRIPTIONS } from '../../types/apiKey';
+import { useMcpEndpoint } from '../../hooks/useMcpEndpoint';
 
 interface CreateApiKeyDialogProps {
   open: boolean;
@@ -177,6 +178,8 @@ export const ShowTokenDialog: React.FC<ShowTokenDialogProps> = ({ open, token, i
     }
   };
 
+  const mcpEndpoint = useMcpEndpoint();
+
   const close = () => {
     setCopied(false);
     onClose();
@@ -216,7 +219,8 @@ export const ShowTokenDialog: React.FC<ShowTokenDialogProps> = ({ open, token, i
         )}
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: 3 }}>
           Send it as a bearer token: <code>Authorization: Bearer &lt;key&gt;</code>. To connect an
-          assistant over MCP, point it at <code>https://mcp.visin.eu/mcp</code> with this key.
+          assistant over MCP, point it at{' '}
+          {mcpEndpoint ? <code>{mcpEndpoint}</code> : "this deployment's MCP endpoint"} with this key.
         </Typography>
       </DialogContent>
       <DialogActions>

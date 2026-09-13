@@ -13,6 +13,7 @@ import {
 import { LinkOff } from '@mui/icons-material';
 import { ConfirmDialog } from '../groups/GroupDialogs';
 import { useConnections, useRevokeConnection } from '../../hooks/useConnections';
+import { useMcpEndpoint } from '../../hooks/useMcpEndpoint';
 import { SCOPE_DESCRIPTIONS } from '../../types/apiKey';
 import { Connection } from '../../types/connection';
 
@@ -23,6 +24,7 @@ const ConnectionsTab: React.FC = () => {
 
   const connections = useConnections();
   const revoke = useRevokeConnection();
+  const mcpEndpoint = useMcpEndpoint();
 
   // Revoked grants stay in the list on the server so the history is visible,
   // but this page answers "what can reach my account right now" — a disconnected
@@ -108,9 +110,8 @@ const ConnectionsTab: React.FC = () => {
         ) : (
           <Box sx={{ py: 6, textAlign: 'center' }}>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              No apps are connected. An assistant that supports MCP can connect at
-              {' '}
-              <code>https://mcp.visin.eu/mcp</code>.
+              No apps are connected. An assistant that supports MCP can connect at{' '}
+              {mcpEndpoint ? <code>{mcpEndpoint}</code> : "this deployment's MCP endpoint"}.
             </Typography>
           </Box>
         )}

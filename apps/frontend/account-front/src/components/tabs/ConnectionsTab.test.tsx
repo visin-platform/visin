@@ -6,6 +6,7 @@ import { Connection } from '../../types/connection';
 
 const mockedService = vi.hoisted(() => ({ list: vi.fn(), revoke: vi.fn() }));
 vi.mock('../../services/connectionService', () => ({ connectionService: mockedService }));
+vi.mock('../../hooks/useMcpEndpoint', () => ({ useMcpEndpoint: () => 'https://mcp.example.test/mcp' }));
 
 const makeConnection = (overrides: Partial<Connection> = {}): Connection => ({
   id: 'rt1',
@@ -46,7 +47,7 @@ describe('list states', () => {
     renderTab();
 
     expect(await screen.findByText(/no apps are connected/i)).toBeInTheDocument();
-    expect(screen.getByText(/mcp\.visin\.eu\/mcp/)).toBeInTheDocument();
+    expect(screen.getByText(/mcp\.example\.test\/mcp/)).toBeInTheDocument();
   });
 
   it('surfaces a load failure rather than an empty list', async () => {

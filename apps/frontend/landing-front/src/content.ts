@@ -65,8 +65,10 @@ export const OPEN_SOURCE_POINTS: OpenSourcePoint[] = [
  * Every example is a question the shipped tools can actually answer, and every
  * limit named is a real one. Someone who connects an assistant expecting to
  * show it a dataset image finds out here rather than after wiring it up.
+ *
+ * The endpoint itself is not here: it is this deployment's own MCP server
+ * (`MCP_PUBLIC_URL`), read from config by the section that shows it.
  */
-export const MCP_ENDPOINT = 'https://mcp.visin.eu/mcp';
 
 /**
  * One exchange in the sample conversation.

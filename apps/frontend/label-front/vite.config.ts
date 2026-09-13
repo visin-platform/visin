@@ -1,13 +1,33 @@
 import { defineConfig } from 'vite';
 import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { federation } from '@module-federation/vite';
+import { VISIN_FEDERATION_SHARED, VISIN_REMOTE_ENTRY, VISIN_REMOTE_MODULE } from '@visin/frontend-core/federation';
 import { resolve } from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Besides running standalone, label-front is a module-federation remote:
+    // shell-front loads `./App` from this origin's remoteEntry.js. Vitest has no
+    // use for the federation build, so it is left out there.
+    ...(process.env.VITEST
+      ? []
+      : [
+          federation({
+            name: 'label',
+            filename: VISIN_REMOTE_ENTRY,
+            exposes: { [VISIN_REMOTE_MODULE]: './src/federation/RemoteApp.tsx' },
+            shared: VISIN_FEDERATION_SHARED,
+            dts: false
+          })
+        ])
+  ],
   server: {
-    port: 3008
+    port: 3008,
+    // Absolute asset URLs in dev, so the shell's page fetches them from here.
+    origin: 'http://localhost:3008'
   },
   resolve: {
     alias: {

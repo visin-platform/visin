@@ -1,20 +1,9 @@
 import React from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider } from './config/ConfigProvider';
 import App from './App';
+import { queryClient } from './queryClient';
 import type { Root } from 'react-dom/client';
-
-// Create QueryClient instance
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-      staleTime: 30000,
-      gcTime: 1000 * 60 * 5, // 5 minutes
-    },
-  },
-});
 
 // Initialize the app
 async function initApp() {

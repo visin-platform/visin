@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LandingPage from './LandingPage';
-import { ASK_CONVERSATION, ASSISTANT_LIMITS, CONNECT_STEPS, MCP_ENDPOINT, STEPS, GITHUB_URL } from './content';
+import { ASK_CONVERSATION, ASSISTANT_LIMITS, CONNECT_STEPS, STEPS, GITHUB_URL } from './content';
 
-const config: { VISION_FRONT_URL?: string } = { VISION_FRONT_URL: 'http://vision.test' };
+const config: { VISION_FRONT_URL?: string; MCP_PUBLIC_URL?: string } = {
+  VISION_FRONT_URL: 'http://vision.test',
+  MCP_PUBLIC_URL: 'https://mcp.example.test'
+};
 
 vi.mock('./config/ConfigProvider', () => ({
   useConfig: () => config
@@ -13,6 +16,7 @@ vi.mock('./ContactForm', () => ({ default: () => <div>contact-form</div> }));
 beforeEach(() => {
   vi.restoreAllMocks();
   config.VISION_FRONT_URL = 'http://vision.test';
+  config.MCP_PUBLIC_URL = 'https://mcp.example.test';
 });
 
 describe('LandingPage structure', () => {
@@ -94,10 +98,19 @@ describe('LandingPage structure', () => {
     }
   });
 
-  it('shows the endpoint someone actually has to paste', () => {
+  it("shows the endpoint someone actually has to paste, from this deployment's config", () => {
     render(<LandingPage />);
 
-    expect(screen.getByText(MCP_ENDPOINT)).toBeInTheDocument();
+    expect(screen.getByText('https://mcp.example.test/mcp')).toBeInTheDocument();
+  });
+
+  // Self-hosted on its operator's domain: with no MCP server configured there is
+  // no real address to show, and a borrowed one would point at someone else's.
+  it('shows no endpoint when the deployment has not configured an MCP server', () => {
+    config.MCP_PUBLIC_URL = undefined;
+    render(<LandingPage />);
+
+    expect(screen.queryByText('MCP endpoint')).not.toBeInTheDocument();
   });
 
   it('says what the assistant cannot do, not only what it can', () => {

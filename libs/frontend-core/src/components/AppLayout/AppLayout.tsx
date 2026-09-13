@@ -29,7 +29,7 @@ import {
   ExpandMore,
   AccountCircle
 } from '@mui/icons-material';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const DRAWER_WIDTH = 260;
 const COLLAPSED_DRAWER_WIDTH = 88;
@@ -84,6 +84,12 @@ export interface AppLayoutProps {
   onLogin?: () => void;
   /** Adds an "Account" entry to the user menu, linking to account-front. */
   accountUrl?: string;
+  /**
+   * Adds an "Account" entry to the user menu that routes client-side, for an
+   * app that serves Account itself (shell-front). Takes precedence over
+   * `accountUrl`.
+   */
+  accountPath?: string;
   /** Lets the desktop drawer collapse to an icon rail. Defaults to false. */
   collapsible?: boolean;
   /**
@@ -116,10 +122,13 @@ export function AppLayout({
   isAuthenticated = true,
   onLogin,
   accountUrl,
+  accountPath,
   collapsible = false,
   showPageHeader = true
 }: AppLayoutProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const hasAccountEntry = Boolean(accountPath || accountUrl);
   const theme = useTheme();
 
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
@@ -406,11 +415,15 @@ export function AppLayout({
           paper: { sx: { minWidth: 200, borderRadius: 2, boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' } }
         }}
       >
-        {accountUrl && (
+        {hasAccountEntry && (
           <MenuItem
             onClick={() => {
               handleCloseUserMenu();
-              window.location.href = accountUrl;
+              if (accountPath) {
+                navigate(accountPath);
+              } else if (accountUrl) {
+                window.location.href = accountUrl;
+              }
             }}
             sx={{ py: 1.5 }}
           >
@@ -420,7 +433,7 @@ export function AppLayout({
             Account
           </MenuItem>
         )}
-        {accountUrl && <Divider />}
+        {hasAccountEntry && <Divider />}
         <MenuItem
           onClick={() => {
             handleCloseUserMenu();

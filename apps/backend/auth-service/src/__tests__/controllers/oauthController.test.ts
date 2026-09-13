@@ -46,8 +46,8 @@ const mocked = {
 };
 
 const SECRET = 'test-secret';
-const ISSUER = 'https://auth-api.visin.eu';
-const RESOURCE = 'https://mcp.visin.eu';
+const ISSUER = 'https://auth-api.example.test';
+const RESOURCE = 'https://mcp.example.test';
 const CHALLENGE = 'a-code-challenge';
 const REDIRECT = 'https://claude.ai/callback';
 
@@ -110,7 +110,7 @@ beforeEach(() => {
   process.env.JWT_SECRET = SECRET;
   process.env.AUTH_SERVICE_PUBLIC_URL = ISSUER;
   process.env.MCP_PUBLIC_URL = RESOURCE;
-  process.env.AUTH_FRONT_URL = 'https://auth.visin.eu';
+  process.env.AUTH_FRONT_URL = 'https://auth.example.test';
   mocked.findClient.mockResolvedValue(CLIENT);
 });
 
@@ -185,7 +185,7 @@ describe('authorize', () => {
     await authorize(makeReq({ query: authorizeQuery() }), res);
 
     expect(res.redirect.mock.calls[0][0]).toBe(
-      `https://auth.visin.eu?redirect_uri=${encodeURIComponent(`${ISSUER}/oauth/authorize`)}`
+      `https://auth.example.test?redirect_uri=${encodeURIComponent(`${ISSUER}/oauth/authorize`)}`
     );
   });
 
@@ -289,17 +289,21 @@ describe('authorize', () => {
     expect(res.send.mock.calls[0][0]).toContain('Change your labelling jobs');
   });
 
-  it('falls back to production URLs when none are configured', async () => {
+  // Visin is self-hosted on its operator's domain. Borrowing some other
+  // deployment's addresses would name the wrong issuer in the tokens and send
+  // users to someone else's sign-in page, so an unconfigured flow stops instead.
+  it('refuses to run without its public URLs rather than assuming a domain', async () => {
     delete process.env.AUTH_SERVICE_PUBLIC_URL;
     delete process.env.AUTH_SERVICE_URL;
     delete process.env.MCP_PUBLIC_URL;
     delete process.env.AUTH_FRONT_URL;
     const res = makeRes();
 
-    await authorize(makeReq({ query: authorizeQuery() }), res);
-
-    expect(res.redirect.mock.calls[0][0]).toContain('https://auth.visin.eu');
-    expect(res.redirect.mock.calls[0][0]).toContain(encodeURIComponent('https://auth-api.visin.eu'));
+    await expect(authorize(makeReq({ query: authorizeQuery() }), res)).rejects.toThrow(/set to a public address/);
+    expect(res.redirect).not.toHaveBeenCalled();
+    expect(() => authorizationServerMetadata(makeReq({}), makeRes())).toThrow(
+      'AUTH_SERVICE_PUBLIC_URL or AUTH_SERVICE_URL'
+    );
   });
 
   it('trims a trailing slash off a configured URL', async () => {

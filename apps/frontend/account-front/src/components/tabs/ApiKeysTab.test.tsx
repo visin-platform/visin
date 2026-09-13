@@ -15,6 +15,7 @@ const mockedService = vi.hoisted(() => ({
 }));
 
 vi.mock('../../services/apiKeyService', () => ({ apiKeyService: mockedService }));
+vi.mock('../../hooks/useMcpEndpoint', () => ({ useMcpEndpoint: () => 'https://mcp.example.test/mcp' }));
 
 const makeKey = (overrides: Partial<ApiKey> = {}): ApiKey => ({
   id: 'k1',
@@ -235,7 +236,7 @@ describe('creating a key', () => {
     expect(await screen.findByDisplayValue('vsn_live_0123456789ab_secret')).toBeInTheDocument();
     expect(screen.getByText(/copy this now/i)).toBeInTheDocument();
     // The connection details, so nobody has to go looking for the endpoint.
-    expect(screen.getByText(/mcp\.visin\.eu\/mcp/)).toBeInTheDocument();
+    expect(screen.getByText(/mcp\.example\.test\/mcp/)).toBeInTheDocument();
   });
 });
 

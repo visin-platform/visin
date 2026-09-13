@@ -98,11 +98,10 @@ API credentials still use each operation's independent scope checks. The group
 picker uses `GET /api/write-capabilities/groups`.
 
 The membership client calls group-service's read-only
-`POST /api/internal/project-groups` at `https://group-api.visin.eu` in production,
-and `http://localhost:5006` in development. Its purpose-bound, 30-second HMAC
+`POST /api/internal/project-groups` at `GROUP_SERVICE_URL`. Production requires it
+(there is no hosted default — Compose points it at the in-network group-service);
+development falls back to `http://localhost:5006`. Its purpose-bound, 30-second HMAC
 assertion uses the already-shared `JWT_SECRET`; it is not a session credential.
-There are no additional deployment variables, Compose changes, or shared-library
-exports. Both services need the corresponding application code.
 
 ## Upload ownership
 

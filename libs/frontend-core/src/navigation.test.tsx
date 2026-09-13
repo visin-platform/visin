@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createVisinNavItems } from './navigation';
+import { createAccountNavItems, createVisinNavItems } from './navigation';
 
 const urls = { vision: 'https://vision.test', label: 'https://label.test' };
 
@@ -67,10 +67,33 @@ describe('createVisinNavItems', () => {
     ]);
   });
 
+  // shell-front renders both apps on one page, so neither group links across.
+  it('routes every listed app locally when several share the page', () => {
+    const items = createVisinNavItems(['vision', 'label'], urls);
+
+    expect(items.map(item => item.text)).toEqual(['Projects', 'Trainings', 'Datasets', 'Jobs', 'Bundles']);
+    expect(items.every(item => item.path !== undefined && item.href === undefined)).toBe(true);
+  });
+
   it('ignores the current app own URL', () => {
     const items = createVisinNavItems('vision', { vision: 'https://vision.test' });
 
     expect(items.map(item => item.text)).toEqual(['Projects', 'Trainings', 'Datasets']);
     expect(items.every(item => item.path !== undefined)).toBe(true);
+  });
+});
+
+describe('createAccountNavItems', () => {
+  it('lists Account sections as local routes under an Account heading', () => {
+    const items = createAccountNavItems();
+
+    expect(items.map(item => item.text)).toEqual([
+      'Profile',
+      'Groups',
+      'API keys',
+      'Connected apps',
+      'Assistant activity'
+    ]);
+    expect(items.every(item => item.group === 'Account' && item.path?.startsWith('/account/'))).toBe(true);
   });
 });

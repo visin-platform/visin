@@ -211,7 +211,7 @@ describe('apiKeyAuth — scope gating', () => {
  * gated on nothing.
  */
 describe('apiKeyAuth — OAuth access tokens', () => {
-  const RESOURCE = 'https://mcp.visin.eu';
+  const RESOURCE = 'https://mcp.example.test';
 
   const accessToken = (scopes: Parameters<typeof mintAccessToken>[0]['scopes'], resource = RESOURCE) =>
     mintAccessToken({
@@ -219,7 +219,7 @@ describe('apiKeyAuth — OAuth access tokens', () => {
       email: 'a@b.com',
       name: 'A B',
       resource,
-      issuer: 'https://auth-api.visin.eu',
+      issuer: 'https://auth-api.example.test',
       scopes,
       clientId: 'vsn-client-abc',
       clientName: 'Claude'
@@ -233,6 +233,19 @@ describe('apiKeyAuth — OAuth access tokens', () => {
   afterAll(() => {
     delete process.env.JWT_SECRET;
     delete process.env.MCP_PUBLIC_URL;
+  });
+
+  // Self-hosted on its operator's domain: with no MCP server named there is no
+  // audience a token could legitimately carry, so none is accepted.
+  it('refuses every OAuth token when no MCP resource is configured', async () => {
+    const token = accessToken(['vision:read']);
+    delete process.env.MCP_PUBLIC_URL;
+    const res = makeRes();
+
+    await apiKeyAuth('vision')(makeReq({ headers: { authorization: `Bearer ${token}` } }), res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
   });
 
   it('names the user from `sub`, so owner-scoped queries are actually scoped', async () => {

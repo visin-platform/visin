@@ -17,7 +17,7 @@ const respond = (status: number, body: unknown, raw?: string) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
-  process.env.VISION_SERVICE_URL = 'https://vision-api.visin.eu';
+  process.env.VISION_SERVICE_URL = 'https://vision-api.example.test';
   delete process.env.VISION_INTERNAL_URL;
 });
 
@@ -33,7 +33,7 @@ describe('serviceUrl', () => {
   });
 
   it('falls back to the public URL for a split deployment', () => {
-    expect(serviceUrl('VISION')).toBe('https://vision-api.visin.eu');
+    expect(serviceUrl('VISION')).toBe('https://vision-api.example.test');
   });
 
   it('trims a trailing slash, so paths do not double up', () => {
@@ -54,10 +54,10 @@ describe('callService', () => {
     // so nothing can be widened by passing through this hop.
     respond(200, { success: true, data: { name: 'run' } });
 
-    await callService('https://vision-api.visin.eu', 'vsn_live_abc', 'GET', '/trainings/t1');
+    await callService('https://vision-api.example.test', 'vsn_live_abc', 'GET', '/trainings/t1');
 
     const [url, init] = fetched.mock.calls[0];
-    expect(String(url)).toBe('https://vision-api.visin.eu/api/trainings/t1');
+    expect(String(url)).toBe('https://vision-api.example.test/api/trainings/t1');
     expect(init.headers.Authorization).toBe('Bearer vsn_live_abc');
     expect(init.method).toBe('GET');
   });
@@ -66,14 +66,14 @@ describe('callService', () => {
     respond(200, { success: true, data: [{ _id: 'p1' }] });
 
     await expect(
-      callService('https://vision-api.visin.eu', 'k', 'GET', '/projects')
+      callService('https://vision-api.example.test', 'k', 'GET', '/projects')
     ).resolves.toEqual([{ _id: 'p1' }]);
   });
 
   it('falls back to the whole body for a route that answers with the payload directly', async () => {
     respond(200, { name: 'not-enveloped' });
 
-    await expect(callService('https://vision-api.visin.eu', 'k', 'GET', '/x')).resolves.toEqual({
+    await expect(callService('https://vision-api.example.test', 'k', 'GET', '/x')).resolves.toEqual({
       name: 'not-enveloped'
     });
   });
@@ -81,7 +81,7 @@ describe('callService', () => {
   it('appends query parameters, dropping the ones that were not set', async () => {
     respond(200, { success: true, data: {} });
 
-    await callService('https://vision-api.visin.eu', 'k', 'GET', '/trainings', undefined, {
+    await callService('https://vision-api.example.test', 'k', 'GET', '/trainings', undefined, {
       projectId: 'roadside',
       status: undefined,
       limit: 30
@@ -96,7 +96,7 @@ describe('callService', () => {
   it('sends a JSON body and its content type only when there is one', async () => {
     respond(200, { success: true, data: {} });
 
-    await callService('https://vision-api.visin.eu', 'k', 'POST', '/trainings/compare', {
+    await callService('https://vision-api.example.test', 'k', 'POST', '/trainings/compare', {
       trainingIds: ['a', 'b']
     });
 

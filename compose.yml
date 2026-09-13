@@ -39,7 +39,7 @@ x-app-env: &app-env
   MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/visin}
   JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-before-exposing}
   INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-only-internal-token-change-before-exposing}
-  CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3004,http://localhost:3007,http://localhost:3008,http://localhost:3012}
+  CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3004,http://localhost:3007,http://localhost:3008,http://localhost:3010,http://localhost:3012}
 
 x-file-creds: &file-creds
   FILE_SERVICE_API_KEY: ${FILE_SERVICE_API_KEY:-dev-only-file-api-key-change-before-exposing}
@@ -153,6 +153,8 @@ services:
       FILE_SERVICE_URL: http://file-service:5002
       # Project editor groups are read from group-service on every signed-in request.
       GROUP_SERVICE_URL: http://group-service:5006
+      # The MCP server OAuth access tokens must be minted for; unset, they are refused.
+      MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
 
   label-service:
     build: ./apps/backend/label-service
@@ -196,7 +198,11 @@ services:
     ports: ['3000:80']
     environment:
       VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
-      VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012
+      # "Open the app" goes to shell-front, which renders every app on one page.
+      VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
+      MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
+      # This page's own address, for its canonical link, Open Graph tags and sitemap.
+      LANDING_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3000
 
   auth-front:
     build: ./apps/frontend/auth-front
@@ -219,6 +225,7 @@ services:
       GROUP_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5006
       VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012
       LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
+      MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
 
   label-front:
     build: ./apps/frontend/label-front
@@ -243,6 +250,20 @@ services:
       AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
       ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
       LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
+
+  # The module-federation host: one page that renders vision, label and account,
+  # loading each from the address below, where its standalone app also runs.
+  shell-front:
+    build: ./apps/frontend/shell-front
+    image: ${REGISTRY:-visin}/shell-front:${TAG:-local}
+    <<: *common
+    ports: ['3010:80']
+    environment:
+      AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
+      AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
+      VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012
+      LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
+      ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
 
 volumes:
   mongodb_data:

@@ -58,6 +58,43 @@ describe('createConfigProvider', () => {
     expect(getGlobalConfig()).toEqual(prodConfig);
   });
 
+  // A federated remote runs on shell-front's page, where `/config.json` is the shell's.
+  it('fetches from configUrl when one is given', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(prodConfig), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { ConfigProvider, useConfig } = makeProvider({ configUrl: 'https://label.test/config.json' });
+
+    render(
+      <ConfigProvider>
+        <Consumer useConfig={useConfig} />
+      </ConfigProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('api-url')).toHaveTextContent('http://prod-api.test'));
+    expect(fetchMock).toHaveBeenCalledWith('https://label.test/config.json');
+  });
+
+  // shell-front mounts a remote's provider on every visit to that app.
+  it('renders a remounted provider straight from the config it already loaded', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(prodConfig), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { ConfigProvider, useConfig } = makeProvider();
+    const tree = (
+      <ConfigProvider>
+        <Consumer useConfig={useConfig} />
+      </ConfigProvider>
+    );
+    const { unmount } = render(tree);
+    await waitFor(() => expect(screen.getByTestId('api-url')).toHaveTextContent('http://prod-api.test'));
+    unmount();
+
+    render(tree);
+
+    // Synchronously, with no loader in between and no second request.
+    expect(screen.getByTestId('api-url')).toHaveTextContent('http://prod-api.test');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the default Loader while the config fetch is pending', () => {
     vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})));
     const { ConfigProvider, useConfig } = makeProvider();

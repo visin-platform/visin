@@ -28,15 +28,28 @@ import type { ApiKeyScope } from '@visin/backend-core';
  * something they give while signed in rather than a second set of credentials.
  */
 
-const issuer = (): string =>
-  (process.env.AUTH_SERVICE_PUBLIC_URL || process.env.AUTH_SERVICE_URL || 'https://auth-api.visin.eu').replace(/\/$/, '');
+/**
+ * A public address this flow hands to browsers and MCP clients, from the first
+ * of `names` that is set. There is deliberately no default: Visin runs on its
+ * operator's domain, and a fallback to any real one would name the wrong issuer
+ * in this deployment's tokens and send its users to someone else's sign-in
+ * page. Unconfigured, the OAuth routes fail with the setting to fix; the rest of
+ * auth-service works without them.
+ */
+const publicUrl = (...names: string[]): string => {
+  const value = names.map((name) => process.env[name]).find(Boolean);
+  if (!value) {
+    throw new Error(`OAuth for MCP clients needs ${names.join(' or ')} set to a public address`);
+  }
+  return value.replace(/\/$/, '');
+};
+
+const issuer = (): string => publicUrl('AUTH_SERVICE_PUBLIC_URL', 'AUTH_SERVICE_URL');
 
 /** The one resource this server issues tokens for. */
-const mcpResource = (): string =>
-  (process.env.MCP_PUBLIC_URL || 'https://mcp.visin.eu').replace(/\/$/, '');
+const mcpResource = (): string => publicUrl('MCP_PUBLIC_URL');
 
-const authFrontUrl = (): string =>
-  (process.env.AUTH_FRONT_URL || 'https://auth.visin.eu').replace(/\/$/, '');
+const authFrontUrl = (): string => publicUrl('AUTH_FRONT_URL');
 
 /**
  * RFC 8414 metadata: how a client discovers where to send the user and where to

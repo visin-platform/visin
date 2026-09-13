@@ -76,6 +76,9 @@ jobs:
             landing-front:
               - *shared
               - 'apps/frontend/landing-front/**'
+            shell-front:
+              - *frontend-shared
+              - 'apps/frontend/shell-front/**'
             vision-front:
               - *frontend-shared
               - 'apps/frontend/vision-front/**'

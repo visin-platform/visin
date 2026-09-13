@@ -34,7 +34,7 @@ const storedCode = (over: Record<string, unknown> = {}) => ({
   userId: 'u1',
   redirectUri: 'https://claude.ai/callback',
   scopes: ['vision:read'],
-  resource: 'https://mcp.visin.eu',
+  resource: 'https://mcp.example.test',
   codeChallenge: CHALLENGE,
   expiresAt: new Date(Date.now() + 60_000),
   ...over
@@ -127,7 +127,7 @@ describe('issueAuthorizationCode', () => {
       userName: 'A B',
       redirectUri: 'https://claude.ai/callback',
       scopes: ['vision:read'],
-      resource: 'https://mcp.visin.eu',
+      resource: 'https://mcp.example.test',
       codeChallenge: CHALLENGE
     });
 
@@ -215,7 +215,7 @@ describe('redeemAuthorizationCode', () => {
   });
 });
 
-const input = { clientId: 'vsn-client-abc', userId: 'u1', scopes: ['vision:read'] as const, resource: 'https://mcp.visin.eu' };
+const input = { clientId: 'vsn-client-abc', userId: 'u1', scopes: ['vision:read'] as const, resource: 'https://mcp.example.test' };
 const activeGrant = () => ({
   _id: 'grant', generation: 'generation', currentTokenHash: sha256('the-token'),
   ...input, grantedAt: new Date('2026-03-01T00:00:00.000Z')

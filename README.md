@@ -19,6 +19,7 @@ outside its own directory at build or run time.
 | `auth-front`     | 3004 | Sign-in                                           |
 | `account-front`  | 3007 | Account settings                                  |
 | `label-front`    | 3008 | Labeling workbench and job administration         |
+| `shell-front`    | 3010 | One page for Vision, Labeling and Account         |
 | `vision-front`   | 3012 | Main application UI                               |
 
 MongoDB is used by every service except file-service, and Redis by

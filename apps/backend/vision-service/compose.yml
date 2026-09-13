@@ -15,6 +15,8 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN}
       - JWT_SECRET=${JWT_SECRET}
       - GROUP_SERVICE_URL=${GROUP_SERVICE_URL}
+      # The MCP server OAuth access tokens must be minted for; unset, they are refused.
+      - MCP_PUBLIC_URL=${MCP_PUBLIC_URL}
       # File Service configuration
       - FILE_SERVICE_URL=${FILE_SERVICE_URL}
       - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}

@@ -5,12 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Visin: a computer vision & analytics platform (manage datasets, train models, analyze results, label images). An
-npm-workspaces monorepo of 6 independently-deployable backend services and 5 React frontends, plus 2 shared
+npm-workspaces monorepo of 6 independently-deployable backend services and 6 React frontends, plus 2 shared
 libraries.
 
 ```
 apps/backend/{auth,file,group,vision,label,mcp}-service  Express + TypeScript + Mongoose
-apps/frontend/{landing,auth,account,vision,label}-front  React + Vite + MUI
+apps/frontend/{landing,auth,account,vision,label,shell}-front  React + Vite + MUI
 libs/backend-core     @visin/backend-core   — shared Express middleware/app bootstrap
 libs/frontend-core    @visin/frontend-core  — shared auth/API-client/React components
 compose.yml           the whole stack, zero-config; per-service compose.yml alongside each app
@@ -63,7 +63,7 @@ that depends on them.
 ### Auth: cookie primary, header fallback
 
 `auth-service` issues a JWT as an httpOnly `access_token` cookie on Google sign-in (`COOKIE_DOMAIN` is a shared
-parent domain across every Visin subdomain in production, e.g. `.visin.eu`, so the cookie reaches every service).
+parent domain across every Visin subdomain in production, e.g. `.example.com`, so the cookie reaches every service).
 `libs/backend-core`'s `authenticateToken`/`optionalAuth` middleware (used directly or wrapped by group/vision/label-
 service) reads `req.cookies?.access_token` first, falling back to the `Authorization: Bearer` header — the header
 path exists for non-browser callers, notably vision-service's project-scoped API tokens (`apiTokenMiddleware`),
@@ -105,6 +105,13 @@ Each service asserts its required env vars at the top of `index.ts` via `backend
 which logs every missing name at once and exits. Without it a service missing e.g. `INTERNAL_SERVICE_TOKEN` boots
 healthy and then 500s on every internal call — a config error surfacing as a runtime outage. Adding a new required
 var means adding it to that list, to the service's `compose.yml`, and to `.env.example`.
+
+Public addresses — the OAuth issuer, the MCP resource, every front and API URL — come from configuration only.
+Visin is self-hosted on its operator's domain, so a fallback to a real domain (the hosted instance's once filled
+several) would send another deployment's users and tokens there. Unset, a URL fails loudly or its feature is
+refused; frontends take it from `config.json`, and landing-front's static tags get theirs from `LANDING_FRONT_URL`
+at container start. Examples use `example.com`, test fixtures `example.test`; CI's `no-hosted-domain` job fails if
+the hosted domain appears anywhere in source.
 
 ### vision-service project privacy
 
@@ -173,6 +180,34 @@ above) → `models/` (Mongoose schemas). `validation/*Schemas.ts` are Zod schema
 `validateRequest` middleware, which also supplies defaults/coercion — controller-level tests that build a request
 object should parse it through the same schema first (see `__tests__/controllers/*.test.ts`) so the test matches
 what the controller actually receives.
+
+### shell-front: every app on one page (module federation)
+
+vision-front, label-front and account-front each still run standalone on their own domain, and are also
+module-federation remotes (`@module-federation/vite`) of `shell-front`, the host. The shell owns the
+`BrowserRouter`, the one `AppLayout` sidebar (every section a local route), its own session for the user block,
+and the routes `/`, `/login` and `/image-labeling/*`; any other path goes to the app that owns its first segment
+per `shell-front/src/apps.ts`. That app's exposed `./App` — `src/federation/RemoteApp.tsx`: its own
+`ConfigProvider`, `AuthProvider`, module-scope `QueryClient` and `AppRoutes`, but no Router and no layout —
+renders inside the shell's router, so moving between apps swaps content under a sidebar that never unmounts.
+
+- **Paths are one namespace.** No basename separates the apps, so their top-level routes must never overlap, and
+  a new top-level route in a remote must also be added to the shell's `apps.ts` prefixes, or the shell shows it
+  as not found. The per-app frame (content width, page header) lives there too, mirroring each front's own
+  `AppLayout`.
+- **Singletons are declared once**, in `@visin/frontend-core/federation` (`VISIN_FEDERATION_SHARED`), which all
+  four vite configs import. A library that holds React context or global state goes there, never into one
+  config: a remote with its own copy of React breaks hooks, and its own router/Emotion/React Query reads an empty
+  context.
+- **Remote code runs on the shell's origin.** A root-relative URL resolves against the shell, so each remote's
+  `ConfigProvider` passes `configUrl: new URL('/config.json', import.meta.url).href`, and a remote must import an
+  asset rather than reference `/public/...`. `window.location.origin` links (share URLs, invites) point at the
+  shell, which is what you want there. Remote nginx serves `remoteEntry.js` uncached and all of it with CORS.
+- **Remote addresses are runtime config**: the shell's `config.json` `VISION_FRONT_URL`/`LABEL_FRONT_URL`/
+  `ACCOUNT_FRONT_URL` are registered on first use (`src/remotes.ts`); an unreachable app shows a retry panel in
+  the content area (`RemoteBoundary`) while the menu and the other apps keep working.
+- The federation plugin is left out under Vitest (`process.env.VITEST`); shell tests mock
+  `@module-federation/runtime`.
 
 ### Frontend data fetching
 

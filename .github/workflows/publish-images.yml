@@ -44,6 +44,7 @@ on:
           - account-front
           - label-front
           - vision-front
+          - shell-front
 
 permissions:
   contents: read
@@ -64,7 +65,7 @@ jobs:
       - id: plan
         run: |
           ALL="auth-service file-service group-service label-service mcp-service vision-service \
-               landing-front auth-front account-front label-front vision-front"
+               landing-front auth-front account-front label-front vision-front shell-front"
 
           REQUESTED='${{ inputs.services }}'
           if [ -z "$REQUESTED" ] || [ "$REQUESTED" = "all" ]; then

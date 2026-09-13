@@ -25,7 +25,8 @@ export interface ApiKeyContext {
 export interface ApiKeyAuthOptions {
   /**
    * The MCP resource an OAuth access token must be bound to (RFC 8707).
-   * Defaults to `MCP_PUBLIC_URL`; a token minted for anything else is refused.
+   * Defaults to `MCP_PUBLIC_URL`; a token minted for anything else is refused,
+   * and with neither set every OAuth access token is.
    */
   audience?: string;
   /**
@@ -52,11 +53,14 @@ interface Verified {
 }
 
 const verifiedAccessToken = (token: string, audience?: string): Verified => {
-  const expected = (audience || process.env.MCP_PUBLIC_URL || 'https://mcp.visin.eu').replace(
-    /\/$/,
-    ''
-  );
-  const result = verifyAccessToken(token, expected);
+  // No default audience. A deployment accepts tokens for the MCP server it
+  // names and nothing else; checking against some other deployment's address
+  // when none is configured would be a guess about whose tokens to trust.
+  const expected = audience || process.env.MCP_PUBLIC_URL;
+  if (!expected) {
+    return { ok: false, rejection: 'no-audience-configured' };
+  }
+  const result = verifyAccessToken(token, expected.replace(/\/$/, ''));
 
   return {
     ok: result.ok,

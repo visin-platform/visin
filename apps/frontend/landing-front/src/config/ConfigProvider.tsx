@@ -3,12 +3,15 @@ import { createConfigProvider } from '@visin/frontend-core';
 export interface AppConfig {
   VISION_FRONT_URL?: string;
   VISION_API_URL?: string;
+  /** mcp-service's public address; the assistant section shows its endpoint. */
+  MCP_PUBLIC_URL?: string;
 }
 
 function createDevConfig(): AppConfig {
   return {
     VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL || 'http://localhost:3012',
     VISION_API_URL: import.meta.env.VITE_VISION_API_URL || 'http://localhost:4010',
+    MCP_PUBLIC_URL: import.meta.env.VITE_MCP_PUBLIC_URL || 'http://localhost:5009',
   };
 }
 

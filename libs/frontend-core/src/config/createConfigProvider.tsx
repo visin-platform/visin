@@ -13,6 +13,14 @@ export interface CreateConfigProviderOptions<T> {
   renderChildren?: (children: ReactNode) => ReactNode;
   /** Rendered while config is loading. Defaults to the shared Loader. */
   loadingFallback?: ReactNode;
+  /**
+   * Where the production config lives. Defaults to `/config.json`, which a
+   * browser resolves against the *page*. A module-federation remote runs inside
+   * shell-front's page, where that is the shell's file, so remotes pass a URL
+   * resolved against their own module instead:
+   * `new URL('/config.json', import.meta.url).href`.
+   */
+  configUrl?: string;
 }
 
 export function createConfigProvider<T>(options: CreateConfigProviderOptions<T>) {
@@ -21,7 +29,8 @@ export function createConfigProvider<T>(options: CreateConfigProviderOptions<T>)
     isDev,
     onFetchError = 'error-page',
     renderChildren = (children: ReactNode) => children,
-    loadingFallback = <Loader />
+    loadingFallback = <Loader />,
+    configUrl = '/config.json'
   } = options;
 
   let globalConfig: T | null = null;
@@ -46,10 +55,17 @@ export function createConfigProvider<T>(options: CreateConfigProviderOptions<T>)
   }
 
   function ConfigProvider({ children }: { children: ReactNode }) {
-    const [config, setConfig] = useState<T | null>(null);
+    // Starts from an already-loaded config: shell-front mounts a remote's
+    // provider every time the user navigates into that app, and re-fetching
+    // (with a loader in between) on each visit is the reload this avoids.
+    const [config, setConfig] = useState<T | null>(() => globalConfig);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+      if (globalConfig) {
+        return;
+      }
+
       // In development, use environment variables directly
       if (isDev) {
         const devConfig = createDevConfig();
@@ -59,7 +75,7 @@ export function createConfigProvider<T>(options: CreateConfigProviderOptions<T>)
       }
 
       // In production, fetch config.json
-      fetch('/config.json')
+      fetch(configUrl)
         .then((res) => {
           if (!res.ok) throw new Error('Config fetch failed');
           return res.json();

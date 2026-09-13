@@ -21,7 +21,7 @@ jest.mock('../../models/ApiToken', () => ({
 }));
 
 const SECRET = 'test-secret';
-const RESOURCE = 'https://mcp.visin.eu';
+const RESOURCE = 'https://mcp.example.test';
 
 const app = express();
 app.use(apiTokenMiddleware);
@@ -53,7 +53,7 @@ const token = (scopes: Parameters<typeof mintAccessToken>[0]['scopes']) =>
     email: 'a@b.com',
     name: 'A B',
     resource: RESOURCE,
-    issuer: 'https://auth-api.visin.eu',
+    issuer: 'https://auth-api.example.test',
     scopes,
     clientId: 'vsn-client-abc',
     clientName: 'Claude',

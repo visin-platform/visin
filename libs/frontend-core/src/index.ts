@@ -15,7 +15,7 @@ export type {
   AppLayoutExternalNavItem,
   AppLayoutUser
 } from './components/AppLayout';
-export { createVisinNavItems } from './navigation';
+export { createVisinNavItems, createAccountNavItems } from './navigation';
 export type { VisinApp, VisinAppUrls } from './navigation';
 export { createProtectedRoute } from './components/ProtectedRoute';
 export type { ProtectedRouteProps, ProtectedRouteAuth } from './components/ProtectedRoute';

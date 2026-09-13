@@ -6,8 +6,13 @@ services:
     image: ${REGISTRY:-ghcr.io/visin-platform}/landing-front:${TAG:-latest}
     restart: unless-stopped
     environment:
-      VISION_FRONT_URL: ${VISION_FRONT_URL}
+      # The "open the app" link. The app people open is shell-front, so this
+      # takes SHELL_FRONT_URL; vision-front itself is on VISION_FRONT_URL.
+      VISION_FRONT_URL: ${SHELL_FRONT_URL}
       VISION_API_URL: ${VISION_API_URL}
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL}
+      # The page's own address, for its canonical link, Open Graph tags and sitemap.
+      LANDING_FRONT_URL: ${LANDING_FRONT_URL}
     ports:
       - '3000:80'
     init: true

@@ -20,19 +20,26 @@ export interface AuthContextValue {
 export function createAuthContext(authService: AuthService) {
   const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+  // The last session this context resolved; `undefined` until the first check.
+  // shell-front mounts a remote's provider each time the user navigates into
+  // that app, so starting from what is already known keeps protected pages from
+  // flashing "Checking authentication..." on every visit. The check still runs
+  // on each mount and corrects it.
+  let lastKnownUser: AuthUser | null | undefined;
+
   function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<AuthUser | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [user, setUser] = useState<AuthUser | null>(lastKnownUser ?? null);
+    const [isLoading, setIsLoading] = useState(lastKnownUser === undefined);
 
     const refresh = useCallback(async (): Promise<AuthCheckResult> => {
       const result = await authService.checkAuth();
+      lastKnownUser = result.user;
       setUser(result.user);
       return result;
     }, []);
 
     useEffect(() => {
       let cancelled = false;
-      setIsLoading(true);
       refresh().finally(() => {
         if (!cancelled) setIsLoading(false);
       });
@@ -47,6 +54,7 @@ export function createAuthContext(authService: AuthService) {
 
     const logout = useCallback(async (): Promise<void> => {
       await authService.logout();
+      lastKnownUser = null;
       setUser(null);
       window.location.reload();
     }, []);

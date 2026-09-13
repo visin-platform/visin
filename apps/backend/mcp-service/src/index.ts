@@ -12,8 +12,12 @@ import app from './app';
  * the service boots healthy and then fails every single tool call, turning a
  * config mistake into what looks like an outage. `VISION_INTERNAL_URL` is
  * optional — it is the in-network shortcut, and the public URL works without it.
+ *
+ * `MCP_PUBLIC_URL` and `AUTH_SERVICE_URL` are what a connecting client is told
+ * to authenticate against. They name this deployment's own servers, so neither
+ * has a default to fall back on.
  */
-assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'VISION_SERVICE_URL', 'MCP_PUBLIC_URL']);
+assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'VISION_SERVICE_URL', 'MCP_PUBLIC_URL', 'AUTH_SERVICE_URL']);
 
 const PORT = process.env.PORT || 5009;
 

@@ -45,7 +45,7 @@ const frame = (over: Record<string, unknown> = {}) => ({
   type: 'overlay',
   epoch: 99,
   filename: 'frame_0092.png',
-  signedUrl: 'https://file-api.visin.eu/files/download/x?sig=abc',
+  signedUrl: 'https://file-api.example.test/files/download/x?sig=abc',
   ...over
 });
 

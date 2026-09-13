@@ -28,8 +28,12 @@ info:
 servers:
   - url: http://localhost:4010/api
     description: Development server
-  - url: https://vision-api.visin.eu/api
-    description: Production server
+  - url: https://{host}/api
+    description: Your deployment's vision-service
+    variables:
+      host:
+        default: vision-api.example.com
+        description: Public hostname of vision-service (VISION_API_URL)
 
 tags:
   - name: Datasets
