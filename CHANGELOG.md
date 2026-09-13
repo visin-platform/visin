@@ -1,4 +1,17 @@
 # Visin Changelog
+## [1.8.0](https://github.com/visin-platform/visin/compare/v1.7.0...v1.8.0) (2026-09-13)
+
+
+### Features
+
+* upgrade dependencies ([1e3e989](https://github.com/visin-platform/visin/commit/1e3e989d86dcd02e3a78057df49f2f47070acf56))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.4.0 ([e40f4fb](https://github.com/visin-platform/visin/commit/e40f4fb266108ba216da56f62913d821f94e3f4d))
+* **release:** @visin/frontend-core 1.3.0 ([06bc570](https://github.com/visin-platform/visin/commit/06bc57076fc73afb5c4a7394bcfd7b86ff90d44a))
+
 ## [1.7.0](https://github.com/visin-platform/visin/compare/v1.6.0...v1.7.0) (2026-09-13)
 
 
