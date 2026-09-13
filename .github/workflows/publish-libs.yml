@@ -48,6 +48,18 @@ on:
           - patch
           - minor
           - major
+  # Called by release.yml for each library with publishable changes.
+  workflow_call:
+    inputs:
+      library:
+        description: 'Library to publish'
+        required: true
+        type: string
+      release-type:
+        description: 'auto, patch, minor or major'
+        required: false
+        default: auto
+        type: string
 
 permissions:
   contents: write # commits the version bump and the re-pinned consumers

@@ -50,6 +50,15 @@ cached `npm i` layer in place, and the build compiles fresh source against a mon
 consumer automatically (`scripts/sync-lib-versions.mjs`); `npm run sync:libs` does it by hand and CI's
 `lib-versions` job fails on drift.
 
+A release is one manual run of `.github/workflows/release.yml`, which calls the other three in order: publish
+each lib with changes (`publish-libs.yml`), bump/changelog/tag (`changelog.yml`), then images (`publish-images.yml`)
+— building only services whose files changed since the previous `v*` tag and re-tagging the rest onto the new
+version, so every service exists at every version (the deploy depends on that). "Changed" is decided by
+`scripts/release-plan.mjs`, which ignores tests, e2e and Markdown. Every stage checks out the branch tip, not the
+dispatched commit: the stage before it has pushed since. Because each image builds from its own directory with its
+own lockfile, a dependency must be in that workspace's `package.json` — hoisting in the monorepo hides a missing one
+until the Docker build.
+
 Every workspace enforces a jest/vitest `coverageThreshold`/`thresholds` floor (see each `jest.config.ts` /
 `vite.config.ts`) — set just below current coverage so CI catches regressions. Ratchet the floor up when you add
 meaningful coverage; don't lower it to make a failing build pass.

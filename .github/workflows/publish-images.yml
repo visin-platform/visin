@@ -14,6 +14,11 @@
 #
 # Authentication is the job's own GITHUB_TOKEN — scoped to this run and expiring
 # with it — so no registry credential is stored in this repository.
+#
+# Called from release.yml with a version, it builds only the services whose
+# source changed since the previous release and gives every other one the new
+# version tag on its existing image. Every service therefore exists at every
+# version, which is what lets a deploy name one version for the whole platform.
 
 name: Publish images
 
@@ -45,6 +50,12 @@ on:
           - label-front
           - vision-front
           - shell-front
+  workflow_call:
+    inputs:
+      version:
+        description: 'The released version to publish, without the v prefix'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -58,14 +69,72 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       services: ${{ steps.plan.outputs.services }}
+      retag: ${{ steps.plan.outputs.retag }}
+      previous: ${{ steps.plan.outputs.previous }}
       tag: ${{ steps.plan.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # A release publishes exactly its tagged commit, and compares it with
+          # the release before, so it needs the history and the tags.
+          fetch-depth: 0
+          ref: ${{ inputs.version && format('v{0}', inputs.version) || '' }}
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        if: inputs.version
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: plan
+        env:
+          VERSION: ${{ inputs.version }}
+          IMAGE_BASE: ${{ env.REGISTRY }}/${{ github.repository_owner }}
         run: |
           ALL="auth-service file-service group-service label-service mcp-service vision-service \
                landing-front auth-front account-front label-front vision-front shell-front"
+          RETAG=""
+          PREVIOUS=""
+
+          to_json() { printf '%s\n' $1 | jq -R 'select(length > 0)' | jq -cs .; }
+
+          if [ -n "$VERSION" ]; then
+            # Called by release.yml: build what changed since the previous
+            # release, carry the rest forward.
+            TAG="$VERSION"
+            PREVIOUS=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "v$VERSION^" 2>/dev/null || true)
+            if [ -z "$PREVIOUS" ]; then
+              echo "No earlier release to compare with; building everything"
+              SVCS="$ALL"
+            else
+              PREVIOUS="${PREVIOUS#v}"
+              PLAN=$(node scripts/release-plan.mjs services "v$PREVIOUS" "v$VERSION")
+              SVCS=$(echo "$PLAN" | jq -r '.changed[]')
+              for s in $(echo "$PLAN" | jq -r '.unchanged[]'); do
+                # A service added since the previous release has no image there to
+                # carry forward, so it is built instead.
+                if docker buildx imagetools inspect "$IMAGE_BASE/$s:$PREVIOUS" >/dev/null 2>&1; then
+                  RETAG="$RETAG $s"
+                else
+                  echo "$s has no $PREVIOUS image to carry forward; building it"
+                  SVCS="$SVCS $s"
+                fi
+              done
+            fi
+
+            echo "services=$(to_json "$SVCS")" >> "$GITHUB_OUTPUT"
+            echo "retag=$(to_json "$RETAG")" >> "$GITHUB_OUTPUT"
+            echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Images for $TAG"
+              echo ""
+              echo "- Built: \`$(to_json "$SVCS")\`"
+              echo "- Carried forward from ${PREVIOUS:-—}: \`$(to_json "$RETAG")\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
           REQUESTED='${{ inputs.services }}'
           if [ -z "$REQUESTED" ] || [ "$REQUESTED" = "all" ]; then
@@ -92,7 +161,8 @@ jobs:
             TAG="$(node -p "require('./package.json').version")"
           fi
 
-          echo "services=$(printf '%s\n' $SVCS | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+          echo "services=$(to_json "$SVCS")" >> "$GITHUB_OUTPUT"
+          echo "retag=[]" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Building [$SVCS] as tag $TAG"
 
@@ -101,6 +171,8 @@ jobs:
   # because two jobs pushing the same tag would race and the loser would vanish.
   build:
     needs: setup
+    # A release where every service was carried forward has nothing to build.
+    if: needs.setup.outputs.services != '[]'
     strategy:
       fail-fast: false
       matrix:
@@ -124,6 +196,8 @@ jobs:
     name: ${{ matrix.service }} · ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.version && format('v{0}', inputs.version) || '' }}
 
       - name: Resolve build context
         id: ctx
@@ -174,6 +248,7 @@ jobs:
   # unreachable by name.
   merge:
     needs: [setup, build]
+    if: needs.setup.outputs.services != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -231,4 +306,33 @@ jobs:
               *" $want "*) ;;
               *) echo "::error::$IMAGE:$TAG is missing linux/$want"; exit 1 ;;
             esac
+          done
+
+  # Services unchanged since the previous release: the new version tag goes onto
+  # the image already published for that release. Nothing is rebuilt — the same
+  # manifest list, both architectures included, gains a second tag.
+  retag:
+    needs: setup
+    if: needs.setup.outputs.retag != '[]'
+    runs-on: ubuntu-latest
+    name: carry forward unchanged images
+    steps:
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag the previous release's images with this version
+        env:
+          IMAGE_BASE: ${{ env.REGISTRY }}/${{ github.repository_owner }}
+          SERVICES: ${{ needs.setup.outputs.retag }}
+          FROM: ${{ needs.setup.outputs.previous }}
+          TAG: ${{ needs.setup.outputs.tag }}
+        run: |
+          for s in $(echo "$SERVICES" | jq -r '.[]'); do
+            docker buildx imagetools create --tag "$IMAGE_BASE/$s:$TAG" "$IMAGE_BASE/$s:$FROM"
+            echo "$s: $FROM -> $TAG"
           done
