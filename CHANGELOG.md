@@ -1,4 +1,20 @@
 # Visin Changelog
+## [1.5.0](https://github.com/visin-platform/visin/compare/v1.4.1...v1.5.0) (2026-09-13)
+
+
+### Features
+
+* add shell app with module federation ([4382e2e](https://github.com/visin-platform/visin/commit/4382e2ef2deeda91c247b4bf6e384f48045e6aeb))
+* improve menu loading ([307d09a](https://github.com/visin-platform/visin/commit/307d09afc4f79176f50f4261290502120a1aeb1b))
+* restore deleted trainings ([2f7c4e2](https://github.com/visin-platform/visin/commit/2f7c4e20b2c2c6b7ce7f957afd2c5c55921dbdae))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.1.0 ([1001486](https://github.com/visin-platform/visin/commit/100148661f969971312253efe6a9878c62a3804f))
+* **release:** @visin/backend-core 1.2.0 ([f071232](https://github.com/visin-platform/visin/commit/f071232b2a33c055bb4d047069fb81de7f0cf9a0))
+* **release:** @visin/frontend-core 1.1.0 ([004fbb0](https://github.com/visin-platform/visin/commit/004fbb03f017fe276ce41ab752aa36981375eefa))
+
 ### [1.4.1](https://github.com/visin-platform/visin/compare/v1.4.0...v1.4.1) (2026-09-11)
 
 
