@@ -106,10 +106,13 @@ describe('authService', () => {
       vi.doUnmock('../config/ConfigProvider');
     });
 
-    it('falls back to an empty auth-front URL when redirecting to login', async () => {
+    // An empty auth-front URL would send the browser to `?redirect_uri=…` on the
+    // same page, which reloads and redirects again forever.
+    it('does not redirect to login when no auth-front URL is configured', async () => {
       vi.doMock('../config/ConfigProvider', () => ({ getGlobalConfig: () => ({}) }));
       vi.resetModules();
       const { authService: freshAuthService } = await import('./authService');
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
       Object.defineProperty(window, 'location', {
         value: { ...window.location, href: 'http://app.test/page' },
         writable: true,
@@ -117,8 +120,8 @@ describe('authService', () => {
 
       freshAuthService.redirectToLogin();
 
-      expect(window.location.href).toContain('?redirect_uri=');
-      expect(window.location.href).not.toContain('auth-front.test');
+      expect(window.location.href).toBe('http://app.test/page');
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('AUTH_FRONT_URL'));
       vi.doUnmock('../config/ConfigProvider');
     });
   });

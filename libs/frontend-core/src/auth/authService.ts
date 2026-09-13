@@ -123,8 +123,16 @@ export function createAuthService({ authServiceUrl, authFrontUrl }: AuthServiceO
   }
 
   function redirectToLogin(returnUrl?: string): void {
+    const loginUrl = authFrontUrl();
+    if (!loginUrl) {
+      // With no auth-front address the target would be `?redirect_uri=…` on this
+      // same page: it reloads, finds no session, redirects again, forever. Say
+      // what is missing and stay put instead.
+      console.error('Cannot redirect to sign-in: the auth-front URL (AUTH_FRONT_URL) is not configured.');
+      return;
+    }
     const currentUrl = returnUrl || window.location.href;
-    window.location.href = `${authFrontUrl()}?redirect_uri=${encodeURIComponent(currentUrl)}`;
+    window.location.href = `${loginUrl}?redirect_uri=${encodeURIComponent(currentUrl)}`;
   }
 
   return { checkAuth, getCurrentUser, getProfile, isAuthenticated, logout, redirectToLogin };

@@ -5,9 +5,13 @@ import { resolve } from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd());
+  // Unit tests read no .env: a test stubs what it needs, so a developer's local
+  // .env cannot make a suite pass here and fail in CI.
+  const envDir = process.env.VITEST ? false : process.cwd();
+  const env = loadEnv(mode, envDir);
 
   return {
+    envDir,
     plugins: [react()],
     server: {
       port: 3004

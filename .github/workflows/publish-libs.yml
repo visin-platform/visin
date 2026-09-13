@@ -23,6 +23,11 @@
 
 name: Publish libraries
 
+# Names each run after what it publishes, so the run list says which library a
+# release was. The version is only known once the job has derived it, so it is
+# in the run's summary rather than here.
+run-name: Publish ${{ inputs.library }} (${{ inputs.release-type }})
+
 on:
   workflow_dispatch:
     inputs:

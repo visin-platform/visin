@@ -126,5 +126,18 @@ describe('createAuthService', () => {
 
       expect(window.location.href).toBe('http://auth-front.test?redirect_uri=http%3A%2F%2Fapp.test%2Fdatasets');
     });
+
+    // Without an auth-front address the redirect would target this same page,
+    // which reloads, finds no session, and redirects again without end.
+    it('stays put and says what is missing when no auth-front URL is configured', () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      Object.defineProperty(window, 'location', { value: { ...window.location, href: 'http://app.test/account' }, writable: true });
+      const service = createAuthService({ authServiceUrl: () => 'http://auth-api.test', authFrontUrl: () => '' });
+
+      service.redirectToLogin();
+
+      expect(window.location.href).toBe('http://app.test/account');
+      expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('AUTH_FRONT_URL'));
+    });
   });
 });

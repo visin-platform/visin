@@ -1,5 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
+
+// Loading MUI and the shared lib the first time is the slow part, and it is
+// not what these tests measure. Doing it once here keeps it out of each test's
+// timeout; the per-test re-import below then only re-evaluates the provider.
+beforeAll(async () => {
+  await import('./ConfigProvider');
+}, 30_000);
 
 // The provider keeps the first config it resolves for the rest of the page's
 // life (shell-front remounts it on every visit to Vision), so each test that
