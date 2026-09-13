@@ -1,4 +1,17 @@
 # Visin Changelog
+## [1.6.0](https://github.com/visin-platform/visin/compare/v1.5.0...v1.6.0) (2026-09-13)
+
+
+### Features
+
+* add tsconfig for tests ([fff623f](https://github.com/visin-platform/visin/commit/fff623f84e6d4cea5f0c72ad4418a241e92aa7f0))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.3.0 ([74877ab](https://github.com/visin-platform/visin/commit/74877abbf29e40135921d52d4e1dae328f5a38fa))
+* **release:** @visin/frontend-core 1.2.0 ([31c5283](https://github.com/visin-platform/visin/commit/31c52830b5d960802fe278d74e81c097c5c07882))
+
 ## [1.5.0](https://github.com/visin-platform/visin/compare/v1.4.1...v1.5.0) (2026-09-13)
 
 
