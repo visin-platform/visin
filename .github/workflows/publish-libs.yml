@@ -65,6 +65,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          # The branch tip, not the commit the run was dispatched from. Runs
+          # queue behind each other (see concurrency above), so a run started
+          # while another was publishing would otherwise build on the commit
+          # before that release — and have its own release commit rejected after
+          # its version was already on npm, where it cannot be taken back.
+          ref: ${{ github.ref_name }}
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -123,13 +129,23 @@ jobs:
           echo "name=$NAME"       >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
-            echo "::error::$NAME@$VERSION is already on the registry"
+            echo "::error::$NAME@$VERSION is already on the registry. If an earlier run published it but did not push its release commit, finish that commit by hand: set the lib's package.json version to $VERSION, run node scripts/sync-lib-versions.mjs, npm install --package-lock-only, node scripts/gen-lockfiles.mjs, and commit."
             exit 1
           fi
           echo "Publishing $NAME@$VERSION"
 
       - name: Build
         run: npm run build --workspace=@visin/${{ inputs.library }}
+
+      # Publishing cannot be undone, and the release commit is only pushed after
+      # it. If the branch moved since checkout, stop now, while stopping is free.
+      - name: Check the branch has not moved
+        run: |
+          git fetch origin "${{ github.ref_name }}"
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]; then
+            echo "::error::${{ github.ref_name }} moved while this run was preparing; nothing was published. Run it again."
+            exit 1
+          fi
 
       # Publishes with an automation token rather than npm trusted publishing,
       # because configuring a trusted publisher needs 2FA on the npm account.
@@ -211,7 +227,14 @@ jobs:
             exit 0
           fi
           git commit -m "chore(release): $NAME $VERSION"
-          git push origin HEAD:${{ github.ref_name }}
+          # Something can still land during the minutes publishing takes. The
+          # version is already on npm by now, so replay the release commit —
+          # versions and lockfiles only — on top rather than lose it. CI's
+          # lockfile check catches a replay that no longer describes the tree.
+          if ! git push origin HEAD:${{ github.ref_name }}; then
+            git pull --rebase origin "${{ github.ref_name }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
 
       - name: Summary
         env:
