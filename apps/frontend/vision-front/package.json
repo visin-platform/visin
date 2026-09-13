@@ -28,7 +28,7 @@
     "@mui/material": "^9.4.0",
     "@mui/x-charts": "^9.13.0",
     "@tanstack/react-query": "^5.102.8",
-    "@visin/frontend-core": "1.2.0",
+    "@visin/frontend-core": "1.3.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.3"
