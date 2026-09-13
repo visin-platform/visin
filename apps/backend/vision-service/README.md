@@ -35,7 +35,7 @@ npm run typecheck --workspace=vision-service
 ```
 
 The finding pagination and project-token integration tests run automatically under `npm test`
-using `mongodb-memory-server` 11.2.0 with MongoDB 8.2.11. They need no separate
+using `mongodb-memory-server` 11.2.0 with MongoDB 8.3.9. They need no separate
 MongoDB service or Docker container. The first run downloads and caches the binary.
 
 ## Project token permissions

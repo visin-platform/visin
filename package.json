@@ -32,7 +32,10 @@
     "lockfiles:check": "node scripts/gen-lockfiles.mjs --check"
   },
   "devDependencies": {
-    "concurrently": "^10.0.3",
-    "prettier": "^3.9.4"
+    "concurrently": "^10.0.5",
+    "prettier": "^3.9.6"
+  },
+  "overrides": {
+    "adm-zip": "0.6.1"
   }
 }

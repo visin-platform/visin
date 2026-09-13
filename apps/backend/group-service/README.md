@@ -51,7 +51,7 @@ npm test --workspace=group-service -- --runInBand
 ```
 
 It starts and stops its own isolated database, with no Docker or external MongoDB
-configuration. The first run downloads MongoDB 8.2.11 to the package's binary cache.
+configuration. The first run downloads MongoDB 8.3.9 to the package's binary cache.
 The tests exercise real conditional writes, simultaneous demotions/removals,
 legacy duplicate memberships, imported groups without a version key, stale
 authorization, restore/delete races, and ordinary ownership handover.

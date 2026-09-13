@@ -23,7 +23,7 @@ describe('group ownership against in-memory MongoDB', () => {
   let mongo: MongoMemoryServer | undefined;
 
   beforeAll(async () => {
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.2.11' } });
+    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri(), {
       serverSelectionTimeoutMS: 10_000,
     });

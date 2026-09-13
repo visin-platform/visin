@@ -19,7 +19,7 @@ describe('account-bound invitations with in-memory MongoDB', () => {
   const previousSecret = process.env.JWT_SECRET;
   beforeAll(async () => {
     process.env.JWT_SECRET = secret;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.2.11' } });
+    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json());

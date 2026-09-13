@@ -5,7 +5,7 @@ import { FileUpload } from '../../models/FileUpload';
 export function useMongo() {
   let mongo: MongoMemoryServer;
   beforeAll(async () => {
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.2.11' } });
+    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     await FileUpload.init();
   }, 60_000);

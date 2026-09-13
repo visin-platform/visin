@@ -89,7 +89,7 @@ production container, the equivalent command is
 `node dist/scripts/recoverAdmin.js <existing-user-id>` using its configured environment.
 
 The bootstrap regression suite runs automatically under `npm test` using
-`mongodb-memory-server` with MongoDB 8.2.11. It needs no external database or
+`mongodb-memory-server` with MongoDB 8.3.9. It needs no external database or
 Docker service; the first run downloads and caches the test binary.
 
 ## Docker Compose

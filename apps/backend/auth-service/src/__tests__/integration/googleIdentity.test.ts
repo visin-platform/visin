@@ -25,7 +25,7 @@ describe('Google account authority with in-memory MongoDB', () => {
     process.env.JWT_SECRET = 'google-identity-integration-secret';
     process.env.GOOGLE_CLIENT_ID = 'test-client';
     delete process.env.GROUP_SERVICE_URL;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.2.11' } });
+    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     await User.init();
     passwordHash = await passwords.hashPassword(password);

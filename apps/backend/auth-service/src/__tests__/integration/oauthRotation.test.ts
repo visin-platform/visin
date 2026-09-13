@@ -45,7 +45,7 @@ describe('OAuth refresh grant authority on standalone MongoDB', () => {
     // deployment must: there is no hosted address to fall back on.
     process.env.AUTH_SERVICE_PUBLIC_URL = 'https://auth-api.example.test';
     process.env.MCP_PUBLIC_URL = input.resource;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.2.11' } });
+    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     await Promise.all([OAuthGrant.init(), RefreshToken.init(), OAuthClient.init()]);
     const app = express();

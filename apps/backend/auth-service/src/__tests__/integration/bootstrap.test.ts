@@ -27,7 +27,7 @@ describe('first-run setup with in-memory MongoDB', () => {
   beforeAll(async () => {
     process.env.JWT_SECRET = 'bootstrap-integration-test-secret';
     delete process.env.GROUP_SERVICE_URL;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.2.11' } });
+    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri(), { autoIndex: false });
     await Promise.all([initializeBootstrap(), initializeBootstrap()]);
   }, 120_000);

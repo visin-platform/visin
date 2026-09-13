@@ -52,7 +52,7 @@ x-needs-mongo: &needs-mongo
 services:
   # ---------------------------------------------------------------- data stores
   mongodb:
-    image: mongo:8.2.11
+    image: mongo:8.3.9
     <<: *common
     # Bound to loopback, not 0.0.0.0: the containers reach Mongo over the compose
     # network and don't need this at all. It is published so `npm run dev` — which
@@ -69,7 +69,7 @@ services:
 
   # Backs label-service's bundle-import queue (BullMQ). Nothing else needs it.
   redis:
-    image: redis:8.2-alpine
+    image: redis:8.10-alpine
     <<: *common
     command: ['redis-server', '--appendonly', 'yes']
     ports: ['127.0.0.1:6379:6379']
@@ -83,7 +83,7 @@ services:
 
   # Optional Mongo web UI: `docker compose --profile tools up -d`
   mongo-express:
-    image: mongo-express:1.0.2-18
+    image: mongo-express:1.0.2-20-alpine3.19
     <<: *common
     profiles: ['tools']
     ports: ['127.0.0.1:8081:8081']

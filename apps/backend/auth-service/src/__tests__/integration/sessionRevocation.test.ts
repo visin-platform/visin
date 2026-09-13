@@ -19,7 +19,7 @@ describe('session revocation across auth and shared middleware', () => {
     process.env.JWT_SECRET = 'revocation-test-secret';
     process.env.INTERNAL_SERVICE_TOKEN = 'revocation-internal-secret';
     delete process.env.GROUP_SERVICE_URL;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.2.11' } });
+    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json(), cookieParser());

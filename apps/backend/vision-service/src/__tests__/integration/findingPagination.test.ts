@@ -19,7 +19,7 @@ describe('visible finding pages with in-memory MongoDB', () => {
     }));
 
   beforeAll(async () => {
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.2.11' } });
+    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     await Promise.all([Finding.init(), Project.init()]);
   }, 120_000);
