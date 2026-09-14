@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.9.0](https://github.com/visin-platform/visin/compare/v1.8.0...v1.9.0) (2026-09-14)
+
+
+### Features
+
+* add new home page ([4d7d39f](https://github.com/visin-platform/visin/commit/4d7d39f7070a7c6d5d4f0f16231404037d0dec85))
+
+
+### Chores
+
+* **release:** @visin/frontend-core 1.4.0 ([f3234fc](https://github.com/visin-platform/visin/commit/f3234fc61a3789fcc8b60804071ac2f98547c57e))
+
 ## [1.8.0](https://github.com/visin-platform/visin/compare/v1.7.0...v1.8.0) (2026-09-13)
 
 
