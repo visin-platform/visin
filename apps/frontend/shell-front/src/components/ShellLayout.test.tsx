@@ -14,18 +14,17 @@ import ShellLayout from './ShellLayout';
 
 const Path = () => <div data-testid="path">{useLocation().pathname}</div>;
 
-const renderAt = (path: string) => {
-  const result = render(
+const renderAt = (path: string) =>
+  render(
     <MemoryRouter initialEntries={[path]}>
       <ShellLayout>
         <Path />
       </ShellLayout>
     </MemoryRouter>
   );
-  // Only the permanent desktop drawer; the mobile one portals out of <nav>.
-  const nav = within(result.container.querySelector('nav')!);
-  return { ...result, nav };
-};
+
+const main = () => within(screen.getByRole('navigation', { name: 'Main' }));
+const sectionBar = (name: string) => within(screen.getByRole('navigation', { name }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -33,36 +32,75 @@ beforeEach(() => {
 });
 
 describe('ShellLayout', () => {
-  it('routes every section inside the page, with nothing linking to another domain', () => {
-    const { nav } = renderAt('/projects');
+  it('groups every app into Projects, Data and Labels, routed inside the page', () => {
+    renderAt('/projects');
 
     for (const [name, href] of [
       ['Projects', '/projects'],
-      ['Trainings', '/trainings'],
-      ['Datasets', '/datasets'],
-      ['Jobs', '/jobs'],
-      ['Bundles', '/bundles'],
+      ['Data', '/datasets'],
+      ['Labels', '/jobs'],
     ]) {
-      expect(nav.getByRole('link', { name })).toHaveAttribute('href', href);
+      expect(main().getByRole('link', { name })).toHaveAttribute('href', href);
     }
   });
 
-  it('highlights the section being shown, whichever app serves it', () => {
-    const { nav } = renderAt('/jobs/j1');
+  it('opens a signed-in session at Home, first in the menu', () => {
+    renderAt('/');
 
-    expect(nav.getByRole('link', { name: 'Jobs' }).className).toContain('Mui-selected');
-    expect(nav.getByRole('link', { name: 'Projects' }).className).not.toContain('Mui-selected');
+    const groups = main().getAllByRole('link', { name: /^(Home|Projects|Data|Labels)$/ });
+    expect(groups.map((link) => link.textContent)).toEqual(['Home', 'Projects', 'Data', 'Labels']);
+    expect(main().getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'true');
   });
 
-  it('adds Account sections only while in Account', () => {
-    expect(renderAt('/projects').nav.queryByRole('link', { name: 'Profile' })).not.toBeInTheDocument();
+  it('takes the logo home', () => {
+    renderAt('/jobs');
+
+    fireEvent.click(main().getByRole('link', { name: 'Visin home' }));
+
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/$/);
+  });
+
+  it('offers no Home to an anonymous visitor', () => {
+    authState.isAuthenticated = false;
+    renderAt('/projects');
+
+    expect(main().queryByRole('link', { name: 'Home' })).not.toBeInTheDocument();
+  });
+
+  it('lists bundles beside the jobs, routed inside the page', () => {
+    renderAt('/bundles');
+
+    expect(sectionBar('Labels').getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/jobs');
+    expect(sectionBar('Labels').getByRole('link', { name: 'Bundles' })).toHaveAttribute('aria-current', 'page');
+    expect(main().getByRole('link', { name: 'Labels' })).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('highlights the group being shown', () => {
+    renderAt('/jobs/j1');
+
+    expect(main().getByRole('link', { name: 'Labels' })).toHaveAttribute('aria-current', 'true');
+    expect(main().getByRole('link', { name: 'Projects' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('keeps Projects highlighted on the pages a project leads to', () => {
+    for (const path of ['/comparisons/c1', '/benchmarks', '/visualizations/compare']) {
+      const { unmount } = renderAt(path);
+      expect(main().getByRole('link', { name: 'Projects' })).toHaveAttribute('aria-current', 'true');
+      unmount();
+    }
   });
 
   it('lists Account sections, and titles the page from them, on an Account route', () => {
-    const { nav } = renderAt('/account/groups');
+    renderAt('/account/groups');
 
-    expect(nav.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/account/profile');
+    expect(sectionBar('Account').getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/account/profile');
     expect(screen.getByRole('heading', { level: 4, name: 'Groups' })).toBeInTheDocument();
+  });
+
+  it('keeps Account sections out of the section bar elsewhere', () => {
+    renderAt('/projects');
+
+    expect(screen.queryByRole('navigation', { name: 'Account' })).not.toBeInTheDocument();
   });
 
   it('frames each app as its standalone front did', () => {
@@ -86,20 +124,20 @@ describe('ShellLayout', () => {
     expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
   });
 
-  it('opens Account from the user menu without leaving the page', () => {
+  it('opens an Account section from the account menu without leaving the page', () => {
     renderAt('/projects');
 
-    fireEvent.click(screen.getAllByLabelText('open user menu')[0]);
-    fireEvent.click(screen.getByText('Account'));
+    fireEvent.click(main().getByRole('button', { name: 'Account' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Profile' }));
 
-    expect(screen.getByTestId('path')).toHaveTextContent('/account');
+    expect(screen.getByTestId('path')).toHaveTextContent('/account/profile');
   });
 
   it('offers Login to an anonymous visitor', () => {
     authState.isAuthenticated = false;
     renderAt('/projects');
 
-    fireEvent.click(screen.getAllByText('Login')[0]);
+    fireEvent.click(main().getByRole('button', { name: 'Login' }));
 
     expect(authState.login).toHaveBeenCalled();
   });

@@ -45,6 +45,8 @@ describe('shell ConfigProvider', () => {
       VISION_FRONT_URL: 'http://localhost:3012',
       LABEL_FRONT_URL: 'http://localhost:3008',
       ACCOUNT_FRONT_URL: 'http://localhost:3007',
+      VISION_API_URL: 'http://localhost:4010',
+      LABEL_SERVICE_URL: 'http://localhost:5008',
     });
   });
 

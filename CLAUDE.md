@@ -194,7 +194,7 @@ what the controller actually receives.
 
 vision-front, label-front and account-front each still run standalone on their own domain, and are also
 module-federation remotes (`@module-federation/vite`) of `shell-front`, the host. The shell owns the
-`BrowserRouter`, the one `AppLayout` sidebar (every section a local route), its own session for the user block,
+`BrowserRouter`, the one `AppLayout` navigation (every section a local route), its own session for the user block,
 and the routes `/`, `/login` and `/image-labeling/*`; any other path goes to the app that owns its first segment
 per `shell-front/src/apps.ts`. That app's exposed `./App` — `src/federation/RemoteApp.tsx`: its own
 `ConfigProvider`, `AuthProvider`, module-scope `QueryClient` and `AppRoutes`, but no Router and no layout —

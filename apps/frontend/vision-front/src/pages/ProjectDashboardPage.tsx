@@ -27,6 +27,9 @@ import DeleteProjectDialog from '../components/project/DeleteProjectDialog';
 import { useProjectDashboard } from '../hooks/useProjectDashboard';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 
+// In ProjectTabs' order. Analysis once had no entry here while Settings kept
+// its old index, so `?tab=settings` opened Analysis and neither tab could be
+// linked to.
 const tabNameToIndex: Record<string, number> = {
   overview: 0,
   trainings: 1,
@@ -34,7 +37,8 @@ const tabNameToIndex: Record<string, number> = {
   visualizations: 3,
   benchmarks: 4,
   comparisons: 5,
-  settings: 6
+  analysis: 6,
+  settings: 7
 };
 
 const indexToTabName: Record<number, string> = {
@@ -44,7 +48,8 @@ const indexToTabName: Record<number, string> = {
   3: 'visualizations',
   4: 'benchmarks',
   5: 'comparisons',
-  6: 'settings'
+  6: 'analysis',
+  7: 'settings'
 };
 
 const ProjectDashboardPage: React.FC = () => {

@@ -19,6 +19,7 @@ const renderProvider = async () => {
       <div>
         <span data-testid="api-url">{config.VISION_API_URL ?? 'no-url'}</span>
         <span data-testid="mcp-url">{config.MCP_PUBLIC_URL ?? 'no-mcp'}</span>
+        <span data-testid="shell-url">{config.SHELL_FRONT_URL ?? 'no-shell'}</span>
       </div>
     );
   };
@@ -29,7 +30,8 @@ const renderProvider = async () => {
   );
   return {
     apiUrl: await screen.findByTestId('api-url'),
-    mcpUrl: screen.getByTestId('mcp-url')
+    mcpUrl: screen.getByTestId('mcp-url'),
+    shellUrl: screen.getByTestId('shell-url')
   };
 };
 
@@ -46,25 +48,28 @@ describe('ConfigProvider', () => {
 
   it('uses configured env vars over the localhost defaults when present', async () => {
     vi.stubEnv('VITE_VISION_API_URL', 'http://configured-api.test');
-    vi.stubEnv('VITE_VISION_FRONT_URL', 'http://configured-front.test');
+    vi.stubEnv('VITE_SHELL_FRONT_URL', 'http://configured-shell.test');
     vi.stubEnv('VITE_MCP_PUBLIC_URL', 'http://configured-mcp.test');
 
-    const { apiUrl, mcpUrl } = await renderProvider();
+    const { apiUrl, mcpUrl, shellUrl } = await renderProvider();
 
     expect(apiUrl).toHaveTextContent('http://configured-api.test');
     expect(mcpUrl).toHaveTextContent('http://configured-mcp.test');
+    expect(shellUrl).toHaveTextContent('http://configured-shell.test');
   });
 
   it('falls back to the localhost defaults when the env vars are empty', async () => {
     // .env sets these vars for normal dev/build, so the `|| default` branch
     // only fires when they're explicitly blanked out, as here.
     vi.stubEnv('VITE_VISION_API_URL', '');
-    vi.stubEnv('VITE_VISION_FRONT_URL', '');
+    vi.stubEnv('VITE_SHELL_FRONT_URL', '');
     vi.stubEnv('VITE_MCP_PUBLIC_URL', '');
 
-    const { apiUrl, mcpUrl } = await renderProvider();
+    const { apiUrl, mcpUrl, shellUrl } = await renderProvider();
 
     expect(apiUrl).toHaveTextContent('http://localhost:4010');
     expect(mcpUrl).toHaveTextContent('http://localhost:5009');
+    // The app people open is shell-front, not vision-front's own port.
+    expect(shellUrl).toHaveTextContent('http://localhost:3010');
   });
 });

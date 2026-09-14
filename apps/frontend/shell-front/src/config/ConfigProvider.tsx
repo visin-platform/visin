@@ -12,6 +12,9 @@ export interface AppConfig {
   VISION_FRONT_URL?: string;
   LABEL_FRONT_URL?: string;
   ACCOUNT_FRONT_URL?: string;
+  /** The services the home page reads. Unset, the parts they feed are left out. */
+  VISION_API_URL?: string;
+  LABEL_SERVICE_URL?: string;
 }
 
 // `npm run dev` starts every app on its fixed port, so the shell needs no .env to
@@ -22,7 +25,9 @@ function createDevConfig(): AppConfig {
     AUTH_FRONT_URL: import.meta.env.VITE_AUTH_FRONT_URL || 'http://localhost:3004',
     VISION_FRONT_URL: import.meta.env.VITE_VISION_FRONT_URL || 'http://localhost:3012',
     LABEL_FRONT_URL: import.meta.env.VITE_LABEL_FRONT_URL || 'http://localhost:3008',
-    ACCOUNT_FRONT_URL: import.meta.env.VITE_ACCOUNT_FRONT_URL || 'http://localhost:3007'
+    ACCOUNT_FRONT_URL: import.meta.env.VITE_ACCOUNT_FRONT_URL || 'http://localhost:3007',
+    VISION_API_URL: import.meta.env.VITE_VISION_API_URL || 'http://localhost:4010',
+    LABEL_SERVICE_URL: import.meta.env.VITE_LABEL_SERVICE_URL || 'http://localhost:5008'
   };
 }
 

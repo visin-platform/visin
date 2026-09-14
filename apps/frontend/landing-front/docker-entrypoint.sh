@@ -4,7 +4,7 @@ HTML=/usr/share/nginx/html
 
 cat > $HTML/config.json << EOF
 {
-  "VISION_FRONT_URL": "${VISION_FRONT_URL}",
+  "SHELL_FRONT_URL": "${SHELL_FRONT_URL}",
   "VISION_API_URL": "${VISION_API_URL}",
   "MCP_PUBLIC_URL": "${MCP_PUBLIC_URL}"
 }

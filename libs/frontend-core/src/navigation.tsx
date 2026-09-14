@@ -1,118 +1,134 @@
+import type { ReactNode } from 'react';
 import {
-  Folder,
-  ModelTraining,
-  Storage,
   Assignment,
-  Inventory2,
-  Person,
+  Folder,
+  FolderCopy,
   Groups,
+  Insights,
+  Inventory2,
   Key,
+  Label,
   Link as LinkIcon,
-  Insights
+  ModelTraining,
+  Person,
+  PhotoLibrary,
+  Storage
 } from '@mui/icons-material';
-import type { AppLayoutNavItem } from './components/AppLayout';
+import type { AppLayoutNavGroup, AppLayoutNavItem } from './components/AppLayout';
 
 /** The fronts whose sections make up the shared menu. */
-export type VisinApp = 'vision' | 'label';
+export type VisinApp = 'vision' | 'label' | 'account';
 
 export interface VisinAppUrls {
   /** Base URL of vision-front, e.g. https://ml.example.com */
   vision?: string;
   /** Base URL of label-front, e.g. https://label.example.com */
   label?: string;
+  /** Base URL of account-front, e.g. https://account.example.com */
+  account?: string;
+}
+
+export interface VisinNavigation {
+  groups: AppLayoutNavGroup[];
+  accountItems: AppLayoutNavItem[];
 }
 
 interface NavSection {
+  app: VisinApp;
   text: string;
-  icon: AppLayoutNavItem['icon'];
+  icon: ReactNode;
   path: string;
 }
 
 interface NavGroup {
-  app: VisinApp;
   label: string;
+  icon: ReactNode;
   sections: NavSection[];
+  /** Pages of the group reached from inside it — a project, a training — rather than from the menu. */
+  pages?: { app: VisinApp; paths: string[] };
 }
 
 /**
- * The whole menu, in the order every app shows it. It used to list only the
- * current app's sections plus one link across, so following that link swapped
- * the entire sidebar out from under the user. Now every app renders the same
- * groups in the same places; crossing apps changes which item is highlighted,
+ * The whole menu, grouped by what the user is doing. Every app renders the same
+ * groups in the same places; crossing apps changes which entry is highlighted,
  * never what the menu contains.
  */
 const NAV_GROUPS: NavGroup[] = [
   {
-    app: 'vision',
-    label: 'Vision',
+    label: 'Projects',
+    icon: <Folder />,
     sections: [
-      { text: 'Projects', icon: <Folder />, path: '/projects' },
-      { text: 'Trainings', icon: <ModelTraining />, path: '/trainings' },
-      { text: 'Datasets', icon: <Storage />, path: '/datasets' }
-    ]
+      // Not "Projects": the group already says so, and the bar under it would
+      // read Projects, Projects.
+      { app: 'vision', text: 'All projects', icon: <FolderCopy />, path: '/projects' },
+      { app: 'vision', text: 'Trainings', icon: <ModelTraining />, path: '/trainings' }
+    ],
+    pages: {
+      app: 'vision',
+      paths: ['/comparisons', '/epochs', '/configs', '/test-results', '/visualizations', '/benchmarks']
+    }
   },
   {
-    app: 'label',
-    label: 'Labeling',
-    // "New job" is deliberately not here: it is an action on the Jobs list, not a
-    // section of the app, and a nav entry for it made the menu read as three
-    // destinations when there are two.
+    label: 'Data',
+    icon: <Storage />,
+    sections: [{ app: 'vision', text: 'Datasets', icon: <PhotoLibrary />, path: '/datasets' }]
+  },
+  {
+    label: 'Labels',
+    icon: <Label />,
+    // A bundle is the image set a job is labelled from, so it sits beside the
+    // jobs rather than with Datasets. "New job" is deliberately not here: it is
+    // an action on the Jobs list, not a section.
     sections: [
-      { text: 'Jobs', icon: <Assignment />, path: '/jobs' },
-      { text: 'Bundles', icon: <Inventory2 />, path: '/bundles' }
+      { app: 'label', text: 'Jobs', icon: <Assignment />, path: '/jobs' },
+      { app: 'label', text: 'Bundles', icon: <Inventory2 />, path: '/bundles' }
     ]
   }
 ];
 
 const ACCOUNT_SECTIONS: NavSection[] = [
-  { text: 'Profile', icon: <Person />, path: '/account/profile' },
-  { text: 'Groups', icon: <Groups />, path: '/account/groups' },
-  { text: 'API keys', icon: <Key />, path: '/account/api-keys' },
-  { text: 'Connected apps', icon: <LinkIcon />, path: '/account/connections' },
-  { text: 'Assistant activity', icon: <Insights />, path: '/account/activity' }
+  { app: 'account', text: 'Profile', icon: <Person />, path: '/account/profile' },
+  { app: 'account', text: 'Groups', icon: <Groups />, path: '/account/groups' },
+  { app: 'account', text: 'API keys', icon: <Key />, path: '/account/api-keys' },
+  { app: 'account', text: 'Connected apps', icon: <LinkIcon />, path: '/account/connections' },
+  { app: 'account', text: 'Assistant activity', icon: <Insights />, path: '/account/activity' }
 ];
 
 const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
 
 /**
  * Builds the shared menu. `localApps` are the apps whose sections are routes of
- * the page drawing the menu: one app in a standalone front, both in shell-front
- * (which renders every app on one page), and none in account-front, where every
- * entry links across. Every other app's sections are absolute links to that app.
+ * the page drawing the menu: one app in a standalone front, all of them in
+ * shell-front (which renders every app on one page). Every other app's sections
+ * are absolute links to that app.
  *
- * A non-local app with no URL configured has its group omitted, rather than
+ * A non-local app with no URL configured has its sections omitted, rather than
  * rendered as dead links into the current origin — a missing `LABEL_FRONT_URL`
- * should hide Labeling, not leave entries that 404 inside Vision.
+ * should hide Jobs and Bundles, not leave entries that 404 inside Vision. A
+ * group left with no sections is omitted with them.
  */
-export function createVisinNavItems(
+export function createVisinNavigation(
   localApps: VisinApp | readonly VisinApp[] | null,
   urls: VisinAppUrls
-): AppLayoutNavItem[] {
+): VisinNavigation {
   const local = new Set<VisinApp>(localApps === null ? [] : typeof localApps === 'string' ? [localApps] : localApps);
 
-  return NAV_GROUPS.flatMap(({ app, label, sections }): AppLayoutNavItem[] => {
+  const toItems = ({ app, text, icon, path }: NavSection): AppLayoutNavItem[] => {
     if (local.has(app)) {
-      return sections.map(({ text, icon, path }) => ({ text, icon, path, group: label }));
+      return [{ text, icon, path }];
     }
-
     const baseUrl = urls[app];
-    if (!baseUrl) {
+    return baseUrl ? [{ text, icon, href: `${stripTrailingSlash(baseUrl)}${path}` }] : [];
+  };
+
+  const groups = NAV_GROUPS.flatMap(({ label, icon, sections, pages }): AppLayoutNavGroup[] => {
+    const items = sections.flatMap(toItems);
+    if (items.length === 0) {
       return [];
     }
-    return sections.map(({ text, icon, path }) => ({
-      text,
-      icon,
-      href: `${stripTrailingSlash(baseUrl)}${path}`,
-      group: label
-    }));
+    // Another app's pages never render on this one, so only local ones can match.
+    return [{ label, icon, items, match: pages && local.has(pages.app) ? pages.paths : [] }];
   });
-}
 
-/**
- * Account's own sections, under an Account heading, as local routes. Shown only
- * while the user is in Account (account-front, or shell-front's Account routes);
- * everywhere else Account is a single entry in the user menu.
- */
-export function createAccountNavItems(): AppLayoutNavItem[] {
-  return ACCOUNT_SECTIONS.map(({ text, icon, path }) => ({ text, icon, path, group: 'Account' }));
+  return { groups, accountItems: ACCOUNT_SECTIONS.flatMap(toItems) };
 }

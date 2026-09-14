@@ -22,6 +22,14 @@ vi.mock('../remotes', () => ({
 }));
 vi.mock('../components/LoginRedirect', () => ({ default: () => <div>login redirect</div> }));
 
+const { authState } = vi.hoisted(() => ({
+  authState: { user: { name: 'Jane Doe' }, isAuthenticated: true, isLoading: false },
+}));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
+vi.mock('../pages/HomePage', () => ({
+  HomePage: ({ userName }: { userName?: string }) => <div>home page for {userName}</div>,
+}));
+
 import ShellRoutes from './index';
 import { forgetRemote } from '../remotes';
 
@@ -38,14 +46,31 @@ const renderAt = (path: string) =>
 beforeEach(() => {
   vi.clearAllMocks();
   labelBroken = false;
+  Object.assign(authState, { isAuthenticated: true, isLoading: false });
 });
 
 describe('ShellRoutes', () => {
-  it('lands on Vision projects from the root', () => {
+  it('opens a signed-in session on its home page', () => {
+    renderAt('/');
+
+    expect(screen.getByText('home page for Jane Doe')).toBeInTheDocument();
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/$/);
+  });
+
+  it('sends a visitor from the root to Vision projects', () => {
+    authState.isAuthenticated = false;
     renderAt('/');
 
     expect(screen.getByText('vision app')).toBeInTheDocument();
     expect(screen.getByTestId('path')).toHaveTextContent('/projects');
+  });
+
+  it('waits for the session check before choosing', () => {
+    authState.isLoading = true;
+    renderAt('/');
+
+    expect(screen.queryByText(/home page/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/$/);
   });
 
   it.each([

@@ -3,8 +3,8 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import LandingPage from './LandingPage';
 import { ASK_CONVERSATION, ASSISTANT_LIMITS, CONNECT_STEPS, STEPS, GITHUB_URL } from './content';
 
-const config: { VISION_FRONT_URL?: string; MCP_PUBLIC_URL?: string } = {
-  VISION_FRONT_URL: 'http://vision.test',
+const config: { SHELL_FRONT_URL?: string; MCP_PUBLIC_URL?: string } = {
+  SHELL_FRONT_URL: 'http://shell.test',
   MCP_PUBLIC_URL: 'https://mcp.example.test'
 };
 
@@ -15,7 +15,7 @@ vi.mock('./ContactForm', () => ({ default: () => <div>contact-form</div> }));
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  config.VISION_FRONT_URL = 'http://vision.test';
+  config.SHELL_FRONT_URL = 'http://shell.test';
   config.MCP_PUBLIC_URL = 'https://mcp.example.test';
 });
 
@@ -148,18 +148,18 @@ describe('LandingPage structure', () => {
 });
 
 describe('LandingPage calls to action', () => {
-  it('points every app link at the configured Vision URL', () => {
+  it('points every app link at shell-front, where the apps open', () => {
     render(<LandingPage />);
 
     const appLinks = screen.getAllByRole('link', { name: /open the app/i });
     expect(appLinks.length).toBeGreaterThan(1);
     for (const link of appLinks) {
-      expect(link).toHaveAttribute('href', 'http://vision.test');
+      expect(link).toHaveAttribute('href', 'http://shell.test');
     }
   });
 
   it('falls back to a harmless href when the app URL is unconfigured', () => {
-    config.VISION_FRONT_URL = undefined;
+    config.SHELL_FRONT_URL = undefined;
     render(<LandingPage />);
 
     expect(screen.getAllByRole('link', { name: /open the app/i })[0]).toHaveAttribute('href', '#');

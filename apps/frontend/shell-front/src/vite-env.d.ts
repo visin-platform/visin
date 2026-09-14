@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_VISION_FRONT_URL: string;
   readonly VITE_LABEL_FRONT_URL: string;
   readonly VITE_ACCOUNT_FRONT_URL: string;
+  readonly VITE_VISION_API_URL: string;
+  readonly VITE_LABEL_SERVICE_URL: string;
 }
 
 interface ImportMeta {

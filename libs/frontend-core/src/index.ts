@@ -10,13 +10,14 @@ export type { ErrorPageProps } from './components/ErrorPage';
 export { AppLayout } from './components/AppLayout';
 export type {
   AppLayoutProps,
+  AppLayoutNavGroup,
   AppLayoutNavItem,
   AppLayoutInternalNavItem,
   AppLayoutExternalNavItem,
   AppLayoutUser
 } from './components/AppLayout';
-export { createVisinNavItems, createAccountNavItems } from './navigation';
-export type { VisinApp, VisinAppUrls } from './navigation';
+export { createVisinNavigation } from './navigation';
+export type { VisinApp, VisinAppUrls, VisinNavigation } from './navigation';
 export { createProtectedRoute } from './components/ProtectedRoute';
 export type { ProtectedRouteProps, ProtectedRouteAuth } from './components/ProtectedRoute';
 export { createLoginRedirect } from './components/LoginRedirect';

@@ -11,7 +11,7 @@ import Footer from './components/Footer';
 
 function LandingPage() {
   const config = useConfig();
-  const appUrl = config.VISION_FRONT_URL || '#';
+  const appUrl = config.SHELL_FRONT_URL || '#';
 
   return (
     <ThemeProvider theme={theme}>

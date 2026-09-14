@@ -4,8 +4,23 @@ import { Box, Typography } from '@mui/material';
 import { Loader } from '@visin/frontend-core';
 import LoginRedirect from '../components/LoginRedirect';
 import { RemoteBoundary } from '../components/RemoteBoundary';
+import { useAuth } from '../contexts/AuthContext';
+import { HomePage } from '../pages/HomePage';
 import { APPS, appForPath } from '../apps';
 import { forgetRemote, remoteComponent } from '../remotes';
+
+/**
+ * A signed-in session opens on its home page. A visitor has none: Vision's
+ * public projects are what there is to see without an account.
+ */
+function Home() {
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <Loader fullHeight={false} />;
+  }
+  return isAuthenticated ? <HomePage userName={user?.name} /> : <Navigate to="/projects" replace />;
+}
 
 const NotFound = () => (
   <Box sx={{ py: 8, textAlign: 'center' }}>
@@ -55,7 +70,7 @@ function RemoteOutlet() {
 function ShellRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/projects" replace />} />
+      <Route path="/" element={<Home />} />
       <Route path="/login" element={<LoginRedirect />} />
       {/* vision-front keeps this old address alive by forwarding to label-front's
           domain; here Labeling is a route of the same page. */}

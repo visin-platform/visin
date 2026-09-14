@@ -1,99 +1,102 @@
 import { describe, it, expect } from 'vitest';
-import { createAccountNavItems, createVisinNavItems } from './navigation';
+import { createVisinNavigation } from './navigation';
 
-const urls = { vision: 'https://vision.test', label: 'https://label.test' };
+const urls = { vision: 'https://vision.test', label: 'https://label.test', account: 'https://account.test' };
 
-describe('createVisinNavItems', () => {
-  it('gives every app the same menu, in the same order', () => {
-    const texts = (items: ReturnType<typeof createVisinNavItems>) => items.map(item => item.text);
-    const expected = ['Projects', 'Trainings', 'Datasets', 'Jobs', 'Bundles'];
+const labels = (nav: ReturnType<typeof createVisinNavigation>) => nav.groups.map(group => group.label);
+const texts = (nav: ReturnType<typeof createVisinNavigation>) =>
+  nav.groups.map(group => group.items.map(item => item.text));
+
+describe('createVisinNavigation', () => {
+  it('gives every app the same groups, in the same order', () => {
+    const expected = [['All projects', 'Trainings'], ['Datasets'], ['Jobs', 'Bundles']];
 
     // Crossing apps must not change what the menu contains.
-    expect(texts(createVisinNavItems('vision', urls))).toEqual(expected);
-    expect(texts(createVisinNavItems('label', urls))).toEqual(expected);
-    expect(texts(createVisinNavItems(null, urls))).toEqual(expected);
+    for (const local of ['vision', 'label', 'account', null] as const) {
+      const nav = createVisinNavigation(local, urls);
+      expect(labels(nav)).toEqual(['Projects', 'Data', 'Labels']);
+      expect(texts(nav)).toEqual(expected);
+    }
   });
 
-  it('files each section under its app heading', () => {
-    expect(createVisinNavItems('vision', urls).map(item => item.group)).toEqual([
-      'Vision',
-      'Vision',
-      'Vision',
-      'Labeling',
-      'Labeling'
-    ]);
+  it('keeps bundles beside the jobs labelled from them', () => {
+    const group = createVisinNavigation('vision', urls).groups.find(candidate => candidate.label === 'Labels')!;
+
+    expect(group.items).toMatchObject([{ href: 'https://label.test/jobs' }, { href: 'https://label.test/bundles' }]);
   });
 
   it('keeps the current app sections as internal routes', () => {
-    const projects = createVisinNavItems('vision', urls).find(item => item.text === 'Projects');
-    const jobs = createVisinNavItems('label', urls).find(item => item.text === 'Jobs');
+    const [projects] = createVisinNavigation('vision', urls).groups[0].items;
+    const [jobs] = createVisinNavigation('label', urls).groups[2].items;
 
-    expect(projects?.path).toBe('/projects');
-    expect(projects?.href).toBeUndefined();
-    expect(jobs?.path).toBe('/jobs');
-    expect(jobs?.href).toBeUndefined();
+    expect(projects.path).toBe('/projects');
+    expect(projects.href).toBeUndefined();
+    expect(jobs.path).toBe('/jobs');
+    expect(jobs.href).toBeUndefined();
   });
 
   it('links the other app sections straight to that section', () => {
-    const bundles = createVisinNavItems('vision', urls).find(item => item.text === 'Bundles');
-    const datasets = createVisinNavItems('label', urls).find(item => item.text === 'Datasets');
+    const nav = createVisinNavigation('label', urls);
+    const [datasets] = nav.groups[1].items;
+    const [, bundles] = nav.groups[2].items;
 
-    expect(bundles?.href).toBe('https://label.test/bundles');
-    expect(bundles?.path).toBeUndefined();
-    expect(datasets?.href).toBe('https://vision.test/datasets');
-    expect(datasets?.path).toBeUndefined();
-  });
-
-  it('links every section across for an app that owns none of them', () => {
-    const items = createVisinNavItems(null, urls);
-
-    expect(items.every(item => item.href !== undefined)).toBe(true);
-    expect(items[0]).toMatchObject({ href: 'https://vision.test/projects' });
+    expect(datasets.href).toBe('https://vision.test/datasets');
+    expect(datasets.path).toBeUndefined();
+    expect(bundles.path).toBe('/bundles');
+    expect(bundles.href).toBeUndefined();
   });
 
   it('tolerates a trailing slash on the configured base URL', () => {
-    const items = createVisinNavItems('vision', { label: 'https://label.test/' });
+    const nav = createVisinNavigation('vision', { label: 'https://label.test/' });
 
-    expect(items.find(item => item.text === 'Jobs')).toMatchObject({ href: 'https://label.test/jobs' });
+    expect(nav.groups[2].items[0]).toMatchObject({ href: 'https://label.test/jobs' });
   });
 
-  it('omits a sibling app group when that app has no URL configured', () => {
-    // Dead links into the current origin would 404; an absent group is honest.
-    expect(createVisinNavItems('vision', {}).map(item => item.text)).toEqual(['Projects', 'Trainings', 'Datasets']);
-    expect(createVisinNavItems('label', {}).map(item => item.text)).toEqual(['Jobs', 'Bundles']);
-    expect(createVisinNavItems(null, { label: 'https://label.test' }).map(item => item.text)).toEqual([
-      'Jobs',
-      'Bundles'
-    ]);
+  it('omits sections, and then groups, whose app has no URL configured', () => {
+    // Dead links into the current origin would 404; an absent entry is honest.
+    expect(texts(createVisinNavigation('vision', {}))).toEqual([['All projects', 'Trainings'], ['Datasets']]);
+    expect(texts(createVisinNavigation('label', {}))).toEqual([['Jobs', 'Bundles']]);
+    expect(labels(createVisinNavigation(null, { label: 'https://label.test' }))).toEqual(['Labels']);
   });
 
-  // shell-front renders both apps on one page, so neither group links across.
+  it('keeps Projects lit on the pages a project leads to, only where they are local', () => {
+    expect(createVisinNavigation('vision', urls).groups[0].match).toContain('/benchmarks');
+    expect(createVisinNavigation('label', urls).groups[0].match).toEqual([]);
+    expect(createVisinNavigation('vision', urls).groups[1].match).toEqual([]);
+  });
+
+  // shell-front renders every app on one page, so nothing links across.
   it('routes every listed app locally when several share the page', () => {
-    const items = createVisinNavItems(['vision', 'label'], urls);
+    const nav = createVisinNavigation(['vision', 'label', 'account'], {});
+    const items = [...nav.groups.flatMap(group => group.items), ...nav.accountItems];
 
-    expect(items.map(item => item.text)).toEqual(['Projects', 'Trainings', 'Datasets', 'Jobs', 'Bundles']);
     expect(items.every(item => item.path !== undefined && item.href === undefined)).toBe(true);
   });
 
   it('ignores the current app own URL', () => {
-    const items = createVisinNavItems('vision', { vision: 'https://vision.test' });
+    const nav = createVisinNavigation('vision', { vision: 'https://vision.test' });
 
-    expect(items.map(item => item.text)).toEqual(['Projects', 'Trainings', 'Datasets']);
-    expect(items.every(item => item.path !== undefined)).toBe(true);
+    expect(nav.groups[0].items.every(item => item.path !== undefined)).toBe(true);
   });
 });
 
-describe('createAccountNavItems', () => {
-  it('lists Account sections as local routes under an Account heading', () => {
-    const items = createAccountNavItems();
+describe('account items', () => {
+  const sections = ['Profile', 'Groups', 'API keys', 'Connected apps', 'Assistant activity'];
 
-    expect(items.map(item => item.text)).toEqual([
-      'Profile',
-      'Groups',
-      'API keys',
-      'Connected apps',
-      'Assistant activity'
-    ]);
-    expect(items.every(item => item.group === 'Account' && item.path?.startsWith('/account/'))).toBe(true);
+  it('are local routes in the app that serves Account', () => {
+    const { accountItems } = createVisinNavigation('account', urls);
+
+    expect(accountItems.map(item => item.text)).toEqual(sections);
+    expect(accountItems.every(item => item.path?.startsWith('/account/'))).toBe(true);
+  });
+
+  it('link to account-front from anywhere else', () => {
+    const { accountItems } = createVisinNavigation('vision', urls);
+
+    expect(accountItems[0]).toMatchObject({ href: 'https://account.test/account/profile' });
+  });
+
+  it('are absent when account-front is unconfigured', () => {
+    expect(createVisinNavigation('vision', {}).accountItems).toEqual([]);
   });
 });

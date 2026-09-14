@@ -199,7 +199,7 @@ services:
     environment:
       VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
       # "Open the app" goes to shell-front, which renders every app on one page.
-      VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
+      SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
       # This page's own address, for its canonical link, Open Graph tags and sitemap.
       LANDING_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3000
@@ -264,6 +264,9 @@ services:
       VISION_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3012
       LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
       ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
+      # Read by the home page; unset, the parts they feed are left out.
+      VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
+      LABEL_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5008
 
 volumes:
   mongodb_data:

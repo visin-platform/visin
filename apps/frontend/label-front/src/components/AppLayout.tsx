@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { useMatch } from 'react-router-dom';
-import { AppLayout as SharedAppLayout, createVisinNavItems } from '@visin/frontend-core';
+import { AppLayout as SharedAppLayout, createVisinNavigation } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { getGlobalConfig } from '../config/ConfigProvider';
 
@@ -30,21 +30,23 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   // Same menu as vision-front, only with the ownership flipped: Jobs/Bundles
   // are local routes here and the Vision sections link across.
-  const navItems = createVisinNavItems('label', { vision: config.VISION_FRONT_URL });
+  const { groups, accountItems } = createVisinNavigation('label', {
+    vision: config.VISION_FRONT_URL,
+    account: config.ACCOUNT_FRONT_URL
+  });
 
   return (
     <SharedAppLayout
       appName="Labeling"
       subtitle="Label images and review annotation quality."
-      navItems={navItems}
+      navGroups={groups}
+      accountItems={accountItems}
       user={user}
-      // Jobs and the workbench serve anonymous visitors now, so the drawer has
+      // Jobs and the workbench serve anonymous visitors now, so the menu has
       // to offer a way in rather than assuming there is already a session.
       isAuthenticated={isAuthenticated}
       onLogin={login}
       onLogout={logout}
-      accountUrl={config.ACCOUNT_FRONT_URL}
-      collapsible
       maxContentWidth={workbench ? FULL_BLEED : READING_WIDTH}
       // The workbench draws its own header — frame id, progress, undo — so the
       // shell's title band is a second one, costing the frame a strip of height.

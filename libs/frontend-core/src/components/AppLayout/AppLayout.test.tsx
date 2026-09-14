@@ -1,14 +1,43 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { AppLayout, type AppLayoutNavItem, type AppLayoutUser } from './AppLayout';
+import { AppLayout, type AppLayoutNavGroup, type AppLayoutNavItem, type AppLayoutUser } from './AppLayout';
 
-const navItems: AppLayoutNavItem[] = [
-  { text: 'Jobs', icon: <span>jobs-icon</span>, path: '/jobs' },
-  { text: 'New job', icon: <span>new-job-icon</span>, path: '/jobs/new' }
+const navGroups: AppLayoutNavGroup[] = [
+  {
+    label: 'Projects',
+    icon: <i />,
+    items: [
+      { text: 'All projects', icon: <i />, path: '/projects' },
+      { text: 'Trainings', icon: <i />, path: '/trainings' }
+    ],
+    match: ['/benchmarks']
+  },
+  {
+    label: 'Data',
+    icon: <i />,
+    items: [{ text: 'Datasets', icon: <i />, path: '/datasets' }]
+  },
+  {
+    label: 'Labels',
+    icon: <i />,
+    items: [
+      { text: 'Jobs', icon: <i />, path: '/jobs' },
+      { text: 'New job', icon: <i />, path: '/jobs/new' },
+      { text: 'Bundles', icon: <i />, href: 'https://label.test/bundles' }
+    ]
+  }
+];
+
+const accountItems: AppLayoutNavItem[] = [
+  { text: 'Profile', icon: <i />, path: '/account/profile' },
+  { text: 'Groups', icon: <i />, path: '/account/groups' }
 ];
 
 const onLogout = vi.fn();
+const onLogin = vi.fn();
+
+const Path = () => <div data-testid="path">{useLocation().pathname}</div>;
 
 const renderAt = (
   path: string,
@@ -18,303 +47,306 @@ const renderAt = (
   render(
     <MemoryRouter initialEntries={[path]}>
       <AppLayout
-        appName="Jobs App"
-        subtitle="Manage jobs."
-        navItems={navItems}
+        appName="Visin App"
+        subtitle="Everything in one place."
+        navGroups={navGroups}
+        accountItems={accountItems}
         user={user}
         onLogout={onLogout}
+        onLogin={onLogin}
         {...extraProps}
       >
         <div>page content</div>
+        <Path />
       </AppLayout>
     </MemoryRouter>
   );
 
-// Both drawers render a user block, so every query here takes the first match.
-const openUserMenu = () => fireEvent.click(screen.getAllByLabelText('open user menu')[0]);
+const main = () => within(screen.getByRole('navigation', { name: 'Main' }));
+const sectionBar = (name: string) => within(screen.getByRole('navigation', { name }));
+const openAccount = () => fireEvent.click(main().getByRole('button', { name: 'Account' }));
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe('AppLayout', () => {
-  it('renders the brand, nav items, and children', () => {
-    renderAt('/jobs');
+  it('renders the logo, one entry per group, and the page', () => {
+    renderAt('/projects');
 
-    expect(screen.getAllByText('Visin').length).toBeGreaterThan(0);
+    expect(screen.getByAltText('Visin')).toBeInTheDocument();
     expect(screen.getByText('page content')).toBeInTheDocument();
-    expect(screen.getAllByText('Jobs').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('New job').length).toBeGreaterThan(0);
+    expect(main().getAllByRole('link').map(link => link.textContent)).toEqual(['Projects', 'Data', 'Labels']);
   });
 
-  it('shows the active nav item as the desktop header title', () => {
-    renderAt('/jobs');
+  it('links the logo home where the app has a home page', () => {
+    renderAt('/projects', undefined, { homePath: '/' });
 
-    expect(screen.getByRole('heading', { level: 4, name: 'Jobs' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('link', { name: 'Visin home' }));
+
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/$/);
   });
 
-  it('does not mark a parent path active when a sibling path exactly matches the current route', () => {
-    renderAt('/jobs/new');
+  it('opens a group at its first section', () => {
+    renderAt('/projects');
 
-    expect(screen.getByRole('heading', { level: 4, name: 'New job' })).toBeInTheDocument();
+    expect(main().getByRole('link', { name: 'Projects' })).toHaveAttribute('href', '/projects');
+    expect(main().getByRole('link', { name: 'Labels' })).toHaveAttribute('href', '/jobs');
   });
 
-  it('falls back to appName as the title outside known routes', () => {
+  it('links a group led by another app section as a plain anchor', () => {
+    renderAt('/projects', null, {
+      navGroups: [{ label: 'Labels', icon: null, items: [{ text: 'Jobs', icon: null, href: 'https://label.test/jobs' }] }]
+    });
+
+    expect(main().getByRole('link', { name: 'Labels' })).toHaveAttribute('href', 'https://label.test/jobs');
+  });
+
+  it('highlights the group of the section being shown', () => {
+    renderAt('/trainings/t1');
+
+    expect(main().getByRole('link', { name: 'Projects' })).toHaveAttribute('aria-current', 'true');
+    expect(main().getByRole('link', { name: 'Labels' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('keeps a group highlighted on its pages that are not sections', () => {
+    renderAt('/benchmarks/b1');
+
+    expect(main().getByRole('link', { name: 'Projects' })).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('highlights nothing on a page no group owns', () => {
     renderAt('/somewhere-else');
 
-    expect(screen.getByRole('heading', { level: 4, name: 'Jobs App' })).toBeInTheDocument();
+    expect(main().queryAllByRole('link').filter(link => link.hasAttribute('aria-current'))).toHaveLength(0);
+    expect(screen.queryByRole('navigation', { name: 'Projects' })).not.toBeInTheDocument();
   });
 
-  it('shows the signed-in user name and email', () => {
-    renderAt('/jobs');
+  describe('section bar', () => {
+    it('lists the shown group sections above the content', () => {
+      renderAt('/trainings');
 
-    expect(screen.getAllByText('Test User').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('test@example.com').length).toBeGreaterThan(0);
-  });
-
-  it('falls back to "User" when the user has no name', () => {
-    renderAt('/jobs', { email: 'test@example.com' });
-
-    expect(screen.getAllByText('User').length).toBeGreaterThan(0);
-  });
-
-  it('handles a null user', () => {
-    renderAt('/jobs', null);
-
-    expect(screen.getAllByText('User').length).toBeGreaterThan(0);
-  });
-
-  it('logs out from the user menu', () => {
-    renderAt('/jobs');
-
-    openUserMenu();
-    fireEvent.click(screen.getByText('Logout'));
-
-    expect(onLogout).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps the user block out of the page header', () => {
-    const { container } = renderAt('/jobs');
-
-    // Account actions belong in the drawer; a header block cost every page a
-    // band of vertical space.
-    const main = container.querySelector('main')!;
-    expect(within(main).queryByText('Test User')).not.toBeInTheDocument();
-    expect(within(main).queryByLabelText('open user menu')).not.toBeInTheDocument();
-  });
-
-  it('toggles the mobile drawer', () => {
-    renderAt('/jobs');
-
-    fireEvent.click(screen.getByLabelText('open drawer'));
-
-    // Temporary drawer content mounts (keepMounted) — brand appears more than once.
-    expect(screen.getAllByText('Visin').length).toBeGreaterThan(1);
-  });
-
-  it('closes the mobile drawer when a nav item is clicked', () => {
-    renderAt('/jobs');
-
-    fireEvent.click(screen.getByLabelText('open drawer'));
-    const jobsLinks = screen.getAllByText('Jobs');
-    fireEvent.click(jobsLinks[jobsLinks.length - 1]);
-
-    expect(screen.getAllByText('Jobs').length).toBeGreaterThan(0);
-  });
-
-  describe('grouped nav items', () => {
-    const groupedNav: AppLayoutNavItem[] = [
-      { text: 'Projects', icon: <span>p</span>, path: '/projects', group: 'Vision' },
-      { text: 'Datasets', icon: <span>d</span>, path: '/datasets', group: 'Vision' },
-      { text: 'Jobs', icon: <span>j</span>, href: 'https://label.test/jobs', group: 'Labeling' }
-    ];
-
-    const renderGrouped = (extraProps: Partial<React.ComponentProps<typeof AppLayout>> = {}) =>
-      render(
-        <MemoryRouter initialEntries={['/projects']}>
-          <AppLayout appName="Vision" subtitle="s" navItems={groupedNav} user={null} onLogout={onLogout} {...extraProps}>
-            <div>page content</div>
-          </AppLayout>
-        </MemoryRouter>
-      );
-
-    it('draws one heading per group, above its first item', () => {
-      const { container } = renderGrouped();
-      const nav = within(container.querySelector('nav')!);
-
-      expect(nav.getAllByText('Vision')).toHaveLength(1);
-      expect(nav.getAllByText('Labeling')).toHaveLength(1);
-      // The heading precedes the group's first item in document order.
-      const heading = nav.getByText('Labeling');
-      const jobs = nav.getByText('Jobs');
-      expect(heading.compareDocumentPosition(jobs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      const bar = sectionBar('Projects');
+      expect(bar.getByRole('link', { name: 'All projects' })).toHaveAttribute('href', '/projects');
+      expect(bar.getByRole('link', { name: 'Trainings' })).toHaveAttribute('aria-current', 'page');
+      expect(bar.getByRole('link', { name: 'All projects' })).not.toHaveAttribute('aria-current');
     });
 
-    it('draws no headings for ungrouped items', () => {
-      const { container } = renderAt('/jobs');
+    it('is left out for a group of one', () => {
+      renderAt('/datasets');
 
-      expect(container.querySelector('nav')!.querySelectorAll('.MuiDivider-root')).toHaveLength(1);
-      expect(within(container.querySelector('nav')!).queryByText('Jobs App')).not.toBeInTheDocument();
+      expect(main().getByRole('link', { name: 'Data' })).toHaveAttribute('aria-current', 'true');
+      expect(screen.queryByRole('navigation', { name: 'Data' })).not.toBeInTheDocument();
     });
 
-    it('swaps headings for a rule between groups on the collapsed rail', () => {
-      const { container } = renderGrouped({ collapsible: true });
-      const nav = () => container.querySelector('nav')!;
-      const dividers = () => nav().querySelectorAll('.MuiDivider-root').length;
-      const before = dividers();
+    it('lets an exact section match win over a prefix one', () => {
+      renderAt('/jobs/new');
 
-      fireEvent.click(screen.getByLabelText('collapse navigation'));
-
-      expect(within(nav()).queryByText('Labeling')).not.toBeInTheDocument();
-      // One rule between the two groups, none above the first.
-      expect(dividers()).toBe(before + 1);
-    });
-  });
-
-  it('applies a custom max content width', () => {
-    render(
-      <MemoryRouter initialEntries={['/jobs']}>
-        <AppLayout
-          appName="Jobs App"
-          subtitle="Manage jobs."
-          navItems={navItems}
-          user={null}
-          onLogout={onLogout}
-          maxContentWidth={1400}
-        >
-          <div>page content</div>
-        </AppLayout>
-      </MemoryRouter>
-    );
-
-    expect(screen.getByText('page content')).toBeInTheDocument();
-  });
-
-  describe('external nav items', () => {
-    const mixedNav: AppLayoutNavItem[] = [
-      { text: 'Datasets', icon: <span>d</span>, path: '/datasets' },
-      { text: 'Jobs', icon: <span>j</span>, href: 'https://label.test/jobs' }
-    ];
-
-    it('renders a sibling app section as a plain anchor', () => {
-      render(
-        <MemoryRouter initialEntries={['/datasets']}>
-          <AppLayout appName="Vision" subtitle="s" navItems={mixedNav} user={null} onLogout={onLogout}>
-            <div>page content</div>
-          </AppLayout>
-        </MemoryRouter>
-      );
-
-      // A full page load, not a client-side route change.
-      expect(screen.getAllByText('Jobs')[0].closest('a')).toHaveAttribute(
-        'href',
-        'https://label.test/jobs'
-      );
+      expect(sectionBar('Labels').getByRole('link', { name: 'New job' })).toHaveAttribute('aria-current', 'page');
+      expect(sectionBar('Labels').getByRole('link', { name: 'Jobs' })).not.toHaveAttribute('aria-current');
     });
 
-    it('never marks an external item active', () => {
-      render(
-        <MemoryRouter initialEntries={['/jobs']}>
-          <AppLayout appName="Vision" subtitle="s" navItems={mixedNav} user={null} onLogout={onLogout}>
-            <div>page content</div>
-          </AppLayout>
-        </MemoryRouter>
-      );
-
-      const jobsButton = screen.getAllByText('Jobs')[0].closest('.MuiListItemButton-root');
-      expect(jobsButton?.className).not.toContain('Mui-selected');
-    });
-  });
-
-  describe('anonymous visitors', () => {
-    it('shows a Login button in place of the user block', () => {
-      const onLogin = vi.fn();
-      renderAt('/jobs', null, { isAuthenticated: false, onLogin });
-
-      fireEvent.click(screen.getAllByText('Login')[0]);
-
-      expect(onLogin).toHaveBeenCalled();
-      expect(screen.queryByText('Logout')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('account link', () => {
-    it('is absent unless an accountUrl is given', () => {
-      renderAt('/jobs');
-      openUserMenu();
-
-      expect(screen.queryByText('Account')).not.toBeInTheDocument();
-    });
-
-    it('navigates to account-front when chosen', () => {
-      const assign = vi.fn();
-      Object.defineProperty(window, 'location', { value: { href: '' }, writable: true });
-
-      renderAt('/jobs', { name: 'Test User' }, { accountUrl: 'https://account.test' });
-      openUserMenu();
-      fireEvent.click(screen.getByText('Account'));
-
-      expect(window.location.href).toBe('https://account.test');
-      expect(assign).not.toHaveBeenCalled();
-    });
-
-    // An app that serves Account itself routes there instead of loading a page.
-    it('routes client-side to an accountPath, in preference to accountUrl', () => {
-      const Path = () => <div data-testid="path">{useLocation().pathname}</div>;
-      render(
-        <MemoryRouter initialEntries={['/jobs']}>
-          <AppLayout
-            appName="Shell"
-            subtitle="s"
-            navItems={navItems}
-            user={{ name: 'Test User' }}
-            onLogout={onLogout}
-            accountPath="/account"
-            accountUrl="https://account.test"
-          >
-            <Path />
-          </AppLayout>
-        </MemoryRouter>
-      );
-
-      openUserMenu();
-      fireEvent.click(screen.getByText('Account'));
-
-      expect(screen.getByTestId('path')).toHaveTextContent('/account');
-    });
-  });
-
-  describe('collapsible drawer', () => {
-    it('has no collapse control by default', () => {
+    it('links another app section as a plain anchor, never highlighted', () => {
       renderAt('/jobs');
 
-      expect(screen.queryByLabelText('collapse navigation')).not.toBeInTheDocument();
-    });
-
-    it('collapses and expands, hiding the labels while collapsed', () => {
-      const { container } = renderAt('/jobs', null, { collapsible: true });
-      const nav = () => within(container.querySelector('nav')!);
-
-      // The mobile drawer is a Modal and portals out of <nav>, so only the
-      // permanent desktop drawer is counted here.
-      expect(nav().queryAllByText('Jobs').length).toBe(1);
-
-      fireEvent.click(screen.getByLabelText('collapse navigation'));
-      expect(nav().queryAllByText('Jobs').length).toBe(0);
-
-      fireEvent.click(screen.getByLabelText('expand navigation'));
-      expect(nav().queryAllByText('Jobs').length).toBe(1);
+      const bundles = sectionBar('Labels').getByRole('link', { name: 'Bundles' });
+      expect(bundles).toHaveAttribute('href', 'https://label.test/bundles');
+      expect(bundles).not.toHaveAttribute('aria-current');
     });
   });
 
   describe('page header', () => {
-    it('can be hidden for apps whose pages carry their own titles', () => {
-      renderAt('/jobs', { name: 'Test User', email: 'test@example.com' }, { showPageHeader: false });
+    it('titles the page from its section, with the app subtitle', () => {
+      renderAt('/jobs');
+
+      expect(screen.getByRole('heading', { level: 4, name: 'Jobs' })).toBeInTheDocument();
+      expect(screen.getByText('Everything in one place.')).toBeInTheDocument();
+    });
+
+    it('falls back to appName outside known routes', () => {
+      renderAt('/somewhere-else');
+
+      expect(screen.getByRole('heading', { level: 4, name: 'Visin App' })).toBeInTheDocument();
+    });
+
+    it('can be left to apps whose pages carry their own titles', () => {
+      renderAt('/jobs', undefined, { showPageHeader: false });
 
       expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
-      // The user block stays in the drawer: it is the only route to Account
-      // and Logout.
-      expect(screen.getAllByText('Test User').length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('account', () => {
+    it('keeps the user out of the content', () => {
+      const { container } = renderAt('/jobs');
+
+      expect(within(container.querySelector('main')!).queryByText('Test User')).not.toBeInTheDocument();
+    });
+
+    it('opens a menu with who is signed in and the Account sections', () => {
+      renderAt('/projects');
+      // Held before opening: the open menu hides the rest of the page from queries by role.
+      const account = main().getByRole('button', { name: 'Account' });
+
+      fireEvent.click(account);
+
+      const menu = within(screen.getByRole('menu', { name: 'Account' }));
+      expect(menu.getByText('Test User')).toBeInTheDocument();
+      expect(menu.getByText('test@example.com')).toBeInTheDocument();
+      expect(menu.getByRole('menuitem', { name: 'Profile' })).toHaveAttribute('href', '/account/profile');
+      expect(account).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('routes to an Account section client-side', () => {
+      renderAt('/projects');
+
+      openAccount();
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Groups' }));
+
+      expect(screen.getByTestId('path')).toHaveTextContent('/account/groups');
+    });
+
+    it('links Account sections of another app as plain anchors', () => {
+      renderAt('/projects', undefined, {
+        accountItems: [{ text: 'Profile', icon: null, href: 'https://account.test/account/profile' }]
+      });
+
+      openAccount();
+
+      expect(screen.getByRole('menuitem', { name: 'Profile' })).toHaveAttribute(
+        'href',
+        'https://account.test/account/profile'
+      );
+    });
+
+    it('logs out from the menu', () => {
+      renderAt('/projects');
+
+      openAccount();
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
+
+      expect(onLogout).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers only Logout where Account is unreachable', () => {
+      renderAt('/projects', undefined, { accountItems: [] });
+
+      openAccount();
+
+      expect(screen.queryByRole('menuitem', { name: 'Profile' })).not.toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'Logout' })).toBeInTheDocument();
+    });
+
+    it('falls back to "User" when the user has no name, or there is no user', () => {
+      const { unmount } = renderAt('/projects', { email: 'test@example.com' });
+      openAccount();
+      expect(screen.getByText('User')).toBeInTheDocument();
+      unmount();
+
+      renderAt('/projects', null);
+      openAccount();
+      expect(screen.getByText('User')).toBeInTheDocument();
+    });
+
+    it('is a group of its own while one of its sections is shown', () => {
+      renderAt('/account/groups');
+
+      expect(main().getByRole('button', { name: 'Account' })).toHaveAttribute('aria-current', 'true');
+      expect(sectionBar('Account').getByRole('link', { name: 'Groups' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('heading', { level: 4, name: 'Groups' })).toBeInTheDocument();
+    });
+
+    it('offers Login in its place to an anonymous visitor', () => {
+      renderAt('/projects', null, { isAuthenticated: false });
+
+      expect(main().queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
+      fireEvent.click(main().getByRole('button', { name: 'Login' }));
+
+      expect(onLogin).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('Logout')).not.toBeInTheDocument();
+    });
+  });
+
+  it('applies a custom max content width', () => {
+    renderAt('/jobs', undefined, { maxContentWidth: 1400 });
+
+    expect(screen.getByText('page content')).toBeInTheDocument();
+  });
+
+  describe('on a phone', () => {
+    beforeEach(() => {
+      Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        writable: true,
+        value: (query: string) => ({
+          matches: true,
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn()
+        })
+      });
+    });
+
+    afterEach(() => {
+      delete (window as { matchMedia?: unknown }).matchMedia;
+    });
+
+    it('moves the groups to a tab bar under the content', () => {
+      const { container } = renderAt('/projects');
+
+      const tabBar = screen.getByRole('navigation', { name: 'Main' });
+      expect(within(tabBar).getAllByRole('link').map(link => link.textContent)).toEqual([
+        'Projects',
+        'Data',
+        'Labels'
+      ]);
+      expect(within(tabBar).getByRole('button', { name: 'Account' })).toBeInTheDocument();
+      const content = container.querySelector('main')!;
+      expect(content.compareDocumentPosition(tabBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // The rail's logo has no room there.
+      expect(screen.queryByAltText('Visin')).not.toBeInTheDocument();
+    });
+
+    it('turns the section bar into a dropdown named for the current section', () => {
+      renderAt('/trainings');
+
+      fireEvent.click(sectionBar('Projects').getByRole('button', { name: 'Trainings' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'All projects' }));
+
+      expect(screen.getByTestId('path')).toHaveTextContent('/projects');
+    });
+
+    it('names the dropdown for the group on a page that is none of its sections', () => {
+      renderAt('/benchmarks');
+
+      expect(sectionBar('Projects').getByRole('button', { name: 'Projects' })).toHaveAttribute(
+        'aria-haspopup',
+        'menu'
+      );
+    });
+
+    it('drops the page title where the dropdown already names the page', () => {
+      const { unmount } = renderAt('/jobs');
+      expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
+      unmount();
+
+      renderAt('/datasets');
+      expect(screen.getByRole('heading', { level: 4, name: 'Datasets' })).toBeInTheDocument();
+    });
+
+    it('opens Account as a bottom sheet', () => {
+      renderAt('/projects');
+
+      openAccount();
+      const sheet = within(screen.getByRole('menu', { name: 'Account' }));
+      expect(sheet.getByRole('menuitem', { name: 'Profile' })).toBeInTheDocument();
+      fireEvent.click(sheet.getByRole('menuitem', { name: 'Logout' }));
+
+      expect(onLogout).toHaveBeenCalledTimes(1);
     });
   });
 });

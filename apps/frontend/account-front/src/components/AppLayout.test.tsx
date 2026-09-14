@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import AppLayout from './AppLayout';
 
@@ -26,25 +26,29 @@ const renderAt = (path: string) =>
     </MemoryRouter>
   );
 
+const main = () => within(screen.getByRole('navigation', { name: 'Main' }));
+const accountBar = () => within(screen.getByRole('navigation', { name: 'Account' }));
+const openAccount = () => fireEvent.click(main().getByRole('button', { name: 'Account' }));
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockUser = { name: 'Test User', email: 'test@example.com' };
 });
 
 describe('AppLayout', () => {
-  it('renders the menu, brand, and children', () => {
+  it('lists its own sections in the section bar, as local routes', () => {
     renderAt('/account/profile');
 
-    expect(screen.getAllByText('Visin').length).toBeGreaterThan(0);
     expect(screen.getByText('page content')).toBeInTheDocument();
-    expect(screen.getAllByText('Profile').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Groups').length).toBeGreaterThan(0);
+    expect(accountBar().getByRole('link', { name: 'Profile' })).toHaveAttribute('aria-current', 'page');
+    expect(accountBar().getByRole('link', { name: 'Groups' })).toHaveAttribute('href', '/account/groups');
+    expect(main().getByRole('button', { name: 'Account' })).toHaveAttribute('aria-current', 'true');
   });
 
   it('shows the active section title in the desktop header', () => {
     renderAt('/account/groups');
 
-    // The h4 page title mirrors the active menu item's label.
+    // The h4 page title mirrors the active section's label.
     expect(screen.getByRole('heading', { level: 4, name: 'Groups' })).toBeInTheDocument();
   });
 
@@ -54,21 +58,12 @@ describe('AppLayout', () => {
     expect(screen.getByRole('heading', { level: 4, name: 'Account' })).toBeInTheDocument();
   });
 
-  it('shows the same Vision and Labeling sections as the other apps, linking across', () => {
+  it('shows the same groups as the other apps, linking across', () => {
     renderAt('/account/profile');
 
-    expect(screen.getAllByText('Datasets')[0].closest('a')).toHaveAttribute('href', 'https://vision.test/datasets');
-    expect(screen.getAllByText('Bundles')[0].closest('a')).toHaveAttribute('href', 'https://label.test/bundles');
-  });
-
-  it('lists its own sections under an Account heading, after the shared groups', () => {
-    const { container } = renderAt('/account/profile');
-    const texts = Array.from(container.querySelector('nav')!.querySelectorAll('li')).map((li) => li.textContent);
-
-    expect(texts.findIndex((t) => t?.includes('Bundles'))).toBeLessThan(
-      texts.findIndex((t) => t?.includes('Profile'))
-    );
-    expect(texts.find((t) => t?.includes('Profile'))).toContain('Account');
+    expect(main().getByRole('link', { name: 'Projects' })).toHaveAttribute('href', 'https://vision.test/projects');
+    expect(main().getByRole('link', { name: 'Data' })).toHaveAttribute('href', 'https://vision.test/datasets');
+    expect(main().getByRole('link', { name: 'Labels' })).toHaveAttribute('href', 'https://label.test/jobs');
   });
 
   it('drops a group whose app is unconfigured rather than guessing a URL', async () => {
@@ -84,56 +79,35 @@ describe('AppLayout', () => {
       </MemoryRouter>
     );
 
-    expect(screen.queryByText('Projects')).not.toBeInTheDocument();
-    expect(screen.queryByText('Jobs')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Profile').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: 'Projects' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Labels' })).not.toBeInTheDocument();
+    expect(accountBar().getByRole('link', { name: 'Profile' })).toBeInTheDocument();
 
     vi.doUnmock('../config/ConfigProvider');
   });
 
-  it('shows the user name and email in the header', () => {
+  it('shows the user name and email in the account menu', () => {
     renderAt('/account/profile');
+    openAccount();
 
-    expect(screen.getAllByText('Test User').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('test@example.com').length).toBeGreaterThan(0);
+    expect(screen.getByText('Test User')).toBeInTheDocument();
+    expect(screen.getByText('test@example.com')).toBeInTheDocument();
   });
 
   it('falls back to "User" when there is no name', () => {
     mockUser = { email: 'anon@example.com' };
     renderAt('/account/profile');
+    openAccount();
 
-    expect(screen.getAllByText('User').length).toBeGreaterThan(0);
+    expect(screen.getByText('User')).toBeInTheDocument();
   });
 
-  it('opens the user menu and logs out on click', () => {
+  it('opens the account menu and logs out on click', () => {
     renderAt('/account/profile');
 
-    fireEvent.click(screen.getAllByLabelText('open user menu')[0]);
-
-    const logoutItem = screen.getByText('Logout');
-    fireEvent.click(logoutItem);
+    openAccount();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
 
     expect(mockLogout).toHaveBeenCalledTimes(1);
-  });
-
-  it('closes the mobile drawer when a nav item is clicked', () => {
-    renderAt('/account/profile');
-
-    const groupsLinks = screen.getAllByText('Groups');
-    fireEvent.click(groupsLinks[0]);
-
-    // The click handler just closes the mobile drawer; the app itself
-    // stays mounted and doesn't throw.
-    expect(screen.getAllByText('Visin').length).toBeGreaterThan(0);
-  });
-
-  it('toggles the mobile drawer', () => {
-    renderAt('/account/profile');
-
-    const toggle = screen.getByLabelText('open drawer');
-    fireEvent.click(toggle);
-
-    // Toggling shouldn't throw and the drawer content remains present.
-    expect(screen.getAllByText('Visin').length).toBeGreaterThan(0);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import AppLayout from './AppLayout';
 
@@ -26,27 +26,32 @@ const renderAt = (path: string) =>
     </MemoryRouter>
   );
 
+const main = () => within(screen.getByRole('navigation', { name: 'Main' }));
+const openAccount = () => fireEvent.click(main().getByRole('button', { name: 'Account' }));
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockUser = { name: 'Test User', email: 'test@example.com' };
 });
 
 describe('AppLayout', () => {
-  it('renders the menu, brand, and children', () => {
+  it('renders the menu, logo, and children', () => {
     renderAt('/jobs');
 
-    expect(screen.getAllByText('Visin').length).toBeGreaterThan(0);
+    expect(screen.getByAltText('Visin')).toBeInTheDocument();
     expect(screen.getByText('page content')).toBeInTheDocument();
-    expect(screen.getAllByText('Jobs').length).toBeGreaterThan(0);
+    expect(main().getByRole('link', { name: 'Labels' })).toHaveAttribute('aria-current', 'true');
   });
 
   it('shows the same menu as vision-front, with the Vision sections linking across', () => {
-    renderAt('/jobs');
+    renderAt('/bundles');
 
     // Identical contents in both apps: crossing over changes the highlight, not the menu.
-    expect(screen.getAllByText('Datasets')[0].closest('a')).toHaveAttribute('href', 'https://vision.test/datasets');
-    expect(screen.getAllByText('Bundles')[0].closest('a')).toHaveAttribute('href', '/bundles');
-    expect(screen.getAllByText('Jobs')[0].closest('.MuiListItemButton-root')?.className).toContain('Mui-selected');
+    expect(main().getByRole('link', { name: 'Projects' })).toHaveAttribute('href', 'https://vision.test/projects');
+    expect(main().getByRole('link', { name: 'Data' })).toHaveAttribute('href', 'https://vision.test/datasets');
+    const labels = within(screen.getByRole('navigation', { name: 'Labels' }));
+    expect(labels.getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/jobs');
+    expect(labels.getByRole('link', { name: 'Bundles' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('shows the active section title in the desktop header', () => {
@@ -61,26 +66,27 @@ describe('AppLayout', () => {
     expect(screen.getByRole('heading', { level: 4, name: 'Labeling' })).toBeInTheDocument();
   });
 
-  it('shows the signed-in user name and email', () => {
+  it('shows the signed-in user name and email in the account menu', () => {
     renderAt('/jobs');
+    openAccount();
 
-    expect(screen.getAllByText('Test User').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('test@example.com').length).toBeGreaterThan(0);
+    expect(screen.getByText('Test User')).toBeInTheDocument();
+    expect(screen.getByText('test@example.com')).toBeInTheDocument();
   });
 
   it('falls back to "User" when the user has no name', () => {
     mockUser = { email: 'test@example.com' };
     renderAt('/jobs');
+    openAccount();
 
-    expect(screen.getAllByText('User').length).toBeGreaterThan(0);
+    expect(screen.getByText('User')).toBeInTheDocument();
   });
 
-  it('logs out from the user menu', () => {
+  it('logs out from the account menu', () => {
     renderAt('/jobs');
 
-    const avatarButtons = screen.getAllByRole('button');
-    fireEvent.click(avatarButtons[avatarButtons.length - 1]);
-    fireEvent.click(screen.getByText('Logout'));
+    openAccount();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
 
     expect(mockLogout).toHaveBeenCalledTimes(1);
   });
@@ -96,14 +102,5 @@ describe('AppLayout', () => {
 
     renderAt('/jobs/j1');
     expect(screen.getByRole('heading', { level: 4 })).toBeInTheDocument();
-  });
-
-  it('toggles the mobile drawer', () => {
-    renderAt('/jobs');
-
-    fireEvent.click(screen.getByLabelText('open drawer'));
-
-    // Temporary drawer content mounts (keepMounted) — brand appears more than once.
-    expect(screen.getAllByText('Visin').length).toBeGreaterThan(1);
   });
 });
