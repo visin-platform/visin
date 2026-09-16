@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.10.0](https://github.com/visin-platform/visin/compare/v1.9.0...v1.10.0) (2026-09-16)
+
+
+### Features
+
+* improve mobile views ([e82cf17](https://github.com/visin-platform/visin/commit/e82cf1749ce924bfe202ec940b1ac9faeadbb792))
+
+
+### Chores
+
+* **release:** @visin/frontend-core 1.5.0 ([551f277](https://github.com/visin-platform/visin/commit/551f2776a2cc03f6f47ccb667a99816ccb2bb6ee))
+
 ## [1.9.0](https://github.com/visin-platform/visin/compare/v1.8.0...v1.9.0) (2026-09-14)
 
 
