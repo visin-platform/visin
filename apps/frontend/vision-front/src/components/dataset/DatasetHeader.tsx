@@ -10,6 +10,19 @@ import {
   Delete as DeleteIcon
 } from '@mui/icons-material';
 import { DatasetAnalysis } from '../../services/analysisService';
+import { formatDateTime } from '../../utils';
+
+// Icon-only below `sm`; the labels are carried by aria-label there.
+const compactButtonSx = {
+  minWidth: { xs: 0, sm: 64 },
+  px: { xs: 1, sm: 2 },
+  '& .MuiButton-startIcon': {
+    mr: { xs: 0, sm: 1 },
+    ml: { xs: 0, sm: -0.5 }
+  }
+} as const;
+
+const labelSx = { display: { xs: 'none', sm: 'inline' } } as const;
 
 interface DatasetHeaderProps {
   analysis: DatasetAnalysis;
@@ -30,58 +43,65 @@ const DatasetHeader: React.FC<DatasetHeaderProps> = ({
 }) => {
   return (
     <Box sx={{
-      mb: 4
+      mb: { xs: 2, sm: 4 }
     }}>
       <Box
         sx={{
           display: "flex",
-          flexDirection: { xs: 'column', md: 'row' },
+          // The buttons stay beside the title on a phone once they are icons;
+          // stacking them was what made this header tall.
           justifyContent: "space-between",
-          alignItems: { xs: 'flex-start', md: 'flex-start' },
-          gap: 3
+          alignItems: "flex-start",
+          gap: { xs: 1, md: 3 }
         }}>
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
           <Typography variant="h4" component="h1" sx={{
-            fontWeight: "bold"
+            fontWeight: "bold",
+            fontSize: { xs: '1.5rem', sm: '2.125rem' }
           }}>
             {analysis.dataset}
           </Typography>
           <Typography
-            variant="body1"
             sx={{
               color: "text.secondary",
               maxWidth: 800,
-              mb: 2
+              mb: { xs: 0.25, sm: 1.5 },
+              fontSize: { xs: '0.8125rem', sm: '1rem' }
             }}>
             Dataset analysis with {imagesCount} images
           </Typography>
           <Typography variant="body2" sx={{
-            color: "text.secondary"
+            color: "text.secondary",
+            fontSize: { xs: '0.75rem', sm: '0.875rem' }
           }}>
-            Created: {new Date(analysis.createdAt).toLocaleString()} • 
-            Updated: {new Date(analysis.updatedAt).toLocaleString()}
+            Created: {formatDateTime(analysis.createdAt)} •{' '}
+            Updated: {formatDateTime(analysis.updatedAt)}
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={1}>
-          <Button 
-            startIcon={<RefreshIcon />} 
-            onClick={onRefresh} 
-            variant="outlined" 
+        <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+          <Button
+            startIcon={<RefreshIcon />}
+            onClick={onRefresh}
+            variant="outlined"
             color="inherit"
             disabled={isLoading}
+            aria-label="Refresh"
+            sx={compactButtonSx}
           >
-            Refresh
+            <Box component="span" sx={labelSx}>Refresh</Box>
           </Button>
           {canDelete && (
-            <Button 
-              startIcon={<DeleteIcon />} 
-              onClick={onDelete} 
-              color="error" 
+            <Button
+              startIcon={<DeleteIcon />}
+              onClick={onDelete}
+              color="error"
               variant="outlined"
               disabled={isLoading}
+              aria-label="Delete"
+              sx={compactButtonSx}
             >
-              Delete
+              <Box component="span" sx={labelSx}>Delete</Box>
             </Button>
           )}
         </Stack>

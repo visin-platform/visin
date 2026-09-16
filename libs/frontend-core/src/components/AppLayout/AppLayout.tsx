@@ -137,7 +137,12 @@ export function AppLayout({
   const theme = useTheme();
   // Read synchronously. The default first pass assumes a wide screen, which
   // would draw the rail on a phone for a frame before swapping in the tab bar.
-  const mobile = useMediaQuery(theme.breakpoints.down('sm'), { noSsr: true });
+  //
+  // The cut is at `md`, not `sm`: a tablet-width window has room for the rail
+  // but not for the rail *and* a readable content column, so from 600 to 900 it
+  // was the content that gave up the 88px. Below `md` the compact layout — tab
+  // bar, section dropdown, bottom-sheet account — gets the full width instead.
+  const mobile = useMediaQuery(theme.breakpoints.down('md'), { noSsr: true });
 
   const [accountAnchor, setAccountAnchor] = useState<HTMLElement | null>(null);
   const [sectionAnchor, setSectionAnchor] = useState<HTMLElement | null>(null);
@@ -364,14 +369,14 @@ export function AppLayout({
 
   // On a phone the section dropdown already names the page.
   const pageHeader = showPageHeader && !(mobile && sectionGroup) && (
-    <Box sx={{ mb: { xs: 3, sm: 6 } }}>
+    <Box sx={{ mb: { xs: 3, md: 6 } }}>
       <Typography
         variant="h4"
         sx={{ fontWeight: 700, letterSpacing: '-1px', mb: 1, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}
       >
         {activeItem?.text || appName}
       </Typography>
-      <Typography variant="body1" sx={{ color: 'text.secondary', display: { xs: 'none', sm: 'block' } }}>
+      <Typography variant="body1" sx={{ color: 'text.secondary', display: { xs: 'none', md: 'block' } }}>
         {subtitle}
       </Typography>
     </Box>
@@ -435,7 +440,9 @@ export function AppLayout({
           component="main"
           sx={{
             flexGrow: 1,
-            p: { xs: 2, sm: 4, md: 8 },
+            // Gutters stay narrow for as long as the compact layout runs; 4 was
+            // a desktop margin applied to a tablet's much shorter line.
+            p: { xs: 2, sm: 3, md: 8 },
             // Clear of the fixed tab bar. On the padding rather than a spacer,
             // since the workbench sizes its frame to what main's padding leaves.
             ...(mobile && { pb: `calc(${TAB_BAR_HEIGHT}px + ${theme.spacing(2)} + env(safe-area-inset-bottom))` }),

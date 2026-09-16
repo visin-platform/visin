@@ -35,16 +35,13 @@ const TrainingsPage: React.FC = () => {
     trainingDescription,
     setTrainingDescription,
     selectedDatasetId,
-    setSelectedDatasetId,
     selectedProjectId,
     setSelectedProjectId,
     selectedStatus,
     setSelectedStatus,
     trainingTags,
     setTrainingTags,
-    datasets,
     projects,
-    loadingDatasets,
     loadingProjects,
     creating,
     createError,
@@ -144,13 +141,12 @@ const TrainingsPage: React.FC = () => {
         onSubmit={handleCreateTraining}
         isEditing={!!editingTrainingId}
         isCreating={creating}
-        isLoadingData={loadingDatasets || loadingProjects}
+        isLoadingData={loadingProjects}
         trainingName={trainingName}
         onNameChange={setTrainingName}
         trainingDescription={trainingDescription}
         onDescriptionChange={setTrainingDescription}
         selectedDatasetId={selectedDatasetId}
-        onDatasetChange={setSelectedDatasetId}
         selectedProjectId={selectedProjectId}
         onProjectChange={setSelectedProjectId}
         selectedStatus={selectedStatus}
@@ -158,11 +154,9 @@ const TrainingsPage: React.FC = () => {
         trainingTags={trainingTags}
         onTagsChange={setTrainingTags}
         availableTags={availableTags}
-        datasets={datasets}
         projects={projects}
         error={createError}
         success={createSuccess}
-        loadingDatasets={loadingDatasets}
         loadingProjects={loadingProjects}
       />
 

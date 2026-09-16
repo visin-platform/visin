@@ -32,7 +32,7 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   onDelete
 }) => {
   return (
-    <Box sx={{ mb: 3 }}>
+    <Box sx={{ mb: { xs: 2, sm: 3 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
@@ -41,7 +41,8 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             gutterBottom
             sx={{
               fontWeight: "bold",
-              fontSize: { xs: '1.5rem', sm: '2rem' }
+              fontSize: { xs: '1.5rem', sm: '2rem' },
+              mb: { xs: 0, sm: 0.35 }
             }}>
             {project.name}
           </Typography>

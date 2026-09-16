@@ -46,7 +46,7 @@ describe('vision-service routers', () => {
     ['imageCategoryRoutes', imageCategoryRoutes, 6],
     ['projectRoutes', projectRoutes, 6],
     ['testResultRoutes', testResultRoutes, 10],
-    ['trainingRoutes', trainingRoutes, 12],
+    ['trainingRoutes', trainingRoutes, 13],
     ['visualizationRoutes', visualizationRoutes, 8],
   ];
 
@@ -89,6 +89,17 @@ describe('vision-service routers', () => {
     // auth + controller
     expect(restore.handlerCount).toBe(2);
     expect(gets.indexOf('/deleted')).toBeLessThan(gets.indexOf('/:id'));
+  });
+
+  it('trainingRoutes serves the tag list publicly, ahead of the /:id wildcard', () => {
+    const { routes } = describeRouter(trainingRoutes);
+    const tags = routes.find((r) => r.path === '/tags' && r.methods.includes('get'))!;
+    const gets = routes.filter((r) => r.methods.includes('get')).map((r) => r.path);
+
+    // optionalAuth + controller: no query to validate, and the scoping is the
+    // caller's visible set rather than a filter they pass
+    expect(tags.handlerCount).toBe(2);
+    expect(gets.indexOf('/tags')).toBeLessThan(gets.indexOf('/:id'));
   });
 
   it('epochRoutes deletes behind auth', () => {

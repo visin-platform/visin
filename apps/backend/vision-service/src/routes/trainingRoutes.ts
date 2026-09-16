@@ -4,6 +4,7 @@ import {
   getTrainingById,
   getTrainingByUuid,
   getTrainingWithEpochs,
+  getTrainingTags,
   createTraining,
   updateTraining,
   deleteTraining,
@@ -37,6 +38,8 @@ router.get(
 );
 router.get('/:id/configs', optionalAuthMiddleware, getConfigsByTraining);
 router.get('/stats', optionalAuthMiddleware, validateRequest({ query: getTrainingStatsQuerySchema }), getTrainingStats);
+// Before '/:id', or 'tags' reads as a training id.
+router.get('/tags', optionalAuthMiddleware, getTrainingTags);
 // A recovery list, never public: only runs the caller could restore.
 router.get('/deleted', authMiddleware, validateRequest({ query: getDeletedTrainingsQuerySchema }), getDeletedTrainings);
 router.get('/', optionalAuthMiddleware, validateRequest({ query: getTrainingsQuerySchema }), getTrainings);

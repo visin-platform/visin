@@ -14,6 +14,7 @@ jest.mock('../../services/trainingService', () => ({
     updateTraining: jest.fn(),
     deleteTraining: jest.fn(),
     getTrainingStats: jest.fn(),
+    getTrainingTags: jest.fn(),
     compareTrainings: jest.fn(),
     getDeletedTrainings: jest.fn(),
     restoreTraining: jest.fn(),
@@ -211,6 +212,16 @@ describe('trainingController', () => {
 
     await trainingCtrl.compareTrainings(makeReq({ body: { trainingIds: ['a'] } }), makeRes());
     expect(mockedTrainingSvc.compareTrainings).toHaveBeenCalledWith('u1', ['a']);
+  });
+
+  it('getTrainingTags returns the caller-scoped tag list', async () => {
+    mockedTrainingSvc.getTrainingTags.mockResolvedValue(['a', 'b']);
+    const res = makeRes();
+
+    await trainingCtrl.getTrainingTags(makeReq({}), res);
+
+    expect(mockedTrainingSvc.getTrainingTags).toHaveBeenCalledWith('u1');
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: ['a', 'b'] });
   });
 });
 

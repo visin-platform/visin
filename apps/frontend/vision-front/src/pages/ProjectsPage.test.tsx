@@ -137,6 +137,26 @@ describe('ProjectsPage', () => {
     expect(screen.getAllByTestId('DeleteOutlinedIcon')).toHaveLength(1);
   });
 
+  it('drops the Actions column when the viewer owns none of the projects', async () => {
+    useAuthMock.mockReturnValue({ user: null });
+    projectServiceMock.getProjects.mockResolvedValue({ data: [project2] });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Project Two')).toBeInTheDocument());
+
+    expect(screen.queryByText('Actions')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('DeleteOutlinedIcon')).not.toBeInTheDocument();
+  });
+
+  it('keeps the Actions column when at least one project is the viewer\'s own', async () => {
+    projectServiceMock.getProjects.mockResolvedValue({ data: [project1, project2] });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Project One')).toBeInTheDocument());
+
+    expect(screen.getByText('Actions')).toBeInTheDocument();
+  });
+
   it('navigates to the project detail page when a project name is clicked', async () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [project1] });
 

@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { trainingService } from '../services/trainingService';
 import { projectService } from '../services/projectService';
-import { getAllAnalyses, type DatasetAnalysis } from '../services/analysisService';
+import { useTrainingTags } from './useTrainingTags';
 import { Training } from '../types';
-import { Project } from '../types/Project';
 
 export const useTrainingEdit = (training: Training | undefined, refetch: () => void) => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -13,14 +12,19 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
   const [editDatasetId, setEditDatasetId] = useState('');
   const [editStatus, setEditStatus] = useState<Training['status']>('pending');
   const [editTags, setEditTags] = useState<string[]>([]);
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [editDatasets, setEditDatasets] = useState<DatasetAnalysis[]>([]);
-  const [editProjects, setEditProjects] = useState<Project[]>([]);
-  const [editLoadingDatasets, setEditLoadingDatasets] = useState(false);
-  const [editLoadingProjects, setEditLoadingProjects] = useState(false);
   const [editProjectId, setEditProjectId] = useState('');
 
-  const queryClient = useQueryClient();
+  // Both only feed pickers inside the dialog, so they load once it is open and
+  // the dialog renders its own loading state meanwhile. Opening used to await
+  // all of this — projects, every dataset analysis, and 1000 trainings to
+  // collect their tags — before the dialog appeared at all.
+  const { data: projectsData, isLoading: editLoadingProjects } = useQuery({
+    queryKey: ['projects', 'all'],
+    queryFn: () => projectService.getProjects(),
+    staleTime: 5 * 60 * 1000,
+    enabled: editDialogOpen
+  });
+  const { availableTags } = useTrainingTags(editDialogOpen);
 
   const updateMutation = useMutation({
     mutationFn: () => {
@@ -28,6 +32,8 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
       return trainingService.updateTraining(training._id, {
         name: editName.trim(),
         description: editDescription.trim(),
+        // Unchanged by this form — sent back as it came so an edit of the name
+        // does not clear what the pipeline reported.
         datasetId: editDatasetId || undefined,
         projectId: editProjectId || undefined,
         status: editStatus,
@@ -40,49 +46,16 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
     }
   });
 
-  const handleEditTraining = async () => {
+  const handleEditTraining = () => {
     if (!training) return;
 
-    try {
-      setEditLoadingDatasets(true);
-      setEditLoadingProjects(true);
-
-      // Load datasets and projects (cached across the app under these keys)
-      const [analysisRes, projectsRes] = await Promise.all([
-        queryClient.fetchQuery({ queryKey: ['dataset-analyses', 100, 0], queryFn: () => getAllAnalyses(100, 0) }),
-        queryClient.fetchQuery({ queryKey: ['projects'], queryFn: () => projectService.getProjects() })
-      ]);
-
-      setEditDatasets(analysisRes.data || []);
-      setEditProjects(projectsRes.data || []);
-
-      // Load available tags
-      const allTrainings = await queryClient.fetchQuery({
-        queryKey: ['trainings-all-tags'],
-        queryFn: () => trainingService.getTrainings({ page: 1, limit: 1000 })
-      });
-      const tags = new Set<string>();
-      allTrainings.data.trainings.forEach((t: Training) => {
-        if (t.tags) {
-          t.tags.forEach(tag => tags.add(tag));
-        }
-      });
-      setAvailableTags(Array.from(tags).sort());
-
-      // Populate form with training data
-      setEditName(training.name);
-      setEditDescription(training.description || '');
-      setEditDatasetId(training.datasetId || '');
-      setEditProjectId(training.projectId || '');
-      setEditStatus(training.status);
-      setEditTags(training.tags || []);
-      setEditDialogOpen(true);
-    } catch (err) {
-      console.error('Failed to load data for editing:', err);
-    } finally {
-      setEditLoadingDatasets(false);
-      setEditLoadingProjects(false);
-    }
+    setEditName(training.name);
+    setEditDescription(training.description || '');
+    setEditDatasetId(training.datasetId || '');
+    setEditProjectId(training.projectId || '');
+    setEditStatus(training.status);
+    setEditTags(training.tags || []);
+    setEditDialogOpen(true);
   };
 
   const handleEditConfirm = async () => {
@@ -112,9 +85,7 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
     editStatus, setEditStatus,
     editTags, setEditTags,
     availableTags,
-    editDatasets,
-    editProjects,
-    editLoadingDatasets,
+    editProjects: projectsData?.data || [],
     editLoadingProjects,
     isUpdating: updateMutation.isPending,
     updateError: updateMutation.error instanceof Error ? updateMutation.error.message : (updateMutation.error ? 'Failed to update training' : null),

@@ -93,17 +93,21 @@ export const DatasetsPage: React.FC = () => {
         sx={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
-          mb: 4
+          alignItems: "flex-start",
+          gap: 1,
+          mb: { xs: 2, sm: 4 }
         }}>
-        <Box>
-          <Typography variant="h4" component="h1" gutterBottom sx={{
-            fontWeight: 700
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h4" component="h1" sx={{
+            fontWeight: 700,
+            fontSize: { xs: '1.5rem', sm: '2.125rem' },
+            mb: { xs: 0.25, sm: 0.5 }
           }}>
             Datasets
           </Typography>
-          <Typography variant="body1" sx={{
-            color: "text.secondary"
+          <Typography sx={{
+            color: "text.secondary",
+            fontSize: { xs: '0.8125rem', sm: '1rem' }
           }}>
             Dataset analyses and files are publicly shared, including when used by a private project.
           </Typography>
@@ -115,20 +119,32 @@ export const DatasetsPage: React.FC = () => {
               startIcon={<UploadIcon />}
               onClick={() => setShowCreateModal(true)}
               disabled={creating}
+              aria-label="Upload Dataset"
               sx={{
-                px: 3,
-                py: 1,
+                // Same 40px square as the refresh button beside it until the
+                // label fits; the privacy note needs the width.
+                minWidth: { xs: 40, md: 64 },
+                width: { xs: 40, md: 'auto' },
+                height: 40,
+                px: { xs: 0, md: 3 },
                 borderRadius: 2,
-                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
+                '& .MuiButton-startIcon': {
+                  mr: { xs: 0, md: 1 },
+                  ml: { xs: 0, md: -0.5 }
+                }
               }}
             >
-              Upload Dataset
+              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Upload Dataset</Box>
             </Button>
           )}
           <IconButton
+            aria-label="Refresh"
             onClick={handleRefresh}
             disabled={creating}
             sx={{
+              width: 40,
+              height: 40,
               bgcolor: 'background.paper',
               border: `1px solid ${theme.palette.divider}`,
               borderRadius: 2,

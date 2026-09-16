@@ -39,7 +39,7 @@ function TabPanel(props: TabPanelProps) {
       {...other}
     >
       {value === index && (
-        <Box sx={{ py: 3 }}>
+        <Box sx={{ px: { xs: 1.5, sm: 0 }, py: { xs: 2, sm: 3 } }}>
           {children}
         </Box>
       )}
@@ -133,7 +133,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
 
   return (
     <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', px: { xs: 0.5, sm: 2 } }}>
         <Tabs
           value={tabValue}
           onChange={onTabChange}

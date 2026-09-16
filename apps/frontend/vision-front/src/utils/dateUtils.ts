@@ -18,6 +18,18 @@ export const formatDateTime = (dateString: string): string => {
 };
 
 /**
+ * Formats a date string as DD.MM.YYYY (e.g., "04.01.2026") — the compact form
+ * used where a narrow screen has no room for the time as well.
+ */
+export const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+
+  return `${day}.${month}.${date.getFullYear()}`;
+};
+
+/**
  * Formats a duration in seconds to a human-readable string
  * @param seconds - Duration in seconds (can be float)
  * @returns Formatted duration string (e.g., "2h 30m", "45m 30s", "30s")

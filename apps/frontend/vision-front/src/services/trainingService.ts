@@ -94,6 +94,14 @@ export const trainingService = {
     return response.data as ApiResponse<TrainingStats>;
   },
 
+  // Every tag in use on the runs the caller can see, for the tag pickers.
+  // A `distinct` on the server: the pickers used to list 1000 trainings —
+  // epoch aggregation and costing included — and collect the tags client-side.
+  async getTrainingTags(): Promise<ApiResponse<string[]>> {
+    const response = await visionApi.get('/trainings/tags');
+    return response.data as ApiResponse<string[]>;
+  },
+
   // Compare multiple trainings
   async compareTrainings(trainingIds: string[]): Promise<ApiResponse<TrainingComparisonResponse>> {
     const response = await visionApi.post('/trainings/compare', { trainingIds });

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { trainingService } from '../services/trainingService';
 import { projectService } from '../services/projectService';
-import { getAllAnalyses } from '../services/analysisService';
+import { useTrainingTags } from './useTrainingTags';
 import { Training } from '../types';
 import { exportTrainingsToCSV } from '../utils/csvExport';
 import { useAuth } from '../contexts/AuthContext';
@@ -39,20 +39,16 @@ export const useTrainingsPage = () => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [excludedTags, setExcludedTags] = useState<string[]>([]);
 
-  // Datasets/projects for the create/edit modal — only fetched while the
-  // modal is open, and shared between the "create" and "edit" entry points
-  // (previously each hand-rolled its own duplicate Promise.all).
-  const { data: analysisData, isLoading: loadingDatasets } = useQuery({
-    queryKey: ['dataset-analyses', 100, 0],
-    queryFn: () => getAllAnalyses(100, 0),
-    enabled: createModalOpen
-  });
+  // Projects for the create/edit modal — only fetched while the modal is open,
+  // and shared between the "create" and "edit" entry points. The dataset is
+  // reported by the pipeline, so the form shows it read-only and no longer
+  // fetches every analysis to fill a picker.
   const { data: projectsData, isLoading: loadingProjects } = useQuery({
     queryKey: ['projects', 'all'],
     queryFn: () => projectService.getProjects(),
+    staleTime: 5 * 60 * 1000,
     enabled: createModalOpen
   });
-  const datasets = analysisData?.data || [];
   const availableProjects = projectsData?.data || [];
   const canEditProject = useWriteCapabilities('project', availableProjects.map(project => project._id));
   const projects = availableProjects.filter(project => canEditProject(project._id));
@@ -134,22 +130,7 @@ export const useTrainingsPage = () => {
     }
   });
 
-  const { data: availableTags = [], refetch: refetchTags } = useQuery({
-    queryKey: ['training-tags'],
-    queryFn: async () => {
-      const allTrainings = await trainingService.getTrainings({
-        page: 1,
-        limit: 1000 // Get a large number to collect all tags
-      });
-      const tags = new Set<string>();
-      allTrainings.data.trainings.forEach((training: Training) => {
-        if (training.tags) {
-          training.tags.forEach(tag => tags.add(tag));
-        }
-      });
-      return Array.from(tags).sort();
-    }
-  });
+  const { availableTags, refetchTags } = useTrainingTags();
 
   const allTrainings = useMemo(() => data?.data?.trainings || [], [data?.data?.trainings]);
   const backendTotal = data?.data?.pagination?.total || 0;
@@ -278,9 +259,9 @@ export const useTrainingsPage = () => {
   };
 
   const handleEditTraining = (training: Training) => {
-    // Opening the modal flips `enabled` on the datasets/projects
-    // queries above, which fetch in the background — the modal already
-    // renders a loading state for them via isLoadingData.
+    // Opening the modal flips `enabled` on the projects query above, which
+    // fetches in the background — the modal already renders a loading state
+    // for it via isLoadingData.
     setEditingTrainingId(training._id);
     setTrainingName(training.name);
     setTrainingDescription(training.description || '');
@@ -391,9 +372,7 @@ export const useTrainingsPage = () => {
     setSelectedStatus,
     trainingTags,
     setTrainingTags,
-    datasets,
     projects,
-    loadingDatasets,
     loadingProjects,
     creating,
     createError,

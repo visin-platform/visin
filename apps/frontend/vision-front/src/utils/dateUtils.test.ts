@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDateTime, formatDuration } from './dateUtils';
+import { formatDate, formatDateTime, formatDuration } from './dateUtils';
 
 describe('formatDateTime', () => {
   it('formats a date as DD.MM.YYYY HH:mm with zero-padding', () => {
@@ -10,6 +10,18 @@ describe('formatDateTime', () => {
   it('does not zero-pad the year', () => {
     const date = new Date(2026, 11, 31, 23, 59);
     expect(formatDateTime(date.toISOString())).toBe('31.12.2026 23:59');
+  });
+});
+
+describe('formatDate', () => {
+  it('formats a date as DD.MM.YYYY with zero-padding and no time', () => {
+    const date = new Date(2026, 0, 4, 9, 5);
+    expect(formatDate(date.toISOString())).toBe('04.01.2026');
+  });
+
+  it('keeps two-digit days and months as they are', () => {
+    const date = new Date(2026, 11, 31, 23, 59);
+    expect(formatDate(date.toISOString())).toBe('31.12.2026');
   });
 });
 

@@ -11,15 +11,14 @@ import {
 } from '@mui/material';
 import { Compare as CompareIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import TrainingsTable from '../TrainingsTable';
 import TrainingFormDialog from '../TrainingFormDialog';
 import { trainingService } from '../../services/trainingService';
 import { projectService } from '../../services/projectService';
-import { getAllAnalyses, type DatasetAnalysis } from '../../services/analysisService';
+import { useTrainingTags } from '../../hooks/useTrainingTags';
 import { Training } from '../../types';
-import { Project } from '../../types/Project';
 
 export type TrainingSortColumn = 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
 
@@ -68,11 +67,18 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<'pending' | 'running' | 'completed' | 'failed'>('pending');
   const [trainingTags, setTrainingTags] = useState<string[]>([]);
   
-  const [datasets, setDatasets] = useState<DatasetAnalysis[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  
-  const [loadingDatasets, setLoadingDatasets] = useState(false);
-  const [loadingProjects, setLoadingProjects] = useState(false);
+  // The dialog's project picker and tag suggestions, loaded once it is open:
+  // opening used to await every dataset analysis and every project first, which
+  // is what made the edit button feel unresponsive.
+  const { data: projectsData, isLoading: loadingProjects } = useQuery({
+    queryKey: ['projects', 'all'],
+    queryFn: () => projectService.getProjects(),
+    staleTime: 5 * 60 * 1000,
+    enabled: trainingModalOpen
+  });
+  const projects = projectsData?.data || [];
+  const { availableTags } = useTrainingTags(trainingModalOpen);
+
   const [savingTraining, setSavingTraining] = useState(false);
   const [trainingError, setTrainingError] = useState<string | null>(null);
   const [trainingSuccess, setTrainingSuccess] = useState<string | null>(null);
@@ -105,33 +111,17 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
     if (ids.length > 1) navigate(`/trainings/compare?ids=${ids.join(',')}`);
   };
 
-  const handleEditTraining = async (training: Training) => {
-    try {
-      setLoadingDatasets(true);
-      setLoadingProjects(true);
-
-      const [analysesRes, projectsRes] = await Promise.all([
-        getAllAnalyses(100, 0),
-        projectService.getProjects()
-      ]);
-
-      setDatasets(analysesRes.data || []);
-      setProjects(projectsRes.data || []);
-
-      setEditingTrainingId(training._id);
-      setTrainingName(training.name);
-      setTrainingDescription(training.description || '');
-      setSelectedDatasetId(training.datasetId || '');
-      setSelectedProjectId(training.projectId || '');
-      setSelectedStatus(training.status);
-      setTrainingTags(training.tags || []);
-      setTrainingModalOpen(true);
-    } catch (err) {
-      console.error('Failed to load data for editing training:', err);
-    } finally {
-      setLoadingDatasets(false);
-      setLoadingProjects(false);
-    }
+  // Opening flips `enabled` on the queries above, which load in the background
+  // while the dialog shows the run's own values straight away.
+  const handleEditTraining = (training: Training) => {
+    setEditingTrainingId(training._id);
+    setTrainingName(training.name);
+    setTrainingDescription(training.description || '');
+    setSelectedDatasetId(training.datasetId || '');
+    setSelectedProjectId(training.projectId || '');
+    setSelectedStatus(training.status);
+    setTrainingTags(training.tags || []);
+    setTrainingModalOpen(true);
   };
 
   const handleSubmitTraining = async () => {
@@ -238,25 +228,22 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
         onSubmit={handleSubmitTraining}
         isEditing={!!editingTrainingId}
         isCreating={savingTraining}
-        isLoadingData={loadingDatasets || loadingProjects}
+        isLoadingData={loadingProjects}
         trainingName={trainingName}
         onNameChange={setTrainingName}
         trainingDescription={trainingDescription}
         onDescriptionChange={setTrainingDescription}
         selectedDatasetId={selectedDatasetId}
-        onDatasetChange={setSelectedDatasetId}
         selectedProjectId={selectedProjectId}
         onProjectChange={setSelectedProjectId}
         selectedStatus={selectedStatus}
         onStatusChange={setSelectedStatus}
         trainingTags={trainingTags}
         onTagsChange={setTrainingTags}
-        availableTags={[]}
-        datasets={datasets}
+        availableTags={availableTags}
         projects={projects}
         error={trainingError}
         success={trainingSuccess}
-        loadingDatasets={loadingDatasets}
         loadingProjects={loadingProjects}
       />
 

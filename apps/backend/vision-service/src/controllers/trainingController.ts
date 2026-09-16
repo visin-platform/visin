@@ -25,6 +25,16 @@ export const getTrainings = async (req: AuthRequest, res: Response): Promise<voi
   });
 };
 
+// Every tag in use on the runs the caller can see
+export const getTrainingTags = async (req: AuthRequest, res: Response): Promise<void> => {
+  const tags = await trainingService.getTrainingTags(req.user?.id);
+
+  res.json({
+    success: true,
+    data: tags
+  });
+};
+
 // Get training by ID
 export const getTrainingById = async (req: AuthRequest, res: Response): Promise<void> => {
   const id = req.params.id as string;

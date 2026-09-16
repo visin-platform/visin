@@ -4,24 +4,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
 vi.mock('../services/trainingService', () => ({
-  trainingService: { updateTraining: vi.fn(), getTrainings: vi.fn() }
+  trainingService: { updateTraining: vi.fn(), getTrainings: vi.fn(), getTrainingTags: vi.fn() }
 }));
 vi.mock('../services/projectService', () => ({
   projectService: { getProjects: vi.fn() }
 }));
-vi.mock('../services/analysisService', () => ({
-  getAllAnalyses: vi.fn()
-}));
 
 import { trainingService } from '../services/trainingService';
 import { projectService } from '../services/projectService';
-import { getAllAnalyses } from '../services/analysisService';
 import { useTrainingEdit } from './useTrainingEdit';
 import type { Training } from '../types';
 
 const mockedTraining = vi.mocked(trainingService);
 const mockedProject = vi.mocked(projectService);
-const mockedAnalyses = vi.mocked(getAllAnalyses);
 
 const makeWrapper = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -42,20 +37,18 @@ const training: Training = {
 describe('useTrainingEdit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedAnalyses.mockResolvedValue({ data: [{ _id: 'a1' }] as any, pagination: {} as any });
     mockedProject.getProjects.mockResolvedValue({ success: true, data: [{ _id: 'p1' }] as any });
-    mockedTraining.getTrainings.mockResolvedValue({
-      success: true,
-      data: { trainings: [{ _id: 't1', tags: ['a', 'b'] }, { _id: 't2', tags: ['b', 'c'] }] as any, pagination: {} as any }
-    });
+    mockedTraining.getTrainingTags.mockResolvedValue({ success: true, data: ['a', 'b', 'c'] });
   });
 
-  it('handleEditTraining loads datasets/projects/tags and opens the dialog prefilled', async () => {
+  it('handleEditTraining opens the dialog prefilled without waiting on any request', async () => {
     const refetch = vi.fn();
     const { result } = renderHook(() => useTrainingEdit(training, refetch), { wrapper: makeWrapper() });
 
-    await act(async () => {
-      await result.current.handleEditTraining();
+    // Synchronous on purpose: the dialog is open before the pickers it holds
+    // have asked the API for anything.
+    act(() => {
+      result.current.handleEditTraining();
     });
 
     expect(result.current.editDialogOpen).toBe(true);
@@ -64,17 +57,32 @@ describe('useTrainingEdit', () => {
     expect(result.current.editProjectId).toBe('p1');
     expect(result.current.editStatus).toBe('running');
     expect(result.current.editTags).toEqual(['a', 'b']);
+    // The pickers' requests are in flight, not awaited: the dialog is already
+    // open and prefilled while they are still empty.
+    expect(result.current.editProjects).toEqual([]);
+    expect(result.current.availableTags).toEqual([]);
+  });
+
+  it('loads the project list and tag suggestions once the dialog is open', async () => {
+    const refetch = vi.fn();
+    const { result } = renderHook(() => useTrainingEdit(training, refetch), { wrapper: makeWrapper() });
+
+    act(() => {
+      result.current.handleEditTraining();
+    });
+
+    await waitFor(() => expect(result.current.editProjects).toEqual([{ _id: 'p1' }]));
     expect(result.current.availableTags).toEqual(['a', 'b', 'c']);
-    expect(result.current.editDatasets).toEqual([{ _id: 'a1' }]);
-    expect(result.current.editProjects).toEqual([{ _id: 'p1' }]);
+    // Never the full list endpoint: the tags come from their own cheap route.
+    expect(mockedTraining.getTrainings).not.toHaveBeenCalled();
   });
 
   it('does nothing when training is undefined', async () => {
     const refetch = vi.fn();
     const { result } = renderHook(() => useTrainingEdit(undefined, refetch), { wrapper: makeWrapper() });
 
-    await act(async () => {
-      await result.current.handleEditTraining();
+    act(() => {
+      result.current.handleEditTraining();
     });
 
     expect(mockedProject.getProjects).not.toHaveBeenCalled();
@@ -86,8 +94,8 @@ describe('useTrainingEdit', () => {
     const refetch = vi.fn();
     const { result } = renderHook(() => useTrainingEdit(training, refetch), { wrapper: makeWrapper() });
 
-    await act(async () => {
-      await result.current.handleEditTraining();
+    act(() => {
+      result.current.handleEditTraining();
     });
     act(() => {
       result.current.setEditName('Updated Name');
@@ -122,8 +130,8 @@ describe('useTrainingEdit', () => {
     const refetch = vi.fn();
     const { result } = renderHook(() => useTrainingEdit(training, refetch), { wrapper: makeWrapper() });
 
-    await act(async () => {
-      await result.current.handleEditTraining();
+    act(() => {
+      result.current.handleEditTraining();
     });
     act(() => {
       result.current.setEditName('Still valid');
@@ -140,8 +148,8 @@ describe('useTrainingEdit', () => {
     const refetch = vi.fn();
     const { result } = renderHook(() => useTrainingEdit(training, refetch), { wrapper: makeWrapper() });
 
-    await act(async () => {
-      await result.current.handleEditTraining();
+    act(() => {
+      result.current.handleEditTraining();
     });
 
     act(() => {

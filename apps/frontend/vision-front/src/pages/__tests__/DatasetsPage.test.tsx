@@ -98,7 +98,7 @@ describe('DatasetsPage', () => {
 
   it('refreshes the table when the refresh button is clicked', () => {
     render(<DatasetsPage />);
-    const refreshBtn = screen.getByRole('button', { name: '' });
+    const refreshBtn = screen.getByRole('button', { name: /refresh/i });
     fireEvent.click(refreshBtn);
     expect(screen.getByTestId('datasets-table')).toBeInTheDocument();
   });

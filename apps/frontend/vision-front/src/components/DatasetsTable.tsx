@@ -29,6 +29,10 @@ import AnalysisTableRow from './dataset/AnalysisTableRow';
 import DeleteAnalysisDialog from './dataset/DeleteAnalysisDialog';
 import DatasetUploadDialog from './dataset/DatasetUploadDialog';
 
+// Columns a phone has no room for; AnalysisTableRow folds their content into
+// a caption under the dataset name instead.
+const secondaryColumnSx = { display: { xs: 'none', md: 'table-cell' } } as const;
+
 interface AnalysisTableProps {
   selectedAnalysisIds?: Set<string>;
   onSelectAnalysis?: (analysisId: string) => void;
@@ -175,21 +179,12 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          {selectedAnalysisIds.size > 1 && (
-            <Button variant="contained" startIcon={<CompareIcon />} onClick={onCompareSelected} color="primary" size="small">
-              Compare
-            </Button>
-          )}
-        </Box>
-      </Box>
       {/* Bulk Selection UI */}
       {selectedAnalysisIds.size > 0 && (
         <Box
           sx={{
             mb: 2,
-            p: 2,
+            p: { xs: 1.25, sm: 2 },
             display: 'flex',
             alignItems: 'center',
             gap: 2,
@@ -219,7 +214,9 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
         }}
       >
         <TableContainer sx={{ overflowX: 'auto' }}>
-          <Table sx={{ minWidth: 650 }}>
+          {/* Size/Created/Updated drop out below `md`, so the table no longer
+              needs a minimum width a phone has to scroll sideways through. */}
+          <Table size="small" sx={{ minWidth: { xs: 0, md: 650 }, '& .MuiTableCell-root': { px: { xs: 1, sm: 2 } } }}>
             <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
               <TableRow>
                 <TableCell padding="checkbox" sx={{ fontWeight: 600 }}>
@@ -244,8 +241,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     )}
                   </Box>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Size</TableCell>
-                <TableCell sx={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600 }} onClick={() => handleSort('createdAt')}>
+                <TableCell sx={{ fontWeight: 600, ...secondaryColumnSx }}>Size</TableCell>
+                <TableCell sx={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600, ...secondaryColumnSx }} onClick={() => handleSort('createdAt')}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     Created
                     {sortField === 'createdAt' && (
@@ -253,7 +250,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     )}
                   </Box>
                 </TableCell>
-                <TableCell sx={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600 }} onClick={() => handleSort('updatedAt')}>
+                <TableCell sx={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600, ...secondaryColumnSx }} onClick={() => handleSort('updatedAt')}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     Updated
                     {sortField === 'updatedAt' && (

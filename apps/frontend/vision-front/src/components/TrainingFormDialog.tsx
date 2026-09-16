@@ -19,13 +19,7 @@ import {
 } from '@mui/material';
 import { Training } from '../types';
 import { Project } from '../types/Project';
-import { DatasetAnalysis } from '../services/analysisService';
 import TagInput from './TagInput';
-
-interface DatasetAnalysisSummary {
-  total_frames?: number;
-  total_classes?: number;
-}
 
 interface TrainingFormDialogProps {
   open: boolean;
@@ -38,8 +32,8 @@ interface TrainingFormDialogProps {
   onNameChange: (value: string) => void;
   trainingDescription: string;
   onDescriptionChange: (value: string) => void;
+  /** Read-only here; the reporting pipeline owns it. */
   selectedDatasetId: string;
-  onDatasetChange: (value: string) => void;
   selectedProjectId: string;
   onProjectChange: (value: string) => void;
   selectedStatus: Training['status'];
@@ -47,11 +41,9 @@ interface TrainingFormDialogProps {
   trainingTags: string[];
   onTagsChange: (tags: string[]) => void;
   availableTags?: string[];
-  datasets: DatasetAnalysis[];
   projects: Project[];
   error: string | null;
   success: string | null;
-  loadingDatasets: boolean;
   loadingProjects: boolean;
 }
 
@@ -67,7 +59,6 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
   trainingDescription,
   onDescriptionChange,
   selectedDatasetId,
-  onDatasetChange,
   selectedProjectId,
   onProjectChange,
   selectedStatus,
@@ -75,11 +66,9 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
   trainingTags,
   onTagsChange,
   availableTags = [],
-  datasets,
   projects,
   error,
   success,
-  loadingDatasets,
   loadingProjects
 }) => {
   return (
@@ -147,28 +136,19 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
             <FormHelperText>Project cannot be changed after creation.</FormHelperText>
           )}
         </FormControl>
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Select Dataset Analysis (Optional)</InputLabel>
-          <Select
-            value={selectedDatasetId}
-            onChange={(e: SelectChangeEvent<string>) => onDatasetChange(e.target.value)}
-            label="Select Dataset Analysis (Optional)"
-            disabled={isCreating || isLoadingData || loadingDatasets}
-          >
-            <MenuItem value="">
-              <em>None</em>
-            </MenuItem>
-            {datasets.map((dataset: DatasetAnalysis) => {
-              const summary = dataset.data as DatasetAnalysisSummary | undefined;
-              return (
-                <MenuItem key={dataset._id} value={dataset._id}>
-                  {dataset.dataset} ({summary?.total_frames || 0} frames, {summary?.total_classes || 0} classes)
-                </MenuItem>
-              );
-            })}
-          </Select>
-          <FormHelperText>Dataset analyses and files are publicly shared, including in private projects.</FormHelperText>
-        </FormControl>
+        {/* Read-only: the dataset is whatever the pipeline reported with the
+            run, so the form shows it rather than offering to reassign it. */}
+        <TextField
+          margin="dense"
+          label="Dataset Analysis"
+          fullWidth
+          variant="outlined"
+          value={selectedDatasetId}
+          slotProps={{ input: { readOnly: true }, inputLabel: { shrink: true } }}
+          placeholder="None"
+          helperText="Set by the pipeline that reports the training."
+          sx={{ mb: 2 }}
+        />
         <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel>Status</InputLabel>
           <Select
@@ -195,7 +175,7 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
           />
         </Box>
         <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 2 }}>
-          A unique UUID will be automatically generated for this training. You can select a dataset analysis. After creating, you can upload epoch JSON files to track training progress. The training&apos;s config is set by the pipeline that reports it and is shown, read-only, on the Config tab.
+          A unique UUID will be automatically generated for this training. After creating, you can upload epoch JSON files to track training progress. The training&apos;s dataset and config are set by the pipeline that reports it and are shown read-only — the config on the Config tab.
         </Typography>
       </DialogContent>
       <DialogActions>

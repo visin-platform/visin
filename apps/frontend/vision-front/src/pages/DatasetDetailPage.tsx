@@ -266,10 +266,10 @@ const DatasetDetailPage: React.FC = () => {
         canDelete={!!canDeleteDatasets()}
       />
 
-      <Paper sx={{ mb: 4, borderRadius: 2, border: `1px solid ${theme.palette.divider}` }}>
+      <Paper sx={{ mb: { xs: 2, sm: 4 }, borderRadius: 2, border: `1px solid ${theme.palette.divider}` }}>
         <DatasetDetailTabs value={activeTab} onChange={handleTabChange} />
 
-        <Box sx={{ p: 3 }}>
+        <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
           {activeTab === 0 && (
             <DatasetInfoTab
               analysis={analysis}

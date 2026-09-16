@@ -3,7 +3,10 @@ import { Box, Checkbox, CircularProgress, IconButton, TableCell, TableRow, Toolt
 import { Delete as DeleteIcon, Edit as EditIcon, Download as DownloadIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { DatasetAnalysis } from '../../services/analysisService';
-import { formatDateTime } from '../../utils';
+import { formatDate, formatDateTime } from '../../utils';
+
+// Must match DatasetsTable's header cells, which hide the same columns.
+const secondaryColumnSx = { display: { xs: 'none', md: 'table-cell' } } as const;
 
 interface AnalysisTableRowProps {
   analysis: DatasetAnalysis;
@@ -60,14 +63,23 @@ const AnalysisTableRow: React.FC<AnalysisTableRowProps> = ({
           }}
         />
       </TableCell>
-      <TableCell>{analysis.dataset}</TableCell>
-      <TableCell>{analysis.size || '-'}</TableCell>
       <TableCell>
+        {analysis.dataset}
+        {/* What the Size and Created columns say, for widths that drop them. */}
+        <Typography
+          variant="caption"
+          component="div"
+          sx={{ display: { xs: 'block', md: 'none' }, color: 'text.secondary' }}>
+          {analysis.size ? `${analysis.size} · ` : ''}{formatDate(analysis.createdAt)}
+        </Typography>
+      </TableCell>
+      <TableCell sx={secondaryColumnSx}>{analysis.size || '-'}</TableCell>
+      <TableCell sx={secondaryColumnSx}>
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
           {formatDateTime(analysis.createdAt)}
         </Typography>
       </TableCell>
-      <TableCell>
+      <TableCell sx={secondaryColumnSx}>
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
           {formatDateTime(analysis.updatedAt)}
         </Typography>

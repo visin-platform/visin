@@ -129,12 +129,16 @@ const LoginPage: React.FC = () => {
       {/* Brand panel, painted with the product's own colours rather than a
           stock photo, so it costs no third-party request. */}
       <Grid
-        size={{ xs: 0, sm: 4, md: 6 }}
+        size={{ xs: 0, md: 6 }}
         sx={{
-          display: { xs: 'none', sm: 'flex' },
+          // From `md` only: at tablet widths a third of the screen left the
+          // panel's heading one word per line and squeezed the form beside it,
+          // so below that the form takes the whole width and the wordmark
+          // above it carries the brand instead.
+          display: { xs: 'none', md: 'flex' },
           flexDirection: 'column',
           justifyContent: 'flex-end',
-          p: 6,
+          p: { md: 5, lg: 6 },
           bgcolor: '#111827',
           color: '#fff',
           backgroundImage:
@@ -156,14 +160,14 @@ const LoginPage: React.FC = () => {
       </Grid>
 
       <Grid
-        size={{ xs: 12, sm: 8, md: 6 }}
+        size={{ xs: 12, md: 6 }}
         component={Paper}
         elevation={0}
         square
         sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}
       >
         <Box sx={{ my: 8, width: '100%', maxWidth: 440, px: { xs: 3, sm: 4 } }}>
-          <Box sx={{ display: { xs: 'flex', sm: 'none' }, alignItems: 'center', gap: 1.5, mb: 4 }}>
+          <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1.5, mb: 4 }}>
             <Box component="img" src="/logo.svg" alt="" sx={{ width: 40, height: 40 }} />
             <Typography variant="h5" sx={{ fontWeight: 700 }}>
               Visin

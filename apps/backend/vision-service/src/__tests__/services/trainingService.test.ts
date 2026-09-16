@@ -21,6 +21,7 @@ jest.mock('../../models/Training', () => {
     findOne: jest.fn(),
     countDocuments: jest.fn(),
     aggregate: jest.fn(),
+    distinct: jest.fn(),
   });
   return { __esModule: true, default: ctor };
 });
@@ -291,6 +292,54 @@ describe('getTrainings', () => {
     expect(metrics.gpuCost).toBeCloseTo(20);
     expect(metrics.totalCost).toBeCloseTo(22);
     expect(metrics.currency).toBe('USD');
+  });
+});
+
+describe('getTrainingTags', () => {
+  it('returns the distinct tags of the visible runs, sorted and deduplicated by Mongo', async () => {
+    mockedTraining.distinct.mockResolvedValue(['zebra', 'alpha']);
+
+    const tags = await trainingService.getTrainingTags('u1');
+
+    expect(mockedVisibleProjects).toHaveBeenCalledWith('u1');
+    expect(mockedTraining.distinct).toHaveBeenCalledWith(
+      'tags',
+      expect.objectContaining({
+        deletedAt: null,
+        $or: [{ projectId: { $in: ['p1'] } }, { projectId: { $exists: false } }, { projectId: null }],
+      })
+    );
+    expect(tags).toEqual(['alpha', 'zebra']);
+  });
+
+  it('scopes an anonymous caller to public projects', async () => {
+    mockedVisibleProjects.mockResolvedValue(['pub']);
+    mockedTraining.distinct.mockResolvedValue([]);
+
+    await trainingService.getTrainingTags(undefined);
+
+    expect(mockedVisibleProjects).toHaveBeenCalledWith(undefined);
+    expect(mockedTraining.distinct).toHaveBeenCalledWith(
+      'tags',
+      expect.objectContaining({
+        $or: [{ projectId: { $in: ['pub'] } }, { projectId: { $exists: false } }, { projectId: null }],
+      })
+    );
+  });
+
+  it('drops the empty strings and non-strings a Mixed field can hold', async () => {
+    mockedTraining.distinct.mockResolvedValue(['keep', '', null, 42, undefined]);
+
+    expect(await trainingService.getTrainingTags('u1')).toEqual(['keep']);
+  });
+
+  it('never runs the epoch lookup the list endpoint needs', async () => {
+    mockedTraining.distinct.mockResolvedValue(['a']);
+
+    await trainingService.getTrainingTags('u1');
+
+    expect(mockedTraining.aggregate).not.toHaveBeenCalled();
+    expect(mockedTraining.find).not.toHaveBeenCalled();
   });
 });
 

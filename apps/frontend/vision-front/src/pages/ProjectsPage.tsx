@@ -39,8 +39,11 @@ import ProjectFormDialog from '../components/ProjectFormDialog';
 import { ProjectCosting, ProjectTaxonomy } from '../types/taxonomy';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
-import { formatDateTime } from '../utils';
+import { formatDate, formatDateTime } from '../utils';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+
+// Columns a phone has no room for; their content moves under the project name.
+const secondaryColumnSx = { display: { xs: 'none', md: 'table-cell' } } as const;
 
 const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -73,6 +76,11 @@ const ProjectsPage: React.FC = () => {
   });
 
   const projects = data?.data || [];
+
+  // Edit/delete only ever render on a project the signed-in user owns, so for a
+  // logged-out visitor — or one browsing only other people's public projects —
+  // the column was a header over a row of blank cells.
+  const showActions = projects.some((project: Project) => project.ownerId === user?.id);
 
   const handleSort = (property: 'name' | 'createdAt') => {
     const isAsc = sortBy === property && sortOrder === 'asc';
@@ -186,11 +194,14 @@ const ProjectsPage: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          mb: 4
+          gap: 1,
+          mb: { xs: 2, sm: 4 }
         }}>
-        <Box>
-          <Typography variant="h4" component="h1" gutterBottom sx={{
-            fontWeight: 700
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h4" component="h1" sx={{
+            fontWeight: 700,
+            fontSize: { xs: '1.5rem', sm: '2.125rem' },
+            mb: { xs: 0, sm: 0.5 }
           }}>
             Projects
           </Typography>
@@ -217,20 +228,29 @@ const ProjectsPage: React.FC = () => {
                 setEditingProjectId(null);
                 setCreateModalOpen(true);
               }}
-              sx={{ 
-                px: { xs: 2, sm: 3 },
-                py: { xs: 0.75, sm: 1 },
+              aria-label="New Project"
+              sx={{
+                // A plus in the same 40px square as the refresh button beside
+                // it, until there is room for the label.
+                minWidth: { xs: 40, md: 64 },
+                width: { xs: 40, md: 'auto' },
+                height: 40,
+                px: { xs: 0, md: 3 },
                 fontSize: { xs: '0.875rem', sm: '0.9375rem' },
                 borderRadius: 2,
-                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
+                '& .MuiButton-startIcon': {
+                  mr: { xs: 0, md: 1 },
+                  ml: { xs: 0, md: -0.5 }
+                }
               }}
             >
-              <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>New Project</Box>
-              <Box sx={{ display: { xs: 'inline', sm: 'none' } }}>New</Box>
+              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>New Project</Box>
             </Button>
           )}
-          <IconButton 
-            onClick={() => refetch()} 
+          <IconButton
+            aria-label="Refresh"
+            onClick={() => refetch()}
             disabled={isLoading}
             sx={{ 
               bgcolor: 'background.paper',
@@ -249,7 +269,7 @@ const ProjectsPage: React.FC = () => {
         </Alert>
       )}
       <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: theme.shadows[2] }}>
-        <Table>
+        <Table size="small" sx={{ '& .MuiTableCell-root': { px: { xs: 1.5, sm: 2 } } }}>
           <TableHead>
             <TableRow>
               <TableCell>
@@ -261,9 +281,9 @@ const ProjectsPage: React.FC = () => {
                   Name
                 </TableSortLabel>
               </TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell>Visibility</TableCell>
-              <TableCell>
+              <TableCell sx={secondaryColumnSx}>Description</TableCell>
+              <TableCell sx={secondaryColumnSx}>Visibility</TableCell>
+              <TableCell sx={secondaryColumnSx}>
                 <TableSortLabel
                   active={sortBy === 'createdAt'}
                   direction={sortBy === 'createdAt' ? sortOrder : 'asc'}
@@ -272,13 +292,13 @@ const ProjectsPage: React.FC = () => {
                   Created At
                 </TableSortLabel>
               </TableCell>
-              <TableCell align="right">Actions</TableCell>
+              {showActions && <TableCell align="right">Actions</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
             {projects.length === 0 && !isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} align="center" sx={{ pb: 4 }}>
+                <TableCell colSpan={showActions ? 5 : 4} align="center" sx={{ pb: 4 }}>
                   <Typography sx={{
                     color: "text.secondary"
                   }}>No projects found</Typography>
@@ -298,8 +318,24 @@ const ProjectsPage: React.FC = () => {
                       }}>
                       {project.name}
                     </Typography>
+                    {/* Below the Description/Visibility/Created columns'
+                        breakpoint, their content collapses onto one caption
+                        line here rather than disappearing. */}
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: { xs: 'flex', md: 'none' },
+                        alignItems: 'center',
+                        gap: 0.5,
+                        color: 'text.secondary'
+                      }}>
+                      {project.isPublic
+                        ? <PublicIcon sx={{ fontSize: '0.875rem' }} />
+                        : <LockIcon sx={{ fontSize: '0.875rem' }} />}
+                      {project.isPublic ? 'Public' : 'Private'} · {formatDate(project.createdAt)}
+                    </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={secondaryColumnSx}>
                     <Typography
                       variant="body2"
                       sx={{
@@ -312,7 +348,7 @@ const ProjectsPage: React.FC = () => {
                       {project.description || '-'}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={secondaryColumnSx}>
                     <Chip
                       icon={project.isPublic ? <PublicIcon fontSize="small" /> : <LockIcon fontSize="small" />}
                       label={project.isPublic ? 'Public' : 'Private'}
@@ -321,25 +357,27 @@ const ProjectsPage: React.FC = () => {
                       variant="outlined"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={secondaryColumnSx}>
                     {formatDateTime(project.createdAt)}
                   </TableCell>
-                  <TableCell align="right">
-                    {user && project.ownerId === user.id && (
-                      <>
-                        <Tooltip title="Edit">
-                          <IconButton size="small" onClick={() => handleEditProject(project)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton size="small" color="error" onClick={() => handleDeleteClick(project._id)}>
-                            <DeleteOutlineIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </>
-                    )}
-                  </TableCell>
+                  {showActions && (
+                    <TableCell align="right">
+                      {project.ownerId === user?.id && (
+                        <>
+                          <Tooltip title="Edit">
+                            <IconButton size="small" onClick={() => handleEditProject(project)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <IconButton size="small" color="error" onClick={() => handleDeleteClick(project._id)}>
+                              <DeleteOutlineIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

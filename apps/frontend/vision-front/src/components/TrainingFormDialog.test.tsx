@@ -4,13 +4,9 @@ import userEvent from '@testing-library/user-event';
 import TrainingFormDialog from './TrainingFormDialog';
 import type { Config, Training } from '../types';
 import type { Project } from '../types/Project';
-import type { DatasetAnalysis } from '../services/analysisService';
 
 const configs: Config[] = [
   { _id: 'c1', config_uuid: 'cu1', summary: 'A summary', config_data: {}, config_name: 'Config One', createdAt: '', updatedAt: '' }
-];
-const datasets: DatasetAnalysis[] = [
-  { _id: 'd1', dataset: 'waymo', data: { total_frames: 100, total_classes: 5 }, createdAt: '', updatedAt: '' }
 ];
 const projects: Project[] = [
   { _id: 'p1', name: 'Project One', isPublic: true, ownerId: 'u1', createdAt: '', updatedAt: '' }
@@ -30,7 +26,6 @@ const baseProps = {
   selectedConfigId: '',
   onConfigChange: vi.fn(),
   selectedDatasetId: '',
-  onDatasetChange: vi.fn(),
   selectedProjectId: '',
   onProjectChange: vi.fn(),
   selectedStatus: 'pending' as Training['status'],
@@ -38,12 +33,10 @@ const baseProps = {
   trainingTags: [] as string[],
   onTagsChange: vi.fn(),
   configs,
-  datasets,
   projects,
   error: null as string | null,
   success: null as string | null,
   loadingConfigs: false,
-  loadingDatasets: false,
   loadingProjects: false
 };
 
@@ -109,5 +102,24 @@ describe('TrainingFormDialog', () => {
     const [projectSelect] = screen.getAllByRole('combobox');
     await userEvent.click(projectSelect);
     expect(await screen.findByText('Project One')).toBeInTheDocument();
+  });
+
+  it('shows the dataset the pipeline reported, read-only', async () => {
+    render(<TrainingFormDialog {...baseProps} selectedDatasetId="d1" />);
+
+    const field = screen.getByLabelText('Dataset Analysis');
+    expect(field).toHaveValue('d1');
+    expect(field).toHaveAttribute('readonly');
+    await userEvent.type(field, 'x');
+    expect(field).toHaveValue('d1');
+  });
+
+  it('leaves the dataset field empty for a run that has none, and never offers a picker for it', () => {
+    render(<TrainingFormDialog {...baseProps} selectedDatasetId="" />);
+
+    expect(screen.getByLabelText('Dataset Analysis')).toHaveValue('');
+    // A plain field, not one of the dialog's pickers.
+    expect(screen.getByRole('textbox', { name: 'Dataset Analysis' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /dataset/i })).not.toBeInTheDocument();
   });
 });

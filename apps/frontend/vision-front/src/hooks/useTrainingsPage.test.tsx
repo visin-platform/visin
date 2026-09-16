@@ -22,6 +22,7 @@ vi.mock('../contexts/AuthContext', () => ({
 vi.mock('../services/trainingService', () => ({
   trainingService: {
     getTrainings: vi.fn(),
+    getTrainingTags: vi.fn(),
     createTraining: vi.fn(),
     updateTraining: vi.fn(),
     deleteTraining: vi.fn(),
@@ -83,6 +84,7 @@ beforeEach(() => {
     data: { trainings: [makeTraining()], pagination: { page: 1, limit: 100, total: 1, pages: 1 } },
   } as never);
   mockedConfig.getAllConfigs.mockResolvedValue({ success: true, data: { configs: [] } } as never);
+  mockedTraining.getTrainingTags.mockResolvedValue({ success: true, data: ['a', 'b'] } as never);
   mockedProject.getProjects.mockResolvedValue({ success: true, data: [] } as never);
   mockedGetAllAnalyses.mockResolvedValue({ success: true, data: [] } as never);
 });
@@ -109,14 +111,22 @@ describe('useTrainingsPage', () => {
   });
 
   it('falls back to an empty tag list when loading tags fails', async () => {
-    mockedTraining.getTrainings.mockImplementation(() =>
-      Promise.reject(new Error('boom'))
-    );
+    mockedTraining.getTrainingTags.mockRejectedValue(new Error('boom'));
 
     const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
 
-    await waitFor(() => expect(mockedTraining.getTrainings).toHaveBeenCalled());
+    await waitFor(() => expect(mockedTraining.getTrainingTags).toHaveBeenCalled());
     await waitFor(() => expect(result.current.availableTags).toEqual([]));
+  });
+
+  it('reads the tags from their own endpoint, not by listing every training', async () => {
+    const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.availableTags).toEqual(['a', 'b']));
+    // The list call is the page's own, paginated; nothing asks for 1000 rows.
+    for (const [params] of mockedTraining.getTrainings.mock.calls) {
+      expect((params as { limit?: number } | undefined)?.limit ?? 0).toBeLessThanOrEqual(100);
+    }
   });
 
   it('debounces search and resets to page 0', async () => {

@@ -232,6 +232,33 @@ export const trainingService = {
     };
   },
 
+  /**
+   * Every tag in use on the runs this caller can see, for the tag pickers on
+   * the trainings screens.
+   *
+   * The forms used to build this client-side by listing 1000 trainings and
+   * collecting `tags` off the rows — which runs the epoch `$lookup` and the
+   * per-project costing pass over all 1000 to produce what is one `distinct`
+   * over a small field. The edit dialog awaited that before it would open.
+   */
+  async getTrainingTags(userId: string | undefined): Promise<string[]> {
+    const query: QueryFilter<ITraining> = { deletedAt: null };
+    if (tokenProjectId()) query.$and = [{ projectId: { $in: await getVisibleProjectIds(userId) } }];
+
+    // The same visible set getTrainings lists, standalone runs included.
+    const projectIds = await getVisibleProjectIds(userId);
+    query.$or = [
+      { projectId: { $in: projectIds } },
+      { projectId: { $exists: false } },
+      { projectId: null }
+    ];
+
+    const tags: unknown[] = await Training.distinct('tags', query);
+    return tags
+      .filter((tag): tag is string => typeof tag === 'string' && tag.length > 0)
+      .sort((a, b) => a.localeCompare(b));
+  },
+
   async getTrainingById(id: string, userId: string | undefined) {
     const training = await Training.findOne({ _id: id, deletedAt: null });
 
