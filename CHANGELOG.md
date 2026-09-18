@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.13.0](https://github.com/visin-platform/visin/compare/v1.12.0...v1.13.0) (2026-09-18)
+
+
+### Features
+
+* use internal urls for internal communications ([2f007f2](https://github.com/visin-platform/visin/commit/2f007f2821bdf091544ee4a79f9967d7c4d6fbc6))
+
 ## [1.12.0](https://github.com/visin-platform/visin/compare/v1.11.0...v1.12.0) (2026-09-18)
 
 
