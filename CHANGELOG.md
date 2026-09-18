@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.16.0](https://github.com/visin-platform/visin/compare/v1.15.0...v1.16.0) (2026-09-18)
+
+
+### Features
+
+* resume upload after cancel ([4955aba](https://github.com/visin-platform/visin/commit/4955aba4113463efe59b48409378bde6b3ef0f67))
+
+
+### Chores
+
+* **release:** @visin/frontend-core 1.7.0 ([bbcfb31](https://github.com/visin-platform/visin/commit/bbcfb311dbf83eb9a55571f309a0e84558fefb45))
+
 ## [1.15.0](https://github.com/visin-platform/visin/compare/v1.14.0...v1.15.0) (2026-09-18)
 
 
