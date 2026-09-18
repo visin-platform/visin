@@ -21,6 +21,7 @@ Copy `.env.example` to `.env` and set:
 - `JWT_SECRET`: shared JWT verification secret. Must match `auth-service`.
 - `CORS_ORIGIN`: comma-separated browser origins.
 - `FILE_SERVICE_URL`: file-service URL, usually `http://localhost:5002` locally.
+- `FILE_SERVICE_INTERNAL_URL` (optional): file-service on a private network, preferred for this service's own calls.
 - `FILE_SERVICE_API_KEY`: shared API key for calls to `file-service`.
 - `FILE_SERVICE_HMAC_SECRET`: shared HMAC secret for signed file URLs.
 

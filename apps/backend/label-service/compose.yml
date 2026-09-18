@@ -16,6 +16,7 @@ services:
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
       - GROUP_SERVICE_URL=${GROUP_SERVICE_URL}
       - FILE_SERVICE_URL=${FILE_SERVICE_URL}
+      - FILE_SERVICE_INTERNAL_URL=${FILE_SERVICE_INTERNAL_URL:-}
       - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}
       - CORS_ORIGIN=${CORS_ORIGIN}
       # Datasets — the images a job's tasks show — live in dataset-service.

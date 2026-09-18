@@ -150,7 +150,7 @@ services:
       <<: [*app-env, *file-creds]
       PORT: 4010
       # Internal: /internal/* calls, container to container.
-      FILE_SERVICE_URL: http://file-service:5002
+      FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       # Project editor groups are read from group-service on every signed-in request.
       GROUP_SERVICE_URL: http://group-service:5006
       # The MCP server OAuth access tokens must be minted for; unset, they are refused.
@@ -166,7 +166,7 @@ services:
       <<: [*app-env, *file-creds]
       PORT: 5008
       GROUP_SERVICE_URL: http://group-service:5006
-      FILE_SERVICE_URL: http://file-service:5002
+      FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       # The datasets a job's tasks are built from.
       DATASET_SERVICE_URL: http://dataset-service:5010
 
@@ -184,7 +184,7 @@ services:
       <<: [*app-env, *file-creds]
       PORT: 5010
       GROUP_SERVICE_URL: http://group-service:5006
-      FILE_SERVICE_URL: http://file-service:5002
+      FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       # The MCP server OAuth access tokens must be minted for; unset, they are refused.
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
       # Import queue; Redis is shared, deployed separately, reached over visinnet.

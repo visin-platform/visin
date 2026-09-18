@@ -19,7 +19,8 @@ Copy `.env.example` to `.env` and set:
 - `PORT`: HTTP port, usually `5002`.
 - `NODE_ENV`: `development` or `production`.
 - `FILE_SERVICE_DATA_DIR`: storage directory. In dev this is usually `./data`; Docker uses `/data`.
-- `FILE_SERVICE_URL`: externally reachable service URL used when generating URLs.
+- `FILE_SERVICE_URL`: externally reachable service URL used when generating URLs. Other services may reach
+  file-service at a private address instead (`FILE_SERVICE_INTERNAL_URL` in their config).
 - `FILE_SERVICE_API_KEY`: shared API key for internal callers.
 - `FILE_SERVICE_HMAC_SECRET`: secret used for signed URL HMAC validation.
 - `CORS_ORIGIN`: comma-separated browser origins.

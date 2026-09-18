@@ -82,3 +82,14 @@ it('stores, streams, measures, ranges and deletes files', async () => {
   expect(JSON.parse(fetchMock.mock.calls.at(-1)[1].body)).toEqual({ prefix: 'datasets/d/' });
   await expect(deleteFolder('datasets/d/')).rejects.toThrow('folder delete failed');
 });
+
+it('prefers the internal address, when one is set, over the public one', async () => {
+  process.env.FILE_SERVICE_INTERNAL_URL = 'http://file-service:5002/';
+  try {
+    fetchMock.mockResolvedValue(jsonResponse({ data: { uploadUrl: 'http://signed/put', expiresMs: 9 } }));
+    await getUploadUrl('a.zip', 1);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://file-service:5002/internal/upload-url');
+  } finally {
+    delete process.env.FILE_SERVICE_INTERNAL_URL;
+  }
+});

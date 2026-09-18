@@ -4,7 +4,7 @@ import { createHmac } from 'crypto';
 import express from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { errorHandler, optionalAuth } from '@visin/backend-core';
+import { BadGatewayError, errorHandler, optionalAuth } from '@visin/backend-core';
 import { checkMembership, getMyGroups } from '../../clients/groupServiceClient';
 import { enqueueImport, enqueueScan, removeQueuedImport } from '../../queue/importQueue';
 import { markScanFailed, runScan } from '../../services/scanService';
@@ -258,9 +258,22 @@ describe('archive upload, download and import', () => {
     fileStore.stored.set(fileId, Buffer.from('definitely not a zip file'));
     expect((await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER })).status).toBe(200);
 
-    await expect(runScan(id, fileId)).rejects.toBeInstanceOf(NonRetryableImportError);
+    await expect(runScan(id, fileId)).rejects.toThrow(/not a readable zip archive \(.+\)/);
     await markScanFailed(id, fileId, 'The uploaded file is not a readable zip archive');
     expect((await call(`/api/datasets/${id}`)).body.data.scan).toMatchObject({ status: 'failed', error: 'The uploaded file is not a readable zip archive' });
+  });
+
+  it('retries a scan file-service could not serve, instead of calling the zip unreadable', async () => {
+    const id = await createDataset();
+    const { fileId } = await uploadZip(id, [{ path: 'a.txt', data: Buffer.from('hi') }]);
+    jest.mocked(fileStore.client.getFileRange).mockRejectedValueOnce(new BadGatewayError('file-service ignored a Range request'));
+    const failure = await runScan(id, fileId).catch((err: Error) => err);
+    expect(failure).toBeInstanceOf(BadGatewayError);
+    expect(failure).not.toBeInstanceOf(NonRetryableImportError);
+    jest.mocked(fileStore.client.getFileRange).mockRejectedValueOnce(new TypeError('fetch failed'));
+    await expect(runScan(id, fileId)).rejects.toThrow('fetch failed');
+    await runScan(id, fileId);
+    expect((await call(`/api/datasets/${id}`)).body.data.scan.status).toBe('done');
   });
 
   it('ignores a scan whose archive has since been replaced, or whose file is gone', async () => {

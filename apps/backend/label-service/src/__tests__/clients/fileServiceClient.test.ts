@@ -36,3 +36,14 @@ describe('getDownloadUrls', () => {
     await expect(getDownloadUrls(['frame'])).rejects.toThrow('download-urls failed (503)');
   });
 });
+
+it('prefers the internal address, when one is set, over the public one', async () => {
+  process.env.FILE_SERVICE_INTERNAL_URL = 'http://file-service:5002/';
+  try {
+    fetchMock.mockResolvedValue(jsonResponse({ data: { urls: { a: 'u' }, expiresMs: 1 } }));
+    await getDownloadUrls(['a']);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://file-service:5002/internal/download-urls');
+  } finally {
+    delete process.env.FILE_SERVICE_INTERNAL_URL;
+  }
+});

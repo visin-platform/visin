@@ -112,3 +112,16 @@ describe('fileExists / getFileMetadata / listFiles / copyFile', () => {
   });
 
 });
+
+describe('file-service address', () => {
+  it('prefers the internal address, when one is set, over the public one', async () => {
+    process.env.FILE_SERVICE_INTERNAL_URL = 'http://file-service:5002/';
+    try {
+      mockFetch.mockResolvedValue(okJson({ success: true, data: { downloadUrl: 'http://dl', expiresMs: 1 } }));
+      await getSignedUrl('f1');
+      expect(mockFetch.mock.calls[0][0]).toBe('http://file-service:5002/internal/download-url');
+    } finally {
+      delete process.env.FILE_SERVICE_INTERNAL_URL;
+    }
+  });
+});
