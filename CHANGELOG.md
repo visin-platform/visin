@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.14.0](https://github.com/visin-platform/visin/compare/v1.13.0...v1.14.0) (2026-09-18)
+
+
+### Features
+
+* delete dataset images in background queue ([1e71a38](https://github.com/visin-platform/visin/commit/1e71a38a670117702c21c949137caada0b5c53f1))
+
 ## [1.13.0](https://github.com/visin-platform/visin/compare/v1.12.0...v1.13.0) (2026-09-18)
 
 
