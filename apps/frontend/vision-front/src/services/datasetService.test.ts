@@ -56,7 +56,7 @@ describe('datasetService', () => {
     const onProgress = vi.fn();
     expect(await service.uploadArchive('d1', file, onProgress)).toMatchObject({ _id: 'd1' });
     expect(api.post).toHaveBeenNthCalledWith(1, '/d1/archive/upload-url', { filename: 'set.zip', size: 3, lastModified: file.lastModified });
-    expect(uploadToSignedUrl).toHaveBeenCalledWith('https://files.test/up', file, onProgress);
+    expect(uploadToSignedUrl).toHaveBeenCalledWith('https://files.test/up', file, onProgress, undefined);
     expect(api.post).toHaveBeenNthCalledWith(2, '/d1/archive/complete');
   });
 

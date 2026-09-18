@@ -162,14 +162,14 @@ export const finishUpload = async (id: string) => (await datasetApi.post<Envelop
  * progress on to where it stopped — or, if every byte had arrived, there is
  * nothing to send.
  */
-export const uploadArchive = async (id: string, file: File, onProgress?: (fraction: number) => void) => {
+export const uploadArchive = async (id: string, file: File, onProgress?: (fraction: number) => void, signal?: AbortSignal) => {
   const { data } = await datasetApi.post<Envelope<{ uploadUrl?: string; uploaded: boolean }>>(`/${id}/archive/upload-url`, {
     filename: file.name,
     size: file.size,
     lastModified: file.lastModified
   });
   if (!data.uploaded && data.uploadUrl) {
-    await uploadToSignedUrl(data.uploadUrl, file, onProgress);
+    await uploadToSignedUrl(data.uploadUrl, file, onProgress, signal);
   }
   return finishUpload(id);
 };

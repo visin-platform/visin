@@ -9,7 +9,6 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
-  LinearProgress,
   MenuItem,
   Radio,
   RadioGroup,
@@ -31,8 +30,6 @@ interface DatasetFormDialogProps {
   mode: 'create' | 'edit' | 'replace';
   initial?: Partial<DatasetFields>;
   busy: boolean;
-  /** 0–1 while zip bytes are going up; null otherwise */
-  uploadProgress: number | null;
   error?: string | null;
   /** replace mode, for an interrupted upload: the file to choose again to continue it */
   resume?: { filename: string; size?: number };
@@ -44,11 +41,11 @@ const TITLES = { create: 'New dataset', edit: 'Edit dataset', replace: 'Replace 
 const SUBMIT = { create: 'Create and upload', edit: 'Save', replace: 'Upload' } as const;
 
 /**
- * Create a dataset (details + zip), edit its details, or replace its zip.
- * One dialog because the three share the upload progress display, and a
- * multi-GB upload needs a real progress bar, not a spinner.
+ * Create a dataset (details + zip), edit its details, or replace its zip. One
+ * dialog because the three share their fields. It only collects the choice: the
+ * upload itself runs in the corner (UploadPanel), so the dialog closes at once.
  */
-const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initial, busy, uploadProgress, error, resume, onCancel, onSubmit }) => {
+const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initial, busy, error, resume, onCancel, onSubmit }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [visibility, setVisibility] = useState<DatasetVisibility>('public');
@@ -97,8 +94,6 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
     });
   };
 
-  const sendingBytes = uploadProgress !== null && uploadProgress < 1;
-  const percent = Math.round((uploadProgress ?? 0) * 100);
 
   return (
     <Dialog open={open} onClose={busy ? undefined : onCancel} maxWidth="sm" fullWidth>
@@ -166,27 +161,8 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
                 </Button>
                 <input ref={fileInput} type="file" accept=".zip,application/zip" hidden onChange={chooseFile} data-testid="dataset-zip-input" />
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
-                  The whole zip stays downloadable. After upload you choose which folders to show as images.
-                </Typography>
-              </Box>
-            )}
-            {busy && file && (
-              <Box data-testid="upload-progress">
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    {sendingBytes ? 'Uploading zip…' : 'Finishing the upload…'}
-                  </Typography>
-                  {sendingBytes && (
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      {percent}% of {formatBytes(file.size)}
-                    </Typography>
-                  )}
-                </Box>
-                <LinearProgress variant={sendingBytes ? 'determinate' : 'indeterminate'} value={sendingBytes ? percent : undefined} />
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
-                  Keep this page open until the upload finishes. If it is interrupted, choose the same zip again to continue.
-                  Once it has finished you can close the page — reading the zip and importing its images happen on the
-                  server.
+                  The zip uploads in the corner of the page, so you can keep working. It stays downloadable whole;
+                  once it is up you choose which folders to show as images.
                 </Typography>
               </Box>
             )}

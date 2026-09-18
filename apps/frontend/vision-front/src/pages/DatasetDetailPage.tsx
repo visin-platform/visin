@@ -33,7 +33,6 @@ import ImportMappingDialog from '../components/dataset/ImportMappingDialog';
 import ImportStatusPanel from '../components/dataset/ImportStatusPanel';
 import RemoveGroupDialog from '../components/dataset/RemoveGroupDialog';
 import { useDatasetDownload } from '../hooks/useDatasetDownload';
-import { useWarnOnLeave } from '../hooks/useWarnOnLeave';
 import { usePageTitle } from '../hooks/usePageTitle';
 import {
   cancelImport,
@@ -47,9 +46,9 @@ import {
   scanArchive,
   setCover,
   startImport,
-  updateDataset,
-  uploadArchive
+  updateDataset
 } from '../services/datasetService';
+import { isActive, startUpload, useDatasetUpload } from '../services/datasetUploads';
 import { formatBytes } from '../utils/datasetMapping';
 import { formatDateTime } from '../utils';
 
@@ -74,14 +73,14 @@ const DatasetDetailPage: React.FC = () => {
 
   const [dialog, setDialog] = useState<DialogName>(null);
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(arrival?.uploadError ?? null);
   const [openItem, setOpenItem] = useState<DatasetItem | null>(null);
   // Choosing image groups needs the zip's contents, which a background scan
   // fills in after an upload — so the dialog waits for them.
   const [mapWhenReady, setMapWhenReady] = useState(Boolean(arrival?.chooseGroups));
   const { downloadingId, download } = useDatasetDownload(setActionError);
-  useWarnOnLeave(progress !== null);
+  const upload = useDatasetUpload(id);
+  const sending = isActive(upload);
 
   const { data: dataset, isLoading, error } = useQuery({
     queryKey: ['dataset', id],
@@ -100,14 +99,14 @@ const DatasetDetailPage: React.FC = () => {
 
   // After an upload, go on to choosing image groups once the zip has been read.
   useEffect(() => {
-    if (!mapWhenReady || !dataset) return;
-    if (dataset.scan?.status === 'failed' || !dataset.canWrite) {
+    if (!mapWhenReady || !dataset || sending) return;
+    if (dataset.scan?.status === 'failed' || !dataset.canWrite || upload?.status === 'failed' || upload?.status === 'cancelled') {
       setMapWhenReady(false);
     } else if (dataset.contents && !isScanning(dataset) && !isImporting(dataset)) {
       setMapWhenReady(false);
       setDialog('mapping');
     }
-  }, [mapWhenReady, dataset]);
+  }, [mapWhenReady, dataset, sending, upload?.status]);
 
   // When an import finishes, the grid's pages are out of date.
   // Primitive deps: polling during an import hands back a new dataset object
@@ -150,19 +149,18 @@ const DatasetDetailPage: React.FC = () => {
       setActionError(errorText(err, fallback));
     } finally {
       setBusy(false);
-      setProgress(null);
     }
   };
 
   const handleEdit = ({ name, description, visibility, groupId }: DatasetFormValues) =>
     run(async () => refresh(await updateDataset(id, { name, description, visibility, groupId })), 'Failed to save');
 
+  // The upload runs in the corner; the dialog closes at once.
   const handleReplace = ({ file }: DatasetFormValues) =>
     run(async () => {
-      setProgress(0);
-      refresh(await uploadArchive(id, file!, setProgress));
+      startUpload(dataset!, file!, queryClient);
       setMapWhenReady(true);
-    }, 'Failed to upload zip');
+    }, 'Failed to start the upload');
 
   const [coverBusy, setCoverBusy] = useState(false);
   const handleSetCover = async (item: DatasetItem | null) => {
@@ -251,16 +249,16 @@ const DatasetDetailPage: React.FC = () => {
           )}
           {dataset.canWrite && (
             <>
-              <Button variant="outlined" startIcon={<MappingIcon />} onClick={() => openDialog('mapping')} disabled={!dataset.contents || importing || scanning || held} title={heldReason}>
+              <Button variant="outlined" startIcon={<MappingIcon />} onClick={() => openDialog('mapping')} disabled={!dataset.contents || importing || scanning || sending || held} title={heldReason}>
                 Image groups
               </Button>
-              <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => openDialog('replace')} disabled={importing || scanning || held} title={heldReason}>
+              <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => openDialog('replace')} disabled={importing || scanning || sending || held} title={heldReason}>
                 {dataset.archive ? 'Replace zip' : 'Upload zip'}
               </Button>
               <Button variant="outlined" startIcon={<EditIcon />} onClick={() => openDialog('edit')}>
                 Edit
               </Button>
-              <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => openDialog('delete')} disabled={held} title={heldReason}>
+              <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => openDialog('delete')} disabled={held || sending} title={heldReason}>
                 Delete
               </Button>
             </>
@@ -274,7 +272,17 @@ const DatasetDetailPage: React.FC = () => {
         </Alert>
       )}
 
-      {dataset.uploading && dataset.canWrite && !busy && (
+      {sending && (
+        <Alert severity="info" icon={<CircularProgress size={20} />} sx={{ mb: 3 }}>
+          {upload!.status === 'finishing'
+            ? `Finishing the upload of ${upload!.filename}…`
+            : `Uploading ${upload!.filename} — ${Math.round(upload!.progress * 100)}%.`}{' '}
+          You can keep using the site; progress stays in the corner. Keep this tab open until it is done.
+        </Alert>
+      )}
+
+      {/* An upload this tab still holds is resumed from the corner, with the file in hand. */}
+      {dataset.uploading && dataset.canWrite && !busy && (!upload || upload.status === 'done') && (
         <Alert
           severity="warning"
           sx={{ mb: 3 }}
@@ -389,7 +397,6 @@ const DatasetDetailPage: React.FC = () => {
         mode={dialog === 'replace' ? 'replace' : 'edit'}
         initial={formInitial}
         busy={busy}
-        uploadProgress={progress}
         error={actionError}
         resume={dataset.uploading}
         onCancel={() => setDialog(null)}

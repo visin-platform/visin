@@ -15,7 +15,32 @@ const MAX_CHUNK_ATTEMPTS = 5;
 /** Pause before a retry: 1 s, 2 s, 4 s, 8 s — long enough for a request the server is still finishing to let go. */
 export const retryDelayMs = (attempt: number): number => 1000 * 2 ** (attempt - 1);
 
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/** Thrown when the caller stopped the upload — never retried. */
+export class UploadCancelledError extends Error {
+  constructor() {
+    super('Upload cancelled');
+    this.name = 'UploadCancelledError';
+  }
+}
+
+const wait = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    // Cancelled while the failed request was still settling: don't start the pause at all.
+    if (signal?.aborted) {
+      reject(new UploadCancelledError());
+      return;
+    }
+    const timer = setTimeout(done, ms);
+    function done() {
+      signal?.removeEventListener('abort', stop);
+      resolve();
+    }
+    function stop() {
+      clearTimeout(timer);
+      reject(new UploadCancelledError());
+    }
+    signal?.addEventListener('abort', stop, { once: true });
+  });
 
 interface ChunkResult {
   status: number;
@@ -46,10 +71,17 @@ const putChunk = (
   body: Blob,
   contentRange: string | null,
   contentType: string,
-  onLoaded: (loaded: number) => void
+  onLoaded: (loaded: number) => void,
+  signal?: AbortSignal
 ): Promise<ChunkResult> =>
   new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new UploadCancelledError());
+      return;
+    }
     const xhr = new XMLHttpRequest();
+    const cancel = () => xhr.abort();
+    signal?.addEventListener('abort', cancel, { once: true });
     xhr.open('PUT', uploadUrl);
     xhr.setRequestHeader('Content-Type', contentType);
     if (contentRange) {
@@ -60,9 +92,19 @@ const putChunk = (
         onLoaded(event.loaded);
       }
     };
-    xhr.onload = () => resolve({ status: xhr.status, size: parseStoredSize(xhr.responseText) });
-    xhr.onerror = () => reject(new Error('Failed to upload dataset file (network)'));
-    xhr.onabort = () => reject(new Error('Dataset upload cancelled'));
+    const settle = () => signal?.removeEventListener('abort', cancel);
+    xhr.onload = () => {
+      settle();
+      resolve({ status: xhr.status, size: parseStoredSize(xhr.responseText) });
+    };
+    xhr.onerror = () => {
+      settle();
+      reject(new Error('Failed to upload dataset file (network)'));
+    };
+    xhr.onabort = () => {
+      settle();
+      reject(new UploadCancelledError());
+    };
     xhr.send(body);
   });
 
@@ -82,7 +124,9 @@ const putChunk = (
 export const uploadToSignedUrl = async (
   uploadUrl: string,
   file: File,
-  onProgress?: (fraction: number) => void
+  onProgress?: (fraction: number) => void,
+  /** stops the upload; it rejects with UploadCancelledError */
+  signal?: AbortSignal
 ): Promise<void> => {
   const contentType = file.type || 'application/octet-stream';
   const report = (fraction: number): void => onProgress?.(Math.min(1, fraction));
@@ -90,8 +134,13 @@ export const uploadToSignedUrl = async (
   // Small archives stay a single request: fewer round trips, and it exercises
   // the same un-chunked server path that non-browser clients use.
   if (file.size <= CHUNK_BYTES) {
-    const { status } = await putChunk(uploadUrl, file, null, contentType, (loaded) =>
-      report(file.size === 0 ? 1 : loaded / file.size)
+    const { status } = await putChunk(
+      uploadUrl,
+      file,
+      null,
+      contentType,
+      (loaded) => report(file.size === 0 ? 1 : loaded / file.size),
+      signal
     );
     if (status < 200 || status >= 300) {
       throw new Error(`Failed to upload dataset file (${status})`);
@@ -114,16 +163,18 @@ export const uploadToSignedUrl = async (
         file.slice(chunkStart, end),
         `bytes ${chunkStart}-${end - 1}/${file.size}`,
         contentType,
-        (loaded) => report((chunkStart + loaded) / file.size)
+        (loaded) => report((chunkStart + loaded) / file.size),
+        signal
       );
     } catch (err) {
+      if (err instanceof UploadCancelledError) throw err;
       // Dropped mid-chunk. Re-sending the same range is safe: it either lands,
       // or answers 409 with how far the server actually got.
       attempts += 1;
       if (attempts >= MAX_CHUNK_ATTEMPTS) {
         throw err;
       }
-      await wait(retryDelayMs(attempts));
+      await wait(retryDelayMs(attempts), signal);
       continue;
     }
 
@@ -146,7 +197,7 @@ export const uploadToSignedUrl = async (
       if (!retryable || attempts >= MAX_CHUNK_ATTEMPTS) {
         throw new Error(`Failed to upload dataset file (${result.status})`);
       }
-      await wait(retryDelayMs(attempts));
+      await wait(retryDelayMs(attempts), signal);
       continue;
     }
 

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CHUNK_BYTES, retryDelayMs, uploadToSignedUrl } from './chunkedUpload';
+import { CHUNK_BYTES, retryDelayMs, UploadCancelledError, uploadToSignedUrl } from './chunkedUpload';
 
 interface FakeXhr {
   open: ReturnType<typeof vi.fn>;
   setRequestHeader: ReturnType<typeof vi.fn>;
   send: ReturnType<typeof vi.fn>;
+  abort: ReturnType<typeof vi.fn>;
   upload: { onprogress?: (e: { lengthComputable: boolean; loaded: number }) => void };
   onload?: () => void;
   onerror?: () => void;
@@ -17,6 +18,7 @@ const makeXhr = (): FakeXhr => ({
   open: vi.fn(),
   setRequestHeader: vi.fn(),
   send: vi.fn(),
+  abort: vi.fn(),
   upload: {},
   status: 200,
   responseText: ''
@@ -222,6 +224,27 @@ describe('uploadToSignedUrl', () => {
     await promise;
 
     expect(rangeOf(last)).toBe(`bytes ${CHUNK_BYTES}-${total - 1}/${total}`);
+  });
+
+  it('stops at once when cancelled — mid-chunk, while waiting to retry, or before starting', async () => {
+    const created = stubXhrQueue();
+    const controller = new AbortController();
+    const promise = uploadToSignedUrl('http://upload', makeFile(CHUNK_BYTES * 2), undefined, controller.signal);
+    const failed = expect(promise).rejects.toBeInstanceOf(UploadCancelledError);
+    const xhr = await waitFor(created, 0);
+    xhr.abort = vi.fn(() => xhr.onabort!());
+    controller.abort();
+    await failed;
+    expect(xhr.abort).toHaveBeenCalled();
+
+    const waiting = new AbortController();
+    const retrying = uploadToSignedUrl('http://upload', makeFile(CHUNK_BYTES * 2), undefined, waiting.signal);
+    const stopped = expect(retrying).rejects.toBeInstanceOf(UploadCancelledError);
+    (await waitFor(created, 1)).onerror!();
+    waiting.abort();
+    await stopped;
+
+    await expect(uploadToSignedUrl('http://upload', makeFile(10), undefined, controller.signal)).rejects.toBeInstanceOf(UploadCancelledError);
   });
 
   it('pauses longer before each consecutive retry', () => {

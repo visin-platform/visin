@@ -12,6 +12,7 @@ vi.mock('../services/datasetService', () => service);
 const useAuthMock = vi.hoisted(() => vi.fn());
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => useAuthMock() }));
 
+import { resetDatasetUploads } from '../services/datasetUploads';
 import DatasetsPage from './DatasetsPage';
 import { renderWithClient } from '../test/renderWithClient';
 
@@ -31,6 +32,7 @@ const submitCreate = async (file = new File(['zip'], 'vlm.zip')) => {
 describe('DatasetsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetDatasetUploads();
     useAuthMock.mockReturnValue({ isAuthenticated: true });
     service.listDatasets.mockResolvedValue({
       datasets: [
@@ -80,7 +82,7 @@ describe('DatasetsPage', () => {
     const file = await submitCreate();
     await waitFor(() => expect(screen.getByTestId('elsewhere')).toBeInTheDocument());
     expect(service.createDataset).toHaveBeenCalledWith({ name: 'vlm', description: '', visibility: 'public', groupId: undefined });
-    expect(service.uploadArchive).toHaveBeenCalledWith('new', file, expect.any(Function));
+    expect(service.uploadArchive).toHaveBeenCalledWith('new', file, expect.any(Function), expect.any(AbortSignal));
   });
 
   it('shows a refused create, and leaves a failed upload to the dataset page', async () => {

@@ -18,6 +18,7 @@ const service = vi.hoisted(() => ({
 }));
 vi.mock('../services/datasetService', () => service);
 
+import { resetDatasetUploads } from '../services/datasetUploads';
 import DatasetDetailPage from './DatasetDetailPage';
 import { renderWithClient } from '../test/renderWithClient';
 
@@ -41,6 +42,7 @@ describe('DatasetDetailPage', () => {
   beforeEach(() => {
     // reset, not clear: a test's unconsumed mockResolvedValueOnce must not reach the next one
     vi.resetAllMocks();
+    resetDatasetUploads();
     service.getDataset.mockResolvedValue(dataset());
     service.listItems.mockResolvedValue({ items: [], pagination: { page: 1, limit: 60, total: 0, pages: 0 } });
     service.listMyGroups.mockResolvedValue([]);
@@ -192,7 +194,7 @@ describe('DatasetDetailPage', () => {
     const file = new File(['z'], 'zod.zip');
     fireEvent.change(within(dialog).getByTestId('dataset-zip-input'), { target: { files: [file] } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Upload' }));
-    await waitFor(() => expect(service.uploadArchive).toHaveBeenCalledWith('d1', file, expect.any(Function)));
+    await waitFor(() => expect(service.uploadArchive).toHaveBeenCalledWith('d1', file, expect.any(Function), expect.any(AbortSignal)));
     expect(await screen.findByText(/you can leave this page/)).toBeInTheDocument();
   });
 

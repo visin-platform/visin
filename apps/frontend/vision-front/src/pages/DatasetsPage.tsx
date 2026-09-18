@@ -23,10 +23,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useDatasetDownload } from '../hooks/useDatasetDownload';
-import { useWarnOnLeave } from '../hooks/useWarnOnLeave';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DatasetFormDialog, { DatasetFormValues } from '../components/dataset/DatasetFormDialog';
-import { createDataset, Dataset, listDatasets, uploadArchive } from '../services/datasetService';
+import { createDataset, Dataset, listDatasets } from '../services/datasetService';
+import { isActive, useDatasetUpload, startUpload } from '../services/datasetUploads';
 import { formatBytes } from '../utils/datasetMapping';
 import { formatDate } from '../utils';
 
@@ -34,6 +34,8 @@ const PAGE_SIZE = 24;
 
 const DatasetCard: React.FC<{ dataset: Dataset; downloading: boolean; onDownload: () => void }> = ({ dataset, downloading, onDownload }) => {
   const navigate = useNavigate();
+  const upload = useDatasetUpload(dataset._id);
+  const sending = isActive(upload);
   return (
     <Card variant="outlined" sx={{ display: 'flex', flexDirection: 'column', borderRadius: 2 }}>
       <CardActionArea onClick={() => navigate(`/datasets/${dataset._id}`)} sx={{ flexGrow: 1, alignItems: 'stretch' }}>
@@ -61,7 +63,8 @@ const DatasetCard: React.FC<{ dataset: Dataset; downloading: boolean; onDownload
       </CardActionArea>
       <Stack direction="row" spacing={1} sx={{ px: 2, pb: 1.5, alignItems: 'center' }}>
         {dataset.visibility === 'group' && <Chip size="small" label="Group" />}
-        {dataset.uploading && <Chip size="small" color="warning" label="Upload interrupted" />}
+        {sending && <Chip size="small" color="info" label={`Uploading ${Math.round(upload!.progress * 100)}%`} />}
+        {dataset.uploading && !sending && <Chip size="small" color="warning" label="Upload interrupted" />}
         {(dataset.scan?.status === 'queued' || dataset.scan?.status === 'running') && <Chip size="small" color="info" label="Reading zip" />}
         {dataset.scan?.status === 'failed' && !dataset.contents && <Chip size="small" color="error" label="Unreadable zip" />}
         {dataset.import && (dataset.import.status === 'queued' || dataset.import.status === 'running') && <Chip size="small" color="info" label="Importing" />}
@@ -90,10 +93,8 @@ export const DatasetsPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { downloadingId, download } = useDatasetDownload(setError);
-  useWarnOnLeave(progress !== null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -110,28 +111,21 @@ export const DatasetsPage: React.FC = () => {
   });
 
   // Create the record first, then upload: anything the server refuses (a bad
-  // name, no access to the group) fails before a multi-GB transfer starts.
+  // name, no access to the group) fails before a multi-GB transfer starts. The
+  // transfer itself runs in the corner, so the dataset's page opens at once.
   const handleCreate = async ({ file, ...fields }: DatasetFormValues) => {
     setBusy(true);
     setError(null);
-    let created: Dataset | undefined;
     try {
-      created = await createDataset(fields);
-      setProgress(0);
-      await uploadArchive(created._id, file!, setProgress);
+      const created = await createDataset(fields);
+      startUpload(created, file!, queryClient);
+      setCreating(false);
       await queryClient.invalidateQueries({ queryKey: ['datasets'] });
       navigate(`/datasets/${created._id}`, { state: { chooseGroups: true } });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create dataset';
-      if (created) {
-        // The dataset exists; its page offers the upload again.
-        navigate(`/datasets/${created._id}`, { state: { uploadError: message } });
-      } else {
-        setError(message);
-      }
+      setError(err instanceof Error ? err.message : 'Failed to create dataset');
     } finally {
       setBusy(false);
-      setProgress(null);
     }
   };
 
@@ -186,7 +180,6 @@ export const DatasetsPage: React.FC = () => {
         open={creating}
         mode="create"
         busy={busy}
-        uploadProgress={progress}
         onCancel={() => setCreating(false)}
         onSubmit={handleCreate}
       />

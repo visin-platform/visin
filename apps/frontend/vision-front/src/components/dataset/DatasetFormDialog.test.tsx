@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const listMyGroups = vi.hoisted(() => vi.fn());
@@ -18,7 +18,7 @@ describe('DatasetFormDialog', () => {
 
   it('creates: needs a zip, names itself after it, and shares with a chosen group', async () => {
     const onSubmit = vi.fn();
-    renderWithClient(<DatasetFormDialog open mode="create" busy={false} uploadProgress={null} onCancel={vi.fn()} onSubmit={onSubmit} />);
+    renderWithClient(<DatasetFormDialog open mode="create" busy={false} onCancel={vi.fn()} onSubmit={onSubmit} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Create and upload' }));
     expect(screen.getByText('Choose a .zip file')).toBeInTheDocument();
@@ -49,7 +49,7 @@ describe('DatasetFormDialog', () => {
   it('edits details without a file, and requires a name', async () => {
     const onSubmit = vi.fn();
     renderWithClient(
-      <DatasetFormDialog open mode="edit" initial={{ name: 'ZOD', visibility: 'public' }} busy={false} uploadProgress={null} error="Server said no" onCancel={vi.fn()} onSubmit={onSubmit} />
+      <DatasetFormDialog open mode="edit" initial={{ name: 'ZOD', visibility: 'public' }} busy={false} error="Server said no" onCancel={vi.fn()} onSubmit={onSubmit} />
     );
     expect(screen.getByText('Server said no')).toBeInTheDocument();
     expect(screen.queryByTestId('dataset-zip-input')).not.toBeInTheDocument();
@@ -61,16 +61,14 @@ describe('DatasetFormDialog', () => {
     expect(onSubmit).toHaveBeenCalledWith({ name: 'ZOD v2', description: '', visibility: 'public', groupId: undefined, file: undefined });
   });
 
-  it('replaces a zip with a progress bar while bytes go up', async () => {
+  it('asks only for the zip when replacing one', async () => {
     const onCancel = vi.fn();
-    const { rerender } = renderWithClient(<DatasetFormDialog open mode="replace" busy={false} uploadProgress={null} onCancel={onCancel} onSubmit={vi.fn()} />);
+    renderWithClient(<DatasetFormDialog open mode="replace" busy={false} onCancel={onCancel} onSubmit={vi.fn()} />);
     expect(screen.queryByLabelText(/Name/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByTestId('dataset-zip-input'), { target: { files: [zipFile()] } });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onCancel).toHaveBeenCalled();
     expect(listMyGroups).not.toHaveBeenCalled();
-    rerender(<DatasetFormDialog open mode="replace" busy uploadProgress={0.25} onCancel={onCancel} onSubmit={vi.fn()} />);
-    await waitFor(() => expect(screen.getByTestId('upload-progress')).toBeInTheDocument());
-    expect(screen.getByText(/Keep this page open until the upload finishes/)).toBeInTheDocument();
+    expect(screen.getByText(/uploads in the corner of the page/)).toBeInTheDocument();
   });
 });
