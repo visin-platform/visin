@@ -56,9 +56,11 @@ export const createDatasetAccess = (userId?: string): DatasetAccess => {
       return member && (role === 'owner' || role === 'admin');
     },
     async readableFilter() {
-      if (!userId) return { visibility: 'public' };
+      // A dataset being deleted is gone as far as any reader is concerned.
+      if (!userId) return { visibility: 'public', deletingAt: { $exists: false } };
       const myGroups = await groups.getMyGroups(userId);
       return {
+        deletingAt: { $exists: false },
         $or: [
           { visibility: 'public' },
           { ownerId: userId },
@@ -72,7 +74,7 @@ export const createDatasetAccess = (userId?: string): DatasetAccess => {
 /** The dataset, or 404 — also for a malformed id, which can name nothing. */
 export const findDataset = async (id: string, withManifest = false): Promise<IDataset> => {
   if (!/^[0-9a-fA-F]{24}$/.test(id)) throw new NotFoundError('Dataset not found');
-  const query = Dataset.findById(id);
+  const query = Dataset.findOne({ _id: id, deletingAt: { $exists: false } });
   const dataset = await (withManifest ? query.select('+manifest') : query);
   if (!dataset) throw new NotFoundError('Dataset not found');
   return dataset;

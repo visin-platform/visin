@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() }));
+const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() }));
 vi.mock('../config/datasetApi', () => ({ datasetApi: api }));
 vi.mock('../utils/chunkedUpload', () => ({ uploadToSignedUrl: vi.fn() }));
 
@@ -41,6 +41,11 @@ describe('datasetService', () => {
     expect(api.post).toHaveBeenLastCalledWith('/d1/import', { groups: [{ folder: 'a', group: 'a' }] });
     await service.cancelImport('d1');
     expect(api.delete).toHaveBeenLastCalledWith('/d1/import');
+    await service.removeGroup('d1', 'lidar png');
+    expect(api.delete).toHaveBeenLastCalledWith('/d1/groups/lidar%20png');
+    api.put.mockResolvedValue({ data: { _id: 'd1' } });
+    await service.setCover('d1', 'i1');
+    expect(api.put).toHaveBeenLastCalledWith('/d1/cover', { itemId: 'i1' });
     await service.scanArchive('d1');
     expect(api.post).toHaveBeenLastCalledWith('/d1/archive/scan');
   });

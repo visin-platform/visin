@@ -64,7 +64,8 @@ export async function* readZipEntries(
   source: Readable,
   limits: ZipLimits,
   shouldRead: (path: string) => boolean,
-  onInput?: () => Promise<void>
+  /** called as the zip is copied to disk, with the bytes copied so far */
+  onInput?: (copiedBytes: number) => Promise<void>
 ): AsyncGenerator<ZipData> {
   let sourceError: Error | undefined;
   // The download may fail while the temporary directory is being created.
@@ -87,7 +88,7 @@ export async function* readZipEntries(
           if (inputBytes > limits.inputBytes) {
             throw new NonRetryableImportError(`Zip input exceeds ${limits.inputBytes} bytes`);
           }
-          await onInput?.();
+          await onInput?.(inputBytes);
           yield chunk;
         }
       },

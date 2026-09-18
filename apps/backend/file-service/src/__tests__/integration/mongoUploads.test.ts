@@ -7,7 +7,7 @@ import { useMongo } from '../helpers/mongo';
 import { FileUpload } from '../../models/FileUpload';
 import { openUploadStore, readUploadState, uploadLocation, UPLOAD_LEASE_MS } from '../../services/uploadStore';
 import { reserveFileUpload, uploadFile } from '../../services/uploadService';
-import { deleteFile, fileExists, getMetadata, listFiles, openRead, readFile, writeFile } from '../../utils/storage';
+import { deleteByPrefix, deleteFile, deleteFiles, fileExists, getMetadata, listFiles, openRead, readFile, writeFile } from '../../utils/storage';
 
 useMongo();
 let directory: string;
@@ -206,4 +206,32 @@ it('closes descriptors on range selection failure and retries a collected snapsh
     return original(...args);
   });
   expect(await readFile('test.png')).toEqual(png);
+});
+
+it('retires a folder of managed files in bulk, leaving legacy and busy files to one-by-one deletion', async () => {
+  for (const name of ['a', 'b', 'c']) await uploadFile(`set/${name}.png`, send(), { internal: true });
+  writeFile('set/legacy.png', png);
+  const busy = await openUploadStore('set/c.png');
+  const deleting = deleteByPrefix('set/');
+  // c.png is being written: bulk retirement passes it over and deleteFile waits for no one.
+  await expect(deleting).rejects.toThrow('Another upload');
+  await busy.close();
+  expect((await readUploadState('set/a.png'))?.status).toBe('retired');
+  expect(fs.existsSync(uploadLocation('set/a.png').directory)).toBe(false);
+  expect(await fileExists('set/a.png')).toBe(false);
+  expect(await readFile('set/c.png')).toEqual(png);
+
+  await deleteByPrefix('set/');
+  expect(await listFiles('set')).toEqual([]);
+  expect((await readUploadState('set/legacy.png'))?.status).toBe('retired');
+  await expect(uploadFile('set/a.png', send(), { internal: true })).rejects.toThrow('cannot be overwritten');
+});
+
+it('deletes named files only, managed and legacy, leaving their neighbours', async () => {
+  for (const name of ['a', 'b', 'keep']) await uploadFile(`set/${name}.png`, send(), { internal: true });
+  writeFile('set/legacy.png', png);
+  await deleteFiles(['set/a.png', 'set/b.png', 'set/a.png', 'set/legacy.png']);
+  expect((await listFiles('set')).map((file) => file.name)).toEqual(['set/keep.png']);
+  expect((await readUploadState('set/b.png'))?.status).toBe('retired');
+  await expect(deleteFiles(['../escape.png'])).rejects.toThrow('escapes');
 });

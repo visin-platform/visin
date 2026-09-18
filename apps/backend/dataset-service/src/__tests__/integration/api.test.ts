@@ -6,7 +6,8 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { BadGatewayError, errorHandler, optionalAuth } from '@visin/backend-core';
 import { checkMembership, getMyGroups } from '../../clients/groupServiceClient';
-import { enqueueImport, enqueueScan, removeQueuedImport } from '../../queue/importQueue';
+import { enqueueDelete, enqueueImport, enqueueRemoveGroup, enqueueScan, removeQueuedImport } from '../../queue/importQueue';
+import { resumeDeletions, runDelete, runRemoveGroup } from '../../services/deleteService';
 import { markScanFailed, runScan } from '../../services/scanService';
 import { NonRetryableImportError } from '../../utils/boundedZip';
 import { Dataset } from '../../models/Dataset';
@@ -18,7 +19,7 @@ import { zip } from '../fixtures/zip';
 
 jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
 jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(), getMyGroups: jest.fn() }));
-jest.mock('../../queue/importQueue', () => ({ enqueueImport: jest.fn(), enqueueScan: jest.fn(), removeQueuedImport: jest.fn() }));
+jest.mock('../../queue/importQueue', () => ({ enqueueImport: jest.fn(), enqueueScan: jest.fn(), enqueueDelete: jest.fn(), enqueueRemoveGroup: jest.fn(), removeQueuedImport: jest.fn() }));
 
 const OWNER = '000000000000000000000001';
 const MEMBER = '000000000000000000000002';
@@ -335,11 +336,41 @@ describe('holds', () => {
     await DatasetItem.create({ datasetId: id, group: 'g', path: 'p.png', stem: 'p', kind: 'image', size: 1 });
     await Dataset.updateOne({ _id: id }, { $set: { 'import.id': 'i', 'import.status': 'queued' } });
     expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: STRANGER })).status).toBe(403);
-    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER })).status).toBe(200);
+    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER })).status).toBe(202);
     expect(removeQueuedImport).toHaveBeenCalledWith('i');
+    expect(enqueueDelete).toHaveBeenCalledWith({ datasetId: id });
+
+    // Gone for every reader at once, and no longer claimable; the files wait for the worker.
+    expect((await call(`/api/datasets/${id}`)).status).toBe(404);
+    expect((await call('/api/datasets')).body.data.datasets).toEqual([]);
+    expect((await call(`/internal/datasets/${id}/holds/label-service/job2`, { method: 'PUT', internal: true })).status).toBe(404);
+    expect((await Dataset.findById(id).lean())?.import?.status).toBe('cancelled');
+    expect(fileStore.stored.has(fileId)).toBe(true);
+    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER })).status).toBe(404);
+
+    expect(await resumeDeletions()).toBe(1);
+    await runDelete(id);
     expect(fileStore.stored.has(fileId)).toBe(false);
     expect(await DatasetItem.countDocuments({ datasetId: id })).toBe(0);
-    expect((await call(`/api/datasets/${id}`)).status).toBe(404);
+    expect(await Dataset.countDocuments({ _id: id })).toBe(0);
+    await runDelete(id);
+  });
+
+  it('refuses a delete that loses the race to a new hold', async () => {
+    const id = await createDataset();
+    const findOne = Dataset.findOne.bind(Dataset);
+    // The hold lands between reading the dataset and marking it.
+    const spy = jest.spyOn(Dataset, 'findOne').mockImplementationOnce(((...args: Parameters<typeof Dataset.findOne>) => {
+      const read = findOne(...args).exec();
+      return read.then(async (dataset) => {
+        await Dataset.updateOne({ _id: id }, { $push: { holds: { service: 'label-service', ref: 'late', createdAt: new Date() } } });
+        return dataset;
+      });
+    }) as unknown as typeof Dataset.findOne);
+    const response = await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER });
+    spy.mockRestore();
+    expect(response.status).toBe(409);
+    expect((await Dataset.findById(id).lean())?.deletingAt).toBeUndefined();
   });
 });
 
@@ -356,6 +387,82 @@ describe('items', () => {
       { datasetId, group: 'verify', path: 'verify/0002.masks.json', stem: '0002', variant: 'masks', kind: 'json', size: 1, data: [{ id: 1, class: 'bus', score: { nested: 1 } }] }
     ]);
     await Dataset.updateOne({ _id: id }, { $set: { manifest: [{ stem: '0001', attributes: { stratum: 'day' } }] } });
+  });
+
+  it('removes one image group in the background, hiding it at once', async () => {
+    const datasetId = new mongoose.Types.ObjectId(id);
+    for (const item of await DatasetItem.find({ datasetId })) {
+      fileStore.stored.set(item.fileId!, Buffer.from('x'));
+      if (item.thumbnailFileId) fileStore.stored.set(item.thumbnailFileId, Buffer.from('t'));
+    }
+    await Dataset.updateOne({ _id: id }, {
+      $set: {
+        groups: [{ name: 'frames', images: 2, jsons: 0 }, { name: 'verify', images: 1, jsons: 2 }],
+        imageCount: 3,
+        coverPath: 'frames/0002.jpg',
+        import: { id: 'i', status: 'done', mapping: { groups: [{ folder: 'frames', group: 'frames' }, { folder: 'verify', group: 'verify' }] }, processed: 5, skipped: 0, errors: [] }
+      }
+    });
+    const remove = (group: string, user = OWNER) => call(`/api/datasets/${id}/groups/${group}`, { method: 'DELETE', user });
+
+    expect((await remove('frames', STRANGER)).status).toBe(403);
+    expect((await remove('lidar')).status).toBe(404);
+    const removed = await remove('frames');
+    expect(removed.status).toBe(202);
+    expect(enqueueRemoveGroup).toHaveBeenCalledWith({ datasetId: id, group: 'frames' });
+    expect(removed.body.data).toMatchObject({ groups: [{ name: 'verify' }], imageCount: 1, removingGroups: ['frames'] });
+    expect((await remove('frames')).status).toBe(409);
+
+    // Gone for readers and for labeling straight away; the files wait for the worker.
+    expect((await call(`/api/datasets/${id}/items?kind=image`)).body.data.items.map((item: { path: string }) => item.path)).toEqual(['verify/0001.ids.png']);
+    expect((await call(`/api/datasets/${id}/items?group=frames`)).body.data.items).toEqual([]);
+    expect((await call(`/internal/datasets/${id}/items?group=frames`, { internal: true })).body.data.items).toEqual([]);
+    expect((await call(`/internal/datasets/${id}/items`, { internal: true })).body.data.items).toHaveLength(3);
+    expect((await call(`/internal/datasets/${id}`, { internal: true })).body.data.groups).toEqual([{ name: 'verify', images: 1, jsons: 2 }]);
+    expect(fileStore.stored.has('f1')).toBe(true);
+    await Dataset.updateOne({ _id: id }, { $set: { archive: { fileId: 'z.zip', filename: 'z.zip', uploadedAt: new Date() } } });
+    expect((await call(`/api/datasets/${id}/import`, { method: 'POST', user: OWNER, body: { groups: [{ folder: 'frames', group: 'frames' }] } })).status).toBe(409);
+
+    expect(await resumeDeletions()).toBe(1);
+    await runRemoveGroup(id, 'frames');
+    for (const fileId of ['f1', 't1', 'f2', 't2']) expect(fileStore.stored.has(fileId)).toBe(false);
+    expect(fileStore.stored.has('i1')).toBe(true);
+    const after = await Dataset.findById(id).lean();
+    expect(after).toMatchObject({ imageCount: 1, removingGroups: [] });
+    // The pick went with its group, and an id map is never an automatic cover.
+    expect(after?.coverPath).toBeUndefined();
+    expect(after?.coverFileId).toBeUndefined();
+    expect(after?.import?.mapping.groups).toEqual([{ folder: 'verify', group: 'verify' }]);
+    expect(await DatasetItem.countDocuments({ datasetId, group: 'frames' })).toBe(0);
+    await runRemoveGroup(id, 'frames');
+  });
+
+  it('refuses to remove a group while labeling holds the dataset or an import runs', async () => {
+    await Dataset.updateOne({ _id: id }, { $set: { groups: [{ name: 'frames', images: 2, jsons: 0 }] } });
+    await Dataset.updateOne({ _id: id }, { $set: { 'import.id': 'i', 'import.status': 'queued' } });
+    expect((await call(`/api/datasets/${id}/groups/frames`, { method: 'DELETE', user: OWNER })).status).toBe(409);
+    await Dataset.updateOne({ _id: id }, { $unset: { import: '' }, $push: { holds: { service: 'label-service', ref: 'job', createdAt: new Date() } } });
+    expect((await call(`/api/datasets/${id}/groups/frames`, { method: 'DELETE', user: OWNER })).status).toBe(409);
+  });
+
+  it('lets a writer pick the cover image, and go back to the automatic one', async () => {
+    const [frame] = (await call(`/api/datasets/${id}/items?group=frames&limit=1`)).body.data.items;
+    const cover = (itemId: string | null, user = OWNER) => call(`/api/datasets/${id}/cover`, { method: 'PUT', user, body: { itemId } });
+
+    expect((await cover(frame._id, STRANGER)).status).toBe(403);
+    expect((await cover('0123456789abcdef01234567')).status).toBe(404);
+    expect((await cover('not-an-id')).status).toBe(400);
+    const json = await DatasetItem.findOne({ datasetId: id, kind: 'json' });
+    expect((await cover(json!._id.toString())).status).toBe(404);
+
+    const second = await DatasetItem.findOne({ datasetId: id, path: 'frames/0002.jpg' });
+    const picked = await cover(second!._id.toString());
+    expect(picked.body.data).toMatchObject({ coverPath: 'frames/0002.jpg', coverUrl: 'signed:t2' });
+    expect((await call('/api/datasets')).body.data.datasets[0].coverUrl).toBe('signed:t2');
+
+    const automatic = await cover(null);
+    expect(automatic.body.data.coverPath).toBeUndefined();
+    expect(automatic.body.data.coverUrl).toBe('signed:t1');
   });
 
   it('pages thumbnails, filters, and includes JSON only for one stem', async () => {

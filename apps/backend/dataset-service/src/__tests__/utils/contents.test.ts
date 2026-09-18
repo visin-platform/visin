@@ -1,4 +1,4 @@
-import { summarizeContents } from '../../utils/contents';
+import { expectedImportFiles, summarizeContents } from '../../utils/contents';
 
 it('counts every folder with everything beneath it, including empty ancestors', () => {
   const contents = summarizeContents([
@@ -27,4 +27,20 @@ it('keeps the shallowest folders when there are too many', () => {
   expect(contents.folders).toHaveLength(2000);
   expect(contents.folders.map((folder) => folder.path)).toEqual(expect.arrayContaining(['', 'root']));
   expect(contents.totalBytes).toBe(0);
+});
+
+it('expects the files beneath the mapped folders, counting nested mappings once', () => {
+  const contents = summarizeContents([
+    { path: 'set/camera/1.png', size: 1 },
+    { path: 'set/camera/2.png', size: 1 },
+    { path: 'set/camera/verify/3.png', size: 1 },
+    { path: 'set/masks/1.json', size: 1 },
+    { path: 'set/readme.txt', size: 1 }
+  ]);
+  expect(expectedImportFiles(contents, ['set/camera'])).toBe(3);
+  expect(expectedImportFiles(contents, ['set/camera', 'set/camera/verify', 'set/masks'])).toBe(4);
+  expect(expectedImportFiles(contents, [''])).toBe(4);
+  expect(expectedImportFiles(contents, ['nowhere'])).toBe(0);
+  expect(expectedImportFiles({ ...contents, truncated: true }, ['set/camera'])).toBeUndefined();
+  expect(expectedImportFiles(undefined, ['set/camera'])).toBeUndefined();
 });

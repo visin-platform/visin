@@ -4,6 +4,11 @@ export const deleteFolderBodySchema = z.object({
   prefix: z.string().min(1, 'prefix is required')
 });
 
+/** Files to delete in one call; a caller with more sends batches. */
+export const deleteFilesBodySchema = z.object({
+  fileIds: z.array(z.string().min(1)).min(1).max(1000)
+});
+
 export const listFilesQuerySchema = z.object({
   prefix: z.string().optional(),
   maxKeys: z.coerce.number().int().positive().default(1000),

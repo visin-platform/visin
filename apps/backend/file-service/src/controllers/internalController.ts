@@ -4,6 +4,7 @@ import {
   openRead,
   deleteFile,
   deleteByPrefix,
+  deleteFiles,
   fileExists,
   getMetadata,
   listFiles
@@ -117,6 +118,16 @@ export const internalDeleteFolder = async (req: Request, res: Response): Promise
   const { prefix } = req.body as { prefix: string };
   const count = await deleteByPrefix(prefix);
   res.json({ success: true, message: `Deleted ${count} file(s)`, count });
+};
+
+/**
+ * POST /internal/delete-files
+ * Body: { fileIds: string[] } — up to 1000.
+ */
+export const internalDeleteFiles = async (req: Request, res: Response): Promise<void> => {
+  const { fileIds } = req.body as { fileIds: string[] };
+  await deleteFiles(fileIds);
+  res.json({ success: true, message: `Deleted ${fileIds.length} file(s)`, count: fileIds.length });
 };
 
 /**

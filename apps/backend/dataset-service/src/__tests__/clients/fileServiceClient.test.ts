@@ -1,6 +1,7 @@
 import { Readable } from 'stream';
 import {
   deleteFile,
+  deleteFiles,
   deleteFolder,
   getDownloadUrls,
   getFileRange,
@@ -81,6 +82,17 @@ it('stores, streams, measures, ranges and deletes files', async () => {
   await deleteFolder('datasets/d/');
   expect(JSON.parse(fetchMock.mock.calls.at(-1)[1].body)).toEqual({ prefix: 'datasets/d/' });
   await expect(deleteFolder('datasets/d/')).rejects.toThrow('folder delete failed');
+});
+
+it('deletes named files in batches of file-service\'s limit', async () => {
+  fetchMock.mockResolvedValue(jsonResponse({}));
+  const fileIds = Array.from({ length: 1500 }, (_, index) => `f${index}`);
+  await deleteFiles(fileIds);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(fetchMock.mock.calls[0][0]).toBe('http://files.test/internal/delete-files');
+  expect(JSON.parse(fetchMock.mock.calls[1][1].body).fileIds).toHaveLength(500);
+  fetchMock.mockResolvedValueOnce(jsonResponse({}, 500));
+  await expect(deleteFiles(['a'])).rejects.toThrow('delete-files failed (500)');
 });
 
 it('prefers the internal address, when one is set, over the public one', async () => {

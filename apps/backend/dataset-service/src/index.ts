@@ -12,6 +12,7 @@ import {
 import datasetRoutes from './routes/datasetRoutes';
 import internalRoutes from './routes/internalRoutes';
 import { createImportWorker } from './queue/importWorker';
+import { resumeDeletions } from './services/deleteService';
 import { closeImportQueue } from './queue/importQueue';
 
 // JWT_SECRET verifies sessions; INTERNAL_SERVICE_TOKEN gates /internal and the
@@ -48,6 +49,9 @@ connectDb({ serviceName: 'dataset-service' })
     // container (same image, a worker-only entrypoint) if imports start competing
     // with request handling for the event loop.
     const importWorker = createImportWorker();
+    resumeDeletions()
+      .then((count) => count && logger.info('Resumed dataset deletions', { count }))
+      .catch((err: Error) => logger.error('Could not resume dataset deletions', { error: err.message }));
     const server = app.listen(PORT, () => logger.info('Dataset service started successfully', { port: PORT }));
 
     // On redeploy, stop taking new work and let the in-flight import finish:

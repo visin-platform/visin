@@ -36,7 +36,10 @@ const toItemView = (item: IDatasetItem, urls: Record<string, string>, withData: 
 export const listItems = async (access: DatasetAccess, datasetId: string, query: ListItemsQuery) => {
   const dataset = await readableDataset(access, datasetId);
   const filter: QueryFilter<IDatasetItem> = { datasetId: dataset._id };
-  if (query.group) filter.group = query.group;
+  // A group being removed is already gone for readers.
+  const hidden = dataset.removingGroups ?? [];
+  if (query.group) filter.group = hidden.includes(query.group) ? { $in: [] } : query.group;
+  else if (hidden.length) filter.group = { $nin: hidden };
   if (query.kind) filter.kind = query.kind;
   if (query.stem) filter.stem = query.stem;
   if (query.search) filter.path = { $regex: escapeRegex(query.search), $options: 'i' };

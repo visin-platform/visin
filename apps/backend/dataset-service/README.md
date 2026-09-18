@@ -91,6 +91,33 @@ records and 1 MiB per JSON sidecar. `DATASET_IMPORT_MAX_ENTRY_BYTES`,
 a deployment outgrows; each must be a positive safe integer. The container needs
 temporary disk for the largest zip it will import.
 
+### Deleting
+
+`DELETE /api/datasets/:id` answers `202` at once: it marks the dataset
+(`deletingAt`), which hides it from every reader and refuses new holds, cancels a
+running import, and queues a `delete` job. The worker removes the files (one
+folder delete in file-service, which retires them in bulk), the item rows, and
+the record last — so an attempt that dies part-way leaves the mark, and startup
+queues every marked dataset again.
+
+### Removing one image group
+
+`DELETE /api/datasets/:id/groups/:group` answers `202`: the group goes on
+`removingGroups`, which leaves it out of the dataset's groups, counts and item
+listings (public and internal) at once, and a `remove-group` job deletes its
+files (file-service's batch `POST /internal/delete-files`) and rows a thousand at
+a time, then recounts, re-picks the cover and drops the group from the recorded
+mapping. Refused while a labeling job holds the dataset or an import runs; an
+import waits until the removal is done. Like deletions, unfinished removals are
+queued again at startup.
+
+### Cover image
+
+The dataset card shows an automatic cover (the first frame) unless someone
+picks one: `PUT /api/datasets/:id/cover { itemId }`, or `{ itemId: null }` to go
+back. The pick is kept by path (`coverPath`), so a re-import that stores the
+same image again keeps it; one the new images no longer hold is forgotten.
+
 ## Who can see and change a dataset
 
 Public datasets are readable by anyone, group datasets by that group. The uploader

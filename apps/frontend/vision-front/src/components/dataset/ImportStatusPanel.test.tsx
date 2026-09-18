@@ -4,9 +4,11 @@ import ImportStatusPanel from './ImportStatusPanel';
 import type { DatasetImport } from '../../services/datasetService';
 
 const base: DatasetImport = { id: 'i', status: 'done', mapping: { groups: [] }, processed: 10, skipped: 0, errors: [], stale: false };
-const renderPanel = (imported: Partial<DatasetImport>, canWrite = true) => {
+const renderPanel = (imported: Partial<DatasetImport>, canWrite = true, archiveBytes?: number) => {
   const handlers = { onCancel: vi.fn(), onRemap: vi.fn() };
-  const view = render(<ImportStatusPanel imported={{ ...base, ...imported }} canWrite={canWrite} cancelling={false} {...handlers} />);
+  const view = render(
+    <ImportStatusPanel imported={{ ...base, ...imported }} archiveBytes={archiveBytes} canWrite={canWrite} cancelling={false} {...handlers} />
+  );
   return { ...view, ...handlers };
 };
 
@@ -22,6 +24,27 @@ describe('ImportStatusPanel', () => {
     renderPanel({ status: 'running', processed: 1200, skipped: 30 }, false);
     expect(screen.getByText(/1,200 stored, 30 already there/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+  });
+
+  it('shows the zip being copied before any image is stored, then images against the expected total', () => {
+    const gib = 1024 ** 3;
+    const { rerender } = renderPanel({ status: 'running', processed: 0, copiedBytes: gib, expected: 11500 }, true, 4 * gib);
+    expect(screen.getByText(/copying the zip to the server… 1\.0 GB of 4\.0 GB/)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '25');
+    expect(screen.getByText(/you can close the page/)).toBeInTheDocument();
+
+    rerender(
+      <ImportStatusPanel
+        imported={{ ...base, status: 'running', processed: 481, copiedBytes: 4 * gib, expected: 11500 }}
+        archiveBytes={4 * gib}
+        canWrite
+        cancelling={false}
+        onCancel={vi.fn()}
+        onRemap={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/481 of 11,500 stored/)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', expect.stringMatching(/^4/));
   });
 
   it('says nothing about a clean, current import', () => {

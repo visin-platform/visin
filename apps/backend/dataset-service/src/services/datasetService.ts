@@ -1,10 +1,12 @@
 import { randomUUID } from 'crypto';
 import { Types } from 'mongoose';
-import { BadRequestError, ConflictError, ForbiddenError, getUploadPolicy, logger } from '@visin/backend-core';
+import { BadRequestError, ConflictError, ForbiddenError, getUploadPolicy, logger, NotFoundError } from '@visin/backend-core';
 import { Dataset, IDataset, ImportMapping } from '../models/Dataset';
 import { DatasetItem } from '../models/DatasetItem';
 import * as files from '../clients/fileServiceClient';
-import { enqueueImport, enqueueScan, removeQueuedImport } from '../queue/importQueue';
+import { summarizeItems } from './importService';
+import { enqueueDelete, enqueueImport, enqueueRemoveGroup, enqueueScan, removeQueuedImport } from '../queue/importQueue';
+import { expectedImportFiles } from '../utils/contents';
 import { normalizeFolder } from '../utils/zipPaths';
 import { DatasetAccess, readableDataset, writableDataset } from './accessService';
 import type { ArchiveUploadBody, CreateDatasetBody, ListDatasetsQuery, UpdateDatasetBody } from '../validation/datasetSchemas';
@@ -54,9 +56,14 @@ export const toDatasetView = (dataset: IDataset, canWrite: boolean, coverUrl?: s
   uploading: dataset.pendingUpload ? { filename: dataset.pendingUpload.filename, size: dataset.pendingUpload.size } : undefined,
   contents: dataset.contents,
   scan: dataset.scan ? { status: dataset.scan.status, error: dataset.scan.error, finishedAt: dataset.scan.finishedAt } : undefined,
-  groups: dataset.groups,
-  imageCount: dataset.imageCount,
+  // A group being removed is gone as far as readers are concerned.
+  groups: dataset.groups.filter((group) => !dataset.removingGroups?.includes(group.name)),
+  imageCount:
+    dataset.imageCount -
+    dataset.groups.filter((group) => dataset.removingGroups?.includes(group.name)).reduce((sum, group) => sum + group.images, 0),
+  removingGroups: dataset.removingGroups ?? [],
   coverUrl,
+  coverPath: dataset.coverPath,
   import: dataset.import
     ? {
         id: dataset.import.id,
@@ -68,6 +75,8 @@ export const toDatasetView = (dataset: IDataset, canWrite: boolean, coverUrl?: s
         errors: dataset.import.errors,
         startedAt: dataset.import.startedAt,
         finishedAt: dataset.import.finishedAt,
+        expected: dataset.import.expected,
+        copiedBytes: dataset.import.copiedBytes,
         // true when the archive was replaced after this import ran
         stale: Boolean(dataset.archive && dataset.import.archiveFileId !== dataset.archive.fileId)
       }
@@ -141,17 +150,29 @@ export const updateDataset = async (access: DatasetAccess, id: string, body: Upd
   return toDatasetView(dataset, await access.canWrite(dataset));
 };
 
+/**
+ * Hide the dataset at once and hand removing its files to the worker: tens of
+ * thousands of them outlast any request. Refused while a labeling job holds
+ * it — checked in the same update that marks it, so a hold taken meanwhile wins.
+ */
 export const deleteDataset = async (access: DatasetAccess, id: string): Promise<void> => {
   const dataset = await writableDataset(access, id);
   assertNotHeld(dataset, 'delete this dataset');
-  if (dataset.import && (dataset.import.status === 'queued' || dataset.import.status === 'running')) {
-    // A running worker notices the dataset is gone at its next heartbeat and stops.
-    await removeQueuedImport(dataset.import.id);
-  }
-  await files.deleteFolder(dataset.storagePrefix);
-  await DatasetItem.deleteMany({ datasetId: dataset._id });
-  await Dataset.deleteOne({ _id: dataset._id });
-  logger.info('Dataset deleted', { datasetId: id });
+  const activeImport = dataset.import && (dataset.import.status === 'queued' || dataset.import.status === 'running');
+  const marked = await Dataset.updateOne(
+    { _id: dataset._id, holds: { $size: 0 }, deletingAt: { $exists: false } },
+    {
+      $set: {
+        deletingAt: new Date(),
+        // A running import stops at its next heartbeat and removes what it stored.
+        ...(activeImport ? { 'import.status': 'cancelled', 'import.finishedAt': new Date() } : {})
+      }
+    }
+  );
+  if (marked.matchedCount === 0) throw new ConflictError('The dataset is in use by a labeling job, or already being deleted');
+  if (activeImport) await removeQueuedImport(dataset.import!.id);
+  await enqueueDelete({ datasetId: id });
+  logger.info('Dataset deletion queued', { datasetId: id });
 };
 
 /** The file an interrupted upload was sending, chosen again. One recorded before sizes were (no `size`) matches by name. */
@@ -221,6 +242,47 @@ export const discardArchiveUpload = async (access: DatasetAccess, id: string) =>
   return toDatasetView(dataset, true);
 };
 
+/**
+ * Pick the image a dataset's card shows, or (null) go back to the automatic
+ * one. Stored by path as well as file, so a re-import keeps the choice.
+ */
+export const setCover = async (access: DatasetAccess, id: string, itemId: string | null) => {
+  const dataset = await writableDataset(access, id);
+  if (itemId) {
+    const item = await DatasetItem.findOne({ _id: itemId, datasetId: dataset._id, kind: 'image' });
+    if (!item) throw new NotFoundError('That image is not in this dataset');
+    dataset.coverPath = item.path;
+    dataset.coverFileId = item.thumbnailFileId || item.fileId;
+  } else {
+    dataset.coverPath = undefined;
+    dataset.coverFileId = (await summarizeItems(dataset._id)).coverFileId;
+  }
+  await dataset.save();
+  const { urls } = await signedUrls([dataset.coverFileId]);
+  return toDatasetView(dataset, true, dataset.coverFileId ? urls[dataset.coverFileId] : undefined);
+};
+
+/**
+ * Remove one image group — a folder imported by mistake, say. Hidden at once;
+ * the worker deletes its files and rows. Refused while a labeling job holds the
+ * dataset (its tasks may show those images) and while an import runs.
+ */
+export const removeGroup = async (access: DatasetAccess, id: string, group: string) => {
+  const dataset = await writableDataset(access, id);
+  assertNotHeld(dataset, 'remove an image group');
+  if (isImportActive(dataset)) throw new ConflictError('An import is running — wait for it or cancel it first');
+  if (!dataset.groups.some((row) => row.name === group)) throw new NotFoundError(`The dataset has no image group "${group}"`);
+  const marked = await Dataset.findOneAndUpdate(
+    { _id: dataset._id, holds: { $size: 0 }, removingGroups: { $ne: group } },
+    { $addToSet: { removingGroups: group } },
+    { returnDocument: 'after' }
+  );
+  if (!marked) throw new ConflictError('That group is already being removed, or a labeling job now uses this dataset');
+  await enqueueRemoveGroup({ datasetId: id, group });
+  logger.info('Dataset image group removal queued', { datasetId: id, group });
+  return toDatasetView(marked, true);
+};
+
 /** Hand reading the archive's index to the worker; the page polls `scan`. */
 const queueScan = async (dataset: IDataset, fileId: string): Promise<void> => {
   dataset.scan = { status: 'queued', fileId };
@@ -278,6 +340,7 @@ export const startImport = async (access: DatasetAccess, id: string, mapping: Im
   assertNotHeld(dataset, 're-import');
   if (!dataset.archive) throw new BadRequestError('Upload a zip before importing');
   if (isImportActive(dataset)) throw new ConflictError('An import is already running for this dataset');
+  if (dataset.removingGroups?.length) throw new ConflictError('An image group is still being removed — import once it is gone');
   if (dataset.import && (dataset.import.status === 'queued' || dataset.import.status === 'running')) {
     // Stale: its process died. Drop it from the queue so a late pickup can't race this one.
     await removeQueuedImport(dataset.import.id);
@@ -285,17 +348,20 @@ export const startImport = async (access: DatasetAccess, id: string, mapping: Im
 
   const groupNames = mapping.groups.map((row) => row.group);
   const importId = new Types.ObjectId().toString();
+  const groups = mapping.groups.map((row, index) => ({ folder: normalizeFolder(row.folder), group: groupNames[index] }));
+  const expected = expectedImportFiles(dataset.contents, groups.map((row) => row.folder));
   dataset.import = {
     id: importId,
     status: 'queued',
     mapping: {
-      groups: mapping.groups.map((row, index) => ({ folder: normalizeFolder(row.folder), group: groupNames[index] })),
+      groups,
       ...(mapping.manifest ? { manifest: normalizeFolder(mapping.manifest) } : {})
     },
     archiveFileId: dataset.archive.fileId,
     processed: 0,
     skipped: 0,
-    errors: []
+    errors: [],
+    ...(expected !== undefined ? { expected } : {})
   };
   dataset.markModified('import');
   await dataset.save();

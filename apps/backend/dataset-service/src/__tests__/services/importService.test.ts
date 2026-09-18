@@ -87,6 +87,8 @@ it('stores mapped images and JSON, byte-identical, with groups, variants, manife
 
   const updated = await Dataset.findById(datasetId).select('+manifest').lean();
   expect(updated?.import).toMatchObject({ status: 'done', processed: 4, skipped: 0, total: 4, errors: [] });
+  // The whole zip was copied to disk before extraction, and the page was told so.
+  expect(updated?.import?.copiedBytes).toBe(fileStore.stored.get(dataset.archive!.fileId)!.length);
   expect(updated?.groups).toEqual([{ name: 'frames', images: 1, jsons: 0 }, { name: 'verify', images: 2, jsons: 1 }]);
   expect(updated?.imageCount).toBe(3);
   expect(updated?.coverFileId).toContain('.thumbs/frames/0001.png.jpg');
@@ -119,6 +121,22 @@ it('replaces what earlier imports left, folders and migrated files alike', async
   expect((await DatasetItem.find({ datasetId }).lean()).map((item) => item.path)).toEqual(['frames/0001.png']);
   expect(fileStore.stored.has('label-bundles/b/frames/m.png')).toBe(false);
   expect([...fileStore.stored.keys()].some((key) => key.includes(oldImport))).toBe(false);
+});
+
+it('keeps a picked cover the new import stores again, and forgets one it does not', async () => {
+  const kept = await createImport(vlmEntries());
+  await Dataset.updateOne({ _id: kept.datasetId }, { $set: { coverPath: 'annotations/verify/0001.png' } });
+  await runImport(kept.datasetId, kept.importId);
+  const withPick = await Dataset.findById(kept.datasetId).lean();
+  expect(withPick?.coverPath).toBe('annotations/verify/0001.png');
+  expect(withPick?.coverFileId).toContain('.thumbs/annotations/verify/0001.png.jpg');
+
+  const dropped = await createImport(vlmEntries(), { groups: [{ folder: 'frames', group: 'frames' }] });
+  await Dataset.updateOne({ _id: dropped.datasetId }, { $set: { coverPath: 'annotations/verify/0001.png' } });
+  await runImport(dropped.datasetId, dropped.importId);
+  const withoutPick = await Dataset.findById(dropped.datasetId).lean();
+  expect(withoutPick?.coverPath).toBeUndefined();
+  expect(withoutPick?.coverFileId).toContain('.thumbs/frames/0001.png.jpg');
 });
 
 it('reports unreadable files per file, and fails an import that stored nothing', async () => {

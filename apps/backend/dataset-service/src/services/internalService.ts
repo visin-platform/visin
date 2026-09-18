@@ -17,7 +17,7 @@ const summary = (dataset: Awaited<ReturnType<typeof findDataset>>) => ({
   ownerId: dataset.ownerId,
   visibility: dataset.visibility,
   groupId: dataset.groupId,
-  groups: dataset.groups,
+  groups: dataset.groups.filter((group) => !dataset.removingGroups?.includes(group.name)),
   imageCount: dataset.imageCount,
   importStatus: dataset.import?.status,
   holds: dataset.holds.map((hold) => ({ service: hold.service, ref: hold.ref }))
@@ -40,7 +40,10 @@ export const getDatasetSummary = async (id: string) => summary(await findDataset
 export const listItemsAfter = async (id: string, query: InternalItemsQuery) => {
   const dataset = await findDataset(id);
   const filter: QueryFilter<IDatasetItem> = { datasetId: dataset._id };
-  if (query.group !== undefined) filter.group = query.group;
+  // A group being removed must not reach a new labeling job.
+  const hidden = dataset.removingGroups ?? [];
+  if (query.group !== undefined) filter.group = hidden.includes(query.group) ? { $in: [] } : query.group;
+  else if (hidden.length) filter.group = { $nin: hidden };
   if (query.kind) filter.kind = query.kind;
   if (query.variant) filter.variant = query.variant;
   else if (query.noVariant) filter.variant = { $exists: false };
@@ -123,7 +126,7 @@ export const getManifest = async (id: string) => (await findDataset(id, true)).m
 export const addHold = async (id: string, service: string, ref: string) => {
   const dataset = await findDataset(id);
   await Dataset.updateOne(
-    { _id: dataset._id, holds: { $not: { $elemMatch: { service, ref } } } },
+    { _id: dataset._id, deletingAt: { $exists: false }, holds: { $not: { $elemMatch: { service, ref } } } },
     { $push: { holds: { service, ref, createdAt: new Date() } } }
   );
 };

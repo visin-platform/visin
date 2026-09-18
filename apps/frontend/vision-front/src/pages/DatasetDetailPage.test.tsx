@@ -12,7 +12,9 @@ const service = vi.hoisted(() => ({
   listItems: vi.fn(),
   listMyGroups: vi.fn(),
   scanArchive: vi.fn(),
-  discardUpload: vi.fn()
+  discardUpload: vi.fn(),
+  setCover: vi.fn(),
+  removeGroup: vi.fn()
 }));
 vi.mock('../services/datasetService', () => service);
 
@@ -28,7 +30,7 @@ const contents = {
 };
 const dataset = (overrides = {}) => ({
   _id: 'd1', name: 'VLM', description: 'Mask review set', ownerId: 'u1', visibility: 'public', groups: [{ name: 'frames', images: 2, jsons: 0 }],
-  imageCount: 2, usedBy: 0, canWrite: true, contents,
+  imageCount: 2, usedBy: 0, canWrite: true, contents, removingGroups: [],
   archive: { filename: 'vlm.zip', size: 2048, uploadedAt: '2026-09-01T00:00:00Z' },
   createdAt: '2026-09-01T00:00:00Z', updatedAt: '2026-09-02T00:00:00Z', ...overrides
 });
@@ -204,6 +206,32 @@ describe('DatasetDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
     await waitFor(() => expect(screen.queryByText(/stopped before it finished/)).not.toBeInTheDocument());
     expect(service.discardUpload).toHaveBeenCalledTimes(2);
+  });
+
+  it('picks the open image as the dataset cover', async () => {
+    const frame = { _id: 'f1', group: 'frames', path: 'frames/0001.png', stem: '0001', kind: 'image', size: 1, url: 'u', thumbnailUrl: 't' };
+    service.listItems.mockResolvedValue({ items: [frame], pagination: { page: 1, limit: 60, total: 1, pages: 1 } });
+    service.setCover.mockRejectedValueOnce(new Error('Not allowed')).mockResolvedValueOnce(dataset({ coverPath: 'frames/0001.png' }));
+    renderPage();
+    fireEvent.click(await screen.findByAltText('frames/0001.png'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Use as cover' }));
+    await waitFor(() => expect(service.setCover).toHaveBeenCalledWith('d1', 'f1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Use as cover' }));
+    expect(await screen.findByText('Dataset cover')).toBeInTheDocument();
+  });
+
+  it('removes an image group in the background', async () => {
+    const groups = [{ name: 'camera', images: 2300, jsons: 0 }, { name: 'lidar_png', images: 2300, jsons: 0 }];
+    service.getDataset.mockResolvedValue(dataset({ groups }));
+    service.removeGroup.mockResolvedValue(dataset({ groups: [groups[0]], removingGroups: ['lidar_png'] }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove a group' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Remove' })).toBeDisabled();
+    fireEvent.click(within(dialog).getByLabelText('lidar_png — 2,300 images'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove 2,300 images' }));
+    await waitFor(() => expect(service.removeGroup).toHaveBeenCalledWith('d1', 'lidar_png'));
+    expect(await screen.findByText(/Removing lidar_png in the background/)).toBeInTheDocument();
   });
 
   it('explains a dataset that does not load', async () => {

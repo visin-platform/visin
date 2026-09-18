@@ -3,6 +3,7 @@ import { authenticateToken, validateRequest } from '@visin/backend-core';
 import * as ctrl from '../controllers/datasetController';
 import {
   archiveUploadBodySchema,
+  setCoverBodySchema,
   createDatasetBodySchema,
   listDatasetsQuerySchema,
   listItemsQuerySchema,
@@ -22,6 +23,8 @@ router.get('/groups', authenticateToken, ctrl.listMyGroups);
 router.get('/:id', ctrl.getDataset);
 router.patch('/:id', authenticateToken, validateRequest({ body: updateDatasetBodySchema }), ctrl.updateDataset);
 router.delete('/:id', authenticateToken, ctrl.deleteDataset);
+router.delete('/:id/groups/:group', authenticateToken, ctrl.removeGroup);
+router.put('/:id/cover', authenticateToken, validateRequest({ body: setCoverBodySchema }), ctrl.setCover);
 
 // Upload is two calls around a browser-direct chunked PUT to file-service.
 router.post('/:id/archive/upload-url', authenticateToken, validateRequest({ body: archiveUploadBodySchema }), ctrl.createArchiveUpload);

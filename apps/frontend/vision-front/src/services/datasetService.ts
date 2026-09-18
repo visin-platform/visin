@@ -39,6 +39,10 @@ export interface DatasetImport {
   processed: number;
   skipped: number;
   total?: number;
+  /** files the mapping takes, per the zip's index */
+  expected?: number;
+  /** bytes of the zip copied to the server's work disk; extraction starts after all of it */
+  copiedBytes?: number;
   errors: { path: string; reason: string }[];
   startedAt?: string;
   finishedAt?: string;
@@ -63,6 +67,10 @@ export interface Dataset {
   groups: { name: string; images: number; jsons: number }[];
   imageCount: number;
   coverUrl?: string;
+  /** image groups being removed in the background; already left out of `groups` and `imageCount` */
+  removingGroups: string[];
+  /** the image a user picked as the cover; absent when the cover is chosen automatically */
+  coverPath?: string;
   import?: DatasetImport;
   /** labeling jobs whose tasks show this dataset's images */
   usedBy: number;
@@ -165,6 +173,14 @@ export const uploadArchive = async (id: string, file: File, onProgress?: (fracti
   }
   return finishUpload(id);
 };
+
+/** Take one image group out of the dataset; its files are deleted in the background. */
+export const removeGroup = async (id: string, group: string) =>
+  (await datasetApi.delete<Envelope<Dataset>>(`/${id}/groups/${encodeURIComponent(group)}`)).data;
+
+/** Show this image on the dataset's card, or (null) let the import pick one again. */
+export const setCover = async (id: string, itemId: string | null) =>
+  (await datasetApi.put<Envelope<Dataset>>(`/${id}/cover`, { itemId })).data;
 
 /** Give up on an interrupted upload; its partial bytes are deleted from the server. */
 export const discardUpload = async (id: string) => (await datasetApi.delete<Envelope<Dataset>>(`/${id}/archive/upload`)).data;

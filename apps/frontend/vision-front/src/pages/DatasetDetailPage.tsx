@@ -31,6 +31,7 @@ import DatasetImageGrid from '../components/dataset/DatasetImageGrid';
 import DatasetItemDialog from '../components/dataset/DatasetItemDialog';
 import ImportMappingDialog from '../components/dataset/ImportMappingDialog';
 import ImportStatusPanel from '../components/dataset/ImportStatusPanel';
+import RemoveGroupDialog from '../components/dataset/RemoveGroupDialog';
 import { useDatasetDownload } from '../hooks/useDatasetDownload';
 import { useWarnOnLeave } from '../hooks/useWarnOnLeave';
 import { usePageTitle } from '../hooks/usePageTitle';
@@ -42,7 +43,9 @@ import {
   discardUpload,
   getDataset,
   ImportMapping,
+  removeGroup,
   scanArchive,
+  setCover,
   startImport,
   updateDataset,
   uploadArchive
@@ -50,13 +53,15 @@ import {
 import { formatBytes } from '../utils/datasetMapping';
 import { formatDateTime } from '../utils';
 
-type DialogName = 'edit' | 'replace' | 'mapping' | 'delete' | null;
+type DialogName = 'edit' | 'replace' | 'mapping' | 'delete' | 'removeGroup' | null;
 
 const isImporting = (dataset?: Dataset): boolean =>
   dataset?.import?.status === 'queued' || dataset?.import?.status === 'running';
 
 const isScanning = (dataset?: Dataset): boolean =>
   dataset?.scan?.status === 'queued' || dataset?.scan?.status === 'running';
+
+const isRemovingGroups = (dataset?: Dataset): boolean => Boolean(dataset?.removingGroups?.length);
 
 const errorText = (err: unknown, fallback: string): string => (err instanceof Error ? err.message : fallback);
 
@@ -83,7 +88,8 @@ const DatasetDetailPage: React.FC = () => {
     queryFn: () => getDataset(id),
     enabled: Boolean(id),
     // Poll only while an import or a scan runs; both report on the dataset.
-    refetchInterval: (query) => (isImporting(query.state.data) || isScanning(query.state.data) ? 3000 : false)
+    refetchInterval: (query) =>
+      isImporting(query.state.data) || isScanning(query.state.data) || isRemovingGroups(query.state.data) ? 3000 : false
   });
   usePageTitle(dataset ? `${dataset.name} - Datasets - Vision` : 'Dataset - Vision');
 
@@ -117,11 +123,16 @@ const DatasetDetailPage: React.FC = () => {
   };
 
   const importStatus = dataset?.import?.status;
+  const removing = dataset?.removingGroups?.join('\n') ?? '';
   useEffect(() => {
     if (importStatus && importStatus !== 'queued' && importStatus !== 'running') {
       queryClient.invalidateQueries({ queryKey: ['dataset-items', id] });
     }
   }, [importStatus, id, queryClient]);
+  // A group starting or finishing its removal changes what the grid holds.
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['dataset-items', id] });
+  }, [removing, id, queryClient]);
 
   const refresh = (next?: Dataset) => {
     if (next) queryClient.setQueryData(['dataset', id], next);
@@ -153,12 +164,27 @@ const DatasetDetailPage: React.FC = () => {
       setMapWhenReady(true);
     }, 'Failed to upload zip');
 
+  const [coverBusy, setCoverBusy] = useState(false);
+  const handleSetCover = async (item: DatasetItem | null) => {
+    setCoverBusy(true);
+    setActionError(null);
+    try {
+      refresh(await setCover(id, item?._id ?? null));
+    } catch (err) {
+      setActionError(errorText(err, 'Failed to change the cover'));
+    } finally {
+      setCoverBusy(false);
+    }
+  };
+
   const handleDiscardUpload = () => run(async () => refresh(await discardUpload(id)), 'Failed to discard the upload');
 
   const handleImport = (mapping: ImportMapping) =>
     run(async () => refresh(await startImport(id, mapping)), 'Failed to start import');
 
   const handleScan = () => run(async () => refresh(await scanArchive(id)), 'Failed to scan the zip');
+
+  const handleRemoveGroup = (group: string) => run(async () => refresh(await removeGroup(id, group)), 'Failed to remove the group');
 
   const handleCancelImport = () => run(async () => refresh(await cancelImport(id)), 'Failed to cancel import');
 
@@ -304,6 +330,7 @@ const DatasetDetailPage: React.FC = () => {
       {dataset.import && (
         <ImportStatusPanel
           imported={dataset.import}
+          archiveBytes={dataset.import.stale ? undefined : dataset.archive?.size}
           canWrite={dataset.canWrite && !held}
           cancelling={busy}
           onCancel={handleCancelImport}
@@ -311,11 +338,29 @@ const DatasetDetailPage: React.FC = () => {
         />
       )}
 
+      {dataset.removingGroups.length > 0 && (
+        <Alert severity="info" icon={<CircularProgress size={20} />} sx={{ mb: 3 }}>
+          Removing {dataset.removingGroups.join(', ')} in the background. You can leave this page.
+        </Alert>
+      )}
+
       {dataset.imageCount > 0 ? (
         <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, mb: 3, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ mb: 1.5 }}>
-            Images
-          </Typography>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+            <Typography variant="h6">Images</Typography>
+            {dataset.canWrite && (
+              <Button
+                size="small"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => openDialog('removeGroup')}
+                disabled={importing || held}
+                title={heldReason}
+              >
+                Remove a group
+              </Button>
+            )}
+          </Stack>
           <DatasetImageGrid datasetId={dataset._id} groups={dataset.groups} onOpen={setOpenItem} />
         </Paper>
       ) : (
@@ -359,11 +404,20 @@ const DatasetDetailPage: React.FC = () => {
         onCancel={() => setDialog(null)}
         onConfirm={handleImport}
       />
+      <RemoveGroupDialog
+        open={dialog === 'removeGroup'}
+        groups={dataset.groups}
+        busy={busy}
+        error={actionError}
+        onCancel={() => setDialog(null)}
+        onConfirm={handleRemoveGroup}
+      />
       <Dialog open={dialog === 'delete'} onClose={busy ? undefined : () => setDialog(null)}>
         <DialogTitle>Delete dataset</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Delete "{dataset.name}", its zip and every imported image? This cannot be undone.
+            Delete "{dataset.name}", its zip and every imported image? This cannot be undone. The dataset disappears at
+            once; its files are removed on the server in the background.
           </DialogContentText>
           {actionError && <Alert severity="error" sx={{ mt: 2 }}>{actionError}</Alert>}
         </DialogContent>
@@ -376,7 +430,12 @@ const DatasetDetailPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      <DatasetItemDialog datasetId={dataset._id} item={openItem} onClose={() => setOpenItem(null)} />
+      <DatasetItemDialog
+        datasetId={dataset._id}
+        item={openItem}
+        onClose={() => setOpenItem(null)}
+        cover={dataset.canWrite ? { path: dataset.coverPath, busy: coverBusy, onChange: handleSetCover } : undefined}
+      />
     </Container>
   );
 };

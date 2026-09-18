@@ -2,9 +2,10 @@ import { Worker, Job, UnrecoverableError } from 'bullmq';
 import { logger } from '@visin/backend-core';
 import { runImport, markImportFailed } from '../services/importService';
 import { runScan, markScanFailed } from '../services/scanService';
+import { runDelete, runRemoveGroup } from '../services/deleteService';
 import { NonRetryableImportError } from '../utils/boundedZip';
 import { createRedisConnection } from './connection';
-import { DatasetJobData, IMPORT_QUEUE_NAME, ImportJobData, SCAN_JOB, ScanJobData } from './importQueue';
+import { DatasetJobData, DELETE_JOB, IMPORT_QUEUE_NAME, ImportJobData, REMOVE_GROUP_JOB, RemoveGroupJobData, SCAN_JOB, ScanJobData } from './importQueue';
 
 // One import at a time: each one already processes several images in parallel
 // (DATASET_IMPORT_CONCURRENCY), and in the default deployment the worker shares
@@ -26,6 +27,15 @@ export const willRetry = (job: Job<DatasetJobData>, err: Error): boolean =>
 
 export const processImportJob = async (job: Job<DatasetJobData>): Promise<void> => {
   try {
+    if (job.name === DELETE_JOB) {
+      await runDelete(job.data.datasetId);
+      return;
+    }
+    if (job.name === REMOVE_GROUP_JOB) {
+      const { datasetId, group } = job.data as RemoveGroupJobData;
+      await runRemoveGroup(datasetId, group);
+      return;
+    }
     if (job.name === SCAN_JOB) {
       const { datasetId, fileId } = job.data as ScanJobData;
       await runScan(datasetId, fileId);
@@ -52,6 +62,8 @@ export const handleFailedImport = (job: Job<DatasetJobData> | undefined, err: Er
     return;
   }
   logger.error('Dataset job failed', { datasetId, job: job.name, error: err.message });
+  // A deletion or group removal keeps its mark and is queued again at the next startup.
+  if (job.name === DELETE_JOB || job.name === REMOVE_GROUP_JOB) return;
   // The processor is already gone, so this is the last chance to close the
   // work out — without it a dead import or scan polls as unfinished forever.
   const closing =

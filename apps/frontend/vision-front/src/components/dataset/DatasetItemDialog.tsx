@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box,
+  Button,
   Chip,
   CircularProgress,
   Dialog,
@@ -10,7 +11,7 @@ import {
   Stack,
   Typography
 } from '@mui/material';
-import { Close as CloseIcon } from '@mui/icons-material';
+import { Close as CloseIcon, Image as CoverIcon } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { DatasetItem, listItems } from '../../services/datasetService';
 
@@ -18,6 +19,12 @@ interface DatasetItemDialogProps {
   datasetId: string;
   item: DatasetItem | null;
   onClose: () => void;
+  /** offered when the viewer can change the dataset: show the open image on its card */
+  cover?: {
+    path?: string;
+    busy: boolean;
+    onChange: (item: DatasetItem | null) => void;
+  };
 }
 
 const labelFor = (item: DatasetItem): string => `${item.group}${item.variant ? ` · ${item.variant}` : ''}`;
@@ -27,7 +34,7 @@ const labelFor = (item: DatasetItem): string => `${item.group}${item.variant ? `
  * groups (the camera frame, its annotation overlay, its id map), plus any JSON
  * sidecars, shown as they are.
  */
-const DatasetItemDialog: React.FC<DatasetItemDialogProps> = ({ datasetId, item, onClose }) => {
+const DatasetItemDialog: React.FC<DatasetItemDialogProps> = ({ datasetId, item, onClose, cover }) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => setSelectedId(item?._id ?? null), [item]);
 
@@ -74,10 +81,25 @@ const DatasetItemDialog: React.FC<DatasetItemDialogProps> = ({ datasetId, item, 
               </Box>
             )}
             {selected && (
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace', display: 'block', mb: 2 }}>
-                {selected.path}
-                {selected.width && selected.height ? ` · ${selected.width}×${selected.height}` : ''}
-              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace', minWidth: 0, overflowWrap: 'anywhere' }}>
+                  {selected.path}
+                  {selected.width && selected.height ? ` · ${selected.width}×${selected.height}` : ''}
+                </Typography>
+                {cover &&
+                  (cover.path === selected.path ? (
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
+                      <Chip size="small" color="primary" icon={<CoverIcon />} label="Dataset cover" />
+                      <Button size="small" onClick={() => cover.onChange(null)} disabled={cover.busy}>
+                        Pick automatically
+                      </Button>
+                    </Stack>
+                  ) : (
+                    <Button size="small" variant="outlined" startIcon={<CoverIcon />} onClick={() => cover.onChange(selected)} disabled={cover.busy} sx={{ flexShrink: 0 }}>
+                      Use as cover
+                    </Button>
+                  ))}
+              </Stack>
             )}
             {sidecars.map((entry) => (
               <Box key={entry._id} sx={{ mb: 2 }}>

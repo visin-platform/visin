@@ -28,6 +28,10 @@ export const updateDatasetBodySchema = z
   .refine(requireGroupForGroupVisibility, { message: 'A group dataset needs a groupId', path: ['groupId'] });
 export type UpdateDatasetBody = z.infer<typeof updateDatasetBodySchema>;
 
+/** An image of the dataset to show on its card, or null to go back to the automatic choice. */
+export const setCoverBodySchema = z.object({ itemId: objectId.nullable() });
+export type SetCoverBody = z.infer<typeof setCoverBodySchema>;
+
 export const listDatasetsQuerySchema = z.object({
   search: z.string().trim().max(200).optional(),
   page: z.coerce.number().int().positive().default(1),

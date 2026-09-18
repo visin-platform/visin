@@ -6,7 +6,7 @@ const queueConstructor = jest.fn(() => ({ add, getJob, close }));
 jest.mock('bullmq', () => ({ Queue: queueConstructor }));
 jest.mock('../../queue/connection', () => ({ createRedisConnection: jest.fn(() => 'REDIS') }));
 
-import { closeImportQueue, enqueueImport, enqueueScan, getImportQueue, IMPORT_QUEUE_NAME, removeQueuedImport } from '../../queue/importQueue';
+import { closeImportQueue, enqueueDelete, enqueueRemoveGroup, enqueueImport, enqueueScan, getImportQueue, IMPORT_QUEUE_NAME, removeQueuedImport } from '../../queue/importQueue';
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -41,4 +41,14 @@ it('closes the queue it opened', async () => {
 it('queues reading a zip as its own kind of job', async () => {
   await enqueueScan({ datasetId: 'd', fileId: 'f.zip' });
   expect(add).toHaveBeenCalledWith('scan', { datasetId: 'd', fileId: 'f.zip' }, expect.objectContaining({ attempts: 3 }));
+});
+
+it('queues one deletion per dataset, however often it is asked for', async () => {
+  await enqueueDelete({ datasetId: 'd' });
+  expect(add).toHaveBeenCalledWith('delete', { datasetId: 'd' }, expect.objectContaining({ jobId: 'delete-d' }));
+});
+
+it('queues one removal per group, with a job id safe for any group name', async () => {
+  await enqueueRemoveGroup({ datasetId: 'd', group: 'a:b' });
+  expect(add).toHaveBeenCalledWith('remove-group', { datasetId: 'd', group: 'a:b' }, expect.objectContaining({ jobId: 'remove-group-d-613a62' }));
 });

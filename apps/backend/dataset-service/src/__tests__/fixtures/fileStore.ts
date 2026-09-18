@@ -29,6 +29,9 @@ export const createFileStore = () => {
       deleteFile: jest.fn(async (fileId: string) => {
         stored.delete(fileId);
       }),
+      deleteFiles: jest.fn(async (fileIds: string[]) => {
+        for (const fileId of fileIds) stored.delete(fileId);
+      }),
       deleteFolder: jest.fn(async (prefix: string) => {
         for (const fileId of [...stored.keys()]) if (fileId.startsWith(prefix)) stored.delete(fileId);
       })

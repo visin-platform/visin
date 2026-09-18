@@ -27,6 +27,7 @@ interface ImportState {
   skipped: number;
   errors: ImportError[];
   errorBytes: number;
+  copiedBytes: number;
   manifest?: ManifestRow[];
 }
 
@@ -205,6 +206,23 @@ export const summarizeItems = async (datasetId: Types.ObjectId) => {
 };
 
 /**
+ * After an import: the image a user picked, if the import stored it again,
+ * otherwise the automatic one — and a pick the new images no longer hold is
+ * forgotten rather than left pointing at deleted files.
+ */
+export const refreshCover = async (datasetId: Types.ObjectId, coverPath: string | undefined, automatic: string | undefined): Promise<void> => {
+  const picked = coverPath ? await DatasetItem.findOne({ datasetId, path: coverPath, kind: 'image' }) : null;
+  const coverFileId = picked ? picked.thumbnailFileId || picked.fileId : automatic;
+  const unset: Record<string, ''> = {};
+  if (!coverFileId) unset.coverFileId = '';
+  if (coverPath && !picked) unset.coverPath = '';
+  await Dataset.updateOne(
+    { _id: datasetId },
+    { ...(coverFileId ? { $set: { coverFileId } } : {}), ...(Object.keys(unset).length ? { $unset: unset } : {}) }
+  );
+};
+
+/**
  * Close an import out as failed. Called by the queue worker once the attempt
  * budget is spent — `runImport` never decides this, because from inside one
  * attempt a transient failure is indistinguishable from a final one.
@@ -235,7 +253,7 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
   }
   if (current.status === 'cancelled') return;
 
-  const state: ImportState = { processed: 0, skipped: 0, errors: [], errorBytes: 0 };
+  const state: ImportState = { processed: 0, skipped: 0, errors: [], errorBytes: 0, copiedBytes: 0 };
   const now = new Date();
   await Dataset.updateOne(
     { _id: dataset._id, 'import.id': importId },
@@ -260,7 +278,14 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
     lastFlush = Date.now();
     const updated = await Dataset.findOneAndUpdate(
       { _id: dataset._id, 'import.id': importId },
-      { $set: { 'import.processed': state.processed, 'import.skipped': state.skipped, 'import.heartbeatAt': new Date() } },
+      {
+        $set: {
+          'import.processed': state.processed,
+          'import.skipped': state.skipped,
+          'import.copiedBytes': state.copiedBytes,
+          'import.heartbeatAt': new Date()
+        }
+      },
       { returnDocument: 'after', projection: { 'import.status': 1 } }
     );
     if (!updated) throw new NonRetryableImportError('Import no longer belongs to its dataset (deleted or superseded)');
@@ -293,7 +318,10 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
     const zipStream = await files.getFileStream(current.archiveFileId);
     let failure: unknown;
     const limit = concurrency();
-    for await (const entry of readZipEntries(zipStream, importZipLimits(), shouldRead, () => flush())) {
+    for await (const entry of readZipEntries(zipStream, importZipLimits(), shouldRead, (copied) => {
+      state.copiedBytes = copied;
+      return flush();
+    })) {
       const result = classified.get(entry.path)!;
       classified.delete(entry.path);
       const task: Promise<void> = handleEntry(dataset, importId, entry, result, state)
@@ -325,13 +353,12 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
           'import.total': state.processed + state.skipped + state.errors.length,
           'import.errors': state.errors,
           'import.finishedAt': new Date()
-        },
-        ...(summary.coverFileId ? {} : { $unset: { coverFileId: '' } })
+        }
       },
       { returnDocument: 'after' }
     );
     if (!finished) throw new ImportStopped();
-    if (summary.coverFileId) await Dataset.updateOne({ _id: dataset._id }, { $set: { coverFileId: summary.coverFileId } });
+    await refreshCover(dataset._id, finished.coverPath, summary.coverFileId);
     logger.info('Dataset import finished', { datasetId, importId, status, processed: state.processed, errors: state.errors.length });
   } catch (err) {
     await Promise.allSettled(inFlight);

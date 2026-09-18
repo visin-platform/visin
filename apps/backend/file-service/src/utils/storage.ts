@@ -1,9 +1,10 @@
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 import path from 'path';
 import { logger, NotFoundError } from '@visin/backend-core';
 
 import { dataDir, CONTROL_DIRECTORY, resolvePath } from './paths';
-import { openUploadStore, pendingFileIds, readUploadState, uploadLocation } from '../services/uploadStore';
+import { openUploadStore, pendingFileIds, readUploadState, uploadLocation, UPLOAD_LEASE_MS } from '../services/uploadStore';
 import { FileUpload } from '../models/FileUpload';
 export { resolvePath } from './paths';
 const DATA_DIR = dataDir;
@@ -128,6 +129,53 @@ export const deleteFile = async (fileId: string): Promise<void> => {
   } finally { await store.close(); }
 };
 
+const RETIRE_BATCH = 1000;
+
+/**
+ * Retire many managed files at once — what `deleteFile` does one by one, which
+ * costs several majority writes per file: a dataset's 23,000 images and
+ * thumbnails took over an hour. Per batch, claim every unleased row with one
+ * update, retire the claimed ones with another, then remove their bytes. A file
+ * another request is writing, or one Mongo does not manage yet, is returned for
+ * `deleteFile`, which handles both.
+ */
+async function retireInBulk(fileIds: string[]): Promise<string[]> {
+  const remaining: string[] = [];
+  for (let start = 0; start < fileIds.length; start += RETIRE_BATCH) {
+    const batch = fileIds.slice(start, start + RETIRE_BATCH);
+    const keys = batch.map(fileId => uploadLocation(fileId).key);
+    const claim = randomUUID();
+    await FileUpload.updateMany(
+      { _id: { $in: keys }, state: { $exists: true }, $or: [{ owner: { $exists: false } }, { $expr: { $lte: ['$leaseUntil', '$$NOW'] } }] },
+      [{ $set: { owner: claim, leaseUntil: { $add: ['$$NOW', UPLOAD_LEASE_MS] } } }],
+      { updatePipeline: true, writeConcern: { w: 'majority' } }
+    );
+    const claimed = await FileUpload.find({ _id: { $in: keys }, owner: claim }).readConcern('majority').lean();
+    await FileUpload.updateMany(
+      { _id: { $in: claimed.map(row => row._id) }, owner: claim },
+      { $set: { 'state.status': 'retired', 'state.parts': [] }, $unset: { 'state.published': '', owner: '', leaseUntil: '' } },
+      { writeConcern: { w: 'majority' } }
+    );
+    // Retired rows refuse every later write, so their bytes can go.
+    for (const row of claimed) {
+      fs.rmSync(resolvePath(row.fileId), { force: true });
+      fs.rmSync(uploadLocation(row.fileId).directory, { recursive: true, force: true });
+    }
+    const done = new Set(claimed.map(row => row.fileId));
+    remaining.push(...batch.filter(fileId => !done.has(path.relative(dataDir(), resolvePath(fileId)))));
+  }
+  return remaining;
+}
+
+/**
+ * Delete named files — the subset of a folder a caller tracks itself, like one
+ * image group of a dataset. Bulk where it can be, one by one where it must.
+ */
+export const deleteFiles = async (fileIds: string[]): Promise<void> => {
+  for (const fileId of fileIds) resolvePath(fileId);
+  for (const fileId of await retireInBulk([...new Set(fileIds)])) await deleteFile(fileId);
+};
+
 /** Cancel pending reservations as well as published files; retain tombstones so
  * deleting a resource cannot make an old upload capability writable again. */
 export const deleteByPrefix = async (prefix: string): Promise<number> => {
@@ -140,7 +188,8 @@ export const deleteByPrefix = async (prefix: string): Promise<number> => {
     : path.dirname(fileId) === path.dirname(normalized) && path.basename(fileId).startsWith(path.basename(normalized)));
   const published = (await listFiles(directoryPrefix ? normalized : path.dirname(normalized), Number.MAX_SAFE_INTEGER, directoryPrefix))
     .filter(file => matches(file.name)).map(file => file.name);
-  for (const fileId of new Set([...published, ...pending.filter(matches)])) await deleteFile(fileId);
+  const remaining = await retireInBulk([...new Set([...published, ...pending.filter(matches)])]);
+  for (const fileId of remaining) await deleteFile(fileId);
   // Preserve folder-delete behavior without ever walking the control namespace.
   const prune = (directory: string): void => {
     if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) return;

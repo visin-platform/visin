@@ -34,6 +34,10 @@ export interface DatasetImport {
   processed: number;
   skipped: number;
   total?: number;
+  /** files the mapping takes, per the zip's index — absent when the index is incomplete */
+  expected?: number;
+  /** bytes of the zip copied to the worker's disk so far; extraction starts once all are */
+  copiedBytes?: number;
   errors: ImportError[];
   startedAt?: Date;
   finishedAt?: Date;
@@ -107,9 +111,15 @@ export interface IDataset extends Document {
   groups: DatasetGroup[];
   imageCount: number;
   coverFileId?: string;
+  /** the image a user picked as the cover, by path — so a re-import that stores it again keeps it */
+  coverPath?: string;
   manifest?: ManifestRow[];
   import?: DatasetImport;
   holds: DatasetHold[];
+  /** set when a delete was asked for; the dataset is hidden while the worker removes its files */
+  deletingAt?: Date;
+  /** image groups being removed: hidden at once, their files and rows removed by the worker */
+  removingGroups?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -157,9 +167,12 @@ const DatasetSchema = new Schema<IDataset>(
     },
     imageCount: { type: Number, default: 0 },
     coverFileId: { type: String },
+    coverPath: { type: String },
     manifest: { type: [Schema.Types.Mixed], default: undefined, select: false },
     import: { type: Schema.Types.Mixed },
-    holds: { type: [HoldSchema], default: [] }
+    holds: { type: [HoldSchema], default: [] },
+    deletingAt: { type: Date },
+    removingGroups: { type: [String], default: undefined }
   },
   { timestamps: true, minimize: false }
 );

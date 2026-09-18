@@ -12,12 +12,14 @@ jest.mock('bullmq', () => ({ Worker: workerConstructor, UnrecoverableError: Fake
 jest.mock('../../queue/connection', () => ({ createRedisConnection: jest.fn(() => 'REDIS') }));
 jest.mock('../../services/importService', () => ({ runImport: jest.fn(), markImportFailed: jest.fn() }));
 jest.mock('../../services/scanService', () => ({ runScan: jest.fn(), markScanFailed: jest.fn(() => Promise.resolve()) }));
+jest.mock('../../services/deleteService', () => ({ runDelete: jest.fn(), runRemoveGroup: jest.fn() }));
 
 import type { Job } from 'bullmq';
 import { createImportWorker, handleFailedImport, processImportJob, willRetry } from '../../queue/importWorker';
 import { IMPORT_QUEUE_NAME, ImportJobData } from '../../queue/importQueue';
 import { markImportFailed, runImport } from '../../services/importService';
 import { markScanFailed, runScan } from '../../services/scanService';
+import { runDelete, runRemoveGroup } from '../../services/deleteService';
 import { NonRetryableImportError } from '../../utils/boundedZip';
 
 const job = (attemptsMade: number, attempts = 3) =>
@@ -66,5 +68,24 @@ it('runs a scan job, and marks a scan failed when no retry is left', async () =>
 
   handleFailedImport(scanJob(3), new Error('not a zip'));
   expect(markScanFailed).toHaveBeenCalledWith('d', 'f.zip', 'not a zip');
+  expect(markImportFailed).not.toHaveBeenCalled();
+});
+
+it('runs a delete job, and leaves a failed one marked for the startup sweep', async () => {
+  const deleteJob = { name: 'delete', data: { datasetId: 'd' }, attemptsMade: 0, opts: { attempts: 3 } } as unknown as Job<ImportJobData>;
+  await processImportJob(deleteJob);
+  expect(runDelete).toHaveBeenCalledWith('d');
+  expect(runImport).not.toHaveBeenCalled();
+
+  handleFailedImport({ ...deleteJob, attemptsMade: 3 } as unknown as Job<ImportJobData>, new Error('file-service down'));
+  expect(markImportFailed).not.toHaveBeenCalled();
+  expect(markScanFailed).not.toHaveBeenCalled();
+});
+
+it('runs a group removal job, and leaves a failed one marked', async () => {
+  const removeJob = { name: 'remove-group', data: { datasetId: 'd', group: 'lidar' }, attemptsMade: 3, opts: { attempts: 3 } } as unknown as Job<ImportJobData>;
+  await processImportJob(removeJob);
+  expect(runRemoveGroup).toHaveBeenCalledWith('d', 'lidar');
+  handleFailedImport(removeJob, new Error('down'));
   expect(markImportFailed).not.toHaveBeenCalled();
 });

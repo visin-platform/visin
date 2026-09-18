@@ -33,6 +33,26 @@ describe('DatasetItemDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('offers the open image as the cover, and the automatic choice once it is', async () => {
+    listItems.mockResolvedValue({ items: [frame], pagination: { page: 1, limit: 200, total: 1, pages: 1 } });
+    const onChange = vi.fn();
+    const { rerender } = renderWithClient(<DatasetItemDialog datasetId="d1" item={frame} onClose={vi.fn()} cover={{ busy: false, onChange }} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Use as cover' }));
+    expect(onChange).toHaveBeenCalledWith(frame);
+
+    rerender(<DatasetItemDialog datasetId="d1" item={frame} onClose={vi.fn()} cover={{ path: 'frames/0001.png', busy: false, onChange }} />);
+    expect(screen.getByText('Dataset cover')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Pick automatically' }));
+    expect(onChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it('offers no cover choice to a reader', async () => {
+    listItems.mockResolvedValue({ items: [frame], pagination: { page: 1, limit: 200, total: 1, pages: 1 } });
+    renderWithClient(<DatasetItemDialog datasetId="d1" item={frame} onClose={vi.fn()} />);
+    expect(await screen.findByText('frames/0001.png · 1363×768')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use as cover' })).not.toBeInTheDocument();
+  });
+
   it('renders nothing without an item', () => {
     renderWithClient(<DatasetItemDialog datasetId="d1" item={null} onClose={vi.fn()} />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

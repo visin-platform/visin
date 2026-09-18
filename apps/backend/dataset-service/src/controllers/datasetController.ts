@@ -8,6 +8,7 @@ import type {
   CreateDatasetBody,
   ListDatasetsQuery,
   ListItemsQuery,
+  SetCoverBody,
   StartImportBody,
   UpdateDatasetBody
 } from '../validation/datasetSchemas';
@@ -44,7 +45,16 @@ export const updateDataset = async (req: Request, res: Response): Promise<void> 
 
 export const deleteDataset = async (req: Request, res: Response): Promise<void> => {
   await datasets.deleteDataset(accessFor(req), idOf(req));
-  res.json({ success: true, message: 'Dataset deleted' });
+  res.status(202).json({ success: true, message: 'Dataset deletion queued' });
+};
+
+export const removeGroup = async (req: Request, res: Response): Promise<void> => {
+  res.status(202).json({ success: true, data: await datasets.removeGroup(accessFor(req), idOf(req), String(req.params.group)) });
+};
+
+export const setCover = async (req: Request, res: Response): Promise<void> => {
+  const { itemId } = req.body as SetCoverBody;
+  res.json({ success: true, data: await datasets.setCover(accessFor(req), idOf(req), itemId) });
 };
 
 export const createArchiveUpload = async (req: Request, res: Response): Promise<void> => {

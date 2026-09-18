@@ -8,11 +8,13 @@ import {
   internalExists,
   internalMetadata,
   internalDelete,
+  internalDeleteFiles,
   internalDeleteFolder,
   internalList
 } from '../controllers/internalController';
 import { validateRequest } from '@visin/backend-core';
 import {
+  deleteFilesBodySchema,
   deleteFolderBodySchema,
   listFilesQuerySchema,
   generateUploadUrlBodySchema,
@@ -62,6 +64,7 @@ router.delete(
   validateRequest({ body: deleteFolderBodySchema }),
   internalDeleteFolder
 );
+router.post('/internal/delete-files', requireApiKey, express.json(), validateRequest({ body: deleteFilesBodySchema }), internalDeleteFiles);
 router.get('/internal/files', requireApiKey, validateRequest({ query: listFilesQuerySchema }), internalList);
 router.put('/internal/files/*fileId', requireApiKey, internalUpload);
 router.get('/internal/meta/*fileId', requireApiKey, internalMetadata);

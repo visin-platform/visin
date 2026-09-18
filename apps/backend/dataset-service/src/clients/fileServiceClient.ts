@@ -153,6 +153,20 @@ export const deleteFile = async (fileId: string): Promise<void> => {
   }
 };
 
+/** Delete named files, in batches of file-service's limit — one image group, not a whole folder. */
+export const deleteFiles = async (fileIds: string[]): Promise<void> => {
+  for (let start = 0; start < fileIds.length; start += 1000) {
+    const response = await fetchWithTimeout(`${baseUrl()}/internal/delete-files`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ fileIds: fileIds.slice(start, start + 1000) }),
+      timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
+      serviceName: 'file-service'
+    });
+    if (!response.ok) throw new Error(`file-service delete-files failed (${response.status})`);
+  }
+};
+
 /** Delete every stored file under a prefix. */
 export const deleteFolder = async (prefix: string): Promise<void> => {
   const response = await fetchWithTimeout(`${baseUrl()}/internal/files/folder`, {

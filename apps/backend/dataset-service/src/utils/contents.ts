@@ -1,6 +1,21 @@
 import type { ContentsFolder, DatasetContents } from '../models/Dataset';
 import { IMAGE_EXTENSIONS, extensionOf, folderOf, normalizeEntryPath } from './zipPaths';
 
+/**
+ * How many images and JSON files an import with these mapped folders will take:
+ * the files beneath any mapped folder, each counted once however deep the
+ * mapping nests. Undefined when the index left folders out (a truncated one).
+ */
+export const expectedImportFiles = (contents: DatasetContents | undefined, folders: string[]): number | undefined => {
+  if (!contents || contents.truncated) return undefined;
+  const beneath = (folder: string, parent: string) => parent === '' || folder.startsWith(`${parent}/`);
+  const outermost = [...new Set(folders)].filter((folder) => !folders.some((other) => other !== folder && beneath(folder, other)));
+  return outermost.reduce((sum, folder) => {
+    const counted = contents.folders.find((row) => row.path === folder);
+    return sum + (counted ? counted.images + counted.jsons : 0);
+  }, 0);
+};
+
 export interface ZipIndexEntry {
   path: string;
   size: number;

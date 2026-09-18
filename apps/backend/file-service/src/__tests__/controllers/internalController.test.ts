@@ -9,6 +9,7 @@ jest.mock('../../utils/storage', () => ({
   openRead: jest.fn(),
   deleteFile: jest.fn(),
   deleteByPrefix: jest.fn(),
+  deleteFiles: jest.fn(),
   fileExists: jest.fn(),
   getMetadata: jest.fn(),
   listFiles: jest.fn(),
@@ -27,6 +28,7 @@ import {
   internalMetadata,
   internalDelete,
   internalDeleteFolder,
+  internalDeleteFiles,
   internalList,
 } from '../../controllers/internalController';
 import * as storage from '../../utils/storage';
@@ -260,6 +262,15 @@ describe('internalDeleteFolder', () => {
 
     expect(mockedStorage.deleteByPrefix).toHaveBeenCalledWith('grp/alb');
     expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Deleted 3 file(s)', count: 3 });
+  });
+});
+
+describe('internalDeleteFiles', () => {
+  it('deletes the named files and reports how many', async () => {
+    const res = makeRes();
+    await internalDeleteFiles(makeReq({ body: { fileIds: ['a.png', 'b.png'] } }), res);
+    expect(mockedStorage.deleteFiles).toHaveBeenCalledWith(['a.png', 'b.png']);
+    expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Deleted 2 file(s)', count: 2 });
   });
 });
 
