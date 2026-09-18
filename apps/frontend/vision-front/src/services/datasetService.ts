@@ -3,6 +3,7 @@ import { uploadToSignedUrl } from '../utils/chunkedUpload';
 
 export type DatasetVisibility = 'public' | 'group';
 export type ImportStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+export type ScanStatus = 'queued' | 'running' | 'done' | 'failed';
 
 export interface FolderMapping {
   folder: string;
@@ -54,8 +55,11 @@ export interface Dataset {
   groupId?: string;
   /** `size` is absent until the zip has been scanned (a dataset migrated from labeling starts that way) */
   archive?: { filename: string; size?: number; uploadedAt: string };
-  uploading?: { filename: string };
+  /** an upload that stopped before it finished: choosing the same file again resumes it */
+  uploading?: { filename: string; size?: number };
   contents?: DatasetContents;
+  /** reading the zip's index, which happens in the background after an upload */
+  scan?: { status: ScanStatus; error?: string; finishedAt?: string };
   groups: { name: string; images: number; jsons: number }[];
   imageCount: number;
   coverUrl?: string;
@@ -133,17 +137,39 @@ export const deleteDataset = async (id: string): Promise<void> => {
 };
 
 /**
+ * Tell dataset-service a zip has arrived. It swaps the archive in and queues
+ * reading its index, so this returns straight away; the dataset's `scan`
+ * reports that reading. Also finishes an upload whose browser went away after
+ * the last byte was sent.
+ */
+export const finishUpload = async (id: string) => (await datasetApi.post<Envelope<Dataset>>(`/${id}/archive/complete`)).data;
+
+/**
  * Upload a zip for a dataset: reserve, send it straight to file-service in
- * chunks, then let dataset-service read its index. The signed URL is its own
- * credential, so the bytes never pass through dataset-service.
+ * chunks, then finish. The signed URL is its own credential, so the bytes
+ * never pass through dataset-service.
+ *
+ * Size and date identify the file: the same one again after an interrupted
+ * upload gets that upload back, and file-service's first answer moves the
+ * progress on to where it stopped — or, if every byte had arrived, there is
+ * nothing to send.
  */
 export const uploadArchive = async (id: string, file: File, onProgress?: (fraction: number) => void) => {
-  const { data } = await datasetApi.post<Envelope<{ uploadUrl: string }>>(`/${id}/archive/upload-url`, { filename: file.name });
-  await uploadToSignedUrl(data.uploadUrl, file, onProgress);
-  return (await datasetApi.post<Envelope<Dataset>>(`/${id}/archive/complete`)).data;
+  const { data } = await datasetApi.post<Envelope<{ uploadUrl?: string; uploaded: boolean }>>(`/${id}/archive/upload-url`, {
+    filename: file.name,
+    size: file.size,
+    lastModified: file.lastModified
+  });
+  if (!data.uploaded && data.uploadUrl) {
+    await uploadToSignedUrl(data.uploadUrl, file, onProgress);
+  }
+  return finishUpload(id);
 };
 
-/** Measure and index a zip that is already stored. */
+/** Give up on an interrupted upload; its partial bytes are deleted from the server. */
+export const discardUpload = async (id: string) => (await datasetApi.delete<Envelope<Dataset>>(`/${id}/archive/upload`)).data;
+
+/** Measure and index a zip that is already stored, in the background like after an upload. */
 export const scanArchive = async (id: string) => (await datasetApi.post<Envelope<Dataset>>(`/${id}/archive/scan`)).data;
 
 export const getDownloadUrl = async (id: string) =>

@@ -66,19 +66,22 @@ using the existing `MONGODB_URI` setting before accepting requests; its standalo
 Compose file now passes that setting through. No separate database service or new
 configuration name is introduced. MongoDB failures fail requests closed.
 
-File bytes stay on the existing volume, under `FILE_SERVICE_DATA_DIR/.uploads`.
+File bytes stay on the existing volume, under `FILE_SERVICE_DATA_DIR/uploads` (a reserved name: no file id may start with it).
 All file-service instances using this collection must share that same data volume.
-Each request writes its own immutable file. A conditional MongoDB update requiring
+A request that starts a file writes its own uniquely named file. A conditional MongoDB update requiring
 the current, unexpired owner commits its progress or publishes its completed
 version, with majority acknowledgement. A writer whose lease expired cannot
 change the visible version, even if it resumes later. Leases use MongoDB's clock,
 last 30 seconds and renew every 10 seconds. A killed writer can be retried after
 its lease expires; a stalled request times out after five minutes.
 
-Chunks are assembled once at completion, then checked and synced before MongoDB
-publishes their pointer. Uploads allow at most 4,096 chunks. Normal 64 MiB clients
-stay well below that limit. Assembly temporarily needs room for both the parts
-and the complete file. Public uploads are immutable after completion: whole-body
+Each chunk after the first is written into the file the first chunk started, at
+its offset, so completing copies nothing: the final chunk is checked and synced,
+then MongoDB publishes the file's pointer. Assembling a multi-GB upload at the end
+instead outlasted the ~100 s a proxy (Cloudflare) waits for the final chunk's
+response. An interrupted attempt's bytes past the committed offset are overwritten
+by its retry. Uploads begun as separate part files before this still assemble at
+completion, and allow at most 4,096 chunks. Public uploads are immutable after completion: whole-body
 retries return the stored result, and chunk retries report the final offset.
 An invalid multi-chunk file may require a fresh reservation to correct an already
 committed prefix.

@@ -59,6 +59,18 @@ export interface DatasetContents {
   extensions: { ext: string; files: number; bytes: number }[];
 }
 
+export const SCAN_STATUSES = ['queued', 'running', 'done', 'failed'] as const;
+export type ScanStatus = (typeof SCAN_STATUSES)[number];
+
+/** Reading a zip's index, done in the background after an upload so the browser can leave. */
+export interface DatasetScan {
+  status: ScanStatus;
+  /** the archive being read — a newer upload supersedes it */
+  fileId: string;
+  error?: string;
+  finishedAt?: Date;
+}
+
 export interface DatasetGroup {
   name: string;
   images: number;
@@ -88,8 +100,10 @@ export interface IDataset extends Document {
   storagePrefix: string;
   /** `size` and `contents` are absent until the zip has been scanned (a migrated dataset starts that way) */
   archive?: { fileId: string; filename: string; size?: number; uploadedAt: Date };
-  pendingUpload?: { fileId: string; filename: string; expiresAt: Date };
+  /** `size`/`lastModified` identify the browser's file, so choosing it again resumes the upload */
+  pendingUpload?: { fileId: string; filename: string; size?: number; lastModified?: number; expiresAt: Date };
   contents?: DatasetContents;
+  scan?: DatasetScan;
   groups: DatasetGroup[];
   imageCount: number;
   coverFileId?: string;
@@ -128,12 +142,15 @@ const DatasetSchema = new Schema<IDataset>(
         _id: false,
         fileId: { type: String, required: true },
         filename: { type: String, required: true },
+        size: { type: Number },
+        lastModified: { type: Number },
         expiresAt: { type: Date, required: true }
       },
       default: undefined
     },
     // Opaque summaries written whole; nothing queries inside them.
     contents: { type: Schema.Types.Mixed },
+    scan: { type: Schema.Types.Mixed },
     groups: {
       type: [{ _id: false, name: { type: String, required: true }, images: Number, jsons: Number }],
       default: []

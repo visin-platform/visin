@@ -186,8 +186,8 @@ describe('bounded and atomic uploads', () => {
   it('hides control state from signed paths, metadata and listing', async () => {
     (await reserve());
     expect((await listFiles())).toEqual([]);
-    expect(() => resolvePath('.uploads/private.part')).toThrow('Reserved');
-    expect(() => resolvePath('a/../.uploads/private.part')).toThrow('Reserved');
+    expect(() => resolvePath('uploads/private.part')).toThrow('Reserved');
+    expect(() => resolvePath('a/../uploads/private.part')).toThrow('Reserved');
     await expect(openUploadStore('.')).rejects.toThrow('file path');
   });
 });

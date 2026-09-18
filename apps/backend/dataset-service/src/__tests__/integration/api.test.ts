@@ -6,7 +6,9 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { errorHandler, optionalAuth } from '@visin/backend-core';
 import { checkMembership, getMyGroups } from '../../clients/groupServiceClient';
-import { enqueueImport, removeQueuedImport } from '../../queue/importQueue';
+import { enqueueImport, enqueueScan, removeQueuedImport } from '../../queue/importQueue';
+import { markScanFailed, runScan } from '../../services/scanService';
+import { NonRetryableImportError } from '../../utils/boundedZip';
 import { Dataset } from '../../models/Dataset';
 import { DatasetItem } from '../../models/DatasetItem';
 import datasetRoutes from '../../routes/datasetRoutes';
@@ -16,7 +18,7 @@ import { zip } from '../fixtures/zip';
 
 jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
 jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(), getMyGroups: jest.fn() }));
-jest.mock('../../queue/importQueue', () => ({ enqueueImport: jest.fn(), removeQueuedImport: jest.fn() }));
+jest.mock('../../queue/importQueue', () => ({ enqueueImport: jest.fn(), enqueueScan: jest.fn(), removeQueuedImport: jest.fn() }));
 
 const OWNER = '000000000000000000000001';
 const MEMBER = '000000000000000000000002';
@@ -150,7 +152,7 @@ describe('visibility', () => {
 });
 
 describe('archive upload, download and import', () => {
-  it('reads the zip index on completion and replaces a previous archive', async () => {
+  it('adopts the zip at once, reads its index in the background, and replaces a previous archive', async () => {
     const id = await createDataset();
     expect((await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename: 'set.tar' } })).status).toBe(400);
     expect((await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER })).status).toBe(400);
@@ -158,8 +160,16 @@ describe('archive upload, download and import', () => {
 
     const first = await uploadZip(id, [{ path: 'frames/1.png', data: Buffer.from('x') }, { path: 'lidar/1.bin', data: Buffer.alloc(10) }]);
     expect(first.completed.status).toBe(200);
-    expect(first.completed.body.data.contents).toMatchObject({ entries: 2, totalBytes: 11 });
-    expect(first.completed.body.data.archive).toMatchObject({ filename: 'set.zip' });
+    // The request returns before the zip is read: the browser can leave now.
+    expect(first.completed.body.data).toMatchObject({ archive: { filename: 'set.zip' }, scan: { status: 'queued' } });
+    expect(first.completed.body.data).not.toHaveProperty('contents');
+    expect(enqueueScan).toHaveBeenCalledWith({ datasetId: id, fileId: first.fileId });
+
+    // What the worker does with that job.
+    await runScan(id, first.fileId);
+    const scanned = (await call(`/api/datasets/${id}`)).body.data;
+    expect(scanned.contents).toMatchObject({ entries: 2, totalBytes: 11 });
+    expect(scanned.scan.status).toBe('done');
 
     const second = await uploadZip(id, [{ path: 'a.png', data: Buffer.from('y') }]);
     expect(second.completed.status).toBe(200);
@@ -177,20 +187,90 @@ describe('archive upload, download and import', () => {
     expect((await call(`/api/datasets/${id}`)).body.data.archive).not.toHaveProperty('size');
 
     expect((await call(`/api/datasets/${id}/archive/scan`, { method: 'POST', user: STRANGER })).status).toBe(403);
-    const scanned = await call(`/api/datasets/${id}/archive/scan`, { method: 'POST', user: OWNER });
-    expect(scanned.status).toBe(200);
-    expect(scanned.body.data.archive.size).toBeGreaterThan(0);
-    expect(scanned.body.data.contents).toMatchObject({ entries: 1, totalBytes: 2 });
+    const queued = await call(`/api/datasets/${id}/archive/scan`, { method: 'POST', user: OWNER });
+    expect(queued.status).toBe(200);
+    expect(queued.body.data.scan).toEqual({ status: 'queued' });
+    expect(enqueueScan).toHaveBeenCalledWith({ datasetId: id, fileId });
+
+    await runScan(id, fileId);
+    const scanned = (await call(`/api/datasets/${id}`)).body.data;
+    expect(scanned.archive.size).toBeGreaterThan(0);
+    expect(scanned.contents).toMatchObject({ entries: 1, totalBytes: 2 });
   });
 
-  it('refuses an upload that never arrived or is not a zip', async () => {
+  it('resumes an interrupted upload of the same file, and drops an abandoned one for another', async () => {
+    const id = await createDataset();
+    const file = { filename: 'set.zip', size: 4000, lastModified: 17 };
+    const upload = (body: object) => call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body });
+
+    const first = (await upload(file)).body.data;
+    expect(first).toMatchObject({ uploaded: false, resumed: false });
+    expect((await call(`/api/datasets/${id}`)).body.data.uploading).toEqual({ filename: 'set.zip', size: 4000 });
+
+    // The same file again continues the same reservation.
+    const again = (await upload(file)).body.data;
+    expect(again).toMatchObject({ uploadUrl: first.uploadUrl, resumed: true, uploaded: false });
+
+    // Every byte had arrived: only finishing is left.
+    const fileId = first.uploadUrl.replace('upload:', '');
+    fileStore.stored.set(fileId, Buffer.from('bytes'));
+    expect((await upload(file)).body.data).toEqual({ uploaded: true, resumed: true });
+
+    // A different file (same name, other size) starts over and deletes the abandoned bytes.
+    const other = (await upload({ ...file, size: 5000 })).body.data;
+    expect(other).toMatchObject({ resumed: false });
+    expect(other.uploadUrl).not.toBe(first.uploadUrl);
+    expect(fileStore.stored.has(fileId)).toBe(false);
+  });
+
+  it('discards an interrupted upload and its partial bytes', async () => {
+    const id = await createDataset();
+    const reserved = (await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename: 'set.zip' } })).body.data;
+    const fileId = reserved.uploadUrl.replace('upload:', '');
+    fileStore.stored.set(fileId, Buffer.from('partial'));
+    expect((await call(`/api/datasets/${id}/archive/upload`, { method: 'DELETE', user: STRANGER })).status).toBe(403);
+    const discarded = await call(`/api/datasets/${id}/archive/upload`, { method: 'DELETE', user: OWNER });
+    expect(discarded.status).toBe(200);
+    expect(discarded.body.data.uploading).toBeUndefined();
+    expect(fileStore.stored.has(fileId)).toBe(false);
+    expect((await call(`/api/datasets/${id}/archive/upload`, { method: 'DELETE', user: OWNER })).status).toBe(200);
+  });
+
+  it('starts over when an interrupted reservation can no longer be resumed', async () => {
+    const id = await createDataset();
+    const file = { filename: 'set.zip', size: 4000, lastModified: 17 };
+    const first = (await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: file })).body.data;
+    jest.mocked(fileStore.client.getUploadUrl).mockRejectedValueOnce(new Error('Upload path is already reserved'));
+    jest.mocked(fileStore.client.deleteFile).mockRejectedValueOnce(new Error('file-service down'));
+    const next = (await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: file })).body.data;
+    expect(next).toMatchObject({ resumed: false });
+    expect(next.uploadUrl).not.toBe(first.uploadUrl);
+  });
+
+  it('refuses to finish an upload that never arrived, and reports a file that is not a zip', async () => {
     const id = await createDataset();
     const reserved = await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename: 'set.zip' } });
-    expect((await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER })).status).toBe(400);
-    fileStore.stored.set(reserved.body.data.uploadUrl.replace('upload:', ''), Buffer.from('definitely not a zip file'));
-    const completed = await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER });
-    expect(completed.status).toBe(400);
-    expect(completed.body.message).toContain('not a readable zip');
+    // The upload is still pending, so the page can offer to finish it later.
+    expect((await call(`/api/datasets/${id}`)).body.data.uploading).toEqual({ filename: 'set.zip' });
+    expect((await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER })).body.message).toContain('upload the zip again');
+
+    const fileId = reserved.body.data.uploadUrl.replace('upload:', '');
+    fileStore.stored.set(fileId, Buffer.from('definitely not a zip file'));
+    expect((await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER })).status).toBe(200);
+
+    await expect(runScan(id, fileId)).rejects.toBeInstanceOf(NonRetryableImportError);
+    await markScanFailed(id, fileId, 'The uploaded file is not a readable zip archive');
+    expect((await call(`/api/datasets/${id}`)).body.data.scan).toMatchObject({ status: 'failed', error: 'The uploaded file is not a readable zip archive' });
+  });
+
+  it('ignores a scan whose archive has since been replaced, or whose file is gone', async () => {
+    const id = await createDataset();
+    const { fileId } = await uploadZip(id, [{ path: 'a.png', data: Buffer.from('x') }]);
+    await runScan(id, 'some/older/upload.zip');
+    expect((await Dataset.findById(id).lean())?.scan?.status).toBe('queued');
+
+    fileStore.stored.delete(fileId);
+    await expect(runScan(id, fileId)).rejects.toThrow('no longer stored');
   });
 
   it('queues, refuses a second, and cancels an import', async () => {

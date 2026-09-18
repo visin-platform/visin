@@ -27,12 +27,26 @@ downloads and still says what is inside it.
 ## Upload, then map, then import
 
 ```
-POST /api/datasets/:id/archive/upload-url  { filename }   → signed chunked PUT to file-service
-POST /api/datasets/:id/archive/complete                   → reads the zip index into `contents`
+POST /api/datasets/:id/archive/upload-url  { filename, size?, lastModified? } → signed chunked PUT to file-service
+DELETE /api/datasets/:id/archive/upload                   → discard an interrupted upload and its partial bytes
+POST /api/datasets/:id/archive/complete                   → swaps the zip in, queues reading its index
 POST /api/datasets/:id/import  { groups: [{ folder, group }], manifest? }
 DELETE /api/datasets/:id/import                           → cancel
 POST /api/datasets/:id/archive/scan                       → re-measure and re-index a stored zip
 ```
+
+Reading a zip's index (`contents`) runs on the same queue as imports, so the
+uploader can close the browser as soon as the last byte is sent. The dataset's
+`scan` reports `queued`/`running`/`done`/`failed`; a newer upload supersedes a scan
+still running for the old zip. `complete` only needs the file to be stored, so a
+browser that left before calling it can call it later.
+
+**Resuming.** An interrupted upload stays on the dataset as `uploading`. Asking
+for an upload URL for the same file again (same name, size and modification
+time) returns the same reservation: file-service answers the first chunk with
+the offset it already holds, and the client continues from there. If every byte
+had arrived, the answer is `uploaded: true` and only `complete` is left. A
+different file starts a new reservation and deletes the abandoned one's bytes.
 
 The mapping says which zip folders become image groups. A mapped folder takes
 everything beneath it and the deepest mapped folder wins, so `annotations` and

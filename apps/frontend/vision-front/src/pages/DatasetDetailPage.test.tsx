@@ -11,7 +11,8 @@ const service = vi.hoisted(() => ({
   getDownloadUrl: vi.fn(),
   listItems: vi.fn(),
   listMyGroups: vi.fn(),
-  scanArchive: vi.fn()
+  scanArchive: vi.fn(),
+  discardUpload: vi.fn()
 }));
 vi.mock('../services/datasetService', () => service);
 
@@ -36,7 +37,8 @@ const renderPage = (state?: unknown) => renderWithClient(<DatasetDetailPage />, 
 
 describe('DatasetDetailPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // reset, not clear: a test's unconsumed mockResolvedValueOnce must not reach the next one
+    vi.resetAllMocks();
     service.getDataset.mockResolvedValue(dataset());
     service.listItems.mockResolvedValue({ items: [], pagination: { page: 1, limit: 60, total: 0, pages: 0 } });
     service.listMyGroups.mockResolvedValue([]);
@@ -150,6 +152,58 @@ describe('DatasetDetailPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Scan zip' }));
     await waitFor(() => expect(service.scanArchive).toHaveBeenCalledWith('d1'));
     expect(await screen.findByText('Contents')).toBeInTheDocument();
+  });
+
+  it('reads a new zip in the background, then goes on to choosing image groups', async () => {
+    const scanning = dataset({ contents: undefined, imageCount: 0, groups: [], scan: { status: 'running' } });
+    service.uploadArchive.mockResolvedValue(scanning);
+    service.getDataset.mockResolvedValueOnce(dataset()).mockResolvedValue(dataset({ scan: { status: 'done' } }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace zip' }));
+    fireEvent.change(await screen.findByTestId('dataset-zip-input'), { target: { files: [new File(['z'], 'new.zip')] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+    expect(await screen.findByText(/you can leave this page/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Image groups' })).toBeDisabled());
+    expect(screen.queryByText('Choose image groups')).not.toBeInTheDocument();
+    expect(await screen.findByText('Choose image groups', undefined, { timeout: 5000 })).toBeInTheDocument();
+  }, 10_000);
+
+  it('offers another scan when reading the zip failed', async () => {
+    service.getDataset.mockResolvedValue(dataset({ contents: undefined, scan: { status: 'failed', error: 'not a zip' } }));
+    service.scanArchive.mockResolvedValue(dataset({ contents: undefined, scan: { status: 'queued' } }));
+    renderPage({ chooseGroups: true });
+    expect(await screen.findByText('The zip could not be read: not a zip')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Scan again' }));
+    expect(await screen.findByText(/you can leave this page/)).toBeInTheDocument();
+    expect(screen.queryByText('Choose image groups')).not.toBeInTheDocument();
+  });
+
+  it('resumes an interrupted upload with the same zip', async () => {
+    service.getDataset.mockResolvedValue(dataset({ uploading: { filename: 'zod.zip', size: 4096 } }));
+    service.uploadArchive.mockResolvedValue(dataset({ contents: undefined, scan: { status: 'queued' } }));
+    renderPage();
+    expect(await screen.findByText(/The upload of zod\.zip stopped before it finished/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Resume upload')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Choose zod\.zip \(4\.0 KB\) again/)).toBeInTheDocument();
+    const file = new File(['z'], 'zod.zip');
+    fireEvent.change(within(dialog).getByTestId('dataset-zip-input'), { target: { files: [file] } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Upload' }));
+    await waitFor(() => expect(service.uploadArchive).toHaveBeenCalledWith('d1', file, expect.any(Function)));
+    expect(await screen.findByText(/you can leave this page/)).toBeInTheDocument();
+  });
+
+  it('discards an interrupted upload, keeping the current zip', async () => {
+    service.getDataset.mockResolvedValue(dataset({ uploading: { filename: 'zod.zip' } }));
+    service.discardUpload.mockRejectedValueOnce(new Error('file-service down')).mockResolvedValueOnce(dataset());
+    renderPage();
+    expect(await screen.findByText(/The current zip stays in place/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(await screen.findByText('file-service down')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByText(/stopped before it finished/)).not.toBeInTheDocument());
+    expect(service.discardUpload).toHaveBeenCalledTimes(2);
   });
 
   it('explains a dataset that does not load', async () => {

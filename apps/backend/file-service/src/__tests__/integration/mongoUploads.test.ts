@@ -160,6 +160,30 @@ it('rejects excessive chunk manifests and truncated committed parts', async () =
   expect(await fileExists('test.png')).toBe(false);
 });
 
+it('writes later chunks into the file the first one started, so completing copies nothing', async () => {
+  const reservationId = await reserve();
+  const chunk = (start: number, end: number) => uploadFile('test.png', send(png.subarray(start, end + 1)), { reservationId, range: { start, end, total: 16 } });
+  await chunk(0, 3);
+  const first = (await readUploadState('test.png'))!.parts;
+  await chunk(4, 11);
+  expect((await readUploadState('test.png'))!.parts).toEqual([{ id: first[0].id, size: 12 }]);
+  await chunk(12, 15);
+  expect((await readUploadState('test.png'))!.published?.id).toBe(first[0].id);
+  expect(await readFile('test.png')).toEqual(png);
+});
+
+it('still assembles an upload begun as separate parts', async () => {
+  const reservationId = await reserve();
+  const { directory: control } = uploadLocation('test.png');
+  await uploadFile('test.png', send(png.subarray(0, 8)), { reservationId, range: { start: 0, end: 7, total: 16 } });
+  const [part] = (await readUploadState('test.png'))!.parts;
+  fs.writeFileSync(path.join(control, 'aaaa.part'), png.subarray(4, 8));
+  fs.truncateSync(path.join(control, part.id), 4);
+  await FileUpload.updateOne({ fileId: 'test.png' }, { $set: { 'state.parts': [{ id: part.id, size: 4 }, { id: 'aaaa.part', size: 4 }] } });
+  await uploadFile('test.png', send(png.subarray(8)), { reservationId, range: { start: 8, end: 15, total: 16 } });
+  expect(await readFile('test.png')).toEqual(png);
+});
+
 it('lists Mongo versions with directory boundaries and hides replaced legacy bytes', async () => {
   writeFile('a.b/legacy.png', Buffer.from('legacy'));
   await uploadFile('a.b/legacy.png', send(), { internal: true });

@@ -34,6 +34,8 @@ interface DatasetFormDialogProps {
   /** 0–1 while zip bytes are going up; null otherwise */
   uploadProgress: number | null;
   error?: string | null;
+  /** replace mode, for an interrupted upload: the file to choose again to continue it */
+  resume?: { filename: string; size?: number };
   onCancel: () => void;
   onSubmit: (values: DatasetFormValues) => void;
 }
@@ -46,7 +48,7 @@ const SUBMIT = { create: 'Create and upload', edit: 'Save', replace: 'Upload' } 
  * One dialog because the three share the upload progress display, and a
  * multi-GB upload needs a real progress bar, not a spinner.
  */
-const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initial, busy, uploadProgress, error, onCancel, onSubmit }) => {
+const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initial, busy, uploadProgress, error, resume, onCancel, onSubmit }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [visibility, setVisibility] = useState<DatasetVisibility>('public');
@@ -101,7 +103,7 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
   return (
     <Dialog open={open} onClose={busy ? undefined : onCancel} maxWidth="sm" fullWidth>
       <form onSubmit={submit} noValidate>
-        <DialogTitle>{TITLES[mode]}</DialogTitle>
+        <DialogTitle>{mode === 'replace' && resume ? 'Resume upload' : TITLES[mode]}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             {showDetails && (
@@ -143,6 +145,13 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
                 </Box>
               </>
             )}
+            {mode === 'replace' && resume && !busy && (
+              <Alert severity="info">
+                Choose {resume.filename}
+                {resume.size ? ` (${formatBytes(resume.size)})` : ''} again and the upload continues from where it stopped. A
+                different file starts a new upload.
+              </Alert>
+            )}
             {needsFile && (
               <Box>
                 <Button
@@ -165,7 +174,7 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
               <Box data-testid="upload-progress">
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    {sendingBytes ? 'Uploading zip…' : 'Reading zip contents…'}
+                    {sendingBytes ? 'Uploading zip…' : 'Finishing the upload…'}
                   </Typography>
                   {sendingBytes && (
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -174,6 +183,11 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
                   )}
                 </Box>
                 <LinearProgress variant={sendingBytes ? 'determinate' : 'indeterminate'} value={sendingBytes ? percent : undefined} />
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
+                  Keep this page open until the upload finishes. If it is interrupted, choose the same zip again to continue.
+                  Once it has finished you can close the page — reading the zip and importing its images happen on the
+                  server.
+                </Typography>
               </Box>
             )}
             {(validation || error) && <Alert severity="error">{validation || error}</Alert>}

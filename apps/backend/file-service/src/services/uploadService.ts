@@ -46,8 +46,9 @@ export async function reserveFileUpload(fileId: string, mimetype: string | undef
 }
 
 /** Reject excess bytes before forwarding a buffer to disk. The request itself is
- * kept outside pipeline so a 4xx response can be sent before closing its socket. */
-async function receive(body: Readable, stage: string, signal: AbortSignal, limit: number, expected?: number): Promise<number> {
+ * kept outside pipeline so a 4xx response can be sent before closing its socket.
+ * `at` writes into an existing file from that byte instead of creating one. */
+async function receive(body: Readable, stage: string, signal: AbortSignal, limit: number, expected?: number, at?: number): Promise<number> {
   signal.throwIfAborted();
   if (body.destroyed) throw new BadRequestError('Upload interrupted');
   let count = 0;
@@ -56,7 +57,7 @@ async function receive(body: Readable, stage: string, signal: AbortSignal, limit
     count += chunk.length;
     callback(null, chunk);
   } });
-  const output = fs.createWriteStream(stage, { flags: 'wx' });
+  const output = at === undefined ? fs.createWriteStream(stage, { flags: 'wx' }) : fs.createWriteStream(stage, { flags: 'r+', start: at });
   const fail = (error: Error) => bounded.destroy(error);
   const aborted = () => fail(new BadRequestError('Upload interrupted'));
   const timer = setTimeout(() => fail(new HttpError(408, 'Upload timed out')), 5 * 60 * 1000);
@@ -109,10 +110,13 @@ function durable(stage: string): void {
   try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
   syncDirectory(path.dirname(stage));
 }
-/** Assemble once at completion, rather than copying the growing prefix for every
- * chunk. Both the output and each committed part are immutable. */
+/** Only uploads begun before chunks were written in place have several parts;
+ * a current upload is one part and needs no copy. */
 async function assemble(store: Awaited<ReturnType<typeof openUploadStore>>, parts: UploadPart[]): Promise<string> {
-  if (parts.length === 1) return parts[0].id;
+  if (parts.length === 1) {
+    if (fs.statSync(store.path(parts[0].id)).size !== parts[0].size) throw new Error('Committed upload part is incomplete');
+    return parts[0].id;
+  }
   const id = store.candidate('blob');
   async function* bytes() {
     for (const part of parts) {
@@ -162,12 +166,21 @@ async function writeUpload(fileId: string, body: Readable, options: UploadOption
     if (state.parts.length >= 4096) throw new BadRequestError('Upload has too many chunks');
     if (range) { state.total = range.total; await store.save(state); }
     if (interrupted()) throw new BadRequestError('Upload interrupted');
-    const id = store.candidate('part');
-    const received = await receive(body, store.path(id), store.signal, expected ?? maximum - state.offset, expected);
+    // A later chunk is written into the file the first one started, at its
+    // offset: assembling a multi-GB zip at the end took longer than the proxy
+    // in front of file-service waits for the final chunk's response. Bytes an
+    // interrupted attempt left past the committed offset are overwritten by the
+    // retry, which starts from that offset. Uploads begun as separate parts
+    // continue that way.
+    const extending = state.parts.length === 1 && state.parts[0].size === state.offset;
+    const id = extending ? state.parts[0].id : store.candidate('part');
+    if (extending && fs.statSync(store.path(id)).size < state.offset) throw new Error('Committed upload part is incomplete');
+    const received = await receive(body, store.path(id), store.signal, expected ?? maximum - state.offset, expected, extending ? state.offset : undefined);
     durable(store.path(id));
     const size = state.offset + received;
     const complete = !range || size === range.total;
-    state.parts.push({ id, size: received });
+    if (extending) state.parts[0].size = size;
+    else state.parts.push({ id, size: received });
     state.offset = size;
     if (complete) {
       const publishedId = await assemble(store, state.parts);

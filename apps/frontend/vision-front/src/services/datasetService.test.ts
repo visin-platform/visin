@@ -50,8 +50,18 @@ describe('datasetService', () => {
     const file = new File(['zip'], 'set.zip');
     const onProgress = vi.fn();
     expect(await service.uploadArchive('d1', file, onProgress)).toMatchObject({ _id: 'd1' });
-    expect(api.post).toHaveBeenNthCalledWith(1, '/d1/archive/upload-url', { filename: 'set.zip' });
+    expect(api.post).toHaveBeenNthCalledWith(1, '/d1/archive/upload-url', { filename: 'set.zip', size: 3, lastModified: file.lastModified });
     expect(uploadToSignedUrl).toHaveBeenCalledWith('https://files.test/up', file, onProgress);
     expect(api.post).toHaveBeenNthCalledWith(2, '/d1/archive/complete');
+  });
+
+  it('only finishes a resumed upload whose bytes had all arrived, and discards one', async () => {
+    api.post.mockResolvedValueOnce({ data: { uploaded: true, resumed: true } }).mockResolvedValueOnce({ data: { _id: 'd1' } });
+    await service.uploadArchive('d1', new File(['zip'], 'set.zip'));
+    expect(uploadToSignedUrl).not.toHaveBeenCalled();
+    expect(api.post).toHaveBeenLastCalledWith('/d1/archive/complete');
+    api.delete.mockResolvedValueOnce({ data: { _id: 'd1' } });
+    expect(await service.discardUpload('d1')).toEqual({ _id: 'd1' });
+    expect(api.delete).toHaveBeenLastCalledWith('/d1/archive/upload');
   });
 });

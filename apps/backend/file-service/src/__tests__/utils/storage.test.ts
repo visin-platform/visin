@@ -59,7 +59,7 @@ describe('resolvePath', () => {
 
   it('reports rejected paths as client errors, including the reserved upload namespace', async () => {
     expect(() => resolvePath('../outside.txt')).toThrow(BadRequestError);
-    expect(() => resolvePath('.uploads/state')).toThrow(BadRequestError);
+    expect(() => resolvePath('uploads/state')).toThrow(BadRequestError);
   });
 
   it('allows a path that resolves to the data dir itself', async () => {

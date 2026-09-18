@@ -6,6 +6,7 @@ test('loads the app shell without crashing', async ({ page }) => {
 
   await page.goto('/');
 
-  await expect(page.getByText('Visin').first()).toBeAttached();
+  // The shared layout shows the brand as its logo, not as text.
+  await expect(page.getByRole('img', { name: 'Visin' }).first()).toBeAttached();
   expect(pageErrors, `Uncaught exceptions: ${pageErrors.join(', ')}`).toEqual([]);
 });

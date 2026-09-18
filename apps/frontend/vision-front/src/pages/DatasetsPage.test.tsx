@@ -36,7 +36,8 @@ describe('DatasetsPage', () => {
       datasets: [
         dataset(),
         dataset({ _id: 'd2', name: 'Team set', visibility: 'group', archive: undefined, coverUrl: undefined, imageCount: 0, import: { status: 'running' } }),
-        dataset({ _id: 'd3', name: 'Migrated', archive: { filename: 'upload.zip', uploadedAt: '2026-09-01T00:00:00Z' }, imageCount: 5 })
+        dataset({ _id: 'd3', name: 'Migrated', archive: { filename: 'upload.zip', uploadedAt: '2026-09-01T00:00:00Z' }, imageCount: 5, uploading: { filename: 'next.zip' }, scan: { status: 'failed' }, contents: undefined }),
+        dataset({ _id: 'd4', name: 'Fresh', imageCount: 0, archive: { filename: 'fresh.zip', uploadedAt: '2026-09-01T00:00:00Z' }, scan: { status: 'running' } })
       ],
       pagination: { page: 1, limit: 24, total: 30, pages: 2 }
     });
@@ -51,7 +52,10 @@ describe('DatasetsPage', () => {
     expect(screen.getByText('Group')).toBeInTheDocument();
     expect(screen.getByText('Importing')).toBeInTheDocument();
     expect(screen.getByText(/upload\.zip · 5 images/)).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Download/ })).toHaveLength(2);
+    expect(screen.getByText('Upload interrupted')).toBeInTheDocument();
+    expect(screen.getByText('Unreadable zip')).toBeInTheDocument();
+    expect(screen.getByText('Reading zip')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Download/ })).toHaveLength(3);
 
     fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }));
     await waitFor(() => expect(service.listDatasets).toHaveBeenLastCalledWith({ search: undefined, page: 2, limit: 24 }));

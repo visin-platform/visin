@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useDatasetDownload } from '../hooks/useDatasetDownload';
+import { useWarnOnLeave } from '../hooks/useWarnOnLeave';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DatasetFormDialog, { DatasetFormValues } from '../components/dataset/DatasetFormDialog';
 import { createDataset, Dataset, listDatasets, uploadArchive } from '../services/datasetService';
@@ -60,6 +61,9 @@ const DatasetCard: React.FC<{ dataset: Dataset; downloading: boolean; onDownload
       </CardActionArea>
       <Stack direction="row" spacing={1} sx={{ px: 2, pb: 1.5, alignItems: 'center' }}>
         {dataset.visibility === 'group' && <Chip size="small" label="Group" />}
+        {dataset.uploading && <Chip size="small" color="warning" label="Upload interrupted" />}
+        {(dataset.scan?.status === 'queued' || dataset.scan?.status === 'running') && <Chip size="small" color="info" label="Reading zip" />}
+        {dataset.scan?.status === 'failed' && !dataset.contents && <Chip size="small" color="error" label="Unreadable zip" />}
         {dataset.import && (dataset.import.status === 'queued' || dataset.import.status === 'running') && <Chip size="small" color="info" label="Importing" />}
         <Box sx={{ flexGrow: 1 }} />
         {dataset.archive && (
@@ -89,6 +93,7 @@ export const DatasetsPage: React.FC = () => {
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { downloadingId, download } = useDatasetDownload(setError);
+  useWarnOnLeave(progress !== null);
 
   useEffect(() => {
     const timer = setTimeout(() => {

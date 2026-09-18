@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { BadRequestError } from '@visin/backend-core';
 export const dataDir = (): string => path.resolve(process.env.FILE_SERVICE_DATA_DIR || '/data');
-export const CONTROL_DIRECTORY = '.uploads';
+// Reserved: no file id may start with it, so a caller can never read or write upload state.
+export const CONTROL_DIRECTORY = 'uploads';
 // A caller-supplied path is client input: rejecting it is a 400, not a server fault.
 export const resolvePath = (fileId: string): string => {
   const root = dataDir();

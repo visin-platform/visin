@@ -11,15 +11,19 @@ const workerConstructor = jest.fn(() => ({ on }));
 jest.mock('bullmq', () => ({ Worker: workerConstructor, UnrecoverableError: FakeUnrecoverableError }));
 jest.mock('../../queue/connection', () => ({ createRedisConnection: jest.fn(() => 'REDIS') }));
 jest.mock('../../services/importService', () => ({ runImport: jest.fn(), markImportFailed: jest.fn() }));
+jest.mock('../../services/scanService', () => ({ runScan: jest.fn(), markScanFailed: jest.fn(() => Promise.resolve()) }));
 
 import type { Job } from 'bullmq';
 import { createImportWorker, handleFailedImport, processImportJob, willRetry } from '../../queue/importWorker';
 import { IMPORT_QUEUE_NAME, ImportJobData } from '../../queue/importQueue';
 import { markImportFailed, runImport } from '../../services/importService';
+import { markScanFailed, runScan } from '../../services/scanService';
 import { NonRetryableImportError } from '../../utils/boundedZip';
 
 const job = (attemptsMade: number, attempts = 3) =>
-  ({ data: { datasetId: 'd', importId: 'i' }, attemptsMade, opts: { attempts } }) as unknown as Job<ImportJobData>;
+  ({ name: 'import', data: { datasetId: 'd', importId: 'i' }, attemptsMade, opts: { attempts } }) as unknown as Job<ImportJobData>;
+const scanJob = (attemptsMade: number) =>
+  ({ name: 'scan', data: { datasetId: 'd', fileId: 'f.zip' }, attemptsMade, opts: { attempts: 3 } }) as unknown as Job<ImportJobData>;
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -53,4 +57,14 @@ it('marks the import failed only when no retry is left', async () => {
   expect(markImportFailed).toHaveBeenCalledWith('d', 'i', 'final');
   handleFailedImport(undefined, new Error('orphan'));
   await new Promise((resolve) => setImmediate(resolve));
+});
+
+it('runs a scan job, and marks a scan failed when no retry is left', async () => {
+  await processImportJob(scanJob(0));
+  expect(runScan).toHaveBeenCalledWith('d', 'f.zip');
+  expect(runImport).not.toHaveBeenCalled();
+
+  handleFailedImport(scanJob(3), new Error('not a zip'));
+  expect(markScanFailed).toHaveBeenCalledWith('d', 'f.zip', 'not a zip');
+  expect(markImportFailed).not.toHaveBeenCalled();
 });

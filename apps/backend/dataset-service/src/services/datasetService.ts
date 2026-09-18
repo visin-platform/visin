@@ -4,12 +4,10 @@ import { BadRequestError, ConflictError, ForbiddenError, getUploadPolicy, logger
 import { Dataset, IDataset, ImportMapping } from '../models/Dataset';
 import { DatasetItem } from '../models/DatasetItem';
 import * as files from '../clients/fileServiceClient';
-import { enqueueImport, removeQueuedImport } from '../queue/importQueue';
-import { summarizeContents } from '../utils/contents';
-import { readZipIndex } from '../utils/zipIndex';
+import { enqueueImport, enqueueScan, removeQueuedImport } from '../queue/importQueue';
 import { normalizeFolder } from '../utils/zipPaths';
 import { DatasetAccess, readableDataset, writableDataset } from './accessService';
-import type { CreateDatasetBody, ListDatasetsQuery, UpdateDatasetBody } from '../validation/datasetSchemas';
+import type { ArchiveUploadBody, CreateDatasetBody, ListDatasetsQuery, UpdateDatasetBody } from '../validation/datasetSchemas';
 
 const UPLOAD_URL_MINUTES = 240;
 const DOWNLOAD_URL_MINUTES = 60;
@@ -53,8 +51,9 @@ export const toDatasetView = (dataset: IDataset, canWrite: boolean, coverUrl?: s
   visibility: dataset.visibility,
   groupId: dataset.groupId,
   archive: dataset.archive ? { filename: dataset.archive.filename, size: dataset.archive.size, uploadedAt: dataset.archive.uploadedAt } : undefined,
-  uploading: dataset.pendingUpload ? { filename: dataset.pendingUpload.filename } : undefined,
+  uploading: dataset.pendingUpload ? { filename: dataset.pendingUpload.filename, size: dataset.pendingUpload.size } : undefined,
   contents: dataset.contents,
+  scan: dataset.scan ? { status: dataset.scan.status, error: dataset.scan.error, finishedAt: dataset.scan.finishedAt } : undefined,
   groups: dataset.groups,
   imageCount: dataset.imageCount,
   coverUrl,
@@ -155,36 +154,87 @@ export const deleteDataset = async (access: DatasetAccess, id: string): Promise<
   logger.info('Dataset deleted', { datasetId: id });
 };
 
-/** Reserve a stored zip path and hand back a signed chunked-upload URL for it. */
-export const createArchiveUpload = async (access: DatasetAccess, id: string, filename: string) => {
+/** The file an interrupted upload was sending, chosen again. One recorded before sizes were (no `size`) matches by name. */
+const isSameFile = (pending: NonNullable<IDataset['pendingUpload']>, body: ArchiveUploadBody): boolean =>
+  pending.filename === body.filename &&
+  (pending.size === undefined || (pending.size === body.size && pending.lastModified === body.lastModified));
+
+/**
+ * Hand back a signed chunked-upload URL for a dataset's zip.
+ *
+ * The same file again (a closed tab, a dropped connection) gets the same
+ * reservation back: file-service answers its first chunk with the offset it
+ * already holds, so the upload continues from there — or, when every byte had
+ * arrived, `uploaded: true` says only finishing is left. Anything else starts
+ * a new reservation and deletes the abandoned one's partial bytes.
+ */
+export const createArchiveUpload = async (access: DatasetAccess, id: string, body: ArchiveUploadBody) => {
   const dataset = await writableDataset(access, id);
   assertNotHeld(dataset, 'replace the zip');
   if (isImportActive(dataset)) throw new ConflictError('An import is running — wait for it or cancel it first');
 
-  const fileId = `${dataset.storagePrefix}archives/${randomUUID()}-${sanitizeFilename(filename)}`;
-  const policy = getUploadPolicy(fileId, 'application/zip', 'archive');
-  const upload = await files.getUploadUrl(fileId, policy.maxBytes, UPLOAD_URL_MINUTES);
-  dataset.pendingUpload = { fileId, filename, expiresAt: new Date(upload.expiresMs) };
-  await dataset.save();
-  return { uploadUrl: upload.url, expiresAt: new Date(upload.expiresMs).toISOString() };
-};
-
-/** Measure a stored zip and read its index. */
-const scanArchive = async (fileId: string, datasetId: string) => {
-  const size = await files.getFileSize(fileId);
-  if (!size) throw new BadRequestError('The upload has not arrived — upload the zip first');
-  try {
-    return { size, contents: summarizeContents(await readZipIndex(fileId, size)) };
-  } catch (err) {
-    logger.warn('Archive is not a readable zip', { datasetId, error: (err as Error).message });
-    throw new BadRequestError('The uploaded file is not a readable zip archive');
+  const pending = dataset.pendingUpload;
+  const policyFor = (fileId: string) => getUploadPolicy(fileId, 'application/zip', 'archive');
+  if (pending && isSameFile(pending, body)) {
+    if (await files.getFileSize(pending.fileId)) return { uploaded: true, resumed: true };
+    try {
+      const upload = await files.getUploadUrl(pending.fileId, policyFor(pending.fileId).maxBytes, UPLOAD_URL_MINUTES);
+      dataset.pendingUpload = { ...pending, expiresAt: new Date(upload.expiresMs) };
+      await dataset.save();
+      return { uploadUrl: upload.url, expiresAt: new Date(upload.expiresMs).toISOString(), uploaded: false, resumed: true };
+    } catch (err) {
+      logger.warn('Could not resume a dataset upload; starting it again', { datasetId: id, error: (err as Error).message });
+    }
   }
+  if (pending) {
+    await files.deleteFile(pending.fileId).catch((err: Error) =>
+      logger.warn('Could not delete an abandoned dataset upload', { datasetId: id, error: err.message })
+    );
+  }
+
+  const fileId = `${dataset.storagePrefix}archives/${randomUUID()}-${sanitizeFilename(body.filename)}`;
+  const upload = await files.getUploadUrl(fileId, policyFor(fileId).maxBytes, UPLOAD_URL_MINUTES);
+  dataset.pendingUpload = {
+    fileId,
+    filename: body.filename,
+    size: body.size,
+    lastModified: body.lastModified,
+    expiresAt: new Date(upload.expiresMs)
+  };
+  await dataset.save();
+  return { uploadUrl: upload.url, expiresAt: new Date(upload.expiresMs).toISOString(), uploaded: false, resumed: false };
 };
 
 /**
- * Adopt the uploaded zip: record its size, read its index into `contents`, and
- * drop the archive it replaces. Takes no file id — the reservation already
- * holds the one this service issued, so a client can't swap in another file.
+ * Give up on an interrupted upload: its partial bytes are deleted and the
+ * dataset keeps the zip it had. Nothing to discard is not an error.
+ */
+export const discardArchiveUpload = async (access: DatasetAccess, id: string) => {
+  const dataset = await writableDataset(access, id);
+  const pending = dataset.pendingUpload;
+  if (pending) {
+    await files.deleteFile(pending.fileId);
+    dataset.pendingUpload = undefined;
+    await dataset.save();
+    logger.info('Dataset upload discarded', { datasetId: id });
+  }
+  return toDatasetView(dataset, true);
+};
+
+/** Hand reading the archive's index to the worker; the page polls `scan`. */
+const queueScan = async (dataset: IDataset, fileId: string): Promise<void> => {
+  dataset.scan = { status: 'queued', fileId };
+  dataset.markModified('scan');
+  await dataset.save();
+  await enqueueScan({ datasetId: dataset._id.toString(), fileId });
+};
+
+/**
+ * Adopt the uploaded zip and drop the archive it replaces, then queue reading
+ * its index — the request returns at once, so the browser can leave. Takes no
+ * file id: the reservation already holds the one this service issued, so a
+ * client can't swap in another file. Safe to call again for an upload whose
+ * confirmation never arrived (a closed tab): it checks the bytes are there.
  */
 export const completeArchiveUpload = async (access: DatasetAccess, id: string) => {
   const dataset = await writableDataset(access, id);
@@ -192,33 +242,27 @@ export const completeArchiveUpload = async (access: DatasetAccess, id: string) =
   if (!pending) throw new BadRequestError('No upload is in progress for this dataset');
   assertNotHeld(dataset, 'replace the zip');
 
-  const { size, contents } = await scanArchive(pending.fileId, id);
+  const size = await files.getFileSize(pending.fileId);
+  if (!size) throw new BadRequestError('The upload has not arrived — upload the zip again');
   const previous = dataset.archive?.fileId;
   dataset.archive = { fileId: pending.fileId, filename: pending.filename, size, uploadedAt: new Date() };
   dataset.pendingUpload = undefined;
-  dataset.contents = contents;
-  dataset.markModified('contents');
-  await dataset.save();
+  dataset.contents = undefined;
+  await queueScan(dataset, pending.fileId);
   if (previous && previous !== pending.fileId) await files.deleteFile(previous);
-  logger.info('Dataset archive uploaded', { datasetId: id, size, entries: contents.entries });
+  logger.info('Dataset archive uploaded', { datasetId: id, size });
   return toDatasetView(dataset, true);
 };
 
 /**
- * Measure and index a zip that is already stored — what a dataset migrated from
+ * Read the index of a zip that is already stored — what a dataset migrated from
  * label-service needs before its contents can be shown or re-mapped, and the
- * way to retry a scan that failed.
+ * way to retry a scan that failed. Queued, like the one after an upload.
  */
 export const rescanArchive = async (access: DatasetAccess, id: string) => {
   const dataset = await writableDataset(access, id);
   if (!dataset.archive) throw new BadRequestError('This dataset has no zip yet');
-  const { size, contents } = await scanArchive(dataset.archive.fileId, id);
-  dataset.archive.size = size;
-  dataset.contents = contents;
-  dataset.markModified('archive');
-  dataset.markModified('contents');
-  await dataset.save();
-  logger.info('Dataset archive scanned', { datasetId: id, size, entries: contents.entries });
+  await queueScan(dataset, dataset.archive.fileId);
   return toDatasetView(dataset, true);
 };
 

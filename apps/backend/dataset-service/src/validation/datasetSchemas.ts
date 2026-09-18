@@ -41,7 +41,10 @@ export const archiveUploadBodySchema = z.object({
     .trim()
     .min(1, 'A filename is required')
     .max(255)
-    .refine((name) => /\.zip$/i.test(name), 'Datasets are uploaded as .zip archives')
+    .refine((name) => /\.zip$/i.test(name), 'Datasets are uploaded as .zip archives'),
+  /** with `lastModified`, identifies the file so an interrupted upload of it can resume */
+  size: z.number().int().positive().optional(),
+  lastModified: z.number().int().nonnegative().optional()
 });
 export type ArchiveUploadBody = z.infer<typeof archiveUploadBodySchema>;
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CHUNK_BYTES, uploadToSignedUrl } from './chunkedUpload';
+import { CHUNK_BYTES, retryDelayMs, uploadToSignedUrl } from './chunkedUpload';
 
 interface FakeXhr {
   open: ReturnType<typeof vi.fn>;
@@ -41,8 +41,9 @@ const stubXhrQueue = (): FakeXhr[] => {
  * would hang the run rather than fail it if the request never arrives.
  */
 const waitFor = async (created: FakeXhr[], index: number): Promise<FakeXhr> => {
+  // Advancing fake time also runs the retry pauses between requests.
   for (let tick = 0; created.length <= index && tick < 100; tick += 1) {
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(500);
   }
   if (created.length <= index) {
     throw new Error(`request ${index} was never opened`);
@@ -75,8 +76,14 @@ const rangeOf = (xhr: FakeXhr): string | undefined =>
   xhr.setRequestHeader.mock.calls.find((c) => c[0] === 'Content-Range')?.[1];
 
 describe('uploadToSignedUrl', () => {
-  beforeEach(() => vi.clearAllMocks());
-  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   it('sends a small file as one un-ranged PUT', async () => {
     const created = stubXhrQueue();
@@ -183,23 +190,42 @@ describe('uploadToSignedUrl', () => {
     const created = stubXhrQueue();
     const promise = uploadToSignedUrl('http://upload', makeFile(CHUNK_BYTES * 2));
 
-    for (let i = 0; i < 4; i++) {
+    const failed = expect(promise).rejects.toThrow('network');
+    for (let i = 0; i < 5; i++) {
       (await waitFor(created, i)).onerror!();
       await Promise.resolve();
     }
 
-    await expect(promise).rejects.toThrow('network');
-    expect(created).toHaveLength(4);
+    await failed;
+    expect(created).toHaveLength(5);
   });
 
   it('gives up when the server keeps resynchronising to a different offset', async () => {
     const created = stubXhrQueue();
     const promise = uploadToSignedUrl('http://upload', makeFile(CHUNK_BYTES * 2));
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       await answer(created, i, 409, { size: 0 });
     }
 
     await expect(promise).rejects.toThrow('could not resynchronise with the server');
+  });
+
+  it('waits out a 409 without an offset — the server still finishing the same chunk', async () => {
+    const created = stubXhrQueue();
+    const total = CHUNK_BYTES + 1;
+    const promise = uploadToSignedUrl('http://upload', makeFile(total));
+
+    await answer(created, 0, 200, { size: CHUNK_BYTES });
+    await answer(created, 1, 524);
+    await answer(created, 2, 409, { success: false, message: 'Another upload is writing this file' });
+    const last = await answer(created, 3, 200, { size: total, complete: true });
+    await promise;
+
+    expect(rangeOf(last)).toBe(`bytes ${CHUNK_BYTES}-${total - 1}/${total}`);
+  });
+
+  it('pauses longer before each consecutive retry', () => {
+    expect([1, 2, 3, 4].map(retryDelayMs)).toEqual([1000, 2000, 4000, 8000]);
   });
 
   it('falls back to the chunk end when the reply carries no size', async () => {

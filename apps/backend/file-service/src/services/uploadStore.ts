@@ -19,8 +19,10 @@ export async function readUploadState(fileId: string): Promise<UploadState | und
 }
 
 /** Mongo owns the visible pointer. A lease only coordinates work: every state
- * commit is fenced, and each request writes immutable, uniquely named bytes.
- * A paused writer can never overwrite a replacement after losing its lease. */
+ * commit is fenced, and a request that starts a file writes uniquely named bytes,
+ * so a paused writer can never overwrite a replacement after losing its lease.
+ * Later chunks of a ranged upload extend the file its first chunk started, only
+ * past that file's committed header, and only within the reservation's total. */
 export async function openUploadStore(fileId: string) {
   const location = uploadLocation(fileId);
   fs.mkdirSync(location.directory, { recursive: true });

@@ -71,5 +71,6 @@ describe('DatasetFormDialog', () => {
     expect(listMyGroups).not.toHaveBeenCalled();
     rerender(<DatasetFormDialog open mode="replace" busy uploadProgress={0.25} onCancel={onCancel} onSubmit={vi.fn()} />);
     await waitFor(() => expect(screen.getByTestId('upload-progress')).toBeInTheDocument());
+    expect(screen.getByText(/Keep this page open until the upload finishes/)).toBeInTheDocument();
   });
 });

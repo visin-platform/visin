@@ -48,12 +48,15 @@ export const deleteDataset = async (req: Request, res: Response): Promise<void> 
 };
 
 export const createArchiveUpload = async (req: Request, res: Response): Promise<void> => {
-  const { filename } = req.body as ArchiveUploadBody;
-  res.status(201).json({ success: true, data: await datasets.createArchiveUpload(accessFor(req), idOf(req), filename) });
+  res.status(201).json({ success: true, data: await datasets.createArchiveUpload(accessFor(req), idOf(req), req.body as ArchiveUploadBody) });
 };
 
 export const completeArchiveUpload = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await datasets.completeArchiveUpload(accessFor(req), idOf(req)) });
+};
+
+export const discardArchiveUpload = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await datasets.discardArchiveUpload(accessFor(req), idOf(req)) });
 };
 
 export const rescanArchive = async (req: Request, res: Response): Promise<void> => {

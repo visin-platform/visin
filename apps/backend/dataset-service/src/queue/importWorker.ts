@@ -1,9 +1,10 @@
 import { Worker, Job, UnrecoverableError } from 'bullmq';
 import { logger } from '@visin/backend-core';
 import { runImport, markImportFailed } from '../services/importService';
+import { runScan, markScanFailed } from '../services/scanService';
 import { NonRetryableImportError } from '../utils/boundedZip';
 import { createRedisConnection } from './connection';
-import { IMPORT_QUEUE_NAME, ImportJobData } from './importQueue';
+import { DatasetJobData, IMPORT_QUEUE_NAME, ImportJobData, SCAN_JOB, ScanJobData } from './importQueue';
 
 // One import at a time: each one already processes several images in parallel
 // (DATASET_IMPORT_CONCURRENCY), and in the default deployment the worker shares
@@ -19,14 +20,19 @@ const MAX_STALLED_COUNT = Number(process.env.DATASET_IMPORT_MAX_STALLED || 2);
  * Whether BullMQ will hand this job back after `err`. By the time the 'failed'
  * event fires, `attemptsMade` already counts the attempt that just failed.
  */
-export const willRetry = (job: Job<ImportJobData>, err: Error): boolean =>
+export const willRetry = (job: Job<DatasetJobData>, err: Error): boolean =>
   !(err instanceof UnrecoverableError || err.name === 'UnrecoverableError') &&
   job.attemptsMade < (job.opts.attempts ?? 1);
 
-export const processImportJob = async (job: Job<ImportJobData>): Promise<void> => {
-  const { datasetId, importId } = job.data;
-  logger.info('Dataset import started', { datasetId, importId, attempt: job.attemptsMade + 1 });
+export const processImportJob = async (job: Job<DatasetJobData>): Promise<void> => {
   try {
+    if (job.name === SCAN_JOB) {
+      const { datasetId, fileId } = job.data as ScanJobData;
+      await runScan(datasetId, fileId);
+      return;
+    }
+    const { datasetId, importId } = job.data as ImportJobData;
+    logger.info('Dataset import started', { datasetId, importId, attempt: job.attemptsMade + 1 });
     await runImport(datasetId, importId);
   } catch (err) {
     // Rethrown as unrecoverable so BullMQ stops here instead of re-downloading
@@ -35,27 +41,28 @@ export const processImportJob = async (job: Job<ImportJobData>): Promise<void> =
   }
 };
 
-export const handleFailedImport = (job: Job<ImportJobData> | undefined, err: Error): void => {
+export const handleFailedImport = (job: Job<DatasetJobData> | undefined, err: Error): void => {
   if (!job) {
-    logger.error('Dataset import failed without a job', { error: err.message });
+    logger.error('Dataset job failed without a job', { error: err.message });
     return;
   }
-  const { datasetId, importId } = job.data;
+  const { datasetId } = job.data;
   if (willRetry(job, err)) {
-    logger.warn('Dataset import attempt failed, retrying', { datasetId, importId, attempt: job.attemptsMade, error: err.message });
+    logger.warn('Dataset job attempt failed, retrying', { datasetId, job: job.name, attempt: job.attemptsMade, error: err.message });
     return;
   }
-  logger.error('Dataset import failed', { datasetId, importId, error: err.message });
+  logger.error('Dataset job failed', { datasetId, job: job.name, error: err.message });
   // The processor is already gone, so this is the last chance to close the
-  // import out — without it a dead import polls as `running` until its
-  // heartbeat goes stale.
-  markImportFailed(datasetId, importId, err.message).catch((markErr: Error) =>
-    logger.error('Could not mark import failed', { importId, error: markErr.message })
-  );
+  // work out — without it a dead import or scan polls as unfinished forever.
+  const closing =
+    job.name === SCAN_JOB
+      ? markScanFailed(datasetId, (job.data as ScanJobData).fileId, err.message)
+      : markImportFailed(datasetId, (job.data as ImportJobData).importId, err.message);
+  closing.catch((markErr: Error) => logger.error('Could not mark dataset job failed', { datasetId, error: markErr.message }));
 };
 
-export const createImportWorker = (): Worker<ImportJobData> => {
-  const worker = new Worker<ImportJobData>(IMPORT_QUEUE_NAME, processImportJob, {
+export const createImportWorker = (): Worker<DatasetJobData> => {
+  const worker = new Worker<DatasetJobData>(IMPORT_QUEUE_NAME, processImportJob, {
     connection: createRedisConnection(),
     concurrency: CONCURRENCY,
     maxStalledCount: MAX_STALLED_COUNT

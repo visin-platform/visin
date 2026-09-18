@@ -10,7 +10,12 @@ export const CHUNK_BYTES = 64 * 1024 * 1024;
  * Consecutive failures tolerated on one chunk before the upload gives up.
  * Reset by any chunk that lands, so a flaky link costs retries, not the upload.
  */
-const MAX_CHUNK_ATTEMPTS = 4;
+const MAX_CHUNK_ATTEMPTS = 5;
+
+/** Pause before a retry: 1 s, 2 s, 4 s, 8 s — long enough for a request the server is still finishing to let go. */
+export const retryDelayMs = (attempt: number): number => 1000 * 2 ** (attempt - 1);
+
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface ChunkResult {
   status: number;
@@ -118,6 +123,7 @@ export const uploadToSignedUrl = async (
       if (attempts >= MAX_CHUNK_ATTEMPTS) {
         throw err;
       }
+      await wait(retryDelayMs(attempts));
       continue;
     }
 
@@ -133,10 +139,14 @@ export const uploadToSignedUrl = async (
 
     if (result.status < 200 || result.status >= 300) {
       attempts += 1;
-      // 5xx is worth another try; a 4xx means this request will never be accepted.
-      if (result.status < 500 || attempts >= MAX_CHUNK_ATTEMPTS) {
+      // 5xx is worth another try, and so is a 409 without an offset: the server
+      // is still finishing an earlier attempt at this chunk (typically one whose
+      // response the proxy gave up waiting for). Any other 4xx never succeeds.
+      const retryable = result.status >= 500 || result.status === 409;
+      if (!retryable || attempts >= MAX_CHUNK_ATTEMPTS) {
         throw new Error(`Failed to upload dataset file (${result.status})`);
       }
+      await wait(retryDelayMs(attempts));
       continue;
     }
 

@@ -8,6 +8,17 @@ export interface ImportJobData {
   importId: string;
 }
 
+export interface ScanJobData {
+  datasetId: string;
+  fileId: string;
+}
+
+export type DatasetJobData = ImportJobData | ScanJobData;
+
+/** Job names on the queue: extracting images, and reading a zip's index. */
+export const IMPORT_JOB = 'import';
+export const SCAN_JOB = 'scan';
+
 // A transient failure (file-service restart, aborted transfer) is worth another
 // go — import is idempotent, so a retry resumes where the dead attempt stopped.
 // A structurally bad zip is not, and is thrown as UnrecoverableError instead.
@@ -25,11 +36,11 @@ const JOB_OPTIONS: JobsOptions = {
 
 // Created on first use, not at import time, so requiring this module (or
 // anything that reaches it) never opens a socket in a test or a CLI script.
-let queue: Queue<ImportJobData> | undefined;
+let queue: Queue<DatasetJobData> | undefined;
 
-export const getImportQueue = (): Queue<ImportJobData> => {
+export const getImportQueue = (): Queue<DatasetJobData> => {
   if (!queue) {
-    queue = new Queue<ImportJobData>(IMPORT_QUEUE_NAME, { connection: createRedisConnection() });
+    queue = new Queue<DatasetJobData>(IMPORT_QUEUE_NAME, { connection: createRedisConnection() });
   }
   return queue;
 };
@@ -40,7 +51,16 @@ export const getImportQueue = (): Queue<ImportJobData> => {
  * rather than a second worker racing the first over the same zip.
  */
 export const enqueueImport = async (data: ImportJobData): Promise<void> => {
-  await getImportQueue().add('import', data, { ...JOB_OPTIONS, jobId: data.importId });
+  await getImportQueue().add(IMPORT_JOB, data, { ...JOB_OPTIONS, jobId: data.importId });
+};
+
+/**
+ * Queue reading an uploaded zip's index. Runs on the same worker as imports, so
+ * the request that finishes an upload returns at once and the browser can leave;
+ * the dataset's `scan` is what the page polls.
+ */
+export const enqueueScan = async (data: ScanJobData): Promise<void> => {
+  await getImportQueue().add(SCAN_JOB, data, JOB_OPTIONS);
 };
 
 /** Drop a not-yet-started import from the queue. No-op once a worker has it. */

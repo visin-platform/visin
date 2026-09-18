@@ -32,12 +32,14 @@ import DatasetItemDialog from '../components/dataset/DatasetItemDialog';
 import ImportMappingDialog from '../components/dataset/ImportMappingDialog';
 import ImportStatusPanel from '../components/dataset/ImportStatusPanel';
 import { useDatasetDownload } from '../hooks/useDatasetDownload';
+import { useWarnOnLeave } from '../hooks/useWarnOnLeave';
 import { usePageTitle } from '../hooks/usePageTitle';
 import {
   cancelImport,
   Dataset,
   DatasetItem,
   deleteDataset,
+  discardUpload,
   getDataset,
   ImportMapping,
   scanArchive,
@@ -53,6 +55,9 @@ type DialogName = 'edit' | 'replace' | 'mapping' | 'delete' | null;
 const isImporting = (dataset?: Dataset): boolean =>
   dataset?.import?.status === 'queued' || dataset?.import?.status === 'running';
 
+const isScanning = (dataset?: Dataset): boolean =>
+  dataset?.scan?.status === 'queued' || dataset?.scan?.status === 'running';
+
 const errorText = (err: unknown, fallback: string): string => (err instanceof Error ? err.message : fallback);
 
 const DatasetDetailPage: React.FC = () => {
@@ -67,24 +72,36 @@ const DatasetDetailPage: React.FC = () => {
   const [progress, setProgress] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(arrival?.uploadError ?? null);
   const [openItem, setOpenItem] = useState<DatasetItem | null>(null);
+  // Choosing image groups needs the zip's contents, which a background scan
+  // fills in after an upload — so the dialog waits for them.
+  const [mapWhenReady, setMapWhenReady] = useState(Boolean(arrival?.chooseGroups));
   const { downloadingId, download } = useDatasetDownload(setActionError);
+  useWarnOnLeave(progress !== null);
 
   const { data: dataset, isLoading, error } = useQuery({
     queryKey: ['dataset', id],
     queryFn: () => getDataset(id),
     enabled: Boolean(id),
-    // Poll only while an import runs; its progress lives on the dataset.
-    refetchInterval: (query) => (isImporting(query.state.data) ? 3000 : false)
+    // Poll only while an import or a scan runs; both report on the dataset.
+    refetchInterval: (query) => (isImporting(query.state.data) || isScanning(query.state.data) ? 3000 : false)
   });
   usePageTitle(dataset ? `${dataset.name} - Datasets - Vision` : 'Dataset - Vision');
 
-  // Straight after creating a dataset, go on to choosing its image groups.
+  // Forget the arrival state, so a reload does not reopen anything.
   useEffect(() => {
-    if (arrival?.chooseGroups && dataset?.canWrite && dataset.archive && !dataset.import) {
+    if (arrival?.chooseGroups) navigate(location.pathname, { replace: true, state: null });
+  }, [arrival, navigate, location.pathname]);
+
+  // After an upload, go on to choosing image groups once the zip has been read.
+  useEffect(() => {
+    if (!mapWhenReady || !dataset) return;
+    if (dataset.scan?.status === 'failed' || !dataset.canWrite) {
+      setMapWhenReady(false);
+    } else if (dataset.contents && !isScanning(dataset) && !isImporting(dataset)) {
+      setMapWhenReady(false);
       setDialog('mapping');
-      navigate(location.pathname, { replace: true, state: null });
     }
-  }, [arrival, dataset, navigate, location.pathname]);
+  }, [mapWhenReady, dataset]);
 
   // When an import finishes, the grid's pages are out of date.
   // Primitive deps: polling during an import hands back a new dataset object
@@ -133,7 +150,10 @@ const DatasetDetailPage: React.FC = () => {
     run(async () => {
       setProgress(0);
       refresh(await uploadArchive(id, file!, setProgress));
-    }, 'Failed to upload zip', 'mapping');
+      setMapWhenReady(true);
+    }, 'Failed to upload zip');
+
+  const handleDiscardUpload = () => run(async () => refresh(await discardUpload(id)), 'Failed to discard the upload');
 
   const handleImport = (mapping: ImportMapping) =>
     run(async () => refresh(await startImport(id, mapping)), 'Failed to start import');
@@ -170,6 +190,7 @@ const DatasetDetailPage: React.FC = () => {
   }
 
   const importing = isImporting(dataset);
+  const scanning = isScanning(dataset);
   const held = dataset.usedBy > 0;
   const heldReason = held ? `Used by ${dataset.usedBy} labeling job${dataset.usedBy === 1 ? '' : 's'}` : undefined;
 
@@ -204,10 +225,10 @@ const DatasetDetailPage: React.FC = () => {
           )}
           {dataset.canWrite && (
             <>
-              <Button variant="outlined" startIcon={<MappingIcon />} onClick={() => openDialog('mapping')} disabled={!dataset.archive || importing || held} title={heldReason}>
+              <Button variant="outlined" startIcon={<MappingIcon />} onClick={() => openDialog('mapping')} disabled={!dataset.contents || importing || scanning || held} title={heldReason}>
                 Image groups
               </Button>
-              <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => openDialog('replace')} disabled={importing || held} title={heldReason}>
+              <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => openDialog('replace')} disabled={importing || scanning || held} title={heldReason}>
                 {dataset.archive ? 'Replace zip' : 'Upload zip'}
               </Button>
               <Button variant="outlined" startIcon={<EditIcon />} onClick={() => openDialog('edit')}>
@@ -227,20 +248,51 @@ const DatasetDetailPage: React.FC = () => {
         </Alert>
       )}
 
-      {dataset.archive && !dataset.contents && (
+      {dataset.uploading && dataset.canWrite && !busy && (
         <Alert
-          severity="info"
+          severity="warning"
           sx={{ mb: 3 }}
           action={
-            dataset.canWrite && (
-              <Button color="inherit" size="small" onClick={handleScan} disabled={busy}>
-                Scan zip
+            <Stack direction="row" spacing={1}>
+              <Button color="inherit" size="small" onClick={() => openDialog('replace')} disabled={importing || scanning || held}>
+                Resume
               </Button>
-            )
+              <Button color="inherit" size="small" onClick={handleDiscardUpload}>
+                Discard
+              </Button>
+            </Stack>
           }
         >
-          This zip has not been scanned yet, so its size and contents are unknown.
+          The upload of {dataset.uploading.filename} stopped before it finished. Resume it by choosing the same zip, or
+          discard it to free the space its partial upload takes.
+          {dataset.archive ? ' The current zip stays in place either way.' : ''}
         </Alert>
+      )}
+
+      {scanning ? (
+        <Alert severity="info" icon={<CircularProgress size={20} />} sx={{ mb: 3 }}>
+          Reading the zip's contents in the background. This can take a few minutes for a large zip — you can leave
+          this page.
+        </Alert>
+      ) : (
+        dataset.archive &&
+        !dataset.contents && (
+          <Alert
+            severity={dataset.scan?.status === 'failed' ? 'error' : 'info'}
+            sx={{ mb: 3 }}
+            action={
+              dataset.canWrite && (
+                <Button color="inherit" size="small" onClick={handleScan} disabled={busy}>
+                  {dataset.scan?.status === 'failed' ? 'Scan again' : 'Scan zip'}
+                </Button>
+              )
+            }
+          >
+            {dataset.scan?.status === 'failed'
+              ? `The zip could not be read: ${dataset.scan.error ?? 'unknown error'}`
+              : 'This zip has not been scanned yet, so its size and contents are unknown.'}
+          </Alert>
+        )
       )}
 
       {dataset.description && (
@@ -267,7 +319,7 @@ const DatasetDetailPage: React.FC = () => {
           <DatasetImageGrid datasetId={dataset._id} groups={dataset.groups} onOpen={setOpenItem} />
         </Paper>
       ) : (
-        dataset.archive &&
+        dataset.contents &&
         !importing && (
           <Alert
             severity="info"
@@ -294,6 +346,7 @@ const DatasetDetailPage: React.FC = () => {
         busy={busy}
         uploadProgress={progress}
         error={actionError}
+        resume={dataset.uploading}
         onCancel={() => setDialog(null)}
         onSubmit={dialog === 'replace' ? handleReplace : handleEdit}
       />

@@ -26,6 +26,7 @@ router.delete('/:id', authenticateToken, ctrl.deleteDataset);
 // Upload is two calls around a browser-direct chunked PUT to file-service.
 router.post('/:id/archive/upload-url', authenticateToken, validateRequest({ body: archiveUploadBodySchema }), ctrl.createArchiveUpload);
 router.post('/:id/archive/complete', authenticateToken, ctrl.completeArchiveUpload);
+router.delete('/:id/archive/upload', authenticateToken, ctrl.discardArchiveUpload);
 router.post('/:id/archive/scan', authenticateToken, ctrl.rescanArchive);
 router.get('/:id/download', ctrl.downloadArchive);
 
