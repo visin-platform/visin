@@ -3,9 +3,6 @@ import {
   benchmarksResponseSchema,
   comparisonResponseSchema,
   dashboardStatsSchema,
-  datasetSchema,
-  datasetsResponseSchema,
-  imageCategoriesResponseSchema,
   parseResponse,
   trainingConfigsResponseSchema,
   findingExportSchema,
@@ -19,9 +16,7 @@ import {
   type Benchmark,
   type ComparisonEntry,
   type DashboardStats,
-  type Dataset,
   type Epoch,
-  type ImageCategory,
   type Project,
   type TestResult,
   type Training,
@@ -172,15 +167,6 @@ export const vision = {
   listBenchmarks: (apiKey: string, query: Query): Promise<{ benchmarks: Benchmark[] }> =>
     get(benchmarksResponseSchema, apiKey, '/benchmarks', { page: 1, ...query }),
 
-  listDatasets: (
-    apiKey: string,
-    query: Query
-  ): Promise<{ datasets: Dataset[]; pagination?: { total?: number } }> =>
-    get(datasetsResponseSchema, apiKey, '/datasets', { page: 1, ...query }),
-
-  getDataset: (apiKey: string, id: string): Promise<Dataset> =>
-    get(datasetSchema, apiKey, `/datasets/${encodeURIComponent(id)}`),
-
   /**
    * The run is a path segment, not a query parameter.
    *
@@ -232,12 +218,5 @@ export const vision = {
       recommendations?: string;
       trainingIds?: string[];
     }
-  ): Promise<Finding> => post(findingSchema, apiKey, '/findings', body),
-
-  listImageCategories: (apiKey: string, datasetId: string): Promise<ImageCategory[]> =>
-    get(
-      imageCategoriesResponseSchema,
-      apiKey,
-      `/image-categories/dataset/${encodeURIComponent(datasetId)}`
-    )
+  ): Promise<Finding> => post(findingSchema, apiKey, '/findings', body)
 };

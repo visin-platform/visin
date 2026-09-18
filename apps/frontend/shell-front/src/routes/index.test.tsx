@@ -76,7 +76,6 @@ describe('ShellRoutes', () => {
   it.each([
     ['/projects/p1', 'vision app'],
     ['/jobs/j1/work', 'label app'],
-    ['/bundles', 'label app'],
     ['/account/groups', 'account app'],
     ['/invite', 'account app'],
   ])('renders the app that owns %s', (path, text) => {

@@ -3,18 +3,19 @@
 Computer vision and analytics platform: manage datasets, train models, label
 images, and compare results. Self-hosted, MIT licensed, no hosted tier.
 
-Six backend services and five React frontends in an npm workspace. Each app has
+Seven backend services and six React frontends in an npm workspace. Each app has
 its own `package.json`, `Dockerfile` and `compose.yml`, and depends on nothing
 outside its own directory at build or run time.
 
 | Workspace        | Port | Purpose                                           |
 | ---------------- | ---- | ------------------------------------------------- |
-| `vision-service` | 4010 | Datasets, training, analysis, benchmarks          |
+| `vision-service` | 4010 | Projects, training, analysis, benchmarks          |
 | `auth-service`   | 5001 | Authentication, JWT, user management              |
 | `file-service`   | 5002 | File upload and download with signed URLs         |
 | `group-service`  | 5006 | User groups                                       |
-| `label-service`  | 5008 | Labeling bundles, jobs, tasks, answers, export    |
+| `label-service`  | 5008 | Labeling jobs, tasks, answers, export             |
 | `mcp-service`    | 5009 | MCP server exposing Visin data to AI assistants   |
+| `dataset-service`| 5010 | Dataset zips, their imported images, image groups |
 | `landing-front`  | 3000 | Public landing page                               |
 | `auth-front`     | 3004 | Sign-in                                           |
 | `account-front`  | 3007 | Account settings                                  |
@@ -23,7 +24,7 @@ outside its own directory at build or run time.
 | `vision-front`   | 3012 | Main application UI                               |
 
 MongoDB is used by every service except file-service, and Redis by
-label-service's import queue. The root `compose.yml` runs both.
+dataset-service's import queue. The root `compose.yml` runs both.
 
 ## Run it
 

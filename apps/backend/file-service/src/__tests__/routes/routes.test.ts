@@ -20,6 +20,7 @@ describe('file-service routes', () => {
     // requireApiKey + express.json + validateRequest + controller
     expect(find('post', '/internal/upload-url')!.handlerCount).toBe(4);
     expect(find('post', '/internal/download-url')!.handlerCount).toBe(4);
+    expect(find('post', '/internal/download-urls')!.handlerCount).toBe(4);
   });
 
   it('registers folder delete before the wildcard file routes', () => {

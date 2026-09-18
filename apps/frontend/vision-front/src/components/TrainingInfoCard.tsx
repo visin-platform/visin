@@ -4,8 +4,10 @@ import {
   Card,
   CardContent,
   Chip,
+  Link,
   Typography
 } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 import { Training } from '../types';
 
 interface TrainingInfoCardProps {
@@ -64,7 +66,11 @@ export const TrainingInfoCard: React.FC<TrainingInfoCardProps> = ({
             <Typography variant="body2" sx={{
               fontWeight: 500
             }}>
-              {training.datasetId || '-'}
+              {/^[0-9a-f]{24}$/i.test(training.datasetId || '') ? (
+                <Link component={RouterLink} to={`/datasets/${training.datasetId}`}>{training.datasetId}</Link>
+              ) : (
+                training.datasetId || '-'
+              )}
             </Typography>
           </Box>
           <Box>

@@ -44,14 +44,13 @@ describe('AppLayout', () => {
   });
 
   it('shows the same menu as vision-front, with the Vision sections linking across', () => {
-    renderAt('/bundles');
+    renderAt('/jobs');
 
     // Identical contents in both apps: crossing over changes the highlight, not the menu.
     expect(main().getByRole('link', { name: 'Projects' })).toHaveAttribute('href', 'https://vision.test/projects');
+    // Datasets live in Vision now, so labeling links across to them.
     expect(main().getByRole('link', { name: 'Data' })).toHaveAttribute('href', 'https://vision.test/datasets');
-    const labels = within(screen.getByRole('navigation', { name: 'Labels' }));
-    expect(labels.getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/jobs');
-    expect(labels.getByRole('link', { name: 'Bundles' })).toHaveAttribute('aria-current', 'page');
+    expect(main().getByRole('link', { name: 'Labels' })).toHaveAttribute('aria-current', 'true');
   });
 
   it('shows the active section title in the desktop header', () => {

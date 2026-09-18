@@ -25,3 +25,8 @@ export const generateDownloadUrlBodySchema = z.object({
   fileId: z.string().min(1, 'fileId is required'),
   expiresInMinutes: z.coerce.number().int().positive().default(60)
 });
+
+export const generateDownloadUrlsBodySchema = z.object({
+  fileIds: z.array(z.string().min(1)).min(1, 'fileIds is required').max(1000),
+  expiresInMinutes: z.coerce.number().int().positive().default(60)
+});

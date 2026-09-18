@@ -14,7 +14,7 @@ export const toStem = (filenameOrPath: string): string => {
 /**
  * Parse a selection manifest. CSV: header row with `filename` (+ optional `stratum`)
  * columns. JSONL: one `{"filename": ..., "stratum"?: ...}` object per line.
- * Filenames may be bare basenames or bundle paths — both reduce to the stem.
+ * Filenames may be bare basenames or dataset paths — both reduce to the stem.
  */
 export const parseManifest = (content: string, format: 'csv' | 'jsonl'): ManifestRow[] => {
   const lines = content

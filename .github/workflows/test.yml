@@ -49,6 +49,9 @@ jobs:
             auth-service:
               - *backend-shared
               - 'apps/backend/auth-service/**'
+            dataset-service:
+              - *backend-shared
+              - 'apps/backend/dataset-service/**'
             file-service:
               - *backend-shared
               - 'apps/backend/file-service/**'

@@ -34,9 +34,6 @@ vi.mock('../services/configService', () => ({
 vi.mock('../services/projectService', () => ({
   projectService: { getProjects: vi.fn() },
 }));
-vi.mock('../services/analysisService', () => ({
-  getAllAnalyses: vi.fn(),
-}));
 vi.mock('../utils/csvExport', () => ({
   exportTrainingsToCSV: vi.fn(),
 }));
@@ -44,7 +41,6 @@ vi.mock('../utils/csvExport', () => ({
 import { trainingService } from '../services/trainingService';
 import { configService } from '../services/configService';
 import { projectService } from '../services/projectService';
-import { getAllAnalyses } from '../services/analysisService';
 import { exportTrainingsToCSV } from '../utils/csvExport';
 import { useTrainingsPage } from './useTrainingsPage';
 import type { Training } from '../types';
@@ -52,7 +48,6 @@ import type { Training } from '../types';
 const mockedTraining = vi.mocked(trainingService);
 const mockedConfig = vi.mocked(configService);
 const mockedProject = vi.mocked(projectService);
-const mockedGetAllAnalyses = vi.mocked(getAllAnalyses);
 const mockedExportCSV = vi.mocked(exportTrainingsToCSV);
 
 const makeTraining = (overrides: Partial<Training> = {}): Training =>
@@ -86,7 +81,6 @@ beforeEach(() => {
   mockedConfig.getAllConfigs.mockResolvedValue({ success: true, data: { configs: [] } } as never);
   mockedTraining.getTrainingTags.mockResolvedValue({ success: true, data: ['a', 'b'] } as never);
   mockedProject.getProjects.mockResolvedValue({ success: true, data: [] } as never);
-  mockedGetAllAnalyses.mockResolvedValue({ success: true, data: [] } as never);
 });
 
 describe('useTrainingsPage', () => {

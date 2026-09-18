@@ -67,12 +67,11 @@ describe('ShellLayout', () => {
     expect(main().queryByRole('link', { name: 'Home' })).not.toBeInTheDocument();
   });
 
-  it('lists bundles beside the jobs, routed inside the page', () => {
-    renderAt('/bundles');
+  it('marks the labeling group current, with no section bar for its single section', () => {
+    renderAt('/jobs');
 
-    expect(sectionBar('Labels').getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/jobs');
-    expect(sectionBar('Labels').getByRole('link', { name: 'Bundles' })).toHaveAttribute('aria-current', 'page');
     expect(main().getByRole('link', { name: 'Labels' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.queryByRole('navigation', { name: 'Labels' })).not.toBeInTheDocument();
   });
 
   it('highlights the group being shown', () => {

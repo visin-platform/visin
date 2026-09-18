@@ -1,9 +1,8 @@
 import { Types } from 'mongoose';
 import { BadRequestError, ConflictError, NotFoundError, UserPayload } from '@visin/backend-core';
-import { LabelTask, ILabelTask } from '../models/LabelTask';
+import { LabelTask, ILabelTask, IMaskMeta } from '../models/LabelTask';
 import { LabelJob, ILabelJob } from '../models/LabelJob';
 import { LabelAnswer, ILabelAnswer } from '../models/LabelAnswer';
-import { LabelImage } from '../models/LabelImage';
 import * as files from '../clients/fileServiceClient';
 import { AnswerBody } from '../validation/taskSchemas';
 import { getJobReadAccess } from './jobAccessService';
@@ -12,7 +11,7 @@ import { getJob } from './jobService';
 const LEASE_MINUTES = Number(process.env.TASK_LEASE_MINUTES || 5);
 
 export interface TaskImages {
-  // `stem` is the frame's filename in the bundle — the name a labeler quotes
+  // `stem` is the frame's filename in the dataset — the name a labeler quotes
   // when asking a question about what they are looking at.
   frame: { url: string; width?: number; height?: number; stem?: string };
   layers: { set: string; url: string }[];
@@ -47,8 +46,20 @@ export interface TaskPosition {
   total: number;
 }
 
-/** Public task content; ownership, leases and persistence fields stay internal. */
-export type TaskView = Pick<ILabelTask, '_id' | 'jobId' | 'labelImageId' | 'order' | 'stratum' | 'payload'>;
+/**
+ * Public task content. Ownership, leases and storage file ids stay internal: the
+ * client gets signed URLs in `images`, and from the payload only what it acts on.
+ */
+export interface TaskView {
+  _id: Types.ObjectId;
+  jobId: Types.ObjectId;
+  order: number;
+  stratum?: string;
+  payload?: {
+    layers?: { set: string }[];
+    maskMap?: { masks: IMaskMeta[] };
+  };
+}
 
 export interface TaskItem {
   task: TaskView;
@@ -57,35 +68,29 @@ export interface TaskItem {
   answer: TaskAnswerState;
 }
 
+/** Signed URLs for everything a task shows, in one file-service call. */
 const buildTaskImages = async (task: ILabelTask): Promise<TaskImages> => {
-  const imageIds: Types.ObjectId[] = [
-    task.labelImageId,
-    ...(task.payload?.layers?.map((layer) => layer.imageId) || []),
-    ...(task.payload?.maskMap ? [task.payload.maskMap.imageId] : [])
-  ];
-  const images = await LabelImage.find({ _id: { $in: imageIds } });
-  const byId = new Map(images.map((image) => [image._id.toString(), image]));
+  const layers = task.payload?.layers || [];
+  const maskMap = task.payload?.maskMap;
+  const urls = await files.getDownloadUrls([task.frame.fileId, ...layers.map((layer) => layer.fileId), ...(maskMap ? [maskMap.fileId] : [])]);
 
-  const signFor = async (imageId: Types.ObjectId): Promise<string> => {
-    const image = byId.get(imageId.toString());
-    if (!image) {
-      throw new NotFoundError('Task image missing from bundle');
+  const urlFor = (fileId: string): string => {
+    const url = urls[fileId];
+    if (!url) {
+      throw new NotFoundError('Task image could not be signed');
     }
-    return (await files.getDownloadUrl(image.fileId)).url;
+    return url;
   };
 
-  const frame = byId.get(task.labelImageId.toString());
   return {
     frame: {
-      url: await signFor(task.labelImageId),
-      width: frame?.width,
-      height: frame?.height,
-      stem: frame?.stem
+      url: urlFor(task.frame.fileId),
+      width: task.frame.width,
+      height: task.frame.height,
+      stem: task.frame.stem
     },
-    layers: await Promise.all(
-      (task.payload?.layers || []).map(async (layer) => ({ set: layer.set, url: await signFor(layer.imageId) }))
-    ),
-    ...(task.payload?.maskMap ? { idmap: { url: await signFor(task.payload.maskMap.imageId) } } : {})
+    layers: layers.map((layer) => ({ set: layer.set, url: urlFor(layer.fileId) })),
+    ...(maskMap ? { idmap: { url: urlFor(maskMap.fileId) } } : {})
   };
 };
 
@@ -131,10 +136,16 @@ const buildTaskItem = async (task: ILabelTask, userId?: string, total?: number):
   const view: TaskView = {
     _id: task._id,
     jobId: task.jobId,
-    labelImageId: task.labelImageId,
     order: task.order,
     stratum: task.stratum,
-    payload: task.payload
+    ...(task.payload
+      ? {
+          payload: {
+            ...(task.payload.layers ? { layers: task.payload.layers.map((layer) => ({ set: layer.set })) } : {}),
+            ...(task.payload.maskMap ? { maskMap: { masks: task.payload.maskMap.masks } } : {})
+          }
+        }
+      : {})
   };
   return { task: view, images, position, answer };
 };

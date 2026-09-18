@@ -1,15 +1,14 @@
 # label-service
 
-Backend for the Visin labeling platform: label bundles (uploaded image sets), labeling
-jobs, tasks, answers, and export.
+Backend for the Visin labeling platform: labeling jobs, tasks, answers and export.
+The images a job shows come from a dataset in dataset-service.
 
 - Port: `5008`
 - Stack: Express + TypeScript + Mongoose, bootstrapped from `@visin/backend-core`
 - Auth: JWT `access_token` cookie or `Authorization: Bearer`. Group members can
-  read their jobs and bundles; outsiders can read only explicitly published, active
-  jobs, and the bundles those jobs are built on.
-- Storage: image/zip bytes live on disk behind file-service (internal API); this
-  service persists metadata and uses bounded temporary files while importing archives.
+  read their jobs; outsiders can read only explicitly published, active jobs.
+- Storage: no bytes of its own. A task carries the file ids of the frame, layers
+  and id map it shows, and this service signs them through file-service.
 
 ## Job visibility
 
@@ -26,92 +25,44 @@ reading content or issuing image URLs. Revocation is checked again on each reque
 Previously issued signed image URLs remain usable until their existing expiry
 (up to one hour); downloaded/cached content cannot be recalled.
 
-A bundle has no sharing flag of its own. `GET /api/bundles` and `GET /api/bundles/:id`
-serve a non-member exactly the bundles behind a public, active job — the job has
-already made those frames public — with the uploader's `createdBy` removed. Closing
-the last such job makes the bundle private again. Every other bundle route
-(create, edit, upload, import, delete, mask fields) requires sign-in and group
-owner/admin (mask fields: membership).
+A dataset has its own visibility in dataset-service (public, or one group). A
+published job serves its frames to anyone through signed URLs, because the job
+was published; that does not make the dataset itself readable there.
 
-## Bundle import
+## Datasets
 
-A bundle zip is uploaded (signed PUT to file-service), then imported in two calls:
+A job is built on a dataset: `datasetId`, the dataset image group holding the
+frames (`framesGroup`), and the groups whose layers are drawn over them
+(`annotationSets`). Within an annotation group the file-name variants mean what
+they always have — `0001.png` is the layer, `0001.ids.png` the id map whose pixel
+values are mask ids, `0001.masks.json` those masks' metadata.
 
 ```
-POST /api/bundles/:id/import/preview  { zipFileId }        → folders + suggested mapping
-POST /api/bundles/:id/import          { zipFileId, mapping? } → ImportJob (poll for progress)
+POST /api/jobs                  { datasetId, framesGroup, annotationSets, ... }
+POST /api/jobs/:id/materialize  { kind: 'manifest' | 'filter', ... }
+GET  /api/me/datasets           datasets this caller can build a job on
+GET  /api/me/datasets/:id/mask-fields?set=  groupable mask fields, for slicing a job
 ```
 
-`preview` walks the zip without extracting it and reports what each folder holds; the
-client shows that as the mapping table and posts back an `ImportMapping`
-(`frames`, `annotations: [{ path, set }]`, `manifest`, and the `idsSuffix` /
-`masksSuffix` file-name patterns). Omitting `mapping` falls back to the default layout —
-`frames/`, `annotations/<set>/` (legacy `ann/` still accepted), `manifest.csv|jsonl` —
-so a conventional bundle needs no mapping at all. Both paths run through
-`utils/bundlePaths.ts`, the single definition of what a zip entry means.
+**Materialization copies what a task shows.** `materializeTasks` reads the
+dataset's items once, then stores the frame's file id, path, stem and size on the
+task, along with each layer's file id and the selected masks. Serving a task is
+then one query here and never a call to dataset-service — which matters because
+that path runs for every frame a labeler sees. It also means a task keeps showing
+the same image even as the dataset moves on.
 
-### Archive resource limits
+**A job holds its dataset.** Creating a job claims the dataset
+(`PUT /internal/datasets/:id/holds/label-service/:jobId` in dataset-service);
+deleting the job releases it. While a hold exists, that dataset cannot be deleted,
+re-imported or have its zip replaced — its files are what the tasks show. A job
+whose claim cannot be made is not created, and a job whose claim cannot be
+released is not deleted, so a retry is always the right move.
 
-Ingest downloads compressed input to a private temporary file and expands entries
-one at a time. Defaults are 50 MiB per expanded entry, 10 GiB compressed input,
-10 GiB total expanded data, 100,000 entries, 16 MiB of central-directory records,
-and 8 MiB of combined manifest/mask JSON input retained during an import.
-Per-file diagnostics stop at 1,000 records or 1 MiB of path/reason text so the
-terminal report stays small enough to persist. All
-entries count, including ignored paths and directory payloads. Existing
-`INGEST_MAX_ENTRY_BYTES` and `INGEST_MAX_ENTRIES` overrides must be positive safe
-integers; no additional environment variables are required.
+## Changing a job's images
 
-Exceeding a limit stops the entire import without retrying the same archive.
-Previously stored images remain available for the existing resume workflow.
-Download progress refreshes the import heartbeat before extraction starts.
-Streams are closed and the temporary file is removed on completion, failure, or
-consumer cancellation. Each concurrent import may temporarily use up to 10 GiB of
-local disk; these per-import limits do not enforce file-service upload quotas.
-Abrupt process termination can leave temporary files for operational cleanup.
-
-### The import queue
-
-`POST /api/bundles/:id/import` creates the `ImportJob` document and hands the id to a
-BullMQ queue backed by Redis (`REDIS_URL`); a worker in the same process picks it up
-(`src/queue/`). The ingest routinely runs for minutes, far past the HTTP response, so
-it cannot live in the request — and a redeploy mid-ingest has to leave the work
-somewhere durable rather than dropping it.
-
-- **Progress** still lands on the `ImportJob` the client polls. Nothing about the API
-  changed; only where the work runs.
-- **Retries**: three attempts with exponential backoff. Ingest is idempotent (already
-  imported paths are skipped), so an attempt resumes where the dead one stopped.
-  `runImport` therefore records a fatal error and rethrows rather than marking the job
-  failed — the worker owns that verdict, because flipping the document to `failed`
-  between attempts would tell the polling client the import is over when it isn't.
-  An archive limit violation throws `NonRetryableIngestError`, which the worker turns into
-  BullMQ's `UnrecoverableError` so the budget isn't spent re-downloading it.
-- **Crashes**: BullMQ redelivers a job whose worker died (twice, then it fails for
-  good). The `updatedAt` heartbeat and the `IMPORT_STALE_MINUTES` window in
-  `bundleService` remain as the backstop for anything the queue loses.
-- **Cancellation**: superseding a stale import, deleting an import, and deleting a
-  bundle all call `removeQueuedImport`, so nothing gets picked up later and run
-  against a bundle that has moved on.
-- **Redis down**: `startImport` fails the `ImportJob` it just created and returns 502
-  rather than leaving it at `pending` with nothing to run it.
-
-Redis is shared infrastructure, not owned by this service — the root `compose.yml`
-runs one, and a deployment can point `REDIS_URL` at any instance. Run it with
-`appendonly yes` and `maxmemory-policy noeviction`: a queued import lives only in
-Redis until a worker takes it, so an eviction or an unsaved restart would strand its
-`ImportJob` at `pending`.
-
-## Changing a bundle
-
-`PATCH /api/bundles/:id` edits `name` / `description` only. Imported images are
-immutable by design: `LabelTask` rows point at `LabelImage` ids and answers point at
-tasks, so overwriting an image would silently change what an already-labelled task
-showed. Grow a bundle by uploading another zip (ingest skips paths already imported),
-ship corrected annotations as a *new* set name rather than replacing one, and delete a
-bundle only before any job uses it — `deleteBundle` refuses while a non-archived job
-references it. `groupId` is not editable; moving a bundle would change who can see
-every job drawing from it.
+You cannot: tasks are immutable once materialized, because answers point at tasks.
+Re-map or re-import the dataset and build a new job from it. Materializing again
+is draft-only and replaces the whole task set.
 
 ## Develop
 
@@ -121,6 +72,7 @@ npm run dev --workspace=label-service
 npm test --workspace=label-service
 ```
 
-Copy `.env.example` to `.env` and fill in secrets (JWT secret must match auth-service).
-The import queue needs Redis: `docker compose up -d mongodb redis` at the repo root
-starts it alongside MongoDB, matching the default `REDIS_URL`.
+Copy `.env.example` to `.env` and fill in secrets (the JWT secret must match
+auth-service, and `INTERNAL_SERVICE_TOKEN` must match group-service and
+dataset-service). `DATASET_SERVICE_URL` points at dataset-service; `docker compose
+up -d mongodb` at the repo root covers the database.

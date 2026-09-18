@@ -43,7 +43,7 @@ describe('registerTools', () => {
 
     registerTools(server, caller, ['dataset:read']);
 
-    expect(registered).toEqual(['list_datasets', 'get_dataset', 'list_image_categories']);
+    expect(registered).toEqual(['list_datasets', 'get_dataset']);
   });
 
   it('registers nothing for a key with no scopes, and says so in the count', () => {

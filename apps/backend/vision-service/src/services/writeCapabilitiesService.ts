@@ -2,12 +2,11 @@ import { ForbiddenError, NotFoundError, UnauthorizedError } from '@visin/backend
 import Training from '../models/Training';
 import Comparison from '../models/Comparison';
 import Benchmark from '../models/Benchmark';
-import DatasetAnalysis from '../models/DatasetAnalysis';
 import TestResult from '../models/TestResult';
-import { canWriteResource, assertEpochWrite, getDatasetParent } from './writeAccessService';
+import { canWriteResource, assertEpochWrite } from './writeAccessService';
 import { assertBenchmarkWrite } from './benchmarkService';
 
-export type WritableKind = 'project' | 'training' | 'comparison' | 'benchmark' | 'test-result' | 'analysis' | 'dataset';
+export type WritableKind = 'project' | 'training' | 'comparison' | 'benchmark' | 'test-result';
 
 export async function getWriteCapabilities(kind: WritableKind, ids: string[], userId?: string): Promise<Record<string, boolean>> {
   const result: Record<string, boolean> = {};
@@ -19,8 +18,6 @@ export async function getWriteCapabilities(kind: WritableKind, ids: string[], us
         case 'project': result[id] = await canWriteResource({ projectId: id }, userId); break;
         case 'training': result[id] = await canWriteResource(await Training.findById(id), userId); break;
         case 'comparison': result[id] = await canWriteResource(await Comparison.findById(id), userId); break;
-        case 'analysis': result[id] = (await DatasetAnalysis.findById(id))?.ownerId === userId; break;
-        case 'dataset': result[id] = (await getDatasetParent(id)).ownerId === userId; break;
         case 'benchmark': {
           const benchmark = await Benchmark.findOne({ _id: id, deletedAt: null });
           if (benchmark) { await assertBenchmarkWrite(benchmark, userId); result[id] = true; }

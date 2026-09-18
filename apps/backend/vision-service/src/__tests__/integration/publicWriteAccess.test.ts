@@ -7,11 +7,7 @@ import EpochVisualization from '../../models/EpochVisualization';
 import TestResult from '../../models/TestResult';
 import Benchmark from '../../models/Benchmark';
 import Comparison from '../../models/Comparison';
-import Dataset from '../../models/Dataset';
 import Config from '../../models/Config';
-import DatasetImage from '../../models/DatasetImage';
-import ImageCategory from '../../models/ImageCategory';
-import UploadReservation from '../../models/UploadReservation';
 import writeCapabilitiesRoutes from '../../routes/writeCapabilitiesRoutes';
 import configRoutes from '../../routes/configRoutes';
 import { createServer, type Server } from 'http';
@@ -28,13 +24,8 @@ import testResultRoutes from '../../routes/testResultRoutes';
 import benchmarkRoutes from '../../routes/benchmarkRoutes';
 import comparisonRoutes from '../../routes/comparisonRoutes';
 import visualizationRoutes from '../../routes/visualizationRoutes';
-import analysisRoutes from '../../routes/analysisRoutes';
-import datasetRoutes from '../../routes/datasetRoutes';
-import datasetImageRoutes from '../../routes/datasetImageRoutes';
-import imageCategoryRoutes from '../../routes/imageCategoryRoutes';
 import Project from '../../models/Project';
 import Training from '../../models/Training';
-import DatasetAnalysis from '../../models/DatasetAnalysis';
 import * as files from '../../services/fileServiceClient';
 
 jest.mock('../../services/fileServiceClient', () => ({
@@ -57,7 +48,6 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
   let projectId: string;
   let trainingId: string;
   let legacyId: string;
-  let analysisId: string;
   const secret = 'public-write-test-secret';
   const previousSecret = process.env.JWT_SECRET;
 
@@ -70,9 +60,8 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     app.use('/write-capabilities', writeCapabilitiesRoutes);
     for (const [path, router] of Object.entries({ projects: projectRoutes, configs: configRoutes, trainings: trainingRoutes, epochs: epochRoutes,
       'test-results': testResultRoutes, benchmarks: benchmarkRoutes, comparisons: comparisonRoutes,
-      visualizations: visualizationRoutes, analysis: analysisRoutes, datasets: datasetRoutes,
-      'dataset-images': datasetImageRoutes, 'image-categories': imageCategoryRoutes })) {
-      app.use(`/${path}`, apiKeyAuth(['analysis', 'datasets', 'dataset-images', 'image-categories'].includes(path) ? 'dataset' : 'vision'), router);
+      visualizations: visualizationRoutes })) {
+      app.use(`/${path}`, apiKeyAuth('vision'), router);
     }
     app.use(errorHandler);
     server = createServer(app);
@@ -89,7 +78,6 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     trainingId = String((await Training.create({ name: 'Public run', uuid: 'public-run', projectId }))._id);
     await Epoch.create({ timestamp: new Date(), trainingId, training_uuid: 'public-run', epoch_uuid: 'public-epoch', epoch: 1, results: {} });
     legacyId = String((await Training.create({ name: 'Legacy run', uuid: 'legacy-run' }))._id);
-    analysisId = String((await DatasetAnalysis.create({ dataset: 'Legacy shared dataset', data: {} }))._id);
   });
   afterEach(async () => {
     await Promise.all(Object.values(mongoose.connection.collections).map(collection => collection.deleteMany({})));
@@ -124,31 +112,8 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await Training.findById(legacyId))?.deletedAt).toBeUndefined();
   });
 
-  it('keeps ownerless shared libraries read-only before file effects', async () => {
-    expect((await request(`analysis/${analysisId}`)).status).toBe(200);
-    expect((await request(`analysis/${analysisId}`, 'PUT', { dataset: 'Hijacked' })).status).toBe(403);
-    expect((await request(`analysis/${analysisId}`, 'DELETE')).status).toBe(403);
-    expect(files.deleteFile).not.toHaveBeenCalled();
-  });
   const benchmarkBody = { timestamp: new Date().toISOString(), system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }, results: [] };
   const epochBody = () => ({ trainingId, training_uuid: 'public-run', epoch: 2, results: {} });
-  const archive = async (user = OWNER, dataset?: string) => {
-    const result = await request('analysis/upload-url', 'POST', { filename: 'data.zip', mimetype: 'application/zip', dataset }, user);
-    expect(result.status).toBe(201);
-    return result.body.data as { fileId: string; analysisId?: string };
-  };
-
-  it('rejects missing or oversized attachments against the reserved byte allowance', async () => {
-    const issued = await archive(OWNER, 'Bounded attachment');
-    const reservation = await UploadReservation.findOne({ fileId: issued.fileId });
-    expect(reservation?.maxBytes).toBe(10 * 1024 ** 3);
-    jest.mocked(files.getFileMetadata).mockRejectedValueOnce(new Error('Not published'));
-    expect((await request(`analysis/${issued.analysisId}/complete`, 'POST', {})).status).toBe(400);
-    jest.mocked(files.getFileMetadata).mockResolvedValueOnce({ size: reservation!.maxBytes! + 1 } as Awaited<ReturnType<typeof files.getFileMetadata>>);
-    expect((await request(`analysis/${issued.analysisId}/complete`, 'POST', {})).status).toBe(400);
-    expect((await DatasetAnalysis.findById(issued.analysisId))?.status).toBe('pending');
-    expect((await request(`analysis/${issued.analysisId}/complete`, 'POST', {})).status).toBe(200);
-  });
 
   it('stamps new standalone records and does not accept an injected owner', async () => {
     const created = await request('trainings', 'POST', { name: 'Mine', ownerId: STRANGER });
@@ -248,112 +213,9 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await request(`visualizations/${uuid}`, 'DELETE')).status).toBe(200);
   });
 
-  it('verifies pending archives before completion, enforces creator ownership, and retains unverified legacy bytes', async () => {
-    const issued = await archive(OWNER, 'New analysis');
-    const id = issued.analysisId!;
-    expect((await DatasetAnalysis.findById(id))?.ownerId).toBe(OWNER);
-    expect((await request(`analysis/${id}/complete`, 'POST', {}, STRANGER)).status).toBe(403);
-    jest.mocked(files.getFileMetadata).mockRejectedValueOnce(new Error('not uploaded'));
-    expect((await request(`analysis/${id}/complete`, 'POST', {})).status).toBe(400);
-    expect((await DatasetAnalysis.findById(id))?.status).toBe('pending');
-    expect((await request(`analysis/${id}/complete`, 'POST', {})).status).toBe(200);
-    expect((await request(`analysis/${id}/complete`, 'POST', {})).status).toBe(200);
-    expect((await request(`analysis/${id}`, 'PUT', { dataset: 'Updated' })).status).toBe(200);
-    const replacement = await archive();
-    expect((await request(`analysis/${id}`, 'PUT', { fileId: replacement.fileId })).status).toBe(200);
-    expect(files.deleteFile).toHaveBeenCalledWith(issued.fileId);
-    expect((await request(`analysis/${id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
-    expect((await request(`analysis/${id}`, 'DELETE')).status).toBe(200);
-    expect(files.deleteFile).toHaveBeenCalledWith(replacement.fileId);
-    const legacy = await DatasetAnalysis.create({ ownerId: OWNER, dataset: 'Legacy assigned', fileId: 'datasets/legacy/shared.zip' });
-    jest.mocked(files.deleteFile).mockClear();
-    expect((await request(`analysis/${legacy._id}`, 'DELETE')).status).toBe(200);
-    expect(files.deleteFile).not.toHaveBeenCalled();
-  });
-
-  it('rejects stolen, expired, replayed, and nested archive references', async () => {
-    const issued = await archive();
-    const body = { dataset: 'Data', fileId: issued.fileId };
-    expect((await request('analysis/upload', 'POST', body, STRANGER)).status).toBe(403);
-    expect((await request('analysis/upload', 'POST', { dataset: 'Data', data: { downloadUrl: issued.fileId } }, STRANGER)).status).toBe(403);
-    expect((await request('analysis/upload', 'POST', { ...body, data: { downloadUrl: 'datasets/foreign/file.zip' } })).status).toBe(400);
-    const created = await request('analysis/upload', 'POST', body);
-    expect(created.status).toBe(201);
-    const another = await request('analysis/upload', 'POST', { dataset: 'Other' });
-    expect((await request(`analysis/${another.body.data._id}`, 'PUT', { fileId: issued.fileId })).status).toBe(403);
-    expect((await request(`analysis/${another.body.data._id}`, 'PUT', { data: { downloadUrl: issued.fileId } })).status).toBe(403);
-    expect((await request(`analysis/${created.body.data._id}`, 'DELETE')).status).toBe(200);
-    expect((await request('analysis/upload', 'POST', body)).status).toBe(403);
-    const expired = await archive();
-    await UploadReservation.updateOne({ fileId: expired.fileId }, { expiresAt: new Date(0) });
-    expect((await request('analysis/upload', 'POST', { dataset: 'Expired', fileId: expired.fileId })).status).toBe(403);
-    expect((await request('analysis/upload', 'POST', { dataset: 'External', data: { downloadUrl: 'https://example.invalid/file.zip' } })).status).toBe(201);
-  });
-
-  it('allows exactly one archive attachment under concurrent claims', async () => {
-    const issued = await archive();
-    const first = await request('analysis/upload', 'POST', { dataset: 'First' });
-    const second = await request('analysis/upload', 'POST', { dataset: 'Second' });
-    const results = await Promise.all([first, second].map(record => request(`analysis/${record.body.data._id}`, 'PUT', { fileId: issued.fileId })));
-    expect(results.map(result => result.status).sort()).toEqual([200, 403]);
-    expect(await DatasetAnalysis.countDocuments({ fileId: issued.fileId })).toBe(1);
-  });
-
-  it('inherits image/category writes from the actual analysis parent and enforces category consistency', async () => {
-    const parent = await request('analysis/upload', 'POST', { dataset: 'Images' });
-    const datasetId = String(parent.body.data._id);
-    const category = await request('image-categories', 'POST', { name: 'Cars', datasetId });
-    expect(category.status).toBe(201);
-    const categoryId = String(category.body.data._id);
-    const body = { filename: 'car.png', mimetype: 'image/png', datasetId, categoryId };
-    expect((await request('image-categories', 'POST', { name: 'Foreign', datasetId }, STRANGER)).status).toBe(403);
-    expect((await request(`image-categories/${categoryId}`, 'PUT', { color: 'red' }, STRANGER)).status).toBe(403);
-    expect((await request(`image-categories/${categoryId}`, 'PUT', { color: 'red' })).status).toBe(200);
-    expect((await request('dataset-images/upload-url', 'POST', body, STRANGER)).status).toBe(403);
-    const issued = await request('dataset-images/upload-url', 'POST', body);
-    expect(issued.status).toBe(200);
-    const create = { ...body, originalName: 'car.png', fileId: issued.body.data.fileId, size: 10 };
-    expect((await request('dataset-images', 'POST', create, STRANGER)).status).toBe(403);
-    expect((await request('dataset-images', 'POST', { ...create, fileId: 'foreign/path.png' })).status).toBe(403);
-    expect((await request('dataset-images', 'POST', { ...create, size: 11 })).status).toBe(400);
-    const image = await request('dataset-images', 'POST', create);
-    expect(image.status).toBe(201);
-    const id = String(image.body.data._id);
-    const fetched = await request(`dataset-images/${id}`);
-    expect(fetched.status).toBe(200);
-    expect(fetched.body.data.datasetId).toMatchObject({ _id: datasetId, dataset: 'Images' });
-    const otherCategory = await ImageCategory.create({ name: 'Other', datasetId: analysisId });
-    expect((await request(`dataset-images/${id}`, 'PUT', { categoryId: String(otherCategory._id) })).status).toBe(400);
-    expect((await request(`dataset-images/${id}`, 'PUT', { title: 'Hijack' }, STRANGER)).status).toBe(403);
-    expect((await request(`dataset-images/${id}`, 'PUT', { title: 'Good', categoryId: null })).status).toBe(200);
-    expect((await request(`dataset-images/${id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
-    expect((await request(`dataset-images/${id}`, 'DELETE')).status).toBe(200);
-    expect(files.deleteFile).toHaveBeenCalledWith(create.fileId);
-    expect((await request(`image-categories/${categoryId}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
-    expect((await request(`image-categories/${categoryId}`, 'DELETE')).status).toBe(200);
-  });
-
-  it('keeps ownerless dataset children read-only', async () => {
-    const cat = await ImageCategory.create({ datasetId: analysisId, name: 'Legacy' });
-    const img = await DatasetImage.create({ datasetId: analysisId, categoryId: cat._id, filename: 'old.png', originalName: 'old.png', fileId: 'legacy/file.png', mimetype: 'image/png', size: 10 });
-    for (const [path, body] of [[`image-categories/${cat._id}`, { name: 'Renamed' }], [`dataset-images/${img._id}`, { title: 'Renamed' }]] as const) {
-      expect((await request(path, 'PUT', body)).status).toBe(403);
-      expect((await request(path, 'DELETE')).status).toBe(403);
-    }
-    expect(files.deleteFile).not.toHaveBeenCalled();
-  });
-
-  it('stamps library creators and prevents new datasets from manufacturing stored-file downloads', async () => {
+  it('stamps library creators', async () => {
     expect((await request('configs', 'POST', { summary: 'Config', config_data: {} })).status).toBe(201);
     expect((await Config.findOne())?.ownerId).toBe(OWNER);
-    const result = await request('datasets', 'POST', { name: 'New dataset' });
-    expect(result.status).toBe(201);
-    expect((await Dataset.findById(result.body.data._id))?.ownerId).toBe(OWNER);
-    expect((await request(`datasets/download/${result.body.data.uuid}`)).status).toBe(404);
-    expect((await request('datasets', 'POST', { name: 'Stolen', downloadUrl: 'datasets/private.zip' })).status).toBe(403);
-    const issued = await archive();
-    expect((await request('datasets', 'POST', { name: 'Mine', downloadUrl: issued.fileId })).status).toBe(201);
-    expect((await request('analysis/upload', 'POST', { dataset: 'Replay', fileId: issued.fileId })).status).toBe(403);
   });
 
   it('returns current browser write capabilities without granting legacy or unrelated access', async () => {
@@ -375,8 +237,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     const comparison = await Comparison.create({ uuid: 'cap-comparison', name: 'Comparison', type: 'trainings', itemIds: [], projectId });
     const benchmark = await Benchmark.create({ ...benchmarkBody, training_id: trainingId });
     const test = await TestResult.create({ test_uuid: 'cap-test', epoch_uuid: 'public-epoch', epoch: 1, timestamp: new Date(), test_results: { day: { overall: { score: 1 } } } });
-    const analysis = await DatasetAnalysis.create({ dataset: 'Owned', ownerId: OWNER });
-    for (const [kind, id] of [['project', projectId], ['comparison', comparison._id], ['benchmark', benchmark._id], ['test-result', test._id], ['analysis', analysis._id], ['dataset', analysis._id]]) {
+    for (const [kind, id] of [['project', projectId], ['comparison', comparison._id], ['benchmark', benchmark._id], ['test-result', test._id]]) {
       const path = `write-capabilities?kind=${kind}&ids=${id},${missing}`;
       expect((await request(path)).body.data).toEqual({ [String(id)]: true, [missing]: false });
       expect((await request(path, 'GET', undefined, STRANGER)).body.data).toEqual({ [String(id)]: false, [missing]: false });
@@ -436,19 +297,6 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await request(`projects/${projectId}`, 'PUT', { editorGroupIds: [] })).status).toBe(200);
     expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Group removed' }, EDITOR)).status).toBe(403);
   });
-
-  it.each(['external', 'stored', 'both'])('replaces an archive with a supported %s download reference', async source => {
-    const previous = source === 'external' ? 'https://example.invalid/old.zip' : (await archive()).fileId;
-    const created = await request('analysis/upload', 'POST', { dataset: 'Replaceable', data: { downloadUrl: previous, metric: 1 }, ...(source === 'both' ? { fileId: previous } : {}) });
-    expect(created.status).toBe(201);
-    const replacement = await archive();
-    expect((await request(`analysis/${created.body.data._id}`, 'PUT', { fileId: replacement.fileId })).status).toBe(200);
-    const updated = await DatasetAnalysis.findById(created.body.data._id);
-    expect(updated?.fileId).toBe(replacement.fileId);
-    expect(updated?.data.metric).toBe(1);
-    expect(updated?.data.downloadUrl).toBeUndefined();
-  });
-
 
   describe('read privacy regressions', () => {
     async function privateResults() {

@@ -32,4 +32,4 @@ const LabelAnswerSchema = new Schema<ILabelAnswer>(
 LabelAnswerSchema.index({ taskId: 1, userId: 1 }, { unique: true });
 LabelAnswerSchema.index({ jobId: 1, userId: 1 });
 
-export const LabelAnswer = model<ILabelAnswer>('LabelAnswer', LabelAnswerSchema);
+export const LabelAnswer = model<ILabelAnswer>('LabelAnswer', LabelAnswerSchema, 'label_answers');

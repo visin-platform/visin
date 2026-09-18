@@ -4,7 +4,7 @@ import * as groups from '../clients/groupServiceClient';
 import { GroupMembership } from '../clients/groupServiceClient';
 
 // Per-request membership cache: several access checks in one request (e.g. job +
-// bundle in the same group) should cost one group-service call, not two.
+// dataset in the same group) should cost one group-service call, not two.
 const requestCaches = new WeakMap<Request, Map<string, Promise<GroupMembership>>>();
 
 export const requireUser = (req: Request): UserPayload => {
@@ -29,7 +29,7 @@ const membershipFor = (req: Request, groupId: string): Promise<GroupMembership> 
   return membership;
 };
 
-/** Any group member may work jobs / see bundles. */
+/** Any group member may work jobs. */
 export const assertMember = async (req: Request, groupId: string): Promise<void> => {
   const { member } = await membershipFor(req, groupId);
   if (!member) {
@@ -51,7 +51,7 @@ export const isGroupAdmin = async (req: Request, groupId: string): Promise<boole
   return member === true && (role === 'owner' || role === 'admin');
 };
 
-/** Group owner/admin administers bundles and jobs. */
+/** Group owner/admin administers jobs. */
 export const assertAdmin = async (req: Request, groupId: string): Promise<void> => {
   requireUser(req);
   if (!(await isGroupAdmin(req, groupId))) {

@@ -4,8 +4,9 @@ import UploadReservation from '../models/UploadReservation';
 import { deleteFile, getFileMetadata } from './fileServiceClient';
 import { requireActor } from './writeAccessService';
 
-type UploadKind = 'archive' | 'image' | 'visualization';
-type ResourceKind = 'analysis' | 'dataset' | 'image' | 'visualization';
+// Datasets (archives, images) moved to dataset-service; visualizations are what remain here.
+type UploadKind = 'visualization';
+type ResourceKind = 'visualization';
 
 export async function reserveUpload(fileId: string, kind: UploadKind, parentId: string, mimetype: string, userId?: string, allocationId = new Types.ObjectId().toString()) {
   const policy = getUploadPolicy(fileId, mimetype, kind);
@@ -49,8 +50,4 @@ export async function deleteReservedFile(fileId: string, resourceKind: ResourceK
   const reservation = await UploadReservation.findOneAndUpdate({ fileId, resourceKind, resourceId },
     { $set: { retired: true } }, { new: true });
   if (reservation) await deleteFile(fileId);
-}
-
-export function isExternalUrl(value: unknown): value is string {
-  return typeof value === 'string' && /^https?:\/\//i.test(value);
 }

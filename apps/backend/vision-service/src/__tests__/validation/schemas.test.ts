@@ -1,12 +1,4 @@
 import { paginationSchema, sortOrderSchema, looseStringParam } from '../../validation/common';
-import {
-  analysisUploadUrlBodySchema,
-  uploadAnalysisBodySchema,
-  updateAnalysisBodySchema,
-  getAllAnalysesQuerySchema,
-  getAnalysisByDatasetQuerySchema,
-  compareAnalysesBodySchema,
-} from '../../validation/analysisSchemas';
 import { createTokenBodySchema } from '../../validation/apiTokenSchemas';
 import {
   createFindingBodySchema,
@@ -30,27 +22,12 @@ import {
   createConfigFromJsonBodySchema,
 } from '../../validation/configSchemas';
 import {
-  getAllImagesQuerySchema,
-  getImagesByDatasetQuerySchema,
-  createDatasetImageBodySchema,
-  updateImageBodySchema,
-  exportImageNamesQuerySchema,
-} from '../../validation/datasetImageSchemas';
-import {
-  getDatasetsQuerySchema,
-  createDatasetBodySchema,
-} from '../../validation/datasetSchemas';
-import {
   getEpochsByTrainingQuerySchema,
   createEpochBodySchema,
   updateEpochBodySchema,
   createEpochFromJsonBodySchema,
   createEpochsBatchBodySchema,
 } from '../../validation/epochSchemas';
-import {
-  createImageCategoryBodySchema,
-  updateCategoryBodySchema,
-} from '../../validation/imageCategorySchemas';
 import {
   getProjectsQuerySchema,
   createProjectBodySchema,
@@ -101,43 +78,6 @@ describe('common', () => {
     expect(looseStringParam.parse('a')).toBe('a');
     expect(looseStringParam.parse(['a', 'b'])).toBe('a');
     expect(looseStringParam.parse(undefined)).toBeUndefined();
-  });
-});
-
-describe('analysisSchemas', () => {
-  it('uploadAnalysisBodySchema requires dataset and drops client-set size/downloadUrl', () => {
-    expect(uploadAnalysisBodySchema.safeParse({ dataset: 'waymo' }).success).toBe(true);
-    expect(uploadAnalysisBodySchema.safeParse({}).success).toBe(false);
-    expect(uploadAnalysisBodySchema.parse({ dataset: 'waymo', size: '9 TB', downloadUrl: 'http://x' })).toEqual({
-      dataset: 'waymo'
-    });
-  });
-
-  it('updateAnalysisBodySchema leaves omitted fields out so a rename cannot wipe data', () => {
-    expect(updateAnalysisBodySchema.parse({ dataset: 'zod' })).toEqual({ dataset: 'zod' });
-    expect(updateAnalysisBodySchema.parse({ data: { a: 1 } })).toEqual({ data: { a: 1 } });
-    expect(updateAnalysisBodySchema.safeParse({ dataset: '' }).success).toBe(false);
-  });
-
-  it('analysisUploadUrlBodySchema requires a filename and defaults the mimetype', () => {
-    expect(analysisUploadUrlBodySchema.parse({ filename: 'ds.zip' })).toEqual({
-      filename: 'ds.zip',
-      mimetype: 'application/octet-stream'
-    });
-    expect(analysisUploadUrlBodySchema.safeParse({}).success).toBe(false);
-  });
-
-  it('query schemas default limit/skip', () => {
-    expect(getAllAnalysesQuerySchema.parse({})).toEqual({ limit: 50, skip: 0 });
-    expect(getAnalysisByDatasetQuerySchema.parse({ limit: '5' })).toEqual({ limit: 5, skip: 0 });
-  });
-
-  it('compareAnalysesBodySchema bounds the id list to 1..10', () => {
-    expect(compareAnalysesBodySchema.safeParse({ analysisIds: [] }).success).toBe(false);
-    expect(compareAnalysesBodySchema.safeParse({ analysisIds: ['a'] }).success).toBe(true);
-    expect(
-      compareAnalysesBodySchema.safeParse({ analysisIds: Array(11).fill('x') }).success
-    ).toBe(false);
   });
 });
 
@@ -215,78 +155,6 @@ describe('configSchemas', () => {
   });
 });
 
-describe('datasetImageSchemas', () => {
-  it('getAllImagesQuerySchema defaults paging', () => {
-    expect(getAllImagesQuerySchema.parse({})).toEqual({ page: 1, limit: 50 });
-  });
-
-  it('getImagesByDatasetQuerySchema joins repeated tags back together', () => {
-    const parsed = getImagesByDatasetQuerySchema.parse({ tags: ['a', 'b'] });
-    expect(parsed.tags).toBe('a b');
-    expect(parsed.sortBy).toBe('updatedAt');
-    expect(parsed.sortOrder).toBe('desc');
-  });
-
-  it('createDatasetImageBodySchema requires the full metadata set', () => {
-    const valid = {
-      filename: 'f.jpg',
-      originalName: 'o.jpg',
-      fileId: 'm',
-      datasetId: 'd',
-      categoryId: 'c',
-      mimetype: 'image/jpeg',
-      size: '123',
-    };
-    const parsed = createDatasetImageBodySchema.parse(valid);
-    expect(parsed.size).toBe(123);
-    expect(parsed.tags).toEqual([]);
-    expect(parsed.labels).toEqual([]);
-
-    expect(createDatasetImageBodySchema.safeParse({ ...valid, filename: '' }).success).toBe(false);
-  });
-
-  it('createDatasetImageBodySchema rejects the removed legacy minioFileId key', () => {
-    const base = {
-      filename: 'f.jpg',
-      originalName: 'o.jpg',
-      datasetId: 'd',
-      categoryId: 'c',
-      mimetype: 'image/jpeg',
-      size: 123,
-    };
-
-    // minioFileId is no longer translated into fileId, so it no longer satisfies it.
-    expect(createDatasetImageBodySchema.safeParse({ ...base, minioFileId: 'legacy' }).success).toBe(false);
-
-    // Missing fileId entirely is likewise a validation failure.
-    expect(createDatasetImageBodySchema.safeParse(base).success).toBe(false);
-
-    const parsed = createDatasetImageBodySchema.parse({ ...base, fileId: 'current' });
-    expect(parsed.fileId).toBe('current');
-  });
-
-  it('updateImageBodySchema allows nullable categoryId', () => {
-    expect(updateImageBodySchema.parse({ categoryId: null }).categoryId).toBeNull();
-    expect(exportImageNamesQuerySchema.parse({ tag: ['t1', 't2'] }).tag).toBe('t1');
-  });
-});
-
-describe('datasetSchemas', () => {
-  it('getDatasetsQuerySchema defaults page/limit/sort', () => {
-    expect(getDatasetsQuerySchema.parse({})).toEqual({
-      page: 1,
-      limit: 10,
-      sortBy: 'updatedAt',
-      order: -1,
-    });
-  });
-
-  it('createDatasetBodySchema requires a name', () => {
-    expect(createDatasetBodySchema.safeParse({ name: ' D ' }).success).toBe(true);
-    expect(createDatasetBodySchema.safeParse({ name: '  ' }).success).toBe(false);
-  });
-});
-
 describe('epochSchemas', () => {
   it('getEpochsByTrainingQuerySchema defaults to epoch asc', () => {
     expect(getEpochsByTrainingQuerySchema.parse({})).toEqual({ sortBy: 'epoch', order: 1 });
@@ -324,15 +192,6 @@ describe('epochSchemas', () => {
         epochs: [{ trainingId: 't', training_uuid: 'u', epoch: 1, results: {} }],
       }).success
     ).toBe(true);
-  });
-});
-
-describe('imageCategorySchemas', () => {
-  it('requires name and datasetId on create, all optional on update', () => {
-    expect(createImageCategoryBodySchema.safeParse({ name: 'N', datasetId: 'd' }).success).toBe(true);
-    expect(createImageCategoryBodySchema.safeParse({ name: 'N' }).success).toBe(false);
-    expect(updateCategoryBodySchema.parse({}).name).toBeUndefined();
-    expect(updateCategoryBodySchema.safeParse({ name: '' }).success).toBe(false);
   });
 });
 

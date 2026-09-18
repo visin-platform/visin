@@ -5,7 +5,6 @@ import {
   FolderCopy,
   Groups,
   Insights,
-  Inventory2,
   Key,
   Label,
   Link as LinkIcon,
@@ -76,13 +75,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Labels',
     icon: <Label />,
-    // A bundle is the image set a job is labelled from, so it sits beside the
-    // jobs rather than with Datasets. "New job" is deliberately not here: it is
-    // an action on the Jobs list, not a section.
-    sections: [
-      { app: 'label', text: 'Jobs', icon: <Assignment />, path: '/jobs' },
-      { app: 'label', text: 'Bundles', icon: <Inventory2 />, path: '/bundles' }
-    ]
+    // A labeling job is built on a dataset, which lives under Data; "New job"
+    // is deliberately not here either, being an action on the Jobs list.
+    sections: [{ app: 'label', text: 'Jobs', icon: <Assignment />, path: '/jobs' }]
   }
 ];
 
@@ -104,7 +99,7 @@ const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
  *
  * A non-local app with no URL configured has its sections omitted, rather than
  * rendered as dead links into the current origin — a missing `LABEL_FRONT_URL`
- * should hide Jobs and Bundles, not leave entries that 404 inside Vision. A
+ * should hide Jobs, not leave entries that 404 inside Vision. A
  * group left with no sections is omitted with them.
  */
 export function createVisinNavigation(

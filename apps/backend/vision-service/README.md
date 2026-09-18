@@ -1,6 +1,6 @@
 # Vision Service
 
-Main Vision API for projects, datasets, trainings, epochs, test results, comparisons, visualizations, benchmarks, configs, and API tokens.
+Main Vision API for projects, trainings, epochs, test results, comparisons, visualizations, benchmarks, configs, and API tokens. Datasets (zips, imported images) live in dataset-service; a training's `datasetId` names one there.
 
 ## Local Development
 
@@ -47,14 +47,13 @@ resolve to that project; standalone or missing parents are rejected. Epoch inges
 stores the training UUID from the resolved training, including batch submissions.
 
 Project tokens cannot create, change, or delete projects, or create, list, or revoke
-credentials. Use a user session for project and token administration. Shared dataset
-and config libraries retain their existing behavior. This policy requires no new
+credentials. Use a user session for project and token administration. The shared config
+library retains its existing behavior. This policy requires no new
 environment variables or deployment configuration.
 
 ## Shared library visibility
 
-Configurations, dataset metadata, dataset analyses, images, and dataset archives
-are public shared libraries. Their direct lookups, lists, downloads, and exports
+Configurations are a public shared library. Their direct lookups, lists, downloads, and exports
 remain public when a private training selects them. Use these libraries only for
 non-confidential content. Remove passwords, API keys, tokens, and other secrets
 from configuration payloads and archive contents before ingestion; the service
@@ -86,14 +85,13 @@ Membership uses immutable account IDs accepted through group invitations. The
 separate Google-account-linking and session-revocation backlog still applies.
 
 Standalone trainings, benchmarks, comparisons, and shared libraries record their
-creator in `ownerId`. Dataset images and categories inherit the owner of their
-`DatasetAnalysis` parent. Unowned records are read-only; there is no first-editor
+creator in `ownerId`. Unowned records are read-only; there is no first-editor
 claim or migration command. Existing records and references require an explicit
 operator migration, which is managed outside this change.
 
 The browser reads `GET /api/write-capabilities?kind=training&ids=<comma-separated IDs>`
 (up to 100 IDs) to gate controls; supported kinds also include project, comparison,
-benchmark, test-result, analysis, and dataset. This is a session-only UI endpoint;
+benchmark, and test-result. This is a session-only UI endpoint;
 API credentials still use each operation's independent scope checks. The group
 picker uses `GET /api/write-capabilities/groups`.
 
@@ -109,15 +107,12 @@ Continue the existing upload-URL → file upload → resource creation/completio
 New stored-file references require a persisted reservation matching the uploader,
 resource family, and parent. First attachment expires after 24 hours; signed upload
 URLs still expire after 15 minutes. Attachment verifies the stored file's size and,
-when supplied by image/visualization clients, its declared size and reserved media
+when supplied by visualization clients, its declared size and reserved media
 type. A reservation cannot be transferred to another record. These checks do not
 inspect content bytes for actual MIME type or enforce storage quotas.
 
-Archive replacement clears the previous download-reference alias while preserving
-analysis data. Dataset metadata downloads require an explicit location; no path is
-inferred from a dataset name. Historical file references and thumbnails without
-verified reservations are retained during record deletion for explicit operator
-cleanup. File deletion failures retain image records for retry. Broader upload
+Historical file references without verified reservations are retained during
+record deletion for explicit operator cleanup. Broader upload
 limits and cleanup reconciliation remain tracked in `todo.md`.
 
 ## Finding pagination

@@ -39,6 +39,7 @@ on:
         options:
           - all
           - auth-service
+          - dataset-service
           - file-service
           - group-service
           - label-service
@@ -92,7 +93,7 @@ jobs:
           VERSION: ${{ inputs.version }}
           IMAGE_BASE: ${{ env.REGISTRY }}/${{ github.repository_owner }}
         run: |
-          ALL="auth-service file-service group-service label-service mcp-service vision-service \
+          ALL="auth-service dataset-service file-service group-service label-service mcp-service vision-service \
                landing-front auth-front account-front label-front vision-front shell-front"
           RETAG=""
           PREVIOUS=""

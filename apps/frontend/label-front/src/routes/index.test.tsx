@@ -9,7 +9,6 @@ vi.mock('../components/ProtectedRoute', () => ({
 vi.mock('../pages/JobsPage', () => ({ default: () => <div>jobs-page</div> }));
 vi.mock('../pages/JobDetailPage', () => ({ default: () => <div>job-detail-page</div> }));
 vi.mock('../pages/WorkbenchPage', () => ({ default: () => <div>workbench-page</div> }));
-vi.mock('../pages/BundlesPage', () => ({ default: () => <div>bundles-page</div> }));
 vi.mock('../pages/NewJobPage', () => ({ default: () => <div>new-job-page</div> }));
 vi.mock('../components/LoginRedirect', () => ({ default: () => <div>login-redirect</div> }));
 
@@ -31,7 +30,7 @@ describe('AppRoutes', () => {
     expect(screen.getByText('login-redirect')).toBeInTheDocument();
   });
 
-  it('routes jobs, wizard, detail, workbench, and bundles', () => {
+  it('routes jobs, wizard, detail and workbench', () => {
     renderAt('/jobs');
     expect(screen.getByText('jobs-page')).toBeInTheDocument();
 
@@ -44,7 +43,5 @@ describe('AppRoutes', () => {
     renderAt('/jobs/abc/work');
     expect(screen.getByText('workbench-page')).toBeInTheDocument();
 
-    renderAt('/bundles');
-    expect(screen.getByText('bundles-page')).toBeInTheDocument();
   });
 });

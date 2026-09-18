@@ -21,7 +21,8 @@ export interface CreateJobInput {
   name: string;
   description?: string;
   groupId: string;
-  bundleId: string;
+  datasetId: string;
+  framesGroup: string;
   taskType: 'single_choice' | 'mask_toggle';
   question: { prompt: string; choices?: { key: string; label: string; hotkey?: string }[] };
   annotationSets: string[];

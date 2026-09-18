@@ -1,109 +1,140 @@
-jest.mock('../../models/LabelBundle', () => ({
-  LabelBundle: { findById: jest.fn() },
-}));
-jest.mock('../../models/LabelImage', () => ({
-  LabelImage: { find: jest.fn() },
+jest.mock('../../clients/datasetServiceClient', () => ({
+  getDataset: jest.fn(),
+  listItems: jest.fn(),
+  getManifest: jest.fn()
 }));
 jest.mock('../../models/LabelTask', () => ({
   LabelTask: { deleteMany: jest.fn(), insertMany: jest.fn() },
 }));
 
 import { materializeTasks } from '../../services/materializationService';
-import { LabelBundle } from '../../models/LabelBundle';
-import { LabelImage } from '../../models/LabelImage';
+import * as datasets from '../../clients/datasetServiceClient';
 import { LabelTask } from '../../models/LabelTask';
 import { BadRequestError, ConflictError } from '@visin/backend-core';
 import type { ILabelJob } from '../../models/LabelJob';
 
-const mockedBundle = LabelBundle as unknown as Record<string, jest.Mock>;
-const mockedImage = LabelImage as unknown as Record<string, jest.Mock>;
+const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
 const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
 
-const frame = (stem: string) => ({ _id: `frame-${stem}`, stem, kind: 'frame', path: `frames/${stem}.png` });
-const layer = (set: string, stem: string) => ({ _id: `layer-${set}-${stem}`, stem, kind: 'layer', annotationSet: set });
-const idmap = (set: string, stem: string, masks: unknown[] = [{ id: 1, class: 'vehicle' }]) => ({
-  _id: `idmap-${set}-${stem}`,
+const frame = (stem: string) => ({
+  _id: `frame-${stem}`,
+  group: 'frames',
+  path: `frames/${stem}.png`,
   stem,
-  kind: 'idmap',
-  annotationSet: set,
-  metadata: { masks },
+  kind: 'image' as const,
+  fileId: `file/frames/${stem}.png`,
+  width: 4,
+  height: 2
+});
+const layer = (set: string, stem: string) => ({
+  _id: `layer-${set}-${stem}`,
+  group: set,
+  path: `${set}/${stem}.png`,
+  stem,
+  kind: 'image' as const,
+  fileId: `file/${set}/${stem}.png`
+});
+const idmap = (set: string, stem: string) => ({
+  _id: `idmap-${set}-${stem}`,
+  group: set,
+  path: `${set}/${stem}.ids.png`,
+  stem,
+  variant: 'ids',
+  kind: 'image' as const,
+  fileId: `file/${set}/${stem}.ids.png`
+});
+const masksOf = (set: string, stem: string, masks: unknown[] = [{ id: 1, class: 'vehicle' }]) => ({
+  _id: `masks-${set}-${stem}`,
+  group: set,
+  path: `${set}/${stem}.masks.json`,
+  stem,
+  variant: 'masks',
+  kind: 'json' as const,
+  data: masks
 });
 
 const makeJob = (overrides: Partial<ILabelJob> = {}): ILabelJob =>
   ({
     _id: 'j1',
     status: 'draft',
-    bundleId: 'b1',
+    datasetId: 'd1',
+    framesGroup: 'frames',
     taskType: 'mask_toggle',
     annotationSets: ['setA'],
     save: jest.fn(),
     ...overrides,
   }) as unknown as ILabelJob;
 
-const readyBundle = (overrides: Record<string, unknown> = {}) => ({
-  _id: 'b1',
-  status: 'ready',
-  annotationSets: ['setA', 'setB'],
-  manifest: undefined,
-  ...overrides,
+const dataset = (groups = ['frames', 'setA', 'setB']) => ({
+  _id: 'd1',
+  name: 'VLM',
+  ownerId: 'u1',
+  visibility: 'public' as const,
+  groups: groups.map((name) => ({ name, images: 1, jsons: 0 })),
+  imageCount: groups.length
 });
 
-const stubImages = (frames: unknown[], annotationImages: unknown[]) => {
-  // The frames query filters kind: 'frame' and chains .sort(); the annotation
-  // query (only issued when the job has annotation sets) resolves directly.
-  mockedImage.find.mockImplementation((query: { kind: unknown }) =>
-    query.kind === 'frame'
-      ? { sort: jest.fn().mockResolvedValue(frames) }
-      : Promise.resolve(annotationImages)
+/** Serve the dataset's items the way dataset-service would, per group and kind. */
+const stubItems = (items: ReturnType<typeof frame | typeof layer | typeof idmap | typeof masksOf>[]) => {
+  mockedDatasets.listItems.mockImplementation(async (_id: string, filter: { group: string; kind: string; variant?: string; noVariant?: boolean }) =>
+    items.filter(
+      (item) =>
+        item.group === filter.group &&
+        item.kind === filter.kind &&
+        (filter.variant === undefined || ('variant' in item ? item.variant : undefined) === filter.variant) &&
+        (!filter.noVariant || !('variant' in item && item.variant))
+    )
   );
 };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedDatasets.getDataset.mockResolvedValue(dataset());
+  mockedDatasets.getManifest.mockResolvedValue([]);
   mockedTask.deleteMany.mockResolvedValue({});
   mockedTask.insertMany.mockResolvedValue([]);
+  stubItems([]);
 });
 
 describe('materializeTasks guards', () => {
-  it('requires a draft job with a ready bundle', async () => {
+  it('requires a draft job with a dataset', async () => {
     await expect(materializeTasks(makeJob({ status: 'active' }), { kind: 'filter' })).rejects.toThrow(ConflictError);
-
-    await expect(materializeTasks(makeJob({ bundleId: undefined }), { kind: 'filter' })).rejects.toThrow('no bundle');
-
-    mockedBundle.findById.mockResolvedValue({ status: 'importing' });
-    await expect(materializeTasks(makeJob(), { kind: 'filter' })).rejects.toThrow('not ready');
+    await expect(materializeTasks(makeJob({ datasetId: undefined }), { kind: 'filter' })).rejects.toThrow('no dataset');
   });
 
-  it('rejects annotation sets missing from the bundle', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-
-    await expect(
-      materializeTasks(makeJob({ annotationSets: ['nope'] }), { kind: 'filter' })
-    ).rejects.toThrow('Annotation sets not in bundle: nope');
+  it('rejects a frames group or annotation set the dataset does not have', async () => {
+    await expect(materializeTasks(makeJob({ framesGroup: 'camera' }), { kind: 'filter' })).rejects.toThrow(
+      'no image group "camera"'
+    );
+    await expect(materializeTasks(makeJob({ annotationSets: ['nope'] }), { kind: 'filter' })).rejects.toThrow(
+      'Annotation sets not in dataset: nope'
+    );
   });
 
   it('requires exactly one set for mask_toggle', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-
-    await expect(
-      materializeTasks(makeJob({ annotationSets: ['setA', 'setB'] }), { kind: 'filter' })
-    ).rejects.toThrow('exactly one annotation set');
+    await expect(materializeTasks(makeJob({ annotationSets: ['setA', 'setB'] }), { kind: 'filter' })).rejects.toThrow(
+      'exactly one annotation set'
+    );
   });
 
   it('requires an id map for every manifest-named frame in a mask_toggle job', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle({ manifest: [{ stem: 'a' }, { stem: 'b' }] }));
-    stubImages([frame('a'), frame('b')], [layer('setA', 'a'), idmap('setA', 'a')]);
+    mockedDatasets.getManifest.mockResolvedValue([
+      { stem: 'a', attributes: {} },
+      { stem: 'b', attributes: {} }
+    ]);
+    stubItems([frame('a'), frame('b'), layer('setA', 'a'), idmap('setA', 'a')]);
 
     await expect(materializeTasks(makeJob(), { kind: 'manifest' })).rejects.toThrow('missing for: b');
   });
 });
 
 describe('manifest path', () => {
-  it('materializes from the bundle manifest with strata and layer/idmap resolution', async () => {
-    mockedBundle.findById.mockResolvedValue(
-      readyBundle({ manifest: [{ stem: 'a', stratum: 'vehicle' }, { stem: 'ghost' }] })
-    );
-    stubImages([frame('a')], [layer('setA', 'a'), idmap('setA', 'a')]);
+  it("materializes from the dataset's manifest, copying what each task shows", async () => {
+    mockedDatasets.getManifest.mockResolvedValue([
+      { stem: 'a', attributes: { stratum: 'vehicle' } },
+      { stem: 'ghost', attributes: {} }
+    ]);
+    stubItems([frame('a'), layer('setA', 'a'), idmap('setA', 'a'), masksOf('setA', 'a')]);
     const job = makeJob();
 
     const result = await materializeTasks(job, { kind: 'manifest' });
@@ -112,22 +143,21 @@ describe('manifest path', () => {
     expect(mockedTask.deleteMany).toHaveBeenCalledWith({ jobId: 'j1' });
     expect(mockedTask.insertMany).toHaveBeenCalledWith([
       expect.objectContaining({
-        labelImageId: 'frame-a',
+        frame: { fileId: 'file/frames/a.png', path: 'frames/a.png', stem: 'a', width: 4, height: 2 },
         order: 0,
         stratum: 'vehicle',
         payload: {
-          layers: [{ set: 'setA', imageId: 'layer-setA-a' }],
-          maskMap: { imageId: 'idmap-setA-a', masks: [{ id: 1, class: 'vehicle' }] },
+          layers: [{ set: 'setA', fileId: 'file/setA/a.png' }],
+          maskMap: { fileId: 'file/setA/a.ids.png', masks: [{ id: 1, class: 'vehicle' }] },
         },
       }),
     ]);
     expect(job.tasksCount).toBe(1);
-    expect(job.selection).toMatchObject({ kind: 'manifest', spec: { source: 'bundle', rows: 1, missing: 1 } });
+    expect(job.selection).toMatchObject({ kind: 'manifest', spec: { source: 'dataset', rows: 1, missing: 1 } });
   });
 
   it('parses inline manifest content', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages([frame('a')], [idmap('setA', 'a')]);
+    stubItems([frame('a'), idmap('setA', 'a')]);
 
     const result = await materializeTasks(makeJob(), {
       kind: 'manifest',
@@ -136,17 +166,16 @@ describe('manifest path', () => {
     });
 
     expect(result.tasks).toBe(1);
+    expect(mockedDatasets.getManifest).not.toHaveBeenCalled();
   });
 
   it('fails without any manifest or when nothing matches', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages([frame('a')], []);
+    stubItems([frame('a')]);
     await expect(materializeTasks(makeJob({ taskType: 'single_choice' }), { kind: 'manifest' })).rejects.toThrow(
       'No manifest'
     );
 
-    mockedBundle.findById.mockResolvedValue(readyBundle({ manifest: [{ stem: 'ghost' }] }));
-    stubImages([frame('a')], []);
+    mockedDatasets.getManifest.mockResolvedValue([{ stem: 'ghost', attributes: {} }]);
     await expect(materializeTasks(makeJob({ taskType: 'single_choice' }), { kind: 'manifest' })).rejects.toThrow(
       'matches a frame'
     );
@@ -154,79 +183,73 @@ describe('manifest path', () => {
 });
 
 describe('filter path', () => {
-  it('takes all frames when sampleN is absent', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages([frame('a'), frame('b')], []);
+  it('takes all frames when sampleN is absent, in path order', async () => {
+    stubItems([frame('b'), frame('a')]);
     const job = makeJob({ taskType: 'single_choice', annotationSets: [] });
 
     const result = await materializeTasks(job, { kind: 'filter' });
 
     expect(result.tasks).toBe(2);
+    expect(mockedTask.insertMany.mock.calls[0][0].map((task: { frame: { stem: string } }) => task.frame.stem)).toEqual(['a', 'b']);
     // No layers and no maskMap → tasks carry no payload at all.
     expect(mockedTask.insertMany.mock.calls[0][0][0].payload).toBeUndefined();
   });
 
   it('samples deterministically with a seed', async () => {
     const frames = ['a', 'b', 'c', 'd', 'e'].map(frame);
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages(frames, []);
+    stubItems(frames);
     const job = makeJob({ taskType: 'single_choice', annotationSets: [] });
 
     await materializeTasks(job, { kind: 'filter', sampleN: 2, seed: 7 });
-    const firstPick = mockedTask.insertMany.mock.calls[0][0].map((task: { labelImageId: string }) => task.labelImageId);
+    const firstPick = mockedTask.insertMany.mock.calls[0][0].map((task: { frame: { stem: string } }) => task.frame.stem);
 
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages(frames, []);
     await materializeTasks(job, { kind: 'filter', sampleN: 2, seed: 7 });
-    const secondPick = mockedTask.insertMany.mock.calls[1][0].map((task: { labelImageId: string }) => task.labelImageId);
+    const secondPick = mockedTask.insertMany.mock.calls[1][0].map((task: { frame: { stem: string } }) => task.frame.stem);
 
     expect(firstPick).toHaveLength(2);
     expect(secondPick).toEqual(firstPick);
   });
 
   it('scopes a mask_toggle job to the frames its own set covers', async () => {
-    // One bundle, two sets painted on different frames — a job on setA gets
+    // One dataset, two sets painted on different frames — a job on setA gets
     // setA's frames and ignores the ones only setB annotates.
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages(
-      [frame('a'), frame('b'), frame('c')],
-      [idmap('setA', 'a'), idmap('setB', 'b'), idmap('setB', 'c')]
-    );
+    stubItems([frame('a'), frame('b'), frame('c'), idmap('setA', 'a'), idmap('setB', 'b'), idmap('setB', 'c')]);
 
     const result = await materializeTasks(makeJob(), { kind: 'filter' });
 
     expect(result.tasks).toBe(1);
-    expect(mockedTask.insertMany.mock.calls[0][0][0].labelImageId).toBe('frame-a');
+    expect(mockedTask.insertMany.mock.calls[0][0][0].frame.stem).toBe('a');
   });
 
   it('fails when no frame carries the mask_toggle set', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages([frame('a')], [idmap('setB', 'a')]);
+    stubItems([frame('a'), idmap('setB', 'a')]);
 
     await expect(materializeTasks(makeJob(), { kind: 'filter' })).rejects.toThrow(
-      'No frame in the bundle has an .ids.png in "setA"'
+      'No frame in the dataset has an id map in "setA"'
     );
   });
 
-  it('caps masks per field value across the whole bundle and drops emptied frames', async () => {
+  it('caps masks per field value across the whole dataset and drops emptied frames', async () => {
     // Three frames, one 'rare' mask scattered one per frame plus 'common' ones:
     // a per-frame cap could never reach a target count for 'rare', so the cap is
     // global. Frame c contributes no selected mask and gets no task.
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages(
-      [frame('a'), frame('b'), frame('c')],
-      [
-        idmap('setA', 'a', [
-          { id: 1, class: 'sign', stratum: 'rare' },
-          { id: 2, class: 'sign', stratum: 'common' }
-        ]),
-        idmap('setA', 'b', [
-          { id: 1, class: 'sign', stratum: 'rare' },
-          { id: 2, class: 'sign', stratum: 'common' }
-        ]),
-        idmap('setA', 'c', [{ id: 1, class: 'sign', stratum: 'common' }])
-      ]
-    );
+    stubItems([
+      frame('a'),
+      frame('b'),
+      frame('c'),
+      idmap('setA', 'a'),
+      idmap('setA', 'b'),
+      idmap('setA', 'c'),
+      masksOf('setA', 'a', [
+        { id: 1, class: 'sign', stratum: 'rare' },
+        { id: 2, class: 'sign', stratum: 'common' }
+      ]),
+      masksOf('setA', 'b', [
+        { id: 1, class: 'sign', stratum: 'rare' },
+        { id: 2, class: 'sign', stratum: 'common' }
+      ]),
+      masksOf('setA', 'c', [{ id: 1, class: 'sign', stratum: 'common' }])
+    ]);
     const job = makeJob();
 
     const result = await materializeTasks(job, {
@@ -237,10 +260,7 @@ describe('filter path', () => {
     expect(result.tasks).toBe(2);
     expect(result.masks).toEqual({ rare: 2 });
     const tasks = mockedTask.insertMany.mock.calls[0][0];
-    expect(tasks.map((task: { labelImageId: string }) => task.labelImageId).sort()).toEqual([
-      'frame-a',
-      'frame-b'
-    ]);
+    expect(tasks.map((task: { frame: { stem: string } }) => task.frame.stem).sort()).toEqual(['a', 'b']);
     // Only the selected masks reach the workbench, not every mask in the frame.
     expect(tasks[0].payload.maskMap.masks).toEqual([{ id: 1, class: 'sign', stratum: 'rare' }]);
     expect(job.selection).toMatchObject({
@@ -250,36 +270,30 @@ describe('filter path', () => {
   });
 
   it('keeps every mask of a value when no cap is given, and splits per value', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages(
-      [frame('a')],
-      [
-        idmap('setA', 'a', [
-          { id: 2, class: 'sign', stratum: 'rare' },
-          { id: 1, class: 'sign', stratum: 'common' }
-        ])
-      ]
-    );
+    stubItems([
+      frame('a'),
+      idmap('setA', 'a'),
+      masksOf('setA', 'a', [
+        { id: 2, class: 'sign', stratum: 'rare' },
+        { id: 1, class: 'sign', stratum: 'common' }
+      ])
+    ]);
 
     const result = await materializeTasks(makeJob(), { kind: 'filter', masks: { field: 'stratum' } });
 
     expect(result.masks).toEqual({ rare: 1, common: 1 });
-    // Sampling shuffles; the workbench still walks masks in bundle id order.
-    expect(mockedTask.insertMany.mock.calls[0][0][0].payload.maskMap.masks.map((m: { id: number }) => m.id)).toEqual([
-      1, 2
-    ]);
+    // Sampling shuffles; the workbench still walks masks in dataset id order.
+    expect(mockedTask.insertMany.mock.calls[0][0][0].payload.maskMap.masks.map((m: { id: number }) => m.id)).toEqual([1, 2]);
   });
 
   it('rejects a mask selection that matches nothing, or a job type without masks', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages([frame('a')], [idmap('setA', 'a', [{ id: 1, class: 'sign', stratum: 'common' }])]);
+    stubItems([frame('a'), idmap('setA', 'a'), masksOf('setA', 'a', [{ id: 1, class: 'sign', stratum: 'common' }])]);
 
     await expect(
       materializeTasks(makeJob(), { kind: 'filter', masks: { field: 'stratum', include: ['rare'] } })
     ).rejects.toThrow('No mask matches the selection on "stratum"');
 
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages([frame('a')], []);
+    stubItems([frame('a')]);
     await expect(
       materializeTasks(makeJob({ taskType: 'single_choice', annotationSets: [] }), {
         kind: 'filter',
@@ -288,10 +302,45 @@ describe('filter path', () => {
     ).rejects.toThrow('only applies to mask_toggle');
   });
 
-  it('fails on an empty bundle', async () => {
-    mockedBundle.findById.mockResolvedValue(readyBundle());
-    stubImages([], []);
+  it('copies only the layers a frame actually has, and omits absent image sizes', async () => {
+    const bare = { ...frame('a'), width: undefined, height: undefined };
+    stubItems([bare, frame('b'), layer('setA', 'a'), layer('setB', 'b')]);
+    const job = makeJob({ taskType: 'single_choice', annotationSets: ['setA', 'setB'] });
 
+    await materializeTasks(job, { kind: 'filter' });
+
+    const [first, second] = mockedTask.insertMany.mock.calls[0][0];
+    expect(first.frame).toEqual({ fileId: 'file/frames/a.png', path: 'frames/a.png', stem: 'a' });
+    expect(first.payload).toEqual({ layers: [{ set: 'setA', fileId: 'file/setA/a.png' }] });
+    expect(second.payload).toEqual({ layers: [{ set: 'setB', fileId: 'file/setB/b.png' }] });
+  });
+
+  it('ignores masks whose selector field is missing or null', async () => {
+    stubItems([
+      frame('a'),
+      idmap('setA', 'a'),
+      masksOf('setA', 'a', [
+        { id: 1, class: 'sign', stratum: null },
+        { id: 2, class: 'sign' },
+        { id: 3, class: 'sign', stratum: 'rare' }
+      ])
+    ]);
+
+    const result = await materializeTasks(makeJob(), { kind: 'filter', masks: { field: 'stratum' } });
+
+    expect(result.masks).toEqual({ rare: 1 });
+    expect(mockedTask.insertMany.mock.calls[0][0][0].payload.maskMap.masks).toEqual([{ id: 3, class: 'sign', stratum: 'rare' }]);
+  });
+
+  it('gives a mask_toggle frame an empty mask list when the set ships no masks.json', async () => {
+    stubItems([frame('a'), idmap('setA', 'a')]);
+
+    await materializeTasks(makeJob(), { kind: 'filter' });
+
+    expect(mockedTask.insertMany.mock.calls[0][0][0].payload.maskMap).toEqual({ fileId: 'file/setA/a.ids.png', masks: [] });
+  });
+
+  it('fails on a dataset with no frames', async () => {
     await expect(
       materializeTasks(makeJob({ taskType: 'single_choice', annotationSets: [] }), { kind: 'filter' })
     ).rejects.toThrow(BadRequestError);

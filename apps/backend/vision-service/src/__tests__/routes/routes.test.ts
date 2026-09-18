@@ -1,14 +1,10 @@
 import type { Router } from 'express';
-import analysisRoutes from '../../routes/analysisRoutes';
 import apiTokenRoutes from '../../routes/apiTokenRoutes';
 import benchmarkRoutes from '../../routes/benchmarkRoutes';
 import comparisonRoutes from '../../routes/comparisonRoutes';
 import configRoutes from '../../routes/configRoutes';
-import datasetImageRoutes from '../../routes/datasetImageRoutes';
-import datasetRoutes from '../../routes/datasetRoutes';
 import epochRoutes from '../../routes/epochRoutes';
 import findingRoutes from '../../routes/findingRoutes';
-import imageCategoryRoutes from '../../routes/imageCategoryRoutes';
 import projectRoutes from '../../routes/projectRoutes';
 import testResultRoutes from '../../routes/testResultRoutes';
 import trainingRoutes from '../../routes/trainingRoutes';
@@ -35,15 +31,11 @@ const describeRouter = (router: Router) => {
 
 describe('vision-service routers', () => {
   const routers: Array<[string, Router, number]> = [
-    ['analysisRoutes', analysisRoutes, 10],
     ['apiTokenRoutes', apiTokenRoutes, 3],
     ['benchmarkRoutes', benchmarkRoutes, 7],
     ['comparisonRoutes', comparisonRoutes, 7],
     ['configRoutes', configRoutes, 5],
-    ['datasetImageRoutes', datasetImageRoutes, 8],
-    ['datasetRoutes', datasetRoutes, 6],
     ['epochRoutes', epochRoutes, 9],
-    ['imageCategoryRoutes', imageCategoryRoutes, 6],
     ['projectRoutes', projectRoutes, 6],
     ['testResultRoutes', testResultRoutes, 10],
     ['trainingRoutes', trainingRoutes, 13],

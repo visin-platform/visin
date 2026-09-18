@@ -25,7 +25,7 @@ export const buildMaskIndex = (rgba: Uint8ClampedArray, width: number, height: n
  * maskId under an image-space coordinate, or null.
  *
  * `scope` is the task's own mask list, which can be a subset of what the id map
- * paints: one full-corpus bundle backs several jobs, so a frame's layer may show
+ * paints: one full-corpus dataset backs several jobs, so a frame's layer may show
  * masks this job never asked about. Those are out of scope — not clickable, and
  * dimmed by the overlay below — so a judgement is only ever recorded for a mask
  * the job actually selected.

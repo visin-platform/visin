@@ -107,7 +107,7 @@ describe('TrainingFormDialog', () => {
   it('shows the dataset the pipeline reported, read-only', async () => {
     render(<TrainingFormDialog {...baseProps} selectedDatasetId="d1" />);
 
-    const field = screen.getByLabelText('Dataset Analysis');
+    const field = screen.getByLabelText('Dataset');
     expect(field).toHaveValue('d1');
     expect(field).toHaveAttribute('readonly');
     await userEvent.type(field, 'x');
@@ -117,9 +117,9 @@ describe('TrainingFormDialog', () => {
   it('leaves the dataset field empty for a run that has none, and never offers a picker for it', () => {
     render(<TrainingFormDialog {...baseProps} selectedDatasetId="" />);
 
-    expect(screen.getByLabelText('Dataset Analysis')).toHaveValue('');
+    expect(screen.getByLabelText('Dataset')).toHaveValue('');
     // A plain field, not one of the dialog's pickers.
-    expect(screen.getByRole('textbox', { name: 'Dataset Analysis' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Dataset' })).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /dataset/i })).not.toBeInTheDocument();
   });
 });

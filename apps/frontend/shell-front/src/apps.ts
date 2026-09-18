@@ -56,7 +56,7 @@ export const APPS: Record<ShellApp, ShellAppDefinition> = {
     title: 'Labeling',
     subtitle: 'Label images and review annotation quality.',
     urlKey: 'LABEL_FRONT_URL',
-    prefixes: ['/jobs', '/bundles'],
+    prefixes: ['/jobs'],
     layout: (pathname) =>
       WORKBENCH.test(pathname)
         ? { maxContentWidth: FULL_BLEED, showPageHeader: false }

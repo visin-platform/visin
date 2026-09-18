@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Request, Response } from 'express';
-import { generateUploadUrl, generateDownloadUrl } from '../../controllers/signedUrlController';
+import { generateUploadUrl, generateDownloadUrl, generateDownloadUrls } from '../../controllers/signedUrlController';
 import { verifyToken } from '../../utils/hmac';
 
 const makeRes = () => {
@@ -68,5 +68,25 @@ describe('generateDownloadUrl', () => {
 
     const token = new URL(data.downloadUrl).searchParams.get('token')!;
     expect(verifyToken('download', 'grp/alb/file.jpg', data.expiresMs, token)).toBe(true);
+  });
+});
+
+describe('generateDownloadUrls', () => {
+  it('signs every requested file with one shared expiry', () => {
+    const res = makeRes();
+
+    generateDownloadUrls(makeReq({ fileIds: ['a/1.jpg', 'b/2.png'], expiresInMinutes: 30 }), res);
+
+    const { data } = res.json.mock.calls[0][0];
+    expect(Object.keys(data.urls)).toEqual(['a/1.jpg', 'b/2.png']);
+    for (const [fileId, url] of Object.entries(data.urls as Record<string, string>)) {
+      const token = new URL(url).searchParams.get('token')!;
+      expect(verifyToken('download', fileId, data.expiresMs, token)).toBe(true);
+    }
+    expect(data.expiresInMinutes).toBe(30);
+  });
+
+  it('refuses a path that escapes the data directory', () => {
+    expect(() => generateDownloadUrls(makeReq({ fileIds: ['ok.jpg', '../../etc/passwd'], expiresInMinutes: 1 }), makeRes())).toThrow();
   });
 });

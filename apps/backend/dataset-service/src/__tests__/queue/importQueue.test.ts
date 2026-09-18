@@ -1,0 +1,39 @@
+const add = jest.fn();
+const getJob = jest.fn();
+const close = jest.fn();
+const queueConstructor = jest.fn(() => ({ add, getJob, close }));
+
+jest.mock('bullmq', () => ({ Queue: queueConstructor }));
+jest.mock('../../queue/connection', () => ({ createRedisConnection: jest.fn(() => 'REDIS') }));
+
+import { closeImportQueue, enqueueImport, getImportQueue, IMPORT_QUEUE_NAME, removeQueuedImport } from '../../queue/importQueue';
+
+beforeEach(async () => {
+  jest.clearAllMocks();
+  await closeImportQueue();
+});
+
+it('creates the queue once, on first use', () => {
+  expect(queueConstructor).not.toHaveBeenCalled();
+  expect(getImportQueue()).toBe(getImportQueue());
+  expect(queueConstructor).toHaveBeenCalledWith(IMPORT_QUEUE_NAME, { connection: 'REDIS' });
+});
+
+it('uses the import id as the job id, so a double submit is a no-op', async () => {
+  await enqueueImport({ datasetId: 'd', importId: 'i' });
+  expect(add).toHaveBeenCalledWith('import', { datasetId: 'd', importId: 'i' }, expect.objectContaining({ jobId: 'i', attempts: 3 }));
+});
+
+it('removes a queued job and tolerates one that already left', async () => {
+  const remove = jest.fn().mockRejectedValue(new Error('locked'));
+  getJob.mockResolvedValueOnce({ remove }).mockResolvedValueOnce(undefined);
+  await removeQueuedImport('i');
+  await removeQueuedImport('gone');
+  expect(remove).toHaveBeenCalled();
+});
+
+it('closes the queue it opened', async () => {
+  getImportQueue();
+  await closeImportQueue();
+  expect(close).toHaveBeenCalled();
+});

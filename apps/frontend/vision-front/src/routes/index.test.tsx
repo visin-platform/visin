@@ -10,7 +10,6 @@ vi.mock('../pages/ComparisonDetailPage', () => ({ default: () => <div>Comparison
 vi.mock('../pages/EpochsPage', () => ({ default: () => <div>EpochsPage</div> }));
 vi.mock('../pages/ConfigsPage', () => ({ default: () => <div>ConfigsPage</div> }));
 vi.mock('../pages/DatasetsPage', () => ({ default: () => <div>DatasetsPage</div> }));
-vi.mock('../pages/DatasetComparisonPage', () => ({ default: () => <div>DatasetComparisonPage</div> }));
 vi.mock('../pages/DatasetDetailPage', () => ({ default: () => <div>DatasetDetailPage</div> }));
 vi.mock('../pages/LabelingRedirectPage', () => ({ default: () => <div>LabelingRedirectPage</div> }));
 vi.mock('../pages/TestResultsPage', () => ({ default: () => <div>TestResultsPage</div> }));
@@ -45,7 +44,6 @@ describe('AppRoutes', () => {
     ['/configs', 'ConfigsPage'],
     ['/datasets', 'DatasetsPage'],
     ['/datasets/d1', 'DatasetDetailPage'],
-    ['/datasets/compare', 'DatasetComparisonPage'],
     ['/image-labeling', 'LabelingRedirectPage'],
     ['/image-labeling/img1', 'LabelingRedirectPage'],
     ['/test-results', 'TestResultsPage'],

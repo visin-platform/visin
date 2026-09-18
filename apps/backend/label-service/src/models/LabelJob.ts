@@ -30,7 +30,10 @@ export interface ILabelJob extends Document {
     name?: string;
   };
   groupId: string;
-  bundleId?: Types.ObjectId; // optional while draft; required to activate
+  /** the dataset-service dataset whose images the tasks show; optional while draft, required to activate */
+  datasetId?: string;
+  /** the dataset group holding the frames; `annotationSets` name its annotation groups */
+  framesGroup: string;
   taskType: TaskType;
   question: {
     prompt: string;
@@ -56,7 +59,8 @@ const LabelJobSchema = new Schema<ILabelJob>(
       name: { type: String }
     },
     groupId: { type: String, required: true, index: true },
-    bundleId: { type: Schema.Types.ObjectId, ref: 'LabelBundle' },
+    datasetId: { type: String, index: true },
+    framesGroup: { type: String, trim: true, default: 'frames' },
     taskType: { type: String, enum: TASK_TYPES, required: true },
     question: {
       prompt: { type: String, required: true, trim: true, maxlength: 500 },
@@ -87,4 +91,4 @@ const LabelJobSchema = new Schema<ILabelJob>(
 
 LabelJobSchema.index({ groupId: 1, status: 1 });
 
-export const LabelJob = model<ILabelJob>('LabelJob', LabelJobSchema);
+export const LabelJob = model<ILabelJob>('LabelJob', LabelJobSchema, 'label_jobs');

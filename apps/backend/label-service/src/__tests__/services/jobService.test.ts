@@ -1,8 +1,10 @@
 jest.mock('../../models/LabelJob', () => ({
   LabelJob: { create: jest.fn(), find: jest.fn(), findById: jest.fn(), deleteOne: jest.fn() },
 }));
-jest.mock('../../models/LabelBundle', () => ({
-  LabelBundle: { findById: jest.fn() },
+jest.mock('../../clients/datasetServiceClient', () => ({
+  getDataset: jest.fn(),
+  addHold: jest.fn(),
+  removeHold: jest.fn(),
 }));
 jest.mock('../../models/LabelTask', () => ({
   LabelTask: { countDocuments: jest.fn(), deleteMany: jest.fn(), aggregate: jest.fn() },
@@ -16,14 +18,14 @@ jest.mock('../../clients/groupServiceClient', () => ({
 
 import * as svc from '../../services/jobService';
 import { LabelJob } from '../../models/LabelJob';
-import { LabelBundle } from '../../models/LabelBundle';
+import * as datasets from '../../clients/datasetServiceClient';
 import { LabelTask } from '../../models/LabelTask';
 import { LabelAnswer } from '../../models/LabelAnswer';
 import * as groups from '../../clients/groupServiceClient';
 import { BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
 
 const mockedJob = LabelJob as unknown as Record<string, jest.Mock>;
-const mockedBundle = LabelBundle as unknown as Record<string, jest.Mock>;
+const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
 const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
 const mockedAnswer = LabelAnswer as unknown as Record<string, jest.Mock>;
 const mockedGroups = groups as unknown as Record<string, jest.Mock>;
@@ -35,15 +37,26 @@ const body = {
   taskType: 'mask_toggle' as const,
   question: { prompt: 'p' },
   annotationSets: [],
+  framesGroup: 'frames',
   redundancy: 1,
 };
+
+const dataset = (extra: Record<string, unknown> = {}) => ({
+  _id: 'd1',
+  name: 'VLM',
+  ownerId: 'u1',
+  visibility: 'public',
+  groups: [{ name: 'frames', images: 2, jsons: 0 }, { name: 'verify', images: 2, jsons: 1 }],
+  imageCount: 4,
+  ...extra,
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
 describe('createJob', () => {
-  it('creates a draft without a bundle', async () => {
+  it('creates a draft without a dataset, claiming nothing', async () => {
     mockedJob.create.mockResolvedValue({ _id: 'j1' });
 
     await svc.createJob(user, body);
@@ -51,14 +64,43 @@ describe('createJob', () => {
     expect(mockedJob.create).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'draft', createdBy: { userId: 'u1', email: 'admin@x.com', name: 'Admin' } })
     );
+    expect(mockedDatasets.addHold).not.toHaveBeenCalled();
   });
 
-  it('validates the bundle exists and matches the group', async () => {
-    mockedBundle.findById.mockResolvedValue(null);
-    await expect(svc.createJob(user, { ...body, bundleId: 'missing' })).rejects.toThrow(BadRequestError);
+  it('claims the dataset so its files cannot go away under the job', async () => {
+    mockedDatasets.getDataset.mockResolvedValue(dataset());
+    mockedJob.create.mockResolvedValue({ _id: 'j1', datasetId: 'd1' });
 
-    mockedBundle.findById.mockResolvedValue({ groupId: 'other-group' });
-    await expect(svc.createJob(user, { ...body, bundleId: 'b1' })).rejects.toThrow('different group');
+    await svc.createJob(user, { ...body, datasetId: 'd1', annotationSets: ['verify'] });
+
+    expect(mockedDatasets.addHold).toHaveBeenCalledWith('d1', 'j1');
+  });
+
+  it('refuses a dataset that is missing, another group\'s, or lacks the named image groups', async () => {
+    mockedDatasets.getDataset.mockRejectedValueOnce(new NotFoundError('Dataset not found'));
+    await expect(svc.createJob(user, { ...body, datasetId: 'missing' })).rejects.toThrow(BadRequestError);
+
+    mockedDatasets.getDataset.mockRejectedValueOnce(new Error('dataset-service down'));
+    await expect(svc.createJob(user, { ...body, datasetId: 'd1' })).rejects.toThrow('dataset-service down');
+
+    mockedDatasets.getDataset.mockResolvedValue(dataset({ visibility: 'group', groupId: 'other-group' }));
+    await expect(svc.createJob(user, { ...body, datasetId: 'd1' })).rejects.toThrow('different group');
+
+    mockedDatasets.getDataset.mockResolvedValue(dataset());
+    await expect(svc.createJob(user, { ...body, datasetId: 'd1', framesGroup: 'nope', annotationSets: ['gone'] })).rejects.toThrow(
+      'Not image groups of this dataset: nope, gone'
+    );
+    expect(mockedJob.create).not.toHaveBeenCalled();
+  });
+
+  it('does not leave a job behind when the claim fails', async () => {
+    mockedDatasets.getDataset.mockResolvedValue(dataset());
+    mockedJob.create.mockResolvedValue({ _id: 'j1', datasetId: 'd1' });
+    mockedDatasets.addHold.mockRejectedValueOnce(new Error('dataset-service down'));
+
+    await expect(svc.createJob(user, { ...body, datasetId: 'd1' })).rejects.toThrow('dataset-service down');
+
+    expect(mockedJob.deleteOne).toHaveBeenCalledWith({ _id: 'j1' });
   });
 });
 
@@ -168,16 +210,15 @@ describe('transitionJob', () => {
   const makeJob = (status: string, extra: Record<string, unknown> = {}) => ({
     _id: 'j1',
     status,
-    bundleId: 'b1',
+    datasetId: 'd1',
     tasksCount: 5,
     save: jest.fn(),
     ...extra,
   });
 
-  it('activates a draft with a ready bundle and materialized tasks', async () => {
+  it('activates a draft with a dataset and materialized tasks', async () => {
     const job = makeJob('draft');
     mockedJob.findById.mockResolvedValue(job);
-    mockedBundle.findById.mockResolvedValue({ status: 'ready' });
 
     const updated = await svc.transitionJob('j1', 'activate');
 
@@ -185,27 +226,21 @@ describe('transitionJob', () => {
     expect(job.save).toHaveBeenCalled();
   });
 
-  it('refuses to activate without a bundle, a ready bundle, or tasks', async () => {
-    mockedJob.findById.mockResolvedValue(makeJob('draft', { bundleId: undefined }));
-    await expect(svc.transitionJob('j1', 'activate')).rejects.toThrow('no bundle');
-
-    mockedJob.findById.mockResolvedValue(makeJob('draft'));
-    mockedBundle.findById.mockResolvedValue({ status: 'importing' });
-    await expect(svc.transitionJob('j1', 'activate')).rejects.toThrow('not ready');
+  it('refuses to activate without a dataset or without tasks', async () => {
+    mockedJob.findById.mockResolvedValue(makeJob('draft', { datasetId: undefined }));
+    await expect(svc.transitionJob('j1', 'activate')).rejects.toThrow('no dataset');
 
     mockedJob.findById.mockResolvedValue(makeJob('draft', { tasksCount: 0 }));
-    mockedBundle.findById.mockResolvedValue({ status: 'ready' });
     await expect(svc.transitionJob('j1', 'activate')).rejects.toThrow('materialize first');
   });
 
-  it('resumes a paused job without re-checking the bundle', async () => {
+  it('resumes a paused job', async () => {
     const job = makeJob('paused');
     mockedJob.findById.mockResolvedValue(job);
 
     const updated = await svc.transitionJob('j1', 'resume');
 
     expect(updated.status).toBe('active');
-    expect(mockedBundle.findById).not.toHaveBeenCalled();
   });
 
   it('pauses only active jobs and archives from most states', async () => {
@@ -229,6 +264,7 @@ describe('transitionJob', () => {
 
 describe('deleteJob', () => {
   it('removes answers, then tasks, then the job itself', async () => {
+    mockedJob.findById.mockResolvedValue({ _id: 'j1', datasetId: 'd1' });
     const order: string[] = [];
     mockedAnswer.deleteMany.mockImplementation(async () => {
       order.push('answers');
@@ -252,6 +288,17 @@ describe('deleteJob', () => {
     // Answers first: a half-done delete must never leave an answer whose task is
     // already gone, which no repeat call could then find.
     expect(order).toEqual(['answers', 'tasks', 'job']);
+    expect(mockedDatasets.removeHold).toHaveBeenCalledWith('d1', 'j1');
+  });
+
+  it('keeps the job when its dataset claim cannot be released, so the delete can be retried', async () => {
+    mockedJob.findById.mockResolvedValue({ _id: 'j1', datasetId: 'd1' });
+    mockedDatasets.removeHold.mockRejectedValueOnce(new Error('dataset-service down'));
+
+    await expect(svc.deleteJob('j1')).rejects.toThrow('dataset-service down');
+
+    expect(mockedAnswer.deleteMany).not.toHaveBeenCalled();
+    expect(mockedJob.deleteOne).not.toHaveBeenCalled();
   });
 
   it('reports zero when a driver omits deletedCount', async () => {

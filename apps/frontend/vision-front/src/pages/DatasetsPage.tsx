@@ -1,185 +1,189 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
-  Alert,
-  Typography,
+  Card,
+  CardActionArea,
+  CardContent,
+  CardMedia,
+  Chip,
+  CircularProgress,
   Container,
   IconButton,
-  useTheme,
-  alpha
+  Pagination,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography
 } from '@mui/material';
+import { Add as AddIcon, Download as DownloadIcon, FolderZip as ZipIcon } from '@mui/icons-material';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Refresh as RefreshIcon, CloudUpload as UploadIcon } from '@mui/icons-material';
-import { createAnalysis } from '../services/analysisService';
-import DatasetsTable from '../components/DatasetsTable';
-import DatasetUploadDialog from '../components/dataset/DatasetUploadDialog';
-import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
+import { usePageTitle } from '../hooks/usePageTitle';
+import { useDatasetDownload } from '../hooks/useDatasetDownload';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import DatasetFormDialog, { DatasetFormValues } from '../components/dataset/DatasetFormDialog';
+import { createDataset, Dataset, listDatasets, uploadArchive } from '../services/datasetService';
+import { formatBytes } from '../utils/datasetMapping';
+import { formatDate } from '../utils';
+
+const PAGE_SIZE = 24;
+
+const DatasetCard: React.FC<{ dataset: Dataset; downloading: boolean; onDownload: () => void }> = ({ dataset, downloading, onDownload }) => {
+  const navigate = useNavigate();
+  return (
+    <Card variant="outlined" sx={{ display: 'flex', flexDirection: 'column', borderRadius: 2 }}>
+      <CardActionArea onClick={() => navigate(`/datasets/${dataset._id}`)} sx={{ flexGrow: 1, alignItems: 'stretch' }}>
+        {dataset.coverUrl ? (
+          <CardMedia component="img" image={dataset.coverUrl} alt="" loading="lazy" sx={{ height: 140, objectFit: 'cover' }} />
+        ) : (
+          <Box sx={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'action.hover' }}>
+            <ZipIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+          </Box>
+        )}
+        <CardContent sx={{ pb: 1 }}>
+          <Typography variant="subtitle1" noWrap sx={{ fontWeight: 600 }}>
+            {dataset.name}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {[
+              dataset.archive ? (dataset.archive.size ? formatBytes(dataset.archive.size) : dataset.archive.filename) : 'No zip yet',
+              dataset.imageCount ? `${dataset.imageCount.toLocaleString()} images` : null,
+              `updated ${formatDate(dataset.updatedAt)}`
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </Typography>
+        </CardContent>
+      </CardActionArea>
+      <Stack direction="row" spacing={1} sx={{ px: 2, pb: 1.5, alignItems: 'center' }}>
+        {dataset.visibility === 'group' && <Chip size="small" label="Group" />}
+        {dataset.import && (dataset.import.status === 'queued' || dataset.import.status === 'running') && <Chip size="small" color="info" label="Importing" />}
+        <Box sx={{ flexGrow: 1 }} />
+        {dataset.archive && (
+          <Tooltip title="Download zip">
+            <span>
+              <IconButton size="small" aria-label={`Download ${dataset.name}`} onClick={onDownload} disabled={downloading}>
+                {downloading ? <CircularProgress size={18} /> : <DownloadIcon fontSize="small" />}
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+      </Stack>
+    </Card>
+  );
+};
 
 export const DatasetsPage: React.FC = () => {
-  const navigate = useNavigate();
-  const theme = useTheme();
-  const { isAuthenticated } = useAuth();
-
-  // Set page title
   usePageTitle('Datasets - Vision');
-  const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [selectedAnalysisIds, setSelectedAnalysisIds] = useState<Set<string>>(new Set());
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { downloadingId, download } = useDatasetDownload(setError);
 
-  const handleRefresh = () => {
-    setRefreshKey((prev) => prev + 1);
-  };
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  // Handle checkbox change
-  const handleSelectAnalysis = (analysisId: string) => {
-    const newSelected = new Set(selectedAnalysisIds);
-    if (newSelected.has(analysisId)) {
-      newSelected.delete(analysisId);
-    } else {
-      newSelected.add(analysisId);
-    }
-    setSelectedAnalysisIds(newSelected);
-  };
+  const { data, isLoading, error: loadError } = useQuery({
+    queryKey: ['datasets', search, page],
+    queryFn: () => listDatasets({ search: search || undefined, page, limit: PAGE_SIZE }),
+    placeholderData: keepPreviousData
+  });
 
-  // Handle select all
-  const handleSelectAll = (allIds: string[]) => {
-    setSelectedAnalysisIds(new Set(allIds));
-  };
-
-  // Handle compare selected
-  const handleCompareSelected = () => {
-    // Navigate to comparison page with selected analysis IDs
-    const selectedIds = Array.from(selectedAnalysisIds);
-    if (selectedIds.length > 1) {
-      navigate(`/datasets/compare?ids=${selectedIds.join(',')}`);
-    }
-  };
-
-  // Handle create new dataset
-  const handleCreateAnalysis = async (datasetName: string, file?: File) => {
+  // Create the record first, then upload: anything the server refuses (a bad
+  // name, no access to the group) fails before a multi-GB transfer starts.
+  const handleCreate = async ({ file, ...fields }: DatasetFormValues) => {
+    setBusy(true);
+    setError(null);
+    let created: Dataset | undefined;
     try {
-      setCreating(true);
-      // null when there is no file, so the bar only appears for a real upload.
-      setUploadProgress(file ? 0 : null);
-      setError(null);
-
-      const newAnalysis = await createAnalysis(datasetName, file, setUploadProgress);
-
-      setShowCreateModal(false);
-      // Navigate to the detail page
-      navigate(`/datasets/${newAnalysis._id}`);
+      created = await createDataset(fields);
+      setProgress(0);
+      await uploadArchive(created._id, file!, setProgress);
+      await queryClient.invalidateQueries({ queryKey: ['datasets'] });
+      navigate(`/datasets/${created._id}`, { state: { chooseGroups: true } });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create dataset');
+      const message = err instanceof Error ? err.message : 'Failed to create dataset';
+      if (created) {
+        // The dataset exists; its page offers the upload again.
+        navigate(`/datasets/${created._id}`, { state: { uploadError: message } });
+      } else {
+        setError(message);
+      }
     } finally {
-      setCreating(false);
-      setUploadProgress(null);
+      setBusy(false);
+      setProgress(null);
     }
   };
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <PageBreadcrumbs
-        items={[
-          { label: 'Datasets', current: true }
-        ]}
-      />
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 1,
-          mb: { xs: 2, sm: 4 }
-        }}>
+      <PageBreadcrumbs items={[{ label: 'Datasets', current: true }]} />
+      <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h4" component="h1" sx={{
-            fontWeight: 700,
-            fontSize: { xs: '1.5rem', sm: '2.125rem' },
-            mb: { xs: 0.25, sm: 0.5 }
-          }}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 700, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>
             Datasets
           </Typography>
-          <Typography sx={{
-            color: "text.secondary",
-            fontSize: { xs: '0.8125rem', sm: '1rem' }
-          }}>
-            Dataset analyses and files are publicly shared, including when used by a private project.
+          <Typography sx={{ color: 'text.secondary', fontSize: { xs: '0.8125rem', sm: '1rem' } }}>
+            Zip bundles to download, with the images inside them to browse.
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          {isAuthenticated && (
-            <Button
-              variant="contained"
-              startIcon={<UploadIcon />}
-              onClick={() => setShowCreateModal(true)}
-              disabled={creating}
-              aria-label="Upload Dataset"
-              sx={{
-                // Same 40px square as the refresh button beside it until the
-                // label fits; the privacy note needs the width.
-                minWidth: { xs: 40, md: 64 },
-                width: { xs: 40, md: 'auto' },
-                height: 40,
-                px: { xs: 0, md: 3 },
-                borderRadius: 2,
-                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
-                '& .MuiButton-startIcon': {
-                  mr: { xs: 0, md: 1 },
-                  ml: { xs: 0, md: -0.5 }
-                }
-              }}
-            >
-              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Upload Dataset</Box>
-            </Button>
-          )}
-          <IconButton
-            aria-label="Refresh"
-            onClick={handleRefresh}
-            disabled={creating}
-            sx={{
-              width: 40,
-              height: 40,
-              bgcolor: 'background.paper',
-              border: `1px solid ${theme.palette.divider}`,
-              borderRadius: 2,
-              '&:hover': { bgcolor: theme.palette.action.hover }
-            }}
-          >
-            <RefreshIcon />
-          </IconButton>
-        </Box>
-      </Box>
-      {/* Messages */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-          {error}
+        {isAuthenticated && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)} sx={{ flexShrink: 0 }}>
+            New dataset
+          </Button>
+        )}
+      </Stack>
+
+      <TextField size="small" label="Search datasets" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} sx={{ mb: 2, width: { xs: '100%', sm: 320 } }} />
+      {(error || loadError) && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error || (loadError instanceof Error ? loadError.message : 'Failed to load datasets')}
         </Alert>
       )}
-      {/* Analyses Table */}
-      <Box key={refreshKey}>
-        <DatasetsTable
-          selectedAnalysisIds={selectedAnalysisIds}
-          onSelectAnalysis={handleSelectAnalysis}
-          onSelectAll={handleSelectAll}
-          onCompareSelected={handleCompareSelected}
-        />
-      </Box>
-      {/* Upload Dataset Modal */}
-      <DatasetUploadDialog
-        open={showCreateModal}
-        loading={creating}
-        uploadProgress={uploadProgress}
-        title="Upload Dataset"
-        submitLabel="Upload"
-        fileRequired
-        onCancel={() => setShowCreateModal(false)}
-        onSubmit={handleCreateAnalysis}
+
+      {isLoading ? (
+        <Box sx={{ textAlign: 'center', py: 8 }}>
+          <CircularProgress />
+        </Box>
+      ) : data && data.datasets.length === 0 ? (
+        <Typography sx={{ color: 'text.secondary', py: 6, textAlign: 'center' }}>
+          {search ? 'No dataset matches that search.' : 'No datasets yet.'}
+        </Typography>
+      ) : (
+        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' } }}>
+          {data?.datasets.map((dataset) => (
+            <DatasetCard key={dataset._id} dataset={dataset} downloading={downloadingId === dataset._id} onDownload={() => download(dataset._id)} />
+          ))}
+        </Box>
+      )}
+      {data && data.pagination.pages > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+          <Pagination count={data.pagination.pages} page={page} onChange={(_event, value) => setPage(value)} />
+        </Box>
+      )}
+
+      <DatasetFormDialog
+        open={creating}
+        mode="create"
+        busy={busy}
+        uploadProgress={progress}
+        onCancel={() => setCreating(false)}
+        onSubmit={handleCreate}
       />
     </Container>
   );

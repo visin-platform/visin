@@ -232,18 +232,31 @@ export const benchmarksResponseSchema = z
   })
   .loose();
 
+/**
+ * A dataset as dataset-service describes it: a zip to download, a summary of
+ * what the zip holds, and the image groups imported out of it.
+ */
 export const datasetSchema = z
   .object({
     _id: z.string(),
-    uuid: z.string().optional(),
     name: z.string(),
     description: z.string().optional(),
-    timestamp: z.string().optional(),
-    dataset_info: z.record(z.string(), z.unknown()).optional(),
-    annotations: z.record(z.string(), z.unknown()).optional(),
-    camera: z.record(z.string(), z.unknown()).optional(),
-    lidar: z.record(z.string(), z.unknown()).optional(),
-    createdAt: z.string().optional()
+    visibility: z.string().optional(),
+    archive: z.object({ filename: z.string(), size: z.number() }).loose().optional(),
+    contents: z
+      .object({
+        entries: z.number(),
+        totalBytes: z.number(),
+        extensions: z.array(z.object({ ext: z.string(), files: z.number(), bytes: z.number() }).loose()),
+        folders: z.array(z.object({ path: z.string(), depth: z.number(), files: z.number(), images: z.number() }).loose())
+      })
+      .loose()
+      .optional(),
+    groups: z.array(z.object({ name: z.string(), images: z.number(), jsons: z.number() }).loose()).default([]),
+    imageCount: z.number().default(0),
+    import: z.object({ status: z.string() }).loose().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional()
   })
   .loose();
 
@@ -340,18 +353,6 @@ export const findingSchema = z
 
 export const findingsResponseSchema = z.array(findingSchema);
 
-export const imageCategorySchema = z
-  .object({
-    _id: z.string(),
-    name: z.string(),
-    description: z.string().optional(),
-    color: z.string().optional(),
-    datasetId: z.string().optional()
-  })
-  .loose();
-
-export const imageCategoriesResponseSchema = z.array(imageCategorySchema);
-
 /** One training's slice of a comparison. */
 export const comparisonEntrySchema = z
   .object({
@@ -416,7 +417,6 @@ export type Epoch = z.infer<typeof epochSchema>;
 export type TestResult = z.infer<typeof testResultSchema>;
 export type Benchmark = z.infer<typeof benchmarkSchema>;
 export type Dataset = z.infer<typeof datasetSchema>;
-export type ImageCategory = z.infer<typeof imageCategorySchema>;
 export type Visualization = z.infer<typeof visualizationSchema>;
 export type Finding = z.infer<typeof findingSchema>;
 export type ComparisonEntry = z.infer<typeof comparisonEntrySchema>;

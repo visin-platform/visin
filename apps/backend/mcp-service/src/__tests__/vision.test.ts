@@ -99,14 +99,6 @@ describe('routing', () => {
     expect(lastCall()).toMatchObject({ method: 'PUT', path: '/trainings/t1' });
   });
 
-  it('scopes a category lookup to its dataset', async () => {
-    called.mockResolvedValue([]);
-
-    await vision.listImageCategories('k', 'd1');
-
-    expect(lastCall().path).toBe('/image-categories/dataset/d1');
-  });
-
   it.each([
     [
       'getDashboardStats',
@@ -144,18 +136,6 @@ describe('routing', () => {
       () => vision.listBenchmarks('k', { training_uuid: 'u1' }),
       { benchmarks: [] },
       { method: 'GET', path: '/benchmarks', query: { training_uuid: 'u1' } }
-    ],
-    [
-      'listDatasets',
-      () => vision.listDatasets('k', { limit: 30 }),
-      { datasets: [] },
-      { method: 'GET', path: '/datasets', query: { limit: 30 } }
-    ],
-    [
-      'getDataset',
-      () => vision.getDataset('k', 'd1'),
-      { _id: 'd1', name: 'Highway' },
-      { method: 'GET', path: '/datasets/d1' }
     ],
     [
       'getTrainingConfigs',

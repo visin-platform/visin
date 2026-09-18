@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { visionApi } from '../config/visionApi';
 
-type Kind = 'project' | 'training' | 'comparison' | 'benchmark' | 'test-result' | 'analysis' | 'dataset';
+type Kind = 'project' | 'training' | 'comparison' | 'benchmark' | 'test-result';
 
 /** Missing, loading, and failed permission responses all leave controls read-only. */
 export function useWriteCapabilities(kind: Kind, ids: string[]) {

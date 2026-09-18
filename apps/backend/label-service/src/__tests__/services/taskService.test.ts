@@ -14,18 +14,14 @@ jest.mock('../../models/LabelJob', () => ({
 jest.mock('../../models/LabelAnswer', () => ({
   LabelAnswer: { find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), findOneAndDelete: jest.fn() },
 }));
-jest.mock('../../models/LabelImage', () => ({
-  LabelImage: { find: jest.fn() },
-}));
 jest.mock('../../clients/fileServiceClient', () => ({
-  getDownloadUrl: jest.fn(),
+  getDownloadUrls: jest.fn(),
 }));
 
 import * as svc from '../../services/taskService';
 import { LabelTask } from '../../models/LabelTask';
 import { LabelJob } from '../../models/LabelJob';
 import { LabelAnswer } from '../../models/LabelAnswer';
-import { LabelImage } from '../../models/LabelImage';
 import * as files from '../../clients/fileServiceClient';
 import { BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
 import type { ILabelJob } from '../../models/LabelJob';
@@ -34,7 +30,6 @@ import type { ILabelTask } from '../../models/LabelTask';
 const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
 const mockedJob = LabelJob as unknown as Record<string, jest.Mock>;
 const mockedAnswer = LabelAnswer as unknown as Record<string, jest.Mock>;
-const mockedImage = LabelImage as unknown as Record<string, jest.Mock>;
 const mockedFiles = files as unknown as Record<string, jest.Mock>;
 
 const user = { id: 'u1', email: 'Worker@X.com', name: 'Worker' };
@@ -54,10 +49,10 @@ const maskTask = (overrides: Record<string, unknown> = {}): ILabelTask =>
   ({
     _id: 't1',
     jobId: 'j1',
-    labelImageId: 'img-frame',
+    frame: { fileId: 'f-frame', path: 'frames/frame_000012.png', stem: 'frame_000012', width: 100, height: 50 },
     payload: {
-      layers: [{ set: 'setA', imageId: 'img-layer' }],
-      maskMap: { imageId: 'img-idmap', masks: [{ id: 1, class: 'vehicle' }, { id: 2, class: 'sign' }] },
+      layers: [{ set: 'setA', fileId: 'f-layer' }],
+      maskMap: { fileId: 'f-idmap', masks: [{ id: 1, class: 'vehicle' }, { id: 2, class: 'sign' }] },
     },
     ...overrides,
   }) as unknown as ILabelTask;
@@ -80,12 +75,7 @@ describe('nextTask', () => {
   it('atomically leases the first eligible task and signs its images', async () => {
     const task = maskTask();
     mockedTask.findOneAndUpdate.mockResolvedValue(task);
-    mockedImage.find.mockResolvedValue([
-      { _id: 'img-frame', fileId: 'f-frame', width: 100, height: 50 },
-      { _id: 'img-layer', fileId: 'f-layer' },
-      { _id: 'img-idmap', fileId: 'f-idmap' },
-    ]);
-    mockedFiles.getDownloadUrl.mockImplementation(async (fileId: string) => ({ url: `signed:${fileId}` }));
+    mockedFiles.getDownloadUrls.mockImplementation(async (fileIds: string[]) => Object.fromEntries(fileIds.map((fileId) => [fileId, `signed:${fileId}`])));
 
     const result = await svc.nextTask(activeJob({ tasksCount: 40 }), user);
 
@@ -95,7 +85,7 @@ describe('nextTask', () => {
     expect(update.$set.leasedBy).toBe('u1');
     expect(options).toMatchObject({ sort: { order: 1 }, new: true });
 
-    expect(result?.images.frame).toEqual({ url: 'signed:f-frame', width: 100, height: 50 });
+    expect(result?.images.frame).toEqual({ url: 'signed:f-frame', width: 100, height: 50, stem: 'frame_000012' });
     expect(result?.images.layers).toEqual([{ set: 'setA', url: 'signed:f-layer' }]);
     expect(result?.images.idmap).toEqual({ url: 'signed:f-idmap' });
     // `total` rides along on the job rather than costing a count of its own.
@@ -117,9 +107,9 @@ describe('nextTask', () => {
     expect(mockedTask.findOneAndUpdate.mock.calls[0][0]).toMatchObject({ _id: { $nin: ['abc123'] } });
   });
 
-  it('fails loudly when a task image is missing from the bundle', async () => {
+  it('fails loudly when file-service will not sign a task image', async () => {
     mockedTask.findOneAndUpdate.mockResolvedValue(maskTask());
-    mockedImage.find.mockResolvedValue([]);
+    mockedFiles.getDownloadUrls.mockResolvedValue({});
 
     await expect(svc.nextTask(activeJob(), user)).rejects.toThrow(NotFoundError);
   });
@@ -128,16 +118,12 @@ describe('nextTask', () => {
 describe('getTaskItem', () => {
   it('serves a named task with signed images and the frame stem', async () => {
     mockedTask.findById.mockResolvedValue(maskTask());
-    mockedImage.find.mockResolvedValue([
-      { _id: 'img-frame', fileId: 'f-frame', width: 100, height: 50, stem: 'frame_000012' },
-      { _id: 'img-layer', fileId: 'f-layer' },
-      { _id: 'img-idmap', fileId: 'f-idmap' },
-    ]);
-    mockedFiles.getDownloadUrl.mockImplementation(async (fileId: string) => ({ url: `signed:${fileId}` }));
+    mockedFiles.getDownloadUrls.mockImplementation(async (fileIds: string[]) => Object.fromEntries(fileIds.map((fileId) => [fileId, `signed:${fileId}`])));
 
     const result = await svc.getTaskItem('t1');
 
     expect(result.images.frame).toEqual({ url: 'signed:f-frame', width: 100, height: 50, stem: 'frame_000012' });
+    expect(result.images.layers).toEqual([{ set: 'setA', url: 'signed:f-layer' }]);
     expect(result.images.idmap).toEqual({ url: 'signed:f-idmap' });
   });
 
@@ -145,12 +131,7 @@ describe('getTaskItem', () => {
   // take the task out of the queue for whoever was about to be handed it.
   it('takes no lease', async () => {
     mockedTask.findById.mockResolvedValue(maskTask());
-    mockedImage.find.mockResolvedValue([
-      { _id: 'img-frame', fileId: 'f' },
-      { _id: 'img-layer', fileId: 'f' },
-      { _id: 'img-idmap', fileId: 'f' },
-    ]);
-    mockedFiles.getDownloadUrl.mockResolvedValue({ url: 'signed' });
+    mockedFiles.getDownloadUrls.mockImplementation(async (fileIds: string[]) => Object.fromEntries(fileIds.map((fileId) => [fileId, 'signed'])));
 
     await svc.getTaskItem('t1');
 
@@ -318,12 +299,7 @@ describe('getTaskItemAtIndex', () => {
 
   it('serves the frame at a position, with its answer state', async () => {
     atIndex(maskTask());
-    mockedImage.find.mockResolvedValue([
-      { _id: 'img-frame', fileId: 'f' },
-      { _id: 'img-layer', fileId: 'f' },
-      { _id: 'img-idmap', fileId: 'f' },
-    ]);
-    mockedFiles.getDownloadUrl.mockResolvedValue({ url: 'signed' });
+    mockedFiles.getDownloadUrls.mockImplementation(async (fileIds: string[]) => Object.fromEntries(fileIds.map((fileId) => [fileId, 'signed'])));
     mockedTask.countDocuments.mockResolvedValueOnce(6).mockResolvedValueOnce(40);
     answersOnTask([
       { userId: 'u2', rejectedMaskIds: [4], updatedAt: new Date('2026-08-02') },
@@ -348,12 +324,7 @@ describe('getTaskItemAtIndex', () => {
 
   it('carries a single_choice verdict through as the choice key', async () => {
     atIndex(maskTask());
-    mockedImage.find.mockResolvedValue([
-      { _id: 'img-frame', fileId: 'f' },
-      { _id: 'img-layer', fileId: 'f' },
-      { _id: 'img-idmap', fileId: 'f' },
-    ]);
-    mockedFiles.getDownloadUrl.mockResolvedValue({ url: 'signed' });
+    mockedFiles.getDownloadUrls.mockImplementation(async (fileIds: string[]) => Object.fromEntries(fileIds.map((fileId) => [fileId, 'signed'])));
     answersOnTask([{ userId: 'u1', choiceKey: 'good', updatedAt: new Date('2026-08-01') }]);
 
     const result = await svc.getTaskItemAtIndex('j1', 0, 'u1');
@@ -363,12 +334,7 @@ describe('getTaskItemAtIndex', () => {
 
   it('has no answer of its own for an anonymous reader', async () => {
     atIndex(maskTask());
-    mockedImage.find.mockResolvedValue([
-      { _id: 'img-frame', fileId: 'f' },
-      { _id: 'img-layer', fileId: 'f' },
-      { _id: 'img-idmap', fileId: 'f' },
-    ]);
-    mockedFiles.getDownloadUrl.mockResolvedValue({ url: 'signed' });
+    mockedFiles.getDownloadUrls.mockImplementation(async (fileIds: string[]) => Object.fromEntries(fileIds.map((fileId) => [fileId, 'signed'])));
     answersOnTask([{ userId: 'u1', rejectedMaskIds: [1], updatedAt: new Date('2026-08-01') }]);
 
     const result = await svc.getTaskItemAtIndex('j1', 0);
@@ -423,7 +389,7 @@ describe('task response privacy', () => {
     const { LabelTask: TaskModel } = jest.requireActual<typeof import('../../models/LabelTask')>('../../models/LabelTask');
     const document = new TaskModel({
       jobId: '000000000000000000000001',
-      labelImageId: '000000000000000000000002',
+      frame: { fileId: 'frame', path: 'frames/frame-1.png', stem: 'frame-1', width: 100, height: 50 },
       order: 3,
       stratum: 'night',
       answersCount: 1,
@@ -431,9 +397,9 @@ describe('task response privacy', () => {
       leasedBy: 'private-lessee',
       leaseExpiresAt: new Date('2026-09-12'),
       payload: {
-        layers: [{ set: 'model-a', imageId: '000000000000000000000003' }],
+        layers: [{ set: 'model-a', fileId: 'layer' }],
         maskMap: {
-          imageId: '000000000000000000000004',
+          fileId: 'map',
           masks: [{ id: 9, class: 'vehicle', bbox: [1, 2, 3, 4], confidence: 0.8, source: { model: 'example' } }],
         },
       },
@@ -445,12 +411,7 @@ describe('task response privacy', () => {
     mockedTask.findOne.mockReturnValue({ sort: () => ({ skip: jest.fn().mockResolvedValue(document) }) });
     mockedTask.findOneAndUpdate.mockResolvedValue(document);
     mockedTask.countDocuments.mockResolvedValue(4);
-    mockedImage.find.mockResolvedValue([
-      { _id: document.labelImageId, fileId: 'frame', width: 100, height: 50, stem: 'frame-1' },
-      { _id: document.payload!.layers![0].imageId, fileId: 'layer' },
-      { _id: document.payload!.maskMap!.imageId, fileId: 'map' },
-    ]);
-    mockedFiles.getDownloadUrl.mockImplementation(async (fileId: string) => ({ url: `signed:${fileId}` }));
+    mockedFiles.getDownloadUrls.mockImplementation(async (fileIds: string[]) => Object.fromEntries(fileIds.map((fileId) => [fileId, `signed:${fileId}`])));
     const updatedAt = new Date('2026-09-11');
     answersOnTask([
       { userId: 'private-answerer', userEmail: 'private@example.test', rejectedMaskIds: [9], updatedAt },
@@ -466,11 +427,17 @@ describe('task response privacy', () => {
     expect(response.task).toEqual({
       _id: document.id,
       jobId: document.jobId.toString(),
-      labelImageId: document.labelImageId.toString(),
       order: 3,
       stratum: 'night',
-      payload: JSON.parse(JSON.stringify(document.payload)),
+      // Only what the workbench acts on: the sets it composites and the masks
+      // it asks about — never the storage paths behind them.
+      payload: {
+        layers: [{ set: 'model-a' }],
+        masks: undefined,
+        maskMap: { masks: JSON.parse(JSON.stringify(document.payload!.maskMap!.masks)) },
+      },
     });
+    expect(JSON.stringify(response)).not.toContain('datasets/');
     expect(JSON.stringify(response)).not.toMatch(/private-answerer|private-lessee|private-audit-marker|private@example.test/);
     expect(response.answer).toEqual({
       count: 2,

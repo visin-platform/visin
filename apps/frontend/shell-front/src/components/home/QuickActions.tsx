@@ -1,7 +1,7 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, ButtonBase, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import { AddTask, Inventory2, ModelTraining, PhotoLibrary } from '@mui/icons-material';
+import { AddTask, ModelTraining, PhotoLibrary } from '@mui/icons-material';
 import type { SvgIconComponent } from '@mui/icons-material';
 
 interface Shortcut {
@@ -15,7 +15,6 @@ interface Shortcut {
 const SHORTCUTS: Shortcut[] = [
   { label: 'Trainings', to: '/trainings', Icon: ModelTraining, color: '#2563eb', app: 'vision' },
   { label: 'Datasets', to: '/datasets', Icon: PhotoLibrary, color: '#0d9488', app: 'vision' },
-  { label: 'Bundles', to: '/bundles', Icon: Inventory2, color: '#7c3aed', app: 'label' },
   { label: 'New job', to: '/jobs/new', Icon: AddTask, color: '#ea580c', app: 'label' }
 ];
 

@@ -88,7 +88,7 @@ export const exportJob = async (req: Request, res: Response): Promise<void> => {
 
   // How the rows came to be, rather than the rows themselves: sampling spec,
   // redundancy, and per-value inclusion counts, so a rate measured on this job
-  // scales back to the bundle without the analyst reconstructing the scoping.
+  // scales back to the dataset without the analyst reconstructing the scoping.
   if (req.query.format === 'manifest') {
     const manifest = await exportSvc.exportManifest(job);
     res.setHeader('Content-Type', 'application/json');

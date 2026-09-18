@@ -1,13 +1,9 @@
-jest.mock('../../vision', () => ({
-  vision: {
-    listDatasets: jest.fn(),
-    getDataset: jest.fn(),
-    listImageCategories: jest.fn()
-  }
+jest.mock('../../datasets', () => ({
+  datasets: { list: jest.fn(), get: jest.fn() }
 }));
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { vision } from '../../vision';
+import { datasets } from '../../datasets';
 import { VisinError } from '../../http';
 import { datasetRead } from '../../tools/dataset';
 
@@ -16,7 +12,7 @@ type Handler = (args: Record<string, unknown>) => Promise<{
   content: Array<{ text: string }>;
 }>;
 
-const mocked = vision as unknown as Record<string, jest.Mock>;
+const mocked = datasets as unknown as Record<string, jest.Mock>;
 
 const call = async (name: string, args: Record<string, unknown> = {}) => {
   const found: Record<string, Handler> = {};
@@ -34,127 +30,89 @@ const call = async (name: string, args: Record<string, unknown> = {}) => {
 beforeEach(() => jest.clearAllMocks());
 
 describe('list_datasets', () => {
-  it('names each dataset with the identifier the other tools take', async () => {
-    mocked.listDatasets.mockResolvedValue({
+  it('names each dataset with its size, image count and id', async () => {
+    mocked.list.mockResolvedValue({
       datasets: [
-        { _id: 'd1', uuid: 'uuid-1', name: 'Highway', description: 'Night runs' },
-        { _id: 'd2', name: 'Urban' }
+        { _id: 'd1', name: 'Highway', description: 'Night runs\nmore detail', imageCount: 1200, groups: [], archive: { filename: 'h.zip', size: 3.6 * 1024 ** 3 } },
+        { _id: 'd2', name: 'Urban', imageCount: 0, groups: [] }
       ],
       pagination: { total: 2 }
     });
 
-    const { text } = await call('list_datasets');
+    const { text } = await call('list_datasets', { search: 'h' });
 
-    expect(text).toContain('Highway — Night runs  [uuid-1]');
-    expect(text).toContain('Urban  [d2]');
+    expect(mocked.list).toHaveBeenCalledWith('vsn_live_abc', { search: 'h', limit: 30 });
+    expect(text).toContain('- Highway — Night runs (1,200 images, 3.6 GB)  [d1]');
+    expect(text).toContain('- Urban (0 images)  [d2]');
   });
 
   it('says how many more there are when the page is not everything', async () => {
-    mocked.listDatasets.mockResolvedValue({
-      datasets: [{ _id: 'd1', name: 'Highway' }],
-      pagination: { total: 40 }
-    });
-
-    expect((await call('list_datasets')).text).toContain('1 of 40 datasets');
+    mocked.list.mockResolvedValue({ datasets: [{ _id: 'd1', name: 'Highway', imageCount: 1, groups: [] }], pagination: { total: 40 } });
+    expect((await call('list_datasets', { limit: 1 })).text).toContain('1 of 40 datasets');
   });
 
-  it('reports an empty result plainly', async () => {
-    mocked.listDatasets.mockResolvedValue({ datasets: [] });
-    expect((await call('list_datasets', { search: 'lidar' })).text).toBe('No datasets match that.');
+  it('reports an empty result plainly, and an error as an error', async () => {
+    mocked.list.mockResolvedValueOnce({ datasets: [] });
+    expect((await call('list_datasets')).text).toBe('No datasets match that.');
+    mocked.list.mockRejectedValueOnce(new VisinError('dataset-service unavailable', 503));
+    expect((await call('list_datasets')).isError).toBe(true);
   });
 });
 
 describe('get_dataset', () => {
-  it('flattens the scalar metadata a dataset carries', async () => {
-    mocked.getDataset.mockResolvedValue({
+  it('describes the zip, its contents and the imported groups', async () => {
+    mocked.get.mockResolvedValue({
       _id: 'd1',
-      name: 'Highway',
-      description: 'Night runs',
-      timestamp: '2026-07-04T08:00:00Z',
-      dataset_info: { frames: 12_000, split: 'train' },
-      annotations: { format: 'coco' }
+      name: 'VLM',
+      description: 'Mask review set',
+      archive: { filename: 'vlm.zip', size: 2048 },
+      imageCount: 8220,
+      groups: [
+        { name: 'frames', images: 4110, jsons: 0 },
+        { name: 'verify', images: 8220, jsons: 4110 }
+      ],
+      import: { status: 'failed' },
+      contents: {
+        entries: 16440,
+        totalBytes: 512,
+        extensions: [{ ext: '.png', files: 8220, bytes: 1 }, { ext: '.json', files: 4110, bytes: 1 }],
+        folders: [
+          { path: '', depth: 0, files: 16440, images: 12330 },
+          { path: 'frames', depth: 1, files: 4110, images: 4110 },
+          { path: 'annotations/verify', depth: 2, files: 12330, images: 8220 }
+        ]
+      }
     });
 
     const { text } = await call('get_dataset', { dataset: 'd1' });
 
-    expect(text).toContain('Highway');
-    expect(text).toContain('Captured 2026-07-04.');
-    expect(text).toContain('frames: 12000');
-    expect(text).toContain('format: coco');
+    expect(mocked.get).toHaveBeenCalledWith('vsn_live_abc', 'd1');
+    expect(text).toContain('VLM\nMask review set\nvlm.zip, 2.0 KB; 8,220 images imported; last import failed.');
+    expect(text).toContain('  verify: 8,220 images, 4,110 JSON sidecars');
+    expect(text).toContain('  frames: 4,110 images\n');
+    expect(text).toContain('Zip contents: 16,440 files, 512 B uncompressed.');
+    expect(text).toContain('  by type: .png 8,220, .json 4,110');
+    expect(text).toContain('  frames/: 4,110 files, 4,110 images');
+    expect(text).not.toContain('annotations/verify/');
   });
 
-  it('summarises a nested blob instead of rendering it', async () => {
-    // These are usually per-sensor calibration matrices: hundreds of tokens
-    // that answer nothing anyone asked, and re-sent on every later turn.
-    mocked.getDataset.mockResolvedValue({
-      _id: 'd1',
-      name: 'Highway',
-      camera: { intrinsics: { fx: 1, fy: 2, cx: 3, cy: 4 }, frames: [1, 2, 3] }
+  it('keeps a bare dataset short and caps a long folder list', async () => {
+    mocked.get.mockResolvedValueOnce({ _id: 'd1', name: 'Empty', imageCount: 0, groups: [] });
+    expect((await call('get_dataset', { dataset: 'd1' })).text).toBe('Empty\nno zip uploaded yet; 0 images imported.');
+
+    mocked.get.mockResolvedValueOnce({
+      _id: 'd2', name: 'Sequences', imageCount: 0, groups: [], import: { status: 'done' },
+      contents: { entries: 25, totalBytes: 25, extensions: [], folders: Array.from({ length: 25 }, (_, i) => ({ path: `s${i}`, depth: 1, files: 1, images: 0 })) }
     });
-
-    const { text } = await call('get_dataset', { dataset: 'd1' });
-
-    expect(text).toContain('intrinsics: 4 fields');
-    expect(text).toContain('frames: 3 entries');
-    expect(text).not.toContain('fx');
+    const { text } = await call('get_dataset', { dataset: 'd2' });
+    expect(text).toContain('…and 5 more folders');
+    expect(text).not.toContain('by type');
+    expect(text).not.toContain('last import');
   });
 
-  it('skips a blob that is absent or empty rather than printing a bare heading', async () => {
-    mocked.getDataset.mockResolvedValue({
-      _id: 'd1',
-      name: 'Highway',
-      annotations: {},
-      lidar: { sensors: 2 }
-    });
-
-    const { text } = await call('get_dataset', { dataset: 'd1' });
-
-    expect(text).not.toContain('Annotations:');
-    expect(text).toContain('Lidar:');
-  });
-
-  it('drops a null field without turning it into the string "null"', async () => {
-    mocked.getDataset.mockResolvedValue({
-      _id: 'd1',
-      name: 'Highway',
-      dataset_info: { frames: 10, notes: null }
-    });
-
-    const { text } = await call('get_dataset', { dataset: 'd1' });
-
-    expect(text).toContain('frames: 10');
-    expect(text).not.toContain('notes');
-  });
-});
-
-describe('list_image_categories', () => {
-  it('lists the label vocabulary', async () => {
-    mocked.listImageCategories.mockResolvedValue([
-      { _id: 'c1', name: 'car', description: 'Any four-wheeled vehicle' },
-      { _id: 'c2', name: 'pedestrian' }
-    ]);
-
-    const { text } = await call('list_image_categories', { dataset: 'd1' });
-
-    expect(text).toContain('2 categories:');
-    expect(text).toContain('- car — Any four-wheeled vehicle');
-    expect(text).toContain('- pedestrian');
-  });
-
-  it('reports a dataset with no categories defined', async () => {
-    mocked.listImageCategories.mockResolvedValue([]);
-
-    expect((await call('list_image_categories', { dataset: 'd1' })).text).toContain(
-      'no image categories defined'
-    );
-  });
-
-  it('turns a failure into something the model can act on', async () => {
-    mocked.listImageCategories.mockRejectedValue(new VisinError('Access denied', 403));
-
-    const { text, isError } = await call('list_image_categories', { dataset: 'd1' });
-
-    expect(isError).toBe(true);
-    expect(text).toContain('Do not retry');
+  it('turns a failed lookup into an error the model can read', async () => {
+    mocked.get.mockRejectedValue(new VisinError('Dataset not found', 404));
+    const result = await call('get_dataset', { dataset: 'missing' });
+    expect(result.isError).toBe(true);
   });
 });

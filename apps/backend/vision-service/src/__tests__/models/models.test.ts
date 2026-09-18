@@ -4,12 +4,8 @@ import Benchmark from '../../models/Benchmark';
 import Comparison from '../../models/Comparison';
 import Config from '../../models/Config';
 import Contact from '../../models/Contact';
-import DatasetAnalysis from '../../models/DatasetAnalysis';
-import DatasetImage from '../../models/DatasetImage';
-import Dataset from '../../models/Dataset';
 import Epoch from '../../models/Epoch';
 import EpochVisualization from '../../models/EpochVisualization';
-import ImageCategory from '../../models/ImageCategory';
 import Project from '../../models/Project';
 import TestResult from '../../models/TestResult';
 import Training from '../../models/Training';
@@ -21,12 +17,8 @@ describe('model registration', () => {
     expect(Comparison.modelName).toBe('comparison');
     expect(Config.modelName).toBe('training_config');
     expect(Contact.modelName).toBe('Contact');
-    expect(DatasetAnalysis.modelName).toBe('dataset_analysis');
-    expect(DatasetImage.modelName).toBe('DatasetImage');
-    expect(Dataset.modelName).toBe('training_dataset');
     expect(Epoch.modelName).toBe('training_epoch');
     expect(EpochVisualization.modelName).toBe('epoch_visualization');
-    expect(ImageCategory.modelName).toBe('ImageCategory');
     expect(Project.modelName).toBe('Project');
     expect(TestResult.modelName).toBe('test_result');
     expect(Training.modelName).toBe('training');
@@ -156,48 +148,6 @@ describe('Contact', () => {
   });
 });
 
-describe('DatasetImage', () => {
-  it('accepts any capture condition, including one it has never seen', () => {
-    const image = new DatasetImage({
-      filename: 'f.jpg',
-      originalName: 'o.jpg',
-      fileId: 'id',
-      datasetId: new mongoose.Types.ObjectId(),
-      categoryId: new mongoose.Types.ObjectId(),
-      mimetype: 'image/jpeg',
-      size: 1,
-      condition: 'snow',
-    });
-    expect(image.validateSync()).toBeUndefined();
-
-    // `condition` is deliberately open: ingest pipelines write it over the API and
-    // cannot register a vocabulary first, so an unfamiliar value must still save.
-    image.condition = 'volcano';
-    expect(image.validateSync()).toBeUndefined();
-  });
-
-  it('serializes fileId/thumbnailFileId under their current names only', () => {
-    const image = new DatasetImage({
-      filename: 'f.jpg',
-      originalName: 'o.jpg',
-      fileId: 'id',
-      thumbnailFileId: 'thumb',
-      datasetId: new mongoose.Types.ObjectId(),
-      categoryId: new mongoose.Types.ObjectId(),
-      mimetype: 'image/jpeg',
-      size: 1,
-    });
-
-    for (const doc of [image.toJSON(), image.toObject()]) {
-      const serialized = doc as unknown as Record<string, unknown>;
-      expect(serialized.fileId).toBe('id');
-      expect(serialized.thumbnailFileId).toBe('thumb');
-      expect('minioFileId' in serialized).toBe(false);
-      expect('minioThumbnailFileId' in serialized).toBe(false);
-    }
-  });
-});
-
 describe('EpochVisualization', () => {
   it('serializes fileId under its current name only', () => {
     const viz = new EpochVisualization({
@@ -216,39 +166,11 @@ describe('EpochVisualization', () => {
   });
 });
 
-describe('Config / DatasetAnalysis', () => {
+describe('Config', () => {
   it('Config requires uuid, summary, and data', () => {
     const error = new Config({}).validateSync();
     expect(error?.errors.config_uuid).toBeDefined();
     expect(error?.errors.summary).toBeDefined();
     expect(error?.errors.config_data).toBeDefined();
-  });
-
-  it('DatasetAnalysis requires a dataset name', () => {
-    const error = new DatasetAnalysis({}).validateSync();
-    expect(error?.errors.dataset).toBeDefined();
-  });
-
-  it('DatasetAnalysis accepts an empty analysis payload', () => {
-    // `data` was once required, which made a record with no JSON attached
-    // unsaveable — including every record reserved before its archive uploads.
-    const error = new DatasetAnalysis({ dataset: 'waymo' }).validateSync();
-    expect(error?.errors.data).toBeUndefined();
-  });
-
-  it('DatasetAnalysis keeps an empty `data` object instead of minimizing it away', () => {
-    // With Mongoose's default `minimize: true`, `data: {}` is stripped on write
-    // and the field comes back missing — which then failed the old `required`
-    // validator on the next save (rename included). Nested empties inside a
-    // stored analysis payload were being dropped the same way.
-    const doc = new DatasetAnalysis({ dataset: 'waymo', data: { nested: {} } });
-    expect(doc.toObject().data).toEqual({ nested: {} });
-
-    const empty = new DatasetAnalysis({ dataset: 'waymo', data: {} });
-    expect(empty.toObject().data).toEqual({});
-  });
-
-  it('DatasetAnalysis defaults status to ready so legacy records stay visible', () => {
-    expect(new DatasetAnalysis({ dataset: 'waymo' }).status).toBe('ready');
   });
 });

@@ -13,18 +13,21 @@ describe('createJobBodySchema', () => {
 
     expect(parsed.redundancy).toBe(1);
     expect(parsed.annotationSets).toEqual([]);
-    expect(parsed.bundleId).toBeUndefined();
+    expect(parsed.datasetId).toBeUndefined();
+    expect(parsed.framesGroup).toBe('frames');
     expect(parsed.question.choices).toBeUndefined();
   });
 
-  it('accepts bundleId and annotationSets', () => {
+  it('accepts datasetId, its frames group and annotation sets', () => {
     const parsed = createJobBodySchema.parse({
       ...validBody,
-      bundleId: 'b1',
+      datasetId: 'd1',
+      framesGroup: 'camera',
       annotationSets: ['llava_34b'],
     });
 
-    expect(parsed.bundleId).toBe('b1');
+    expect(parsed.datasetId).toBe('d1');
+    expect(parsed.framesGroup).toBe('camera');
     expect(parsed.annotationSets).toEqual(['llava_34b']);
   });
 

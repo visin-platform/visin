@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import { requireApiKey, requireSignedToken } from '../middleware/auth';
-import { generateUploadUrl, generateDownloadUrl } from '../controllers/signedUrlController';
+import { generateUploadUrl, generateDownloadUrl, generateDownloadUrls } from '../controllers/signedUrlController';
 import { uploadPublic, downloadPublic } from '../controllers/publicController';
 import {
   internalUpload,
@@ -16,7 +16,8 @@ import {
   deleteFolderBodySchema,
   listFilesQuerySchema,
   generateUploadUrlBodySchema,
-  generateDownloadUrlBodySchema
+  generateDownloadUrlBodySchema,
+  generateDownloadUrlsBodySchema
 } from '../validation/fileSchemas';
 
 const router = Router();
@@ -36,6 +37,13 @@ router.post(
   express.json(),
   validateRequest({ body: generateDownloadUrlBodySchema }),
   generateDownloadUrl
+);
+router.post(
+  '/internal/download-urls',
+  requireApiKey,
+  express.json({ limit: '1mb' }),
+  validateRequest({ body: generateDownloadUrlsBodySchema }),
+  generateDownloadUrls
 );
 
 // ─── Internal: server-to-server file operations ───────────────────────────────

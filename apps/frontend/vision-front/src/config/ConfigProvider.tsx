@@ -3,6 +3,7 @@ import { createConfigProvider } from '@visin/frontend-core';
 
 export interface AppConfig {
   VISION_API_URL?: string;
+  DATASET_API_URL?: string;
   AUTH_SERVICE_URL?: string;
   AUTH_FRONT_URL?: string;
   ACCOUNT_FRONT_URL?: string;
@@ -12,6 +13,7 @@ export interface AppConfig {
 function createDevConfig(): AppConfig {
   return {
     VISION_API_URL: import.meta.env.VITE_VISION_API_URL,
+    DATASET_API_URL: import.meta.env.VITE_DATASET_API_URL,
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL,
     AUTH_FRONT_URL: import.meta.env.VITE_AUTH_FRONT_URL,
     ACCOUNT_FRONT_URL: import.meta.env.VITE_ACCOUNT_FRONT_URL,

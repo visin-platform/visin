@@ -1,8 +1,7 @@
-import { ForbiddenError, NotFoundError, UnauthorizedError } from '@visin/backend-core';
+import { ForbiddenError, UnauthorizedError } from '@visin/backend-core';
 import Project from '../models/Project';
 import Training from '../models/Training';
 import Epoch from '../models/Epoch';
-import DatasetAnalysis from '../models/DatasetAnalysis';
 import { canEditProject, isWithinTokenScope } from './projectAccessService';
 
 export function requireActor(userId: string | undefined): string {
@@ -29,23 +28,6 @@ export async function canWriteResource(resource: OwnedResource | null | undefine
 export async function assertResourceWrite(resource: OwnedResource | null | undefined, userId?: string): Promise<void> {
   requireActor(userId);
   if (!(await canWriteResource(resource, userId))) throw new ForbiddenError('Write permission is required for this resource');
-}
-
-/** Shared libraries remain public; their creator controls mutations. */
-export function assertLibraryWrite(resource: Pick<OwnedResource, 'ownerId' | 'deletedAt'>, userId?: string): void {
-  requireActor(userId);
-  if (resource.deletedAt || resource.ownerId !== userId) throw new ForbiddenError('Only the library owner can modify it');
-}
-
-/** Dataset images and categories belong to the dataset analysis shown by the UI. */
-export async function getDatasetParent(datasetId: string) {
-  const parent = await DatasetAnalysis.findById(datasetId);
-  if (!parent) throw new NotFoundError('Dataset not found');
-  return parent;
-}
-
-export async function assertDatasetWrite(datasetId: string, userId?: string): Promise<void> {
-  assertLibraryWrite(await getDatasetParent(datasetId), userId);
 }
 
 export async function assertEpochWrite(epochUuid: string, userId?: string, scope?: string) {

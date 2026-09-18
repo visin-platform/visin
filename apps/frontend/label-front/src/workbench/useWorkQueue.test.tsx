@@ -27,7 +27,7 @@ const item = (
   id: string,
   overrides: { index?: number; total?: number; mine?: AnswerSnapshot | null; count?: number } = {}
 ): WorkItem => ({
-  task: { _id: id, jobId: 'j1', labelImageId: 'img', order: overrides.index ?? 0 },
+  task: { _id: id, jobId: 'j1', order: overrides.index ?? 0 },
   images: { frame: { url: `frame-${id}` }, layers: [{ set: 's', url: `layer-${id}` }], idmap: { url: `idmap-${id}` } },
   position: { index: overrides.index ?? 0, total: overrides.total ?? 10 },
   answer: {

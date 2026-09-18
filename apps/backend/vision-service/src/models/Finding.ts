@@ -3,10 +3,9 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 /**
  * A written conclusion about a project or a run.
  *
- * Called a Finding rather than an Analysis because `/api/analysis` already
- * belongs to DatasetAnalysis — the uploaded artefacts describing a dataset —
- * and two things called analysis in one service is a trap for whoever reads it
- * next. The UI calls these "Analysis", which is the word people use.
+ * Called a Finding rather than an Analysis because the API-key scope that
+ * gates it is also called `analysis`, and the model name should say what one
+ * record is. The UI calls these "Analysis", which is the word people use.
  *
  * The point of storing them is that an assistant's reasoning currently
  * evaporates: it can work out that window16 beats window24 on ZOD but not on

@@ -6,7 +6,6 @@ import ComparisonDetailPage from '../pages/ComparisonDetailPage';
 import EpochsPage from '../pages/EpochsPage';
 import ConfigsPage from '../pages/ConfigsPage';
 import DatasetsPage from '../pages/DatasetsPage';
-import DatasetComparisonPage from '../pages/DatasetComparisonPage';
 import DatasetDetailPage from '../pages/DatasetDetailPage';
 import LabelingRedirectPage from '../pages/LabelingRedirectPage';
 import TestResultsPage from '../pages/TestResultsPage';
@@ -31,7 +30,6 @@ function AppRoutes() {
       <Route path="/configs" element={<ConfigsPage />} />
       <Route path="/datasets" element={<DatasetsPage />} />
       <Route path="/datasets/:id" element={<DatasetDetailPage />} />
-      <Route path="/datasets/compare" element={<DatasetComparisonPage />} />
       {/* The labeling tool moved to label-front; keep old URLs working. */}
       <Route path="/image-labeling/*" element={<LabelingRedirectPage />} />
       <Route path="/test-results" element={<TestResultsPage />} />

@@ -7,6 +7,7 @@ import {
   Button,
   Chip,
   FormControlLabel,
+  Link,
   MenuItem,
   Paper,
   Radio,
@@ -18,9 +19,10 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { getMaskFields, listBundles } from '../services/bundleService';
+import { getMaskFields, listDatasets } from '../services/datasetService';
 import { createJob, getMyGroups, materializeJob, transitionJob } from '../services/jobService';
-import { JobChoice, MaskSelector, MaterializeBody, MaterializeResult, TaskType } from '../types';
+import { getGlobalConfig } from '../config/ConfigProvider';
+import { JobChoice, LabelDataset, MaskSelector, MaterializeBody, MaterializeResult, TaskType } from '../types';
 
 const STEPS = ['Basics', 'Question', 'Tasks', 'Activate'];
 
@@ -31,8 +33,9 @@ const DEFAULT_CHOICES: JobChoice[] = [
 
 const NewJobPage: React.FC = () => {
   const navigate = useNavigate();
+  const visionFrontUrl = (getGlobalConfig().VISION_FRONT_URL || '').replace(/\/$/, '');
   const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups });
-  const { data: bundles } = useQuery({ queryKey: ['bundles'], queryFn: listBundles });
+  const { data: datasets } = useQuery({ queryKey: ['datasets'], queryFn: listDatasets });
 
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +45,8 @@ const NewJobPage: React.FC = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [groupId, setGroupId] = useState('');
-  const [bundleId, setBundleId] = useState('');
+  const [datasetId, setDatasetId] = useState('');
+  const [framesGroup, setFramesGroup] = useState('');
 
   // Step 2 — question
   const [taskType, setTaskType] = useState<TaskType>('mask_toggle');
@@ -64,17 +68,30 @@ const NewJobPage: React.FC = () => {
   const [materialized, setMaterialized] = useState<MaterializeResult | null>(null);
 
   const adminGroups = (groups || []).filter((group) => group.role === 'owner' || group.role === 'admin');
-  const groupBundles = (bundles || []).filter((bundle) => bundle.groupId === groupId && bundle.status === 'ready');
-  const bundle = useMemo(() => groupBundles.find((candidate) => candidate._id === bundleId), [groupBundles, bundleId]);
-  const bundleSets = bundle?.annotationSets || [];
+  // A public dataset can back any group's job; a group dataset only its own.
+  const available = (datasets || []).filter(
+    (candidate) => candidate.imageCount > 0 && (candidate.visibility === 'public' || candidate.groupId === groupId)
+  );
+  const dataset = useMemo(() => available.find((candidate) => candidate._id === datasetId), [available, datasetId]);
+  const imageGroups = (dataset?.groups || []).filter((group) => group.images > 0).map((group) => group.name);
+  // Every group except the frames one can carry annotation layers.
+  const annotationGroups = imageGroups.filter((group) => group !== framesGroup);
+
+  /** Default the frames to a group called `frames`, else the first one. */
+  const chooseDataset = (chosen: LabelDataset | undefined) => {
+    const groupNames = (chosen?.groups || []).filter((group) => group.images > 0).map((group) => group.name);
+    setDatasetId(chosen?._id || '');
+    setFramesGroup(groupNames.includes('frames') ? 'frames' : groupNames[0] || '');
+    setAnnotationSets([]);
+  };
 
   // Mask metadata is per annotation set, so the groupable fields only exist once
-  // a set is picked — one full-corpus bundle can then be sliced per job.
+  // a set is picked — one full-corpus dataset can then be sliced per job.
   const maskSet = taskType === 'mask_toggle' ? annotationSets[0] : undefined;
   const { data: maskFields } = useQuery({
-    queryKey: ['mask-fields', bundleId, maskSet],
-    queryFn: () => getMaskFields(bundleId, maskSet!),
-    enabled: Boolean(bundleId && maskSet)
+    queryKey: ['mask-fields', datasetId, maskSet],
+    queryFn: () => getMaskFields(datasetId, maskSet!),
+    enabled: Boolean(datasetId && maskSet)
   });
   const selectedField = (maskFields || []).find((entry) => entry.field === maskField);
 
@@ -88,14 +105,15 @@ const NewJobPage: React.FC = () => {
     );
   };
 
-  // A bundle with sets but none picked materializes tasks with no payload — the
-  // workbench then shows the bare frame and there is nothing to judge, so block it.
+  // A dataset with annotation groups but none picked materializes tasks with no
+  // payload — the workbench then shows the bare frame and there is nothing to
+  // judge, so block it.
   const stepValid = [
-    Boolean(name.trim() && groupId && bundleId),
+    Boolean(name.trim() && groupId && datasetId && framesGroup),
     Boolean(prompt.trim()) &&
       (taskType === 'mask_toggle'
         ? annotationSets.length === 1
-        : choices.length >= 2 && (bundleSets.length === 0 || annotationSets.length >= 1)) &&
+        : choices.length >= 2 && (annotationGroups.length === 0 || annotationSets.length >= 1)) &&
       redundancy >= 1,
     Boolean(materialized),
     true
@@ -111,7 +129,8 @@ const NewJobPage: React.FC = () => {
           name: name.trim(),
           description: description.trim() || undefined,
           groupId,
-          bundleId,
+          datasetId,
+          framesGroup,
           taskType,
           question: { prompt: prompt.trim(), ...(taskType === 'single_choice' ? { choices } : {}) },
           annotationSets,
@@ -194,7 +213,7 @@ const NewJobPage: React.FC = () => {
             value={groupId}
             onChange={(event) => {
               setGroupId(event.target.value);
-              setBundleId('');
+              chooseDataset(undefined);
             }}
             helperText="Group members label; owners/admins administer"
           >
@@ -206,18 +225,43 @@ const NewJobPage: React.FC = () => {
           </TextField>
           <TextField
             select
-            label="Bundle"
-            value={bundleId}
+            label="Dataset"
+            value={datasetId}
+            onChange={(event) => chooseDataset(available.find((candidate) => candidate._id === event.target.value))}
+            disabled={!groupId}
+            helperText={
+              groupId && available.length === 0 ? (
+                <>
+                  No dataset with images is available here — upload one in{' '}
+                  <Link href={`${visionFrontUrl}/datasets`} target="_blank" rel="noreferrer">
+                    Vision → Datasets
+                  </Link>
+                </>
+              ) : (
+                ' '
+              )
+            }
+          >
+            {available.map((candidate) => (
+              <MenuItem key={candidate._id} value={candidate._id}>
+                {candidate.name} ({candidate.imageCount.toLocaleString()} images)
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Frames"
+            value={framesGroup}
             onChange={(event) => {
-              setBundleId(event.target.value);
+              setFramesGroup(event.target.value);
               setAnnotationSets([]);
             }}
-            disabled={!groupId}
-            helperText={groupId && groupBundles.length === 0 ? 'No ready bundles in this group — upload one first' : ' '}
+            disabled={!datasetId}
+            helperText="The dataset's image group the labeler sees; the others can be drawn over it"
           >
-            {groupBundles.map((candidate) => (
-              <MenuItem key={candidate._id} value={candidate._id}>
-                {candidate.name} ({candidate.counts.frames} frames)
+            {imageGroups.map((group) => (
+              <MenuItem key={group} value={group}>
+                {group}
               </MenuItem>
             ))}
           </TextField>
@@ -239,7 +283,7 @@ const NewJobPage: React.FC = () => {
             Annotation set{taskType === 'mask_toggle' ? ' (exactly one)' : 's (at least one)'}
           </Typography>
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-            {bundleSets.map((set) => (
+            {annotationGroups.map((set) => (
               <Chip
                 key={set}
                 label={set}
@@ -248,13 +292,13 @@ const NewJobPage: React.FC = () => {
                 data-testid={`set-chip-${set}`}
               />
             ))}
-            {bundleSets.length === 0 && (
+            {annotationGroups.length === 0 && (
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                This bundle has no annotation sets — tasks will show the bare frame.
+                This dataset has no other image group — tasks will show the bare frame.
               </Typography>
             )}
           </Stack>
-          {bundleSets.length > 0 && annotationSets.length === 0 && (
+          {annotationGroups.length > 0 && annotationSets.length === 0 && (
             <Alert severity="info">
               Pick a set — its layers are what the workbench draws over the frame. With none selected the labeler
               sees the bare frame and has nothing to judge.
@@ -319,7 +363,7 @@ const NewJobPage: React.FC = () => {
             <FormControlLabel
               value="manifest"
               control={<Radio />}
-              label={`Manifest${bundle?.manifest ? ` (bundle has one: ${bundle.manifest.length} rows)` : ''}`}
+              label="Manifest"
             />
             <FormControlLabel value="filter" control={<Radio />} label="All frames / sample" />
           </RadioGroup>
@@ -327,7 +371,7 @@ const NewJobPage: React.FC = () => {
           {selectionKind === 'manifest' && (
             <>
               <TextField
-                label={bundle?.manifest ? 'Override manifest (optional — blank uses the bundle manifest)' : 'Manifest content'}
+                label="Manifest content (optional — blank uses the dataset's own manifest)"
                 value={manifestContent}
                 onChange={(event) => setManifestContent(event.target.value)}
                 multiline
@@ -360,7 +404,7 @@ const NewJobPage: React.FC = () => {
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 Label part of &quot;{maskSet}&quot; instead of every mask in it. The cap applies per value
-                across the whole bundle, so a group scattered one-per-frame still reaches its target;
+                across the whole dataset, so a group scattered one-per-frame still reaches its target;
                 frames left with no selected mask get no task.
               </Typography>
               <Stack direction="row" spacing={2} sx={{ mt: 2, flexWrap: 'wrap' }} useFlexGap>

@@ -6,18 +6,16 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { errorHandler, optionalAuth } from '@visin/backend-core';
 import { LabelJob, JOB_STATUSES, JobStatus } from '../../models/LabelJob';
 import { LabelTask } from '../../models/LabelTask';
-import { LabelImage } from '../../models/LabelImage';
-import { LabelBundle } from '../../models/LabelBundle';
 import jobRoutes from '../../routes/jobRoutes';
 import taskRoutes from '../../routes/taskRoutes';
 import { checkMembership } from '../../clients/groupServiceClient';
-import { getDownloadUrl } from '../../clients/fileServiceClient';
+import { getDownloadUrls } from '../../clients/fileServiceClient';
 import { setJobVisibility } from '../../services/jobService';
 
 jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn() }));
-jest.mock('../../clients/fileServiceClient', () => ({ getDownloadUrl: jest.fn() }));
+jest.mock('../../clients/fileServiceClient', () => ({ getDownloadUrls: jest.fn() }));
 const membership = checkMembership as jest.Mock;
-const sign = getDownloadUrl as jest.Mock;
+const sign = getDownloadUrls as jest.Mock;
 const actors: Record<string, string> = { owner: '000000000000000000000001', member: '000000000000000000000002', stranger: '000000000000000000000003' };
 const creator = { userId: 'owner', email: 'PRIVATE_CREATOR@example.test' };
 
@@ -42,10 +40,10 @@ describe('job publication and task access with in-memory MongoDB', () => {
     await mongoose.connection.collection('users').insertMany(Object.entries(actors).map(([name, id]) => ({ _id: new mongoose.Types.ObjectId(id), email: `${name}@example.test`, tokenVersion: 1 })));
     jest.clearAllMocks();
     membership.mockImplementation(async (groupId, userId) => ({ member: groupId === 'actual-group' && [actors.member, actors.owner].includes(userId), role: userId === actors.owner ? 'owner' : 'member' }));
-    sign.mockResolvedValue({ url: 'SIGNED_IMAGE_URL' });
+    sign.mockResolvedValue({ 'frame-file': 'SIGNED_IMAGE_URL' });
   });
   afterEach(async () => {
-    await Promise.all([mongoose.connection.collection('users').deleteMany({}), LabelJob.deleteMany({}), LabelTask.deleteMany({}), LabelImage.deleteMany({}), LabelBundle.deleteMany({})]);
+    await Promise.all([mongoose.connection.collection('users').deleteMany({}), LabelJob.deleteMany({}), LabelTask.deleteMany({})]);
   });
   afterAll(async () => {
     await new Promise<void>(resolve => server.close(() => resolve()));
@@ -59,11 +57,9 @@ describe('job publication and task access with in-memory MongoDB', () => {
     ...(body ? { body: JSON.stringify(body) } : {})
   });
   const fixture = async (status: JobStatus = 'active', isPublic?: boolean) => {
-    const bundle = await LabelBundle.create({ name: 'B', groupId: 'actual-group', createdBy: creator, status: 'ready' });
     const job = await LabelJob.create({ name: 'Private content', groupId: 'actual-group', createdBy: creator, status,
-      bundleId: bundle.id, taskType: 'single_choice', question: { prompt: 'Private prompt', choices: [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }] }, tasksCount: 1, ...(isPublic !== undefined ? { isPublic } : {}) });
-    const image = await LabelImage.create({ bundleId: bundle.id, path: 'frame.png', stem: 'frame', kind: 'frame', fileId: 'frame-file', size: 1, mimetype: 'image/png' });
-    const task = await LabelTask.create({ jobId: job.id, labelImageId: image.id, order: 0 });
+      datasetId: 'd1', taskType: 'single_choice', question: { prompt: 'Private prompt', choices: [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }] }, tasksCount: 1, ...(isPublic !== undefined ? { isPublic } : {}) });
+    const task = await LabelTask.create({ jobId: job.id, frame: { fileId: 'frame-file', path: 'frames/frame.png', stem: 'frame' }, order: 0 });
     return { job, task };
   };
   const paths = (jobId: string, taskId: string) => [`/jobs/${jobId}`, `/jobs/${jobId}/stats`, `/tasks/${taskId}`, `/jobs/${jobId}/tasks/at/0`, `/jobs/${jobId}/tasks/at/999`];

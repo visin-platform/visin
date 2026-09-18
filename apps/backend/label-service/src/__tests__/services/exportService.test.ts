@@ -4,36 +4,27 @@ jest.mock('../../models/LabelTask', () => ({
 jest.mock('../../models/LabelAnswer', () => ({
   LabelAnswer: { find: jest.fn() },
 }));
-jest.mock('../../models/LabelImage', () => ({
-  LabelImage: { find: jest.fn() },
-}));
-jest.mock('../../models/LabelBundle', () => ({
-  LabelBundle: { findById: jest.fn() },
-}));
-jest.mock('../../services/bundleService', () => ({
-  maskFields: jest.fn(),
+jest.mock('../../clients/datasetServiceClient', () => ({
+  getDataset: jest.fn(),
+  jsonFields: jest.fn(),
 }));
 
 import { exportRows, exportCsv, exportManifest, jobStats } from '../../services/exportService';
 import { LabelTask } from '../../models/LabelTask';
 import { LabelAnswer } from '../../models/LabelAnswer';
-import { LabelImage } from '../../models/LabelImage';
-import { LabelBundle } from '../../models/LabelBundle';
-import { maskFields } from '../../services/bundleService';
+import * as datasets from '../../clients/datasetServiceClient';
 import type { ILabelJob } from '../../models/LabelJob';
 
 const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
 const mockedAnswer = LabelAnswer as unknown as Record<string, jest.Mock>;
-const mockedImage = LabelImage as unknown as Record<string, jest.Mock>;
-const mockedBundle = LabelBundle as unknown as Record<string, jest.Mock>;
-const mockedMaskFields = maskFields as unknown as jest.Mock;
+const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
 
 const singleChoiceJob = { _id: 'j1', taskType: 'single_choice', redundancy: 2 } as unknown as ILabelJob;
 const maskJob = { _id: 'j1', taskType: 'mask_toggle', redundancy: 2 } as unknown as ILabelJob;
 
 const task = (id: string, overrides: Record<string, unknown> = {}) => ({
   _id: id,
-  labelImageId: `img-${id}`,
+  frame: { fileId: `file-${id}`, path: `frames/${id}.png`, stem: id },
   answersCount: 0,
   payload: undefined,
   ...overrides,
@@ -47,7 +38,7 @@ const answer = (taskId: string, userId: string, overrides: Record<string, unknow
   ...overrides,
 });
 
-const stubData = (tasks: unknown[], answers: unknown[], frames?: unknown[]) => {
+const stubData = (tasks: unknown[], answers: unknown[]) => {
   // A thenable that also has `.sort()`: loadJobData sorts, exportManifest awaits
   // the projected query directly, and both go through this one mock.
   mockedTask.find.mockReturnValue({
@@ -55,9 +46,6 @@ const stubData = (tasks: unknown[], answers: unknown[], frames?: unknown[]) => {
     then: (resolve: (value: unknown) => unknown) => resolve(tasks),
   });
   mockedAnswer.find.mockResolvedValue(answers);
-  mockedImage.find.mockResolvedValue(
-    frames ?? (tasks as { _id: string }[]).map((t) => ({ _id: `img-${t._id}`, path: `frames/${t._id}.png` }))
-  );
 };
 
 const csvRows = (csv: string) => csv.trim().split('\n');
@@ -128,12 +116,12 @@ describe('exportRows mask_toggle', () => {
     expect(rows[1]).toMatchObject({ maskId: 2, consensus: null }); // u1 incorrect vs u2 correct → tie
   });
 
-  it('nests the bundle mask metadata and stamps each verdict with its timing', async () => {
+  it('nests the dataset mask metadata and stamps each verdict with its timing', async () => {
     stubData(
       [
         task('t1', {
           stratum: 'task-level',
-          payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'vehicle', stratum: 'both', kind: 'fringe' }] } },
+          payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'vehicle', stratum: 'both', kind: 'fringe' }] } },
         }),
       ],
       [answer('t1', 'u1', { rejectedMaskIds: [1], elapsedMs: 12, createdAt: new Date('2026-08-04T10:00:00Z') })]
@@ -179,7 +167,7 @@ describe('exportCsv', () => {
 
   it('emits one row per user-mask verdict for mask_toggle', async () => {
     stubData(
-      [task('t1', { payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'vehicle' }] } } })],
+      [task('t1', { payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'vehicle' }] } } })],
       [answer('t1', 'u1', { rejectedMaskIds: [1], elapsedMs: 40, createdAt: new Date('2026-08-04T10:00:00Z') })]
     );
 
@@ -189,7 +177,7 @@ describe('exportCsv', () => {
     ]);
   });
 
-  it('carries every bundle mask field as a mask_ column without shadowing the task stratum', async () => {
+  it('carries every dataset mask field as a mask_ column without shadowing the task stratum', async () => {
     stubData(
       [
         task('t1', {
@@ -197,7 +185,7 @@ describe('exportCsv', () => {
           payload: {
             maskMap: {
               imageId: 'i',
-              // `stratum` here is the bundle's own mask field, a different thing
+              // `stratum` here is the dataset's own mask field, a different thing
               // from the task's; both have to survive the export.
               masks: [{ id: 1, class: 'vehicle', stratum: 'both', triage_llava: 'accept', bbox: [1, 2, 3, 4] }],
             },
@@ -233,8 +221,8 @@ describe('exportCsv', () => {
   it('emits a row for a task nobody has answered, so the denominator survives', async () => {
     stubData(
       [
-        task('t1', { payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'vehicle' }] } } }),
-        task('t2', { payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'sign' }] } } }),
+        task('t1', { payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'vehicle' }] } } }),
+        task('t2', { payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'sign' }] } } }),
       ],
       [answer('t1', 'u1', { rejectedMaskIds: [1] })]
     );
@@ -247,12 +235,12 @@ describe('exportCsv', () => {
 });
 
 describe('exportManifest', () => {
-  const bundledJob = {
+  const datasetJob = {
     _id: 'j1',
     name: 'Verify',
     taskType: 'mask_toggle',
     redundancy: 2,
-    bundleId: 'b1',
+    datasetId: 'd1',
     annotationSets: ['verify'],
     question: { prompt: 'Mark all incorrect masks' },
     status: 'active',
@@ -260,21 +248,21 @@ describe('exportManifest', () => {
     selection: { kind: 'filter', spec: { sampleN: null, seed: 42, rows: 2 } },
   } as unknown as ILabelJob;
 
-  it('pairs each value with what the bundle holds and what the job asks about', async () => {
+  it('pairs each value with what the dataset holds and what the job asks about', async () => {
     stubData(
       [
         task('t1', {
           answersCount: 1,
-          payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'vehicle', stratum: 'both' }] } },
+          payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'vehicle', stratum: 'both' }] } },
         }),
         task('t2', {
-          payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'sign', stratum: 'neither' }] } },
+          payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'sign', stratum: 'neither' }] } },
         }),
       ],
       [answer('t1', 'u1', { rejectedMaskIds: [] })]
     );
-    mockedBundle.findById.mockResolvedValue({ _id: 'b1', name: 'corpus', annotationSets: ['verify'], counts: { frames: 9, layers: 9 } });
-    mockedMaskFields.mockResolvedValue([
+    mockedDatasets.getDataset.mockResolvedValue({ _id: 'd1', name: 'corpus', groups: [{ name: 'verify', images: 9, jsons: 9 }] });
+    mockedDatasets.jsonFields.mockResolvedValue([
       {
         field: 'stratum',
         values: [
@@ -285,30 +273,31 @@ describe('exportManifest', () => {
       },
     ]);
 
-    const manifest = await exportManifest(bundledJob);
+    const manifest = await exportManifest(datasetJob);
+
+    expect(mockedDatasets.jsonFields).toHaveBeenCalledWith('d1', 'verify', 'masks');
 
     expect(manifest.masks?.stratum).toEqual({
-      both: { bundle: 100, job: 1 },
-      neither: { bundle: 40, job: 1 },
-      // In the bundle, in no task — inclusion zero, which is the whole point of
+      both: { dataset: 100, job: 1 },
+      neither: { dataset: 40, job: 1 },
+      // In the dataset, in no task — inclusion zero, which is the whole point of
       // reporting the pair rather than either number alone.
-      llava_only: { bundle: 7, job: 0 },
+      llava_only: { dataset: 7, job: 0 },
     });
     expect(manifest.selection).toEqual({ kind: 'filter', spec: { sampleN: null, seed: 42, rows: 2 } });
     expect(manifest.progress).toEqual({ tasks: 2, completed: 0, answers: 1 });
-    expect(manifest.bundle).toMatchObject({ id: 'b1', name: 'corpus' });
+    expect(manifest.dataset).toMatchObject({ id: 'd1', name: 'corpus' });
     expect(manifest.job).toMatchObject({ redundancy: 2, tasksCount: 2, taskType: 'mask_toggle' });
   });
 
   it('omits inclusion counts for a single_choice job, which has no masks to weight', async () => {
     stubData([task('t1')], []);
-    mockedBundle.findById.mockResolvedValue(null);
 
-    const manifest = await exportManifest({ ...bundledJob, taskType: 'single_choice' } as unknown as ILabelJob);
+    const manifest = await exportManifest({ ...datasetJob, taskType: 'single_choice', datasetId: undefined } as unknown as ILabelJob);
 
     expect(manifest.masks).toBeUndefined();
-    expect(mockedMaskFields).not.toHaveBeenCalled();
-    expect(manifest.bundle).toBeNull();
+    expect(mockedDatasets.jsonFields).not.toHaveBeenCalled();
+    expect(manifest.dataset).toBeNull();
   });
 });
 
@@ -347,7 +336,7 @@ describe('jobStats', () => {
       [
         task('t1', {
           answersCount: 2,
-          payload: { maskMap: { imageId: 'i', masks: [{ id: 1, class: 'v' }, { id: 2, class: 's' }] } },
+          payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'v' }, { id: 2, class: 's' }] } },
         }),
       ],
       [answer('t1', 'u1', { rejectedMaskIds: [1] }), answer('t1', 'u2', { rejectedMaskIds: [1, 2] })]

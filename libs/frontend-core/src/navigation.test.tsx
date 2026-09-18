@@ -9,7 +9,7 @@ const texts = (nav: ReturnType<typeof createVisinNavigation>) =>
 
 describe('createVisinNavigation', () => {
   it('gives every app the same groups, in the same order', () => {
-    const expected = [['All projects', 'Trainings'], ['Datasets'], ['Jobs', 'Bundles']];
+    const expected = [['All projects', 'Trainings'], ['Datasets'], ['Jobs']];
 
     // Crossing apps must not change what the menu contains.
     for (const local of ['vision', 'label', 'account', null] as const) {
@@ -19,10 +19,10 @@ describe('createVisinNavigation', () => {
     }
   });
 
-  it('keeps bundles beside the jobs labelled from them', () => {
+  it('links labeling across from another app', () => {
     const group = createVisinNavigation('vision', urls).groups.find(candidate => candidate.label === 'Labels')!;
 
-    expect(group.items).toMatchObject([{ href: 'https://label.test/jobs' }, { href: 'https://label.test/bundles' }]);
+    expect(group.items).toMatchObject([{ href: 'https://label.test/jobs' }]);
   });
 
   it('keeps the current app sections as internal routes', () => {
@@ -38,12 +38,12 @@ describe('createVisinNavigation', () => {
   it('links the other app sections straight to that section', () => {
     const nav = createVisinNavigation('label', urls);
     const [datasets] = nav.groups[1].items;
-    const [, bundles] = nav.groups[2].items;
+    const [jobs] = nav.groups[2].items;
 
     expect(datasets.href).toBe('https://vision.test/datasets');
     expect(datasets.path).toBeUndefined();
-    expect(bundles.path).toBe('/bundles');
-    expect(bundles.href).toBeUndefined();
+    expect(jobs.path).toBe('/jobs');
+    expect(jobs.href).toBeUndefined();
   });
 
   it('tolerates a trailing slash on the configured base URL', () => {
@@ -55,7 +55,7 @@ describe('createVisinNavigation', () => {
   it('omits sections, and then groups, whose app has no URL configured', () => {
     // Dead links into the current origin would 404; an absent entry is honest.
     expect(texts(createVisinNavigation('vision', {}))).toEqual([['All projects', 'Trainings'], ['Datasets']]);
-    expect(texts(createVisinNavigation('label', {}))).toEqual([['Jobs', 'Bundles']]);
+    expect(texts(createVisinNavigation('label', {}))).toEqual([['Jobs']]);
     expect(labels(createVisinNavigation(null, { label: 'https://label.test' }))).toEqual(['Labels']);
   });
 

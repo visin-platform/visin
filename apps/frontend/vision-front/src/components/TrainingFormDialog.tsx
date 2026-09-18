@@ -140,7 +140,7 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
             run, so the form shows it rather than offering to reassign it. */}
         <TextField
           margin="dense"
-          label="Dataset Analysis"
+          label="Dataset"
           fullWidth
           variant="outlined"
           value={selectedDatasetId}

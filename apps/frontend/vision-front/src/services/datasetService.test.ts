@@ -1,54 +1,57 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../config/visionApi', () => ({
-  visionApi: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() }
-}));
+const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() }));
+vi.mock('../config/datasetApi', () => ({ datasetApi: api }));
+vi.mock('../utils/chunkedUpload', () => ({ uploadToSignedUrl: vi.fn() }));
 
-import { visionApi } from '../config/visionApi';
-import { datasetService } from './datasetService';
-
-const mockedApi = vi.mocked(visionApi);
+import * as service from './datasetService';
+import { uploadToSignedUrl } from '../utils/chunkedUpload';
 
 describe('datasetService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeEach(() => vi.clearAllMocks());
+
+  it('unwraps list, detail and groups responses, dropping empty query params', async () => {
+    api.get.mockResolvedValueOnce({ data: { datasets: [], pagination: {} } });
+    await service.listDatasets({ search: '', page: 2 });
+    expect(api.get).toHaveBeenLastCalledWith('?page=2');
+    api.get.mockResolvedValueOnce({ data: { _id: 'd1' } });
+    expect(await service.getDataset('d1')).toEqual({ _id: 'd1' });
+    api.get.mockResolvedValueOnce({ data: [{ id: 'g' }] });
+    expect(await service.listMyGroups()).toEqual([{ id: 'g' }]);
+    api.get.mockResolvedValueOnce({ data: { items: [] } });
+    await service.listItems('d1', { stem: '0001', limit: 200 });
+    expect(api.get).toHaveBeenLastCalledWith('/d1/items?stem=0001&limit=200');
+    api.get.mockResolvedValueOnce({ data: { downloadUrl: 'u', filename: 'f.zip' } });
+    expect(await service.getDownloadUrl('d1')).toEqual({ downloadUrl: 'u', filename: 'f.zip' });
+    api.get.mockResolvedValueOnce({ data: { datasets: [] } });
+    await service.listDatasets();
+    expect(api.get).toHaveBeenLastCalledWith('');
   });
 
-  it('getDatasets passes params through', async () => {
-    mockedApi.get.mockResolvedValue({ data: { success: true, data: [] } });
-    await datasetService.getDatasets({ page: 1, search: 'q' });
-    expect(mockedApi.get).toHaveBeenCalledWith('/datasets', { params: { page: 1, search: 'q' } });
+  it('creates, edits, deletes, imports and cancels', async () => {
+    api.post.mockResolvedValue({ data: { _id: 'd1' } });
+    api.patch.mockResolvedValue({ data: { _id: 'd1', name: 'x' } });
+    api.delete.mockResolvedValue({ data: { _id: 'd1' } });
+    await service.createDataset({ name: 'n', visibility: 'public' });
+    expect(api.post).toHaveBeenLastCalledWith('', { name: 'n', visibility: 'public' });
+    expect(await service.updateDataset('d1', { name: 'x' })).toMatchObject({ name: 'x' });
+    await service.deleteDataset('d1');
+    expect(api.delete).toHaveBeenLastCalledWith('/d1');
+    await service.startImport('d1', { groups: [{ folder: 'a', group: 'a' }] });
+    expect(api.post).toHaveBeenLastCalledWith('/d1/import', { groups: [{ folder: 'a', group: 'a' }] });
+    await service.cancelImport('d1');
+    expect(api.delete).toHaveBeenLastCalledWith('/d1/import');
+    await service.scanArchive('d1');
+    expect(api.post).toHaveBeenLastCalledWith('/d1/archive/scan');
   });
 
-  it('getDatasetsFromAnalysis calls /analysis with params', async () => {
-    mockedApi.get.mockResolvedValue({ data: { data: [] } });
-    await datasetService.getDatasetsFromAnalysis({ limit: 5, skip: 0 });
-    expect(mockedApi.get).toHaveBeenCalledWith('/analysis', { params: { limit: 5, skip: 0 } });
-  });
-
-  it('createDataset posts dataset data', async () => {
-    mockedApi.post.mockResolvedValue({ data: { success: true, data: { _id: 'd1' } } });
-    await datasetService.createDataset({ name: 'ds' });
-    expect(mockedApi.post).toHaveBeenCalledWith('/datasets', { name: 'ds' });
-  });
-
-  it('getDatasetById fetches by id', async () => {
-    mockedApi.get.mockResolvedValue({ data: { success: true, data: { _id: 'd1' } } });
-    const result = await datasetService.getDatasetById('d1');
-    expect(mockedApi.get).toHaveBeenCalledWith('/datasets/d1');
-    expect(result).toEqual({ success: true, data: { _id: 'd1' } });
-  });
-
-  it('getDatasetByUuid fetches by uuid', async () => {
-    mockedApi.get.mockResolvedValue({ data: { success: true, data: { _id: 'd1' } } });
-    await datasetService.getDatasetByUuid('uuid-1');
-    expect(mockedApi.get).toHaveBeenCalledWith('/datasets/uuid/uuid-1');
-  });
-
-  it('downloadDataset returns data.data with downloadUrl', async () => {
-    mockedApi.get.mockResolvedValue({ data: { data: { downloadUrl: 'http://x', expiresAt: 'later' } } });
-    const result = await datasetService.downloadDataset('uuid-1');
-    expect(mockedApi.get).toHaveBeenCalledWith('/datasets/download/uuid-1');
-    expect(result).toEqual({ downloadUrl: 'http://x', expiresAt: 'later' });
+  it('uploads a zip straight to its signed URL between reserving and completing', async () => {
+    api.post.mockResolvedValueOnce({ data: { uploadUrl: 'https://files.test/up' } }).mockResolvedValueOnce({ data: { _id: 'd1', archive: {} } });
+    const file = new File(['zip'], 'set.zip');
+    const onProgress = vi.fn();
+    expect(await service.uploadArchive('d1', file, onProgress)).toMatchObject({ _id: 'd1' });
+    expect(api.post).toHaveBeenNthCalledWith(1, '/d1/archive/upload-url', { filename: 'set.zip' });
+    expect(uploadToSignedUrl).toHaveBeenCalledWith('https://files.test/up', file, onProgress);
+    expect(api.post).toHaveBeenNthCalledWith(2, '/d1/archive/complete');
   });
 });

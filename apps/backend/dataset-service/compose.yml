@@ -1,0 +1,34 @@
+services:
+  dataset-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${REGISTRY:-ghcr.io/visin-platform}/dataset-service:${TAG:-latest}
+    restart: unless-stopped
+    stop_grace_period: 15s
+    ports:
+      - '5010:5010'
+    environment:
+      - PORT=5010
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - GROUP_SERVICE_URL=${GROUP_SERVICE_URL}
+      - FILE_SERVICE_URL=${FILE_SERVICE_URL}
+      - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      # The MCP server OAuth access tokens must be minted for; unset, they are refused.
+      - MCP_PUBLIC_URL=${MCP_PUBLIC_URL}
+      # Import queue. Redis is a shared service, not owned by dataset-service,
+      # deployed separately, and reached over visinnet — not a sidecar here.
+      - REDIS_URL=${REDIS_URL}
+    # Import copies the uploaded zip to a temporary file before extracting it,
+    # so the container's temp space must fit the largest dataset zip.
+    init: true
+    networks:
+      - visinnet
+
+networks:
+  visinnet:
+    external: true

@@ -26,6 +26,8 @@ services:
       # Reuses the VISION_API_URL the deploy already writes, rather than asking
       # for a second variable meaning the same thing.
       - VISION_SERVICE_URL=${VISION_API_URL}
+      - DATASET_INTERNAL_URL=http://dataset-service:5010
+      - DATASET_SERVICE_URL=${DATASET_API_URL}
       # The canonical URL clients authenticate against, and the audience every
       # OAuth access token is bound to (RFC 8707). Must match what auth-service
       # mints for, or every token is refused here.

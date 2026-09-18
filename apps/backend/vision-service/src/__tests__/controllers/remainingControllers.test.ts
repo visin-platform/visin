@@ -53,16 +53,6 @@ jest.mock('../../services/projectAccessService', () => ({
   isWithinTokenScope: jest.fn(),
   resolveProject: jest.fn(),
 }));
-jest.mock('../../services/datasetImageService', () => ({
-  getImages: jest.fn(),
-  createDatasetImage: jest.fn(),
-  getAllImageStats: jest.fn(),
-  getSimpleLabelingStats: jest.fn(),
-  getImageById: jest.fn(),
-  updateImage: jest.fn(),
-  deleteImage: jest.fn(),
-  exportImageNames: jest.fn(),
-}));
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -71,8 +61,6 @@ jest.mock('@visin/backend-core', () => ({
 import type { Request, Response } from 'express';
 import * as epochCtrl from '../../controllers/epochController';
 import * as comparisonCtrl from '../../controllers/comparisonController';
-import * as imageCtrl from '../../controllers/datasetImageController';
-import { exportImageNamesQuerySchema } from '../../validation/datasetImageSchemas';
 import Epoch from '../../models/Epoch';
 import Training from '../../models/Training';
 import Comparison from '../../models/Comparison';
@@ -82,7 +70,6 @@ import {
   resolveProject,
   isWithinTokenScope,
 } from '../../services/projectAccessService';
-import * as imageService from '../../services/datasetImageService';
 
 const mockedEpoch = Epoch as unknown as jest.Mock & Record<string, jest.Mock>;
 const mockedTraining = Training as unknown as Record<string, jest.Mock>;
@@ -91,7 +78,6 @@ const mockedCheckAccess = checkProjectAccess as jest.Mock;
 const mockedVisibleProjects = getVisibleProjectIds as jest.Mock;
 const mockedTokenScope = isWithinTokenScope as jest.Mock;
 const mockedResolveProject = resolveProject as jest.Mock;
-const mockedImageSvc = imageService as unknown as Record<string, jest.Mock>;
 
 type AnyDoc = Record<string, unknown>;
 
@@ -564,128 +550,3 @@ describe('comparisonController list/stats/update/delete', () => {
   });
 });
 
-describe('datasetImageController', () => {
-  it('getAllImages splits space-separated tags and maps random flag', async () => {
-    mockedImageSvc.getImages.mockResolvedValue({ images: [] });
-    const res = makeRes();
-
-    await imageCtrl.getAllImages(
-      makeReq({ query: { page: 1, limit: 5, tags: 'good  bad', random: 'true' } }),
-      res
-    );
-
-    expect(mockedImageSvc.getImages).toHaveBeenCalledWith({
-      page: 1,
-      limit: 5,
-      search: undefined,
-      tags: ['good', 'bad'],
-      weatherCondition: undefined,
-      random: true,
-    });
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: { images: [] } });
-  });
-
-  it('getAllImages passes undefined tags through', async () => {
-    mockedImageSvc.getImages.mockResolvedValue({ images: [] });
-
-    await imageCtrl.getAllImages(makeReq({ query: { page: 1, limit: 5 } }), makeRes());
-
-    expect(mockedImageSvc.getImages).toHaveBeenCalledWith(
-      expect.objectContaining({ tags: undefined, random: false })
-    );
-  });
-
-  it('createDatasetImage responds 201 with the saved image', async () => {
-    mockedImageSvc.createDatasetImage.mockResolvedValue({ _id: 'img1' });
-    const res = makeRes();
-
-    await imageCtrl.createDatasetImage(
-      makeReq({
-        body: {
-          filename: 'f.jpg',
-          originalName: 'o.jpg',
-          fileId: 'm',
-          datasetId: 'd',
-          categoryId: 'c',
-          mimetype: 'image/jpeg',
-          size: 1,
-        },
-      }),
-      res
-    );
-
-    expect(mockedImageSvc.createDatasetImage).toHaveBeenCalledWith(
-      expect.objectContaining({ filename: 'f.jpg', fileId: 'm' }), 'u1'
-    );
-    expect(res.status).toHaveBeenCalledWith(201);
-  });
-
-  it('stats, lookup, update, and delete handlers delegate', async () => {
-    mockedImageSvc.getAllImageStats.mockResolvedValue({ overview: {} });
-    mockedImageSvc.getSimpleLabelingStats.mockResolvedValue({ total: 1 });
-    mockedImageSvc.getImageById.mockResolvedValue({ _id: 'i' });
-    mockedImageSvc.updateImage.mockResolvedValue({ _id: 'i' });
-    mockedImageSvc.deleteImage.mockResolvedValue({ datasetId: 'd' });
-
-    await imageCtrl.getAllImageStats(makeReq(), makeRes());
-    expect(mockedImageSvc.getAllImageStats).toHaveBeenCalled();
-
-    await imageCtrl.getSimpleLabelingStats(makeReq({ params: { datasetId: 'd' } }), makeRes());
-    expect(mockedImageSvc.getSimpleLabelingStats).toHaveBeenCalledWith('d');
-
-    await imageCtrl.getImageById(makeReq({ params: { id: 'i' } }), makeRes());
-    expect(mockedImageSvc.getImageById).toHaveBeenCalledWith('i');
-
-    await imageCtrl.updateImage(makeReq({ params: { id: 'i' }, body: { title: 'T' } }), makeRes());
-    expect(mockedImageSvc.updateImage).toHaveBeenCalledWith('i', expect.objectContaining({ title: 'T' }), 'u1');
-
-    await imageCtrl.deleteImage(makeReq({ params: { id: 'i' } }), makeRes());
-    expect(mockedImageSvc.deleteImage).toHaveBeenCalledWith('i', 'u1');
-  });
-
-  it('exportImageNames streams a CSV attachment', async () => {
-    mockedImageSvc.exportImageNames.mockResolvedValue([{ filename: 'a.jpg' }, { filename: 'b.jpg' }]);
-    const res = makeRes();
-
-    await imageCtrl.exportImageNames(
-      makeReq({
-        params: { datasetId: 'd1' },
-        // parsed through the schema so the controller sees the same defaults it
-        // does in production; the prefix is caller-supplied and empty by default
-        query: exportImageNamesQuerySchema.parse({ tag: 'good', pathPrefix: 'camera/' })
-      }),
-      res
-    );
-
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
-    expect(res.setHeader).toHaveBeenCalledWith(
-      'Content-Disposition',
-      'attachment; filename="images_good_d1.csv"'
-    );
-    expect(res.send).toHaveBeenCalledWith('camera/a.jpg\ncamera/b.jpg');
-  });
-
-  it('exportImageNames writes bare filenames when no prefix is given', async () => {
-    mockedImageSvc.exportImageNames.mockResolvedValue([{ filename: 'a.jpg' }, { filename: 'b.jpg' }]);
-    const res = makeRes();
-
-    await imageCtrl.exportImageNames(
-      makeReq({ params: { datasetId: 'd1' }, query: exportImageNamesQuerySchema.parse({}) }),
-      res
-    );
-
-    expect(res.send).toHaveBeenCalledWith('a.jpg\nb.jpg');
-  });
-
-  it('exportImageNames defaults the filename tag to all', async () => {
-    mockedImageSvc.exportImageNames.mockResolvedValue([]);
-    const res = makeRes();
-
-    await imageCtrl.exportImageNames(makeReq({ params: { datasetId: 'd1' } }), res);
-
-    expect(res.setHeader).toHaveBeenCalledWith(
-      'Content-Disposition',
-      'attachment; filename="images_all_d1.csv"'
-    );
-  });
-});

@@ -16,7 +16,9 @@ describe('LabelJob model', () => {
     expect(job.createdBy.email).toBe('owner@x.com');
     expect(job.status).toBe('draft');
     expect(job.redundancy).toBe(1);
-    expect(job.bundleId).toBeUndefined();
+    expect(job.datasetId).toBeUndefined();
+    expect(job.framesGroup).toBe('frames');
+    expect(LabelJob.collection.name).toBe('label_jobs');
   });
 
   it('requires name, groupId, taskType and question prompt', () => {

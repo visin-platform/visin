@@ -161,6 +161,20 @@ services:
     image: ${REGISTRY:-visin}/label-service:${TAG:-local}
     <<: *common
     ports: ['5008:5008']
+    depends_on: *needs-mongo
+    environment:
+      <<: [*app-env, *file-creds]
+      PORT: 5008
+      GROUP_SERVICE_URL: http://group-service:5006
+      FILE_SERVICE_URL: http://file-service:5002
+      # The datasets a job's tasks are built from.
+      DATASET_SERVICE_URL: http://dataset-service:5010
+
+  dataset-service:
+    build: ./apps/backend/dataset-service
+    image: ${REGISTRY:-visin}/dataset-service:${TAG:-local}
+    <<: *common
+    ports: ['5010:5010']
     depends_on:
       mongodb:
         condition: service_healthy
@@ -168,9 +182,12 @@ services:
         condition: service_healthy
     environment:
       <<: [*app-env, *file-creds]
-      PORT: 5008
+      PORT: 5010
       GROUP_SERVICE_URL: http://group-service:5006
       FILE_SERVICE_URL: http://file-service:5002
+      # The MCP server OAuth access tokens must be minted for; unset, they are refused.
+      MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
+      # Import queue; Redis is shared, deployed separately, reached over visinnet.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
 
   mcp-service:
@@ -184,6 +201,8 @@ services:
       PORT: 5009
       VISION_INTERNAL_URL: http://vision-service:4010
       VISION_SERVICE_URL: http://vision-service:4010
+      DATASET_INTERNAL_URL: http://dataset-service:5010
+      DATASET_SERVICE_URL: http://dataset-service:5010
       # Both are read by connecting assistants, so both must be reachable.
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
       AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
@@ -246,6 +265,7 @@ services:
     ports: ['3012:80']
     environment:
       VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
+      DATASET_API_URL: ${PUBLIC_HOST:-http://localhost}:5010
       AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
       AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
       ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007

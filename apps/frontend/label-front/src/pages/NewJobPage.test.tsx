@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 
-vi.mock('../services/bundleService', () => ({
-  listBundles: vi.fn(),
+vi.mock('../services/datasetService', () => ({
+  listDatasets: vi.fn(),
   getMaskFields: vi.fn(),
 }));
 vi.mock('../services/jobService', () => ({
@@ -17,12 +17,12 @@ vi.mock('react-router-dom', async (importOriginal) => ({
   useNavigate: () => navigate,
 }));
 
-import { getMaskFields, listBundles } from '../services/bundleService';
+import { getMaskFields, listDatasets } from '../services/datasetService';
 import { createJob, getMyGroups, materializeJob, transitionJob } from '../services/jobService';
 import NewJobPage from './NewJobPage';
 import { renderWithProviders } from '../test/renderWithProviders';
 
-const mockedBundles = listBundles as ReturnType<typeof vi.fn>;
+const mockedDatasets = listDatasets as ReturnType<typeof vi.fn>;
 const mockedMaskFields = getMaskFields as ReturnType<typeof vi.fn>;
 const mockedGroups = getMyGroups as ReturnType<typeof vi.fn>;
 const mockedCreate = createJob as ReturnType<typeof vi.fn>;
@@ -33,17 +33,20 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockedMaskFields.mockResolvedValue([]);
   mockedGroups.mockResolvedValue([{ groupId: 'g1', name: 'Team', role: 'owner' }]);
-  mockedBundles.mockResolvedValue([
+  mockedDatasets.mockResolvedValue([
     {
       _id: 'b1',
       name: 'Paper set',
-      groupId: 'g1',
-      status: 'ready',
-      annotationSets: ['llava', 'qwen'],
-      counts: { frames: 100, layers: 200 },
-      manifest: [{ stem: 'a' }],
+      visibility: 'public',
+      imageCount: 300,
+      groups: [
+        { name: 'frames', images: 100, jsons: 0 },
+        { name: 'llava', images: 100, jsons: 100 },
+        { name: 'qwen', images: 100, jsons: 100 },
+      ],
     },
-    { _id: 'b2', name: 'Importing', groupId: 'g1', status: 'importing', annotationSets: [], counts: { frames: 0, layers: 0 } },
+    { _id: 'b2', name: 'Another group', visibility: 'group', groupId: 'g2', imageCount: 10, groups: [{ name: 'frames', images: 10, jsons: 0 }] },
+    { _id: 'b3', name: 'Empty', visibility: 'public', imageCount: 0, groups: [] },
   ]);
 });
 
@@ -51,9 +54,10 @@ const fillBasics = async () => {
   fireEvent.change(screen.getByLabelText('Job name'), { target: { value: 'Verify masks' } });
   fireEvent.mouseDown(screen.getByLabelText('Group'));
   fireEvent.click(await screen.findByRole('option', { name: 'Team' }));
-  fireEvent.mouseDown(screen.getByLabelText('Bundle'));
-  // Only the ready bundle is offered.
-  expect(screen.queryByRole('option', { name: /Importing/ })).not.toBeInTheDocument();
+  fireEvent.mouseDown(screen.getByLabelText('Dataset'));
+  // Another group's dataset, and one with no images, are not offered.
+  expect(screen.queryByRole('option', { name: /Another group/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: /Empty/ })).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole('option', { name: /Paper set/ }));
 };
 
@@ -74,14 +78,15 @@ describe('NewJobPage wizard', () => {
     fireEvent.click(await screen.findByTestId('set-chip-llava'));
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
-    // Step 2: materialize from the bundle manifest
+    // Step 2: materialize from the dataset's manifest
     fireEvent.click(await screen.findByRole('button', { name: 'Create draft & materialize' }));
     await waitFor(() =>
       expect(mockedCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Verify masks',
           groupId: 'g1',
-          bundleId: 'b1',
+          datasetId: 'b1',
+          framesGroup: 'frames',
           taskType: 'mask_toggle',
           annotationSets: ['llava'],
         })
@@ -95,6 +100,36 @@ describe('NewJobPage wizard', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Activate job' }));
     await waitFor(() => expect(mockedTransition).toHaveBeenCalledWith('j1', 'activate'));
     expect(navigate).toHaveBeenCalledWith('/jobs/j1');
+  });
+
+  it('lets the frames group be changed, which resets the annotation sets', async () => {
+    renderWithProviders(<NewJobPage />);
+    await fillBasics();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(await screen.findByTestId('set-chip-llava'));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    // `frames` is the default; picking `qwen` instead leaves llava and frames
+    // as the annotation groups on offer.
+    fireEvent.mouseDown(await screen.findByLabelText('Frames'));
+    fireEvent.click(await screen.findByRole('option', { name: 'qwen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(await screen.findByTestId('set-chip-frames')).toBeInTheDocument();
+    expect(screen.queryByTestId('set-chip-qwen')).not.toBeInTheDocument();
+    expect(screen.getByTestId('set-chip-llava')).not.toHaveClass('MuiChip-colorPrimary');
+  });
+
+  it('points at Vision when the group has no dataset to build on', async () => {
+    mockedDatasets.mockResolvedValue([]);
+    renderWithProviders(<NewJobPage />);
+    fireEvent.mouseDown(screen.getByLabelText('Group'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Team' }));
+
+    // With no configured Vision address the link stays relative, which is what
+    // resolves inside shell-front, where /datasets is the Vision section.
+    expect(await screen.findByRole('link', { name: /Vision → Datasets/ })).toHaveAttribute('href', '/datasets');
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
   });
 
   it('mask_toggle keeps exactly one set selected', async () => {
@@ -185,7 +220,7 @@ describe('NewJobPage single_choice extras', () => {
     expect(screen.getByTestId('set-chip-llava')).not.toHaveClass('MuiChip-colorPrimary');
   });
 
-  it('blocks single_choice with no set picked while the bundle has some', async () => {
+  it('blocks single_choice with no set picked while the dataset has some', async () => {
     await toQuestionStep();
 
     expect(screen.getByText(/Pick a set/)).toBeInTheDocument();
@@ -205,7 +240,7 @@ describe('NewJobPage single_choice extras', () => {
     fireEvent.click(await screen.findByTestId('set-chip-llava'));
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
-    fireEvent.change(await screen.findByLabelText(/Override manifest/), {
+    fireEvent.change(await screen.findByLabelText(/Manifest content/), {
       target: { value: 'filename\na.png' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create draft & materialize' }));
@@ -226,7 +261,7 @@ describe('NewJobPage single_choice extras', () => {
   it('surfaces activation failures without navigating', async () => {
     mockedCreate.mockResolvedValue({ _id: 'j1' });
     mockedMaterialize.mockResolvedValue({ tasks: 5, missing: [] });
-    mockedTransition.mockRejectedValue(new Error('Bundle is not ready'));
+    mockedTransition.mockRejectedValue(new Error('Job has no dataset'));
     renderWithProviders(<NewJobPage />);
     await fillBasics();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
@@ -238,7 +273,7 @@ describe('NewJobPage single_choice extras', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Activate job' }));
 
-    expect(await screen.findByText('Bundle is not ready')).toBeInTheDocument();
+    expect(await screen.findByText('Job has no dataset')).toBeInTheDocument();
     expect(navigate).not.toHaveBeenCalled();
   });
 });

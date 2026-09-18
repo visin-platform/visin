@@ -1,44 +1,65 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { vision } from '../vision';
-import { Caller, ToolModule, capped, count, day, explain, ok } from './module';
+import { datasets } from '../datasets';
+import type { Dataset } from '../schemas';
+import { Caller, ToolModule, capped, count, explain, ok } from './module';
 
 /**
  * The data a model was trained on.
  *
  * Read-only. There is no `create_dataset` here, and deliberately so: a dataset
- * arrives by uploading images and annotations, which is a file transfer rather
- * than an API call an assistant can make. A tool that created the record
- * without the data would leave an empty shell in the app for someone to find
- * later and wonder about.
+ * arrives by uploading a zip, which is a file transfer rather than an API call
+ * an assistant can make. A tool that created the record without the data would
+ * leave an empty shell in the app for someone to find later and wonder about.
  */
 
-/**
- * A metadata blob, flattened to one line per scalar.
- *
- * `dataset_info`, `annotations`, `camera` and `lidar` are open records — a
- * dataset describes its own sensor rig — so nothing here names a field. Nested
- * objects are summarised rather than rendered: they are usually per-sensor
- * calibration matrices, which cost hundreds of tokens and answer nothing a
- * person asked.
- */
-function describeMetadata(label: string, blob: Record<string, unknown> | undefined): string[] {
-  if (!blob) return [];
-  const entries = Object.entries(blob);
-  if (entries.length === 0) return [];
+const bytes = (value: number): string => {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${unit === 0 ? size : size.toFixed(1)} ${units[unit]}`;
+};
 
-  const lines = [`${label}:`];
-  for (const [key, value] of entries) {
-    if (value === null || value === undefined) continue;
-    if (Array.isArray(value)) {
-      lines.push(`  ${key}: ${count(value.length)} entries`);
-    } else if (typeof value === 'object') {
-      lines.push(`  ${key}: ${count(Object.keys(value).length)} fields`);
-    } else {
-      lines.push(`  ${key}: ${String(value)}`);
+// Top-level folders only: a zip with a folder per sequence has thousands, and
+// the first level is what says how the data is organised.
+const MAX_FOLDERS = 20;
+const MAX_EXTENSIONS = 10;
+
+/** What the zip holds and which images were imported from it, in as few lines as say it. */
+function describeDataset(dataset: Dataset): string[] {
+  const lines = [dataset.name];
+  if (dataset.description) lines.push(dataset.description);
+
+  const facts = [
+    dataset.archive ? `${dataset.archive.filename}, ${bytes(dataset.archive.size)}` : 'no zip uploaded yet',
+    `${count(dataset.imageCount)} images imported`
+  ];
+  if (dataset.import && dataset.import.status !== 'done') facts.push(`last import ${dataset.import.status}`);
+  lines.push(`${facts.join('; ')}.`);
+
+  if (dataset.groups.length > 0) {
+    lines.push('', 'Image groups:');
+    for (const group of dataset.groups) {
+      lines.push(`  ${group.name}: ${count(group.images)} images${group.jsons ? `, ${count(group.jsons)} JSON sidecars` : ''}`);
     }
   }
-  return lines.length > 1 ? lines : [];
+
+  if (dataset.contents) {
+    const { contents } = dataset;
+    lines.push('', `Zip contents: ${count(contents.entries)} files, ${bytes(contents.totalBytes)} uncompressed.`);
+    const types = contents.extensions.slice(0, MAX_EXTENSIONS).map((ext) => `${ext.ext} ${count(ext.files)}`);
+    if (types.length > 0) lines.push(`  by type: ${types.join(', ')}`);
+    const folders = contents.folders.filter((folder) => folder.depth === 1);
+    for (const folder of folders.slice(0, MAX_FOLDERS)) {
+      lines.push(`  ${folder.path}/: ${count(folder.files)} files, ${count(folder.images)} images`);
+    }
+    if (folders.length > MAX_FOLDERS) lines.push(`  …and ${count(folders.length - MAX_FOLDERS)} more folders`);
+  }
+  return lines;
 }
 
 function registerReadTools(server: McpServer, caller: Caller): void {
@@ -52,30 +73,24 @@ function registerReadTools(server: McpServer, caller: Caller): void {
         'The datasets available to train on. Use to find the dataset a run used, or to answer ' +
         '"what data do we have".',
       inputSchema: {
-        search: z.string().optional().describe('Free-text filter over name and description'),
+        search: z.string().optional().describe('Filter by name'),
         limit: z.number().int().min(1).max(100).optional().describe('How many to return (default 30)')
       }
     },
     async ({ search, limit }) => {
       try {
-        const { datasets, pagination } = await vision.listDatasets(key, {
-          search,
-          limit: limit ?? 30
-        });
+        const { datasets: found, pagination } = await datasets.list(key, { search, limit: limit ?? 30 });
+        if (found.length === 0) return ok('No datasets match that.');
 
-        if (datasets.length === 0) return ok('No datasets match that.');
-
-        const { shown, note } = capped(datasets, 100, 'datasets');
-        const total = pagination?.total ?? datasets.length;
+        const { shown, note } = capped(found, 100, 'datasets');
+        const total = pagination?.total ?? found.length;
         const lines = shown.map((dataset) => {
-          const description = dataset.description ? ` — ${dataset.description}` : '';
-          return `- ${dataset.name}${description}  [${dataset.uuid ?? dataset._id}]`;
+          const description = dataset.description ? ` — ${dataset.description.split('\n')[0]}` : '';
+          const size = dataset.archive ? `, ${bytes(dataset.archive.size)}` : '';
+          return `- ${dataset.name}${description} (${count(dataset.imageCount)} images${size})  [${dataset._id}]`;
         });
 
-        const header =
-          total > datasets.length
-            ? `${count(datasets.length)} of ${count(total)} datasets:`
-            : `${count(datasets.length)} datasets:`;
+        const header = total > found.length ? `${count(found.length)} of ${count(total)} datasets:` : `${count(found.length)} datasets:`;
         return ok([header, ...lines].join('\n') + note);
       } catch (error) {
         return explain(error);
@@ -88,55 +103,13 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     {
       title: 'One dataset',
       description:
-        'A dataset and what is recorded about it: its description, when it was captured, and ' +
-        'whatever sensor, annotation and camera metadata it carries. Use for "what is in this ' +
-        'dataset", "how was it captured".',
+        'A dataset and what it holds: its description, its zip (size, file types, top-level ' +
+        'folders) and the image groups imported from it. Use for "what is in this dataset".',
       inputSchema: { dataset: z.string().describe('The dataset id, from list_datasets') }
     },
     async ({ dataset }) => {
       try {
-        const details = await vision.getDataset(key, dataset);
-
-        const lines = [details.name];
-        if (details.description) lines.push(details.description);
-        if (details.timestamp) lines.push(`Captured ${day(details.timestamp)}.`);
-
-        for (const [label, blob] of [
-          ['Dataset info', details.dataset_info],
-          ['Annotations', details.annotations],
-          ['Camera', details.camera],
-          ['Lidar', details.lidar]
-        ] as const) {
-          const described = describeMetadata(label, blob);
-          if (described.length > 0) lines.push('', ...described);
-        }
-
-        return ok(lines.join('\n'));
-      } catch (error) {
-        return explain(error);
-      }
-    }
-  );
-
-  server.registerTool(
-    'list_image_categories',
-    {
-      title: 'The classes in a dataset',
-      description:
-        'The image categories defined for a dataset — the label vocabulary. Use for "what ' +
-        'classes does this dataset have", or to check a class name before asking about its scores.',
-      inputSchema: { dataset: z.string().describe('The dataset id, from list_datasets') }
-    },
-    async ({ dataset }) => {
-      try {
-        const categories = await vision.listImageCategories(key, dataset);
-        if (categories.length === 0) return ok('That dataset has no image categories defined.');
-
-        const { shown, note } = capped(categories, 200, 'categories');
-        const lines = shown.map((category) =>
-          category.description ? `- ${category.name} — ${category.description}` : `- ${category.name}`
-        );
-        return ok([`${count(categories.length)} categories:`, ...lines].join('\n') + note);
+        return ok(describeDataset(await datasets.get(key, dataset)).join('\n'));
       } catch (error) {
         return explain(error);
       }

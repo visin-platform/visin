@@ -13,3 +13,6 @@ paper
 /apps/frontend/*/playwright-report
 /apps/frontend/*/test-results
 /apps/frontend/*/blob-report
+
+# Local database backups (contain user data)
+/backups

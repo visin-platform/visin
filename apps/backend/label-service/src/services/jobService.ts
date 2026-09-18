@@ -1,23 +1,40 @@
 import { Types } from 'mongoose';
-import { BadRequestError, ConflictError, NotFoundError, UserPayload } from '@visin/backend-core';
+import { BadRequestError, ConflictError, NotFoundError, UserPayload, logger } from '@visin/backend-core';
 import { LabelJob, ILabelJob, JobStatus } from '../models/LabelJob';
-import { LabelBundle } from '../models/LabelBundle';
 import { LabelTask } from '../models/LabelTask';
 import { LabelAnswer } from '../models/LabelAnswer';
 import { CreateJobBody } from '../validation/jobSchemas';
 import * as groups from '../clients/groupServiceClient';
+import * as datasets from '../clients/datasetServiceClient';
 
+/**
+ * Create a draft job, and claim its dataset so the files its tasks will show
+ * cannot be deleted or re-imported from under it.
+ *
+ * A group dataset can only back a job in that same group; a public one, any job.
+ * The claim is made after the job exists (it names the job) and the job is
+ * removed again if the claim fails — a job whose images are unprotected must
+ * not exist.
+ */
 export const createJob = async (user: UserPayload, data: CreateJobBody): Promise<ILabelJob> => {
-  if (data.bundleId) {
-    const bundle = await LabelBundle.findById(data.bundleId);
-    if (!bundle) {
-      throw new BadRequestError('Bundle not found');
+  if (data.datasetId) {
+    let dataset: datasets.DatasetSummary;
+    try {
+      dataset = await datasets.getDataset(data.datasetId);
+    } catch (err) {
+      if (err instanceof NotFoundError) throw new BadRequestError('Dataset not found');
+      throw err;
     }
-    if (bundle.groupId !== data.groupId) {
-      throw new BadRequestError('Bundle belongs to a different group');
+    if (dataset.visibility === 'group' && dataset.groupId !== data.groupId) {
+      throw new BadRequestError('Dataset belongs to a different group');
+    }
+    const groupNames = dataset.groups.map((group) => group.name);
+    const unknown = [data.framesGroup, ...data.annotationSets].filter((name) => !groupNames.includes(name));
+    if (unknown.length > 0) {
+      throw new BadRequestError(`Not image groups of this dataset: ${unknown.join(', ')}`);
     }
   }
-  return LabelJob.create({
+  const job = await LabelJob.create({
     ...data,
     createdBy: {
       userId: user.id,
@@ -27,6 +44,15 @@ export const createJob = async (user: UserPayload, data: CreateJobBody): Promise
     status: 'draft',
     isPublic: false
   });
+  if (job.datasetId) {
+    try {
+      await datasets.addHold(job.datasetId, job._id.toString());
+    } catch (err) {
+      await LabelJob.deleteOne({ _id: job._id });
+      throw err;
+    }
+  }
+  return job;
 };
 
 export type JobWithProgress = Record<string, unknown> & { progress: JobProgress };
@@ -175,7 +201,7 @@ export type JobAction = keyof typeof TRANSITIONS;
  * Hard-delete a job and everything hanging off it.
  *
  * `archive` is a status, not a removal: an archived job kept its whole task set,
- * so three archived jobs over a 4k-frame bundle left 12,367 LabelTask documents
+ * so three archived jobs over a 4k-frame dataset left 12,367 LabelTask documents
  * behind — each carrying a copy of its frame's selected mask metadata — with no
  * endpoint that could ever reach them. Deleting a job therefore deletes its
  * answers and tasks too; there is no soft-delete tier below this.
@@ -185,6 +211,13 @@ export type JobAction = keyof typeof TRANSITIONS;
  * a repeat call cleans up.
  */
 export const deleteJob = async (jobId: string): Promise<{ tasks: number; answers: number }> => {
+  // Release the dataset first: if that fails the job survives intact and the
+  // delete can be retried, rather than leaving a claim nothing can release.
+  const job = await LabelJob.findById(jobId);
+  if (job?.datasetId) {
+    await datasets.removeHold(job.datasetId, jobId);
+    logger.info('Released dataset hold', { jobId, datasetId: job.datasetId });
+  }
   const answers = await LabelAnswer.deleteMany({ jobId });
   const tasks = await LabelTask.deleteMany({ jobId });
   await LabelJob.deleteOne({ _id: jobId });
@@ -199,14 +232,10 @@ export const transitionJob = async (jobId: string, action: JobAction): Promise<I
     throw new ConflictError(`Cannot ${action} a ${job.status} job`);
   }
 
-  // A job can never go live against a bundle that is still uploading, or without tasks.
+  // A job can never go live without a dataset, or without tasks.
   if (transition.to === 'active' && job.status === 'draft') {
-    if (!job.bundleId) {
-      throw new ConflictError('Job has no bundle');
-    }
-    const bundle = await LabelBundle.findById(job.bundleId);
-    if (!bundle || bundle.status !== 'ready') {
-      throw new ConflictError('Bundle is not ready');
+    if (!job.datasetId) {
+      throw new ConflictError('Job has no dataset');
     }
     if (job.tasksCount === 0) {
       throw new ConflictError('Job has no tasks — materialize first');

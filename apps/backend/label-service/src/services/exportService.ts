@@ -1,9 +1,8 @@
 import { ILabelJob } from '../models/LabelJob';
-import { LabelTask, ILabelTask } from '../models/LabelTask';
+import { LabelTask, ILabelTask, IMaskMeta } from '../models/LabelTask';
 import { LabelAnswer, ILabelAnswer } from '../models/LabelAnswer';
-import { LabelImage, IMaskMeta } from '../models/LabelImage';
-import { LabelBundle } from '../models/LabelBundle';
-import { maskFields } from './bundleService';
+import * as datasets from '../clients/datasetServiceClient';
+import { MASKS_VARIANT } from './materializationService';
 
 interface TaskContext {
   task: ILabelTask;
@@ -14,15 +13,15 @@ interface TaskContext {
 /**
  * Mask metadata keys that already have a column of their own.
  *
- * Everything else a bundle shipped in `<stem>.masks.json` rides along verbatim.
+ * Everything else a dataset shipped in `<stem>.masks.json` rides along verbatim.
  * An uploader puts its provenance there — which pipeline run produced a mask,
  * what each automated agent decided about it, which stratum it was drawn from —
  * and an export that dropped it would force every consumer to keep the original
- * bundle beside the export and re-join the two by hand.
+ * dataset beside the export and re-join the two by hand.
  */
 const MASK_OWN_COLUMNS = new Set(['id', 'class']);
 
-/** Extra mask columns, as `mask_<field>`; prefixed because a bundle is free to
+/** Extra mask columns, as `mask_<field>`; prefixed because a dataset is free to
  *  name a mask field `stratum` or `frame`, which are task-level columns here. */
 const maskExtras = (mask: IMaskMeta): Record<string, unknown> => {
   const extras: Record<string, unknown> = {};
@@ -39,8 +38,6 @@ const loadJobData = async (job: ILabelJob): Promise<TaskContext[]> => {
     LabelTask.find({ jobId: job._id }).sort({ order: 1 }),
     LabelAnswer.find({ jobId: job._id })
   ]);
-  const frames = await LabelImage.find({ _id: { $in: tasks.map((task) => task.labelImageId) } });
-  const framePaths = new Map(frames.map((frame) => [frame._id.toString(), frame.path]));
   const answersByTask = new Map<string, ILabelAnswer[]>();
   for (const answer of answers) {
     const key = answer.taskId.toString();
@@ -48,7 +45,7 @@ const loadJobData = async (job: ILabelJob): Promise<TaskContext[]> => {
   }
   return tasks.map((task) => ({
     task,
-    framePath: framePaths.get(task.labelImageId.toString()) || '(missing)',
+    framePath: task.frame.path,
     answers: answersByTask.get(task._id.toString()) || []
   }));
 };
@@ -105,7 +102,7 @@ export const exportRows = async (job: ILabelJob): Promise<Record<string, unknown
         ...base,
         maskId: mask.id,
         class: mask.class,
-        // The bundle's own metadata for this mask, nested rather than spread so
+        // The dataset's own metadata for this mask, nested rather than spread so
         // a field named `frame` or `stratum` cannot shadow the task's.
         mask,
         verdicts: answers.map((answer) => ({
@@ -132,9 +129,9 @@ const csvEscape = (value: unknown): string => {
  * appended in sorted order.
  *
  * The leading columns are the ones consumers already parse, so they keep their
- * names and their positions; mask metadata varies per bundle and lands after
+ * names and their positions; mask metadata varies per dataset and lands after
  * them. A key absent from a row writes an empty cell rather than shifting the
- * row, so a bundle whose masks carry different fields per source still exports
+ * row, so a dataset whose masks carry different fields per source still exports
  * as one rectangular table.
  */
 const toCsv = (rows: Record<string, unknown>[], leading: string[]): string => {
@@ -150,7 +147,7 @@ const toCsv = (rows: Record<string, unknown>[], leading: string[]): string => {
 
 /**
  * Long format: one CSV row per user-answer (single_choice) or user-mask-verdict
- * (mask_toggle), plus every field the bundle attached to the mask.
+ * (mask_toggle), plus every field the dataset attached to the mask.
  *
  * A task nobody has answered yet still emits a row, with the answer columns
  * blank. Without it an unanswered task is indistinguishable from a mask that was
@@ -282,11 +279,11 @@ export const jobStats = async (job: ILabelJob): Promise<JobStats> => {
 
 export interface JobManifest {
   job: Record<string, unknown>;
-  bundle: Record<string, unknown> | null;
+  dataset: Record<string, unknown> | null;
   selection: Record<string, unknown> | null;
   progress: { tasks: number; completed: number; answers: number };
-  /** field → value → how many masks the bundle has vs how many this job asks about. */
-  masks?: Record<string, Record<string, { bundle: number; job: number }>>;
+  /** field → value → how many masks the dataset has vs how many this job asks about. */
+  masks?: Record<string, Record<string, { dataset: number; job: number }>>;
 }
 
 /**
@@ -294,18 +291,18 @@ export interface JobManifest {
  *
  * An export answers "what did the labelers say"; it cannot answer "what does
  * that imply about the corpus" without knowing what the job sampled from. A rate
- * measured on a job scales to the bundle only through the inclusion fraction,
+ * measured on a job scales to the dataset only through the inclusion fraction,
  * and `masks` gives it directly: for every groupable field, how many masks the
- * bundle holds per value against how many this job put in front of a human. A
+ * dataset holds per value against how many this job put in front of a human. A
  * job capped at 200 masks per stratum out of 9,878 is 2% inclusion, and without
  * that number a per-stratum precision extrapolates to nothing.
  *
  * The rest is provenance a result has to be able to cite: the question asked,
- * the redundancy, the sampling seed, which bundle, how far along it is.
+ * the redundancy, the sampling seed, which dataset, how far along it is.
  */
 export const exportManifest = async (job: ILabelJob): Promise<JobManifest> => {
-  const [bundle, stats] = await Promise.all([
-    job.bundleId ? LabelBundle.findById(job.bundleId) : Promise.resolve(null),
+  const [dataset, stats] = await Promise.all([
+    job.datasetId ? datasets.getDataset(job.datasetId) : Promise.resolve(null),
     jobStats(job)
   ]);
 
@@ -316,6 +313,7 @@ export const exportManifest = async (job: ILabelJob): Promise<JobManifest> => {
       description: job.description,
       taskType: job.taskType,
       question: job.question,
+      framesGroup: job.framesGroup,
       annotationSets: job.annotationSets,
       redundancy: job.redundancy,
       status: job.status,
@@ -323,13 +321,12 @@ export const exportManifest = async (job: ILabelJob): Promise<JobManifest> => {
       createdBy: job.createdBy?.email,
       createdAt: job.createdAt?.toISOString()
     },
-    bundle: bundle
+    dataset: dataset
       ? {
-          id: bundle._id.toString(),
-          name: bundle.name,
-          description: bundle.description,
-          annotationSets: bundle.annotationSets,
-          counts: bundle.counts
+          id: dataset._id,
+          name: dataset.name,
+          description: dataset.description,
+          groups: dataset.groups
         }
       : null,
     selection: job.selection ? { kind: job.selection.kind, spec: job.selection.spec } : null,
@@ -337,7 +334,7 @@ export const exportManifest = async (job: ILabelJob): Promise<JobManifest> => {
   };
 
   const set = job.annotationSets[0];
-  if (job.taskType !== 'mask_toggle' || !job.bundleId || !set) {
+  if (job.taskType !== 'mask_toggle' || !job.datasetId || !set) {
     return manifest;
   }
 
@@ -357,12 +354,12 @@ export const exportManifest = async (job: ILabelJob): Promise<JobManifest> => {
     }
   }
 
-  // Bundle-wide totals come from the same tally the job wizard groups by, so a
+  // Dataset-wide totals come from the same tally the job wizard groups by, so a
   // field the wizard could scope on is a field this can weight by.
   manifest.masks = {};
-  for (const { field, values } of await maskFields(job.bundleId.toString(), set)) {
+  for (const { field, values } of await datasets.jsonFields(job.datasetId, set, MASKS_VARIANT)) {
     manifest.masks[field] = Object.fromEntries(
-      values.map(({ value, count }) => [value, { bundle: count, job: inJob.get(field)?.get(value) || 0 }])
+      values.map(({ value, count }) => [value, { dataset: count, job: inJob.get(field)?.get(value) || 0 }])
     );
   }
   return manifest;

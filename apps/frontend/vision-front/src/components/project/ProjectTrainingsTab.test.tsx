@@ -52,21 +52,16 @@ vi.mock('../../services/trainingService', () => ({
 vi.mock('../../services/projectService', () => ({
   projectService: { getProjects: vi.fn() },
 }));
-vi.mock('../../services/analysisService', () => ({
-  getAllAnalyses: vi.fn(),
-}));
 vi.mock('../../services/comparisonService', () => ({
   comparisonService: { createComparison: vi.fn() },
 }));
 
 import { trainingService } from '../../services/trainingService';
 import { projectService } from '../../services/projectService';
-import { getAllAnalyses } from '../../services/analysisService';
 import { comparisonService } from '../../services/comparisonService';
 
 const mockedTraining = vi.mocked(trainingService);
 const mockedProject = vi.mocked(projectService);
-const mockedGetAllAnalyses = vi.mocked(getAllAnalyses);
 const mockedComparison = vi.mocked(comparisonService);
 
 const makeTraining = (id: string, overrides: Partial<Training> = {}): Training =>
@@ -100,7 +95,6 @@ const renderTab = (props = {}) => render(<ProjectTrainingsTab {...baseProps} {..
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedGetAllAnalyses.mockResolvedValue({ success: true, data: [] } as never);
   mockedProject.getProjects.mockResolvedValue({ success: true, data: [] } as never);
 });
 

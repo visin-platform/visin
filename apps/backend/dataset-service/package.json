@@ -1,0 +1,47 @@
+{
+  "name": "dataset-service",
+  "version": "1.0.0",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/visin-platform/visin.git",
+    "directory": "apps/backend/dataset-service"
+  },
+  "author": "Toomas Tahves",
+  "license": "MIT",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "dev": "nodemon --exec \"node --env-file-if-exists=.env -r ts-node/register\" src/index.ts",
+    "build": "tsc",
+    "test": "jest --passWithNoTests",
+    "test:coverage": "jest --coverage --passWithNoTests",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@visin/backend-core": "1.4.0",
+    "bullmq": "^6.3.4",
+    "express": "^5.2.1",
+    "ioredis": "^6.0.0",
+    "mongoose": "~9.9.5",
+    "sharp": "^0.35.4",
+    "unzipper": "^0.12.5",
+    "yauzl": "^3.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.5.1",
+    "@types/unzipper": "^0.10.11",
+    "@types/yauzl": "^3.4.0",
+    "eslint": "^10.10.0",
+    "jest": "^30.5.1",
+    "mongodb-memory-server": "11.2.0",
+    "nodemon": "^3.1.14",
+    "ts-jest": "^29.4.12",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0"
+  }
+}

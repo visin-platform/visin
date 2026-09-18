@@ -13,7 +13,6 @@ describe('appForPath', () => {
     ['/jobs', 'label'],
     ['/jobs/new', 'label'],
     ['/jobs/j1/work', 'label'],
-    ['/bundles', 'label'],
     ['/account', 'account'],
     ['/account/api-keys', 'account'],
     ['/invite', 'account'],
