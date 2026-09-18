@@ -237,6 +237,17 @@ export const markImportFailed = async (datasetId: string, importId: string, reas
       $push: { 'import.errors': { path: '(zip)', reason } }
     }
   );
+  await showStoredItems(dataset._id, dataset.coverPath);
+};
+
+/**
+ * Show what an import that stopped early did store — counts, groups and cover
+ * from the rows that exist. Resuming it skips those and stores the rest.
+ */
+const showStoredItems = async (datasetId: Types.ObjectId, coverPath: string | undefined): Promise<void> => {
+  const summary = await summarizeItems(datasetId);
+  await Dataset.updateOne({ _id: datasetId }, { $set: { groups: summary.groups, imageCount: summary.imageCount } });
+  await refreshCover(datasetId, coverPath, summary.coverFileId);
 };
 
 /**
@@ -266,11 +277,6 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
       }
     }
   );
-
-  const cleanupCancelled = async (): Promise<void> => {
-    await files.deleteFolder(importFolder(dataset, importId));
-    await DatasetItem.deleteMany({ datasetId: dataset._id, importId });
-  };
 
   let lastFlush = Date.now();
   const flush = async (force = false): Promise<void> => {
@@ -363,8 +369,13 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
   } catch (err) {
     await Promise.allSettled(inFlight);
     if (err instanceof ImportStopped) {
-      await cleanupCancelled();
-      logger.info('Dataset import cancelled', { datasetId, importId });
+      // Cancelled: what landed stays and shows, and resuming stores the rest.
+      await Dataset.updateOne(
+        { _id: dataset._id, 'import.id': importId },
+        { $set: { 'import.processed': state.processed, 'import.skipped': state.skipped, 'import.errors': state.errors } }
+      );
+      await showStoredItems(dataset._id, dataset.coverPath);
+      logger.info('Dataset import cancelled', { datasetId, importId, processed: state.processed });
       return;
     }
     logger.error('Dataset import attempt failed', { datasetId, importId, error: (err as Error).message });

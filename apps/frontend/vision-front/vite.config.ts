@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { federation } from '@module-federation/vite';
-import { VISIN_FEDERATION_SHARED, VISIN_REMOTE_ENTRY, VISIN_REMOTE_MODULE } from '@visin/frontend-core/federation';
+import { VISIN_FEDERATION_SHARED, VISIN_REMOTE_ENTRY, VISIN_REMOTE_MODULE, VISIN_UPLOADS_MODULE } from '@visin/frontend-core/federation';
 import { resolve } from 'path';
 
 // https://vitejs.dev/config/
@@ -13,7 +13,8 @@ export default defineConfig(() => ({
   plugins: [
     react(),
     // Besides running standalone, vision-front is a module-federation remote:
-    // shell-front loads `./App` from this origin's remoteEntry.js. Vitest has no
+    // shell-front loads `./App` from this origin's remoteEntry.js, and
+    // `./Uploads` — the upload corner — to show on every page of the shell. Vitest has no
     // use for the federation build, so it is left out there.
     ...(process.env.VITEST
       ? []
@@ -21,7 +22,10 @@ export default defineConfig(() => ({
           federation({
             name: 'vision',
             filename: VISIN_REMOTE_ENTRY,
-            exposes: { [VISIN_REMOTE_MODULE]: './src/federation/RemoteApp.tsx' },
+            exposes: {
+              [VISIN_REMOTE_MODULE]: './src/federation/RemoteApp.tsx',
+              [VISIN_UPLOADS_MODULE]: './src/federation/RemoteUploads.tsx'
+            },
             shared: VISIN_FEDERATION_SHARED,
             dts: false
           })
@@ -60,8 +64,8 @@ export default defineConfig(() => ({
         statements: 90,
         branches: 80,
         functions: 86,
-        lines: 91,
-      },
-    },
-  },
+        lines: 91
+      }
+    }
+  }
 }));

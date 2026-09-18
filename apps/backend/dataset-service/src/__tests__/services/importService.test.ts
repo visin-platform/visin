@@ -168,7 +168,7 @@ it('reports an oversized JSON sidecar and a broken manifest', async () => {
   }
 });
 
-it('stops a cancelled import at its next heartbeat and removes what it stored', async () => {
+it('stops a cancelled import at its next heartbeat, keeping and showing what it stored, and resumes past it', async () => {
   const { importId, datasetId } = await createImport(vlmEntries());
   let now = Date.now();
   jest.spyOn(Date, 'now').mockImplementation(() => (now += 6000));
@@ -182,9 +182,20 @@ it('stops a cancelled import at its next heartbeat and removes what it stored', 
   } finally {
     fileStore.client.putFile.mockImplementation(putFile);
   }
-  expect(await DatasetItem.countDocuments({ datasetId })).toBe(0);
-  expect([...fileStore.stored.keys()].some((key) => key.includes('/items/'))).toBe(false);
-  expect((await Dataset.findById(datasetId).lean())?.import?.status).toBe('cancelled');
+  const kept = await DatasetItem.countDocuments({ datasetId });
+  expect(kept).toBeGreaterThan(0);
+  expect(kept).toBeLessThan(4);
+  const cancelled = await Dataset.findById(datasetId).lean();
+  expect(cancelled?.import).toMatchObject({ status: 'cancelled', processed: kept });
+  expect(cancelled?.imageCount).toBe(await DatasetItem.countDocuments({ datasetId, kind: 'image' }));
+  expect(cancelled?.groups.length).toBeGreaterThan(0);
+
+  // Resumed under the same id, the files already stored are skipped, not redone.
+  await Dataset.updateOne({ _id: datasetId }, { $set: { 'import.status': 'queued' } });
+  await runImport(datasetId, importId);
+  const resumed = await Dataset.findById(datasetId).lean();
+  expect(resumed?.import).toMatchObject({ status: 'done', processed: 4 - kept, skipped: kept });
+  expect(await DatasetItem.countDocuments({ datasetId })).toBe(4);
 });
 
 it('does nothing for an import cancelled before it started, and refuses one that no longer exists', async () => {
@@ -204,6 +215,10 @@ it('keeps progress but not the status when an attempt fails transiently', async 
   expect((await Dataset.findById(datasetId).lean())?.import?.status).toBe('running');
 
   await markImportFailed(datasetId, importId, 'gave up');
+  // What the failed attempt did store shows on the dataset, ready to resume from.
+  const stored = await DatasetItem.countDocuments({ datasetId, kind: 'image' });
+  expect(stored).toBeGreaterThan(0);
+  expect((await Dataset.findById(datasetId).lean())?.imageCount).toBe(stored);
   const failed = (await Dataset.findById(datasetId).lean())?.import;
   expect(failed?.status).toBe('failed');
   expect(failed?.errors).toContainEqual({ path: '(zip)', reason: 'gave up' });

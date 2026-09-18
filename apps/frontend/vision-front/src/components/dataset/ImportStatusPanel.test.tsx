@@ -5,7 +5,7 @@ import type { DatasetImport } from '../../services/datasetService';
 
 const base: DatasetImport = { id: 'i', status: 'done', mapping: { groups: [] }, processed: 10, skipped: 0, errors: [], stale: false };
 const renderPanel = (imported: Partial<DatasetImport>, canWrite = true, archiveBytes?: number) => {
-  const handlers = { onCancel: vi.fn(), onRemap: vi.fn() };
+  const handlers = { onCancel: vi.fn(), onRemap: vi.fn(), onResume: vi.fn() };
   const view = render(
     <ImportStatusPanel imported={{ ...base, ...imported }} archiveBytes={archiveBytes} canWrite={canWrite} cancelling={false} {...handlers} />
   );
@@ -41,6 +41,7 @@ describe('ImportStatusPanel', () => {
         cancelling={false}
         onCancel={vi.fn()}
         onRemap={vi.fn()}
+        onResume={vi.fn()}
       />
     );
     expect(screen.getByText(/481 of 11,500 stored/)).toBeInTheDocument();
@@ -62,9 +63,25 @@ describe('ImportStatusPanel', () => {
     expect(onRemap).toHaveBeenCalled();
   });
 
+  it('keeps what a stopped import stored, and offers to continue it', () => {
+    const { onResume, onRemap } = renderPanel({ status: 'cancelled', processed: 100, skipped: 0 });
+    expect(screen.getByText('The last import was cancelled. The 100 files it stored are kept.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue import' }));
+    expect(onResume).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Change groups' }));
+    expect(onRemap).toHaveBeenCalled();
+  });
+
+  it('offers no continuation for an import of a zip since replaced', () => {
+    renderPanel({ status: 'failed', processed: 1, stale: true });
+    expect(screen.getByText(/The 1 file it stored is kept/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue import' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import again' })).toBeInTheDocument();
+  });
+
   it.each([
-    [{ status: 'failed' as const }, 'The last import failed.'],
-    [{ status: 'cancelled' as const }, 'The last import was cancelled.'],
+    [{ status: 'failed' as const, processed: 0 }, 'The last import failed.'],
+    [{ status: 'cancelled' as const, processed: 0 }, 'The last import was cancelled.'],
     [{ stale: true, errors: [{ path: 'x', reason: 'y' }, { path: 'z', reason: 'w' }] }, /with 2 problems.*previous one/]
   ])('reports %j', (imported, message) => {
     renderPanel(imported);

@@ -319,6 +319,34 @@ describe('archive upload, download and import', () => {
   });
 });
 
+describe('resuming an import', () => {
+  it('queues a cancelled or failed import again under its own id', async () => {
+    const id = await createDataset();
+    const resume = () => call(`/api/datasets/${id}/import/resume`, { method: 'POST', user: OWNER });
+    expect((await resume()).status).toBe(409);
+
+    const { fileId } = await uploadZip(id, [{ path: 'frames/1.png', data: Buffer.from('x') }]);
+    const importState = (status: string, archiveFileId = fileId) => ({
+      id: 'imp', status, archiveFileId, mapping: { groups: [{ folder: 'frames', group: 'frames' }] }, processed: 100, skipped: 0,
+      errors: [{ path: '(zip)', reason: 'The database ran out of space' }], finishedAt: new Date()
+    });
+    await Dataset.updateOne({ _id: id }, { $set: { import: importState('running') } });
+    expect((await resume()).status).toBe(409);
+
+    await Dataset.updateOne({ _id: id }, { $set: { import: importState('cancelled', 'older.zip') } });
+    expect((await resume()).body.message).toContain('zip was replaced');
+
+    await Dataset.updateOne({ _id: id }, { $set: { import: importState('failed') } });
+    expect((await call(`/api/datasets/${id}/import/resume`, { method: 'POST', user: STRANGER })).status).toBe(403);
+    const resumed = await resume();
+    expect(resumed.status).toBe(202);
+    expect(resumed.body.data.import).toMatchObject({ id: 'imp', status: 'queued', processed: 100, errors: [] });
+    expect(removeQueuedImport).toHaveBeenCalledWith('imp');
+    expect(enqueueImport).toHaveBeenCalledWith({ datasetId: id, importId: 'imp' });
+    expect((await resume()).status).toBe(409);
+  });
+});
+
 describe('holds', () => {
   it('protects a dataset a labeling job uses until the hold is released', async () => {
     const id = await createDataset();

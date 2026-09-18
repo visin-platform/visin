@@ -79,8 +79,11 @@ response, so it cannot live in the request.
   stopped. An archive-limit violation is `NonRetryableImportError`, which the
   worker turns into BullMQ's `UnrecoverableError` rather than re-downloading a zip
   that will fail identically.
-- **Cancellation** stops the import at its next heartbeat and removes what it had
-  stored, so a cancelled import leaves nothing half-imported behind.
+- **Cancellation** stops the import at its next heartbeat. What it had stored
+  stays and shows (counts, groups, cover), as it does for an import that failed.
+- **Resume**: `POST /api/datasets/:id/import/resume` queues a cancelled or failed
+  import again under its own id, so the worker skips every file it already
+  stored. Refused once the zip has been replaced; import anew then.
 
 ### Archive resource limits
 

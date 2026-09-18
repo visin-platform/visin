@@ -43,6 +43,7 @@ import {
   getDataset,
   ImportMapping,
   removeGroup,
+  resumeImport,
   scanArchive,
   setCover,
   startImport,
@@ -61,6 +62,16 @@ const isScanning = (dataset?: Dataset): boolean =>
   dataset?.scan?.status === 'queued' || dataset?.scan?.status === 'running';
 
 const isRemovingGroups = (dataset?: Dataset): boolean => Boolean(dataset?.removingGroups?.length);
+
+/**
+ * A cancel is recorded at once, but the worker stops at its next heartbeat and
+ * only then writes what it stored — keep looking until that has surely landed.
+ */
+const CANCEL_SETTLE_MS = 20_000;
+const isSettlingCancel = (dataset?: Dataset): boolean =>
+  dataset?.import?.status === 'cancelled' &&
+  Boolean(dataset.import.finishedAt) &&
+  Date.now() - new Date(dataset.import.finishedAt!).getTime() < CANCEL_SETTLE_MS;
 
 const errorText = (err: unknown, fallback: string): string => (err instanceof Error ? err.message : fallback);
 
@@ -82,13 +93,22 @@ const DatasetDetailPage: React.FC = () => {
   const upload = useDatasetUpload(id);
   const sending = isActive(upload);
 
-  const { data: dataset, isLoading, error } = useQuery({
+  const {
+    data: dataset,
+    isLoading,
+    error
+  } = useQuery({
     queryKey: ['dataset', id],
     queryFn: () => getDataset(id),
     enabled: Boolean(id),
     // Poll only while an import or a scan runs; both report on the dataset.
     refetchInterval: (query) =>
-      isImporting(query.state.data) || isScanning(query.state.data) || isRemovingGroups(query.state.data) ? 3000 : false
+      isImporting(query.state.data) ||
+      isScanning(query.state.data) ||
+      isRemovingGroups(query.state.data) ||
+      isSettlingCancel(query.state.data)
+        ? 3000
+        : false
   });
   usePageTitle(dataset ? `${dataset.name} - Datasets - Vision` : 'Dataset - Vision');
 
@@ -100,7 +120,12 @@ const DatasetDetailPage: React.FC = () => {
   // After an upload, go on to choosing image groups once the zip has been read.
   useEffect(() => {
     if (!mapWhenReady || !dataset || sending) return;
-    if (dataset.scan?.status === 'failed' || !dataset.canWrite || upload?.status === 'failed' || upload?.status === 'cancelled') {
+    if (
+      dataset.scan?.status === 'failed' ||
+      !dataset.canWrite ||
+      upload?.status === 'failed' ||
+      upload?.status === 'cancelled'
+    ) {
       setMapWhenReady(false);
     } else if (dataset.contents && !isScanning(dataset) && !isImporting(dataset)) {
       setMapWhenReady(false);
@@ -112,7 +137,15 @@ const DatasetDetailPage: React.FC = () => {
   // Primitive deps: polling during an import hands back a new dataset object
   // every few seconds, which must not reset a half-edited form.
   const formInitial = useMemo(
-    () => (dataset ? { name: dataset.name, description: dataset.description, visibility: dataset.visibility, groupId: dataset.groupId } : undefined),
+    () =>
+      dataset
+        ? {
+            name: dataset.name,
+            description: dataset.description,
+            visibility: dataset.visibility,
+            groupId: dataset.groupId
+          }
+        : undefined,
     [dataset?.name, dataset?.description, dataset?.visibility, dataset?.groupId] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
@@ -182,7 +215,10 @@ const DatasetDetailPage: React.FC = () => {
 
   const handleScan = () => run(async () => refresh(await scanArchive(id)), 'Failed to scan the zip');
 
-  const handleRemoveGroup = (group: string) => run(async () => refresh(await removeGroup(id, group)), 'Failed to remove the group');
+  const handleRemoveGroup = (group: string) =>
+    run(async () => refresh(await removeGroup(id, group)), 'Failed to remove the group');
+
+  const handleResumeImport = () => run(async () => refresh(await resumeImport(id)), 'Failed to continue the import');
 
   const handleCancelImport = () => run(async () => refresh(await cancelImport(id)), 'Failed to cancel import');
 
@@ -220,7 +256,12 @@ const DatasetDetailPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <PageBreadcrumbs items={[{ label: 'Datasets', href: '/datasets' }, { label: dataset.name, current: true }]} />
+      <PageBreadcrumbs
+        items={[
+          { label: 'Datasets', href: '/datasets' },
+          { label: dataset.name, current: true }
+        ]}
+      />
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', mb: 3 }}>
         <Box sx={{ minWidth: 0 }}>
@@ -241,24 +282,53 @@ const DatasetDetailPage: React.FC = () => {
             {held && <Chip size="small" color="secondary" label={heldReason} />}
           </Stack>
         </Box>
-        <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'flex-start', flexShrink: 0 }}>
+        <Stack
+          direction="row"
+          useFlexGap
+          spacing={1}
+          sx={{ flexWrap: 'wrap', alignItems: 'flex-start', flexShrink: 0 }}
+        >
           {dataset.archive && (
-            <Button variant="contained" startIcon={downloadingId ? <CircularProgress size={18} color="inherit" /> : <DownloadIcon />} onClick={() => download(dataset._id)} disabled={Boolean(downloadingId)}>
+            <Button
+              variant="contained"
+              startIcon={downloadingId ? <CircularProgress size={18} color="inherit" /> : <DownloadIcon />}
+              onClick={() => download(dataset._id)}
+              disabled={Boolean(downloadingId)}
+            >
               Download zip
             </Button>
           )}
           {dataset.canWrite && (
             <>
-              <Button variant="outlined" startIcon={<MappingIcon />} onClick={() => openDialog('mapping')} disabled={!dataset.contents || importing || scanning || sending || held} title={heldReason}>
+              <Button
+                variant="outlined"
+                startIcon={<MappingIcon />}
+                onClick={() => openDialog('mapping')}
+                disabled={!dataset.contents || importing || scanning || sending || held}
+                title={heldReason}
+              >
                 Image groups
               </Button>
-              <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => openDialog('replace')} disabled={importing || scanning || sending || held} title={heldReason}>
+              <Button
+                variant="outlined"
+                startIcon={<UploadIcon />}
+                onClick={() => openDialog('replace')}
+                disabled={importing || scanning || sending || held}
+                title={heldReason}
+              >
                 {dataset.archive ? 'Replace zip' : 'Upload zip'}
               </Button>
               <Button variant="outlined" startIcon={<EditIcon />} onClick={() => openDialog('edit')}>
                 Edit
               </Button>
-              <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => openDialog('delete')} disabled={held || sending} title={heldReason}>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={() => openDialog('delete')}
+                disabled={held || sending}
+                title={heldReason}
+              >
                 Delete
               </Button>
             </>
@@ -288,7 +358,12 @@ const DatasetDetailPage: React.FC = () => {
           sx={{ mb: 3 }}
           action={
             <Stack direction="row" spacing={1}>
-              <Button color="inherit" size="small" onClick={() => openDialog('replace')} disabled={importing || scanning || held}>
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => openDialog('replace')}
+                disabled={importing || scanning || held}
+              >
                 Resume
               </Button>
               <Button color="inherit" size="small" onClick={handleDiscardUpload}>
@@ -305,8 +380,8 @@ const DatasetDetailPage: React.FC = () => {
 
       {scanning ? (
         <Alert severity="info" icon={<CircularProgress size={20} />} sx={{ mb: 3 }}>
-          Reading the zip's contents in the background. This can take a few minutes for a large zip — you can leave
-          this page.
+          Reading the zip's contents in the background. This can take a few minutes for a large zip — you can leave this
+          page.
         </Alert>
       ) : (
         dataset.archive &&
@@ -343,6 +418,7 @@ const DatasetDetailPage: React.FC = () => {
           cancelling={busy}
           onCancel={handleCancelImport}
           onRemap={() => openDialog('mapping')}
+          onResume={handleResumeImport}
         />
       )}
 
@@ -385,7 +461,8 @@ const DatasetDetailPage: React.FC = () => {
               )
             }
           >
-            No images shown yet. Choose which folders of the zip to browse as images — the full zip stays downloadable either way.
+            No images shown yet. Choose which folders of the zip to browse as images — the full zip stays downloadable
+            either way.
           </Alert>
         )
       )}
@@ -426,7 +503,11 @@ const DatasetDetailPage: React.FC = () => {
             Delete "{dataset.name}", its zip and every imported image? This cannot be undone. The dataset disappears at
             once; its files are removed on the server in the background.
           </DialogContentText>
-          {actionError && <Alert severity="error" sx={{ mt: 2 }}>{actionError}</Alert>}
+          {actionError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {actionError}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialog(null)} disabled={busy}>

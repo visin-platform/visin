@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import DatasetContentsCard from './DatasetContentsCard';
 
 describe('DatasetContentsCard', () => {
-  it('summarizes file types and the top two folder levels', () => {
+  it('summarizes file types and the folder tree, by folder name', () => {
     render(
       <DatasetContentsCard
         contents={{
@@ -22,8 +22,21 @@ describe('DatasetContentsCard', () => {
     );
     expect(screen.getByText('1,500 files, 2.0 KB uncompressed')).toBeInTheDocument();
     expect(screen.getByText('.png · 1,200 · 1.0 KB')).toBeInTheDocument();
-    expect(screen.getByText('camera/front')).toBeInTheDocument();
-    expect(screen.queryByText('camera/front/deep')).not.toBeInTheDocument();
+    expect(screen.getByText('front')).toHaveAttribute('title', 'camera/front');
+    expect(screen.getByText('deep')).toHaveAttribute('title', 'camera/front/deep');
     expect(screen.queryByText('(zip root)')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Deeper folders are left out/)).not.toBeInTheDocument();
+  });
+
+  it('says when the deepest folders are left out', () => {
+    const folders = Array.from({ length: 250 }, (_, i) => ({ path: `seq/${i}`, depth: 2, files: 1, images: 1, jsons: 0, bytes: 1 }));
+    render(
+      <DatasetContentsCard
+        contents={{ entries: 250, totalBytes: 250, truncated: false, extensions: [], folders: [{ path: 'seq', depth: 1, files: 250, images: 250, jsons: 0, bytes: 250 }, ...folders] }}
+      />
+    );
+    expect(screen.getByText('seq')).toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+    expect(screen.getByText(/Deeper folders are left out/)).toBeInTheDocument();
   });
 });

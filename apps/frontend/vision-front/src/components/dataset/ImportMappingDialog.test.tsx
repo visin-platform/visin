@@ -53,6 +53,20 @@ describe('ImportMappingDialog', () => {
     expect(onConfirm).toHaveBeenCalledWith({ groups: [{ folder: '', group: 'root' }], manifest: 'm.csv' });
   });
 
+  it('fills one group from same-named folders, and says so on the button', () => {
+    const onConfirm = vi.fn();
+    const split = {
+      entries: 4, totalBytes: 4, truncated: false, extensions: [],
+      folders: [folder('', 4), folder('day', 2), folder('day/camera', 1), folder('day/lidar', 1), folder('night', 2), folder('night/camera', 1), folder('night/lidar', 1)]
+    };
+    render(<ImportMappingDialog open contents={split} busy={false} onCancel={vi.fn()} onConfirm={onConfirm} />);
+    expect(screen.getAllByText('camera')[0]).toHaveAttribute('title', 'day/camera');
+    fireEvent.click(screen.getByRole('button', { name: 'Import 4 folders as 2 groups' }));
+    expect(onConfirm).toHaveBeenCalledWith({
+      groups: expect.arrayContaining([{ folder: 'night/camera', group: 'camera' }, { folder: 'day/lidar', group: 'lidar' }])
+    });
+  });
+
   it('explains an empty zip and a missing one', () => {
     const { rerender } = render(
       <ImportMappingDialog open contents={{ ...contents, truncated: false, folders: [folder('', 0)], extensions: [] }} busy={false} onCancel={vi.fn()} onConfirm={vi.fn()} />

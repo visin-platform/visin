@@ -25,5 +25,11 @@ export const VISIN_FEDERATION_SHARED = {
 /** File each remote serves its federation entry as, at the root of its origin. */
 export const VISIN_REMOTE_ENTRY = 'remoteEntry.js';
 
-/** The one module every remote exposes: its routes wrapped in its own providers. */
+/** The module every remote exposes: its routes wrapped in its own providers. */
 export const VISIN_REMOTE_MODULE = './App';
+
+/**
+ * Vision's upload corner, which the shell renders on every page so a running
+ * zip upload stays visible outside Vision. Only the vision remote exposes it.
+ */
+export const VISIN_UPLOADS_MODULE = './Uploads';

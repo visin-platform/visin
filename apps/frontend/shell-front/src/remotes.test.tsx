@@ -113,3 +113,41 @@ describe('remoteComponent', () => {
     expect(await screen.findByText(/Vision did not provide its pages/)).toBeInTheDocument();
   });
 });
+
+describe('VisionUploads', () => {
+  const freshUploads = async () => {
+    vi.resetModules();
+    const remotes = await import('./remotes');
+    const { default: VisionUploads } = await import('./components/VisionUploads');
+    return { ...remotes, VisionUploads };
+  };
+
+  it('stays away until Vision has loaded, then shows Vision’s upload corner on any page', async () => {
+    mockedLoad.mockImplementation(async (id: string) => ({
+      default: () => <div>{id === 'vision/Uploads' ? 'upload corner' : 'vision pages'}</div>,
+    }));
+    const { VisionUploads, remoteComponent } = await freshUploads();
+
+    const { rerender } = render(<VisionUploads />);
+    expect(screen.queryByText('upload corner')).not.toBeInTheDocument();
+    expect(mockedLoad).not.toHaveBeenCalledWith('vision/Uploads');
+
+    renderRemote(remoteComponent('vision'));
+    await screen.findByText('vision pages');
+    rerender(<VisionUploads />);
+    expect(await screen.findByText('upload corner')).toBeInTheDocument();
+    expect(mockedLoad).toHaveBeenCalledWith('vision/Uploads');
+  });
+
+  it('renders nothing, and keeps the page, when the corner cannot load', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockedLoad.mockImplementation(async (id: string) => (id === 'vision/Uploads' ? null : { default: () => <div>vision pages</div> }));
+    const { VisionUploads, remoteComponent } = await freshUploads();
+
+    renderRemote(remoteComponent('vision'));
+    await screen.findByText('vision pages');
+    const { container } = render(<VisionUploads />);
+    await vi.waitFor(() => expect(console.error).toHaveBeenCalledWith('Vision upload panel failed to load', expect.any(Error)));
+    expect(container).toBeEmptyDOMElement();
+  });
+});

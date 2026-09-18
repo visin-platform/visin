@@ -11,6 +11,8 @@ interface ImportStatusPanelProps {
   cancelling: boolean;
   onCancel: () => void;
   onRemap: () => void;
+  /** carry on with a cancelled or failed import, skipping what it stored */
+  onResume: () => void;
 }
 
 /** Where the last import is at: progress while it runs, and its per-file problems once it ends. */
@@ -39,7 +41,7 @@ const runningProgress = (imported: DatasetImport, archiveBytes?: number): { text
   return { text: `Importing images… ${imported.processed.toLocaleString()} stored${already}.` };
 };
 
-const ImportStatusPanel: React.FC<ImportStatusPanelProps> = ({ imported, archiveBytes, canWrite, cancelling, onCancel, onRemap }) => {
+const ImportStatusPanel: React.FC<ImportStatusPanelProps> = ({ imported, archiveBytes, canWrite, cancelling, onCancel, onRemap, onResume }) => {
   const [showErrors, setShowErrors] = useState(false);
   const active = imported.status === 'queued' || imported.status === 'running';
   const errors = imported.errors ?? [];
@@ -68,11 +70,15 @@ const ImportStatusPanel: React.FC<ImportStatusPanelProps> = ({ imported, archive
   }
 
   const severity = imported.status === 'failed' ? 'error' : imported.status === 'cancelled' || errors.length > 0 || imported.stale ? 'warning' : 'success';
+  // A stopped import keeps what it stored, which a resume skips.
+  const stored = imported.processed + imported.skipped;
+  const kept = stored > 0 ? ` The ${stored.toLocaleString()} file${stored === 1 ? '' : 's'} it stored ${stored === 1 ? 'is' : 'are'} kept.` : '';
+  const stopped = imported.status === 'failed' || imported.status === 'cancelled';
   const summary =
     imported.status === 'failed'
-      ? 'The last import failed.'
+      ? `The last import failed.${kept}`
       : imported.status === 'cancelled'
-        ? 'The last import was cancelled.'
+        ? `The last import was cancelled.${kept}`
         : `Imported ${imported.processed.toLocaleString()} files${errors.length ? ` with ${errors.length} problem${errors.length === 1 ? '' : 's'}` : ''}.`;
 
   // A clean, current import needs no banner — the images speak for themselves.
@@ -89,9 +95,14 @@ const ImportStatusPanel: React.FC<ImportStatusPanelProps> = ({ imported, archive
               {showErrors ? 'Hide' : 'Details'}
             </Button>
           )}
+          {canWrite && stopped && !imported.stale && (
+            <Button color="inherit" size="small" onClick={onResume} disabled={cancelling}>
+              Continue import
+            </Button>
+          )}
           {canWrite && (
             <Button color="inherit" size="small" onClick={onRemap}>
-              Import again
+              {stopped && !imported.stale ? 'Change groups' : 'Import again'}
             </Button>
           )}
         </Box>

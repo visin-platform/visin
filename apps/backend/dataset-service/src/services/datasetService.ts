@@ -370,6 +370,35 @@ export const startImport = async (access: DatasetAccess, id: string, mapping: Im
   return toDatasetView(dataset, true);
 };
 
+/**
+ * Carry on with an import that was cancelled or failed part-way: the same
+ * mapping, queued again under the same id, so the worker skips every file that
+ * import already stored. Not for an import of a zip since replaced.
+ */
+export const resumeImport = async (access: DatasetAccess, id: string) => {
+  const dataset = await writableDataset(access, id);
+  assertNotHeld(dataset, 're-import');
+  const current = dataset.import;
+  if (!current || (current.status !== 'cancelled' && current.status !== 'failed')) {
+    throw new ConflictError('Only a cancelled or failed import can be resumed');
+  }
+  if (!dataset.archive || current.archiveFileId !== dataset.archive.fileId) {
+    throw new ConflictError('The zip was replaced since this import — start a new one');
+  }
+  if (dataset.removingGroups?.length) throw new ConflictError('An image group is still being removed — import once it is gone');
+  const resumed = await Dataset.findOneAndUpdate(
+    { _id: dataset._id, 'import.id': current.id, 'import.status': current.status },
+    { $set: { 'import.status': 'queued', 'import.errors': [] }, $unset: { 'import.finishedAt': '' } },
+    { returnDocument: 'after' }
+  );
+  if (!resumed) throw new ConflictError('The import changed meanwhile — reload and try again');
+  // A finished job keeps its id in the queue for a while; clear it, or the add is a no-op.
+  await removeQueuedImport(current.id);
+  await enqueueImport({ datasetId: id, importId: current.id });
+  logger.info('Dataset import resumed', { datasetId: id, importId: current.id });
+  return toDatasetView(resumed, true);
+};
+
 export const cancelImport = async (access: DatasetAccess, id: string) => {
   const dataset = await writableDataset(access, id);
   const current = dataset.import;

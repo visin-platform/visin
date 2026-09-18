@@ -15,35 +15,29 @@ import TrainingVisualizationsComparisonPage from '../pages/TrainingVisualization
 import BenchmarksPage from '../pages/BenchmarksPage';
 import ProjectsPage from '../pages/ProjectsPage';
 import ProjectDashboardPage from '../pages/ProjectDashboardPage';
-import UploadPanel from '../components/dataset/UploadPanel';
 
 function AppRoutes() {
-  // The upload corner sits beside the routes, not in one page, so moving around
-  // Vision — standalone or inside the shell — never hides a running upload.
   return (
-    <>
-      <Routes>
-        <Route path="/" element={<Navigate to="/projects" replace />} />
-        <Route path="/projects" element={<ProjectsPage />} />
-        <Route path="/projects/:id" element={<ProjectDashboardPage />} />
-        <Route path="/comparisons/:uuid" element={<ComparisonDetailPage />} />
-        <Route path="/trainings" element={<TrainingsPage />} />
-        <Route path="/trainings/:id" element={<TrainingDetailPage />} />
-        <Route path="/trainings/compare" element={<TrainingComparisonPage />} />
-        <Route path="/epochs" element={<EpochsPage />} />
-        <Route path="/configs" element={<ConfigsPage />} />
-        <Route path="/datasets" element={<DatasetsPage />} />
-        <Route path="/datasets/:id" element={<DatasetDetailPage />} />
-        {/* The labeling tool moved to label-front; keep old URLs working. */}
-        <Route path="/image-labeling/*" element={<LabelingRedirectPage />} />
-        <Route path="/test-results" element={<TestResultsPage />} />
-        <Route path="/visualizations" element={<VisualizationsPage />} />
-        <Route path="/visualizations/compare" element={<VisualizationsComparisonPage />} />
-        <Route path="/visualizations/compare-trainings" element={<TrainingVisualizationsComparisonPage />} />
-        <Route path="/benchmarks" element={<BenchmarksPage />} />
-      </Routes>
-      <UploadPanel />
-    </>
+    <Routes>
+      <Route path="/" element={<Navigate to="/projects" replace />} />
+      <Route path="/projects" element={<ProjectsPage />} />
+      <Route path="/projects/:id" element={<ProjectDashboardPage />} />
+      <Route path="/comparisons/:uuid" element={<ComparisonDetailPage />} />
+      <Route path="/trainings" element={<TrainingsPage />} />
+      <Route path="/trainings/:id" element={<TrainingDetailPage />} />
+      <Route path="/trainings/compare" element={<TrainingComparisonPage />} />
+      <Route path="/epochs" element={<EpochsPage />} />
+      <Route path="/configs" element={<ConfigsPage />} />
+      <Route path="/datasets" element={<DatasetsPage />} />
+      <Route path="/datasets/:id" element={<DatasetDetailPage />} />
+      {/* The labeling tool moved to label-front; keep old URLs working. */}
+      <Route path="/image-labeling/*" element={<LabelingRedirectPage />} />
+      <Route path="/test-results" element={<TestResultsPage />} />
+      <Route path="/visualizations" element={<VisualizationsPage />} />
+      <Route path="/visualizations/compare" element={<VisualizationsComparisonPage />} />
+      <Route path="/visualizations/compare-trainings" element={<TrainingVisualizationsComparisonPage />} />
+      <Route path="/benchmarks" element={<BenchmarksPage />} />
+    </Routes>
   );
 }
 

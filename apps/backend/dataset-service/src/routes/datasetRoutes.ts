@@ -35,6 +35,7 @@ router.get('/:id/download', ctrl.downloadArchive);
 
 router.post('/:id/import', authenticateToken, validateRequest({ body: startImportBodySchema }), ctrl.startImport);
 router.delete('/:id/import', authenticateToken, ctrl.cancelImport);
+router.post('/:id/import/resume', authenticateToken, ctrl.resumeImport);
 
 router.get('/:id/items', validateRequest({ query: listItemsQuerySchema }), ctrl.listItems);
 router.get('/:id/items/:itemId', ctrl.getItem);

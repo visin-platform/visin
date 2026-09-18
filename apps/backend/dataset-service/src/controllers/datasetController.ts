@@ -52,6 +52,10 @@ export const removeGroup = async (req: Request, res: Response): Promise<void> =>
   res.status(202).json({ success: true, data: await datasets.removeGroup(accessFor(req), idOf(req), String(req.params.group)) });
 };
 
+export const resumeImport = async (req: Request, res: Response): Promise<void> => {
+  res.status(202).json({ success: true, data: await datasets.resumeImport(accessFor(req), idOf(req)) });
+};
+
 export const setCover = async (req: Request, res: Response): Promise<void> => {
   const { itemId } = req.body as SetCoverBody;
   res.json({ success: true, data: await datasets.setCover(accessFor(req), idOf(req), itemId) });

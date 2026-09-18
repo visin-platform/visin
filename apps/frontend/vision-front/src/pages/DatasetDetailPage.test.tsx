@@ -14,7 +14,8 @@ const service = vi.hoisted(() => ({
   scanArchive: vi.fn(),
   discardUpload: vi.fn(),
   setCover: vi.fn(),
-  removeGroup: vi.fn()
+  removeGroup: vi.fn(),
+  resumeImport: vi.fn()
 }));
 vi.mock('../services/datasetService', () => service);
 
@@ -110,7 +111,7 @@ describe('DatasetDetailPage', () => {
     expect(await screen.findByText(/Importing images… 5 stored/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Image groups' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(await screen.findByText('The last import was cancelled.')).toBeInTheDocument();
+    expect(await screen.findByText('The last import was cancelled. The 5 files it stored are kept.')).toBeInTheDocument();
   });
 
   it('keeps a dataset labeling uses from being deleted or re-imported', async () => {
@@ -234,6 +235,17 @@ describe('DatasetDetailPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Remove 2,300 images' }));
     await waitFor(() => expect(service.removeGroup).toHaveBeenCalledWith('d1', 'lidar_png'));
     expect(await screen.findByText(/Removing lidar_png in the background/)).toBeInTheDocument();
+  });
+
+  it('continues a cancelled import, keeping what it stored', async () => {
+    const cancelled = { id: 'i', status: 'cancelled', mapping: { groups: [] }, processed: 100, skipped: 0, errors: [], stale: false };
+    service.getDataset.mockResolvedValue(dataset({ import: cancelled }));
+    service.resumeImport.mockResolvedValue(dataset({ import: { ...cancelled, status: 'queued' } }));
+    renderPage();
+    expect(await screen.findByText(/The 100 files it stored are kept/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue import' }));
+    await waitFor(() => expect(service.resumeImport).toHaveBeenCalledWith('d1'));
+    expect(await screen.findByText(/Import queued/)).toBeInTheDocument();
   });
 
   it('explains a dataset that does not load', async () => {

@@ -194,6 +194,9 @@ export const getDownloadUrl = async (id: string) =>
 export const startImport = async (id: string, mapping: ImportMapping) =>
   (await datasetApi.post<Envelope<Dataset>>(`/${id}/import`, mapping)).data;
 
+/** Carry on with a cancelled or failed import; files it already stored are skipped. */
+export const resumeImport = async (id: string) => (await datasetApi.post<Envelope<Dataset>>(`/${id}/import/resume`)).data;
+
 export const cancelImport = async (id: string) => (await datasetApi.delete<Envelope<Dataset>>(`/${id}/import`)).data;
 
 export const listItems = async (

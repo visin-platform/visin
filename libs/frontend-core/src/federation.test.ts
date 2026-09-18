@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { VISIN_FEDERATION_SHARED, VISIN_REMOTE_ENTRY, VISIN_REMOTE_MODULE } from './federation';
+import { VISIN_FEDERATION_SHARED, VISIN_REMOTE_ENTRY, VISIN_REMOTE_MODULE, VISIN_UPLOADS_MODULE } from './federation';
 
 describe('VISIN_FEDERATION_SHARED', () => {
   // Each of these holds React context or global state. A remote that ran its own
@@ -18,5 +18,6 @@ describe('remote conventions', () => {
   it('names the entry file nginx serves uncached, and the module the shell loads', () => {
     expect(VISIN_REMOTE_ENTRY).toBe('remoteEntry.js');
     expect(VISIN_REMOTE_MODULE).toBe('./App');
+    expect(VISIN_UPLOADS_MODULE).toBe('./Uploads');
   });
 });

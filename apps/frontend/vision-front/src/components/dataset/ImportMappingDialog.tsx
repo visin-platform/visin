@@ -18,7 +18,7 @@ import {
   Typography
 } from '@mui/material';
 import type { DatasetContents, ImportMapping } from '../../services/datasetService';
-import { directCounts, folderLabel, formatBytes, suggestMapping } from '../../utils/datasetMapping';
+import { directCounts, folderLabel, folderName, formatBytes, suggestMapping } from '../../utils/datasetMapping';
 
 interface ImportMappingDialogProps {
   open: boolean;
@@ -59,6 +59,13 @@ const ImportMappingDialog: React.FC<ImportMappingDialogProps> = ({ open, content
     [contents, filter]
   );
   const mapped = Object.entries(groups);
+  const groupCount = new Set(mapped.map(([, group]) => group.trim())).size;
+  const importLabel =
+    mapped.length === 0
+      ? 'Import'
+      : groupCount === mapped.length
+        ? `Import ${groupCount} group${groupCount === 1 ? '' : 's'}`
+        : `Import ${mapped.length} folders as ${groupCount} group${groupCount === 1 ? '' : 's'}`;
   const missingName = mapped.some(([, group]) => !group.trim());
   const hasManifestFiles = (contents?.extensions ?? []).some((ext) => ext.ext === '.csv' || ext.ext === '.jsonl');
 
@@ -83,7 +90,7 @@ const ImportMappingDialog: React.FC<ImportMappingDialogProps> = ({ open, content
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {contents
-              ? `${contents.entries.toLocaleString()} files, ${formatBytes(contents.totalBytes)}. Tick the folders to show as images; each becomes a group. Files that share a name across groups (0001.png, 0001.ids.png) are shown together.`
+              ? `${contents.entries.toLocaleString()} files, ${formatBytes(contents.totalBytes)}. Tick the folders to show as images and name the group each goes into — folders given the same name fill one group. Files that share a name across groups (0001.png, 0001.ids.png) are shown together.`
               : 'Upload a zip first.'}
           </Typography>
           {contents?.truncated && <Alert severity="info">This zip has many folders; only the shallowest are listed. Map a parent folder to take everything beneath it.</Alert>}
@@ -113,7 +120,9 @@ const ImportMappingDialog: React.FC<ImportMappingDialogProps> = ({ open, content
                           slotProps={{ input: { 'aria-label': `Include ${folderLabel(folder.path)}` } }}
                         />
                       </TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace', pl: 1 + folder.depth * 2 }}>{folderLabel(folder.path)}</TableCell>
+                      <TableCell title={folderLabel(folder.path)} sx={{ fontFamily: 'monospace', pl: 1 + folder.depth * 2 }}>
+                        {folderName(folder.path)}
+                      </TableCell>
                       <TableCell align="right" title={`${own?.images ?? 0} directly in this folder`}>
                         {folder.images.toLocaleString()}
                       </TableCell>
@@ -163,7 +172,7 @@ const ImportMappingDialog: React.FC<ImportMappingDialogProps> = ({ open, content
           Cancel
         </Button>
         <Button variant="contained" onClick={confirm} disabled={busy || mapped.length === 0 || missingName}>
-          Import {mapped.length > 0 ? `${mapped.length} group${mapped.length === 1 ? '' : 's'}` : ''}
+          {importLabel}
         </Button>
       </DialogActions>
     </Dialog>
