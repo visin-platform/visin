@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.12.0](https://github.com/visin-platform/visin/compare/v1.11.0...v1.12.0) (2026-09-18)
+
+
+### Features
+
+* move file unzip into background process ([79dc366](https://github.com/visin-platform/visin/commit/79dc36664dda45729b3e5d773ba0577e08237670))
+
 ## [1.11.0](https://github.com/visin-platform/visin/compare/v1.10.0...v1.11.0) (2026-09-18)
 
 
