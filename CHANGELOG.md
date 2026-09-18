@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.15.0](https://github.com/visin-platform/visin/compare/v1.14.0...v1.15.0) (2026-09-18)
+
+
+### Features
+
+* upload dataset in background ([98ec182](https://github.com/visin-platform/visin/commit/98ec182cd382871f4204d27d58ba6ac6f90a8222))
+
 ## [1.14.0](https://github.com/visin-platform/visin/compare/v1.13.0...v1.14.0) (2026-09-18)
 
 
