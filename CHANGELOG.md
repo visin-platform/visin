@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.11.0](https://github.com/visin-platform/visin/compare/v1.10.0...v1.11.0) (2026-09-18)
+
+
+### Features
+
+* add dataset-service for zip bundle extractions ([6463414](https://github.com/visin-platform/visin/commit/64634149f9726bcd77d89451d990c75baebbb72d))
+
+
+### Chores
+
+* **release:** @visin/frontend-core 1.6.0 ([be61dc4](https://github.com/visin-platform/visin/commit/be61dc412dc0ad0c1adc00092f7ccd0b98c1c118))
+
 ## [1.10.0](https://github.com/visin-platform/visin/compare/v1.9.0...v1.10.0) (2026-09-16)
 
 
