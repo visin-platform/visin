@@ -1,4 +1,18 @@
 # Visin Changelog
+## [1.17.0](https://github.com/visin-platform/visin/compare/v1.16.0...v1.17.0) (2026-09-19)
+
+
+### Features
+
+* add progressive web app support ([3b845ec](https://github.com/visin-platform/visin/commit/3b845ecb5677138b68ce1b7eb340b784572f50e9))
+* add session management ([c151454](https://github.com/visin-platform/visin/commit/c1514548ce0a1bcdf98ee45c5a73f081f34d56d6))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.5.0 ([4a90156](https://github.com/visin-platform/visin/commit/4a901560904907ab5d766a2730e575dc2500dfc3))
+* **release:** @visin/frontend-core 1.8.0 ([374fd5b](https://github.com/visin-platform/visin/commit/374fd5b1b6e3b5f31df0fd6d3be940e7ee727be1))
+
 ## [1.16.0](https://github.com/visin-platform/visin/compare/v1.15.0...v1.16.0) (2026-09-18)
 
 
