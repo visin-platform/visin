@@ -35,25 +35,25 @@ export const SHOWCASE: ShowcaseItem[] = [
     src: '/showcase/charts.webp',
     alt: 'Training and validation loss and mean IoU curves over 100 epochs',
     title: 'Every epoch, charted',
-    caption: 'Loss and metric curves for each run, as your script posts them.'
+    caption: 'See the loss and metric curves your training script sends.'
   },
   {
     src: '/showcase/compare.webp',
     alt: 'A table comparing nine runs by time, best epoch and best validation mIoU',
     title: 'Runs compared at their best',
-    caption: 'Side by side at the best epoch, not the last one.'
+    caption: 'Compare each run at its strongest epoch.'
   },
   {
     src: '/showcase/tests.webp',
     alt: 'Per-class IoU, precision, recall and AP for each weather condition',
     title: 'Per class, per condition',
-    caption: 'Test scores broken down the way your data is.'
+    caption: 'Break test scores down to match your data.'
   },
   {
     src: '/showcase/label.webp',
     alt: 'A labeling job at 1,002 of 4,110 frames, with start labeling and browse buttons',
     title: 'Labeling as a team',
-    caption: 'Split a job across your group and watch it fill up.'
+    caption: 'Share labeling work across your group and track progress.'
   }
 ];
 
@@ -118,7 +118,7 @@ export const ASK_CONVERSATION: ChatTurn[] = [
   { from: 'you', text: 'Which of the window ablations won?' },
   {
     from: 'visin',
-    text: 'window16, by 0.004 mIoU — 0.451 at epoch 185 against 0.447 at 195. Neither ended at its best; both are past their peak well before epoch 200.',
+    text: 'window16, by 0.004 mIoU: 0.451 at epoch 185 against 0.447 at 195. Neither ended at its best; both peaked well before epoch 200.',
     via: 'read 2 runs, 400 epochs',
     tools: ['list_trainings', 'compare_trainings', 'get_training_curve'],
     chart: true

@@ -11,11 +11,10 @@ export default function Contact() {
               Contact
             </Typography>
             <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, mt: 1, mb: 2 }}>
-              Questions about running it?
+              Need help getting started?
             </Typography>
             <Typography sx={{ color: 'text.secondary', fontSize: '1.075rem', mb: 3 }}>
-              Deployment questions, a missing feature, or interest in contributing. Send a note and
-              we&apos;ll reply by email.
+              Ask about setup, suggest a feature, or get involved. Send a note and we&apos;ll reply by email.
             </Typography>
           </Grid>
 

@@ -21,10 +21,10 @@ export default function OnYourPhone() {
       <Container maxWidth="lg">
         <Box sx={{ textAlign: 'center', mb: { xs: 5, md: 8 } }}>
           <Typography id="mobile-title" variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.75rem' }, mb: 1.5 }}>
-            Your runs, in your pocket
+            Review runs from your phone
           </Typography>
           <Typography sx={{ color: 'rgba(255,255,255,0.72)', fontSize: { md: '1.15rem' } }}>
-            Install it from the browser. It opens like an app.
+            Open Visin in the browser and add it to your home screen.
           </Typography>
         </Box>
 

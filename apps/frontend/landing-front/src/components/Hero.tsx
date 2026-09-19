@@ -5,7 +5,7 @@ import { BrowserFrame, PhoneFrame } from './Frames';
 import { GITHUB_URL } from '../content';
 import { INK } from '../theme';
 
-const BADGES = ['Open source, MIT', 'Self-hosted', 'Reads over MCP'];
+const BADGES = ['Open source, MIT', 'Runs on your hardware', 'Connects to AI tools'];
 
 const outlinedOnInk = {
   borderRadius: 2,
@@ -60,11 +60,11 @@ export default function Hero({ appUrl }: HeroProps) {
           </Stack>
 
           <Typography variant="h1" sx={{ fontSize: { xs: '2.4rem', sm: '3.25rem', md: '4rem' }, lineHeight: 1.05, mb: 2.5 }}>
-            Ask your training runs what actually happened
+            A clear view of your computer vision work
           </Typography>
 
           <Typography sx={{ fontSize: { xs: '1.05rem', md: '1.25rem' }, color: 'rgba(255,255,255,0.75)', mb: 4 }}>
-            Every epoch, score and rendered frame — charted, compared, and readable by your AI assistant.
+            Track experiments, compare results, label images, and review the data behind each decision.
           </Typography>
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'center' }}>

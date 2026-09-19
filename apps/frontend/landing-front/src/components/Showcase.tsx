@@ -14,7 +14,7 @@ export default function Showcase() {
             The product
           </Typography>
           <Typography id="product-title" variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.75rem' } }}>
-            Everything a run records, in one place
+            Your computer vision work, in one place
           </Typography>
         </Box>
 

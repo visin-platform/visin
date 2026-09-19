@@ -17,11 +17,11 @@ export default function OpenSource() {
               Self-hosting
             </Typography>
             <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, mt: 1, mb: 2 }}>
-              Free, and yours to run
+              Run it yourself
             </Typography>
             <Typography sx={{ color: 'text.secondary', fontSize: '1.075rem', mb: 4 }}>
-              Visin is a monorepo you clone and deploy. There is no hosted plan, no seat count, and no telemetry
-              phoning home.
+              Clone the project and start it with Docker. Your images, results, and account data stay on machines you
+              control.
             </Typography>
             <Button
               href={GITHUB_URL}

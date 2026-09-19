@@ -30,7 +30,7 @@ export default function Footer({ appUrl }: FooterProps) {
               </Typography>
             </Stack>
             <Typography variant="body2">
-              An open-source workbench for computer vision datasets, labeling, and experiments.
+              A self-hosted workspace for computer vision experiments, results, datasets, and labeling.
             </Typography>
           </Box>
 

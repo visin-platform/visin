@@ -42,9 +42,7 @@ describe('LandingPage structure', () => {
   it('leads with the headline and the product summary', () => {
     render(<LandingPage />);
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: /ask your training runs what actually happened/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: /a clear view of your computer vision work/i })).toBeInTheDocument();
   });
 
   it('plays the recorded tour, with its still frame as the poster', () => {

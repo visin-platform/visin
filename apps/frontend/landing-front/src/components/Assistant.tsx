@@ -37,11 +37,11 @@ export default function Assistant() {
             Training analysis
           </Typography>
           <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.5rem' }, mt: 1, mb: 2 }}>
-            An analyst for your training data
+            Ask questions about your runs
           </Typography>
           <Typography sx={{ color: 'rgba(255,255,255,0.75)', fontSize: '1.075rem' }}>
-            Your assistant reads the runs themselves, not your summary of them — then writes the answer onto the
-            project.
+            Connect an AI assistant to the results Visin has recorded. It can compare runs, explain metrics, and
+            write findings back to your project.
           </Typography>
         </Box>
 
