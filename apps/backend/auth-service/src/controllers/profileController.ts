@@ -3,7 +3,7 @@ import { UpdateQuery } from 'mongoose';
 import { BadRequestError, NotFoundError, UnauthorizedError, logger } from '@visin/backend-core';
 import { User, IUser } from '../models/User';
 import { hashPassword, verifyPassword } from '../services/passwordService';
-import { displayName as displayNameOf, issueSession } from '../services/sessionService';
+import { continueSessionAlone } from '../services/sessionService';
 
 export const getProfile = async (req: Request, res: Response): Promise<void> => {
   if (!req.user) {
@@ -119,9 +119,9 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
   }
 
   // The bump above invalidated every outstanding token, including the one this
-  // request arrived with — so re-issue from the *updated* document, or the
-  // caller would be signed out by its own password change.
-  const { token } = await issueSession(res, updated, req.user.name || displayNameOf(updated));
+  // request arrived with. Every other session ends; this one is re-signed from
+  // the *updated* document, or the caller would be signed out by its own change.
+  const { token } = await continueSessionAlone(req, res, updated);
 
   logger.info('Password set', { email: updated.email, wasFirstTime: !hadPassword });
 

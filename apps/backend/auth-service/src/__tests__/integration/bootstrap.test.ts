@@ -5,7 +5,10 @@ import { User } from '../../models/User';
 import { getSetupStatus, login, register, setupFirstUser } from '../../controllers/authController';
 import { optionalAuth } from '../../middleware/authMiddleware';
 import * as passwords from '../../services/passwordService';
-import { generateJWT } from '../../services/jwtService';
+import { generateJWT as sign, UserPayload } from '../../services/jwtService';
+
+// A pre-sessions token: these tests are about accounts, not sessions.
+const generateJWT = (payload: UserPayload) => sign(payload, new Date(Date.now() + 24 * 60 * 60 * 1000));
 import { setupBodySchema } from '../../validation/authSchemas';
 import { initializeBootstrap, recoverAdministrator } from '../../services/bootstrapService';
 

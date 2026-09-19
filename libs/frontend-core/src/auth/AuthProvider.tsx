@@ -1,6 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { AuthCheckResult, AuthService, AuthUser } from './authService';
 
+/**
+ * How stale the session check may get before returning to the app re-runs it.
+ * Each check renews the session cookie, so an installed app left open for days
+ * keeps its session alive instead of only renewing on a full page load.
+ */
+const AUTH_RECHECK_INTERVAL_MS = 60 * 60 * 1000;
+
 export interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
@@ -26,6 +33,7 @@ export function createAuthContext(authService: AuthService) {
   // flashing "Checking authentication..." on every visit. The check still runs
   // on each mount and corrects it.
   let lastKnownUser: AuthUser | null | undefined;
+  let lastCheckedAt = 0;
 
   function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<AuthUser | null>(lastKnownUser ?? null);
@@ -33,6 +41,7 @@ export function createAuthContext(authService: AuthService) {
 
     const refresh = useCallback(async (): Promise<AuthCheckResult> => {
       const result = await authService.checkAuth();
+      lastCheckedAt = Date.now();
       lastKnownUser = result.user;
       setUser(result.user);
       return result;
@@ -47,6 +56,25 @@ export function createAuthContext(authService: AuthService) {
         cancelled = true;
       };
     }, [refresh]);
+
+    // Returning to the app (a tab brought forward, an installed app resumed)
+    // re-checks a stale session. A check that could not reach the server — a
+    // phone waking up offline — leaves the session as it was rather than
+    // signing the user out; the next return tries again.
+    useEffect(() => {
+      const onVisibilityChange = () => {
+        if (document.visibilityState !== 'visible') return;
+        if (Date.now() - lastCheckedAt < AUTH_RECHECK_INTERVAL_MS) return;
+        lastCheckedAt = Date.now();
+        void authService.checkAuth().then((result) => {
+          if (result.failed) return;
+          lastKnownUser = result.user;
+          setUser(result.user);
+        });
+      };
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+    }, []);
 
     const login = useCallback((): void => {
       authService.redirectToLogin();

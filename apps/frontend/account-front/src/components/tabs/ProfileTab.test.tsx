@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ProfileTab from './ProfileTab';
+
+// The devices list has its own suite (SessionsCard.test.tsx).
+vi.mock('./SessionsCard', () => ({ default: () => null }));
+
+const renderTab = () =>
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ProfileTab />
+    </QueryClientProvider>
+  );
 
 vi.mock('../../services/authService', () => ({
   authService: { getProfile: vi.fn() },
@@ -25,7 +36,7 @@ beforeEach(() => {
 describe('ProfileTab', () => {
   it('shows a spinner while loading, then populates fields from the profile', async () => {
     mockedGetProfile.mockResolvedValue(user);
-    render(<ProfileTab />);
+    renderTab();
 
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
 
@@ -36,14 +47,14 @@ describe('ProfileTab', () => {
 
   it('shows an error message when loading the profile fails', async () => {
     mockedGetProfile.mockRejectedValue(new Error('network down'));
-    render(<ProfileTab />);
+    renderTab();
 
     await waitFor(() => expect(screen.getByText('Failed to load user data')).toBeInTheDocument());
   });
 
   it('leaves Save disabled until a field actually changes', async () => {
     mockedGetProfile.mockResolvedValue(user);
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
@@ -59,7 +70,7 @@ describe('ProfileTab', () => {
       success: true,
       user: { ...user, firstName: 'Grace' },
     });
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Grace' } });
@@ -73,7 +84,7 @@ describe('ProfileTab', () => {
   it('trims whitespace in the request payload', async () => {
     mockedGetProfile.mockResolvedValue(user);
     mockedUpdateProfile.mockResolvedValue({ success: true, user });
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: '  Grace ' } });
@@ -87,7 +98,7 @@ describe('ProfileTab', () => {
   it('shows the server message when the update response reports failure', async () => {
     mockedGetProfile.mockResolvedValue(user);
     mockedUpdateProfile.mockResolvedValue({ success: false, message: 'Name too long' });
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Grace' } });
@@ -99,7 +110,7 @@ describe('ProfileTab', () => {
   it('shows a generic error when the update request throws', async () => {
     mockedGetProfile.mockResolvedValue(user);
     mockedUpdateProfile.mockRejectedValue(new Error('boom'));
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Grace' } });
@@ -110,7 +121,7 @@ describe('ProfileTab', () => {
 
   it('cancel reverts unsaved changes', async () => {
     mockedGetProfile.mockResolvedValue(user);
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Grace' } });
@@ -123,7 +134,7 @@ describe('ProfileTab', () => {
   it('closes the alert when dismissed', async () => {
     mockedGetProfile.mockResolvedValue(user);
     mockedUpdateProfile.mockResolvedValue({ success: true, user });
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Grace' } });
@@ -137,7 +148,7 @@ describe('ProfileTab', () => {
 
   it('updates last name', async () => {
     mockedGetProfile.mockResolvedValue(user);
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Hopper' } });
@@ -146,7 +157,7 @@ describe('ProfileTab', () => {
 
   it('falls back to empty names when the profile has none, and cancel restores that', async () => {
     mockedGetProfile.mockResolvedValue({ id: 'u2', email: 'blank@example.com', name: 'Blank' });
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => expect(screen.getByDisplayValue('blank@example.com')).toBeInTheDocument());
 
     expect(screen.getByLabelText('First Name')).toHaveValue('');
@@ -161,7 +172,7 @@ describe('ProfileTab', () => {
   it('falls back to a generic message when the failure response has none', async () => {
     mockedGetProfile.mockResolvedValue(user);
     mockedUpdateProfile.mockResolvedValue({ success: false });
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Grace' } });
@@ -172,7 +183,7 @@ describe('ProfileTab', () => {
 
   it('does nothing when getProfile resolves with no user', async () => {
     mockedGetProfile.mockResolvedValue(null);
-    render(<ProfileTab />);
+    renderTab();
 
     await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
     expect(screen.getByLabelText('First Name')).toHaveValue('');
@@ -182,7 +193,7 @@ describe('ProfileTab', () => {
 describe('ProfileTab password section', () => {
   it('offers to set a password for a Google-created account', async () => {
     mockedGetProfile.mockResolvedValue({ ...user, hasPassword: false });
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     expect(screen.getByRole('heading', { name: /set a password/i })).toBeInTheDocument();
@@ -191,7 +202,7 @@ describe('ProfileTab password section', () => {
 
   it('offers to change it for an account that already has one', async () => {
     mockedGetProfile.mockResolvedValue({ ...user, hasPassword: true });
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     expect(screen.getByRole('heading', { name: /change password/i })).toBeInTheDocument();
@@ -201,7 +212,7 @@ describe('ProfileTab password section', () => {
   it('switches to the change form once a password has been set', async () => {
     mockedGetProfile.mockResolvedValue({ ...user, hasPassword: false });
     mockedChangePassword.mockResolvedValue('Password set');
-    render(<ProfileTab />);
+    renderTab();
     await waitFor(() => screen.getByDisplayValue('Ada'));
 
     fireEvent.change(screen.getByLabelText(/^new password$/i), { target: { value: 'a-strong-password' } });

@@ -7,7 +7,10 @@ import { errorHandler } from '@visin/backend-core';
 import { User } from '../../models/User';
 import authRoutes from '../../routes/authRoutes';
 import { verifyGoogleToken } from '../../services/googleAuthService';
-import { generateJWT, verifyJWT } from '../../services/jwtService';
+import { generateJWT as sign, verifyJWT, UserPayload } from '../../services/jwtService';
+
+// A pre-sessions token: these tests are about identities, not sessions.
+const generateJWT = (payload: UserPayload) => sign(payload, new Date(Date.now() + 24 * 60 * 60 * 1000));
 import * as passwords from '../../services/passwordService';
 import { linkGoogleAccount } from '../../services/googleLinkService';
 

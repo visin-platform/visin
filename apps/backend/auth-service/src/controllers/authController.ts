@@ -8,13 +8,13 @@ import {
 } from '@visin/backend-core';
 import { verifyGoogleToken } from '../services/googleAuthService';
 import { signInWithGoogle } from '../services/googleSignInService';
-import { generateJWT, UserPayload } from '../services/jwtService';
 import { hashPassword, verifyPassword } from '../services/passwordService';
 import {
-  ACCESS_TOKEN_COOKIE_OPTIONS,
-  displayName,
-  getUserGroupRoles,
-  issueSession
+  clearSessionCookie,
+  renewSession,
+  revokeOtherSessions,
+  revokeSession,
+  startSession
 } from '../services/sessionService';
 import { User } from '../models/User';
 import { assertRegistrationOpen, createFirstUser, needsSetup } from '../services/bootstrapService';
@@ -43,8 +43,7 @@ export const setupFirstUser = async (req: Request, res: Response): Promise<void>
 
   logger.info('First user created via setup', { email: dbUser.email });
 
-  const name = displayName(dbUser);
-  const { payload, token } = await issueSession(res, dbUser, name);
+  const { payload, token } = await startSession(req, res, dbUser, 'password');
   res.status(201).json({ success: true, user: payload, token });
 };
 
@@ -80,7 +79,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
   logger.info('User registered', { email: normalizedEmail });
 
-  const { payload, token } = await issueSession(res, dbUser, displayName(dbUser));
+  const { payload, token } = await startSession(req, res, dbUser, 'password');
   res.status(201).json({ success: true, user: payload, token });
 };
 
@@ -99,8 +98,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
   await User.updateOne({ _id: dbUser._id }, { $set: { lastLoginAt: new Date() } });
 
-  const name = displayName(dbUser);
-  const { payload, token } = await issueSession(res, dbUser, name);
+  const { payload, token } = await startSession(req, res, dbUser, 'password');
   res.json({ success: true, user: payload, token });
 };
 
@@ -131,40 +129,20 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
   // Update last login
   await User.updateOne({ _id: dbUser._id }, { $set: { lastLoginAt: new Date() } });
 
-  // Update userPayload to use database user ID instead of Google sub
-  const userPayload: UserPayload = {
-    id: dbUser._id.toString(), // Use MongoDB _id instead of Google sub
-    email: dbUser.email,
+  const { payload, token } = await startSession(req, res, dbUser, 'google', {
     name: googleUser.name || '',
-    picture: googleUser.picture,
-    tokenVersion: dbUser.tokenVersion || 1
-  };
-
-  // Fetch user group roles and include in JWT payload
-  const groupRoles = await getUserGroupRoles(userPayload.id);
-
-  const jwtPayload: UserPayload = {
-    ...userPayload,
-    groupRoles
-  };
-
-  const jwtToken = generateJWT(jwtPayload);
-
-  // Set secure cookie for SSO across subdomains
-  res.cookie('access_token', jwtToken, ACCESS_TOKEN_COOKIE_OPTIONS);
-
-  res.json({
-    success: true,
-    user: userPayload,
-    token: jwtToken
+    picture: googleUser.picture
   });
+
+  res.json({ success: true, user: payload, token });
 };
 
-export const logout = (req: Request, res: Response): void => {
-  res.clearCookie('access_token', {
-    domain: process.env.COOKIE_DOMAIN || 'localhost',
-    path: '/'
-  });
+/** Signing out ends this browser's session outright, not just its cookie. */
+export const logout = async (req: Request, res: Response): Promise<void> => {
+  if (req.user?.sid) {
+    await revokeSession(req.user.id, req.user.sid);
+  }
+  clearSessionCookie(res);
   res.json({ success: true, message: 'Logged out successfully' });
 };
 
@@ -181,6 +159,9 @@ export const invalidateUserTokens = async (req: Request, res: Response): Promise
   if (!user) {
     throw new NotFoundError('User not found');
   }
+  // The version bump already refuses every token; deleting the sessions too
+  // keeps them out of the user's list of signed-in devices.
+  await revokeOtherSessions(user._id.toString());
 
   logger.info('Invalidated tokens for user', { email, newTokenVersion: user.tokenVersion });
 
@@ -192,73 +173,26 @@ export const invalidateUserTokens = async (req: Request, res: Response): Promise
 };
 
 
+/**
+ * The session check every front runs on load (and when a backgrounded app comes
+ * back). Also what keeps a session alive: it slides the idle expiry and
+ * re-signs the token with fresh group roles.
+ */
 export const verifyAuth = async (req: Request, res: Response): Promise<void> => {
-  const currentUser = req.user;
-  if (!currentUser?.email) {
+  if (!req.user?.email) {
     throw new UnauthorizedError('No authenticated user');
   }
-
-  // Fetch fresh user group roles
-  const groupRoles = await getUserGroupRoles(currentUser.id);
-
-  // Generate new JWT with fresh roles
-  const jwtPayload: UserPayload = {
-    id: currentUser.id,
-    email: currentUser.email,
-    name: currentUser.name || '',
-    picture: currentUser.picture,
-    groupRoles,
-    tokenVersion: currentUser.tokenVersion || 1
-  };
-
-  const newToken = generateJWT(jwtPayload);
-
-  // Update cookie with fresh token
-  res.cookie('access_token', newToken, ACCESS_TOKEN_COOKIE_OPTIONS);
-
-  logger.info('Generated new token with fresh group roles', {
-    email: currentUser.email,
-    groupRoles
-  });
-
-  res.json({
-    success: true,
-    authenticated: true,
-    user: jwtPayload,
-    token: newToken
-  });
+  const { payload, token } = await renewSession(req, res);
+  res.json({ success: true, authenticated: true, user: payload, token });
 };
 
+/** The same renewal as verify, for callers that asked for it by this name. */
 export const refreshToken = async (req: Request, res: Response): Promise<void> => {
-  // Get current user from JWT
-  const currentUser = req.user;
-  if (!currentUser?.email) {
+  if (!req.user?.email) {
     throw new UnauthorizedError('No authenticated user');
   }
-
-  // Fetch fresh user group roles
-  const groupRoles = await getUserGroupRoles(currentUser.id);
-
-  // Generate new JWT with updated roles
-  const jwtPayload: UserPayload = {
-    id: currentUser.id,
-    email: currentUser.email,
-    name: currentUser.name || '',
-    picture: currentUser.picture,
-    groupRoles,
-    tokenVersion: currentUser.tokenVersion || 1
-  };
-
-  const newToken = generateJWT(jwtPayload);
-
-  // Update cookie
-  res.cookie('access_token', newToken, ACCESS_TOKEN_COOKIE_OPTIONS);
-
-  res.json({
-    success: true,
-    token: newToken,
-    groupRoles
-  });
+  const { payload, token } = await renewSession(req, res);
+  res.json({ success: true, token, groupRoles: payload.groupRoles });
 };
 
 // Admin utility: list users

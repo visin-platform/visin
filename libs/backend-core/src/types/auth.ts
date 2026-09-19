@@ -13,6 +13,11 @@ export interface UserPayload {
    */
   groupRoles?: string[];
   tokenVersion?: number;
+  /**
+   * The browser session this token belongs to (a `user_sessions` id). Absent
+   * only on tokens minted before sessions existed.
+   */
+  sid?: string;
 }
 
 /**

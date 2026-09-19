@@ -10,6 +10,7 @@ const config: Config = {
     'src/**/*.ts',
     '!src/index.ts',
     '!src/**/*.d.ts',
+    '!src/__tests__/**',
   ],
   coverageReporters: ['text', 'lcov'],
   coverageDirectory: 'coverage',
@@ -18,7 +19,7 @@ const config: Config = {
   coverageThreshold: {
     global: {
       statements: 99,
-      branches: 93,
+      branches: 96,
       functions: 100,
       lines: 99,
     },

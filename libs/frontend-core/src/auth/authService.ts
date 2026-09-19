@@ -32,6 +32,12 @@ export interface AuthUser {
 export interface AuthCheckResult {
   authenticated: boolean;
   user: AuthUser | null;
+  /**
+   * True when the check never got an answer (network down, server error), as
+   * opposed to the server saying "not logged in". `authenticated` is false
+   * either way; this is what lets a caller keep a session it already has.
+   */
+  failed?: boolean;
 }
 
 export interface AuthServiceOptions {
@@ -82,6 +88,7 @@ export function createAuthService({ authServiceUrl, authFrontUrl }: AuthServiceO
         // anonymous visitor, not a bug worth an error-level log.
         if (!(error instanceof ApiError && error.status === 401)) {
           console.error('Auth check failed:', error);
+          return { authenticated: false, user: null, failed: true };
         }
         return { authenticated: false, user: null };
       } finally {

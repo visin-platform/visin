@@ -3,6 +3,9 @@
 // Types
 export type { UserPayload } from './types/auth';
 
+// Browser sessions: the collection auth-service writes and every service checks
+export { USER_SESSIONS_COLLECTION, isLegacySessionlessToken } from './auth/session';
+
 // Config
 export { requireEnv, assertRequiredEnv } from './config/env';
 

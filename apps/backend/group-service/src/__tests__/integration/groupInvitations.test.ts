@@ -39,7 +39,7 @@ describe('account-bound invitations with in-memory MongoDB', () => {
     try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
   });
   const request = async (path: string, method = 'GET', body?: unknown, userId = '000000000000000000000005') => {
-    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, tokenVersion: 1, email: 'shared@example.test', exp: Math.floor(Date.now() / 1000) + 60 }]
+    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, tokenVersion: 1, email: 'shared@example.test', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
     const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
     return fetch(`${url}${path}`, { method, headers: { 'Content-Type': 'application/json', ...(userId ? { Authorization: `Bearer ${token}` } : {}) },

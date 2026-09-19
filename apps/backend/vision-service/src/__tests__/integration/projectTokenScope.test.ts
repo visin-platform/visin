@@ -48,7 +48,7 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
   const secret = 'project-token-integration-secret';
   const oldSecret = process.env.JWT_SECRET;
   const sessionToken = () => {
-    const unsigned = [ { alg: 'HS256', typ: 'JWT' }, { id: owner, email: 'owner@example.test', tokenVersion: 1, exp: Math.floor(Date.now() / 1000) + 60 } ]
+    const unsigned = [ { alg: 'HS256', typ: 'JWT' }, { id: owner, email: 'owner@example.test', tokenVersion: 1, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 } ]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
     return `${unsigned}.${crypto.createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
   };

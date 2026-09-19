@@ -13,6 +13,7 @@ import {
 } from '../controllers/authController';
 import { getProfile, updateProfile, changePassword } from '../controllers/profileController';
 import { linkGoogle } from '../controllers/googleLinkController';
+import { listSessions, revokeSession, revokeOtherSessions } from '../controllers/sessionController';
 import { createKey, listKeys, revealKey, revokeKey, removeKey } from '../controllers/apiKeyController';
 import { getToolCalls, getToolUsage } from '../controllers/auditController';
 import { authenticateToken, requireRole } from '../middleware/authMiddleware';
@@ -27,7 +28,8 @@ import {
   setupBodySchema,
   registerBodySchema,
   loginBodySchema,
-  createApiKeyBodySchema
+  createApiKeyBodySchema,
+  sessionIdParamsSchema
 } from '../validation/authSchemas';
 
 const router = Router();
@@ -71,6 +73,14 @@ router.post(
 
 // Verify route now fully protected
 router.get('/verify', authenticateToken, verifyAuth);
+
+/**
+ * Signed-in devices: the caller's own browser sessions. Session-only, like the
+ * API-key routes below — `apiKeyAuth` is not mounted here.
+ */
+router.get('/sessions', authenticateToken, listSessions);
+router.post('/sessions/revoke-others', authenticateToken, revokeOtherSessions);
+router.delete('/sessions/:id', authenticateToken, validateRequest({ params: sessionIdParamsSchema }), revokeSession);
 
 /**
  * API keys — the credential a non-browser client acts with.

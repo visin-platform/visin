@@ -53,7 +53,7 @@ describe('job publication and task access with in-memory MongoDB', () => {
     else process.env.JWT_SECRET = oldSecret;
   });
   const request = (path: string, userId?: string, method = 'GET', body?: object) => fetch(`${base}${path}`, {
-    method, headers: { 'content-type': 'application/json', ...(userId ? { authorization: `Bearer ${jwt.sign({ id: actors[userId], tokenVersion: 1, email: `${userId}@example.test`, name: userId }, process.env.JWT_SECRET!)}` } : {}) },
+    method, headers: { 'content-type': 'application/json', ...(userId ? { authorization: `Bearer ${jwt.sign({ id: actors[userId], tokenVersion: 1, email: `${userId}@example.test`, name: userId }, process.env.JWT_SECRET!, { expiresIn: '1h' })}` } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {})
   });
   const fixture = async (status: JobStatus = 'active', isPublic?: boolean) => {

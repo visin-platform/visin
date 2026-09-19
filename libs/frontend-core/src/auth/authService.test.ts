@@ -71,6 +71,19 @@ describe('createAuthService', () => {
       expect(user).toEqual({ id: 'u1' });
     });
 
+    it('marks a check that never reached the server as failed', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(await makeService().checkAuth()).toEqual({ authenticated: false, user: null, failed: true });
+    });
+
+    it('does not mark a 401 as failed: that is a definite "not logged in"', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 401 })));
+
+      expect(await makeService().checkAuth()).toEqual({ authenticated: false, user: null });
+    });
+
     it('resolve to unauthenticated/null when the server reports success: false', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: false }), { status: 200 })));
 

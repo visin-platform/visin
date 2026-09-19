@@ -44,13 +44,14 @@ describe('authService', () => {
       expect(consoleError).not.toHaveBeenCalled();
     });
 
-    it('logs an error and returns unauthenticated for a non-401 failure', async () => {
+    it('logs an error and reports a failed, unauthenticated check for a non-401 failure', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: 'boom' }), { status: 500 })));
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const result = await authService.checkAuth();
 
-      expect(result).toEqual({ authenticated: false, user: null });
+      // `failed` is what lets a resumed app keep its session through an outage.
+      expect(result).toEqual({ authenticated: false, user: null, failed: true });
       expect(consoleError).toHaveBeenCalledWith('Auth check failed:', expect.anything());
     });
   });

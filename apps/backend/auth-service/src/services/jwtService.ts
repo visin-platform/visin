@@ -1,7 +1,5 @@
 import * as jwt from 'jsonwebtoken';
 
-const JWT_EXPIRES_IN = '24h';
-
 export interface UserPayload {
   id: string;
   email: string;
@@ -15,10 +13,18 @@ export interface UserPayload {
    */
   groupRoles?: string[];
   tokenVersion?: number;
+  /** The `user_sessions` document this token belongs to. */
+  sid?: string;
 }
 
-export const generateJWT = (user: UserPayload): string => {
-  return jwt.sign(user, process.env.JWT_SECRET!, { expiresIn: JWT_EXPIRES_IN });
+/**
+ * Signs a session token that expires at `expiresAt` — its session's hard cap.
+ * Idle expiry and revocation are the session document's job, checked on every
+ * request, so the token's own lifetime is only the outer bound.
+ */
+export const generateJWT = (user: UserPayload, expiresAt: Date): string => {
+  const expiresIn = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+  return jwt.sign(user, process.env.JWT_SECRET!, { expiresIn });
 };
 
 export const verifyJWT = (token: string): UserPayload => {

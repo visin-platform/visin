@@ -1,252 +1,161 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## What this is
-
-Visin: a computer vision & analytics platform (manage datasets, train models, analyze results, label images). An
-npm-workspaces monorepo of 6 independently-deployable backend services and 6 React frontends, plus 2 shared
-libraries.
+Visin: a computer vision & analytics platform (datasets, training runs, results, image labeling). An
+npm-workspaces monorepo:
 
 ```
-apps/backend/{auth,file,group,vision,label,mcp}-service  Express + TypeScript + Mongoose
+apps/backend/{auth,file,group,vision,label,mcp}-service       Express + TypeScript + Mongoose
 apps/frontend/{landing,auth,account,vision,label,shell}-front  React + Vite + MUI
 libs/backend-core     @visin/backend-core   — shared Express middleware/app bootstrap
 libs/frontend-core    @visin/frontend-core  — shared auth/API-client/React components
 compose.yml           the whole stack, zero-config; per-service compose.yml alongside each app
 ```
 
-Each service/front has its own `package.json`, `Dockerfile`, and `compose.yml` and never depends on the monorepo
-root at runtime or deploy time — only at dev time via npm workspace hoisting.
+Each workspace has its own `package.json`, `Dockerfile` and `compose.yml`, and never depends on the monorepo root
+at deploy time.
 
 ## Commands
 
 ```sh
 npm install                          # one install at the root covers every workspace
-npm run dev                          # all backends + frontends, hot reload
-npm run dev:back / npm run dev:front # backends only / frontends only
-docker compose up -d mongodb redis   # data stores for local dev (add --profile tools for mongo-express)
-docker compose up -d                 # the whole stack in containers, zero config
-
-npm run lint        # ESLint, flat config, zero warnings allowed anywhere
-npm run typecheck   # tsc --noEmit per workspace
-npm test            # Jest (backends) + Vitest (frontends)
-npm run test:coverage
-npm run format      # Prettier
+npm run dev                          # all backends + frontends (dev:back / dev:front for one half)
+docker compose up -d mongodb redis   # data stores for local dev
+npm run lint | typecheck | test | test:coverage | format
+npm test --workspace=vision-service  # scope any script to one workspace
 ```
 
-Scope any script to one workspace: `npm test --workspace=vision-service`, or `cd` into the workspace and run
-directly (`npx jest path/to/file.test.ts`, `npx vitest run path/to/file.test.ts`). Backend libs/services must be
-rebuilt (`npm run build` inside `libs/backend-core` or `libs/frontend-core`) after editing their source for
-consuming workspaces to see the change — they resolve each other via `dist/`, not source, per `package.json`
-`main`/`types`.
+## Before finishing a change
 
-Locally the libs are npm-workspace symlinks, but a **deployed image installs them from npm** (`npm i` inside each
-service's Dockerfile, which never sees the monorepo). So a new lib export only reaches a service after
-`npm run release` in the lib *and* that service's `package.json` naming the new version. Consumers therefore pin
-an **exact** version, never `*` or a caret: a range that doesn't change when the lib is published leaves Docker's
-cached `npm i` layer in place, and the build compiles fresh source against a months-old lib — surfacing as
-`has no exported member` for something that demonstrably exists on the registry. `npm run release` syncs every
-consumer automatically (`scripts/sync-lib-versions.mjs`); `npm run sync:libs` does it by hand and CI's
-`lib-versions` job fails on drift.
+Don't report work as done until these pass for every workspace the change touches. A change to a lib touches every
+workspace that depends on it: rebuild the lib first (`npm run build` in it), then check those workspaces too.
 
-A release is one manual run of `.github/workflows/release.yml`, which calls the other three in order: publish
-each lib with changes (`publish-libs.yml`), bump/changelog/tag (`changelog.yml`), then images (`publish-images.yml`)
-— building only services whose files changed since the previous `v*` tag and re-tagging the rest onto the new
-version, so every service exists at every version (the deploy depends on that). "Changed" is decided by
-`scripts/release-plan.mjs`, which ignores tests, e2e and Markdown. Every stage checks out the branch tip, not the
-dispatched commit: the stage before it has pushed since. Because each image builds from its own directory with its
-own lockfile, a dependency must be in that workspace's `package.json` — hoisting in the monorepo hides a missing one
-until the Docker build.
+1. `npm run lint --workspace=<ws>` (zero warnings)
+2. `npm run typecheck --workspace=<ws>`
+3. `npm run test:coverage --workspace=<ws>` (includes the MongoMemoryServer integration suites and coverage floors)
+4. `npm run build --workspace=<ws>` (what the Dockerfile runs; also catches bundling/federation errors)
+5. `npm run test:e2e --workspace=<ws>` for a front with an `e2e/` suite (account, auth, label, landing, vision)
 
-Every workspace enforces a jest/vitest `coverageThreshold`/`thresholds` floor (see each `jest.config.ts` /
-`vite.config.ts`) — set just below current coverage so CI catches regressions. Ratchet the floor up when you add
-meaningful coverage; don't lower it to make a failing build pass.
+If a step can't run here, say so; don't count it as passed. In the report, list what ran and the results,
+including any failures.
 
-CI (`.github/workflows/test.yml`) runs lint/typecheck/test only for workspaces a commit's changed paths actually
-touch (via `dorny/paths-filter`) — `libs/backend-core` or `libs/frontend-core` changes trigger every service/front
-that depends on them.
+## Libraries, releases, CI
+
+- Workspaces resolve the libs through `dist/`, so a lib edit is invisible to its consumers until you rebuild it.
+- **Deployed images install the libs from npm.** A new lib export reaches a service only after `npm run release` in
+  the lib and the service pinning that version.
+- **Pin lib versions exactly, never a range.** A range leaves Docker's cached `npm i` layer in place, which fails as
+  `has no exported member`. `npm run release` syncs the pins, and CI's `lib-versions` job fails on drift.
+- **Dependencies:** each image builds from its own directory and lockfile, so every dependency must be in that
+  workspace's `package.json`. Workspace hoisting hides a missing one until the Docker build.
+- **Releases:** one manual run of `release.yml`, which publishes the libs, then changelog/tag, then images.
+  - It builds only services that changed since the last `v*` tag, per `scripts/release-plan.mjs`, which ignores
+    tests, e2e and Markdown. The other services are re-tagged onto the new version, so every service exists at
+    every version.
+- **Coverage floors** sit just below current coverage. Raise them when you add coverage; never lower one to pass.
+- **CI** runs checks only for the workspaces a change touches; a lib change triggers every consumer.
 
 ## Architecture
 
-### Auth: cookie primary, header fallback
+### Auth
 
-`auth-service` issues a JWT as an httpOnly `access_token` cookie on Google sign-in (`COOKIE_DOMAIN` is a shared
-parent domain across every Visin subdomain in production, e.g. `.example.com`, so the cookie reaches every service).
-`libs/backend-core`'s `authenticateToken`/`optionalAuth` middleware (used directly or wrapped by group/vision/label-
-service) reads `req.cookies?.access_token` first, falling back to the `Authorization: Bearer` header — the header
-path exists for non-browser callers, notably vision-service's project-scoped API tokens (`apiTokenMiddleware`),
-which are a *different* credential (opaque hex token, DB-checked) from a user JWT and are matched by a
-"contains no dot" heuristic before the JWT middleware ever runs.
+- **Where the token lives:** auth-service sets the JWT as an httpOnly `access_token` cookie on the shared parent
+  domain (`COOKIE_DOMAIN`). backend-core's `authenticateToken`/`optionalAuth` read the cookie first and fall back to
+  `Authorization: Bearer`.
+- **The Bearer path is also used by other credentials:** vision-service's project API tokens (opaque, no dots,
+  matched before the JWT middleware), user API keys and OAuth access tokens. Each has its own verification path.
+- **Checks on every request:** both middlewares check the account's id, email and `tokenVersion` against `users` on
+  the primary, uncached. Required auth fails closed on a database error; optional auth continues anonymously.
+- **Sessions:** every browser sign-in is a `user_sessions` document (`auth-service/src/models/Session.ts`), named by
+  the JWT's `sid` claim. Both middlewares require it to exist and be unexpired, so deleting it revokes the session.
+  - Create sessions only through `sessionService.startSession`: a new session per sign-in, never a reused id.
+  - Lifetime: 30 days idle, slid forward by `/auth/verify`, capped at 90 days after sign-in. `tokenVersion` stays
+    the revoke-everything switch.
+- **Legacy tokens:** tokens from before sessions have no `sid` and a 24-hour life. `isLegacySessionlessToken`
+  accepts only those. So a test fixture that hand-builds a session-less JWT must set `iat` and an `exp` within 24h.
+- **Frontends never touch the JWT.** `createApiClient` sends `credentials: 'include'`; there is no `localStorage`
+  token, so don't add one.
+- **Auth components are factories:** `createProtectedRoute(useAuth)` and `createLoginRedirect(useAuth,
+  { redirectTo })`. Each front has its own auth context, and a context imported inside the lib would always be
+  empty.
+- **Resume re-check:** `AuthProvider` re-verifies when a backgrounded app returns after an hour. A check that fails
+  to reach the server keeps the session.
 
-Both shared middleware and auth-service check the account ID, email and `tokenVersion` against the existing
-shared `users` collection before attaching a session identity. Backend-core uses a projected native collection
-read on the primary; auth-service loads its local User model to support account role checks. Checks are not
-cached between requests. Once a version increment is acknowledged, subsequent authorization checks reject
-older sessions. Required auth fails closed on database failure; optional auth continues anonymously. Already
-verified project/API-key/OAuth credentials retain their separate verification paths.
+### Service-to-service
 
-Frontends never touch the JWT directly: `libs/frontend-core`'s `createApiClient` defaults every request to
-`credentials: 'include'`, and `createAuthService`/`createAuthContext` (wrapping it) is what every front's own
-`authService.ts`/`AuthContext.tsx` thinly re-exports. There is no `localStorage` token — don't reintroduce one.
-The two auth-shaped route components are shared the same way: `createProtectedRoute(useAuth)` and
-`createLoginRedirect(useAuth, { redirectTo })` are factories, not plain components, because each front builds its
-own auth context — a context imported inside the lib would be a different, always-empty one. `redirectTo` has no
-default on purpose: the fronts' post-login routes genuinely differ (`/account` vs. `/jobs`).
-
-### Internal-service-to-service auth
-
-Separate from user auth: services call each other over HTTP using an `X-Internal-Token` header, checked by
-`backend-core`'s `requireInternalServiceToken` (hard-gates a route to service-only callers) or
-`validateInternalServiceToken` + `allowUserOrInternalService` (lets a route serve *either* a logged-in user or
-another internal service — mount the `validate*` one globally on the router, then the `allow*` gate per-route
-after user auth middleware). Adding a new inter-service route means picking the right one of these two patterns;
-skipping the gate on a route meant to be internal-only silently opens it to any authenticated user.
-
-Every outbound inter-service `fetch` goes through `backend-core`'s `fetchWithTimeout`, never bare `fetch`: undici
-leaves a stalled peer hanging the caller for minutes, long enough to exhaust the caller's own capacity while a
-dependency is degraded. It defaults to `DEFAULT_FETCH_TIMEOUT_MS` (control-plane JSON calls) and takes
-`TRANSFER_FETCH_TIMEOUT_MS` for calls that move file bytes, since the deadline covers reading the body too. An
-expired deadline becomes a `GatewayTimeoutError` (504), so the shared `errorHandler` reports it as an upstream
-failure rather than a 500 server bug.
-
-Each service asserts its required env vars at the top of `index.ts` via `backend-core`'s `assertRequiredEnv`,
-which logs every missing name at once and exits. Without it a service missing e.g. `INTERNAL_SERVICE_TOKEN` boots
-healthy and then 500s on every internal call — a config error surfacing as a runtime outage. Adding a new required
-var means adding it to that list, to the service's `compose.yml`, and to `.env.example`.
-
-Public addresses — the OAuth issuer, the MCP resource, every front and API URL — come from configuration only.
-Visin is self-hosted on its operator's domain, so a fallback to a real domain (the hosted instance's once filled
-several) would send another deployment's users and tokens there. Unset, a URL fails loudly or its feature is
-refused; frontends take it from `config.json`, and landing-front's static tags get theirs from `LANDING_FRONT_URL`
-at container start. Examples use `example.com`, test fixtures `example.test`; CI's `no-hosted-domain` job fails if
-the hosted domain appears anywhere in source.
+- **Internal token gates:** inter-service calls carry `X-Internal-Token`. Every new internal route needs one of two
+  gates; skipping it opens the route to any logged-in user.
+  - `requireInternalServiceToken`: service callers only.
+  - `validateInternalServiceToken` + `allowUserOrInternalService`: a user or a service. Mount `validate*` on the
+    router and `allow*` per route, after user auth.
+- **Always `fetchWithTimeout`, never bare `fetch`:** a stalled peer otherwise hangs the caller for minutes.
+  - Use `TRANSFER_FETCH_TIMEOUT_MS` for calls that move file bytes.
+  - An expired deadline becomes a 504 `GatewayTimeoutError`.
+- **Required env vars:** each service asserts them at the top of `index.ts` with `assertRequiredEnv`. A new one goes
+  in that list, the service's `compose.yml` and `.env.example`.
+- **Public URLs (OAuth issuer, MCP resource, front/API URLs) come from config only.** Never fall back to a real
+  domain: Visin is self-hosted, and a fallback sends another deployment's users there.
+  - Examples use `example.com`, test fixtures `example.test`.
+  - CI's `no-hosted-domain` job fails if the hosted domain appears anywhere.
 
 ### vision-service project privacy
 
-Almost every vision-service resource (trainings, epochs, test results, comparisons, benchmarks, visualizations)
-hangs off a `Project`, which is public or private. `services/projectAccessService.ts`'s `checkProjectAccess(userId,
-projectId)` is the single source of truth for "can this caller see this project" and is called from controllers or
-services throughout — a new endpoint that reads project-scoped data needs this check, or it leaks private-project
-data. `isWithinTokenScope(reqProjectId, resourceProjectId)` additionally confines a project-scoped API token to its
-own project on writes. Endpoints with no explicit project filter must still scope to `getVisibleProjectIds`/
-`getVisibleTrainingIds` (see `testResultService`/`comparisonController`) rather than returning everything.
+- **Every project-scoped read calls `checkProjectAccess(userId, projectId)`** (`services/projectAccessService.ts`),
+  or it leaks private projects.
+- **Endpoints with no project filter** still scope to `getVisibleProjectIds`/`getVisibleTrainingIds`.
+- **Project API tokens** are confined to their own project on writes by `isWithinTokenScope`.
+- **Per-row checks** use `createProjectAccessChecker(userId)`: one per request, never hoisted to module scope, or
+  privacy changes are served from a stale memo.
 
-Checking access row by row uses `createProjectAccessChecker(userId)` instead of a bare `checkProjectAccess` per
-row: each bare call re-runs `resolveProject` (up to two indexed queries), so a 100-row comparison issued ~200
-lookups for a handful of distinct projects. The checker is per-request by design — never hoist it to module scope,
-or a privacy change gets served from a stale memo.
+### Results taxonomy (vision)
 
-### Project taxonomy (what results are called)
-
-Results arrive from training pipelines over the API, which cannot be asked to declare their vocabulary
-first — so `Epoch.results` and `TestResult.test_results` are open `Mixed` blobs and **the readers discover
-what is in them**. `vision-front/src/taxonomy/discover.ts` walks a payload for its conditions, classes and
-metrics; `resolveTaxonomy.ts` merges that with the project's optional `Project.taxonomy` (labels, colours,
-order, and the one thing data cannot state: whether a metric is better high or low). `TaxonomyProvider` /
-`useTaxonomy` hand the resolved result to components; `useTaxonomyFor(results)` re-resolves for a narrower
-scope, and `resolveTaxonomyFor` is the non-React entry point for exports.
-
-Discovery is the authoritative half. A taxonomy **never gates a write** — posting a class or condition the
-project never named still succeeds and still renders; the taxonomy only decorates it. `taskType` seeds
-metric presets at creation (`applyTaskTypePresets`) and is then inert: nothing branches on it, which is what
-keeps `other` a first-class choice. `metrics[].direction` is what makes "best value" correct for a loss or a
-latency — taking a maximum unconditionally highlighted the *worst* row for those.
-
-Consequently a literal `'day_fair'` or `'vehicle'` in vision-front application code is a bug, and
-`no-restricted-syntax` in its `eslint.config.mjs` fails the build on one. Fixtures may still use those names
-— that is what proves the generic code renders the real data — and the suites deliberately carry a second,
-unrelated vocabulary so a regression to hard-coding fails a test.
-
-`DatasetImage.condition` is a free string for the same reason (it was a closed five-value `weatherCondition`
-enum; the rename is finished end to end, data included, and nothing should reference the old name again).
-Datasets are not project-scoped, so the dataset screens take their condition list from the images on hand
-rather than from a taxonomy.
+- **Results are open blobs, and readers discover their contents.** `Epoch.results` and `TestResult.test_results`
+  are `Mixed`; `taxonomy/discover.ts` finds conditions, classes and metrics.
+- **`Project.taxonomy` only decorates** (labels, colours, order, metric `direction`) and never gates a write.
+- **`taskType` only seeds presets at creation**; nothing branches on it.
+- **`direction` decides "best"**: for a loss or a latency, best is the minimum.
+- **No literal class or condition names** (`'day_fair'`, `'vehicle'`) in vision-front application code; ESLint fails
+  on them. Fixtures may use them.
+- **`DatasetImage.condition` is a free string.**
 
 ### Project cost rates
 
-`Project.costing` holds `cpuRatePerHour` / `gpuRatePerHour` / `currency`. These were a hard-coded
-`0.006` / `0.20` pair repeated in three places in vision-service and a fourth in vision-front, with a `€`
-nailed on at each display site (`€${n}` in three, `${n}€` in a fourth).
+- **No default rate.** `Project.costing` (`cpuRatePerHour`, `gpuRatePerHour`, `currency`) prices a project only
+  when both rates are set.
+  - Otherwise `resolveCosting` returns `null`, the API omits the money fields and the UI shows `-`.
+- **Resolve rates per row** (`costingByProject` / `costingFor`): one query can span projects.
+- **Mixed currencies** in a total report `currency: 'MIXED'`.
+- **Format money with `Intl.NumberFormat`**, never a hard-coded symbol.
 
-There is **no default rate**, on purpose: an unpriced project reports no money at all rather than a
-plausible figure derived from someone else's cloud pricing. `resolveCosting` returns `null` unless *both*
-rates are set — pricing CPU without GPU would silently bill half the machine — and `costOf` then returns
-measured `totalHours` with the money fields absent. The API omits `cpuCost`/`gpuCost`/`totalCost`/`currency`
-in that case and the UI shows `-`.
+### Backend layering and errors
 
-Rates are resolved **per row**, not once per query: a trainings page or a comparison can span projects, and a
-training need not belong to one at all, so `costingByProject` batches one lookup and `costingFor` applies each
-project's card. A cross-project total whose projects use different currencies reports `currency: 'MIXED'`,
-which the frontend renders as a bare number plus a label rather than picking a symbol. Money is formatted with
-`Intl.NumberFormat` in the viewer's locale — never a hard-coded symbol.
+- **Layers:** `routes/` → `controllers/` → `services/` → `models/`.
+- **Validation:** Zod schemas in `validation/`, applied by `validateRequest`, which also coerces and fills defaults.
+  Controller tests should parse their request through the same schema.
+- **Errors:** controllers throw backend-core `HttpError` subclasses (`BadRequestError`, `NotFoundError`, …), and the
+  shared `errorHandler` maps them. A plain `Error` for an expected condition is reported as a 500.
 
-### Layering (vision-service, and the pattern the other backends follow)
+### shell-front (module federation)
 
-`routes/` (thin, wires validation + controller) → `controllers/` (request/response shape, calls services or, in
-several older controllers, Mongoose models directly) → `services/` (business logic, the project-access checks
-above) → `models/` (Mongoose schemas). `validation/*Schemas.ts` are Zod schemas applied via backend-core's
-`validateRequest` middleware, which also supplies defaults/coercion — controller-level tests that build a request
-object should parse it through the same schema first (see `__tests__/controllers/*.test.ts`) so the test matches
-what the controller actually receives.
-
-### shell-front: every app on one page (module federation)
-
-vision-front, label-front and account-front each still run standalone on their own domain, and are also
-module-federation remotes (`@module-federation/vite`) of `shell-front`, the host. The shell owns the
-`BrowserRouter`, the one `AppLayout` navigation (every section a local route), its own session for the user block,
-and the routes `/`, `/login` and `/image-labeling/*`; any other path goes to the app that owns its first segment
-per `shell-front/src/apps.ts`. That app's exposed `./App` — `src/federation/RemoteApp.tsx`: its own
-`ConfigProvider`, `AuthProvider`, module-scope `QueryClient` and `AppRoutes`, but no Router and no layout —
-renders inside the shell's router, so moving between apps swaps content under a sidebar that never unmounts.
-
-- **Paths are one namespace.** No basename separates the apps, so their top-level routes must never overlap, and
-  a new top-level route in a remote must also be added to the shell's `apps.ts` prefixes, or the shell shows it
-  as not found. The per-app frame (content width, page header) lives there too, mirroring each front's own
-  `AppLayout`.
-- **Singletons are declared once**, in `@visin/frontend-core/federation` (`VISIN_FEDERATION_SHARED`), which all
-  four vite configs import. A library that holds React context or global state goes there, never into one
-  config: a remote with its own copy of React breaks hooks, and its own router/Emotion/React Query reads an empty
-  context.
-- **Remote code runs on the shell's origin.** A root-relative URL resolves against the shell, so each remote's
-  `ConfigProvider` passes `configUrl: new URL('/config.json', import.meta.url).href`, and a remote must import an
-  asset rather than reference `/public/...`. `window.location.origin` links (share URLs, invites) point at the
-  shell, which is what you want there. Remote nginx serves `remoteEntry.js` uncached and all of it with CORS.
-- **Remote addresses are runtime config**: the shell's `config.json` `VISION_FRONT_URL`/`LABEL_FRONT_URL`/
-  `ACCOUNT_FRONT_URL` are registered on first use (`src/remotes.ts`); an unreachable app shows a retry panel in
-  the content area (`RemoteBoundary`) while the menu and the other apps keep working.
-- **The shell is the installable PWA** (manifest, icons, `public/sw.js`). The service worker caches no app code —
-  a cached host would run against freshly deployed remotes — and only serves `offline.html` when a navigation
-  fails. Keep it that way rather than adding precaching.
-- The federation plugin is left out under Vitest (`process.env.VITEST`); shell tests mock
-  `@module-federation/runtime`.
+- **Structure:** vision-, label- and account-front run standalone and also as remotes of `shell-front`.
+  - The shell owns the router, the one `AppLayout`, and the routes `/`, `/login`, `/image-labeling/*`.
+  - Every other path goes to the app named in `shell-front/src/apps.ts`, which renders its
+    `src/federation/RemoteApp.tsx` (no router, no layout).
+- **Paths are one namespace.** A new top-level route in a remote must not overlap another app's and must be added
+  to `apps.ts`.
+- **Singletons (React, router, Emotion, React Query…) are declared once** in `VISIN_FEDERATION_SHARED`
+  (`@visin/frontend-core/federation`), never in one app's config.
+- **Remote code runs on the shell's origin.** Remotes load `config.json` through `import.meta.url` and import assets
+  instead of using `/public` paths.
+- **Remote URLs are runtime config** (the shell's `config.json`). An unreachable remote shows a retry panel.
+- **The shell is the installable PWA.** `public/sw.js` caches no app code (a cached host would run against newly
+  deployed remotes) and only serves `offline.html`. Don't add precaching.
+- **Tests:** the federation plugin is off under Vitest.
 
 ### Frontend data fetching
 
-`vision-front`'s API calls go through `config/visionApi.ts` (wraps `@visin/frontend-core`'s `createApiClient`),
-which every `services/*Service.ts` file calls — don't hand-roll `fetch` for a vision-service endpoint. The one
-legitimate exception is uploading via a file-service signed URL (`uploadFileToSignedUrl`,
-`visualizationService.uploadFile`): that's a direct-to-storage PUT against file-service with the signature as the
-credential, not a vision-service API call, so it deliberately bypasses `visionApi` (no `/api` prefix, no auth
-cookie). File-service stores files on local disk — there is no object-storage backend to configure.
-
-The stored-file reference is called `fileId` (`thumbnailFileId` for thumbnails) everywhere: Mongo, the HTTP API,
-and file-service itself. It was once called `minioFileId`, back when storage was object-based; that rename is
-finished end to end — the persisted fields were migrated, the migration script was removed, and the
-request/response compat shim that used to translate the old spelling is gone too. `fileId` is now the only
-accepted spelling: a caller posting `minioFileId` gets a 400, and responses no longer mirror the old key.
-Nothing in the repo should reference the old name again.
-
-Data fetching is React Query (`useQuery`/`useMutation`) throughout; a `useEffect` that calls a service function and
-sets loading/data state by hand is legacy and should be converted when touched. Not every `useEffect` is a fetch,
-though — plenty are legitimate (URL-param sync, debounce, resetting local form state when a dialog opens); only
-migrate ones that duplicate what `useQuery`'s `enabled`/`isLoading`/`data` already gives you.
-
-### Error handling (backend)
-
-Controllers throw a typed error from `libs/backend-core`'s `errors/HttpError.ts` (`BadRequestError`,
-`NotFoundError`, `ForbiddenError`, ...) instead of hand-rolling try/catch + status codes; the shared `errorHandler`
-(mounted last in each service's `index.ts`) classifies known error types (the `HttpError` hierarchy, plus Mongoose's
-`ValidationError`/`CastError`) into the right status/response shape and treats everything else as an unexpected 500.
-Throwing a plain `Error` for an expected condition (like an invalid CORS origin) means it gets logged and reported
-as a server bug rather than the client-facing status it should be — use or add an `HttpError` subclass instead.
+- **vision-front API calls go through `config/visionApi.ts`.** The exception is the direct PUT to a file-service
+  signed URL, which bypasses it on purpose.
+- **Use React Query.** Convert a hand-rolled `useEffect` fetch when you touch it; `useEffect`s that don't fetch
+  stay.
+- **Stored-file references are `fileId`** (`thumbnailFileId`); `minioFileId` is gone. File-service stores on local
+  disk.

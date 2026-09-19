@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { logger } from '@visin/backend-core';
-import { verifyJWT } from '../services/jwtService';
+import { logger, isLegacySessionlessToken } from '@visin/backend-core';
+import { verifyJWT, UserPayload } from '../services/jwtService';
 import { User, IUser } from '../models/User';
+import { ISession, Session } from '../models/Session';
 // req.user is typed globally via @visin/backend-core's Express.Request
 // augmentation, active program-wide once index.ts imports that package —
 // no local declare global needed; a second, non-identical declaration here
@@ -11,8 +12,28 @@ declare global {
   namespace Express {
     interface Request {
       dbUser?: IUser;
+      /** The caller's live session; absent only for a pre-sessions token. */
+      authSession?: ISession;
     }
   }
+}
+
+/**
+ * The session a token belongs to, if it is still live. `null` means the token
+ * must be refused: its session was revoked or expired, or it carries none and
+ * is not a pre-sessions token either. `undefined` is a legacy token, which has
+ * no session to load but is otherwise acceptable.
+ */
+async function loadSession(decoded: UserPayload): Promise<ISession | null | undefined> {
+  if (decoded.sid === undefined) {
+    return isLegacySessionlessToken(decoded) ? undefined : null;
+  }
+  if (typeof decoded.sid !== 'string' || !/^[a-f\d]{24}$/i.test(decoded.sid)) return null;
+  return Session.findOne(
+    { _id: decoded.sid, userId: decoded.id, expiresAt: { $gt: new Date() } },
+    undefined,
+    { readPreference: 'primary', maxTimeMS: 3000 }
+  );
 }
 
 /**
@@ -50,7 +71,14 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
       return;
     }
 
+    const session = await loadSession(decoded);
+    if (session === null) {
+      res.status(401).json({ success: false, message: 'Session has ended' });
+      return;
+    }
+
     req.user = decoded;
+    req.authSession = session;
 
     // attach db user (if needed elsewhere)
     req.dbUser = dbUser;
@@ -68,7 +96,8 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
       const decoded = verifyJWT(token);
       // A retained session must not recreate a deleted user or consume setup.
       // Matching identity and version in the update also rejects revoked tokens.
-      if (typeof decoded.id === 'string' && decoded.id && decoded.tokenVersion != null) {
+      const session = typeof decoded.id === 'string' && decoded.id ? await loadSession(decoded) : null;
+      if (session !== null && decoded.tokenVersion != null) {
         const dbUser = await User.findOneAndUpdate(
           { _id: decoded.id, email: decoded.email.toLowerCase(), tokenVersion: decoded.tokenVersion },
           { $set: { lastLoginAt: new Date() } },
@@ -76,6 +105,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
         );
         if (dbUser) {
           req.user = decoded;
+          req.authSession = session;
           req.dbUser = dbUser;
         }
       }

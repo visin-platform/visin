@@ -21,9 +21,28 @@ one bound to a different subject) is refused with 409: an email match never gran
 Google access to it. Its owner signs in with the password and uses the auth page's
 **Link Google sign-in** form, which requires the current password and a Google account
 choice. The protected `POST /auth/profile/google` endpoint accepts `currentPassword`
-and `idToken`, binds only the authenticated account, and issues a new session after
-incrementing its token version. Existing bindings cannot be overwritten through this
+and `idToken`, binds only the authenticated account, and re-signs the current session
+after incrementing its token version, ending every other session. Existing bindings cannot be overwritten through this
 endpoint. The unique subject index is created by the existing startup index check.
+
+## Sessions
+
+Every sign-in (password, Google, setup, registration) creates a `user_sessions` document and a JWT naming it in
+`sid`, sent as the httpOnly `access_token` cookie. Every service's auth middleware requires that document to exist
+and be unexpired, so deleting it revokes the session on the next request.
+
+- **Lifetime:** 30 days idle, slid forward by `GET /auth/verify` (at most one write per 5 minutes), never past 90 days
+  from sign-in. A TTL index removes expired sessions.
+- **`POST /auth/logout`** deletes the caller's session and clears the cookie.
+- **`GET /auth/sessions`** lists the caller's sessions: device label (from the User-Agent), sign-in method,
+  created/last-active times, and which one is `current`.
+- **`DELETE /auth/sessions/:id`** signs one of the caller's sessions out; `signedOut: true` if it was their own.
+- **`POST /auth/sessions/revoke-others`** signs out every session but the caller's.
+- A password change or Google link keeps the caller's session and ends the rest; `POST
+  /auth/internal/invalidate-tokens` ends all of them.
+
+Pre-sessions tokens (no `sid`, 24-hour lifetime) are still accepted until they expire, and `/auth/verify` upgrades
+one to a session.
 
 ## Local Development
 

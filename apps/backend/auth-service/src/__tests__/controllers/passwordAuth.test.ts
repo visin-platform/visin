@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+jest.mock('../../models/Session', () => jest.requireActual('../helpers/sessionModelMock').sessionModule());
 jest.mock('../../models/User', () => ({
   User: {
     findOne: jest.fn(),

@@ -55,3 +55,7 @@ export const createApiKeyBodySchema = z.object({
   // choice someone made rather than a default they inherited.
   expiresInDays: z.number().int().min(1).max(365).optional()
 });
+
+export const sessionIdParamsSchema = z.object({
+  id: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid session id')
+});

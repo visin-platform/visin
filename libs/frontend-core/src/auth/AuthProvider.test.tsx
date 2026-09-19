@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { createAuthContext } from './AuthProvider';
 import type { AuthService, AuthUser } from './authService';
@@ -129,6 +129,80 @@ describe('createAuthContext', () => {
     expect(screen.getByTestId('loading')).toHaveTextContent('false');
     expect(screen.getByTestId('user')).toHaveTextContent('Test User');
     await waitFor(() => expect(service.checkAuth).toHaveBeenCalledTimes(2));
+  });
+
+  describe('returning to the app', () => {
+    const HOUR = 60 * 60 * 1000;
+    let now: number;
+
+    const setVisibility = (state: DocumentVisibilityState) => {
+      Object.defineProperty(document, 'visibilityState', { value: state, configurable: true });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+    };
+
+    const renderSignedIn = async (service: AuthService) => {
+      renderWithProvider(service);
+      await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('Test User'));
+    };
+
+    beforeEach(() => {
+      now = 1_000_000;
+      vi.spyOn(Date, 'now').mockImplementation(() => now);
+    });
+
+    afterEach(() => {
+      Reflect.deleteProperty(document, 'visibilityState');
+    });
+
+    it('re-checks a session last checked over an hour ago, and applies the answer', async () => {
+      const checkAuth = vi
+        .fn()
+        .mockResolvedValueOnce({ authenticated: true, user: testUser })
+        .mockResolvedValueOnce({ authenticated: false, user: null });
+      await renderSignedIn(makeAuthService({ checkAuth }));
+
+      now += HOUR + 1;
+      setVisibility('visible');
+
+      await waitFor(() => expect(screen.getByTestId('authenticated')).toHaveTextContent('false'));
+      expect(checkAuth).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not re-check a session checked within the hour', async () => {
+      const service = makeAuthService();
+      await renderSignedIn(service);
+
+      now += HOUR - 1;
+      setVisibility('visible');
+
+      expect(service.checkAuth).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores the app being hidden', async () => {
+      const service = makeAuthService();
+      await renderSignedIn(service);
+
+      now += HOUR + 1;
+      setVisibility('hidden');
+
+      expect(service.checkAuth).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the session when the re-check could not reach the server', async () => {
+      const checkAuth = vi
+        .fn()
+        .mockResolvedValueOnce({ authenticated: true, user: testUser })
+        .mockResolvedValueOnce({ authenticated: false, user: null, failed: true });
+      await renderSignedIn(makeAuthService({ checkAuth }));
+
+      now += HOUR + 1;
+      setVisibility('visible');
+
+      await waitFor(() => expect(checkAuth).toHaveBeenCalledTimes(2));
+      expect(screen.getByTestId('user')).toHaveTextContent('Test User');
+    });
   });
 
   it('useAuth throws when used outside its AuthProvider', () => {

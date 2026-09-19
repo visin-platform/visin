@@ -14,7 +14,10 @@ import {
 import { Person, Save } from '@mui/icons-material';
 import { authService } from '../../services/authService';
 import { profileService } from '../../services/profileService';
+import { useQueryClient } from '@tanstack/react-query';
 import PasswordCard from './PasswordCard';
+import SessionsCard from './SessionsCard';
+import { sessionKeys } from '../../hooks/useSessions';
 import { User } from '../../types';
 
 const ProfileTab: React.FC = () => {
@@ -26,6 +29,7 @@ const ProfileTab: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -185,8 +189,16 @@ const ProfileTab: React.FC = () => {
           <Grid size={12}>
             <PasswordCard
               hasPassword={Boolean(user?.hasPassword)}
-              onChanged={() => setUser((current) => (current ? { ...current, hasPassword: true } : current))}
+              onChanged={() => {
+                setUser((current) => (current ? { ...current, hasPassword: true } : current));
+                // A password change signs every other device out.
+                queryClient.invalidateQueries({ queryKey: sessionKeys.mine });
+              }}
             />
+          </Grid>
+
+          <Grid size={12}>
+            <SessionsCard />
           </Grid>
 
         </Grid>

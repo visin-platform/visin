@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 jest.mock('../../services/jwtService', () => ({
   verifyJWT: jest.fn(),
 }));
+jest.mock('../../models/Session', () => jest.requireActual('../helpers/sessionModelMock').sessionModule());
 jest.mock('../../models/User', () => ({
   User: {
     findOne: jest.fn(),
@@ -21,11 +22,17 @@ import {
 } from '../../middleware/authMiddleware';
 import { verifyJWT } from '../../services/jwtService';
 import { User } from '../../models/User';
+import { Session } from '../../models/Session';
+import { makeSession } from '../helpers/sessionModelMock';
 
 const mockedVerifyJWT = verifyJWT as jest.Mock;
 const mockedUser = User as unknown as Record<string, jest.Mock>;
 
-const decoded = { id: 'db-id-1', email: 'Test@Example.com', name: 'Test User', tokenVersion: 3 };
+// A pre-sessions token (no sid, the old 24-hour life): accepted on the account
+// check alone. Session-bearing tokens are covered in their own block below.
+const iat = Math.floor(Date.now() / 1000);
+const decoded = { id: 'db-id-1', email: 'Test@Example.com', name: 'Test User', tokenVersion: 3, iat, exp: iat + 86400 };
+const mockedSession = Session as unknown as Record<string, jest.Mock>;
 const dbUser = { email: 'test@example.com', tokenVersion: 3, roles: ['admin'] };
 
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
@@ -213,6 +220,81 @@ describe('optionalAuth', () => {
     await optionalAuth(req, makeRes(), next as unknown as NextFunction);
 
     expect(req.user).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('session-bearing tokens', () => {
+  const sid = '64b7f1f77bcf86cd79943aaa';
+  const withSession = { ...decoded, sid, exp: iat + 90 * 86400 };
+
+  it('attaches the live session and checks it belongs to the token user, unexpired, on the primary', async () => {
+    const session = makeSession({ _id: sid });
+    mockedVerifyJWT.mockReturnValue(withSession);
+    mockedUser.findOne.mockResolvedValue(dbUser);
+    mockedSession.findOne.mockResolvedValue(session);
+    const req = makeReq({ cookies: { access_token: 't' } });
+
+    await authenticateToken(req, makeRes(), next as unknown as NextFunction);
+
+    expect(mockedSession.findOne).toHaveBeenCalledWith(
+      { _id: sid, userId: 'db-id-1', expiresAt: { $gt: expect.any(Date) } },
+      undefined,
+      { readPreference: 'primary', maxTimeMS: 3000 }
+    );
+    expect(req.authSession).toBe(session);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a token whose session was revoked or expired', async () => {
+    mockedVerifyJWT.mockReturnValue(withSession);
+    mockedUser.findOne.mockResolvedValue(dbUser);
+    mockedSession.findOne.mockResolvedValue(null);
+    const res = makeRes();
+
+    await authenticateToken(makeReq({ cookies: { access_token: 't' } }), res, next as unknown as NextFunction);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: 'Session has ended' }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a malformed sid', { ...withSession, sid: 'nope' }],
+    ['no sid and a longer-than-legacy life', { ...decoded, exp: iat + 30 * 86400 }]
+  ])('refuses %s without looking a session up', async (_label, claims) => {
+    mockedVerifyJWT.mockReturnValue(claims);
+    mockedUser.findOne.mockResolvedValue(dbUser);
+    const res = makeRes();
+
+    await authenticateToken(makeReq({ cookies: { access_token: 't' } }), res, next as unknown as NextFunction);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(mockedSession.findOne).not.toHaveBeenCalled();
+  });
+
+  it('optionalAuth attaches the live session', async () => {
+    const session = makeSession({ _id: sid });
+    mockedVerifyJWT.mockReturnValue(withSession);
+    mockedSession.findOne.mockResolvedValue(session);
+    mockedUser.findOneAndUpdate.mockResolvedValue(dbUser);
+    const req = makeReq({ cookies: { access_token: 't' } });
+
+    await optionalAuth(req, makeRes(), next);
+
+    expect(req.user).toEqual(withSession);
+    expect(req.authSession).toBe(session);
+  });
+
+  it('optionalAuth continues anonymously on an ended session, without touching the account', async () => {
+    mockedVerifyJWT.mockReturnValue(withSession);
+    mockedSession.findOne.mockResolvedValue(null);
+    const req = makeReq({ cookies: { access_token: 't' } });
+
+    await optionalAuth(req, makeRes(), next);
+
+    expect(req.user).toBeUndefined();
+    expect(mockedUser.findOneAndUpdate).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledTimes(1);
   });
 });

@@ -38,7 +38,10 @@ describe('authRoutes', () => {
     expect(find('get', '/tool-usage')).toBeDefined();
     expect(find('get', '/tool-calls')).toBeDefined();
     expect(find('post', '/profile/google')!.handlerCount).toBe(3);
-    expect(routes).toHaveLength(21);
+    expect(find('get', '/sessions')!.handlerCount).toBe(2);
+    expect(find('post', '/sessions/revoke-others')!.handlerCount).toBe(2);
+    expect(find('delete', '/sessions/:id')!.handlerCount).toBe(3);
+    expect(routes).toHaveLength(24);
   });
 
   it('lets nobody reach an API key without a session', () => {
