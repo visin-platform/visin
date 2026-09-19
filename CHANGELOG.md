@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.19.0](https://github.com/visin-platform/visin/compare/v1.18.0...v1.19.0) (2026-09-19)
+
+
+### Features
+
+* improve documentation ([2a649c8](https://github.com/visin-platform/visin/commit/2a649c80e54b407e25636dba2b4b0f0a2094168a))
+
 ## [1.18.0](https://github.com/visin-platform/visin/compare/v1.17.0...v1.18.0) (2026-09-19)
 
 
