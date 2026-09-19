@@ -26,7 +26,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <SharedAppLayout
       appName="Vision"
-      subtitle="Manage datasets, train models, and analyse results."
       navGroups={groups}
       accountItems={accountItems}
       user={user}

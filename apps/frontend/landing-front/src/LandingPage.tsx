@@ -3,7 +3,8 @@ import { useConfig } from './config/ConfigProvider';
 import { theme } from './theme';
 import Nav from './components/Nav';
 import Hero from './components/Hero';
-import Workflow from './components/Workflow';
+import Showcase from './components/Showcase';
+import OnYourPhone from './components/OnYourPhone';
 import Assistant from './components/Assistant';
 import OpenSource from './components/OpenSource';
 import Contact from './components/Contact';
@@ -38,8 +39,9 @@ function LandingPage() {
 
       <Box component="main" id="main">
         <Hero appUrl={appUrl} />
+        <Showcase />
+        <OnYourPhone />
         <Assistant />
-        <Workflow />
         <OpenSource />
         <Contact />
       </Box>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import {
   Container,
   Typography,
@@ -87,28 +88,7 @@ const VisualizationsComparisonPage: React.FC = () => {
         ]}
       />
       {/* Header */}
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 4
-        }}>
-        <Box>
-          <Typography variant="h4" component="h1" gutterBottom sx={{
-            fontWeight: 700
-          }}>
-            Visualizations Comparison
-          </Typography>
-          <Typography variant="body1" sx={{
-            color: "text.secondary"
-          }}>
-            Comparing {visualizations.length} visualization{visualizations.length !== 1 ? 's' : ''}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-        </Box>
-      </Box>
+      <PageHeader title="Visualizations Comparison" subtitle={`Comparing ${visualizations.length} visualization${visualizations.length !== 1 ? 's' : ''}`} />
       {/* Visualizations by Type */}
       {Object.entries(visualizationsByType).map(([type, typeVisualizations]) => (
         <Paper key={type} sx={{ mb: 4, p: 3 }}>

@@ -13,7 +13,7 @@ interface AppLayoutProps {
  * The Box stays for the background behind anything the page does not cover.
  */
 const AppLayout = ({ children }: AppLayoutProps) => {
-  return <Box sx={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>{children}</Box>;
+  return <Box sx={{ minHeight: '100vh', backgroundColor: 'background.paper' }}>{children}</Box>;
 };
 
 export default AppLayout;

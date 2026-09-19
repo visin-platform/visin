@@ -1,5 +1,7 @@
 import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
+import { PageHeader, useCompactLayout } from '@visin/frontend-core';
+import { MobileListHeader, MobileListRow } from '../components/common/MobileList';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
@@ -42,6 +44,7 @@ const AVERAGED_METRICS = ['iou', 'precision', 'recall', 'f1_score'];
 export const TestResultsPage: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
+  const compact = useCompactLayout();
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TestResult | null>(null);
@@ -202,43 +205,22 @@ export const TestResultsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 4
-        }}>
-        <Box>
-          <Typography variant="h4" component="h1" gutterBottom sx={{
-            fontWeight: 700
-          }}>
-            Test Results
-          </Typography>
-          <Typography variant="body1" sx={{
-            color: "text.secondary"
-          }}>
-            View and compare model performance test results
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            startIcon={<CompareIcon />}
-            onClick={handleCompare}
-            disabled={selectedTestResults.size < 2}
-            sx={{ 
-              px: 3,
-              py: 1,
-              borderRadius: 2,
-              border: `1px solid ${theme.palette.divider}`,
-              '&:hover': { bgcolor: theme.palette.action.hover }
-            }}
-          >
-            Compare Selected ({selectedTestResults.size})
-          </Button>
-        </Box>
-      </Box>
+      <PageHeader
+        title="Test Results"
+        subtitle="View and compare model performance test results"
+        // On a phone the compare button floats in once there is something to
+        // compare, rather than sitting disabled.
+        primaryAction={
+          !compact || selectedTestResults.size >= 2
+            ? {
+                label: `Compare selected (${selectedTestResults.size})`,
+                icon: <CompareIcon />,
+                onClick: handleCompare,
+                disabled: selectedTestResults.size < 2
+              }
+            : undefined
+        }
+      />
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
@@ -258,7 +240,52 @@ export const TestResultsPage: React.FC = () => {
         <Typography color="textSecondary">
           No test results found
         </Typography>
-      ) : (
+      ) : compact ? (
+          <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, overflow: 'hidden' }}>
+            <MobileListHeader
+              selectAll={{
+                checked: selectedTestResults.size === testResults.length && testResults.length > 0,
+                indeterminate: selectedTestResults.size > 0 && selectedTestResults.size < testResults.length,
+                onChange: () => handleSelectAll(selectedTestResults.size !== testResults.length),
+                label: 'Select all test results'
+              }}
+            />
+            {testResults.map((testResult) => {
+              const averages = AVERAGED_METRICS.map(metric => getAverageAcrossConditions(testResult.test_results, metric));
+              const overallMetrics = getOverallMetrics(testResult.test_results);
+              const name = testResult.training?.name || 'Unknown Training';
+              return (
+                <MobileListRow
+                  key={testResult._id}
+                  to={testResult.training ? `/trainings/${testResult.training._id}?tab=test-results` : undefined}
+                  title={name}
+                  selected={selectedTestResults.has(testResult._id)}
+                  onToggle={() => handleSelectTestResult(testResult._id, !selectedTestResults.has(testResult._id))}
+                  selectLabel={`Select ${name} epoch ${testResult.epoch}`}
+                  meta={`Epoch ${testResult.epoch} · ${formatDate(testResult.timestamp)}`}
+                  figures={[
+                    ...AVERAGED_METRICS.map((metric, index) => ({
+                      label: `Avg ${taxonomy.metric(metric).label}`,
+                      value: formatNumber(averages[index])
+                    })),
+                    ...taxonomy.overallMetrics.map(metric => ({
+                      label: metric.label,
+                      value: formatNumber(overallMetrics[metric.key], metric.decimals)
+                    }))
+                    // A metric this run did not record is a column of dashes on
+                    // desktop; on a phone it is left out.
+                  ].filter(figure => figure.value !== '-')}
+                  actionsLabel={`Actions for ${name} epoch ${testResult.epoch}`}
+                  actions={
+                    canDeleteTestResults(testResult._id)
+                      ? [{ label: 'Delete', icon: <DeleteIcon fontSize="small" />, onClick: () => handleDeleteClick(testResult), danger: true }]
+                      : []
+                  }
+                />
+              );
+            })}
+          </Paper>
+        ) : (
         <TableContainer 
           component={Paper} 
           elevation={0} 

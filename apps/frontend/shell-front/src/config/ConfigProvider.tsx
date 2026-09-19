@@ -1,5 +1,5 @@
-import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
-import { createConfigProvider } from '@visin/frontend-core';
+import { CssBaseline, ThemeProvider } from '@mui/material';
+import { createConfigProvider, createVisinTheme } from '@visin/frontend-core';
 
 export interface AppConfig {
   AUTH_SERVICE_URL?: string;
@@ -31,42 +31,8 @@ function createDevConfig(): AppConfig {
   };
 }
 
-// The menu's theme — the same one label-front and account-front use. Each
-// remote still wraps its own pages in its own theme.
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#2563eb',
-      light: '#60a5fa',
-      dark: '#1d4ed8'
-    },
-    secondary: {
-      main: '#64748b'
-    },
-    background: {
-      default: '#f8fafc',
-      paper: '#ffffff'
-    },
-    text: {
-      primary: '#0f172a',
-      secondary: '#475569'
-    },
-    divider: '#e2e8f0'
-  },
-  typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    h1: { fontWeight: 700 },
-    h2: { fontWeight: 700 },
-    h3: { fontWeight: 700 },
-    h4: { fontWeight: 600 },
-    h5: { fontWeight: 600 },
-    h6: { fontWeight: 600 },
-    button: { textTransform: 'none', fontWeight: 500 }
-  },
-  shape: {
-    borderRadius: 12
-  }
-});
+// The one Visin theme, so crossing apps inside the shell never changes the look.
+const theme = createVisinTheme();
 
 export const { ConfigProvider, ConfigContext, useConfig, getGlobalConfig } = createConfigProvider<AppConfig>({
   createDevConfig,

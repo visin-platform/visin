@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useCompactLayout } from '@visin/frontend-core';
+import { MobileListRow } from '../common/MobileList';
 import {
   Box,
   Typography,
@@ -26,6 +28,23 @@ import { formatDateTime } from '../../utils';
 import { benchmarkService } from '../../services/benchmarkService';
 import { BenchmarksPaginatedResponse, BenchmarkResult } from '../../types';
 
+const formatParameters = (res: BenchmarkResult | null) => {
+  if (!res) return '-';
+  // Prefer explicit million field if present
+  if (res.total_parameters_m !== undefined && res.total_parameters_m !== null) {
+    return `${Number(res.total_parameters_m).toFixed(1)}M`;
+  }
+  const paramVal = res.parameters ?? res.total_parameters ?? res.trainable_parameters;
+  if (paramVal !== undefined && paramVal !== null) {
+    const num = Number(paramVal);
+    if (Number.isFinite(num)) return `${(num / 1e6).toFixed(1)}M`;
+  }
+  return '-';
+};
+
+const formatFps = (res: BenchmarkResult | null) =>
+  res?.fps !== undefined && res?.fps !== null ? res.fps.toFixed(2) : '-';
+
 interface ProjectBenchmarksTabProps {
   benchmarksResponse: BenchmarksPaginatedResponse | undefined;
   isLoading: boolean;
@@ -45,6 +64,7 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
   onRowsPerPageChange,
   isOwner
 }) => {
+  const compact = useCompactLayout();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [benchmarkToDelete, setBenchmarkToDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -80,12 +100,39 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
     setDeleteError(null);
   };
   return (
-    <Box sx={{ px: 3 }}>
+    <Box sx={{ px: { xs: 0, sm: 3 } }}>
       <Typography variant="h6" gutterBottom>Benchmarks</Typography>
       {isLoading ? (
         <CircularProgress />
       ) : benchmarksResponse?.data?.benchmarks && benchmarksResponse.data.benchmarks.length > 0 ? (
         <>
+          {compact ? (
+            <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+              {benchmarksResponse.data.benchmarks.map((benchmark) => {
+                const firstResult = benchmark.results && benchmark.results.length > 0 ? benchmark.results[0] : null;
+                const trainingObj = benchmark.training_id && typeof benchmark.training_id === 'object' ? benchmark.training_id : null;
+                const trainingName = trainingObj?.name || 'Unknown';
+                return (
+                  <MobileListRow
+                    key={benchmark._id}
+                    to={trainingObj?._id ? `/trainings/${trainingObj._id}?tab=benchmarks` : undefined}
+                    title={trainingName}
+                    figures={[
+                      { label: 'FPS', value: formatFps(firstResult) },
+                      { label: 'Parameters', value: formatParameters(firstResult) }
+                    ]}
+                    footer={formatDateTime(benchmark.timestamp)}
+                    actionsLabel={`Actions for ${trainingName} benchmark`}
+                    actions={
+                      isOwner
+                        ? [{ label: 'Delete', icon: <DeleteIcon fontSize="small" />, onClick: () => handleDeleteBenchmark(benchmark._id), danger: true }]
+                        : []
+                    }
+                  />
+                );
+              })}
+            </Paper>
+          ) : (
           <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
             <Table>
               <TableHead>
@@ -101,19 +148,6 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
                 {benchmarksResponse.data.benchmarks.map((benchmark) => {
                   const firstResult = benchmark.results && benchmark.results.length > 0 ? benchmark.results[0] : null;
 
-                  const formatParameters = (res: BenchmarkResult | null) => {
-                    if (!res) return '-';
-                    // Prefer explicit million field if present
-                    if (res.total_parameters_m !== undefined && res.total_parameters_m !== null) {
-                      return `${Number(res.total_parameters_m).toFixed(1)}M`;
-                    }
-                    const paramVal = res.parameters ?? res.total_parameters ?? res.trainable_parameters;
-                    if (paramVal !== undefined && paramVal !== null) {
-                      const num = Number(paramVal);
-                      if (Number.isFinite(num)) return `${(num / 1e6).toFixed(1)}M`;
-                    }
-                    return '-';
-                  };
 
                   // Determine training link id (prefer object _id)
                   const trainingObj = benchmark.training_id && typeof benchmark.training_id === 'object' ? benchmark.training_id : null;
@@ -135,7 +169,7 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
                           <Typography variant="body2">{trainingName}</Typography>
                         )}
                       </TableCell>
-                      <TableCell>{firstResult?.fps !== undefined && firstResult?.fps !== null ? firstResult.fps.toFixed(2) : '-'}</TableCell>
+                      <TableCell>{formatFps(firstResult)}</TableCell>
                       <TableCell>{formatParameters(firstResult)}</TableCell>
                       <TableCell>{formatDateTime(benchmark.timestamp)}</TableCell>
                       {isOwner && (
@@ -160,6 +194,7 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
               </TableBody>
             </Table>
           </TableContainer>
+          )}
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
             <TablePagination
               component="div"

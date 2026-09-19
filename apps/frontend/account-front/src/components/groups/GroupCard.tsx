@@ -3,6 +3,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Avatar,
   Box,
   Button,
   Chip,
@@ -10,8 +11,10 @@ import {
   IconButton,
   TextField,
   Tooltip,
-  Typography
+  Typography,
+  useTheme
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { Check, Close, Delete, Edit, ExpandMore } from '@mui/icons-material';
 import { Group, GroupRole, permissionsFor, roleOf } from '../../types/group';
 import GroupMembers from './GroupMembers';
@@ -36,6 +39,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
   onChangeRole,
   onRemoveMember
 }) => {
+  const theme = useTheme();
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(group.name);
 
@@ -56,24 +60,50 @@ const GroupCard: React.FC<GroupCardProps> = ({
   };
 
   return (
+    // A row of the groups panel: flat, with a hairline above every row but the first.
     <Accordion
       disableGutters
-      variant="outlined"
-      sx={{ borderRadius: 3, '&:before': { display: 'none' }, mb: 2, overflow: 'hidden' }}
+      elevation={0}
+      square
+      sx={{
+        bgcolor: 'transparent',
+        '&:before': { display: 'none' },
+        '& + &': { borderTop: 1, borderColor: 'divider' }
+      }}
     >
-      <AccordionSummary expandIcon={<ExpandMore />} aria-label={`Toggle ${group.name}`}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, pr: 2 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            {group.name}
-          </Typography>
-          {myRole && <Chip label={myRole} size="small" color={myRole === 'member' ? 'default' : 'primary'} />}
-          <Typography variant="caption" sx={{ color: 'text.secondary', ml: 'auto' }}>
-            {group.members.length} {group.members.length === 1 ? 'member' : 'members'}
-          </Typography>
+      <AccordionSummary
+        expandIcon={<ExpandMore />}
+        aria-label={`Toggle ${group.name}`}
+        sx={{ px: 2, minHeight: 68, '&:hover': { bgcolor: 'action.hover' } }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexGrow: 1, minWidth: 0, pr: 1 }}>
+          <Avatar
+            variant="rounded"
+            sx={{ width: 40, height: 40, borderRadius: '12px', fontWeight: 700, bgcolor: alpha(theme.palette.primary.main, 0.12), color: 'primary.main' }}
+          >
+            {group.name.trim().charAt(0).toUpperCase()}
+          </Avatar>
+          <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+            <Typography noWrap sx={{ fontWeight: 600 }}>
+              {group.name}
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              {group.members.length} {group.members.length === 1 ? 'member' : 'members'}
+            </Typography>
+          </Box>
+          {myRole && (
+            <Chip
+              label={myRole}
+              size="small"
+              color={myRole === 'member' ? 'default' : 'primary'}
+              variant={myRole === 'member' ? 'outlined' : 'filled'}
+              sx={{ textTransform: 'capitalize', flexShrink: 0 }}
+            />
+          )}
         </Box>
       </AccordionSummary>
 
-      <AccordionDetails sx={{ px: 3, pb: 3 }}>
+      <AccordionDetails sx={{ px: { xs: 2, sm: 3 }, pb: 3, pt: 1, bgcolor: 'background.default', borderTop: 1, borderColor: 'divider' }}>
         {permissions.canRename && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
             {editingName ? (
@@ -94,7 +124,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
                 </IconButton>
               </>
             ) : (
-              <Button size="small" startIcon={<Edit />} onClick={() => setEditingName(true)} sx={{ borderRadius: 2 }}>
+              <Button size="small" startIcon={<Edit />} onClick={() => setEditingName(true)}>
                 Rename group
               </Button>
             )}
@@ -128,7 +158,6 @@ const GroupCard: React.FC<GroupCardProps> = ({
                 startIcon={<Delete />}
                 disabled={busy}
                 onClick={() => onDelete(group)}
-                sx={{ borderRadius: 2 }}
               >
                 Delete group
               </Button>

@@ -1,5 +1,7 @@
 import { useWriteCapabilities } from '../../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
+import { useCompactLayout } from '@visin/frontend-core';
+import { MobileListRow } from '../common/MobileList';
 import {
   Box,
   Button,
@@ -39,6 +41,7 @@ type ComparisonType = 'trainings';
 
 const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId }) => {
   const navigate = useNavigate();
+  const compact = useCompactLayout();
   const queryClient = useQueryClient();
   const theme = useTheme();
   const canWrite = useWriteCapabilities('project', [projectId]);
@@ -197,7 +200,7 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
   const comparisons: Comparison[] = comparisonsResponse?.data?.comparisons || [];
 
   return (
-    <Box sx={{ px: 3 }}>
+    <Box sx={{ px: { xs: 0, sm: 3 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h6" gutterBottom>Comparisons</Typography>
         {isAuthenticated && (
@@ -218,6 +221,28 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
       ) : comparisons.length === 0 ? (
         <Alert severity="info">No comparisons found. Create your first comparison to get started.</Alert>
       ) : (
+        compact ? (
+          <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+            {comparisons.map((comparison) => (
+              <MobileListRow
+                key={comparison._id}
+                onClick={() => handleComparisonClick(comparison)}
+                title={comparison.name}
+                meta={`${comparison.itemIds.length} items`}
+                footer={formatDateTime(comparison.createdAt)}
+                actionsLabel={`Actions for ${comparison.name}`}
+                actions={
+                  isAuthenticated
+                    ? [
+                        { label: 'Edit', icon: <EditIcon fontSize="small" />, onClick: () => handleEditComparison(comparison) },
+                        { label: 'Delete', icon: <DeleteIcon fontSize="small" />, onClick: () => handleDeleteComparison(comparison), danger: true }
+                      ]
+                    : []
+                }
+              />
+            ))}
+          </Paper>
+        ) : (
         <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
           <Table>
             <TableHead>
@@ -278,6 +303,7 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
             </TableBody>
           </Table>
         </TableContainer>
+        )
       )}
 
       {/* Create/Edit Comparison Modal */}

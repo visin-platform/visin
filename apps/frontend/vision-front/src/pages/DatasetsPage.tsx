@@ -2,28 +2,27 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
-  Button,
   Card,
   CardActionArea,
   CardContent,
   CardMedia,
   Chip,
   CircularProgress,
-  Container,
   IconButton,
+  InputAdornment,
   Pagination,
   Stack,
   TextField,
   Tooltip,
   Typography
 } from '@mui/material';
-import { Add as AddIcon, Download as DownloadIcon, FolderZip as ZipIcon } from '@mui/icons-material';
+import { Add as AddIcon, Download as DownloadIcon, FolderZip as ZipIcon, Search as SearchIcon } from '@mui/icons-material';
+import { EmptyState, PageHeader, Panel } from '@visin/frontend-core';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useDatasetDownload } from '../hooks/useDatasetDownload';
-import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DatasetFormDialog, { DatasetFormValues } from '../components/dataset/DatasetFormDialog';
 import { createDataset, Dataset, listDatasets } from '../services/datasetService';
 import { isActive, useDatasetUpload, startUpload } from '../services/datasetUploads';
@@ -37,12 +36,12 @@ const DatasetCard: React.FC<{ dataset: Dataset; downloading: boolean; onDownload
   const upload = useDatasetUpload(dataset._id);
   const sending = isActive(upload);
   return (
-    <Card variant="outlined" sx={{ display: 'flex', flexDirection: 'column', borderRadius: 2 }}>
+    <Card sx={{ display: 'flex', flexDirection: 'column', transition: 'border-color .15s ease', '&:hover': { borderColor: 'primary.light' } }}>
       <CardActionArea onClick={() => navigate(`/datasets/${dataset._id}`)} sx={{ flexGrow: 1, alignItems: 'stretch' }}>
         {dataset.coverUrl ? (
-          <CardMedia component="img" image={dataset.coverUrl} alt="" loading="lazy" sx={{ height: 140, objectFit: 'cover' }} />
+          <CardMedia component="img" image={dataset.coverUrl} alt="" loading="lazy" sx={{ height: 150, objectFit: 'cover' }} />
         ) : (
-          <Box sx={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'action.hover' }}>
+          <Box sx={{ height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'action.hover' }}>
             <ZipIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
           </Box>
         )}
@@ -130,25 +129,31 @@ export const DatasetsPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <PageBreadcrumbs items={[{ label: 'Datasets', current: true }]} />
-      <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 700, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>
-            Datasets
-          </Typography>
-          <Typography sx={{ color: 'text.secondary', fontSize: { xs: '0.8125rem', sm: '1rem' } }}>
-            Zip bundles to download, with the images inside them to browse.
-          </Typography>
-        </Box>
-        {isAuthenticated && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)} sx={{ flexShrink: 0 }}>
-            New dataset
-          </Button>
-        )}
-      </Stack>
+    <Box>
+      <PageHeader
+        title="Datasets"
+        subtitle="Zip bundles to download, with the images inside them to browse."
+        hideTitleOnPhone
+        primaryAction={isAuthenticated ? { label: 'New dataset', icon: <AddIcon />, onClick: () => setCreating(true) } : undefined}
+      />
 
-      <TextField size="small" label="Search datasets" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} sx={{ mb: 2, width: { xs: '100%', sm: 320 } }} />
+      <TextField
+        size="small"
+        placeholder="Search datasets"
+        value={searchInput}
+        onChange={(e) => setSearchInput(e.target.value)}
+        slotProps={{
+          htmlInput: { 'aria-label': 'Search datasets' },
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            )
+          }
+        }}
+        sx={{ mb: 2.5, width: { xs: '100%', sm: 360 } }}
+      />
       {(error || loadError) && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error || (loadError instanceof Error ? loadError.message : 'Failed to load datasets')}
@@ -160,9 +165,13 @@ export const DatasetsPage: React.FC = () => {
           <CircularProgress />
         </Box>
       ) : data && data.datasets.length === 0 ? (
-        <Typography sx={{ color: 'text.secondary', py: 6, textAlign: 'center' }}>
-          {search ? 'No dataset matches that search.' : 'No datasets yet.'}
-        </Typography>
+        <Panel>
+          <EmptyState
+            icon={<ZipIcon />}
+            title={search ? 'No dataset matches that search.' : 'No datasets yet.'}
+            description={search ? undefined : 'A dataset is a zip of images you can browse, share with a group and label.'}
+          />
+        </Panel>
       ) : (
         <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(4, 1fr)' } }}>
           {data?.datasets.map((dataset) => (
@@ -183,7 +192,7 @@ export const DatasetsPage: React.FC = () => {
         onCancel={() => setCreating(false)}
         onSubmit={handleCreate}
       />
-    </Container>
+    </Box>
   );
 };
 

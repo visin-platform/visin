@@ -174,7 +174,7 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
   };
 
   return (
-    <Box sx={{ px: 3 }}>
+    <Box sx={{ px: { xs: 0, sm: 3 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2, gap: 1 }}>
         {selectedTrainingIds.size > 1 && (
           <Button

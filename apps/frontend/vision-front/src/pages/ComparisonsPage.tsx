@@ -1,4 +1,5 @@
 import React from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import {
   Box,
   Typography,
@@ -64,43 +65,17 @@ const ComparisonsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 4
-        }}>
-        <Box>
-          <Typography variant="h4" component="h1" gutterBottom sx={{
-            fontWeight: 700
-          }}>
-            Comparisons
-          </Typography>
-          <Typography variant="body1" sx={{
-            color: "text.secondary"
-          }}>
-            Compare and analyze model performance across different test results
-          </Typography>
-        </Box>
-        <Box>
+      <PageHeader
+        title="Comparisons"
+        subtitle="Compare and analyze model performance across different test results"
+        actions={
           <Tooltip title="Refresh">
-            <IconButton
-              onClick={() => {
-                loadComparisons();
-              }}
-              sx={{ 
-                bgcolor: 'background.paper',
-                border: `1px solid ${theme.palette.divider}`,
-                borderRadius: 2,
-                '&:hover': { bgcolor: theme.palette.action.hover }
-              }}
-            >
+            <IconButton aria-label="Refresh" onClick={() => loadComparisons()}>
               <RefreshIcon />
             </IconButton>
           </Tooltip>
-        </Box>
-      </Box>
+        }
+      />
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}

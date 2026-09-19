@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import TrainingsTable from './TrainingsTable';
@@ -169,5 +169,85 @@ describe('TrainingsTable', () => {
     const nextButton = screen.getByRole('button', { name: /next page/i });
     fireEvent.click(nextButton);
     expect(onPageChange).toHaveBeenCalled();
+  });
+});
+
+describe('TrainingsTable on a phone', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      })
+    });
+  });
+
+  afterEach(() => {
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it('lists each run full-width, leading to it, with its figures under the name', () => {
+    renderTable();
+
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    const row = screen.getByRole('link', { name: /Training One/ });
+    expect(row).toHaveAttribute('href', '/trainings/t1');
+    expect(row).toHaveTextContent('10 epochs');
+    expect(row).toHaveTextContent('seg');
+  });
+
+  it('shows the first tags and counts the rest', () => {
+    renderTable({ trainings: [{ ...trainings[0], tags: ['a', 'b', 'c', 'd', 'e'] }] });
+
+    expect(screen.getByText('c')).toBeInTheDocument();
+    expect(screen.queryByText('d')).not.toBeInTheDocument();
+    expect(screen.getByText('+2')).toBeInTheDocument();
+  });
+
+  it('selects runs for comparison from their checkboxes', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Training One' }));
+    expect(baseProps.onSelectTraining).toHaveBeenCalledWith('t1');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all trainings' }));
+    expect(baseProps.onSelectAll).toHaveBeenCalled();
+  });
+
+  it('sorts from the sort control, and flips the order', () => {
+    renderTable();
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Sort by' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Name' }));
+    expect(baseProps.onSort).toHaveBeenCalledWith('name');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sorted descending' }));
+    expect(baseProps.onSort).toHaveBeenCalledWith('createdAt');
+  });
+
+  it('edits and deletes from the row menu, where the viewer may', () => {
+    renderTable();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Training One' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    expect(baseProps.onEdit).toHaveBeenCalledWith(trainings[0]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Training One' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    expect(baseProps.onDelete).toHaveBeenCalledWith('t1');
+  });
+
+  it('offers no menu on runs the viewer cannot change', () => {
+    renderTable({ canWrite: () => false });
+
+    expect(screen.queryByRole('button', { name: /Actions for/ })).not.toBeInTheDocument();
   });
 });

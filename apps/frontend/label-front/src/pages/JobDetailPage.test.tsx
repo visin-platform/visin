@@ -62,6 +62,13 @@ beforeEach(() => {
   mockedListJobs.mockResolvedValue([]);
 });
 
+
+/** Admin chores sit behind the job's ⋮ menu: open it and choose one. */
+const chooseAction = async (name: string) => {
+  fireEvent.click(await screen.findByRole('button', { name: /More actions for/ }));
+  fireEvent.click(await screen.findByRole('menuitem', { name }));
+};
+
 describe('JobDetailPage', () => {
   it('shows progress, stats, per-user and per-stratum tables', async () => {
     renderPage();
@@ -78,7 +85,8 @@ describe('JobDetailPage', () => {
 
     expect(await screen.findByRole('link', { name: 'Start labeling' })).toHaveAttribute('href', '/jobs/j1/work');
     expect(screen.queryByRole('button', { name: 'Pause' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Export JSONL' })).not.toBeInTheDocument();
+    // Admin chores live behind the ⋮ menu, which a non-admin does not get.
+    expect(screen.queryByRole('button', { name: /More actions for/ })).not.toBeInTheDocument();
   });
 
   it('lets an admin pause and export', async () => {
@@ -90,10 +98,10 @@ describe('JobDetailPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Pause' }));
     await waitFor(() => expect(mockedTransition).toHaveBeenCalledWith('j1', 'pause'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+    await chooseAction('Export CSV');
     expect(mockedExport).toHaveBeenCalledWith('j1', 'csv');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export manifest' }));
+    await chooseAction('Export manifest');
     expect(mockedExport).toHaveBeenCalledWith('j1', 'manifest');
   });
 
@@ -119,7 +127,7 @@ describe('JobDetailPage transitions', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Resume' }));
     await waitFor(() => expect(mockedTransition).toHaveBeenCalledWith('j1', 'resume'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    await chooseAction('Archive');
     await waitFor(() => expect(mockedTransition).toHaveBeenCalledWith('j1', 'archive'));
   });
 
@@ -128,7 +136,7 @@ describe('JobDetailPage transitions', () => {
     mockedExport.mockRejectedValue(new Error('Export failed (500)'));
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Export JSONL' }));
+    await chooseAction('Export JSONL');
 
     expect(mockedExport).toHaveBeenCalledWith('j1', 'jsonl');
     expect(await screen.findByText('Export failed (500)')).toBeInTheDocument();
@@ -139,7 +147,7 @@ describe('JobDetailPage transitions', () => {
     mockedDelete.mockResolvedValue({ tasks: 4135, answers: 7 });
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await chooseAction('Delete');
 
     await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('j1'));
     // The 4 collected answers are named in the prompt: they are the labeling
@@ -153,7 +161,7 @@ describe('JobDetailPage transitions', () => {
     mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await chooseAction('Delete');
 
     expect(mockedDelete).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
@@ -167,9 +175,9 @@ it('lets administrators explicitly publish and stop sharing', async () => {
     return job({ isPublic }) as Awaited<ReturnType<typeof setJobVisibility>>;
   });
   renderPage();
-  fireEvent.click(await screen.findByRole('button', { name: 'Enable public sharing' }));
+  await chooseAction('Enable public sharing');
   await waitFor(() => expect(setJobVisibility).toHaveBeenCalledWith('j1', true));
-  fireEvent.click(await screen.findByRole('button', { name: 'Stop public sharing' }));
+  await chooseAction('Stop public sharing');
   await waitFor(() => expect(setJobVisibility).toHaveBeenCalledWith('j1', false));
 });
 
@@ -177,7 +185,7 @@ it('surfaces sharing failures', async () => {
   mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
   vi.mocked(setJobVisibility).mockRejectedValue(new Error('Group owner/admin required'));
   renderPage();
-  fireEvent.click(await screen.findByRole('button', { name: 'Enable public sharing' }));
+  await chooseAction('Enable public sharing');
   expect(await screen.findByText('Group owner/admin required')).toBeInTheDocument();
 });
 
@@ -193,5 +201,5 @@ it('keeps a signed-in public visitor in browse mode', async () => {
   renderPage();
   await screen.findByText('Mask check');
   expect(screen.queryByRole('button', { name: 'Start labeling' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Enable public sharing' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /More actions for/ })).not.toBeInTheDocument();
 });

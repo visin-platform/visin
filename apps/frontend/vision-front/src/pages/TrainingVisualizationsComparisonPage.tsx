@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
@@ -156,14 +157,14 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4">
-          Training Visualizations Comparison
-        </Typography>
-        <Button variant="outlined" onClick={copyShareUrl} size="small">
-          Copy Share Link
-        </Button>
-      </Box>
+      <PageHeader
+        title="Training Visualizations Comparison"
+        actions={
+          <Button variant="outlined" onClick={copyShareUrl} size="small">
+            Copy Share Link
+          </Button>
+        }
+      />
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}

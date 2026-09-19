@@ -1,5 +1,5 @@
-import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
-import { createConfigProvider } from '@visin/frontend-core';
+import { CssBaseline, ThemeProvider } from '@mui/material';
+import { createConfigProvider, createVisinTheme } from '@visin/frontend-core';
 
 export interface AppConfig {
   AUTH_SERVICE_URL?: string;
@@ -22,59 +22,8 @@ function createDevConfig(): AppConfig {
   };
 }
 
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#2563eb', // Modern blue
-      light: '#60a5fa',
-      dark: '#1d4ed8',
-    },
-    secondary: {
-      main: '#64748b', // Slate
-    },
-    background: {
-      default: '#f8fafc', // Very light slate
-      paper: '#ffffff',
-    },
-    text: {
-      primary: '#0f172a',
-      secondary: '#475569',
-    },
-    divider: '#e2e8f0',
-  },
-  typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    h1: { fontWeight: 700 },
-    h2: { fontWeight: 700 },
-    h3: { fontWeight: 700 },
-    h4: { fontWeight: 600 },
-    h5: { fontWeight: 600 },
-    h6: { fontWeight: 600 },
-    button: { textTransform: 'none', fontWeight: 500 },
-  },
-  shape: {
-    borderRadius: 12,
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          boxShadow: 'none',
-          '&:hover': {
-            boxShadow: 'none',
-          },
-        },
-      },
-    },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
-        },
-      },
-    },
-  },
-});
+// The one Visin theme, so crossing apps inside the shell never changes the look.
+const theme = createVisinTheme();
 
 export const { ConfigProvider, ConfigContext, useConfig, getGlobalConfig } = createConfigProvider<AppConfig>({
   createDevConfig,

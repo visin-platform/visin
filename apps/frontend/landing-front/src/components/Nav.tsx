@@ -20,8 +20,8 @@ import { GITHUB_URL } from '../content';
 import { INK } from '../theme';
 
 const LINKS = [
-  { label: 'Analysis', href: '#assistant' },
-  { label: 'How it works', href: '#how-it-works' },
+  { label: 'Product', href: '#product' },
+  { label: 'Assistant', href: '#assistant' },
   { label: 'Self-hosting', href: '#open-source' },
   { label: 'Contact', href: '#contact' }
 ];

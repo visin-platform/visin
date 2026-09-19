@@ -1,4 +1,6 @@
 import React from 'react';
+import { useCompactLayout } from '@visin/frontend-core';
+import { MobileListRow } from '../common/MobileList';
 import {
   Box,
   Typography,
@@ -51,6 +53,40 @@ const ComparisonsTable: React.FC<ComparisonsTableProps> = ({
   getTypeColor,
   theme
 }) => {
+  const compact = useCompactLayout();
+
+  if (compact) {
+    return (
+      <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, overflow: 'hidden' }}>
+        {comparisons.map((comparison) => (
+          <MobileListRow
+            key={comparison._id}
+            onClick={() => onViewComparison(comparison)}
+            title={comparison.name}
+            meta={
+              <>
+                <Chip label={comparison.type} color={getTypeColor(comparison.type)} size="small" variant="outlined" />
+                <span>
+                  {comparison.itemIds.length} item{comparison.itemIds.length !== 1 ? 's' : ''}
+                </span>
+              </>
+            }
+            footer={[comparison.description, formatTimestamp(comparison.createdAt)].filter(Boolean).join(' · ')}
+            actionsLabel={`Actions for ${comparison.name}`}
+            actions={
+              canDelete(comparison._id)
+                ? [
+                    { label: 'Edit', icon: <EditIcon fontSize="small" />, onClick: () => onEditComparison(comparison) },
+                    { label: 'Delete', icon: <DeleteIcon fontSize="small" />, onClick: () => onDeleteComparison(comparison._id), danger: true }
+                  ]
+                : []
+            }
+          />
+        ))}
+      </Paper>
+    );
+  }
+
   return (
     <TableContainer 
       component={Paper} 

@@ -17,26 +17,51 @@ export const GITHUB_URL = 'https://github.com/visin-platform/visin';
  */
 export const QUICKSTART = [`git clone ${GITHUB_URL}`, 'cd visin', 'docker compose up -d'];
 
-export interface Step {
-  /** Key into the icon map in Workflow.tsx. */
-  icon: 'upload' | 'label' | 'train' | 'compare' | 'write';
+/**
+ * Real screens of the product, captured from a running instance: the page
+ * shows what Visin looks like rather than describing it. Metrics and run names
+ * only — no dataset imagery (third-party licences) and no other people's
+ * account details.
+ */
+export interface ShowcaseItem {
+  src: string;
+  alt: string;
   title: string;
-  body: string;
+  caption: string;
 }
 
-/**
- * The pipeline, as a flow.
- *
- * A line each, because the point of the diagram is the shape of the path — raw
- * images in one end, a paper table out the other. A sentence per node stops it
- * being a diagram and makes it a list with decoration.
- */
-export const STEPS: Step[] = [
-  { icon: 'upload', title: 'Upload', body: 'Images and metadata. Private unless you say so.' },
-  { icon: 'label', title: 'Label', body: 'Split the job across your team.' },
-  { icon: 'train', title: 'Train', body: 'Your script posts epochs and renders.' },
-  { icon: 'compare', title: 'Compare', body: 'Runs side by side, at their best epoch.' },
-  { icon: 'write', title: 'Write up', body: 'Your assistant drafts the paper section.' }
+export const SHOWCASE: ShowcaseItem[] = [
+  {
+    src: '/showcase/charts.webp',
+    alt: 'Training and validation loss and mean IoU curves over 100 epochs',
+    title: 'Every epoch, charted',
+    caption: 'Loss and metric curves for each run, as your script posts them.'
+  },
+  {
+    src: '/showcase/compare.webp',
+    alt: 'A table comparing nine runs by time, best epoch and best validation mIoU',
+    title: 'Runs compared at their best',
+    caption: 'Side by side at the best epoch, not the last one.'
+  },
+  {
+    src: '/showcase/tests.webp',
+    alt: 'Per-class IoU, precision, recall and AP for each weather condition',
+    title: 'Per class, per condition',
+    caption: 'Test scores broken down the way your data is.'
+  },
+  {
+    src: '/showcase/label.webp',
+    alt: 'A labeling job at 1,002 of 4,110 frames, with start labeling and browse buttons',
+    title: 'Labeling as a team',
+    caption: 'Split a job across your group and watch it fill up.'
+  }
+];
+
+/** The installed app on a phone: the same data, in your pocket. */
+export const PHONE_SCREENS = [
+  { src: '/showcase/phone-home.webp', alt: 'Visin home on a phone: projects, trainings and tasks to label' },
+  { src: '/showcase/phone-trainings.webp', alt: 'A project’s training runs listed on a phone' },
+  { src: '/showcase/phone-charts.webp', alt: 'A run’s loss curve on a phone' }
 ];
 
 export interface OpenSourcePoint {
@@ -45,18 +70,9 @@ export interface OpenSourcePoint {
 }
 
 export const OPEN_SOURCE_POINTS: OpenSourcePoint[] = [
-  {
-    title: 'Runs on your hardware',
-    body: 'Node services, React apps, MongoDB. Each ships a Dockerfile. Run the lot or two parts.'
-  },
-  {
-    title: 'Your images stay yours',
-    body: 'Files sit on disk, on machines you control. No third party. No hosted tier to leave later.'
-  },
-  {
-    title: 'MIT licensed',
-    body: 'No seats. No quota. No licence key.'
-  }
+  { title: 'Runs on your hardware', body: 'One Docker Compose file.' },
+  { title: 'Your images stay yours', body: 'On disk, on machines you control.' },
+  { title: 'MIT licensed', body: 'No seats, no quota, no licence key.' }
 ];
 
 /**
@@ -89,6 +105,13 @@ export interface ChatTurn {
   via?: string;
   /** something it produced, shown as code */
   code?: string;
+  /**
+   * The MCP tools it calls first, by their real names, played as calls that
+   * run and complete before the answer arrives.
+   */
+  tools?: string[];
+  /** Draw the two runs' validation curves under the answer. */
+  chart?: boolean;
 }
 
 export const ASK_CONVERSATION: ChatTurn[] = [
@@ -96,25 +119,16 @@ export const ASK_CONVERSATION: ChatTurn[] = [
   {
     from: 'visin',
     text: 'window16, by 0.004 mIoU — 0.451 at epoch 185 against 0.447 at 195. Neither ended at its best; both are past their peak well before epoch 200.',
-    via: 'read 2 runs, 400 epochs'
-  },
-  { from: 'you', text: 'Is that gap real?' },
-  {
-    from: 'visin',
-    text: 'One seed each, so I would not report it as one. Validation loss bottoms out around epoch 13 and roughly quadruples by the end — both runs overfit long before they stop.',
-    via: 'read the epoch curves'
-  },
-  { from: 'you', text: 'What should I change for the next run?' },
-  {
-    from: 'visin',
-    text: 'Stop around epoch 30, where validation loss turns. window16 is 15% slower per frame for that 0.004, so keep window8 as the baseline and rerun both on three seeds.',
-    via: 'read the config both runs launched with'
+    via: 'read 2 runs, 400 epochs',
+    tools: ['list_trainings', 'compare_trainings', 'get_training_curve'],
+    chart: true
   },
   { from: 'you', text: 'Write it up.' },
   {
     from: 'visin',
     text: 'Saved to the project, and here it is as a section. The table is built from the recorded epochs, not retyped.',
     via: 'exported as LaTeX',
+    tools: ['record_finding'],
     code: [
       '\\subsection{Window size past 16}',
       '\\begin{table}[htbp]',
@@ -132,18 +146,9 @@ export interface ConnectStep {
 }
 
 export const CONNECT_STEPS: ConnectStep[] = [
-  {
-    title: 'One click, no key',
-    body: 'Point your assistant at the endpoint, tick what it may do, done. Claude and ChatGPT connect this way, and so does anything else that speaks MCP. Read-only unless you say otherwise.'
-  },
-  {
-    title: 'Reading and writing are separate',
-    body: 'An assistant that writes up results does not need to rename anything. So do not grant it.'
-  },
-  {
-    title: 'You see what it did',
-    body: 'Every call logged: which tool, how long, how many tokens, whether it failed.'
-  }
+  { title: 'One click, no key', body: 'Claude, ChatGPT, anything that speaks MCP.' },
+  { title: 'Read-only by default', body: 'Writing is a separate permission.' },
+  { title: 'Every call logged', body: 'Which tool, how long, how many tokens.' }
 ];
 
 export interface AssistantLimit {
@@ -152,6 +157,6 @@ export interface AssistantLimit {
 
 export const ASSISTANT_LIMITS: AssistantLimit[] = [
   { body: 'It reads measurements. It does not make them.' },
-  { body: 'It sees the frames a run rendered. Not your raw dataset images.' },
-  { body: 'It reaches exactly what your account reaches, and nothing else.' }
+  { body: 'It sees rendered frames, not your raw dataset images.' },
+  { body: 'It reaches what your account reaches, nothing more.' }
 ];

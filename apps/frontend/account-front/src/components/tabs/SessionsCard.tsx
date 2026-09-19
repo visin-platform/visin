@@ -56,7 +56,7 @@ const SessionsCard: React.FC = () => {
   const error = revoke.error ?? revokeOthers.error;
 
   return (
-    <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, borderColor: 'divider' }}>
+    <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 4 }, borderRadius: '16px' }}>
       <Box
         sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}
       >

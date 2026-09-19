@@ -15,9 +15,12 @@ import {
   IconButton,
   Tooltip,
   Checkbox,
+  MenuItem,
+  TextField,
   useTheme,
   alpha
 } from '@mui/material';
+import { useCompactLayout } from '@visin/frontend-core';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -28,6 +31,7 @@ import {
   Error as ErrorIcon,
   Schedule as PendingIcon
 } from '@mui/icons-material';
+import { MobileListHeader, MobileListRow } from './common/MobileList';
 import { Link, useNavigate } from 'react-router-dom';
 import { Training } from '../types';
 import { formatDateTime, formatDuration } from '../utils';
@@ -114,7 +118,14 @@ interface SortableTableCellProps {
   sortOrder: 'asc' | 'desc';
   onSort: (column: 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount') => void;
   align?: 'left' | 'center' | 'right';
+  /** Where the column shows, e.g. `LARGE_ONLY`. */
+  display?: { xs: string; lg?: string; xl?: string };
 }
+
+// Run names are long and are what the table is for; on a narrower desktop the
+// secondary columns step aside rather than squeeze the names into a strip.
+const LARGE_ONLY = { xs: 'none', lg: 'table-cell' };
+const WIDE_ONLY = { xs: 'none', xl: 'table-cell' };
 
 const SortableTableCell: React.FC<SortableTableCellProps> = ({
   children,
@@ -122,7 +133,8 @@ const SortableTableCell: React.FC<SortableTableCellProps> = ({
   sortBy,
   sortOrder,
   onSort,
-  align = 'left'
+  align = 'left',
+  display
 }) => {
   const isActive = sortBy === column;
   const theme = useTheme();
@@ -131,6 +143,7 @@ const SortableTableCell: React.FC<SortableTableCellProps> = ({
     <TableCell 
       align={align} 
       sx={{ 
+        display,
         fontWeight: 600,
         cursor: 'pointer',
         userSelect: 'none',
@@ -151,6 +164,116 @@ const SortableTableCell: React.FC<SortableTableCellProps> = ({
         </Box>
       </Box>
     </TableCell>
+  );
+};
+
+type SortColumn = TrainingsTableProps['sortBy'];
+
+const SORT_OPTIONS: { value: SortColumn; label: string }[] = [
+  { value: 'updatedAt', label: 'Updated' },
+  { value: 'createdAt', label: 'Created' },
+  { value: 'name', label: 'Name' },
+  { value: 'status', label: 'Status' },
+  { value: 'epochCount', label: 'Epochs' },
+  { value: 'totalTime', label: 'Time' },
+  { value: 'totalCost', label: 'Cost' }
+];
+
+/** Tags shown on a phone row before the rest collapse into "+N". */
+const PHONE_TAGS = 3;
+
+/**
+ * The phone layout: one full-width row per run. Run names are long and are the
+ * point of the row, so they get the whole width and wrap; everything a column
+ * held on desktop becomes one line under it.
+ */
+const TrainingList: React.FC<Omit<TrainingsTableProps, 'isLoading' | 'searchTerm' | 'onPageChange' | 'onRowsPerPageChange' | 'page' | 'rowsPerPage' | 'total'> & { formatCost: ReturnType<typeof useFormatCost> }> = ({
+  trainings,
+  onEdit,
+  onDelete,
+  selectedTrainingIds,
+  onSelectTraining,
+  onSelectAll,
+  sortBy,
+  sortOrder,
+  onSort,
+  isAuthenticated,
+  canWrite = () => false,
+  formatCost
+}) => {
+  const allSelected = trainings.length > 0 && selectedTrainingIds.size === trainings.length;
+
+  return (
+    <>
+      <MobileListHeader
+        selectAll={{
+          checked: allSelected,
+          indeterminate: selectedTrainingIds.size > 0 && !allSelected,
+          onChange: onSelectAll,
+          label: 'Select all trainings'
+        }}
+      >
+        <TextField
+          select
+          size="small"
+          label="Sort by"
+          value={sortBy}
+          onChange={(event) => onSort(event.target.value as SortColumn)}
+          sx={{ minWidth: 130 }}
+        >
+          {SORT_OPTIONS.map((option) => (
+            <MenuItem key={option.value} value={option.value}>
+              {option.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <IconButton
+          aria-label={sortOrder === 'asc' ? 'Sorted ascending' : 'Sorted descending'}
+          onClick={() => onSort(sortBy)}
+        >
+          {sortOrder === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />}
+        </IconButton>
+      </MobileListHeader>
+
+      {trainings.map((training) => {
+        const metrics = training.metrics;
+        const details = [
+          metrics ? `${metrics.epochCount || 0} epochs` : null,
+          metrics ? formatDuration(metrics.totalTime) : null,
+          metrics ? formatCost((metrics.cpuCost || 0) + (metrics.gpuCost || 0), metrics.currency) : null
+        ].filter((part) => part && part !== '-');
+        const writable = isAuthenticated && canWrite(training._id);
+
+        return (
+          <MobileListRow
+            key={training._id}
+            to={`/trainings/${training._id}`}
+            title={training.name}
+            selected={selectedTrainingIds.has(training._id)}
+            onToggle={() => onSelectTraining(training._id)}
+            selectLabel={`Select ${training.name}`}
+            meta={
+              <>
+                <StatusChip status={training.status} />
+                {details.length > 0 && <span>{details.join(' · ')}</span>}
+              </>
+            }
+            chips={training.tags ?? []}
+            maxChips={PHONE_TAGS}
+            footer={`Updated ${formatDateTime(training.updatedAt)}`}
+            actionsLabel={`Actions for ${training.name}`}
+            actions={
+              writable
+                ? [
+                    { label: 'Edit', icon: <EditIcon fontSize="small" />, onClick: () => onEdit(training) },
+                    { label: 'Delete', icon: <DeleteIcon fontSize="small" />, onClick: () => onDelete(training._id), danger: true }
+                  ]
+                : []
+            }
+          />
+        );
+      })}
+    </>
   );
 };
 
@@ -177,6 +300,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
   const navigate = useNavigate();
   const theme = useTheme();
   const formatCost = useFormatCost();
+  const compact = useCompactLayout();
 
   if (isLoading) {
     return (
@@ -228,6 +352,22 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
         overflow: 'hidden'
       }}
     >
+      {compact ? (
+        <TrainingList
+          trainings={trainings}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          selectedTrainingIds={selectedTrainingIds}
+          onSelectTraining={onSelectTraining}
+          onSelectAll={onSelectAll}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={onSort}
+          isAuthenticated={isAuthenticated}
+          canWrite={canWrite}
+          formatCost={formatCost}
+        />
+      ) : (
       <TableContainer sx={{ overflowX: 'auto' }}>
         <Table sx={{ minWidth: 650 }}>
           <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
@@ -246,7 +386,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
               <SortableTableCell column="name" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
                 Name
               </SortableTableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+              <TableCell sx={{ fontWeight: 600, display: WIDE_ONLY }}>Description</TableCell>
               <SortableTableCell column="status" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="center">
                 Status
               </SortableTableCell>
@@ -259,7 +399,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
               <SortableTableCell column="totalCost" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} align="center">
                 Cost
               </SortableTableCell>
-              <SortableTableCell column="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
+              <SortableTableCell column="createdAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} display={LARGE_ONLY}>
                 Created
               </SortableTableCell>
               <SortableTableCell column="updatedAt" sortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
@@ -296,7 +436,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                       color="primary"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 260 }}>
                     <Box>
                       <Link 
                         to={`/trainings/${training._id}`} 
@@ -332,7 +472,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                       )}
                     </Box>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ display: WIDE_ONLY }}>
                     <Typography
                       variant="body2"
                       noWrap
@@ -367,7 +507,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                       {training.metrics ? formatCost((training.metrics.cpuCost || 0) + (training.metrics.gpuCost || 0), training.metrics.currency) : '-'}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ display: LARGE_ONLY }}>
                     <Typography variant="body2" sx={{
                       color: "text.secondary"
                     }}>
@@ -421,6 +561,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
           </TableBody>
         </Table>
       </TableContainer>
+      )}
       <TablePagination
         rowsPerPageOptions={[10, 25, 50, 100]}
         component="div"
@@ -429,7 +570,8 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
         page={page}
         onPageChange={onPageChange}
         onRowsPerPageChange={onRowsPerPageChange}
-        sx={{ borderTop: `1px solid ${theme.palette.divider}` }}
+        labelRowsPerPage={compact ? 'Rows' : 'Rows per page:'}
+        sx={{ borderTop: compact ? 0 : `1px solid ${theme.palette.divider}` }}
       />
     </Paper>
   );

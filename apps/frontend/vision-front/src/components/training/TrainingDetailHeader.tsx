@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Button, Chip, Stack, Typography } from '@mui/material';
+import { Box, Chip, Stack, Typography } from '@mui/material';
+import { ResponsiveActions } from '@visin/frontend-core';
 import { Refresh as RefreshIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { Training } from '../../types';
 
@@ -24,10 +25,10 @@ const TrainingDetailHeader: React.FC<TrainingDetailHeaderProps> = ({
     <Box
       sx={{
         display: "flex",
-        flexDirection: { xs: 'column', md: 'row' },
+        flexDirection: 'row',
         justifyContent: "space-between",
-        alignItems: { xs: 'flex-start', md: 'flex-start' },
-        gap: 2
+        alignItems: 'flex-start',
+        gap: { xs: 1, md: 2 }
       }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Box
@@ -60,43 +61,26 @@ const TrainingDetailHeader: React.FC<TrainingDetailHeaderProps> = ({
         </Typography>
 
         {training.tags && training.tags.length > 0 && (
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+          <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap" }}>
             {training.tags.map((tag) => (
-              <Chip key={tag} label={tag} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
+              <Chip key={tag} label={tag} size="small" variant="outlined" />
             ))}
           </Stack>
         )}
       </Box>
 
-      <Stack direction="row" spacing={0.5}>
-        <Button
-          startIcon={<RefreshIcon />}
-          onClick={onRefresh}
-          variant="outlined"
-          color="inherit"
-          disabled={isLoading}
-          size="small"
-        >
-          Refresh
-        </Button>
-        {isAuthenticated && (
-          <>
-            <Button startIcon={<EditIcon />} onClick={onEdit} variant="outlined" disabled={isLoading} size="small">
-              Edit
-            </Button>
-            <Button
-              startIcon={<DeleteIcon />}
-              onClick={onDeleteClick}
-              color="error"
-              variant="outlined"
-              disabled={isLoading}
-              size="small"
-            >
-              Delete
-            </Button>
-          </>
-        )}
-      </Stack>
+      <ResponsiveActions
+        menuLabel={`More actions for ${training.name}`}
+        actions={[
+          { label: 'Refresh', icon: <RefreshIcon />, onClick: onRefresh, disabled: isLoading },
+          ...(isAuthenticated
+            ? [
+                { label: 'Edit', icon: <EditIcon />, onClick: onEdit, disabled: isLoading },
+                { label: 'Delete', icon: <DeleteIcon />, onClick: onDeleteClick, disabled: isLoading, danger: true }
+              ]
+            : [])
+        ]}
+      />
     </Box>
   </Box>
 );

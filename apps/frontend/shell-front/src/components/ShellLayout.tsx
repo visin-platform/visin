@@ -33,7 +33,6 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   return (
     <AppLayout
       appName={definition?.title ?? 'Visin'}
-      subtitle={definition?.subtitle ?? ''}
       navGroups={isAuthenticated ? [HOME, ...NAVIGATION.groups] : NAVIGATION.groups}
       homePath="/"
       accountItems={NAVIGATION.accountItems}

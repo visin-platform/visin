@@ -125,7 +125,27 @@ const LoginPage: React.FC = () => {
   const heading = HEADINGS[mode];
 
   return (
-    <Grid container component="main" sx={{ minHeight: '100vh' }}>
+    <Grid container component="main" sx={{ minHeight: '100vh', alignContent: { xs: 'flex-start', md: 'stretch' } }}>
+      {/* On a phone, the brand is a dark band across the top — the same ink the
+          app bar has once you are in — with the form on white below it. */}
+      <Grid
+        size={12}
+        sx={{
+          display: { xs: 'flex', md: 'none' },
+          alignItems: 'center',
+          gap: 1.5,
+          px: 3,
+          pt: 'calc(20px + env(safe-area-inset-top))',
+          pb: 3,
+          bgcolor: '#111827',
+          color: '#fff',
+          backgroundImage: 'radial-gradient(500px 200px at 20% 0%, rgba(37,99,235,0.45), transparent 65%)'
+        }}
+      >
+        <Box component="img" src="/logo.svg" alt="" sx={{ width: 32, height: 32 }} />
+        <Typography sx={{ fontWeight: 700, fontSize: '1.35rem' }}>Visin</Typography>
+      </Grid>
+
       {/* Brand panel, painted with the product's own colours rather than a
           stock photo, so it costs no third-party request. */}
       <Grid
@@ -137,25 +157,34 @@ const LoginPage: React.FC = () => {
           // above it carries the brand instead.
           display: { xs: 'none', md: 'flex' },
           flexDirection: 'column',
-          justifyContent: 'flex-end',
-          p: { md: 5, lg: 6 },
+          justifyContent: 'center',
+          p: { md: 5, lg: 7 },
           bgcolor: '#111827',
           color: '#fff',
           backgroundImage:
             'radial-gradient(800px 400px at 20% 0%, rgba(37,99,235,0.4), transparent 60%), radial-gradient(600px 400px at 90% 20%, rgba(96,165,250,0.2), transparent 55%)'
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-          <Box component="img" src="/logo.svg" alt="" sx={{ width: 48, height: 48 }} />
-          <Typography variant="h3" sx={{ fontWeight: 700 }}>
-            Visin
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 'auto' }}>
+          <Box component="img" src="/logo.svg" alt="" sx={{ width: 36, height: 36 }} />
+          <Typography sx={{ fontWeight: 700, fontSize: '1.5rem' }}>Visin</Typography>
         </Box>
-        <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.9)', fontWeight: 300, maxWidth: 600 }}>
-          Computer vision datasets, labeling, and experiments
-        </Typography>
-        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.7)', mt: 2, maxWidth: 500 }}>
-          Manage your datasets, track training runs, and compare results in one place.
+        {/* The product itself, rather than a paragraph about it. */}
+        <Box
+          component="img"
+          src="/showcase/charts.webp"
+          alt="Loss and mean IoU curves of a training run in Visin"
+          sx={{
+            width: '100%',
+            maxWidth: 640,
+            borderRadius: '14px',
+            border: '1px solid rgba(255,255,255,0.14)',
+            boxShadow: '0 30px 80px rgba(2, 6, 23, 0.55)',
+            my: 5
+          }}
+        />
+        <Typography sx={{ fontSize: { md: '1.6rem', lg: '1.9rem' }, fontWeight: 700, lineHeight: 1.2, maxWidth: 560 }}>
+          Every epoch, score and frame your training produces — in one place.
         </Typography>
       </Grid>
 
@@ -164,15 +193,9 @@ const LoginPage: React.FC = () => {
         component={Paper}
         elevation={0}
         square
-        sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}
+        sx={{ display: 'flex', flexDirection: 'column', justifyContent: { xs: 'flex-start', md: 'center' }, alignItems: 'center' }}
       >
-        <Box sx={{ my: 8, width: '100%', maxWidth: 440, px: { xs: 3, sm: 4 } }}>
-          <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1.5, mb: 4 }}>
-            <Box component="img" src="/logo.svg" alt="" sx={{ width: 40, height: 40 }} />
-            <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              Visin
-            </Typography>
-          </Box>
+        <Box sx={{ my: { xs: 4, md: 8 }, width: '100%', maxWidth: 440, px: { xs: 3, sm: 4 } }}>
 
           {phase === 'checking' && (
             <Box sx={{ py: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>

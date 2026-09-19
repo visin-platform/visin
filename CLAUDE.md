@@ -4,7 +4,7 @@ Visin: a computer vision & analytics platform (datasets, training runs, results,
 npm-workspaces monorepo:
 
 ```
-apps/backend/{auth,file,group,vision,label,mcp}-service       Express + TypeScript + Mongoose
+apps/backend/{auth,file,group,vision,dataset,label,mcp}-service  Express + TypeScript + Mongoose
 apps/frontend/{landing,auth,account,vision,label,shell}-front  React + Vite + MUI
 libs/backend-core     @visin/backend-core   — shared Express middleware/app bootstrap
 libs/frontend-core    @visin/frontend-core  — shared auth/API-client/React components

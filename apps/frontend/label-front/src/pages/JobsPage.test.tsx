@@ -54,7 +54,7 @@ describe('JobsPage', () => {
     renderWithProviders(<JobsPage />);
 
     expect(await screen.findByText('Mask check')).toBeInTheDocument();
-    expect(screen.getByText('mask verification')).toBeInTheDocument();
+    expect(screen.getByText('Mask verification')).toBeInTheDocument();
     expect(screen.getByText('42 tasks')).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'Start labeling' })).toHaveAttribute('href', '/jobs/j1/work')

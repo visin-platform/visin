@@ -9,8 +9,10 @@ import {
   CircularProgress,
   Grid,
   Paper,
-  Fade
+  Fade,
+  useTheme
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { Person, Save } from '@mui/icons-material';
 import { authService } from '../../services/authService';
 import { profileService } from '../../services/profileService';
@@ -30,6 +32,7 @@ const ProfileTab: React.FC = () => {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const queryClient = useQueryClient();
+  const theme = useTheme();
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -101,7 +104,7 @@ const ProfileTab: React.FC = () => {
   }
 
   const SectionHeader = ({ title, subtitle }: { title: string; subtitle: string }) => (
-    <Box sx={{ mb: 4 }}>
+    <Box sx={{ mb: 3 }}>
       <Typography variant="h6" gutterBottom sx={{
         fontWeight: 600
       }}>{title}</Typography>
@@ -117,37 +120,52 @@ const ProfileTab: React.FC = () => {
         {message && (
           <Alert 
             severity={message.type} 
-            sx={{ mb: 4, borderRadius: 2, border: '1px solid', borderColor: `${message.type}.light` }}
+            sx={{ mb: 3 }}
             onClose={() => setMessage(null)}
           >
             {message.text}
           </Alert>
         )}
 
-        <Grid container spacing={6}>
+        <Grid container spacing={3}>
           {/* Personal Info Section */}
           <Grid size={12}>
-            <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
-              <SectionHeader 
-                title="Personal Information" 
-                subtitle="Update your photo and personal details here." 
+            <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 4 }, borderRadius: '16px' }}>
+              {/* Who this is, the way a phone's account screen opens: face, name, address. */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                <Avatar
+                  src={user?.picture}
+                  alt=""
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    fontSize: '1.5rem',
+                    fontWeight: 700,
+                    bgcolor: alpha(theme.palette.primary.main, 0.12),
+                    color: 'primary.main'
+                  }}
+                >
+                  {(firstName || email).charAt(0).toUpperCase() || <Person sx={{ fontSize: 32 }} />}
+                </Avatar>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="h6" noWrap sx={{ lineHeight: 1.3 }}>
+                    {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || email}
+                  </Typography>
+                  <Typography variant="body2" noWrap sx={{ color: 'text.secondary' }}>
+                    {email}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <SectionHeader
+                title="Personal information"
+                subtitle="Your name as teammates see it in groups and labeling jobs."
               />
-              
+
               <Grid container spacing={4} sx={{
                 alignItems: "center"
               }}>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <Box sx={{ width: 100, height: 100, mx: { xs: 'auto', md: 0 } }}>
-                    <Avatar
-                      src={user?.picture}
-                      sx={{ width: 100, height: 100, border: '1px solid', borderColor: 'divider' }}
-                    >
-                      <Person sx={{ fontSize: 40 }} />
-                    </Avatar>
-                  </Box>
-                </Grid>
-                
-                <Grid size={{ xs: 12, md: 9 }}>
+                <Grid size={12}>
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useCompactLayout } from '@visin/frontend-core';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -37,6 +38,7 @@ const NewJobPage: React.FC = () => {
   const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups });
   const { data: datasets } = useQuery({ queryKey: ['datasets'], queryFn: listDatasets });
 
+  const compact = useCompactLayout();
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -183,7 +185,12 @@ const NewJobPage: React.FC = () => {
 
   return (
     <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
-      <Stepper activeStep={step} sx={{ mb: 4 }}>
+      {/* On a phone four labels do not fit: the steps keep their numbers, and
+          only the current one is named. */}
+      <Stepper
+        activeStep={step}
+        sx={{ mb: 4, ...(compact && { '& .MuiStepLabel-label:not(.Mui-active)': { display: 'none' } }) }}
+      >
         {STEPS.map((label) => (
           <Step key={label}>
             <StepLabel>{label}</StepLabel>

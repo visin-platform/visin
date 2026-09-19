@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
@@ -163,9 +164,7 @@ export const EpochsPage: React.FC = () => {
 
   return (
     <Container maxWidth="lg" sx={{ pb: 4 }}>
-      <Typography variant="h4" sx={{ mb: 4 }}>
-        Training Epochs
-      </Typography>
+      <PageHeader title="Training Epochs" subtitle="Upload a training's per-epoch results from a JSON file." />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>

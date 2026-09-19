@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import {
   Alert,
   Box,
@@ -82,37 +83,26 @@ const ToolUsageTab: React.FC = () => {
 
   return (
     <Box>
-      <Paper
-        variant="outlined"
-        sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}
+      <PageHeader
+        subtitle="What your connected assistants have called, and what each answer cost. A tool result stays in the conversation and is sent again with every later message, so the tool worth shrinking is the one with the largest total — not the one called most often."
+        actions={
+      <TextField
+        select
+        size="small"
+        label="Window"
+        value={days}
+        onChange={event => setDays(Number(event.target.value))}
+        sx={{ minWidth: 150, flexShrink: 0 }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 4, gap: 2 }}>
-          <Box>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-              Assistant activity
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              What your connected assistants have called, and what each answer cost. A tool result
-              stays in the conversation and is sent again with every later message, so the tool
-              worth shrinking is the one with the largest total — not the one called most often.
-            </Typography>
-          </Box>
-          <TextField
-            select
-            size="small"
-            label="Window"
-            value={days}
-            onChange={event => setDays(Number(event.target.value))}
-            sx={{ minWidth: 150, flexShrink: 0 }}
-          >
-            {WINDOWS.map(option => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Box>
-
+        {WINDOWS.map(option => (
+          <MenuItem key={option.value} value={option.value}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </TextField>
+        }
+      />
+      <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: '16px' }}>
         {summary.isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress />
@@ -161,10 +151,7 @@ const ToolUsageTab: React.FC = () => {
         )}
       </Paper>
 
-      <Paper
-        variant="outlined"
-        sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, border: '1px solid', borderColor: 'divider', mt: 3 }}
-      >
+      <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: '16px', mt: 3 }}>
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
           Recent calls
         </Typography>

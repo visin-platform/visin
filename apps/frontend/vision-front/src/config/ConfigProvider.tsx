@@ -1,5 +1,5 @@
-import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
-import { createConfigProvider } from '@visin/frontend-core';
+import { CssBaseline, ThemeProvider } from '@mui/material';
+import { createConfigProvider, createVisinTheme } from '@visin/frontend-core';
 
 export interface AppConfig {
   VISION_API_URL?: string;
@@ -21,10 +21,8 @@ function createDevConfig(): AppConfig {
   };
 }
 
-// Vision's pages were built on MUI's default theme. Standalone that was implied;
-// inside shell-front they would inherit the shell's theme instead, so it is
-// stated here.
-const theme = createTheme();
+// The one Visin theme, so crossing apps inside the shell never changes the look.
+const theme = createVisinTheme();
 
 export const { ConfigProvider, ConfigContext, useConfig, getGlobalConfig } = createConfigProvider<AppConfig>({
   createDevConfig,

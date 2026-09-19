@@ -1,5 +1,7 @@
-import { CssBaseline } from '@mui/material';
-import { createConfigProvider } from '@visin/frontend-core';
+import { CssBaseline, ThemeProvider } from '@mui/material';
+import { createConfigProvider, createVisinTheme } from '@visin/frontend-core';
+
+const theme = createVisinTheme();
 
 export interface AppConfig {
   GOOGLE_CLIENT_ID?: string;
@@ -18,10 +20,12 @@ function createDevConfig(): AppConfig {
 export const { ConfigProvider, ConfigContext, useConfig, getGlobalConfig } = createConfigProvider<AppConfig>({
   createDevConfig,
   isDev: import.meta.env.DEV,
+  // The one Visin theme: the sign-in page is the first screen of the app, and
+  // should look like it.
   renderChildren: (children) => (
-    <>
+    <ThemeProvider theme={theme}>
       <CssBaseline />
       {children}
-    </>
+    </ThemeProvider>
   )
 });

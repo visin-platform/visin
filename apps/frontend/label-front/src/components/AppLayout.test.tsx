@@ -56,13 +56,13 @@ describe('AppLayout', () => {
   it('shows the active section title in the desktop header', () => {
     renderAt('/jobs');
 
-    expect(screen.getByRole('heading', { level: 4, name: 'Jobs' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Jobs' })).toBeInTheDocument();
   });
 
   it('falls back to "Labeling" as the title outside known routes', () => {
     renderAt('/somewhere-else');
 
-    expect(screen.getByRole('heading', { level: 4, name: 'Labeling' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Labeling' })).toBeInTheDocument();
   });
 
   it('shows the signed-in user name and email in the account menu', () => {
@@ -95,11 +95,11 @@ describe('AppLayout', () => {
   // the whole point of the page.
   it('drops the page header on the workbench and keeps it everywhere else', () => {
     const { unmount } = renderAt('/jobs/j1/work');
-    expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     expect(screen.getByText('page content')).toBeInTheDocument();
     unmount();
 
     renderAt('/jobs/j1');
-    expect(screen.getByRole('heading', { level: 4 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
   });
 });

@@ -23,7 +23,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <SharedAppLayout
       appName="Account"
-      subtitle="Manage your personal information and the groups you share work with."
       navGroups={groups}
       accountItems={accountItems}
       user={user}

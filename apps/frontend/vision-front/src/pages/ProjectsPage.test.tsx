@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -175,7 +175,7 @@ describe('ProjectsPage', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('Project One')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: /New Project/ }));
+    fireEvent.click(screen.getByRole('button', { name: /New project/i }));
     expect(screen.getByTestId('project-form-dialog')).toHaveTextContent('editing:false');
 
     fireEvent.click(screen.getByText('submit-form'));
@@ -227,5 +227,64 @@ describe('ProjectsPage', () => {
     await waitFor(() => {
       expect(projectServiceMock.getProjects).toHaveBeenLastCalledWith({ sortBy: 'name', sortOrder: 'asc' });
     });
+  });
+});
+
+describe('ProjectsPage on a phone', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAuthMock.mockReturnValue({ user: { id: 'u1' } });
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      })
+    });
+  });
+
+  afterEach(() => {
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it('lists projects as rows leading to each project, with visibility and description under the name', async () => {
+    projectServiceMock.getProjects.mockResolvedValue({ data: [project1, project2] });
+    renderPage();
+
+    const row = await screen.findByRole('link', { name: /Project One/ });
+    expect(row).toHaveAttribute('href', '/projects/p1');
+    expect(row).toHaveTextContent(/Public · .* · A description/);
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('offers edit and delete from a row menu, on the viewer\'s own projects only', async () => {
+    projectServiceMock.getProjects.mockResolvedValue({ data: [project1, project2] });
+    renderPage();
+
+    await screen.findByRole('link', { name: /Project One/ });
+    expect(screen.queryByRole('button', { name: 'Actions for Project Two' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Project One' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    expect(screen.getByTestId('project-form-dialog')).toHaveTextContent('name:Project One');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Project One' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    expect(screen.getByText('Delete Project')).toBeInTheDocument();
+  });
+
+  it('floats New project above the tab bar', async () => {
+    projectServiceMock.getProjects.mockResolvedValue({ data: [] });
+    renderPage();
+
+    expect(await screen.findByText('No projects found')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /New project/ })).toHaveClass('MuiFab-root');
   });
 });

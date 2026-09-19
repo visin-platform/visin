@@ -48,7 +48,6 @@ const renderAt = (
     <MemoryRouter initialEntries={[path]}>
       <AppLayout
         appName="Visin App"
-        subtitle="Everything in one place."
         navGroups={navGroups}
         accountItems={accountItems}
         user={user}
@@ -155,24 +154,39 @@ describe('AppLayout', () => {
     });
   });
 
+  describe('app bar', () => {
+    it('names the area being shown, with its sections as tabs', () => {
+      const { container } = renderAt('/jobs');
+
+      const header = container.querySelector('header')!;
+      expect(header).toHaveTextContent('Labels');
+      expect(within(header).getByRole('link', { name: 'Jobs' })).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('names the app outside any area', () => {
+      const { container } = renderAt('/somewhere-else');
+
+      expect(container.querySelector('header')).toHaveTextContent('Visin App');
+    });
+  });
+
   describe('page header', () => {
-    it('titles the page from its section, with the app subtitle', () => {
+    it('titles the page from its section', () => {
       renderAt('/jobs');
 
-      expect(screen.getByRole('heading', { level: 4, name: 'Jobs' })).toBeInTheDocument();
-      expect(screen.getByText('Everything in one place.')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 1, name: 'Jobs' })).toBeInTheDocument();
     });
 
     it('falls back to appName outside known routes', () => {
       renderAt('/somewhere-else');
 
-      expect(screen.getByRole('heading', { level: 4, name: 'Visin App' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 1, name: 'Visin App' })).toBeInTheDocument();
     });
 
     it('can be left to apps whose pages carry their own titles', () => {
       renderAt('/jobs', undefined, { showPageHeader: false });
 
-      expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     });
   });
 
@@ -253,7 +267,7 @@ describe('AppLayout', () => {
 
       expect(main().getByRole('button', { name: 'Account' })).toHaveAttribute('aria-current', 'true');
       expect(sectionBar('Account').getByRole('link', { name: 'Groups' })).toHaveAttribute('aria-current', 'page');
-      expect(screen.getByRole('heading', { level: 4, name: 'Groups' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 1, name: 'Groups' })).toBeInTheDocument();
     });
 
     it('offers Login in its place to an anonymous visitor', () => {
@@ -329,13 +343,15 @@ describe('AppLayout', () => {
       );
     });
 
-    it('drops the page title where the dropdown already names the page', () => {
+    it('names the page in the app bar instead of a page title', () => {
       const { unmount } = renderAt('/jobs');
-      expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
       unmount();
 
-      renderAt('/datasets');
-      expect(screen.getByRole('heading', { level: 4, name: 'Datasets' })).toBeInTheDocument();
+      // A group of one has no dropdown: the app bar names its section.
+      const { container } = renderAt('/datasets');
+      expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+      expect(container.querySelector('header')).toHaveTextContent('Datasets');
     });
 
     it('opens Account as a bottom sheet', () => {

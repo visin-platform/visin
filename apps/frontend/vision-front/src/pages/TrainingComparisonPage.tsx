@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import {
   Container,
   Typography,
@@ -125,20 +126,10 @@ const TrainingComparisonPage: React.FC = () => {
         ]}
       />
       {/* Header */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h4" component="h1" sx={{ mb: 1 }}>
-            Training Comparison
-          </Typography>
-          <Typography variant="body1" sx={{
-            color: "text.secondary"
-          }}>
-            Comparing {comparisonData.length} training run{comparisonData.length !== 1 ? 's' : ''}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-        </Box>
-      </Box>
+      <PageHeader
+        title="Training Comparison"
+        subtitle={`Comparing ${comparisonData.length} training run${comparisonData.length !== 1 ? 's' : ''}`}
+      />
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs 

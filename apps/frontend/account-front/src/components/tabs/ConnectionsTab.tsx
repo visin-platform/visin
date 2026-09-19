@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import {
   Alert,
   Box,
@@ -33,20 +34,8 @@ const ConnectionsTab: React.FC = () => {
 
   return (
     <Box>
-      <Paper
-        variant="outlined"
-        sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}
-      >
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-            Connected apps
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Assistants you have connected to Visin. Each one can reach only what you could already
-            see, and only the permissions you approved when you connected it.
-          </Typography>
-        </Box>
-
+      <PageHeader subtitle="Assistants you have connected to Visin. Each one can reach only what you could already see, and only the permissions you approved when you connected it." />
+      <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: '16px' }}>
         {revoke.error && (
           <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
             {revoke.error.message}

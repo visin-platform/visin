@@ -60,7 +60,7 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ hasPassword, onChanged }) =
   };
 
   return (
-    <Paper variant="outlined" sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, borderColor: 'divider' }}>
+    <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 4 }, borderRadius: '16px' }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
           {hasPassword ? 'Change password' : 'Set a password'}

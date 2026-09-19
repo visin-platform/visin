@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import {
   Alert,
   Box,
-  Button,
   Chip,
   CircularProgress,
   IconButton,
@@ -92,30 +92,11 @@ const ApiKeysTab: React.FC = () => {
 
   return (
     <Box>
-      <Paper
-        variant="outlined"
-        sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 4, gap: 2 }}>
-          <Box>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-              API keys
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Keys let software act as you — an assistant connected over MCP, a script, a CI job. A
-              key only reaches what you can already see, and only what you granted it.
-            </Typography>
-          </Box>
-          <Button
-            variant="contained"
-            startIcon={<Key />}
-            onClick={() => setCreateOpen(true)}
-            sx={{ borderRadius: 2, flexShrink: 0 }}
-          >
-            New key
-          </Button>
-        </Box>
-
+      <PageHeader
+        subtitle="Keys let software act as you — an assistant connected over MCP, a script, a CI job. A key only reaches what you can already see, and only what you granted it."
+        primaryAction={{ label: 'New key', icon: <Key />, onClick: () => setCreateOpen(true) }}
+      />
+      <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: '16px' }}>
         {mutationError && (
           <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
             {mutationError.message}

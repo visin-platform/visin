@@ -77,7 +77,7 @@ afterAll(async () => {
 });
 
 const tokenFor = (userId: string) => {
-  const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, exp: Math.floor(Date.now() / 1000) + 60 }]
+  const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
     .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
     .join('.');
   return `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;

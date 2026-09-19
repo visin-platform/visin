@@ -11,7 +11,6 @@ export interface ShellLayoutOptions {
 
 export interface ShellAppDefinition {
   title: string;
-  subtitle: string;
   /** Config key holding the app's base URL, where its remoteEntry.js lives. */
   urlKey: keyof Pick<AppConfig, 'VISION_FRONT_URL' | 'LABEL_FRONT_URL' | 'ACCOUNT_FRONT_URL'>;
   /** First path segments the app owns. The three apps' routes never overlap. */
@@ -36,7 +35,6 @@ const WORKBENCH = /^\/jobs\/[^/]+\/work\/?$/;
 export const APPS: Record<ShellApp, ShellAppDefinition> = {
   vision: {
     title: 'Vision',
-    subtitle: 'Manage datasets, train models, and analyse results.',
     urlKey: 'VISION_FRONT_URL',
     prefixes: [
       '/projects',
@@ -54,7 +52,6 @@ export const APPS: Record<ShellApp, ShellAppDefinition> = {
   },
   label: {
     title: 'Labeling',
-    subtitle: 'Label images and review annotation quality.',
     urlKey: 'LABEL_FRONT_URL',
     prefixes: ['/jobs'],
     layout: (pathname) =>
@@ -64,7 +61,6 @@ export const APPS: Record<ShellApp, ShellAppDefinition> = {
   },
   account: {
     title: 'Account',
-    subtitle: 'Manage your personal information and the groups you share work with.',
     urlKey: 'ACCOUNT_FRONT_URL',
     prefixes: ['/account', '/invite'],
     layout: () => ({ maxContentWidth: 800, showPageHeader: true })

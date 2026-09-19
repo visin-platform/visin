@@ -21,7 +21,7 @@ describe('PageBreadcrumbs', () => {
   });
 
   it('renders plain text (no link) for the current item even if href is provided', () => {
-    const items: BreadcrumbItem[] = [{ label: 'Current Page', href: '/current', current: true }];
+    const items: BreadcrumbItem[] = [{ label: 'Projects', href: '/projects' }, { label: 'Current Page', href: '/current', current: true }];
     render(
       <MemoryRouter>
         <PageBreadcrumbs items={items} />
@@ -32,7 +32,7 @@ describe('PageBreadcrumbs', () => {
   });
 
   it('renders plain text for an item with no href', () => {
-    const items: BreadcrumbItem[] = [{ label: 'No Link Item' }];
+    const items: BreadcrumbItem[] = [{ label: 'Parent' }, { label: 'No Link Item' }];
     render(
       <MemoryRouter>
         <PageBreadcrumbs items={items} />
@@ -40,6 +40,15 @@ describe('PageBreadcrumbs', () => {
     );
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.getByText('No Link Item')).toBeInTheDocument();
+  });
+
+  it('renders nothing for a trail of one, which the app bar already names', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <PageBreadcrumbs items={[{ label: 'Trainings', current: true }]} />
+      </MemoryRouter>
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('renders multiple items in order', () => {

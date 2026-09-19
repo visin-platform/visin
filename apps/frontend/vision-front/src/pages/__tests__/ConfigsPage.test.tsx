@@ -106,7 +106,7 @@ describe('ConfigsPage', () => {
     const hookReturn = baseHookReturn();
     useConfigsPageMock.mockReturnValue(hookReturn);
     render(<ConfigsPage />);
-    fireEvent.click(screen.getByRole('button', { name: '' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(hookReturn.handleRefresh).toHaveBeenCalled();
   });
 });

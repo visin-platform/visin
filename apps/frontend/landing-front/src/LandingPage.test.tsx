@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LandingPage from './LandingPage';
-import { ASK_CONVERSATION, ASSISTANT_LIMITS, CONNECT_STEPS, STEPS, GITHUB_URL } from './content';
+import { ASK_CONVERSATION, ASSISTANT_LIMITS, CONNECT_STEPS, GITHUB_URL, PHONE_SCREENS, SHOWCASE } from './content';
 
 const config: { SHELL_FRONT_URL?: string; MCP_PUBLIC_URL?: string } = {
   SHELL_FRONT_URL: 'http://shell.test',
@@ -23,20 +23,20 @@ describe('LandingPage structure', () => {
   it('renders every section landmark', () => {
     const { container } = render(<LandingPage />);
 
-    for (const id of ['top', 'how-it-works', 'assistant', 'open-source', 'contact']) {
+    for (const id of ['top', 'product', 'mobile', 'assistant', 'open-source', 'contact']) {
       expect(container.querySelector(`#${id}`)).toBeInTheDocument();
     }
     expect(container.querySelector('main#main')).toBeInTheDocument();
     expect(container.querySelector('footer')).toBeInTheDocument();
   });
 
-  it('puts the analysis section first, right after the hero', () => {
-    // It is what the page is selling; burying it under the feature grid was
-    // the old order.
+  it('shows the product before it explains anything', () => {
+    // Real screens first, then the phone, then the assistant: the page leads
+    // with what Visin looks like rather than paragraphs about it.
     const { container } = render(<LandingPage />);
 
     const sections = [...container.querySelectorAll('main section')].map(s => s.id);
-    expect(sections).toEqual(['top', 'assistant', 'how-it-works', 'open-source', 'contact']);
+    expect(sections).toEqual(['top', 'product', 'mobile', 'assistant', 'open-source', 'contact']);
   });
 
   it('leads with the headline and the product summary', () => {
@@ -47,12 +47,52 @@ describe('LandingPage structure', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders every workflow step from the content module', () => {
+  it('plays the recorded tour, with its still frame as the poster', () => {
+    const { container } = render(<LandingPage />);
+
+    const video = container.querySelector('video')!;
+    expect(video).toHaveAttribute('src', '/showcase/tour.webm');
+    expect(video).toHaveAttribute('poster', '/showcase/tour-poster.webp');
+    // Muted and inline, or phones refuse to autoplay it.
+    expect(video.muted).toBe(true);
+    expect(video).toHaveAttribute('playsinline');
+    expect(video).toHaveAttribute('loop');
+  });
+
+  it('does not autoplay for someone who asked for less motion', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({
+        matches: query.includes('reduce'),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        onchange: null,
+        dispatchEvent: vi.fn()
+      })
+    });
+    try {
+      const { container } = render(<LandingPage />);
+
+      expect(container.querySelector('video')).not.toHaveAttribute('autoplay');
+    } finally {
+      delete (window as { matchMedia?: unknown }).matchMedia;
+    }
+  });
+
+  it('shows every product screen and phone screen with its description', () => {
     render(<LandingPage />);
 
-    for (const step of STEPS) {
-      expect(screen.getByText(step.title)).toBeInTheDocument();
-      expect(screen.getByText(step.body)).toBeInTheDocument();
+    for (const item of SHOWCASE) {
+      expect(screen.getByRole('img', { name: item.alt })).toHaveAttribute('src', item.src);
+      expect(screen.getByRole('heading', { name: item.title })).toBeInTheDocument();
+      expect(screen.getByText(item.caption)).toBeInTheDocument();
+    }
+    for (const phone of PHONE_SCREENS) {
+      expect(screen.getByRole('img', { name: phone.alt })).toHaveAttribute('src', phone.src);
     }
   });
 
@@ -184,12 +224,13 @@ describe('LandingPage calls to action', () => {
     render(<LandingPage />);
 
     const nav = screen.getByRole('navigation', { name: 'Main' });
-    expect(within(nav).getByRole('link', { name: 'Analysis' })).toHaveAttribute('href', '#assistant');
-    expect(within(nav).getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '#how-it-works');
+    expect(within(nav).getByRole('link', { name: 'Product' })).toHaveAttribute('href', '#product');
+    expect(within(nav).getByRole('link', { name: 'Assistant' })).toHaveAttribute('href', '#assistant');
     expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '#open-source');
     expect(within(nav).getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '#contact');
-    // The feature grid is gone; nothing may still point at where it was.
+    // The old sections are gone; nothing may still point at where they were.
     expect(within(nav).queryByRole('link', { name: 'Features' })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'How it works' })).not.toBeInTheDocument();
   });
 });
 
@@ -203,7 +244,7 @@ describe('LandingPage mobile menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
     const drawer = screen.getByRole('presentation');
-    expect(within(drawer).getByRole('link', { name: 'How it works' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'Product' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /close menu/i }));
     await expectDrawerClosed();
@@ -213,7 +254,7 @@ describe('LandingPage mobile menu', () => {
     render(<LandingPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-    fireEvent.click(within(screen.getByRole('presentation')).getByRole('link', { name: 'How it works' }));
+    fireEvent.click(within(screen.getByRole('presentation')).getByRole('link', { name: 'Product' }));
 
     await expectDrawerClosed();
   });

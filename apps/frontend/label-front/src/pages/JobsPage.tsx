@@ -11,10 +11,11 @@ import {
   Chip,
   LinearProgress,
   Stack,
-  Typography
+  Typography,
+  useTheme
 } from '@mui/material';
-import { AssignmentOutlined } from '@mui/icons-material';
-import { Loader } from '@visin/frontend-core';
+import { Add, AssignmentOutlined } from '@mui/icons-material';
+import { EmptyState, Loader, PageHeader, Panel, RowIcon } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { getMyGroups, listJobs } from '../services/jobService';
 import { LabelJob } from '../types';
@@ -49,13 +50,14 @@ const JobProgressBar: React.FC<{ job: LabelJob }> = ({ job }) => {
         variant="determinate"
         value={percent}
         color={percent >= 100 ? 'success' : 'primary'}
-        sx={{ height: 6, borderRadius: 3 }}
+        sx={{ height: 8 }}
       />
     </Box>
   );
 };
 
 const JobsPage: React.FC = () => {
+  const theme = useTheme();
   const { isAuthenticated } = useAuth();
   const { data: jobs, isLoading, error } = useQuery({ queryKey: ['jobs', 'worker'], queryFn: () => listJobs('worker') });
   // "My groups" is a question only a signed-in caller can ask; asking it
@@ -65,11 +67,7 @@ const JobsPage: React.FC = () => {
   // Creating a job needs a group you administer; without one the wizard's group
   // picker would be empty, so offer the button only where it can be finished.
   const canCreate = (groups || []).some((group) => group.role === 'owner' || group.role === 'admin');
-  const newJobButton = (
-    <Button component={Link} to="/jobs/new" variant="contained">
-      New job
-    </Button>
-  );
+  const newJob = canCreate ? { label: 'New job', icon: <Add />, to: '/jobs/new' } : undefined;
 
   if (isLoading) {
     return <Loader message="Loading jobs..." />;
@@ -80,55 +78,68 @@ const JobsPage: React.FC = () => {
 
   if (!jobs || jobs.length === 0) {
     return (
-      <Box sx={{ textAlign: 'center', py: 8 }}>
-        <AssignmentOutlined sx={{ fontSize: 48, color: 'text.secondary' }} />
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          No labeling jobs yet
-        </Typography>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          {isAuthenticated ? 'Active jobs shared with your groups will appear here.' : 'Active jobs will appear here.'}
-        </Typography>
-        {canCreate && <Box sx={{ mt: 2 }}>{newJobButton}</Box>}
-      </Box>
+      <>
+        <PageHeader primaryAction={newJob} />
+        <Panel>
+          <EmptyState
+            icon={<AssignmentOutlined />}
+            title="No labeling jobs yet"
+            description={
+              isAuthenticated ? 'Active jobs shared with your groups will appear here.' : 'Active jobs will appear here.'
+            }
+          />
+        </Panel>
+      </>
     );
   }
 
   return (
-    <Stack spacing={2}>
-      <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-          {isAuthenticated ? 'Active jobs in your groups.' : 'Active labeling jobs.'} Progress counts frames finished by
-          everyone, not just you.
-        </Typography>
-        {canCreate && newJobButton}
-      </Stack>
+    <>
+      <PageHeader
+        subtitle={
+          <>
+            {isAuthenticated ? 'Active jobs in your groups.' : 'Active labeling jobs.'} Progress counts frames finished
+            by everyone, not just you.
+          </>
+        }
+        primaryAction={newJob}
+      />
 
-      {jobs.map((job) => (
-        <Card key={job._id} variant="outlined" sx={{ borderRadius: 3 }}>
-          <CardContent>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, flexGrow: 1 }}>
-                {job.name}
-              </Typography>
-              <Chip size="small" label={job.taskType === 'mask_toggle' ? 'mask verification' : 'single choice'} />
-              <Chip size="small" label={`${job.tasksCount} tasks`} variant="outlined" />
-            </Stack>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              {job.question.prompt}
-            </Typography>
-            <JobProgressBar job={job} />
-          </CardContent>
-          <CardActions>
-            <Button component={Link} to={`/jobs/${job._id}/work`} variant="contained" size="small">
-              {isAuthenticated ? 'Start labeling' : 'View frames'}
-            </Button>
-            <Button component={Link} to={`/jobs/${job._id}`} size="small">
-              Details
-            </Button>
-          </CardActions>
-        </Card>
-      ))}
-    </Stack>
+      <Stack spacing={2}>
+        {jobs.map((job) => (
+          <Card key={job._id}>
+            <CardContent sx={{ pb: 1 }}>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                <RowIcon color={theme.palette.primary.main}>
+                  <AssignmentOutlined fontSize="small" />
+                </RowIcon>
+                <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                  <Typography variant="h6" sx={{ fontSize: '1.05rem', lineHeight: 1.3 }}>
+                    {job.name}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {job.question.prompt}
+                  </Typography>
+                </Box>
+              </Stack>
+              <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap' }}>
+                <Chip size="small" label={job.taskType === 'mask_toggle' ? 'Mask verification' : 'Single choice'} />
+                <Chip size="small" label={`${job.tasksCount.toLocaleString()} tasks`} variant="outlined" />
+              </Stack>
+              <JobProgressBar job={job} />
+            </CardContent>
+            <CardActions sx={{ px: 2, pb: 2, pt: 1, gap: 1 }}>
+              <Button component={Link} to={`/jobs/${job._id}/work`} variant="contained">
+                {isAuthenticated ? 'Start labeling' : 'View frames'}
+              </Button>
+              <Button component={Link} to={`/jobs/${job._id}`}>
+                Details
+              </Button>
+            </CardActions>
+          </Card>
+        ))}
+      </Stack>
+    </>
   );
 };
 

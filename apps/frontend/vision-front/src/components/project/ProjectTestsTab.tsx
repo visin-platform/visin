@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useCompactLayout } from '@visin/frontend-core';
+import { MobileListHeader, MobileListRow } from '../common/MobileList';
 import {
   Box,
   Button,
@@ -40,6 +42,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
   onPageChange,
   onRowsPerPageChange
 }) => {
+  const compact = useCompactLayout();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedTestResultIds, setSelectedTestResultIds] = useState<Set<string>>(new Set());
@@ -102,7 +105,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
   };
 
   return (
-    <Box sx={{ px: 3 }}>
+    <Box sx={{ px: { xs: 0, sm: 3 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2, gap: 1 }}>
         {selectedTestResultIds.size > 1 && (
           <Button
@@ -122,6 +125,28 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
         <CircularProgress />
       ) : testResultsResponse?.data?.testResults && testResultsResponse.data.testResults.length > 0 ? (
         <>
+          {compact ? (
+            <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+              <MobileListHeader
+                selectAll={{
+                  checked: Boolean(testResultsResponse.data.testResults.length) && selectedTestResultIds.size === testResultsResponse.data.testResults.length,
+                  indeterminate: selectedTestResultIds.size > 0 && selectedTestResultIds.size < testResultsResponse.data.testResults.length,
+                  onChange: handleSelectAllTestResults,
+                  label: 'Select all test results'
+                }}
+              />
+              {testResultsResponse.data.testResults.map((testResult) => (
+                <MobileListRow
+                  key={testResult._id}
+                  title={testResult.training?.name || 'Unknown'}
+                  selected={selectedTestResultIds.has(testResult._id)}
+                  onToggle={() => handleSelectTestResult(testResult._id)}
+                  selectLabel={`Select ${testResult.training?.name || 'test result'} epoch ${testResult.epoch}`}
+                  meta={`Epoch ${testResult.epoch} · ${formatDateTime(testResult.timestamp)}`}
+                />
+              ))}
+            </Paper>
+          ) : (
           <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
             <Table>
               <TableHead>
@@ -155,6 +180,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
               </TableBody>
             </Table>
           </TableContainer>
+          )}
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
             <TablePagination
               component="div"

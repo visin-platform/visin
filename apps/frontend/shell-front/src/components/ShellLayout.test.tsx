@@ -93,7 +93,7 @@ describe('ShellLayout', () => {
     renderAt('/account/groups');
 
     expect(sectionBar('Account').getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/account/profile');
-    expect(screen.getByRole('heading', { level: 4, name: 'Groups' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Groups' })).toBeInTheDocument();
   });
 
   it('keeps Account sections out of the section bar elsewhere', () => {
@@ -104,23 +104,22 @@ describe('ShellLayout', () => {
 
   it('frames each app as its standalone front did', () => {
     renderAt('/jobs');
-    expect(screen.getByRole('heading', { level: 4, name: 'Jobs' })).toBeInTheDocument();
-    expect(screen.getByText('Label images and review annotation quality.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Jobs' })).toBeInTheDocument();
   });
 
   it('leaves the title to Vision pages and to the workbench', () => {
     const { unmount } = renderAt('/projects');
-    expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     unmount();
 
     renderAt('/jobs/j1/work');
-    expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
   });
 
   it('draws no app header on a path no app owns', () => {
     renderAt('/nowhere');
 
-    expect(screen.queryByRole('heading', { level: 4 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
   });
 
   it('opens an Account section from the account menu without leaving the page', () => {

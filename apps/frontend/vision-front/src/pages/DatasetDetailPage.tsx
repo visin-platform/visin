@@ -24,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { ResponsiveActions } from '@visin/frontend-core';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DatasetContentsCard from '../components/dataset/DatasetContentsCard';
 import DatasetFormDialog, { DatasetFormValues } from '../components/dataset/DatasetFormDialog';
@@ -263,9 +264,9 @@ const DatasetDetailPage: React.FC = () => {
         ]}
       />
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', mb: 3 }}>
+      <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 700, fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>
+          <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, overflowWrap: 'anywhere' }}>
             {dataset.name}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
@@ -282,58 +283,49 @@ const DatasetDetailPage: React.FC = () => {
             {held && <Chip size="small" color="secondary" label={heldReason} />}
           </Stack>
         </Box>
-        <Stack
-          direction="row"
-          useFlexGap
-          spacing={1}
-          sx={{ flexWrap: 'wrap', alignItems: 'flex-start', flexShrink: 0 }}
-        >
-          {dataset.archive && (
-            <Button
-              variant="contained"
-              startIcon={downloadingId ? <CircularProgress size={18} color="inherit" /> : <DownloadIcon />}
-              onClick={() => download(dataset._id)}
-              disabled={Boolean(downloadingId)}
-            >
-              Download zip
-            </Button>
-          )}
-          {dataset.canWrite && (
-            <>
-              <Button
-                variant="outlined"
-                startIcon={<MappingIcon />}
-                onClick={() => openDialog('mapping')}
-                disabled={!dataset.contents || importing || scanning || sending || held}
-                title={heldReason}
-              >
-                Image groups
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<UploadIcon />}
-                onClick={() => openDialog('replace')}
-                disabled={importing || scanning || sending || held}
-                title={heldReason}
-              >
-                {dataset.archive ? 'Replace zip' : 'Upload zip'}
-              </Button>
-              <Button variant="outlined" startIcon={<EditIcon />} onClick={() => openDialog('edit')}>
-                Edit
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={() => openDialog('delete')}
-                disabled={held || sending}
-                title={heldReason}
-              >
-                Delete
-              </Button>
-            </>
-          )}
-        </Stack>
+        <Box sx={{ flexShrink: 0 }}>
+          <ResponsiveActions
+            keepOnPhone={1}
+            menuLabel={`More actions for ${dataset.name}`}
+            actions={[
+              ...(dataset.archive
+                ? [
+                    {
+                      label: 'Download zip',
+                      icon: downloadingId ? <CircularProgress size={18} color="inherit" /> : <DownloadIcon />,
+                      onClick: () => download(dataset._id),
+                      disabled: Boolean(downloadingId),
+                      primary: true
+                    }
+                  ]
+                : []),
+              ...(dataset.canWrite
+                ? [
+                    {
+                      label: 'Image groups',
+                      icon: <MappingIcon />,
+                      onClick: () => openDialog('mapping'),
+                      disabled: !dataset.contents || importing || scanning || sending || held
+                    },
+                    {
+                      label: dataset.archive ? 'Replace zip' : 'Upload zip',
+                      icon: <UploadIcon />,
+                      onClick: () => openDialog('replace'),
+                      disabled: importing || scanning || sending || held
+                    },
+                    { label: 'Edit', icon: <EditIcon />, onClick: () => openDialog('edit') },
+                    {
+                      label: 'Delete',
+                      icon: <DeleteIcon />,
+                      onClick: () => openDialog('delete'),
+                      disabled: held || sending,
+                      danger: true
+                    }
+                  ]
+                : [])
+            ]}
+          />
+        </Box>
       </Stack>
 
       {actionError && !dialog && (

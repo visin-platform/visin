@@ -1,5 +1,7 @@
 import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
+import { PageHeader, useCompactLayout } from '@visin/frontend-core';
+import { MobileListRow } from '../components/common/MobileList';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -35,6 +37,48 @@ import {
 import { Benchmark } from '@/types';
 import { benchmarkService } from '@/services/benchmarkService';
 
+/** One benchmark's figures, averaged over the devices it ran on. */
+const summarizeBenchmark = (benchmark: Benchmark) => {
+  // Calculate aggregated metrics for the benchmark
+  const totalModels = benchmark.results.length;
+  const avgFps = benchmark.results.reduce((sum, result) => sum + (result.fps || 0), 0) / totalModels;
+  
+  const totalParams = benchmark.results.reduce((sum, result) => sum + (result.total_parameters || 0), 0) / totalModels;
+  const totalParamsM = totalParams ? (totalParams / 1000000).toFixed(2) : 'N/A';
+
+  const avgFlops = benchmark.results.reduce((sum, result) => sum + (result.flops_giga || 0), 0) / totalModels;
+  const avgFlopsG = avgFlops > 0 ? avgFlops.toFixed(2) : 'N/A';
+
+  // Calculate mean time for GPU and CPU separately
+  const gpuResults = benchmark.results.filter(result => 
+    result.device_type === 'cuda' || result.device?.toLowerCase().includes('gpu') || result.device?.toLowerCase().includes('cuda')
+  );
+  const cpuResults = benchmark.results.filter(result => 
+    result.device_type === 'cpu' || result.device?.toLowerCase().includes('cpu')
+  );
+
+  const meanTimeGpu = gpuResults.length > 0 
+    ? gpuResults.reduce((sum, result) => sum + (result.mean_time_ms || 0), 0) / gpuResults.length 
+    : 0;
+  const meanTimeCpu = cpuResults.length > 0 
+    ? cpuResults.reduce((sum, result) => sum + (result.mean_time_ms || 0), 0) / cpuResults.length 
+    : 0;
+
+  // Calculate standard deviation for GPU and CPU times
+  const stdTimeGpu = gpuResults.length > 0 
+    ? gpuResults.reduce((sum, result) => sum + (result.std_time_ms || 0), 0) / gpuResults.length
+    : 0;
+  const stdTimeCpu = cpuResults.length > 0 
+    ? cpuResults.reduce((sum, result) => sum + (result.std_time_ms || 0), 0) / cpuResults.length
+    : 0;
+  return { avgFps, totalParamsM, avgFlopsG, meanTimeGpu, meanTimeCpu, stdTimeGpu, stdTimeCpu };
+};
+
+const benchmarkTrainingName = (benchmark: Benchmark) =>
+  benchmark.training_id && typeof benchmark.training_id === 'object' && 'name' in benchmark.training_id
+    ? benchmark.training_id.name
+    : benchmark.training_uuid ? 'Unknown Training' : 'Standalone';
+
 const BenchmarksPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -42,6 +86,7 @@ const BenchmarksPage: React.FC = () => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const theme = useTheme();
+  const compact = useCompactLayout();
   const queryClient = useQueryClient();
 
   const {
@@ -137,49 +182,55 @@ const BenchmarksPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 4
-        }}>
-        <Box>
-          <Typography variant="h4" component="h1" gutterBottom sx={{
-            fontWeight: 700
-          }}>
-            Benchmarks
-          </Typography>
-          <Typography variant="body1" sx={{
-            color: "text.secondary"
-          }}>
-            Performance benchmarking results for model evaluation
-          </Typography>
-        </Box>
-        <Box>
+      <PageHeader
+        title="Benchmarks"
+        subtitle="Performance benchmarking results for model evaluation"
+        actions={
           <Tooltip title="Refresh">
-            <IconButton
-              onClick={() => {
-                loadBenchmarks();
-              }}
-              sx={{ 
-                bgcolor: 'background.paper',
-                border: `1px solid ${theme.palette.divider}`,
-                borderRadius: 2,
-                '&:hover': { bgcolor: theme.palette.action.hover }
-              }}
-            >
+            <IconButton aria-label="Refresh" onClick={() => loadBenchmarks()}>
               <RefreshIcon />
             </IconButton>
           </Tooltip>
-        </Box>
-      </Box>
+        }
+      />
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
-      {/* Benchmarks Table */}
+      {compact ? (
+        <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, overflow: 'hidden' }}>
+          {benchmarks.map((benchmark) => {
+            const { avgFps, totalParamsM, avgFlopsG, meanTimeGpu, meanTimeCpu } = summarizeBenchmark(benchmark);
+            const trainingId =
+              benchmark.training_id && typeof benchmark.training_id === 'object' && '_id' in benchmark.training_id
+                ? benchmark.training_id._id
+                : null;
+            const name = benchmarkTrainingName(benchmark);
+            return (
+              <MobileListRow
+                key={benchmark._id}
+                to={trainingId ? `/trainings/${trainingId}?tab=benchmarks` : undefined}
+                title={name}
+                figures={[
+                  { label: 'Mean FPS', value: avgFps.toFixed(2) },
+                  { label: 'Params (M)', value: totalParamsM },
+                  { label: 'FLOPs (G)', value: avgFlopsG },
+                  { label: 'GPU ms', value: meanTimeGpu > 0 ? meanTimeGpu.toFixed(2) : 'N/A' },
+                  { label: 'CPU ms', value: meanTimeCpu > 0 ? meanTimeCpu.toFixed(2) : 'N/A' }
+                ]}
+                footer={formatTimestamp(benchmark.timestamp)}
+                actionsLabel={`Actions for ${name} benchmark`}
+                actions={
+                  canDeleteBenchmarks(benchmark._id)
+                    ? [{ label: 'Delete', icon: <DeleteIcon fontSize="small" />, onClick: () => handleDeleteBenchmark(benchmark._id), danger: true }]
+                    : []
+                }
+              />
+            );
+          })}
+        </Paper>
+      ) : (
       <TableContainer 
         component={Paper} 
         elevation={0} 
@@ -207,38 +258,7 @@ const BenchmarksPage: React.FC = () => {
             {benchmarks.map((benchmark) => {
               const isExpanded = expandedRows.has(benchmark._id);
               
-              // Calculate aggregated metrics for the benchmark
-              const totalModels = benchmark.results.length;
-              const avgFps = benchmark.results.reduce((sum, result) => sum + (result.fps || 0), 0) / totalModels;
-              
-              const totalParams = benchmark.results.reduce((sum, result) => sum + (result.total_parameters || 0), 0) / totalModels;
-              const totalParamsM = totalParams ? (totalParams / 1000000).toFixed(2) : 'N/A';
-
-              const avgFlops = benchmark.results.reduce((sum, result) => sum + (result.flops_giga || 0), 0) / totalModels;
-              const avgFlopsG = avgFlops > 0 ? avgFlops.toFixed(2) : 'N/A';
-
-              // Calculate mean time for GPU and CPU separately
-              const gpuResults = benchmark.results.filter(result => 
-                result.device_type === 'cuda' || result.device?.toLowerCase().includes('gpu') || result.device?.toLowerCase().includes('cuda')
-              );
-              const cpuResults = benchmark.results.filter(result => 
-                result.device_type === 'cpu' || result.device?.toLowerCase().includes('cpu')
-              );
-
-              const meanTimeGpu = gpuResults.length > 0 
-                ? gpuResults.reduce((sum, result) => sum + (result.mean_time_ms || 0), 0) / gpuResults.length 
-                : 0;
-              const meanTimeCpu = cpuResults.length > 0 
-                ? cpuResults.reduce((sum, result) => sum + (result.mean_time_ms || 0), 0) / cpuResults.length 
-                : 0;
-
-              // Calculate standard deviation for GPU and CPU times
-              const stdTimeGpu = gpuResults.length > 0 
-                ? gpuResults.reduce((sum, result) => sum + (result.std_time_ms || 0), 0) / gpuResults.length
-                : 0;
-              const stdTimeCpu = cpuResults.length > 0 
-                ? cpuResults.reduce((sum, result) => sum + (result.std_time_ms || 0), 0) / cpuResults.length
-                : 0;
+              const { avgFps, totalParamsM, avgFlopsG, meanTimeGpu, meanTimeCpu, stdTimeGpu, stdTimeCpu } = summarizeBenchmark(benchmark);
 
               return (
                 <React.Fragment key={benchmark._id}>
@@ -263,7 +283,7 @@ const BenchmarksPage: React.FC = () => {
                         {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                       </IconButton>
                     </TableCell>
-                    <TableCell>{(benchmark.training_id && typeof benchmark.training_id === 'object' && 'name' in benchmark.training_id) ? benchmark.training_id.name : (benchmark.training_uuid ? 'Unknown Training' : 'Standalone')}</TableCell>
+                    <TableCell>{benchmarkTrainingName(benchmark)}</TableCell>
                     <TableCell>{avgFps.toFixed(2)}</TableCell>
                     <TableCell>{totalParamsM}</TableCell>
                     <TableCell>{avgFlopsG}</TableCell>
@@ -346,6 +366,7 @@ const BenchmarksPage: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
+      )}
       {benchmarks.length === 0 && !loading && (
         <Box
           sx={{

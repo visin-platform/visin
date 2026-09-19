@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Container,
   Typography,
   Button,
   Alert,
@@ -12,7 +11,6 @@ import {
   DialogContent,
   DialogActions,
   useTheme,
-  alpha,
   Table,
   TableBody,
   TableCell,
@@ -20,9 +18,11 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
-  Paper,
   Chip,
-  Tooltip
+  Tooltip,
+  Menu,
+  MenuItem,
+  ListItemIcon
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -30,8 +30,11 @@ import {
   Edit as EditIcon,
   DeleteOutlined as DeleteOutlineIcon,
   Public as PublicIcon,
-  Lock as LockIcon
+  Lock as LockIcon,
+  Folder as FolderIcon,
+  MoreVert as MoreVertIcon
 } from '@mui/icons-material';
+import { EmptyState, ListRow, PageHeader, Panel, RowIcon, useCompactLayout } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
 import { Project } from '../types/Project';
@@ -40,16 +43,15 @@ import { ProjectCosting, ProjectTaxonomy } from '../types/taxonomy';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDate, formatDateTime } from '../utils';
-import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
-
-// Columns a phone has no room for; their content moves under the project name.
-const secondaryColumnSx = { display: { xs: 'none', md: 'table-cell' } } as const;
 
 const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
   const { user } = useAuth();
+  const compact = useCompactLayout();
   usePageTitle('Projects - Vision');
+  // The phone list's per-row actions menu, and the project it is open for.
+  const [menu, setMenu] = useState<{ anchor: HTMLElement; project: Project } | null>(null);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
@@ -181,95 +183,52 @@ const ProjectsPage: React.FC = () => {
     }
   };
 
-  return (
-    <Container maxWidth="xl" sx={{ pb: 4 }}>
-      {/* Breadcrumbs */}
-      <PageBreadcrumbs
-        items={[
-          { label: 'Projects', current: true }
-        ]}
-      />
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 1,
-          mb: { xs: 2, sm: 4 }
-        }}>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h4" component="h1" sx={{
-            fontWeight: 700,
-            fontSize: { xs: '1.5rem', sm: '2.125rem' },
-            mb: { xs: 0, sm: 0.5 }
-          }}>
-            Projects
-          </Typography>
-          <Typography
-            variant="body1"
-            sx={{
-              color: "text.secondary",
-              display: { xs: 'none', sm: 'block' }
-            }}>
-            Manage your research projects
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          {user && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => {
-                setProjectName('');
-                setProjectDescription('');
-                setIsPublic(false);
-                setCreateError(null);
-                setCreateSuccess(null);
-                setEditingProjectId(null);
-                setCreateModalOpen(true);
-              }}
-              aria-label="New Project"
-              sx={{
-                // A plus in the same 40px square as the refresh button beside
-                // it, until there is room for the label.
-                minWidth: { xs: 40, md: 64 },
-                width: { xs: 40, md: 'auto' },
-                height: 40,
-                px: { xs: 0, md: 3 },
-                fontSize: { xs: '0.875rem', sm: '0.9375rem' },
-                borderRadius: 2,
-                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
-                '& .MuiButton-startIcon': {
-                  mr: { xs: 0, md: 1 },
-                  ml: { xs: 0, md: -0.5 }
-                }
-              }}
-            >
-              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>New Project</Box>
-            </Button>
-          )}
-          <IconButton
-            aria-label="Refresh"
-            onClick={() => refetch()}
-            disabled={isLoading}
-            sx={{ 
-              bgcolor: 'background.paper',
-              border: `1px solid ${theme.palette.divider}`,
-              borderRadius: 2,
-              '&:hover': { bgcolor: theme.palette.action.hover }
-            }}
-          >
-            <RefreshIcon />
-          </IconButton>
-        </Box>
-      </Box>
-      {error && (
-        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-          {error instanceof Error ? error.message : 'Failed to load projects'}
-        </Alert>
+  const openCreate = () => {
+    setProjectName('');
+    setProjectDescription('');
+    setIsPublic(false);
+    setCreateError(null);
+    setCreateSuccess(null);
+    setEditingProjectId(null);
+    setCreateModalOpen(true);
+  };
+
+  const visibility = (project: Project) => (project.isPublic ? 'Public' : 'Private');
+
+  const list = compact ? (
+    <Panel aria-label="Projects">
+      {projects.length === 0 && !isLoading ? (
+        <EmptyState icon={<FolderIcon />} title="No projects found" description="A project holds the training runs of one line of work." />
+      ) : (
+        projects.map((project: Project) => (
+          <ListRow
+            key={project._id}
+            to={`/projects/${project._id}`}
+            leading={
+              <RowIcon color={project.isPublic ? theme.palette.success.main : theme.palette.primary.main}>
+                {project.isPublic ? <PublicIcon fontSize="small" /> : <FolderIcon fontSize="small" />}
+              </RowIcon>
+            }
+            title={project.name}
+            secondary={[visibility(project), formatDate(project.createdAt), project.description].filter(Boolean).join(' · ')}
+            trailing={
+              project.ownerId === user?.id ? (
+                <IconButton
+                  aria-label={`Actions for ${project.name}`}
+                  onClick={(event) => setMenu({ anchor: event.currentTarget, project })}
+                >
+                  <MoreVertIcon />
+                </IconButton>
+              ) : undefined
+            }
+          />
+        ))
       )}
-      <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: theme.shadows[2] }}>
-        <Table size="small" sx={{ '& .MuiTableCell-root': { px: { xs: 1.5, sm: 2 } } }}>
+    </Panel>
+  ) : (
+    <Panel>
+      <TableContainer>
+        <Table sx={{ '& .MuiTableCell-root': { px: 2 } }}>
           <TableHead>
             <TableRow>
               <TableCell>
@@ -281,15 +240,15 @@ const ProjectsPage: React.FC = () => {
                   Name
                 </TableSortLabel>
               </TableCell>
-              <TableCell sx={secondaryColumnSx}>Description</TableCell>
-              <TableCell sx={secondaryColumnSx}>Visibility</TableCell>
-              <TableCell sx={secondaryColumnSx}>
+              <TableCell>Description</TableCell>
+              <TableCell>Visibility</TableCell>
+              <TableCell>
                 <TableSortLabel
                   active={sortBy === 'createdAt'}
                   direction={sortBy === 'createdAt' ? sortOrder : 'asc'}
                   onClick={() => handleSort('createdAt')}
                 >
-                  Created At
+                  Created
                 </TableSortLabel>
               </TableCell>
               {showActions && <TableCell align="right">Actions</TableCell>}
@@ -298,70 +257,46 @@ const ProjectsPage: React.FC = () => {
           <TableBody>
             {projects.length === 0 && !isLoading ? (
               <TableRow>
-                <TableCell colSpan={showActions ? 5 : 4} align="center" sx={{ pb: 4 }}>
-                  <Typography sx={{
-                    color: "text.secondary"
-                  }}>No projects found</Typography>
+                <TableCell colSpan={showActions ? 5 : 4} sx={{ border: 0 }}>
+                  <EmptyState icon={<FolderIcon />} title="No projects found" description="A project holds the training runs of one line of work." />
                 </TableCell>
               </TableRow>
             ) : (
               projects.map((project: Project) => (
-                <TableRow key={project._id} hover>
+                <TableRow key={project._id} hover sx={{ '&:last-child td': { border: 0 } }}>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <RowIcon color={project.isPublic ? theme.palette.success.main : theme.palette.primary.main}>
+                        {project.isPublic ? <PublicIcon fontSize="small" /> : <FolderIcon fontSize="small" />}
+                      </RowIcon>
+                      <Typography
+                        onClick={() => navigate(`/projects/${project._id}`)}
+                        sx={{ fontWeight: 600, cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
+                      >
+                        {project.name}
+                      </Typography>
+                    </Box>
+                  </TableCell>
                   <TableCell>
                     <Typography
-                      onClick={() => navigate(`/projects/${project._id}`)}
-                      sx={{
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        color: 'primary.main',
-                        '&:hover': { textDecoration: 'underline' }
-                      }}>
-                      {project.name}
-                    </Typography>
-                    {/* Below the Description/Visibility/Created columns'
-                        breakpoint, their content collapses onto one caption
-                        line here rather than disappearing. */}
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        display: { xs: 'flex', md: 'none' },
-                        alignItems: 'center',
-                        gap: 0.5,
-                        color: 'text.secondary'
-                      }}>
-                      {project.isPublic
-                        ? <PublicIcon sx={{ fontSize: '0.875rem' }} />
-                        : <LockIcon sx={{ fontSize: '0.875rem' }} />}
-                      {project.isPublic ? 'Public' : 'Private'} · {formatDate(project.createdAt)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={secondaryColumnSx}>
-                    <Typography
                       variant="body2"
-                      sx={{
-                        color: "text.secondary",
-                        maxWidth: 400,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
+                      sx={{ color: 'text.secondary', maxWidth: 380, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    >
                       {project.description || '-'}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={secondaryColumnSx}>
+                  <TableCell>
                     <Chip
                       icon={project.isPublic ? <PublicIcon fontSize="small" /> : <LockIcon fontSize="small" />}
-                      label={project.isPublic ? 'Public' : 'Private'}
+                      label={visibility(project)}
                       size="small"
                       color={project.isPublic ? 'success' : 'default'}
                       variant="outlined"
                     />
                   </TableCell>
-                  <TableCell sx={secondaryColumnSx}>
-                    {formatDateTime(project.createdAt)}
-                  </TableCell>
+                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{formatDateTime(project.createdAt)}</TableCell>
                   {showActions && (
-                    <TableCell align="right">
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                       {project.ownerId === user?.id && (
                         <>
                           <Tooltip title="Edit">
@@ -384,6 +319,63 @@ const ProjectsPage: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
+    </Panel>
+  );
+
+  return (
+    <Box>
+      <PageHeader
+        title="Projects"
+        subtitle="Research projects and the training runs inside them."
+        hideTitleOnPhone
+        actions={
+          <Tooltip title="Refresh">
+            <span>
+              <IconButton aria-label="Refresh" onClick={() => refetch()} disabled={isLoading}>
+                <RefreshIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        }
+        primaryAction={user ? { label: 'New project', icon: <AddIcon />, onClick: openCreate } : undefined}
+      />
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error instanceof Error ? error.message : 'Failed to load projects'}
+        </Alert>
+      )}
+      {list}
+      <Menu
+        anchorEl={menu?.anchor}
+        open={Boolean(menu)}
+        onClose={() => setMenu(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <MenuItem
+          onClick={() => {
+            if (menu) handleEditProject(menu.project);
+            setMenu(null);
+          }}
+        >
+          <ListItemIcon>
+            <EditIcon fontSize="small" />
+          </ListItemIcon>
+          Edit
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menu) handleDeleteClick(menu.project._id);
+            setMenu(null);
+          }}
+          sx={{ color: 'error.main' }}
+        >
+          <ListItemIcon sx={{ color: 'inherit' }}>
+            <DeleteOutlineIcon fontSize="small" />
+          </ListItemIcon>
+          Delete
+        </MenuItem>
+      </Menu>
       <ProjectFormDialog
         open={createModalOpen}
         onClose={handleCloseModal}
@@ -433,7 +425,7 @@ const ProjectsPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </Box>
   );
 };
 

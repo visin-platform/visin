@@ -42,7 +42,7 @@ const DeletedGroups: React.FC<DeletedGroupsProps> = ({
     variant="outlined"
     expanded={expanded}
     onChange={(_event, isExpanded) => onToggle(isExpanded)}
-    sx={{ borderRadius: 3, '&:before': { display: 'none' }, overflow: 'hidden' }}
+    sx={{ borderRadius: '16px', '&:before': { display: 'none' }, overflow: 'hidden' }}
   >
     <AccordionSummary expandIcon={<ExpandMore />}>
       <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
@@ -74,7 +74,6 @@ const DeletedGroups: React.FC<DeletedGroupsProps> = ({
                         startIcon={<RestoreFromTrash />}
                         disabled={busy}
                         onClick={() => onRestore(group._id)}
-                        sx={{ borderRadius: 2 }}
                       >
                         Restore
                       </Button>
@@ -84,7 +83,6 @@ const DeletedGroups: React.FC<DeletedGroupsProps> = ({
                         startIcon={<DeleteForever />}
                         disabled={busy}
                         onClick={() => onDeleteForever(group)}
-                        sx={{ borderRadius: 2 }}
                       >
                         Delete forever
                       </Button>

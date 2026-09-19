@@ -128,7 +128,7 @@ describe('TestResultsPage', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('Training One')).toBeInTheDocument());
 
-    const compareButton = screen.getByRole('button', { name: /Compare Selected/ });
+    const compareButton = screen.getByRole('button', { name: /Compare selected/i });
     expect(compareButton).toBeDisabled();
 
     const checkboxes = screen.getAllByRole('checkbox');

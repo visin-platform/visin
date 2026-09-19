@@ -249,7 +249,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       {/* Settings Tab */}
       {isOwner && (
         <TabPanel value={tabValue} index={7}>
-          <Box sx={{ px: 3 }}>
+          <Box sx={{ px: { xs: 0, sm: 3 } }}>
             <ProjectSettings project={project} discovered={discoveredVocabulary} />
           </Box>
         </TabPanel>

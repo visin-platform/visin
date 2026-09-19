@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Paper, Typography } from '@mui/material';
-import { GroupAdd } from '@mui/icons-material';
+import { Alert, Box, CircularProgress } from '@mui/material';
+import { GroupAdd, Groups } from '@mui/icons-material';
+import { EmptyState, PageHeader, Panel } from '@visin/frontend-core';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   useCreateGroup,
@@ -93,42 +94,24 @@ const GroupsTab: React.FC = () => {
 
   return (
     <Box>
-      <Paper
-        variant="outlined"
-        sx={{ p: { xs: 3, md: 4 }, borderRadius: 3, border: '1px solid', borderColor: 'divider' }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 4, gap: 2 }}>
-          <Box>
-            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-              Groups
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Groups control who you share datasets and labelling work with. Owners and admins can
-              rename a group and manage its members.
-            </Typography>
-          </Box>
-          <Button
-            variant="contained"
-            startIcon={<GroupAdd />}
-            onClick={() => setCreateOpen(true)}
-            sx={{ borderRadius: 2, flexShrink: 0 }}
-          >
-            New group
-          </Button>
-        </Box>
+      <PageHeader
+        subtitle="Groups control who you share datasets and labelling work with. Owners and admins can rename a group and manage its members."
+        primaryAction={{ label: 'New group', icon: <GroupAdd />, onClick: () => setCreateOpen(true) }}
+      />
 
-        {mutationError && (
-          <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-            {mutationError.message}
-          </Alert>
-        )}
+      {mutationError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {mutationError.message}
+        </Alert>
+      )}
 
+      <Panel aria-label="Your groups">
         {groups.isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress size={28} />
           </Box>
         ) : groups.isError ? (
-          <Alert severity="error" sx={{ borderRadius: 2 }}>
+          <Alert severity="error" sx={{ m: 2 }}>
             Could not load your groups. {(groups.error as Error).message}
           </Alert>
         ) : groups.data && groups.data.length > 0 ? (
@@ -148,13 +131,15 @@ const GroupsTab: React.FC = () => {
             />
           ))
         ) : (
-          <Typography variant="body2" sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
-            You are not in any groups yet. Create one to start sharing work.
-          </Typography>
+          <EmptyState
+            icon={<Groups />}
+            title="No groups yet"
+            description="You are not in any groups yet. Create one to start sharing work."
+          />
         )}
-      </Paper>
+      </Panel>
 
-      <Box sx={{ mt: 4 }}>
+      <Box sx={{ mt: 3 }}>
         <DeletedGroups
           groups={deletedGroups.data ?? []}
           loading={trashOpen && deletedGroups.isLoading}

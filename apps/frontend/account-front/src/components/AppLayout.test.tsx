@@ -49,13 +49,13 @@ describe('AppLayout', () => {
     renderAt('/account/groups');
 
     // The h4 page title mirrors the active section's label.
-    expect(screen.getByRole('heading', { level: 4, name: 'Groups' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Groups' })).toBeInTheDocument();
   });
 
   it('falls back to "Account" as the title outside known routes', () => {
     renderAt('/account/unknown');
 
-    expect(screen.getByRole('heading', { level: 4, name: 'Account' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Account' })).toBeInTheDocument();
   });
 
   it('shows the same groups as the other apps, linking across', () => {

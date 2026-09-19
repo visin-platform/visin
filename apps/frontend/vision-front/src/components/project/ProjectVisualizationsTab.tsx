@@ -60,7 +60,7 @@ const ProjectVisualizationsTab: React.FC<ProjectVisualizationsTabProps> = ({
   });
 
   return (
-    <Box sx={{ px: 3 }}>
+    <Box sx={{ px: { xs: 0, sm: 3 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">Visualizations</Typography>
         {selectedVisualizationTrainingIds.size > 0 && (

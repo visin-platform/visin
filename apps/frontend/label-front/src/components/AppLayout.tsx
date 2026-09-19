@@ -38,7 +38,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <SharedAppLayout
       appName="Labeling"
-      subtitle="Label images and review annotation quality."
       navGroups={groups}
       accountItems={accountItems}
       user={user}

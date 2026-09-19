@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -183,9 +184,7 @@ export const VisualizationsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <Typography variant="h4" sx={{ mb: 4 }}>
-        Training Visualizations Comparison
-      </Typography>
+      <PageHeader title="Training Visualizations Comparison" />
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}

@@ -1,8 +1,7 @@
 import React from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import {
-  Box,
   Container,
-  Typography,
   IconButton,
   Alert
 } from '@mui/material';
@@ -36,32 +35,24 @@ const ConfigsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 4
-        }}>
-        <Typography variant="h4" component="h1">
-          Configs Library
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <ConfigUploadButton
-            uploading={uploading}
-            fileInputRef={fileInputRef}
-            onFileChange={handleFileChange}
-          />
-          <IconButton onClick={handleRefresh} disabled={loading}>
-            <RefreshIcon />
-          </IconButton>
-        </Box>
-      </Box>
-      <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
-        A config is the record of what a run was configured with, so it is read-only once uploaded — a training&apos;s
-        config is set by the pipeline that reports it. Configs are publicly shared, including when cited by a private
-        project. Upload only non-confidential configurations; remove passwords, API keys, and other secrets first.
-      </Typography>
+      <PageHeader
+        title="Configs Library"
+        subtitle={
+          <>
+            A config is the record of what a run was configured with, so it is read-only once uploaded — a training&apos;s
+            config is set by the pipeline that reports it. Configs are publicly shared, including when cited by a private
+            project. Upload only non-confidential configurations; remove passwords, API keys, and other secrets first.
+          </>
+        }
+        actions={
+          <>
+            <ConfigUploadButton uploading={uploading} fileInputRef={fileInputRef} onFileChange={handleFileChange} />
+            <IconButton aria-label="Refresh" onClick={handleRefresh} disabled={loading}>
+              <RefreshIcon />
+            </IconButton>
+          </>
+        }
+      />
       {/* Messages */}
       {success && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>

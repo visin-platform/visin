@@ -13,7 +13,9 @@ import {
   Box,
   CircularProgress
 } from '@mui/material';
-import { Visibility as VisibilityIcon } from '@mui/icons-material';
+import { Settings as SettingsIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
+import { EmptyState, useCompactLayout } from '@visin/frontend-core';
+import { MobileListRow } from '../common/MobileList';
 import { Config } from '../../types';
 
 /**
@@ -29,6 +31,7 @@ interface ConfigsTableProps {
 }
 
 const ConfigsTable: React.FC<ConfigsTableProps> = ({ configs, loading, onViewDetails }) => {
+  const compact = useCompactLayout();
   // Format date helper
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
@@ -39,6 +42,26 @@ const ConfigsTable: React.FC<ConfigsTableProps> = ({ configs, loading, onViewDet
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
         <CircularProgress />
       </Box>
+    );
+  }
+
+  if (compact) {
+    return (
+      <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+        {configs.length === 0 ? (
+          <EmptyState icon={<SettingsIcon />} title="No configs uploaded yet" />
+        ) : (
+          configs.map((config) => (
+            <MobileListRow
+              key={config._id}
+              onClick={() => onViewDetails(config)}
+              title={config.config_name || 'Unnamed'}
+              meta={config.summary}
+              footer={formatDate(config.createdAt)}
+            />
+          ))
+        )}
+      </Paper>
     );
   }
 
