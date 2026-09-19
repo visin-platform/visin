@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.18.0](https://github.com/visin-platform/visin/compare/v1.17.0...v1.18.0) (2026-09-19)
+
+
+### Features
+
+* create unified theme colors and improve mobile views ([260d3b1](https://github.com/visin-platform/visin/commit/260d3b1886af359596409c4bfa2f49caa9102c92))
+
+
+### Chores
+
+* **release:** @visin/frontend-core 1.9.0 ([3d6b197](https://github.com/visin-platform/visin/commit/3d6b1977004ca66b939bb4585a5ab234b2316654))
+
 ## [1.17.0](https://github.com/visin-platform/visin/compare/v1.16.0...v1.17.0) (2026-09-19)
 
 
