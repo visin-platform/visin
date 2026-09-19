@@ -24,3 +24,14 @@ npm test --workspace=shell-front
 ```
 
 Copy `.env.example` to `.env` for local URLs. `npm run dev:front` at the root starts all of them.
+
+## Installable app (PWA)
+
+The shell is what installs as an app on a phone or desktop: `public/manifest.webmanifest`, icons in `public/`
+(`icon-192.png`/`icon-512.png` double as maskable — the logo sits inside the safe zone — plus
+`apple-touch-icon.png`), and `public/sw.js`, registered from `src/pwa.ts` in production builds only.
+
+The service worker caches no app code on purpose: vision, label and account are loaded from their own deployments
+at runtime, so a cached shell would pair stale host code with fresh remotes. It only serves `offline.html` when a
+navigation fails. nginx serves `sw.js` and the manifest uncached so an update is picked up on the next load. After
+changing `favicon.svg`, re-render the PNGs from it (e.g. with `sharp`, flattened on white).

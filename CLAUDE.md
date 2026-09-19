@@ -215,6 +215,9 @@ renders inside the shell's router, so moving between apps swaps content under a 
 - **Remote addresses are runtime config**: the shell's `config.json` `VISION_FRONT_URL`/`LABEL_FRONT_URL`/
   `ACCOUNT_FRONT_URL` are registered on first use (`src/remotes.ts`); an unreachable app shows a retry panel in
   the content area (`RemoteBoundary`) while the menu and the other apps keep working.
+- **The shell is the installable PWA** (manifest, icons, `public/sw.js`). The service worker caches no app code —
+  a cached host would run against freshly deployed remotes — and only serves `offline.html` when a navigation
+  fails. Keep it that way rather than adding precaching.
 - The federation plugin is left out under Vitest (`process.env.VITEST`); shell tests mock
   `@module-federation/runtime`.
 

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="initial-scale=1, width=device-width" />
+    <meta name="theme-color" content="#f8fafc" />
+    <title>Visin — offline</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        color: #0f172a;
+        font-family: 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+        text-align: center;
+      }
+      main {
+        padding: 24px 16px;
+        max-width: 360px;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 16px 0 8px;
+      }
+      p {
+        color: #475569;
+        line-height: 1.5;
+        margin: 0 0 24px;
+      }
+      button {
+        font: inherit;
+        font-weight: 500;
+        color: #fff;
+        background: #2563eb;
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 20px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <svg width="64" height="64" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="grad" x1="20" y1="20" x2="180" y2="180" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#4F46E5" />
+            <stop offset="1" stop-color="#EC4899" />
+          </linearGradient>
+        </defs>
+        <rect x="40" y="40" width="45" height="45" rx="12" fill="url(#grad)" />
+        <rect x="115" y="40" width="45" height="45" rx="12" fill="url(#grad)" />
+        <rect x="77.5" y="115" width="45" height="45" rx="12" fill="url(#grad)" />
+      </svg>
+      <h1>You're offline</h1>
+      <p>Visin needs a connection to load your projects and results. Check your network and try again.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

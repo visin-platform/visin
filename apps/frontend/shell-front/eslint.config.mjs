@@ -8,6 +8,14 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // The service worker is plain script served as-is, running in a worker scope.
+    files: ['public/sw.js'],
+    languageOptions: {
+      sourceType: 'script',
+      globals: { self: 'readonly', caches: 'readonly', fetch: 'readonly', Request: 'readonly' },
+    },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
       parserOptions: {
