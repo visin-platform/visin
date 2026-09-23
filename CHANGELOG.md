@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.20.0](https://github.com/visin-platform/visin/compare/v1.19.0...v1.20.0) (2026-09-23)
+
+
+### Features
+
+* harden auth, fix list paging and sorting, share backend helpers ([acf6cb7](https://github.com/visin-platform/visin/commit/acf6cb7c476af8d87af65c25db7040b83707dbc0))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.6.0 ([659eefb](https://github.com/visin-platform/visin/commit/659eefb702c0e151cb8562eb02cbc3df77f472a2))
+
 ## [1.19.0](https://github.com/visin-platform/visin/compare/v1.18.0...v1.19.0) (2026-09-19)
 
 
