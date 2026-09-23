@@ -31,8 +31,8 @@ describe('requireInternalServiceToken', () => {
 
     requireInternalServiceToken(makeReq({ 'x-internal-token': TOKEN }), res, next);
 
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 500 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('returns 401 when x-internal-token header is missing', () => {
@@ -40,11 +40,9 @@ describe('requireInternalServiceToken', () => {
 
     requireInternalServiceToken(makeReq(), res, next);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Internal service token required' })
-    );
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Internal service token required' }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('returns 401 for a wrong token', () => {
@@ -52,11 +50,9 @@ describe('requireInternalServiceToken', () => {
 
     requireInternalServiceToken(makeReq({ 'x-internal-token': 'wrong-token' }), res, next);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Invalid internal service token' })
-    );
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Invalid internal service token' }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('returns 401 for a token with the correct value but different length', () => {
@@ -68,8 +64,8 @@ describe('requireInternalServiceToken', () => {
       next
     );
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('calls next() for the correct token', () => {

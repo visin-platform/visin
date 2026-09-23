@@ -30,6 +30,6 @@ describe('verifyGoogleToken', () => {
   it('wraps verification failures in an Invalid token error', async () => {
     mockVerifyIdToken.mockRejectedValue(new Error('expired'));
 
-    await expect(verifyGoogleToken('bad-token')).rejects.toThrow('Invalid token');
+    await expect(verifyGoogleToken('bad-token')).rejects.toMatchObject({ statusCode: 401, message: 'Invalid token' });
   });
 });

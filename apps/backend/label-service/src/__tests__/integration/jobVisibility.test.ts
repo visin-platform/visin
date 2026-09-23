@@ -38,12 +38,14 @@ describe('job publication and task access with in-memory MongoDB', () => {
   }, 120_000);
   beforeEach(async () => {
     await mongoose.connection.collection('users').insertMany(Object.entries(actors).map(([name, id]) => ({ _id: new mongoose.Types.ObjectId(id), email: `${name}@example.test`, tokenVersion: 1 })));
+    // Each test token names a session whose id is its user's.
+    await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
     jest.clearAllMocks();
     membership.mockImplementation(async (groupId, userId) => ({ member: groupId === 'actual-group' && [actors.member, actors.owner].includes(userId), role: userId === actors.owner ? 'owner' : 'member' }));
     sign.mockResolvedValue({ 'frame-file': 'SIGNED_IMAGE_URL' });
   });
   afterEach(async () => {
-    await Promise.all([mongoose.connection.collection('users').deleteMany({}), LabelJob.deleteMany({}), LabelTask.deleteMany({})]);
+    await Promise.all([mongoose.connection.collection('users').deleteMany({}), mongoose.connection.collection('user_sessions').deleteMany({}), LabelJob.deleteMany({}), LabelTask.deleteMany({})]);
   });
   afterAll(async () => {
     await new Promise<void>(resolve => server.close(() => resolve()));
@@ -53,7 +55,7 @@ describe('job publication and task access with in-memory MongoDB', () => {
     else process.env.JWT_SECRET = oldSecret;
   });
   const request = (path: string, userId?: string, method = 'GET', body?: object) => fetch(`${base}${path}`, {
-    method, headers: { 'content-type': 'application/json', ...(userId ? { authorization: `Bearer ${jwt.sign({ id: actors[userId], tokenVersion: 1, email: `${userId}@example.test`, name: userId }, process.env.JWT_SECRET!, { expiresIn: '1h' })}` } : {}) },
+    method, headers: { 'content-type': 'application/json', ...(userId ? { authorization: `Bearer ${jwt.sign({ id: actors[userId], tokenVersion: 1, email: `${userId}@example.test`, name: userId, sid: actors[userId], typ: 'session' }, process.env.JWT_SECRET!, { expiresIn: '1h' })}` } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {})
   });
   const fixture = async (status: JobStatus = 'active', isPublic?: boolean) => {

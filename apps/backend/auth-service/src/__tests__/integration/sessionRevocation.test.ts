@@ -189,26 +189,14 @@ describe('browser sessions across auth-service and the shared middleware', () =>
     expect(await status(token, '/auth/verify')).toBe(401);
   });
 
-  it('upgrades a pre-sessions token to a session on its next verify', async () => {
+  it('refuses a session-less token, and does not give it a session', async () => {
     const user = await createAccount();
-    const legacy = generateJWT({ id: user.id, email, name: 'Account', tokenVersion: 1 }, new Date(Date.now() + 24 * 60 * 60 * 1000));
-    expect(await status(legacy)).toBe(200);
+    const sessionless = generateJWT({ id: user.id, email, name: 'Account', tokenVersion: 1 }, new Date(Date.now() + 24 * 60 * 60 * 1000));
 
-    const verified = await fetch(`${base}/auth/verify`, { headers: { ...headersFor(legacy), 'user-agent': FIREFOX_WINDOWS } });
-
-    const upgraded = (await verified.json()).token;
-    const session = (await Session.findById(sidOf(upgraded)))!;
-    expect(session.method).toBe('unknown');
-    expect(session.userAgent).toBe(FIREFOX_WINDOWS);
-    expect(await status(upgraded)).toBe(200);
-  });
-
-  it('refuses a session-less token that is not a pre-sessions one', async () => {
-    const user = await createAccount();
-    const forged = generateJWT({ id: user.id, email, name: 'Account', tokenVersion: 1 }, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
-
-    expect(await status(forged)).toBe(401);
-    expect(await status(forged, '/auth/profile')).toBe(401);
+    expect(await status(sessionless)).toBe(401);
+    expect(await status(sessionless, '/auth/profile')).toBe(401);
+    expect((await fetch(`${base}/auth/verify`, { headers: headersFor(sessionless) })).status).toBe(401);
+    expect(await Session.countDocuments()).toBe(0);
   });
 
   it('honors administrative token invalidation on the next check, and clears the sessions', async () => {

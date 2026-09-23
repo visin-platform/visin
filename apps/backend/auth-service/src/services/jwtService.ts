@@ -1,4 +1,5 @@
 import * as jwt from 'jsonwebtoken';
+import { UnauthorizedError, SESSION_TOKEN_TYPE } from '@visin/backend-core';
 
 export interface UserPayload {
   id: string;
@@ -15,6 +16,8 @@ export interface UserPayload {
   tokenVersion?: number;
   /** The `user_sessions` document this token belongs to. */
   sid?: string;
+  /** `SESSION_TOKEN_TYPE`, set by `generateJWT`. */
+  typ?: string;
 }
 
 /**
@@ -24,14 +27,14 @@ export interface UserPayload {
  */
 export const generateJWT = (user: UserPayload, expiresAt: Date): string => {
   const expiresIn = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-  return jwt.sign(user, process.env.JWT_SECRET!, { expiresIn });
+  return jwt.sign({ ...user, typ: SESSION_TOKEN_TYPE }, process.env.JWT_SECRET!, { expiresIn });
 };
 
 export const verifyJWT = (token: string): UserPayload => {
   try {
-    return jwt.verify(token, process.env.JWT_SECRET!) as UserPayload;
-  } catch (error) {
-    throw new Error('Invalid or expired token', { cause: error });
+    return jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as UserPayload;
+  } catch {
+    throw new UnauthorizedError('Invalid or expired token');
   }
 };
 

@@ -31,6 +31,10 @@ describe('jwtService', () => {
       expect(decoded.tokenVersion).toBe(payload.tokenVersion);
     });
 
+    it('marks the token as a session token', () => {
+      expect(verifyJWT(generateJWT(payload)).typ).toBe('session');
+    });
+
     it('expires when its session hits its hard cap', () => {
       const expiresAt = new Date(Date.now() + 90 * 24 * HOUR_MS);
       const decoded = verifyJWT(sign(payload, expiresAt)) as unknown as { exp: number };
@@ -45,7 +49,7 @@ describe('jwtService', () => {
     });
 
     it('throws for an invalid token', () => {
-      expect(() => verifyJWT('not.a.valid.token')).toThrow('Invalid or expired token');
+      expect(() => verifyJWT('not.a.valid.token')).toThrow(expect.objectContaining({ statusCode: 401, message: 'Invalid or expired token' }));
     });
 
     it('throws for a token signed with a different secret', () => {

@@ -6,7 +6,8 @@ import {
   getVisualizationsByTraining,
   getVisualizationByUuid,
   deleteVisualization,
-  getVisualizationTypes
+  getVisualizationTypes,
+  getVisualizationSummary
 } from '../controllers/visualizationController';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '@visin/backend-core';
@@ -48,6 +49,7 @@ router.get(
   validateRequest({ query: getVisualizationsByTrainingQuerySchema }),
   getVisualizationsByTraining
 );
+router.get('/summary', optionalAuthMiddleware, getVisualizationSummary);
 router.get('/types', optionalAuthMiddleware, validateRequest({ query: getVisualizationTypesQuerySchema }), getVisualizationTypes);
 router.get('/:visualization_uuid', optionalAuthMiddleware, getVisualizationByUuid);
 router.delete('/:visualization_uuid', authMiddleware, deleteVisualization);

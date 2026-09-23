@@ -1,7 +1,7 @@
 import express from 'express';
 import projectGroupsRoutes from './routes/projectGroupsRoutes';
 import path from 'path';
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
 import { authenticateToken } from './middleware/authMiddleware';
 import groupRoutes from './routes/groupRoutes';
 
@@ -10,7 +10,7 @@ import groupRoutes from './routes/groupRoutes';
 assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'INTERNAL_SERVICE_TOKEN']);
 
 const app = createBaseApp({
-  corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id']
+  corsAllowedHeaders: STANDARD_CORS_ALLOWED_HEADERS
 });
 
 // Health check endpoint
@@ -38,7 +38,7 @@ const PORT = process.env.PORT || 5006;
 // container restart policy.
 connectDb({ serviceName: 'group-service' })
   .then(() => {
-    app.listen(PORT, () => logger.info('Group service started successfully', { port: PORT }));
+    serve(app, { port: PORT, serviceName: 'group-service' });
   })
   .catch((err: Error) => {
     logger.error('Failed to start group-service', { error: err.message, stack: err.stack });

@@ -1,5 +1,6 @@
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 import { logger } from '../logging/logger';
+import { ForbiddenError, UnauthorizedError } from '../errors/HttpError';
 import { looksLikeApiKey } from './crypto';
 import { verifyApiKey } from './service';
 import { looksLikeAccessToken, verifyAccessToken } from '../oauth/tokens';
@@ -150,7 +151,7 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
         kind: isKey ? 'api_key' : 'oauth',
         rejection: verification.rejection
       });
-      res.status(401).json({ success: false, message: 'Invalid or expired credentials' });
+      next(new UnauthorizedError('Invalid or expired credentials'));
       return;
     }
 
@@ -165,12 +166,9 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
         required,
         held: scopes
       });
-      res.status(403).json({
-        success: false,
-        // Named precisely, because the fix is a new key rather than a retry —
-        // and a caller told only "forbidden" will retry.
-        message: `This credential does not carry the "${required}" scope.`
-      });
+      // Named precisely, because the fix is a new key rather than a retry —
+      // and a caller told only "forbidden" will retry.
+      next(new ForbiddenError(`This credential does not carry the "${required}" scope.`));
       return;
     }
 

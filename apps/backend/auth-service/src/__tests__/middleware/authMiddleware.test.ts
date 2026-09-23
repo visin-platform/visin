@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 
 jest.mock('../../services/jwtService', () => ({
   verifyJWT: jest.fn(),
@@ -28,10 +29,13 @@ import { makeSession } from '../helpers/sessionModelMock';
 const mockedVerifyJWT = verifyJWT as jest.Mock;
 const mockedUser = User as unknown as Record<string, jest.Mock>;
 
-// A pre-sessions token (no sid, the old 24-hour life): accepted on the account
-// check alone. Session-bearing tokens are covered in their own block below.
+// A live session token; its session document is found unless a test says otherwise.
 const iat = Math.floor(Date.now() / 1000);
-const decoded = { id: 'db-id-1', email: 'Test@Example.com', name: 'Test User', tokenVersion: 3, iat, exp: iat + 86400 };
+const liveSid = '64b7f1f77bcf86cd79943bbb';
+const decoded = {
+  id: 'db-id-1', email: 'Test@Example.com', name: 'Test User', tokenVersion: 3,
+  sid: liveSid, typ: 'session', iat, exp: iat + 90 * 86400
+};
 const mockedSession = Session as unknown as Record<string, jest.Mock>;
 const dbUser = { email: 'test@example.com', tokenVersion: 3, roles: ['admin'] };
 
@@ -46,9 +50,16 @@ const makeRes = () => {
 
 let next: jest.Mock;
 
+// No database in these unit tests: stand in for the connection's state, which
+// the middleware checks before querying.
+let connectionState = 1;
+Object.defineProperty(mongoose.connection, 'readyState', { configurable: true, get: () => connectionState });
+
 beforeEach(() => {
   jest.clearAllMocks();
   next = jest.fn();
+  connectionState = 1;
+  mockedSession.findOne.mockResolvedValue(makeSession({ _id: liveSid }));
 });
 
 describe('authenticateToken', () => {
@@ -57,11 +68,9 @@ describe('authenticateToken', () => {
 
     await authenticateToken(makeReq(), res, next as unknown as NextFunction);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Access token required' })
-    );
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Access token required' }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('accepts the token from the access_token cookie', async () => {
@@ -103,9 +112,9 @@ describe('authenticateToken', () => {
       next as unknown as NextFunction
     );
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: 'User not found' }));
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'User not found' }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('returns 401 when tokenVersion does not match', async () => {
@@ -119,11 +128,9 @@ describe('authenticateToken', () => {
       next as unknown as NextFunction
     );
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Token has been invalidated' })
-    );
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Token has been invalidated' }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('returns 401 when the token has no tokenVersion at all', async () => {
@@ -137,8 +144,8 @@ describe('authenticateToken', () => {
       next as unknown as NextFunction
     );
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('returns 401 when JWT verification throws', async () => {
@@ -153,11 +160,75 @@ describe('authenticateToken', () => {
       next as unknown as NextFunction
     );
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Invalid or expired token' })
-    );
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Invalid or expired token' }));
+    expect(next).not.toHaveBeenCalledWith();
+  });
+
+  // A 401 from /auth/verify reads as "signed out" to every front; an outage must not.
+  it('answers 503, without querying, while the database is disconnected', async () => {
+    mockedVerifyJWT.mockReturnValue(decoded);
+    connectionState = 0;
+    const res = makeRes();
+
+    await authenticateToken(makeReq({ cookies: { access_token: 'tok' } }), res, next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 503 }));
+    expect(mockedUser.findOne).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalledWith();
+  });
+
+  it('answers 503 when the account lookup fails', async () => {
+    mockedVerifyJWT.mockReturnValue(decoded);
+    mockedUser.findOne.mockRejectedValue(new Error('connection reset'));
+    const res = makeRes();
+
+    await authenticateToken(makeReq({ cookies: { access_token: 'tok' } }), res, next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 503 }));
+    expect(next).not.toHaveBeenCalledWith();
+  });
+
+  it('returns 401, without querying, for a token of another type', async () => {
+    mockedVerifyJWT.mockReturnValue({ ...decoded, typ: 'mcp_access' });
+    const res = makeRes();
+
+    await authenticateToken(makeReq({ cookies: { access_token: 'tok' } }), res, next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(mockedUser.findOne).not.toHaveBeenCalled();
+  });
+
+  it('accepts a token typed as a session', async () => {
+    mockedVerifyJWT.mockReturnValue({ ...decoded, typ: 'session' });
+    mockedUser.findOne.mockResolvedValue(dbUser);
+
+    await authenticateToken(makeReq({ cookies: { access_token: 'tok' } }), makeRes(), next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it.each([
+    ['an untyped token (signed before session tokens carried a type)', { typ: undefined }],
+    ['a token naming no session', { sid: undefined }]
+  ])('returns 401, without querying, for %s', async (_label, override) => {
+    mockedVerifyJWT.mockReturnValue({ ...decoded, ...override });
+    mockedUser.findOne.mockResolvedValue(dbUser);
+
+    await authenticateToken(makeReq({ cookies: { access_token: 'tok' } }), makeRes(), next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).not.toHaveBeenCalledWith();
+  });
+
+  it('returns 401 for a token without an email claim', async () => {
+    mockedVerifyJWT.mockReturnValue({ ...decoded, email: undefined });
+    const res = makeRes();
+
+    await authenticateToken(makeReq({ cookies: { access_token: 'tok' } }), res, next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(mockedUser.findOne).not.toHaveBeenCalled();
   });
 });
 
@@ -186,6 +257,22 @@ describe('optionalAuth', () => {
       { new: true, upsert: false }
     );
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['an untyped token', { typ: undefined }],
+    ['a token of another type', { typ: 'mcp_access' }],
+    ['a token with no user id', { id: '' }]
+  ])('continues anonymously for %s, without looking anything up', async (_label, override) => {
+    mockedVerifyJWT.mockReturnValue({ ...decoded, ...override });
+    const req = makeReq({ cookies: { access_token: 't' } });
+
+    await optionalAuth(req, makeRes(), next as unknown as NextFunction);
+
+    expect(req.user).toBeUndefined();
+    expect(mockedSession.findOne).not.toHaveBeenCalled();
+    expect(mockedUser.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('continues anonymously when the account no longer matches', async () => {
@@ -246,6 +333,18 @@ describe('session-bearing tokens', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it('answers 503 when the session lookup fails', async () => {
+    mockedVerifyJWT.mockReturnValue(withSession);
+    mockedUser.findOne.mockResolvedValue(dbUser);
+    mockedSession.findOne.mockRejectedValue(new Error('primary stepped down'));
+    const res = makeRes();
+
+    await authenticateToken(makeReq({ cookies: { access_token: 't' } }), res, next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 503 }));
+    expect(next).not.toHaveBeenCalledWith();
+  });
+
   it('refuses a token whose session was revoked or expired', async () => {
     mockedVerifyJWT.mockReturnValue(withSession);
     mockedUser.findOne.mockResolvedValue(dbUser);
@@ -254,14 +353,14 @@ describe('session-bearing tokens', () => {
 
     await authenticateToken(makeReq({ cookies: { access_token: 't' } }), res, next as unknown as NextFunction);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: 'Session has ended' }));
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Session has ended' }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it.each([
     ['a malformed sid', { ...withSession, sid: 'nope' }],
-    ['no sid and a longer-than-legacy life', { ...decoded, exp: iat + 30 * 86400 }]
+    ['no sid at all', { ...decoded, sid: undefined }]
   ])('refuses %s without looking a session up', async (_label, claims) => {
     mockedVerifyJWT.mockReturnValue(claims);
     mockedUser.findOne.mockResolvedValue(dbUser);
@@ -269,7 +368,7 @@ describe('session-bearing tokens', () => {
 
     await authenticateToken(makeReq({ cookies: { access_token: 't' } }), res, next as unknown as NextFunction);
 
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
     expect(mockedSession.findOne).not.toHaveBeenCalled();
   });
 
@@ -305,8 +404,8 @@ describe('requireRole', () => {
 
     requireRole('admin')(makeReq(), res, next as unknown as NextFunction);
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('rejects when the role is missing', () => {
@@ -318,8 +417,8 @@ describe('requireRole', () => {
       next as unknown as NextFunction
     );
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('rejects when the user has no roles array', () => {
@@ -331,8 +430,8 @@ describe('requireRole', () => {
       next as unknown as NextFunction
     );
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('passes when the role is present', () => {

@@ -51,6 +51,8 @@ describe('restoring a deleted training with in-memory MongoDB', () => {
     await mongoose.connection.collection('users').insertMany([OWNER, STRANGER].map(id => ({
       _id: new mongoose.Types.ObjectId(id), email: `${id}@example.test`, tokenVersion: 1
     })));
+    // Each test token names a session whose id is its user's.
+    await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
     jest.mocked(getUserGroups).mockResolvedValue([]);
     const projectId = String((await Project.create({ name: 'Private', ownerId: OWNER, isPublic: false }))._id);
     trainingId = String((await Training.create({ name: 'Long run', uuid: 'long-run', ownerId: OWNER, projectId }))._id);
@@ -74,7 +76,7 @@ describe('restoring a deleted training with in-memory MongoDB', () => {
   });
 
   const request = async (path: string, method = 'GET', userId = OWNER) => {
-    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
+    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, sid: userId, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
     const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
     const response = await fetch(`${baseUrl}/${path}`, { method, headers: { Authorization: `Bearer ${token}` } });

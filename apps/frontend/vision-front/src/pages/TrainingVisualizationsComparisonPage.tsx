@@ -19,21 +19,12 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import { visualizationService } from '../services/visualizationService';
-import { trainingService } from '../services/trainingService';
-import { Visualization, Training, TrainingVisualizations } from '../types';
+import { Visualization, VisualizationSummary, VisualizationsPaginatedResponse } from '../types';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { formatDateTime } from '../utils';
 
-interface TrainingWithVisualizations {
-  training: Training;
-  visualizations: Visualization[];
-  visualizationsByType: Map<string, Visualization[]>;
-}
-
-interface ComparisonData {
-  trainings: TrainingWithVisualizations[];
-  availableTypes: string[];
-}
+/** Most images of one type loaded per training. */
+const GALLERY_LIMIT = 200;
 
 export const TrainingVisualizationsComparisonPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -45,82 +36,56 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
 
   const idsParam = searchParams.get('ids');
 
+  const trainingIds = React.useMemo(() => (idsParam ? idsParam.split(',').filter(Boolean) : []), [idsParam]);
+
+  // Which trainings, and what they have: counts and types only, no images.
   const {
-    data,
+    data: trainings = [],
     isLoading: loading,
     error: queryError
   } = useQuery({
-    queryKey: ['training-visualizations-comparison', idsParam],
-    queryFn: async (): Promise<ComparisonData> => {
+    queryKey: ['visualizations-summary', 'compare', idsParam],
+    queryFn: async (): Promise<VisualizationSummary[]> => {
       if (!idsParam) {
         throw new Error('No training IDs provided in URL');
       }
-
-      const trainingIds = idsParam.split(',');
       if (trainingIds.length < 2) {
         throw new Error('At least 2 training IDs are required for comparison');
       }
-
-      // First, fetch the selected trainings to get projectId
-      const allTrainingsResponse = await trainingService.getTrainings({
-        page: 1,
-        limit: 1000
-      });
-      const allTrainings = allTrainingsResponse.data.trainings || [];
-      const selectedTrainings = allTrainings.filter((t: Training) =>
-        trainingIds.includes(t.uuid)
-      );
-
-      if (selectedTrainings.length === 0) {
+      const rows = new Map((await visualizationService.getVisualizationSummary()).map((row) => [row._id, row]));
+      const selected = trainingIds.map((id) => rows.get(id)).filter((row): row is VisualizationSummary => Boolean(row));
+      if (selected.length === 0) {
         throw new Error('No trainings found with the provided IDs');
       }
-
-      // Get projectId from first training (assuming all are from same project)
-      const projectId = selectedTrainings[0].projectId;
-
-      // Fetch grouped visualizations for the project
-      const visualizationsResponse = await visualizationService.getVisualizationsByTraining('', {
-        projectId,
-        includeUrls: true // Need URLs for display
-      }) as { data: { trainings: TrainingVisualizations[] } };
-
-      const groupedTrainings = visualizationsResponse.data.trainings || [];
-
-      // Filter to only selected trainings
-      const selectedGroupedTrainings = groupedTrainings.filter((gt) =>
-        trainingIds.includes(gt.training_uuid)
-      );
-
-      // Build trainingsWithViz from grouped data
-      const trainingsWithViz: TrainingWithVisualizations[] = [];
-      const allTypesSet = new Set<string>();
-
-      for (const groupedTraining of selectedGroupedTrainings) {
-        const training = selectedTrainings.find((t: Training) => t.uuid === groupedTraining.training_uuid);
-        if (!training) continue;
-
-        // Group visualizations by type
-        const visualizationsByType = new Map<string, Visualization[]>();
-        groupedTraining.visualizations.forEach((viz: Visualization) => {
-          const existing = visualizationsByType.get(viz.type) || [];
-          existing.push(viz);
-          visualizationsByType.set(viz.type, existing);
-          allTypesSet.add(viz.type);
-        });
-
-        trainingsWithViz.push({
-          training,
-          visualizations: groupedTraining.visualizations,
-          visualizationsByType
-        });
-      }
-
-      return { trainings: trainingsWithViz, availableTypes: Array.from(allTypesSet) };
+      return selected;
     }
   });
 
-  const trainings = React.useMemo(() => data?.trainings || [], [data?.trainings]);
-  const availableTypes = React.useMemo(() => data?.availableTypes || [], [data?.availableTypes]);
+  const availableTypes = React.useMemo(
+    () => [...new Set(trainings.flatMap((row) => row.types.map(({ type }) => type)))].sort(),
+    [trainings]
+  );
+
+  // The selected type's images, per training, fetched side by side.
+  const { data: galleries = {} } = useQuery({
+    queryKey: ['visualizations', 'compare', idsParam, selectedType],
+    queryFn: async (): Promise<Record<string, Visualization[]>> => {
+      const pages = await Promise.all(
+        trainings.map(async (row) => {
+          if (!row.types.some(({ type }) => type === selectedType)) return [row._id, []] as const;
+          const response = await visualizationService.getVisualizationsByTraining(row.uuid, {
+            type: selectedType!,
+            limit: GALLERY_LIMIT,
+            includeUrls: true
+          }) as VisualizationsPaginatedResponse;
+          return [row._id, response.data.visualizations] as const;
+        })
+      );
+      return Object.fromEntries(pages);
+    },
+    enabled: trainings.length > 0 && !!selectedType
+  });
+
   const error = queryError instanceof Error ? queryError.message : (queryError ? 'Failed to load comparison data' : null);
 
   // Auto-select first type once data loads
@@ -188,22 +153,22 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
               </Typography>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                 {trainings.map((t) => (
-                  <Card key={t.training._id} variant="outlined" sx={{ flex: '1 1 200px' }}>
+                  <Card key={t._id} variant="outlined" sx={{ flex: '1 1 200px' }}>
                     <CardContent sx={{ p: 2 }}>
                       <Link 
-                        to={`/trainings/${t.training._id}`}
+                        to={`/trainings/${t._id}`}
                         style={{ textDecoration: 'none', color: 'inherit' }}
                       >
                         <Typography variant="subtitle2" sx={{
                           fontWeight: 600
                         }}>
-                          {t.training.name}
+                          {t.name}
                         </Typography>
                       </Link>
                       <Typography variant="caption" sx={{
                         color: "text.secondary"
                       }}>
-                        {t.visualizations.length} visualizations
+                        {t.total} visualizations
                       </Typography>
                     </CardContent>
                   </Card>
@@ -248,15 +213,15 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
                   overflowX: 'auto'
                 }}>
                   {trainings.map((trainingData) => {
-                    const vizForType = trainingData.visualizationsByType.get(selectedType) || [];
+                    const vizForType = galleries[trainingData._id] || [];
                     return (
-                      <Box key={trainingData.training._id}>
+                      <Box key={trainingData._id}>
                         <Link 
-                          to={`/trainings/${trainingData.training._id}`}
+                          to={`/trainings/${trainingData._id}`}
                           style={{ textDecoration: 'none', color: 'inherit' }}
                         >
                           <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600, textAlign: 'center', position: 'sticky', top: 0, bgcolor: 'background.paper', py: 1, zIndex: 1 }}>
-                            {trainingData.training.name}
+                            {trainingData.name}
                           </Typography>
                         </Link>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

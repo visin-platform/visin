@@ -12,6 +12,7 @@ import { getProfile, updateProfile, changePassword } from '../../controllers/pro
 import { hashPassword, verifyPassword } from '../../services/passwordService';
 import { verifyJWT } from '../../services/jwtService';
 import { User } from '../../models/User';
+import { makeSession } from '../helpers/sessionModelMock';
 
 const mockedUser = User as unknown as Record<string, jest.Mock>;
 
@@ -42,8 +43,9 @@ const makeRes = (): MockRes => {
   return res as unknown as MockRes;
 };
 
+// The live session authenticateToken attaches to every signed-in request.
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ body: {}, ...overrides } as unknown as Request);
+  ({ body: {}, authSession: makeSession({ lastSeenAt: new Date() }), ...overrides } as unknown as Request);
 
 beforeEach(() => {
   jest.clearAllMocks();

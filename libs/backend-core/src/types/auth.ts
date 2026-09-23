@@ -14,10 +14,12 @@ export interface UserPayload {
   groupRoles?: string[];
   tokenVersion?: number;
   /**
-   * The browser session this token belongs to (a `user_sessions` id). Absent
-   * only on tokens minted before sessions existed.
+   * The browser session this token belongs to (a `user_sessions` id). Every
+   * session token carries one; `req.user` set by other credentials has none.
    */
   sid?: string;
+  /** `SESSION_TOKEN_TYPE` on a session token; anything else is refused as one. */
+  typ?: string;
 }
 
 /**

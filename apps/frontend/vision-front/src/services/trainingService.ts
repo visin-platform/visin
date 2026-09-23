@@ -55,6 +55,8 @@ export const trainingService = {
     datasetId?: string;
     projectId?: string;
     tags?: string[];
+    excludeTags?: string[];
+    ids?: string[];
     sortBy?: string;
     order?: 'asc' | 'desc';
   }): Promise<TrainingsPaginatedResponse> {

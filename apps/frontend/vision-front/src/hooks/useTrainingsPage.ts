@@ -98,81 +98,32 @@ export const useTrainingsPage = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Determine if we need to fetch all data for frontend filtering
-  const shouldFetchAll = excludedTags.length > 0;
-
+  // Tag exclusion is filtered on the server too, so every view is one page.
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: shouldFetchAll 
-      ? ['trainings-all', debouncedSearch, sortBy, sortOrder, selectedTags, excludedTags]
-      : ['trainings', page + 1, rowsPerPage, debouncedSearch, sortBy, sortOrder, selectedTags],
-    queryFn: () => {
-      if (shouldFetchAll) {
-        // Fetch all trainings for frontend filtering and pagination
-        return trainingService.getTrainings({
-          page: 1,
-          limit: 10000, // Large limit to get all trainings
-          search: debouncedSearch || undefined,
-          sortBy,
-          order: sortOrder,
-          tags: selectedTags.length > 0 ? selectedTags : undefined
-        });
-      } else {
-        // Normal paginated query
-        return trainingService.getTrainings({
-          page: page + 1,
-          limit: rowsPerPage,
-          search: debouncedSearch || undefined,
-          sortBy,
-          order: sortOrder,
-          tags: selectedTags.length > 0 ? selectedTags : undefined
-        });
-      }
-    }
+    queryKey: ['trainings', page + 1, rowsPerPage, debouncedSearch, sortBy, sortOrder, selectedTags, excludedTags],
+    queryFn: () =>
+      trainingService.getTrainings({
+        page: page + 1,
+        limit: rowsPerPage,
+        search: debouncedSearch || undefined,
+        sortBy,
+        order: sortOrder,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
+        excludeTags: excludedTags.length > 0 ? excludedTags : undefined
+      })
   });
 
   const { availableTags, refetchTags } = useTrainingTags();
 
-  const allTrainings = useMemo(() => data?.data?.trainings || [], [data?.data?.trainings]);
-  const backendTotal = data?.data?.pagination?.total || 0;
-
-  // Filter out trainings that have excluded tags
-  const filteredTrainings = useMemo(() => {
-    const trainingsToFilter = allTrainings;
-    
-    if (excludedTags.length === 0) {
-      return shouldFetchAll ? allTrainings : trainingsToFilter;
-    }
-    
-    return trainingsToFilter.filter((training: Training) => {
-      if (!training.tags) return true;
-      return !excludedTags.some(excludedTag => training.tags!.includes(excludedTag));
-    });
-  }, [allTrainings, excludedTags, shouldFetchAll]);
-
-  // Apply frontend pagination when fetching all data
-  const paginatedTrainings = useMemo(() => {
-    if (!shouldFetchAll) {
-      return filteredTrainings;
-    }
-    const startIndex = page * rowsPerPage;
-    const endIndex = startIndex + rowsPerPage;
-    return filteredTrainings.slice(startIndex, endIndex);
-  }, [filteredTrainings, page, rowsPerPage, shouldFetchAll]);
-
-  // Calculate total count for pagination
-  const totalCount = useMemo(() => {
-    return shouldFetchAll ? filteredTrainings.length : backendTotal;
-  }, [shouldFetchAll, filteredTrainings.length, backendTotal]);
-
-  // Use paginated trainings for display
-  const displayTrainings = shouldFetchAll ? paginatedTrainings : filteredTrainings;
+  const displayTrainings = useMemo(() => data?.data?.trainings || [], [data?.data?.trainings]);
+  const totalCount = data?.data?.pagination?.total || 0;
 
   const canWrite = useWriteCapabilities('training', [...displayTrainings.map(row => row._id), ...selectedTrainingIds]);
   const canDeleteSelected = selectedTrainingIds.size > 0 && [...selectedTrainingIds].every(canWrite);
 
   // CSV Export function
   const exportToCSV = () => {
-    const selectedTrainings = filteredTrainings.filter((training: Training) => selectedTrainingIds.has(training._id));
+    const selectedTrainings = displayTrainings.filter((training: Training) => selectedTrainingIds.has(training._id));
     exportTrainingsToCSV(selectedTrainings);
   };
 

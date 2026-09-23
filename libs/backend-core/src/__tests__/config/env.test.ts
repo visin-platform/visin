@@ -6,9 +6,12 @@ jest.mock('../../logging/logger', () => ({ logger: { error: jest.fn() } }));
 const NAME = 'REQUIRE_ENV_TEST_VAR';
 const OTHER = 'REQUIRE_ENV_TEST_VAR_2';
 
+const originalNodeEnv = process.env.NODE_ENV;
+
 afterEach(() => {
   delete process.env[NAME];
   delete process.env[OTHER];
+  process.env.NODE_ENV = originalNodeEnv;
   jest.restoreAllMocks();
   jest.clearAllMocks();
 });
@@ -66,6 +69,31 @@ describe('assertRequiredEnv', () => {
   it('does nothing for an empty list', () => {
     const exit = mockExit();
     assertRequiredEnv([]);
+    expect(exit).not.toHaveBeenCalled();
+  });
+
+  it.each(['dev-only-jwt-secret-change-before-exposing', '<change-me>'])(
+    'exits in production when a variable still holds the placeholder %p',
+    placeholder => {
+      process.env.NODE_ENV = 'production';
+      process.env[NAME] = placeholder;
+      process.env[OTHER] = 'a-real-secret';
+      const exit = mockExit();
+
+      assertRequiredEnv([NAME, OTHER]);
+
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('placeholder'), { placeholders: [NAME] });
+      expect(exit).toHaveBeenCalledWith(1);
+    }
+  );
+
+  it('accepts the placeholders outside production, so the zero-config stack still boots', () => {
+    process.env.NODE_ENV = 'development';
+    process.env[NAME] = 'dev-only-jwt-secret-change-before-exposing';
+    const exit = mockExit();
+
+    assertRequiredEnv([NAME]);
+
     expect(exit).not.toHaveBeenCalled();
   });
 });

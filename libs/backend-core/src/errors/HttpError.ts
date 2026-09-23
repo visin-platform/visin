@@ -79,3 +79,14 @@ export class GatewayTimeoutError extends HttpError {
     super(504, message);
   }
 }
+
+/**
+ * A dependency this service cannot work without — its own database, say — is
+ * unreachable. A 503 rather than a 401 on an auth check, so a client keeps a
+ * session it could not re-verify instead of treating an outage as a sign-out.
+ */
+export class ServiceUnavailableError extends HttpError {
+  constructor(message = 'Service temporarily unavailable') {
+    super(503, message);
+  }
+}

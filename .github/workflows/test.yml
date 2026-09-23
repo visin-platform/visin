@@ -155,6 +155,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck --workspace=${{ matrix.workspace }}
 
+      # What each Dockerfile runs. Without it a bundling or module-federation
+      # failure first shows up in release.yml, after the version is tagged.
+      - name: Build
+        run: npm run build --workspace=${{ matrix.workspace }}
+
   test:
     needs: changes
     if: needs.changes.outputs.workspaces-single-shard != '[]'

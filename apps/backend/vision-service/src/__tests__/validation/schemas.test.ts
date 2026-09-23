@@ -1,4 +1,4 @@
-import { paginationSchema, sortOrderSchema, looseStringParam } from '../../validation/common';
+import { MAX_PAGE_SIZE, paginationSchema, sortOrderSchema, looseStringParam } from '../../validation/common';
 import { createTokenBodySchema } from '../../validation/apiTokenSchemas';
 import {
   createFindingBodySchema,
@@ -134,6 +134,8 @@ describe('comparisonSchemas', () => {
       createComparisonBodySchema.safeParse({ name: 'C', type: 'bogus', itemIds: ['a'] }).success
     ).toBe(false);
     expect(updateComparisonBodySchema.parse({}).name).toBeUndefined();
+    expect(updateComparisonBodySchema.safeParse({ itemIds: Array(50).fill('x') }).success).toBe(true);
+    expect(updateComparisonBodySchema.safeParse({ itemIds: Array(51).fill('x') }).success).toBe(false);
   });
 });
 
@@ -294,7 +296,25 @@ describe('testResultSchemas', () => {
   });
 });
 
+describe('page size caps', () => {
+  it('refuses a page larger than MAX_PAGE_SIZE on every list', () => {
+    expect(MAX_PAGE_SIZE).toBe(1000);
+    for (const schema of [getAllConfigsQuerySchema, getTrainingsQuerySchema, getVisualizationsByTrainingQuerySchema]) {
+      expect(schema.safeParse({ limit: MAX_PAGE_SIZE }).success).toBe(true);
+      expect(schema.safeParse({ limit: MAX_PAGE_SIZE + 1 }).success).toBe(false);
+    }
+  });
+});
+
 describe('trainingSchemas', () => {
+  it('reads excluded tags and a bounded list of ids', () => {
+    expect(getTrainingsQuerySchema.parse({ excludeTags: 'a,b' }).excludeTags).toEqual(['a', 'b']);
+    expect(getTrainingsQuerySchema.parse({ ids: 'x, y' }).ids).toEqual(['x', 'y']);
+    expect(getTrainingsQuerySchema.parse({ ids: ['x'] }).ids).toEqual(['x']);
+    expect(getTrainingsQuerySchema.parse({ ids: ' , ' }).ids).toBeUndefined();
+    expect(getTrainingsQuerySchema.safeParse({ ids: Array(101).fill('x') }).success).toBe(false);
+  });
+
   it('normalizes tags from comma-string or repeated params', () => {
     expect(getTrainingsQuerySchema.parse({ tags: 'a, b,,c' }).tags).toEqual(['a', 'b', 'c']);
     expect(getTrainingsQuerySchema.parse({ tags: ['x', ' y '] }).tags).toEqual(['x', 'y']);

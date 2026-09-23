@@ -2,11 +2,16 @@ import { Request, Response } from 'express';
 import { reserveFileUpload } from '../services/uploadService';
 import { resolvePath } from '../utils/paths';
 import { signToken } from '../utils/hmac';
-import type { z } from '@visin/backend-core';
+import { requireEnv, type z } from '@visin/backend-core';
 import type { generateUploadUrlBodySchema, generateDownloadUrlBodySchema, generateDownloadUrlsBodySchema } from '../validation/fileSchemas';
 
+// The address browsers are handed, so there is no production default: any
+// fallback would send them to a host that is not this deployment.
 const FILE_SERVICE_URL = (): string =>
-  (process.env.FILE_SERVICE_URL || 'http://localhost:5002').replace(/\/$/, '');
+  (
+    process.env.FILE_SERVICE_URL ||
+    (process.env.NODE_ENV === 'production' ? requireEnv('FILE_SERVICE_URL') : 'http://localhost:5002')
+  ).replace(/\/$/, '');
 
 /**
  * POST /internal/upload-url

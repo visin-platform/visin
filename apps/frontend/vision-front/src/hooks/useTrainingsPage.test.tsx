@@ -348,29 +348,25 @@ describe('useTrainingsPage', () => {
     expect(result.current.createError).toBe('bulk fail');
   });
 
-  it('fetches everything and filters+paginates on the frontend when excludedTags is set', async () => {
-    mockedTraining.getTrainings
-      .mockResolvedValueOnce({
-        success: true,
-        data: { trainings: [makeTraining()], pagination: { page: 1, limit: 1000, total: 1, pages: 1 } },
-      } as never)
-      .mockResolvedValue({
-        success: true,
-        data: {
-          trainings: [
-            makeTraining({ _id: 't1', tags: ['keep'] }),
-            makeTraining({ _id: 't2', tags: ['drop'] }),
-          ],
-          pagination: { page: 1, limit: 10000, total: 2, pages: 1 },
-        },
-      } as never);
+  it('asks the server to leave out excluded tags, one page at a time', async () => {
+    mockedTraining.getTrainings.mockResolvedValue({
+      success: true,
+      data: { trainings: [makeTraining({ _id: 't1', tags: ['keep'] })], pagination: { page: 1, limit: 100, total: 1, pages: 1 } },
+    } as never);
 
     const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => result.current.setExcludedTags(['drop']));
 
+    await waitFor(() =>
+      expect(mockedTraining.getTrainings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, limit: 100, excludeTags: ['drop'] })
+      )
+    );
     await waitFor(() => expect(result.current.totalCount).toBe(1));
-    expect(result.current.displayTrainings.every((t: Training) => t._id !== 't2')).toBe(true);
+    for (const [params] of mockedTraining.getTrainings.mock.calls) {
+      expect((params as { limit: number }).limit).toBeLessThanOrEqual(100);
+    }
   });
 });

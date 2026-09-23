@@ -2,7 +2,7 @@ import { Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import ApiToken from '../models/ApiToken';
 import { AuthRequest } from './authMiddleware';
-import { logger, looksLikeApiKey } from '@visin/backend-core';
+import { logger, looksLikeApiKey, UnauthorizedError } from '@visin/backend-core';
 import { projectTokenContext } from './projectTokenContext';
 
 // How stale lastUsedAt must be before we bother writing an update — this
@@ -10,7 +10,7 @@ import { projectTokenContext } from './projectTokenContext';
 // turns every read into a write.
 const LAST_USED_STALE_MS = 60_000;
 
-export const apiTokenMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const apiTokenMiddleware = async (req: AuthRequest, _res: Response, next: NextFunction) => {
   // If user is already authenticated (e.g. by JWT middleware running before this), skip
   if (req.user) {
     return next();
@@ -37,7 +37,7 @@ export const apiTokenMiddleware = async (req: AuthRequest, res: Response, next: 
         if (apiToken) {
           // Check expiration
           if (apiToken.expiresAt && new Date() > apiToken.expiresAt) {
-             return res.status(401).json({ message: 'Token expired' });
+            return next(new UnauthorizedError('Token expired'));
           }
 
           // Update last used, but only if it's stale — fire-and-forget so it

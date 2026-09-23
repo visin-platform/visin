@@ -67,7 +67,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # Backs label-service's bundle-import queue (BullMQ). Nothing else needs it.
+  # Backs dataset-service's bundle-import queue (BullMQ). Nothing else needs it.
   redis:
     image: redis:8.10-alpine
     <<: *common
@@ -216,7 +216,6 @@ services:
     <<: *common
     ports: ['3000:80']
     environment:
-      VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
       # "Open the app" goes to shell-front, which renders every app on one page.
       SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009

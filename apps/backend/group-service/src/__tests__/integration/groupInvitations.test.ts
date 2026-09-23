@@ -31,15 +31,17 @@ describe('account-bound invitations with in-memory MongoDB', () => {
   }, 120_000);
   beforeEach(async () => {
     await mongoose.connection.collection('users').insertMany(['000000000000000000000001', '000000000000000000000002', '000000000000000000000003', '000000000000000000000004', '000000000000000000000005', '000000000000000000000006', '000000000000000000000007'].map(id => ({ _id: new mongoose.Types.ObjectId(id), email: 'shared@example.test', tokenVersion: 1 })));
+    // Each test token names a session whose id is its user's.
+    await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
     id = String((await service.createGroup('000000000000000000000005', 'Research', 'shared@example.test'))._id); });
-  afterEach(async () => { jest.restoreAllMocks(); await Group.deleteMany({}); await mongoose.connection.collection('users').deleteMany({}); });
+  afterEach(async () => { jest.restoreAllMocks(); await Group.deleteMany({}); await mongoose.connection.collection('users').deleteMany({}); await mongoose.connection.collection('user_sessions').deleteMany({}); });
   afterAll(async () => {
     if (previousSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = previousSecret;
     if (server) await new Promise<void>(resolve => server.close(() => resolve()));
     try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
   });
   const request = async (path: string, method = 'GET', body?: unknown, userId = '000000000000000000000005') => {
-    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, tokenVersion: 1, email: 'shared@example.test', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
+    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, tokenVersion: 1, sid: userId, typ: 'session', email: 'shared@example.test', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
     const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
     return fetch(`${url}${path}`, { method, headers: { 'Content-Type': 'application/json', ...(userId ? { Authorization: `Bearer ${token}` } : {}) },

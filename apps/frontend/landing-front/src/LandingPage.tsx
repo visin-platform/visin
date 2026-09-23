@@ -7,7 +7,6 @@ import Showcase from './components/Showcase';
 import OnYourPhone from './components/OnYourPhone';
 import Assistant from './components/Assistant';
 import OpenSource from './components/OpenSource';
-import Contact from './components/Contact';
 import Footer from './components/Footer';
 
 function LandingPage() {
@@ -43,7 +42,6 @@ function LandingPage() {
         <OnYourPhone />
         <Assistant />
         <OpenSource />
-        <Contact />
       </Box>
 
       <Footer appUrl={appUrl} />

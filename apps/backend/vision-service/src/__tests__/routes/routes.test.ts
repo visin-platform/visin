@@ -39,7 +39,7 @@ describe('vision-service routers', () => {
     ['projectRoutes', projectRoutes, 6],
     ['testResultRoutes', testResultRoutes, 10],
     ['trainingRoutes', trainingRoutes, 13],
-    ['visualizationRoutes', visualizationRoutes, 8],
+    ['visualizationRoutes', visualizationRoutes, 9],
   ];
 
   it.each(routers)('%s registers its routes', (_name, router, expectedRoutes) => {

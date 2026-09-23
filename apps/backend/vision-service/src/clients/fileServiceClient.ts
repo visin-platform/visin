@@ -2,24 +2,15 @@
  * File Service Client
  * All file storage goes through the local file-service API (disk-backed).
  */
-import { logger, fetchWithTimeout } from '@visin/backend-core';
-
-/**
- * Where this service reaches file-service: `FILE_SERVICE_INTERNAL_URL` (the
- * container network) when set, else `FILE_SERVICE_URL`. They differ in
- * production, where the public address runs through Cloudflare — which answered
- * Range requests with the whole file and would carry every multi-GB transfer
- * out through the edge and back. Links handed to browsers are built by
- * file-service from its own public URL, so they are unaffected.
- */
-const FILE_SERVICE_URL = (): string => {
-  const url = process.env.FILE_SERVICE_INTERNAL_URL || process.env.FILE_SERVICE_URL || 'http://file-service:5002';
-  return url.replace(/\/$/, '');
-};
-
-const FILE_SERVICE_API_KEY = (): string => {
-  return process.env.FILE_SERVICE_API_KEY || '';
-};
+import {
+  logger,
+  fetchWithTimeout,
+  fileServiceUrl,
+  fileServiceAuthHeaders,
+  HttpError,
+  BadGatewayError,
+  NotFoundError
+} from '@visin/backend-core';
 
 export interface SignedUrlData {
   signedUrl: string;
@@ -57,10 +48,10 @@ export const getSignedUrl = async (
   expiresInMinutes: number = 60
 ): Promise<SignedUrlData | null> => {
   try {
-    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/download-url`, {
+    const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/download-url`, {
       method: 'POST',
       headers: {
-        'X-Internal-Api-Key': FILE_SERVICE_API_KEY(),
+        ...fileServiceAuthHeaders(),
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ fileId, expiresInMinutes }),
@@ -98,10 +89,10 @@ export const getUploadSignedUrl = async (
   expiresInMinutes: number = 15
 ): Promise<string> => {
   try {
-    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/upload-url`, {
+    const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/upload-url`, {
       method: 'POST',
       headers: {
-        'X-Internal-Api-Key': FILE_SERVICE_API_KEY(),
+        ...fileServiceAuthHeaders(),
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ fileId, expiresInMinutes, mimetype }),
@@ -109,13 +100,13 @@ export const getUploadSignedUrl = async (
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to generate upload URL with status ${response.status}`);
+      throw new BadGatewayError(`Failed to generate upload URL: file-service answered ${response.status}`);
     }
 
     const data = await response.json() as UploadUrlResponse;
 
     if (!data.success || !data.data) {
-      throw new Error('Invalid response from file-service');
+      throw new BadGatewayError('Failed to generate upload URL: invalid response from file-service');
     }
 
     logger.info('Generated upload URL', { fileId, expiresIn: expiresInMinutes, mimetype });
@@ -123,7 +114,10 @@ export const getUploadSignedUrl = async (
     return data.data.uploadUrl;
   } catch (error) {
     logger.error('Failed to generate upload URL', { fileId, error: (error as Error).message });
-    throw new Error('Failed to generate upload URL', { cause: error });
+    // A timeout stays a 504 and the cases above stay 502; anything else (a
+    // refused connection, unparseable JSON) is still file-service's failure.
+    if (error instanceof HttpError) throw error;
+    throw new BadGatewayError('Failed to generate upload URL');
   }
 };
 
@@ -132,10 +126,10 @@ export const getUploadSignedUrl = async (
  */
 export const deleteFile = async (fileId: string): Promise<boolean> => {
   try {
-    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/files/${fileId}`, {
+    const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/${fileId}`, {
       method: 'DELETE',
       headers: {
-        'X-Internal-Api-Key': FILE_SERVICE_API_KEY()
+        ...fileServiceAuthHeaders()
       },
       serviceName: 'file-service'
     });
@@ -157,16 +151,19 @@ export const deleteFile = async (fileId: string): Promise<boolean> => {
  */
 export const getFileMetadata = async (fileId: string): Promise<FileMetadata> => {
   try {
-    const response = await fetchWithTimeout(`${FILE_SERVICE_URL()}/internal/meta/${fileId}`, {
+    const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/meta/${fileId}`, {
       method: 'GET',
       headers: {
-        'X-Internal-Api-Key': FILE_SERVICE_API_KEY()
+        ...fileServiceAuthHeaders()
       },
       serviceName: 'file-service'
     });
 
+    if (response.status === 404) {
+      throw new NotFoundError('File not found');
+    }
     if (!response.ok) {
-      throw new Error('File not found');
+      throw new BadGatewayError(`File metadata lookup failed: file-service answered ${response.status}`);
     }
 
     const data = await response.json() as FileMetadataResponse;
@@ -180,7 +177,8 @@ export const getFileMetadata = async (fileId: string): Promise<FileMetadata> => 
     };
   } catch (error) {
     logger.error('Failed to get metadata', { fileId, error: (error as Error).message });
-    throw new Error('File not found', { cause: error });
+    if (error instanceof HttpError) throw error;
+    throw new BadGatewayError('File metadata lookup failed');
   }
 };
 

@@ -45,8 +45,6 @@ export const revokeSession = async (req: Request, res: Response): Promise<void> 
 /** "Sign out everywhere else": every session but the one making the request. */
 export const revokeOtherSessions = async (req: Request, res: Response): Promise<void> => {
   if (!req.user) throw new UnauthorizedError('Not authenticated');
-  // A pre-sessions token has no session of its own to keep, so this ends all of
-  // them; that token itself still expires within a day.
   const revoked = await endOtherSessions(req.user.id, req.user.sid);
   logger.info('Other sessions revoked', { userId: req.user.id, revoked });
   res.json({ success: true, revoked });

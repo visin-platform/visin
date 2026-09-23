@@ -1,22 +1,13 @@
 import { Readable } from 'stream';
-import { requireEnv, fetchWithTimeout, BadGatewayError, TRANSFER_FETCH_TIMEOUT_MS } from '@visin/backend-core';
+import {
+  fetchWithTimeout,
+  BadGatewayError,
+  TRANSFER_FETCH_TIMEOUT_MS,
+  fileServiceUrl,
+  fileServiceAuthHeaders
+} from '@visin/backend-core';
 
-/**
- * Where this service reaches file-service: `FILE_SERVICE_INTERNAL_URL` (the
- * container network) when set, else `FILE_SERVICE_URL`. They differ in
- * production, where the public address runs through Cloudflare — which answered
- * Range requests with the whole file and would carry every multi-GB transfer
- * out through the edge and back. Links handed to browsers are built by
- * file-service from its own public URL, so they are unaffected.
- */
-const baseUrl = (): string =>
-  (process.env.FILE_SERVICE_INTERNAL_URL || process.env.FILE_SERVICE_URL || 'http://localhost:5002').replace(/\/$/, '');
-
-const apiKeyHeaders = (): Record<string, string> => ({
-  'x-internal-api-key': requireEnv('FILE_SERVICE_API_KEY')
-});
-
-const jsonHeaders = (): Record<string, string> => ({ ...apiKeyHeaders(), 'Content-Type': 'application/json' });
+const jsonHeaders = (): Record<string, string> => ({ ...fileServiceAuthHeaders(), 'Content-Type': 'application/json' });
 
 /**
  * Signed browser-direct PUT URL for a dataset zip. Long-lived because a
@@ -29,7 +20,7 @@ export const getUploadUrl = async (
   expiresInMinutes = 240,
   mimetype = 'application/zip'
 ): Promise<{ url: string; expiresMs: number }> => {
-  const response = await fetchWithTimeout(`${baseUrl()}/internal/upload-url`, {
+  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/upload-url`, {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify({ fileId, expiresInMinutes, mimetype, maxBytes }),
@@ -54,7 +45,7 @@ export const getDownloadUrls = async (
   if (unique.length === 0) {
     return { urls: {}, expiresMs: Date.now() + expiresInMinutes * 60 * 1000 };
   }
-  const response = await fetchWithTimeout(`${baseUrl()}/internal/download-urls`, {
+  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/download-urls`, {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify({ fileIds: unique, expiresInMinutes }),
@@ -69,9 +60,9 @@ export const getDownloadUrls = async (
 
 /** Server-to-server store of one file (import). */
 export const putFile = async (fileId: string, data: Buffer): Promise<void> => {
-  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
+  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/${fileId}`, {
     method: 'PUT',
-    headers: { ...apiKeyHeaders(), 'Content-Type': 'application/octet-stream' },
+    headers: { ...fileServiceAuthHeaders(), 'Content-Type': 'application/octet-stream' },
     body: new Uint8Array(data),
     // Moves file bytes — sized for the payload, not the control-plane default.
     timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
@@ -84,8 +75,8 @@ export const putFile = async (fileId: string, data: Buffer): Promise<void> => {
 
 /** Server-to-server streaming read (import reads the uploaded zip). */
 export const getFileStream = async (fileId: string): Promise<Readable> => {
-  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
-    headers: apiKeyHeaders(),
+  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/${fileId}`, {
+    headers: fileServiceAuthHeaders(),
     timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
     // Import consumes this zip over many minutes — far longer than any transfer
     // budget — so the deadline covers getting the response, not reading it. A
@@ -104,8 +95,8 @@ export const getFileStream = async (fileId: string): Promise<Readable> => {
  * /internal/files/*` is an existence probe with no `Content-Length`.
  */
 export const getFileSize = async (fileId: string): Promise<number | null> => {
-  const response = await fetchWithTimeout(`${baseUrl()}/internal/meta/${fileId}`, {
-    headers: apiKeyHeaders(),
+  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/meta/${fileId}`, {
+    headers: fileServiceAuthHeaders(),
     serviceName: 'file-service'
   });
   if (response.status === 404) {
@@ -130,8 +121,8 @@ export const getFileSize = async (fileId: string): Promise<number | null> => {
  * so a non-206 response is an error rather than a fallback.
  */
 export const getFileRange = async (fileId: string, start: number, end: number): Promise<Readable> => {
-  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
-    headers: { ...apiKeyHeaders(), Range: `bytes=${start}-${end}` },
+  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/${fileId}`, {
+    headers: { ...fileServiceAuthHeaders(), Range: `bytes=${start}-${end}` },
     timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
     streamBody: true,
     serviceName: 'file-service'
@@ -143,9 +134,9 @@ export const getFileRange = async (fileId: string, start: number, end: number): 
 };
 
 export const deleteFile = async (fileId: string): Promise<void> => {
-  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/${fileId}`, {
+  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/${fileId}`, {
     method: 'DELETE',
-    headers: apiKeyHeaders(),
+    headers: fileServiceAuthHeaders(),
     serviceName: 'file-service'
   });
   if (!response.ok && response.status !== 404) {
@@ -156,7 +147,7 @@ export const deleteFile = async (fileId: string): Promise<void> => {
 /** Delete named files, in batches of file-service's limit — one image group, not a whole folder. */
 export const deleteFiles = async (fileIds: string[]): Promise<void> => {
   for (let start = 0; start < fileIds.length; start += 1000) {
-    const response = await fetchWithTimeout(`${baseUrl()}/internal/delete-files`, {
+    const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/delete-files`, {
       method: 'POST',
       headers: jsonHeaders(),
       body: JSON.stringify({ fileIds: fileIds.slice(start, start + 1000) }),
@@ -169,7 +160,7 @@ export const deleteFiles = async (fileIds: string[]): Promise<void> => {
 
 /** Delete every stored file under a prefix. */
 export const deleteFolder = async (prefix: string): Promise<void> => {
-  const response = await fetchWithTimeout(`${baseUrl()}/internal/files/folder`, {
+  const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/folder`, {
     method: 'DELETE',
     headers: jsonHeaders(),
     body: JSON.stringify({ prefix }),

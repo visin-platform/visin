@@ -201,43 +201,63 @@ describe('createBaseApp JSON body parsing', () => {
 });
 
 describe('createBaseApp rate limiting', () => {
-  const hammer = async (baseUrl: string, path: string, times: number): Promise<number[]> => {
+  const hammer = async (
+    baseUrl: string,
+    path: string,
+    times: number,
+    headers: Record<string, string> = {}
+  ): Promise<number[]> => {
     const statuses: number[] = [];
     for (let i = 0; i < times; i++) {
-      statuses.push((await fetch(`${baseUrl}${path}`)).status);
+      statuses.push((await fetch(`${baseUrl}${path}`, { headers })).status);
     }
     return statuses;
   };
 
+  beforeEach(() => {
+    process.env.RATE_LIMIT_PER_MINUTE = '3';
+    process.env.INTERNAL_RATE_LIMIT_PER_MINUTE = '50';
+    process.env.INTERNAL_SERVICE_TOKEN = 'synthetic-internal-token';
+    process.env.FILE_SERVICE_API_KEY = 'synthetic-file-api-key';
+  });
+
+  afterEach(() => {
+    delete process.env.RATE_LIMIT_PER_MINUTE;
+    delete process.env.INTERNAL_RATE_LIMIT_PER_MINUTE;
+    delete process.env.INTERNAL_SERVICE_TOKEN;
+    delete process.env.FILE_SERVICE_API_KEY;
+  });
+
   it('gives internal service traffic its own, far larger bucket', async () => {
     // A bundle import PUTs tens of thousands of files; the browser bucket
     // (500/min) cut one off partway through with a 429.
-    process.env.RATE_LIMIT_PER_MINUTE = '3';
-    process.env.INTERNAL_RATE_LIMIT_PER_MINUTE = '50';
-
     await withServer({}, async baseUrl => {
-      const internal = await hammer(baseUrl, '/internal/files/a.bin', 10);
-      expect(internal.every(status => status !== 429)).toBe(true);
+      const viaToken = await hammer(baseUrl, '/internal/files/a.bin', 5, {
+        'x-internal-token': 'synthetic-internal-token'
+      });
+      const viaApiKey = await hammer(baseUrl, '/internal/files/a.bin', 5, {
+        'x-internal-api-key': 'synthetic-file-api-key'
+      });
+      expect([...viaToken, ...viaApiKey].every(status => status !== 429)).toBe(true);
     });
-
-    delete process.env.RATE_LIMIT_PER_MINUTE;
-    delete process.env.INTERNAL_RATE_LIMIT_PER_MINUTE;
   });
 
   it('still limits public traffic, and internal requests do not consume that bucket', async () => {
-    process.env.RATE_LIMIT_PER_MINUTE = '3';
-    process.env.INTERNAL_RATE_LIMIT_PER_MINUTE = '50';
-
     await withServer({}, async baseUrl => {
-      await hammer(baseUrl, '/internal/files/a.bin', 10); // must not count against /cookie-check
+      // must not count against /cookie-check
+      await hammer(baseUrl, '/internal/files/a.bin', 10, { 'x-internal-token': 'synthetic-internal-token' });
       const publicStatuses = await hammer(baseUrl, '/cookie-check', 5);
 
       expect(publicStatuses.slice(0, 3).every(status => status === 200)).toBe(true);
       expect(publicStatuses.at(-1)).toBe(429);
     });
+  });
 
-    delete process.env.RATE_LIMIT_PER_MINUTE;
-    delete process.env.INTERNAL_RATE_LIMIT_PER_MINUTE;
+  it('counts an /internal request without a valid credential against the public bucket', async () => {
+    await withServer({}, async baseUrl => {
+      const guesses = await hammer(baseUrl, '/internal/files/a.bin', 5, { 'x-internal-token': 'wrong-guess' });
+      expect(guesses.at(-1)).toBe(429);
+    });
   });
 });
 

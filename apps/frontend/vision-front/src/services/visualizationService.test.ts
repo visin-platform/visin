@@ -128,6 +128,14 @@ describe('visualizationService', () => {
     expect(mockedApi.delete).toHaveBeenCalledWith('/visualizations/vu1');
   });
 
+  it('getVisualizationSummary returns the per-training rows', async () => {
+    const rows = [{ _id: 't1', uuid: 'u1', name: 'Run', total: 1, types: [{ type: 'chart', count: 1, epochs: [1] }] }];
+    mockedApi.get.mockResolvedValue({ data: { success: true, data: { trainings: rows } } });
+
+    await expect(visualizationService.getVisualizationSummary()).resolves.toEqual(rows);
+    expect(mockedApi.get).toHaveBeenCalledWith('/visualizations/summary');
+  });
+
   it('getVisualizationTypes passes optional filters', async () => {
     mockedApi.get.mockResolvedValue({ data: { success: true, data: { types: [] } } });
     await visualizationService.getVisualizationTypes({ training_uuid: 't1' });

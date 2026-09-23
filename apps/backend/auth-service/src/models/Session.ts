@@ -13,7 +13,10 @@ export type SignInMethod = (typeof SIGN_IN_METHODS)[number];
 export interface ISession extends Document {
   _id: Types.ObjectId;
   userId: Types.ObjectId;
-  /** How the user proved who they were; `unknown` for a pre-sessions token upgraded in place. */
+  /**
+   * How the user proved who they were. `unknown` only on sessions made for the
+   * pre-sessions tokens they replaced; none are created now.
+   */
   method: SignInMethod;
   /** The browser's User-Agent, truncated — only ever shown back to its owner as a device label. */
   userAgent?: string;

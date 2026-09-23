@@ -1,11 +1,11 @@
 import type { Request, Response, NextFunction } from 'express';
 import { errorHandler, asyncHandler } from '../../middleware/errorHandler';
-import { NotFoundError, ForbiddenError } from '../../errors/HttpError';
+import { NotFoundError, ForbiddenError, UnauthorizedError } from '../../errors/HttpError';
 
-jest.mock('../../logging/logger', () => ({ logger: { warn: jest.fn(), error: jest.fn() } }));
+jest.mock('../../logging/logger', () => ({ logger: { warn: jest.fn(), debug: jest.fn(), error: jest.fn() } }));
 
 const { logger } = jest.requireMock('../../logging/logger') as {
-  logger: { warn: jest.Mock; error: jest.Mock };
+  logger: { warn: jest.Mock; debug: jest.Mock; error: jest.Mock };
 };
 
 const makeReq = () => ({ originalUrl: '/api/things/123', method: 'GET' }) as unknown as Request;
@@ -43,6 +43,16 @@ describe('errorHandler', () => {
     });
     expect(logger.warn).toHaveBeenCalled();
     expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('logs a 401 at debug level, since every signed-out session check is one', () => {
+    const res = makeRes();
+
+    errorHandler(new UnauthorizedError('Access token required'), makeReq(), res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(logger.debug).toHaveBeenCalledWith('Request failed', expect.objectContaining({ statusCode: 401 }));
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it('maps a ForbiddenError to 403', () => {

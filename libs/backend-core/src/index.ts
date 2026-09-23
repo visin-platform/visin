@@ -4,7 +4,7 @@
 export type { UserPayload } from './types/auth';
 
 // Browser sessions: the collection auth-service writes and every service checks
-export { USER_SESSIONS_COLLECTION, isLegacySessionlessToken } from './auth/session';
+export { USER_SESSIONS_COLLECTION, SESSION_TOKEN_TYPE, hasSessionTokenType } from './auth/session';
 
 // Config
 export { requireEnv, assertRequiredEnv } from './config/env';
@@ -19,15 +19,25 @@ export {
   ConflictError,
   TooManyRequestsError,
   BadGatewayError,
-  GatewayTimeoutError
+  GatewayTimeoutError,
+  ServiceUnavailableError
 } from './errors/HttpError';
+
+// Shared-secret comparison, constant-time and safe on any header value
+export { sharedSecretMatches } from './auth/sharedSecret';
 
 // HTTP client
 export { fetchWithTimeout, DEFAULT_FETCH_TIMEOUT_MS, TRANSFER_FETCH_TIMEOUT_MS } from './http/fetchWithTimeout';
 export type { FetchWithTimeoutInit } from './http/fetchWithTimeout';
 
+// Clients for other Visin services
+export { createGroupServiceClient, groupServiceUrl } from './clients/groupService';
+export type { GroupRole, GroupMembership, MyGroup, GroupServiceClient } from './clients/groupService';
+export { fileServiceUrl, fileServiceAuthHeaders } from './clients/fileService';
+
 // Logging
 export { logger } from './logging/logger';
+export { currentRequestId, REQUEST_ID_HEADER } from './logging/requestContext';
 
 // Middleware
 export { authenticateToken, optionalAuth } from './middleware/authMiddleware';
@@ -136,8 +146,10 @@ export { connectDb } from './db/connectDb';
 export type { ConnectDbOptions } from './db/connectDb';
 
 // App factory
-export { createBaseApp } from './app/createBaseApp';
+export { createBaseApp, STANDARD_CORS_ALLOWED_HEADERS } from './app/createBaseApp';
 export type { CreateBaseAppOptions } from './app/createBaseApp';
+export { serve } from './app/serve';
+export type { ServeOptions } from './app/serve';
 
 // Health check
 export { createHealthCheckHandler } from './health/createHealthCheckHandler';

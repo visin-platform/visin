@@ -30,20 +30,106 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import { visualizationService } from '../services/visualizationService';
-import { trainingService } from '../services/trainingService';
-import { Visualization, Training, VisualizationsPaginatedResponse } from '../types';
+import { Visualization, VisualizationsPaginatedResponse } from '../types';
 import { usePageTitle } from '../hooks/usePageTitle';
 
-interface TrainingWithVisualizations {
-  training: Training;
-  visualizations: Visualization[];
-  visualizationsByType: Map<string, Visualization[]>;
-}
+/** Most images one training shows for one type at a time. */
+const GALLERY_LIMIT = 200;
 
-// The endpoint may enrich each visualization with its parent training's uuid,
-// either flattened onto the record or nested under a `training` object.
-interface VisualizationWithTrainingRef extends Visualization {
-  training?: { uuid: string };
+const formatDate = (dateString: string) => new Date(dateString).toLocaleString();
+
+/**
+ * One training's images of one type, side by side by epoch. Loaded only when
+ * shown: the overview carries counts, never images or their signed URLs.
+ */
+function TypeGallery({ trainingUuid, type, onImageClick }: {
+  trainingUuid: string;
+  type: string;
+  onImageClick: (viz: Visualization) => void;
+}) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['visualizations', trainingUuid, type],
+    queryFn: async () =>
+      (await visualizationService.getVisualizationsByTraining(trainingUuid, {
+        type,
+        limit: GALLERY_LIMIT,
+        includeUrls: true
+      }) as VisualizationsPaginatedResponse).data
+  });
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress size={28} />
+      </Box>
+    );
+  }
+  if (error || !data) {
+    return <Alert severity="error">Failed to load {type} visualizations</Alert>;
+  }
+
+  const shown = [...data.visualizations].sort((a, b) => (a.epoch || 0) - (b.epoch || 0));
+  return (
+    <Box>
+      <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+        {type} - Comparison View
+      </Typography>
+      {data.pagination.total > shown.length && (
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+          Showing the latest {shown.length} of {data.pagination.total}
+        </Typography>
+      )}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: 2
+        }}
+      >
+        {shown.map((viz) => (
+          <Card key={viz.visualization_uuid} variant="outlined">
+            <CardContent>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Epoch {viz.epoch}
+              </Typography>
+              <Box
+                component="img"
+                src={viz.signedUrl || ''}
+                alt={viz.filename}
+                sx={{
+                  width: '100%',
+                  height: 'auto',
+                  maxHeight: '400px',
+                  objectFit: 'contain',
+                  bgcolor: 'background.default',
+                  borderRadius: 1,
+                  cursor: 'pointer'
+                }}
+                onClick={() => onImageClick(viz)}
+              />
+              <Typography
+                variant="caption"
+                sx={{
+                  display: "block",
+                  color: "text.secondary",
+                  mt: 1
+                }}>
+                {viz.filename}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  display: "block",
+                  color: "text.secondary"
+                }}>
+                {formatDate(viz.uploadedAt)}
+              </Typography>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
+    </Box>
+  );
 }
 
 export const VisualizationsPage: React.FC = () => {
@@ -63,69 +149,8 @@ export const VisualizationsPage: React.FC = () => {
     isLoading: loading,
     error: queryError
   } = useQuery({
-    queryKey: ['visualizations-overview'],
-    queryFn: async (): Promise<TrainingWithVisualizations[]> => {
-      // Make two parallel requests instead of N+1 requests
-      const [trainingsResponse, visualizationsResponse] = await Promise.all([
-        trainingService.getTrainings({
-          page: 1,
-          limit: 1000
-        }),
-        visualizationService.getVisualizationsByTraining(
-          '', // Empty to get all visualizations
-          {
-            limit: 10000
-          }
-        )
-      ]);
-
-      const allTrainings = trainingsResponse.data.trainings || [];
-      const allVisualizations = (visualizationsResponse as VisualizationsPaginatedResponse).data.visualizations || [];
-
-      // Group visualizations by training_uuid (from epoch data)
-      const visualizationsByTraining = new Map<string, Visualization[]>();
-
-      // We need to get epoch data to link visualizations to trainings
-      // For now, let's group by the training info if available in the visualization
-      // If not, we'll need to fetch epoch data
-      allVisualizations.forEach((viz: VisualizationWithTrainingRef) => {
-        // Try to find training from epoch_uuid
-        // Since we have the epoch data in the visualization response, we can use it
-        // Note: This requires backend to include training_uuid in the response
-        const trainingUuid = viz.training_uuid || viz.training?.uuid;
-        if (trainingUuid) {
-          const existing = visualizationsByTraining.get(trainingUuid) || [];
-          existing.push(viz);
-          visualizationsByTraining.set(trainingUuid, existing);
-        }
-      });
-
-      // Build trainings with visualizations
-      const trainingsWithViz: TrainingWithVisualizations[] = [];
-
-      for (const training of allTrainings) {
-        const trainingUuid = training.uuid || training.training_uuid || '';
-        const visualizations = visualizationsByTraining.get(trainingUuid) || [];
-
-        if (visualizations.length > 0) {
-          // Group visualizations by type
-          const visualizationsByType = new Map<string, Visualization[]>();
-          visualizations.forEach(viz => {
-            const existing = visualizationsByType.get(viz.type) || [];
-            existing.push(viz);
-            visualizationsByType.set(viz.type, existing);
-          });
-
-          trainingsWithViz.push({
-            training,
-            visualizations,
-            visualizationsByType
-          });
-        }
-      }
-
-      return trainingsWithViz;
-    }
+    queryKey: ['visualizations-summary'],
+    queryFn: () => visualizationService.getVisualizationSummary()
   });
 
   const error =
@@ -140,10 +165,6 @@ export const VisualizationsPage: React.FC = () => {
       newExpanded.add(trainingId);
     }
     setExpandedTrainings(newExpanded);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
   };
 
   const handleToggleTrainingSelection = (trainingId: string) => {
@@ -244,14 +265,14 @@ export const VisualizationsPage: React.FC = () => {
         </Card>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {trainings.map((trainingWithViz) => {
-            const isExpanded = expandedTrainings.has(trainingWithViz.training._id);
-            const isSelected = selectedTrainings.has(trainingWithViz.training._id);
-            const availableTypes = Array.from(trainingWithViz.visualizationsByType.keys());
+          {trainings.map((training) => {
+            const isExpanded = expandedTrainings.has(training._id);
+            const isSelected = selectedTrainings.has(training._id);
+            const availableTypes = training.types.map(({ type }) => type);
 
             return (
               <Card 
-                key={trainingWithViz.training._id}
+                key={training._id}
                 sx={{
                   border: isSelected ? '2px solid' : '1px solid',
                   borderColor: isSelected ? 'primary.main' : 'divider'
@@ -275,28 +296,28 @@ export const VisualizationsPage: React.FC = () => {
                           label={isSelected ? '✓' : '○'}
                           size="small"
                           color={isSelected ? 'primary' : 'default'}
-                          onClick={() => handleToggleTrainingSelection(trainingWithViz.training._id)}
+                          onClick={() => handleToggleTrainingSelection(training._id)}
                           sx={{ cursor: 'pointer', minWidth: '32px' }}
                         />
                       )}
                       <IconButton 
                         size="small" 
-                        onClick={() => !compareMode && toggleTraining(trainingWithViz.training._id)}
+                        onClick={() => !compareMode && toggleTraining(training._id)}
                         disabled={compareMode}
                       >
                         {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                       </IconButton>
                       <Box 
                         sx={{ cursor: compareMode ? 'pointer' : 'default' }}
-                        onClick={() => compareMode && handleToggleTrainingSelection(trainingWithViz.training._id)}
+                        onClick={() => compareMode && handleToggleTrainingSelection(training._id)}
                       >
                         <Typography variant="h6">
-                          {trainingWithViz.training.name}
+                          {training.name}
                         </Typography>
                         <Typography variant="body2" sx={{
                           color: "text.secondary"
                         }}>
-                          {trainingWithViz.visualizations.length} visualizations across {availableTypes.length} types
+                          {training.total} visualizations across {availableTypes.length} types
                         </Typography>
                       </Box>
                     </Box>
@@ -325,63 +346,8 @@ export const VisualizationsPage: React.FC = () => {
                       </Box>
 
                       {/* Visualization Grid - Side by Side */}
-                      {selectedType && trainingWithViz.visualizationsByType.get(selectedType) && (
-                        <Box>
-                          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-                            {selectedType} - Comparison View
-                          </Typography>
-                          <Box
-                            sx={{
-                              display: 'grid',
-                              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                              gap: 2
-                            }}
-                          >
-                            {trainingWithViz.visualizationsByType.get(selectedType)!
-                              .sort((a, b) => (a.epoch || 0) - (b.epoch || 0))
-                              .map((viz) => (
-                                <Card key={viz.visualization_uuid} variant="outlined">
-                                  <CardContent>
-                                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                                      Epoch {viz.epoch}
-                                    </Typography>
-                                    <Box
-                                      component="img"
-                                      src={viz.signedUrl || ''}
-                                      alt={viz.filename}
-                                      sx={{
-                                        width: '100%',
-                                        height: 'auto',
-                                        maxHeight: '400px',
-                                        objectFit: 'contain',
-                                        bgcolor: 'background.default',
-                                        borderRadius: 1,
-                                        cursor: 'pointer'
-                                      }}
-                                      onClick={() => handleImageClick(viz)}
-                                    />
-                                    <Typography
-                                      variant="caption"
-                                      sx={{
-                                        display: "block",
-                                        color: "text.secondary",
-                                        mt: 1
-                                      }}>
-                                      {viz.filename}
-                                    </Typography>
-                                    <Typography
-                                      variant="caption"
-                                      sx={{
-                                        display: "block",
-                                        color: "text.secondary"
-                                      }}>
-                                      {formatDate(viz.uploadedAt)}
-                                    </Typography>
-                                  </CardContent>
-                                </Card>
-                              ))}
-                          </Box>
-                        </Box>
+                      {isExpanded && selectedType && availableTypes.includes(selectedType) && (
+                        <TypeGallery trainingUuid={training.uuid} type={selectedType} onImageClick={handleImageClick} />
                       )}
 
                       {/* Show all types overview when none selected */}
@@ -405,15 +371,13 @@ export const VisualizationsPage: React.FC = () => {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {availableTypes.map(type => {
-                                  const vizOfType = trainingWithViz.visualizationsByType.get(type)!;
-                                  const epochs = [...new Set(vizOfType.map(v => v.epoch))].sort((a, b) => (a || 0) - (b || 0));
+                                {training.types.map(({ type, count, epochs }) => {
                                   return (
                                     <TableRow key={type} hover>
                                       <TableCell>
                                         <Chip label={type} size="small" color="primary" variant="outlined" />
                                       </TableCell>
-                                      <TableCell>{vizOfType.length}</TableCell>
+                                      <TableCell>{count}</TableCell>
                                       <TableCell>
                                         {epochs.map(e => `Epoch ${e}`).join(', ')}
                                       </TableCell>

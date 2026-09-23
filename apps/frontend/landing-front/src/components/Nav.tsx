@@ -22,8 +22,7 @@ import { INK } from '../theme';
 const LINKS = [
   { label: 'Product', href: '#product' },
   { label: 'Assistant', href: '#assistant' },
-  { label: 'Self-hosting', href: '#open-source' },
-  { label: 'Contact', href: '#contact' }
+  { label: 'Self-hosting', href: '#open-source' }
 ];
 
 interface NavProps {

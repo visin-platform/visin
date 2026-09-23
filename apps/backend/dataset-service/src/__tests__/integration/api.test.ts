@@ -54,6 +54,8 @@ beforeEach(async () => {
   await mongoose.connection.collection('users').insertMany(
     [OWNER, MEMBER, ADMIN, STRANGER].map((id) => ({ _id: new mongoose.Types.ObjectId(id), email: `${id}@example.test`, tokenVersion: 1 }))
   );
+  // Each test token names a session whose id is its user's.
+  await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
   jest.mocked(checkMembership).mockImplementation(async (_groupId, userId) =>
     userId === MEMBER ? { member: true, role: 'member' } : userId === ADMIN ? { member: true, role: 'admin' } : { member: false, role: null }
   );
@@ -77,7 +79,7 @@ afterAll(async () => {
 });
 
 const tokenFor = (userId: string) => {
-  const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
+  const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, sid: userId, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
     .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
     .join('.');
   return `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;

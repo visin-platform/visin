@@ -41,6 +41,8 @@ describe('training-config privacy with shared public configs', () => {
 
   beforeEach(async () => {
     await mongoose.connection.collection('users').insertMany([OWNER, STRANGER].map(id => ({ _id: new mongoose.Types.ObjectId(id), email: `${id}@example.test`, tokenVersion: 1 })));
+    // Each test token names a session whose id is its user's.
+    await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
     const project = await Project.create({ name: 'Private', ownerId: OWNER });
     const publicProject = await Project.create({ name: 'Public', ownerId: OWNER, isPublic: true });
     configId = String((await Config.create({ config_uuid: 'shared', summary: 'Public fixture', config_data: { learning_rate: 0.01 } }))._id);
@@ -62,7 +64,7 @@ describe('training-config privacy with shared public configs', () => {
   });
 
   const get = async (path: string, userId?: string) => {
-    const payload = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
+    const payload = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, sid: userId, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
     const token = `${payload}.${createHmac('sha256', secret).update(payload).digest('base64url')}`;
     const response = await fetch(`${baseUrl}/${path}`, { headers: userId ? { Authorization: `Bearer ${token}` } : {} });
@@ -98,6 +100,31 @@ describe('training-config privacy with shared public configs', () => {
       expect(response.body.data).not.toHaveProperty('trainingId');
     }
     expect((await get('configs')).body.data.configs).toEqual([expect.objectContaining({ _id: configId })]);
+  });
+
+  it('hides a config only private trainings use from everyone who cannot see them', async () => {
+    await Training.updateOne({ _id: publicId }, { $unset: { configId: 1 } });
+    for (const user of [undefined, STRANGER]) {
+      expect((await get(`configs/${configId}`, user)).status).toBe(404);
+      expect((await get('configs/uuid/shared', user)).status).toBe(404);
+      expect((await get('configs', user)).body.data).toMatchObject({ configs: [], total: 0 });
+    }
+    expect((await get(`configs/${configId}`, OWNER)).status).toBe(200);
+    expect((await get('configs', OWNER)).body.data.configs).toEqual([expect.objectContaining({ _id: configId })]);
+  });
+
+  it('keeps a config hidden after its private training is deleted, but shows it to its own author', async () => {
+    await Training.updateOne({ _id: publicId }, { $unset: { configId: 1 } });
+    await Training.updateOne({ _id: privateId }, { deletedAt: new Date() });
+    expect((await get(`configs/${configId}`)).status).toBe(404);
+    // ownerId is immutable through the model; set it as a legacy import would have.
+    await Config.collection.updateOne({ _id: new mongoose.Types.ObjectId(configId) }, { $set: { ownerId: STRANGER } });
+    expect((await get(`configs/${configId}`, STRANGER)).status).toBe(200);
+    expect((await get('configs/uuid/shared', STRANGER)).status).toBe(200);
+  });
+
+  it('answers 404, not a cast error, for a malformed config id', async () => {
+    expect((await get('configs/not-an-object-id')).status).toBe(404);
   });
 
   it('reapplies project visibility on every association request', async () => {

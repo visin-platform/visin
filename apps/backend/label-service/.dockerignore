@@ -7,3 +7,7 @@ Dockerfile
 dist
 credentials/
 cache/
+coverage
+test-results
+playwright-report
+.vitest-reports

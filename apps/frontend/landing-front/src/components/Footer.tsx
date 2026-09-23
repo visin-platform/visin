@@ -5,8 +5,7 @@ import { INK } from '../theme';
 
 const FOOTER_LINKS = [
   { label: 'Product', href: '#product' },
-  { label: 'Self-hosting', href: '#open-source' },
-  { label: 'Contact', href: '#contact' }
+  { label: 'Self-hosting', href: '#open-source' }
 ];
 
 interface FooterProps {

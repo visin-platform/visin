@@ -44,8 +44,8 @@ describe('validateInternalServiceToken', () => {
 
     validateInternalServiceToken(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 500 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('returns 401 for an invalid token (timing-safe)', () => {
@@ -54,8 +54,8 @@ describe('validateInternalServiceToken', () => {
 
     validateInternalServiceToken(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('returns 401 for a token with wrong length', () => {
@@ -64,8 +64,8 @@ describe('validateInternalServiceToken', () => {
 
     validateInternalServiceToken(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('marks request as internal and calls next() for a valid token', () => {
@@ -106,8 +106,8 @@ describe('allowUserOrInternalService', () => {
 
     allowUserOrInternalService(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('allows a request with an authenticated user', () => {

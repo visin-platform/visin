@@ -3,7 +3,6 @@ import ApiToken from '../../models/ApiToken';
 import Benchmark from '../../models/Benchmark';
 import Comparison from '../../models/Comparison';
 import Config from '../../models/Config';
-import Contact from '../../models/Contact';
 import Epoch from '../../models/Epoch';
 import EpochVisualization from '../../models/EpochVisualization';
 import Project from '../../models/Project';
@@ -16,7 +15,6 @@ describe('model registration', () => {
     expect(Benchmark.modelName).toBe('Benchmark');
     expect(Comparison.modelName).toBe('comparison');
     expect(Config.modelName).toBe('training_config');
-    expect(Contact.modelName).toBe('Contact');
     expect(Epoch.modelName).toBe('training_epoch');
     expect(EpochVisualization.modelName).toBe('epoch_visualization');
     expect(Project.modelName).toBe('Project');
@@ -133,18 +131,6 @@ describe('Comparison', () => {
     expect(
       new Comparison({ uuid: 'c1', name: 'C', type: 'trainings', itemIds: ['a'] }).validateSync()
     ).toBeUndefined();
-  });
-});
-
-describe('Contact', () => {
-  it('validates email format and lowercases it', () => {
-    const good = new Contact({ name: 'N', email: 'A@B.co', message: 'hi' });
-    expect(good.validateSync()).toBeUndefined();
-    expect(good.email).toBe('a@b.co');
-
-    expect(
-      new Contact({ name: 'N', email: 'not-an-email', message: 'hi' }).validateSync()?.errors.email
-    ).toBeDefined();
   });
 });
 

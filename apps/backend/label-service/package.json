@@ -13,12 +13,10 @@
     "start": "node --env-file-if-exists=.env dist/index.js",
     "dev": "nodemon --exec \"node --env-file-if-exists=.env -r ts-node/register\" src/index.ts",
     "build": "tsc",
-    "test": "jest --passWithNoTests",
-    "test:coverage": "jest --coverage --passWithNoTests",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
     "lint": "eslint . --max-warnings 0",
-    "typecheck": "tsc --noEmit",
-    "migrate:datasets": "TS_NODE_COMPILER_OPTIONS='{\"rootDir\":\".\",\"types\":[\"node\"]}' node -r ts-node/register scripts/migrateBundlesToDatasets.ts",
-    "load:datasets": "TS_NODE_COMPILER_OPTIONS='{\"rootDir\":\".\",\"types\":[\"node\"]}' node --env-file-if-exists=.env -r ts-node/register scripts/loadMigratedLabeling.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@visin/backend-core": "1.5.0",
@@ -29,9 +27,11 @@
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.5.1",
     "eslint": "^10.10.0",
     "jest": "^30.5.1",
+    "jsonwebtoken": "^9.0.3",
     "mongodb-memory-server": "11.2.0",
     "nodemon": "^3.1.14",
     "ts-jest": "^29.4.12",

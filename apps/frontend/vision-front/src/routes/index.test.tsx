@@ -28,9 +28,9 @@ const renderAt = (path: string) =>
   );
 
 describe('AppRoutes', () => {
-  it('redirects "/" to "/projects"', () => {
+  it('redirects "/" to "/projects"', async () => {
     renderAt('/');
-    expect(screen.getByText('ProjectsPage')).toBeInTheDocument();
+    expect(await screen.findByText('ProjectsPage')).toBeInTheDocument();
   });
 
   it.each([
@@ -51,8 +51,8 @@ describe('AppRoutes', () => {
     ['/visualizations/compare', 'VisualizationsComparisonPage'],
     ['/visualizations/compare-trainings', 'TrainingVisualizationsComparisonPage'],
     ['/benchmarks', 'BenchmarksPage'],
-  ])('renders %s at %s', (path, expectedText) => {
+  ])('renders %s at %s', async (path, expectedText) => {
     renderAt(path);
-    expect(screen.getByText(expectedText)).toBeInTheDocument();
+    expect(await screen.findByText(expectedText)).toBeInTheDocument();
   });
 });

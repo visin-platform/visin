@@ -8,7 +8,8 @@ import {
   getUploadSignedUrl,
   deleteFile,
   getFileMetadata,
-} from '../../services/fileServiceClient';
+} from '../../clients/fileServiceClient';
+import { GatewayTimeoutError } from '@visin/backend-core';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
@@ -61,16 +62,23 @@ describe('getUploadSignedUrl', () => {
     await expect(getUploadSignedUrl('f1', 'image/png')).resolves.toBe('http://up');
   });
 
-  it('throws on non-ok or malformed responses', async () => {
+  it('reports a non-ok, malformed or unreachable file-service as a 502, not a 500', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
-    await expect(getUploadSignedUrl('f1', 'image/png')).rejects.toThrow(
-      'Failed to generate upload URL'
-    );
+    await expect(getUploadSignedUrl('f1', 'image/png')).rejects.toMatchObject({
+      statusCode: 502,
+      message: expect.stringContaining('Failed to generate upload URL'),
+    });
 
     mockFetch.mockResolvedValue(okJson({ success: true }));
-    await expect(getUploadSignedUrl('f1', 'image/png')).rejects.toThrow(
-      'Failed to generate upload URL'
-    );
+    await expect(getUploadSignedUrl('f1', 'image/png')).rejects.toMatchObject({ statusCode: 502 });
+
+    mockFetch.mockRejectedValue(new TypeError('fetch failed'));
+    await expect(getUploadSignedUrl('f1', 'image/png')).rejects.toMatchObject({ statusCode: 502 });
+  });
+
+  it('keeps a timeout a 504', async () => {
+    mockFetch.mockRejectedValue(new GatewayTimeoutError('file-service timed out'));
+    await expect(getUploadSignedUrl('f1', 'image/png')).rejects.toMatchObject({ statusCode: 504 });
   });
 });
 
@@ -106,9 +114,15 @@ describe('fileExists / getFileMetadata / listFiles / copyFile', () => {
     });
   });
 
-  it('getFileMetadata throws File not found on failure', async () => {
-    mockFetch.mockResolvedValue({ ok: false });
-    await expect(getFileMetadata('f1')).rejects.toThrow('File not found');
+  it('getFileMetadata answers 404 for a missing file and 502 for any other failure', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+    await expect(getFileMetadata('f1')).rejects.toMatchObject({ statusCode: 404, message: 'File not found' });
+
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+    await expect(getFileMetadata('f1')).rejects.toMatchObject({ statusCode: 502 });
+
+    mockFetch.mockRejectedValue(new TypeError('fetch failed'));
+    await expect(getFileMetadata('f1')).rejects.toMatchObject({ statusCode: 502 });
   });
 
 });

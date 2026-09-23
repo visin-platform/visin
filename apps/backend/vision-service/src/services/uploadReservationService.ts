@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { BadRequestError, ForbiddenError, getUploadPolicy } from '@visin/backend-core';
 import UploadReservation from '../models/UploadReservation';
-import { deleteFile, getFileMetadata } from './fileServiceClient';
+import { deleteFile, getFileMetadata } from '../clients/fileServiceClient';
 import { requireActor } from './writeAccessService';
 
 // Datasets (archives, images) moved to dataset-service; visualizations are what remain here.

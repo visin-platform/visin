@@ -6,3 +6,7 @@ Dockerfile
 .env.*
 credentials/
 cache/
+coverage
+test-results
+playwright-report
+.vitest-reports

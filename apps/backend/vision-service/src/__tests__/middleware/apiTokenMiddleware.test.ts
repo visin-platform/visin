@@ -112,9 +112,8 @@ describe('apiTokenMiddleware', () => {
       next as unknown as NextFunction
     );
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ message: 'Token expired' });
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401, message: 'Token expired' }));
+    expect(res.status).not.toHaveBeenCalled();
   });
 
   it('accepts a token with a future expiry', async () => {

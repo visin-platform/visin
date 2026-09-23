@@ -23,12 +23,15 @@ describe('credential-free request diagnostics', () => {
   ])('logs a safe path on successful requests: %s', (originalUrl, path) => {
     const req = { originalUrl, method: 'GET', headers: { authorization: 'Bearer HEADER_SECRET' },
       cookies: { access_token: 'COOKIE_SECRET' } } as unknown as Request;
-    const res = Object.assign(new EventEmitter(), { statusCode: 200 });
+    const res = Object.assign(new EventEmitter(), { statusCode: 200, setHeader: jest.fn() });
     const next = jest.fn();
     requestLogger(req, res as unknown as Response, next);
     expect(next).toHaveBeenCalledTimes(1);
     res.emit('finish');
-    expect(logger.http).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`^GET ${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} 200 \\d+ms$`)));
+    expect(logger.http).toHaveBeenCalledWith(
+      expect.stringMatching(new RegExp(`^GET ${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} 200 \\d+ms$`)),
+      { requestId: expect.any(String) }
+    );
     expect(JSON.stringify(logger.http.mock.calls)).not.toContain('_SECRET');
   });
 

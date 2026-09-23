@@ -95,6 +95,16 @@ export const getVisualizationsByTraining = async (req: Request, res: Response): 
   });
 };
 
+/** Per visible training: visualization counts and epochs by type, without images. */
+export const getVisualizationSummary = async (req: Request, res: Response): Promise<void> => {
+  const trainings = await visualizationService.getVisualizationSummary(req.user?.id);
+
+  res.status(200).json({
+    success: true,
+    data: { trainings }
+  });
+};
+
 /**
  * Get visualization types (distinct types across all visualizations)
  */

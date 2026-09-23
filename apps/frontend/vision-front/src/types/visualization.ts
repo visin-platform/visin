@@ -17,6 +17,15 @@ export interface Visualization {
   updatedAt: string;
 }
 
+/** One training in the visualization overview: counts and epochs per type, no images. */
+export interface VisualizationSummary {
+  _id: string;
+  uuid: string;
+  name: string;
+  total: number;
+  types: { type: string; count: number; epochs: number[] }[];
+}
+
 export interface TrainingVisualizations {
   training_uuid: string;
   training_name: string;

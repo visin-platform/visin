@@ -7,7 +7,8 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
-  Container
+  Container,
+  TablePagination
 } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { useComparisonsPage } from '../hooks/useComparisonsPage';
@@ -18,6 +19,11 @@ import EditComparisonDialog from '../components/comparisons/EditComparisonDialog
 const ComparisonsPage: React.FC = () => {
   const {
     comparisons,
+    totalComparisons,
+    page,
+    rowsPerPage,
+    handleChangePage,
+    handleChangeRowsPerPage,
     loading,
     error,
     deleteDialogOpen,
@@ -94,6 +100,17 @@ const ComparisonsPage: React.FC = () => {
         getTypeColor={getTypeColor}
         theme={theme}
       />
+      {totalComparisons > 0 && (
+        <TablePagination
+          rowsPerPageOptions={[25, 50, 100]}
+          component="div"
+          count={totalComparisons}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+        />
+      )}
       {comparisons.length === 0 && !loading && (
         <Box
           sx={{

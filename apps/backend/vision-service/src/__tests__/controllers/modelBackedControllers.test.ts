@@ -2,11 +2,11 @@ jest.mock('../../services/uploadReservationService', () => ({
   ...jest.requireActual('../../services/uploadReservationService'),
   reserveUpload: jest.fn(async () => ({ allocationId: 'reserved-id' })),
   claimUpload: jest.fn(async (_fileId: string, _kind: string, _parent: string, _resource: string, _user: string, resourceId?: string) => {
-    const files = jest.requireMock('../../services/fileServiceClient');
+    const files = jest.requireMock('../../clients/fileServiceClient');
     const metadata = files.getFileMetadata ? await files.getFileMetadata(_fileId) : undefined;
     return { resourceId: resourceId || 'reserved-id', size: metadata?.size ?? 10 };
   }),
-  deleteReservedFile: jest.fn(async (fileId: string) => jest.requireMock('../../services/fileServiceClient').deleteFile(fileId))
+  deleteReservedFile: jest.fn(async (fileId: string) => jest.requireMock('../../clients/fileServiceClient').deleteFile(fileId))
 }));
 // These workflow tests stub the write-policy boundary. HTTP/Mongo integration
 // tests exercise the real owner/group policy, parent resolution, and denial effects.
@@ -43,9 +43,9 @@ jest.mock('../../models/ApiToken', () => {
 });
 jest.mock('../../models/Training', () => ({
   __esModule: true,
-  default: { findById: jest.fn(), findOne: jest.fn() },
+  default: { findById: jest.fn(), findOne: jest.fn(), distinct: jest.fn().mockResolvedValue([]) },
 }));
-jest.mock('../../services/fileServiceClient', () => ({
+jest.mock('../../clients/fileServiceClient', () => ({
   getSignedUrl: jest.fn(),
   getUploadSignedUrl: jest.fn(),
   getFileMetadata: jest.fn(),
@@ -55,6 +55,7 @@ jest.mock('../../services/projectAccessService', () => ({
   ...jest.requireActual('../../services/projectAccessService'),
   isProjectOwner: jest.fn(),
   checkProjectAccess: jest.fn().mockResolvedValue(true),
+  getVisibleProjectIds: jest.fn().mockResolvedValue([]),
 }));
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),
@@ -151,10 +152,15 @@ describe('configController', () => {
   });
 
   it('getConfigById / getConfigByUuid 404 or return', async () => {
-    mockedConfig.findById.mockResolvedValue(null);
     await expect(configCtrl.getConfigById(makeReq({ params: { id: 'x' } }), makeRes())).rejects.toThrow(
       'Config not found'
     );
+    expect(mockedConfig.findOne).not.toHaveBeenCalled();
+
+    mockedConfig.findOne.mockResolvedValue(null);
+    await expect(
+      configCtrl.getConfigById(makeReq({ params: { id: '64b7f1f77bcf86cd79943aaa' } }), makeRes())
+    ).rejects.toThrow('Config not found');
 
     mockedConfig.findOne.mockResolvedValue(null);
     await expect(

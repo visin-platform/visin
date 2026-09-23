@@ -1,15 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
-import { authenticateToken as verifyJwt } from '@visin/backend-core';
+import { authenticateToken as verifyJwt, validateInternalServiceToken } from '@visin/backend-core';
 
 /**
- * Internal-service requests carry their own X-Internal-Token, validated
- * downstream by validateInternalServiceToken/allowUserOrInternalService
- * (see internalServiceAuth.ts) — skip user JWT auth for those and defer.
- * Otherwise, require a valid, signed-in user.
+ * Internal-service requests carry an X-Internal-Token instead of a user JWT.
+ * The token is validated here, where user auth is skipped, rather than left to
+ * each router: otherwise any router mounted under `/api` without its own
+ * `validateInternalServiceToken` would admit a request carrying any value in
+ * that header. Otherwise, require a valid, signed-in user.
  */
 export function authenticateToken(req: Request, res: Response, next: NextFunction): void {
   if (req.headers['x-internal-token']) {
-    next();
+    validateInternalServiceToken(req, res, next);
     return;
   }
   verifyJwt(req, res, next);

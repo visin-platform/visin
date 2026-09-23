@@ -2,7 +2,7 @@ import express from 'express';
 import { identityContextMiddleware } from './middleware/requestIdentityContext';
 import writeCapabilitiesRoutes from './routes/writeCapabilitiesRoutes';
 import path from 'path';
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, apiKeyAuth } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, apiKeyAuth, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
 import trainingRoutes from './routes/trainingRoutes';
 import epochRoutes from './routes/epochRoutes';
 import configRoutes from './routes/configRoutes';
@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 4010;
 
 const app = createBaseApp({
   corsMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id'],
+  corsAllowedHeaders: STANDARD_CORS_ALLOWED_HEADERS,
   json: false
 });
 
@@ -90,7 +90,7 @@ app.use(errorHandler);
 // container restart policy.
 connectDb({ serviceName: 'vision-service' })
   .then(() => {
-    app.listen(PORT, () => logger.info(`Vision service started successfully on port ${PORT}`));
+    serve(app, { port: PORT, serviceName: 'vision-service' });
   })
   .catch((err: Error) => {
     logger.error('Failed to start vision-service', { error: err.message, stack: err.stack });

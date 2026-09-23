@@ -1,7 +1,7 @@
 import { z } from '@visin/backend-core';
 import { paginationSchema, sortOrderSchema } from './common';
 
-const COMPARISON_SORT_FIELDS = ['name', 'type', 'createdAt', 'updatedAt', 'uuid'] as const;
+const COMPARISON_SORT_FIELDS = ['name', 'type', 'createdAt', 'updatedAt', 'uuid', 'itemCount'] as const;
 const COMPARISON_TYPES = ['trainings', 'tests', 'benchmarks', 'epochs'] as const;
 
 export const getComparisonsQuerySchema = z.object({
@@ -38,6 +38,6 @@ export const createComparisonBodySchema = z.object({
 export const updateComparisonBodySchema = z.object({
   name: z.string().trim().min(1).optional(),
   description: z.string().trim().optional(),
-  itemIds: z.array(z.string()).optional(),
+  itemIds: z.array(z.string()).max(50, 'Maximum 50 items can be compared at once').optional(),
   metadata: z.unknown().optional()
 });

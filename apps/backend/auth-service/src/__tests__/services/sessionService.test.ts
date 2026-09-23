@@ -1,7 +1,8 @@
 jest.mock('../../models/Session', () => jest.requireActual('../helpers/sessionModelMock').sessionModule());
 import type { Request, Response } from 'express';
 import { Session } from '../../models/Session';
-import { renewSession } from '../../services/sessionService';
+import { continueSessionAlone, renewSession } from '../../services/sessionService';
+import type { IUser } from '../../models/User';
 import { makeSession } from '../helpers/sessionModelMock';
 
 const mockedSession = Session as unknown as Record<string, jest.Mock>;
@@ -31,5 +32,27 @@ describe('renewSession', () => {
 
     expect(mockedSession.findOneAndUpdate).not.toHaveBeenCalled();
     expect(response.cookie).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('without a session attached', () => {
+  const user = { id: '507f1f77bcf86cd799439011', email: 'user@example.test', name: 'User', tokenVersion: 1 };
+  const req = { user, headers: {} } as unknown as Request;
+
+  it('renews nothing and creates no session', async () => {
+    const response = { cookie: jest.fn() } as unknown as Response & { cookie: jest.Mock };
+
+    await expect(renewSession(req, response)).rejects.toMatchObject({ statusCode: 401, message: 'Session has ended' });
+    expect(mockedSession.create).not.toHaveBeenCalled();
+    expect(response.cookie).not.toHaveBeenCalled();
+  });
+
+  it('does not continue a session that is not there, nor revoke the others', async () => {
+    const response = { cookie: jest.fn() } as unknown as Response & { cookie: jest.Mock };
+    const updated = { _id: { toString: () => user.id }, email: user.email, tokenVersion: 2 } as unknown as IUser;
+
+    await expect(continueSessionAlone(req, response, updated)).rejects.toMatchObject({ statusCode: 401 });
+    expect(mockedSession.deleteMany).not.toHaveBeenCalled();
+    expect(mockedSession.create).not.toHaveBeenCalled();
   });
 });

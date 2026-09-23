@@ -1,7 +1,7 @@
 import { assertResourceWrite, requireActor } from './writeAccessService';
 import { resolveProject } from './projectAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
-import { QueryFilter } from 'mongoose';
+import { QueryFilter, Types } from 'mongoose';
 import { ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Comparison, { IComparison } from '../models/Comparison';
 import { checkProjectAccess, getVisibleProjectIds } from './projectAccessService';
@@ -102,6 +102,25 @@ const getAccessibleComparison = async (idQuery: QueryFilter<IComparison>, userId
   return comparison;
 };
 
+/** One page ordered by how many items each comparison holds, a count no field stores. */
+const comparisonsByItemCount = async (
+  query: QueryFilter<IComparison>,
+  order: 1 | -1,
+  skip: number,
+  limit: number
+) => {
+  const ids = await Comparison.aggregate<{ _id: Types.ObjectId }>([
+    { $match: query },
+    { $addFields: { itemCount: { $size: { $ifNull: ['$itemIds', []] } } } },
+    { $sort: { itemCount: order, _id: order } },
+    { $skip: skip },
+    { $limit: limit },
+    { $project: { _id: 1 } }
+  ]);
+  const byId = new Map((await Comparison.find({ _id: { $in: ids.map(row => row._id) } })).map(c => [String(c._id), c]));
+  return ids.flatMap(row => byId.get(String(row._id)) ?? []);
+};
+
 export const getComparisons = async (filters: GetComparisonsQuery, userId: string | undefined) => {
   const {
     page = 1,
@@ -115,10 +134,12 @@ export const getComparisons = async (filters: GetComparisonsQuery, userId: strin
   const skip = (numericPage - 1) * numericLimit;
 
   const [comparisons, total] = await Promise.all([
-    Comparison.find(query)
-      .sort({ [sortBy]: order })
-      .skip(skip)
-      .limit(numericLimit),
+    sortBy === 'itemCount'
+      ? comparisonsByItemCount(query, order === 'desc' || order === -1 ? -1 : 1, skip, numericLimit)
+      : Comparison.find(query)
+        .sort({ [sortBy]: order })
+        .skip(skip)
+        .limit(numericLimit),
     Comparison.countDocuments(query)
   ]);
 

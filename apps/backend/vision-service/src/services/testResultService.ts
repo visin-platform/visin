@@ -15,6 +15,7 @@ import {
 } from './projectAccessService';
 import type { z } from '@visin/backend-core';
 import type { createTestResultBodySchema, updateTestResultBodySchema } from '../validation/testResultSchemas';
+import { MAX_PAGE_SIZE } from '../validation/common';
 
 type CreateTestResultData = z.infer<typeof createTestResultBodySchema>;
 type UpdateTestResultData = z.infer<typeof updateTestResultBodySchema>;
@@ -87,7 +88,7 @@ export const testResultService = {
     const [testResults, total] =
       page && limit
         ? await Promise.all([query.skip((page - 1) * limit).limit(limit), TestResult.countDocuments(filter)])
-        : await Promise.all([query, Promise.resolve(0)]);
+        : await Promise.all([query.limit(MAX_PAGE_SIZE), Promise.resolve(0)]);
 
     // Enrich with training info
     const epochUuids = testResults.map((tr) => tr.epoch_uuid);
@@ -203,7 +204,7 @@ export const testResultService = {
       const skip = (page - 1) * limit;
       testResults = await query.skip(skip).limit(limit);
     } else {
-      testResults = await query;
+      testResults = await query.limit(MAX_PAGE_SIZE);
     }
 
     // Enrich

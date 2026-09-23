@@ -1,7 +1,7 @@
 import { assertResourceWrite, requireActor } from './writeAccessService';
 import { getEditableProjectIds, resolveProject } from './projectAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
-import { QueryFilter, Types } from 'mongoose';
+import { QueryFilter, Types, isValidObjectId } from 'mongoose';
 import { tokenProjectId } from '../middleware/projectTokenContext';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Training, { ITraining } from '../models/Training';
@@ -9,9 +9,11 @@ import Epoch, { IEpoch } from '../models/Epoch';
 import TestResult from '../models/TestResult';
 import Benchmark, { IBenchmark } from '../models/Benchmark';
 import Comparison from '../models/Comparison';
+import Project from '../models/Project';
 import { testResultService } from './testResultService';
 import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from './projectAccessService';
 import { costOf, costingByProject, costingFor } from './costingService';
+import type { TrainingSortField } from '../validation/trainingSchemas';
 
 interface TrainingMetrics {
   totalTime: number;
@@ -37,9 +39,84 @@ type TrainingComparisonItem = Awaited<ReturnType<typeof testResultService.getAgg
 // with `name`/`uuid` — Mongoose's static types don't reflect .populate() shape changes.
 type PopulatedTrainingRef = Pick<ITraining, '_id' | 'name' | 'uuid'>;
 
+const COMPUTED_SORT_FIELDS = new Set<TrainingSortField>(['epochCount', 'totalTime', 'cpuCost', 'gpuCost', 'totalCost']);
+
 interface PaginationOptions {
   page?: number;
   limit?: number;
+  sortBy?: TrainingSortField;
+  order?: 1 | -1;
+}
+
+/**
+ * One page of training ids, ordered by a value computed per run: its epochs'
+ * count or time, or that time priced at its project's rates. Every matching
+ * run is measured, since any of them may belong on the page. A run whose
+ * project has no rates has no cost and sorts after every priced one, either way.
+ */
+async function idsOrderedByMetric(
+  query: QueryFilter<ITraining>,
+  sortBy: TrainingSortField,
+  order: 1 | -1,
+  skip: number,
+  limit: number
+): Promise<Types.ObjectId[]> {
+  const hours = { $divide: ['$totalTime', 3600] };
+  const priced = { $and: [{ $isNumber: '$rates.cpuRatePerHour' }, { $isNumber: '$rates.gpuRatePerHour' }] };
+  const cost = (rate: object) => ({ $cond: [priced, rate, null] });
+  const rows = await Training.aggregate<{ _id: Types.ObjectId }>([
+    { $match: query },
+    {
+      $lookup: {
+        from: Epoch.collection.name,
+        let: { trainingId: { $toString: '$_id' } },
+        pipeline: [
+          { $match: { $expr: { $eq: ['$trainingId', '$$trainingId'] }, deletedAt: null } },
+          { $group: { _id: null, epochCount: { $sum: 1 }, totalTime: { $sum: { $ifNull: ['$epoch_time', 0] } } } }
+        ],
+        as: 'epochs'
+      }
+    },
+    {
+      $addFields: {
+        epochCount: { $ifNull: [{ $first: '$epochs.epochCount' }, 0] },
+        totalTime: { $ifNull: [{ $first: '$epochs.totalTime' }, 0] }
+      }
+    },
+    ...(sortBy === 'epochCount' || sortBy === 'totalTime'
+      ? []
+      : [
+          {
+            $lookup: {
+              from: Project.collection.name,
+              let: { projectId: '$projectId' },
+              pipeline: [
+                { $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$projectId'] } } },
+                { $project: { _id: 0, costing: 1 } }
+              ],
+              as: 'project'
+            }
+          },
+          { $addFields: { rates: { $first: '$project.costing' } } },
+          {
+            $addFields: {
+              cpuCost: cost({ $multiply: [hours, '$rates.cpuRatePerHour'] }),
+              gpuCost: cost({ $multiply: [hours, '$rates.gpuRatePerHour'] }),
+              totalCost: cost({ $multiply: [hours, { $add: ['$rates.cpuRatePerHour', '$rates.gpuRatePerHour'] }] })
+            }
+          },
+          { $addFields: { unpriced: { $cond: [priced, 0, 1] } } }
+        ]),
+    {
+      $sort: sortBy === 'epochCount' || sortBy === 'totalTime'
+        ? { [sortBy]: order, _id: order }
+        : { unpriced: 1, [sortBy]: order, _id: order }
+    },
+    { $skip: skip },
+    { $limit: limit },
+    { $project: { _id: 1 } }
+  ]);
+  return rows.map(row => row._id);
 }
 
 interface TrainingFilters {
@@ -48,6 +125,9 @@ interface TrainingFilters {
   datasetId?: string;
   projectId?: string;
   tags?: string[];
+  excludeTags?: string[];
+  /** Only these runs (still subject to visibility). */
+  ids?: string[];
 }
 
 interface CreateTrainingData {
@@ -95,8 +175,8 @@ export const trainingService = {
   checkProjectAccess,
 
   async getTrainings(userId: string | undefined, filters: TrainingFilters, pagination: PaginationOptions) {
-    const { page = 1, limit = 30 } = pagination;
-    const { search, status, datasetId, projectId, tags } = filters;
+    const { page = 1, limit = 30, sortBy = 'updatedAt', order = -1 } = pagination;
+    const { search, status, datasetId, projectId, tags, excludeTags, ids } = filters;
 
     const query: QueryFilter<ITraining> = { deletedAt: null };
     if (tokenProjectId()) query.$and = [{ projectId: { $in: await getVisibleProjectIds(userId) } }];
@@ -139,20 +219,49 @@ export const trainingService = {
       ];
     }
 
-    // Filter by tags
+    if (ids) {
+      // As ObjectIds, so the same filter works in an aggregation, which does not cast.
+      query._id = { $in: ids.filter(id => isValidObjectId(id)).map(id => new Types.ObjectId(id)) };
+    }
+
+    // Filter by tags: every wanted tag present, and none of the excluded ones.
+    const tagFilter: { $in?: string[]; $all?: string[]; $nin?: string[] } = {};
     if (tags && tags.length > 0) {
-      query.tags = tags.length === 1 ? { $in: tags } : { $all: tags };
+      if (tags.length === 1) tagFilter.$in = tags;
+      else tagFilter.$all = tags;
+    }
+    if (excludeTags && excludeTags.length > 0) {
+      tagFilter.$nin = excludeTags;
+    }
+    if (Object.keys(tagFilter).length > 0) {
+      query.tags = tagFilter;
     }
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    const [fetchedTrainings, total] = await Promise.all([
-      Training.find(query)
-        .sort({ updatedAt: -1 })
-        .skip(skip)
-        .limit(Number(limit)),
-      Training.countDocuments(query)
-    ]);
+    let fetchedTrainings: ITraining[];
+    let total: number;
+    if (COMPUTED_SORT_FIELDS.has(sortBy)) {
+      const [pageIds, count] = await Promise.all([
+        idsOrderedByMetric(query, sortBy, order, skip, Number(limit)),
+        Training.countDocuments(query)
+      ]);
+      const byId = new Map<string, ITraining>(
+        (await Training.find({ _id: { $in: pageIds } })).map(t => [t._id.toString(), t])
+      );
+      fetchedTrainings = pageIds.flatMap(id => byId.get(id.toString()) ?? []);
+      total = count;
+    } else {
+      [fetchedTrainings, total] = await Promise.all([
+        Training.find(query)
+          .sort({ [sortBy]: order, _id: order })
+          // Names sort as people read them: "b" before "C".
+          .collation({ locale: 'en', strength: 2 })
+          .skip(skip)
+          .limit(Number(limit)),
+        Training.countDocuments(query)
+      ]);
+    }
 
     const trainings: ITraining[] = fetchedTrainings;
     let trainingsOutput: Array<ITraining | TrainingWithMetrics> = trainings;

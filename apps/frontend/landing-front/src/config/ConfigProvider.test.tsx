@@ -17,7 +17,6 @@ const renderProvider = async () => {
     const config = useConfig();
     return (
       <div>
-        <span data-testid="api-url">{config.VISION_API_URL ?? 'no-url'}</span>
         <span data-testid="mcp-url">{config.MCP_PUBLIC_URL ?? 'no-mcp'}</span>
         <span data-testid="shell-url">{config.SHELL_FRONT_URL ?? 'no-shell'}</span>
       </div>
@@ -29,8 +28,7 @@ const renderProvider = async () => {
     </ConfigProvider>
   );
   return {
-    apiUrl: await screen.findByTestId('api-url'),
-    mcpUrl: screen.getByTestId('mcp-url'),
+    mcpUrl: await screen.findByTestId('mcp-url'),
     shellUrl: screen.getByTestId('shell-url')
   };
 };
@@ -41,19 +39,17 @@ afterEach(() => {
 
 describe('ConfigProvider', () => {
   it('provides a dev config to consumers', async () => {
-    const { apiUrl } = await renderProvider();
+    const { mcpUrl } = await renderProvider();
 
-    expect(apiUrl).toHaveTextContent(/no-url|http/);
+    expect(mcpUrl).toHaveTextContent(/no-mcp|http/);
   });
 
   it('uses configured env vars over the localhost defaults when present', async () => {
-    vi.stubEnv('VITE_VISION_API_URL', 'http://configured-api.test');
     vi.stubEnv('VITE_SHELL_FRONT_URL', 'http://configured-shell.test');
     vi.stubEnv('VITE_MCP_PUBLIC_URL', 'http://configured-mcp.test');
 
-    const { apiUrl, mcpUrl, shellUrl } = await renderProvider();
+    const { mcpUrl, shellUrl } = await renderProvider();
 
-    expect(apiUrl).toHaveTextContent('http://configured-api.test');
     expect(mcpUrl).toHaveTextContent('http://configured-mcp.test');
     expect(shellUrl).toHaveTextContent('http://configured-shell.test');
   });
@@ -61,13 +57,11 @@ describe('ConfigProvider', () => {
   it('falls back to the localhost defaults when the env vars are empty', async () => {
     // .env sets these vars for normal dev/build, so the `|| default` branch
     // only fires when they're explicitly blanked out, as here.
-    vi.stubEnv('VITE_VISION_API_URL', '');
     vi.stubEnv('VITE_SHELL_FRONT_URL', '');
     vi.stubEnv('VITE_MCP_PUBLIC_URL', '');
 
-    const { apiUrl, mcpUrl, shellUrl } = await renderProvider();
+    const { mcpUrl, shellUrl } = await renderProvider();
 
-    expect(apiUrl).toHaveTextContent('http://localhost:4010');
     expect(mcpUrl).toHaveTextContent('http://localhost:5009');
     // The app people open is shell-front, not vision-front's own port.
     expect(shellUrl).toHaveTextContent('http://localhost:3010');

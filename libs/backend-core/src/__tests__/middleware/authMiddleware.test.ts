@@ -41,9 +41,9 @@ describe('authenticateToken', () => {
 
     await authenticateToken(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Access token required' });
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Access token required' }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('rejects with 401 for a forged/unsigned token', async () => {
@@ -55,9 +55,19 @@ describe('authenticateToken', () => {
 
     await authenticateToken(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ success: false, message: 'Invalid or expired token' });
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Invalid or expired token' }));
+    expect(next).not.toHaveBeenCalledWith();
+  });
+
+  it('rejects with 401 a token signed with the right secret under another algorithm', async () => {
+    const req = makeReq(`Bearer ${jwt.sign(PAYLOAD, SECRET, { algorithm: 'HS512' })}`);
+    const res = makeRes();
+
+    await authenticateToken(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('attaches req.user and calls next() for a validly signed token', async () => {
@@ -182,9 +192,9 @@ describe('MCP access tokens are not sessions', () => {
 
     await authenticateToken(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
     expect(req.user).toBeUndefined();
-    expect(next).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('optionalAuth proceeds anonymously rather than with a user that has no id', async () => {
@@ -210,15 +220,18 @@ describe('MCP access tokens are not sessions', () => {
 });
 
 describe('session revocation boundary', () => {
-  it.each([false, 'database failure'])('refuses required auth when the current account check fails (%s)', async result => {
+  it.each([
+    [false, 401],
+    ['database failure', 503]
+  ])('refuses required auth when the current account check fails (%s → %i)', async (result, status) => {
     if (result === false) (isCurrentSession as jest.Mock).mockResolvedValue(false);
     else (isCurrentSession as jest.Mock).mockRejectedValue(new Error(String(result)));
     const req = makeReq(`Bearer ${jwt.sign(PAYLOAD, SECRET)}`);
     const res = makeRes();
     await authenticateToken(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: status }));
     expect(req.user).toBeUndefined();
-    expect(next).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalledWith();
   });
   it.each([false, 'database failure'])('optional auth continues only anonymously on failed session check (%s)', async result => {
     if (result === false) (isCurrentSession as jest.Mock).mockResolvedValue(false);

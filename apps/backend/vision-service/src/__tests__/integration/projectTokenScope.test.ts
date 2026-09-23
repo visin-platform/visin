@@ -27,7 +27,7 @@ import Comparison from '../../models/Comparison';
 import Finding from '../../models/Finding';
 import Config from '../../models/Config';
 
-jest.mock('../../services/fileServiceClient', () => ({
+jest.mock('../../clients/fileServiceClient', () => ({
   getSignedUrl: jest.fn(async (fileId: string) => ({ signedUrl: `https://files.invalid/${fileId}` })),
   getUploadSignedUrl: jest.fn(async () => 'https://files.invalid/upload'),
   getFileMetadata: jest.fn(async () => ({ size: 1 })),
@@ -48,7 +48,7 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
   const secret = 'project-token-integration-secret';
   const oldSecret = process.env.JWT_SECRET;
   const sessionToken = () => {
-    const unsigned = [ { alg: 'HS256', typ: 'JWT' }, { id: owner, email: 'owner@example.test', tokenVersion: 1, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 } ]
+    const unsigned = [ { alg: 'HS256', typ: 'JWT' }, { id: owner, email: 'owner@example.test', tokenVersion: 1, sid: owner, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 } ]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
     return `${unsigned}.${crypto.createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
   };
@@ -73,6 +73,8 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
 
   beforeEach(async () => {
     await mongoose.connection.collection('users').insertOne({ _id: new mongoose.Types.ObjectId(owner), email: 'owner@example.test', tokenVersion: 1 });
+    // Each test token names a session whose id is its user's.
+    await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
     const projects = await Project.create([
       { name: 'A', slug: 'a', ownerId: owner },
       { name: 'B', slug: 'b', ownerId: owner },

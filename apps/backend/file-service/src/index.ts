@@ -1,4 +1,4 @@
-import { createBaseApp, errorHandler, logger, createHealthCheckHandler, assertRequiredEnv, connectDb } from '@visin/backend-core';
+import { createBaseApp, errorHandler, createHealthCheckHandler, assertRequiredEnv, connectDb, serve } from '@visin/backend-core';
 import routes from './routes/routes';
 
 // API key authenticates internal callers; HMAC secret signs the browser-direct
@@ -25,7 +25,8 @@ app.use('/', routes);
 app.use(errorHandler);
 
 connectDb({ serviceName: 'file-service' }).then(() => {
-  app.listen(PORT, () => logger.info(`File service started on port ${PORT}`));
+  // Draining on SIGTERM lets in-flight uploads finish their current chunk.
+  serve(app, { port: PORT, serviceName: 'file-service' });
 }).catch(() => process.exit(1));
 
 export default app;

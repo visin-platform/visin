@@ -1,4 +1,5 @@
 import { GatewayTimeoutError } from '../errors/HttpError';
+import { REQUEST_ID_HEADER, currentRequestId } from '../logging/requestContext';
 
 /**
  * Deadline for a control-plane inter-service call (signed-URL minting,
@@ -46,6 +47,9 @@ export interface FetchWithTimeoutInit extends RequestInit {
  *
  * A caller-supplied `signal` still works — it's combined with the deadline,
  * so whichever fires first aborts the request.
+ *
+ * Inside a request, the request's id is forwarded as `X-Request-Id` unless the
+ * caller set one, so the peer logs under the same id.
  */
 export async function fetchWithTimeout(input: string | URL, init: FetchWithTimeoutInit = {}): Promise<Response> {
   const { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS, serviceName, streamBody, signal, ...rest } = init;
@@ -57,7 +61,11 @@ export async function fetchWithTimeout(input: string | URL, init: FetchWithTimeo
   const deadline = controller ? controller.signal : AbortSignal.timeout(timeoutMs);
 
   try {
-    return await fetch(input, { ...rest, signal: signal ? AbortSignal.any([signal, deadline]) : deadline });
+    return await fetch(input, {
+      ...rest,
+      headers: withRequestId(rest.headers),
+      signal: signal ? AbortSignal.any([signal, deadline]) : deadline
+    });
   } catch (error) {
     // Only the deadline firing is a timeout: a caller-supplied signal aborting
     // (shutdown, client disconnect) is not this peer's fault and stays as-is.
@@ -70,4 +78,12 @@ export async function fetchWithTimeout(input: string | URL, init: FetchWithTimeo
     // Headers are in (or the request failed) — the body is the caller's problem now.
     clearTimeout(timer);
   }
+}
+
+function withRequestId(headers: RequestInit['headers']): RequestInit['headers'] {
+  const requestId = currentRequestId();
+  if (!requestId) return headers;
+  const merged = new Headers(headers);
+  if (!merged.has(REQUEST_ID_HEADER)) merged.set(REQUEST_ID_HEADER, requestId);
+  return merged;
 }

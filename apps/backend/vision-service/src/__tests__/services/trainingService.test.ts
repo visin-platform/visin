@@ -71,6 +71,7 @@ import TestResult from '../../models/TestResult';
 import Benchmark from '../../models/Benchmark';
 import Project from '../../models/Project';
 import Comparison from '../../models/Comparison';
+import { Types } from 'mongoose';
 import { testResultService } from '../../services/testResultService';
 import { checkProjectAccess, getVisibleProjectIds } from '../../services/projectAccessService';
 import { projectTokenContext } from '../../middleware/projectTokenContext';
@@ -107,6 +108,7 @@ const trainingDoc = (id: string, overrides: AnyDoc = {}): AnyDoc => ({
 const mockFindChain = (docs: unknown[]) => {
   const chain = {
     sort: jest.fn().mockReturnThis(),
+    collation: jest.fn().mockReturnThis(),
     skip: jest.fn().mockReturnThis(),
     limit: jest.fn().mockResolvedValue(docs),
   };
@@ -208,6 +210,32 @@ describe('getTrainings', () => {
 
     expect(mockedTraining.find).toHaveBeenCalledWith(
       expect.objectContaining({ tags: { $all: ['a', 'b'] } })
+    );
+  });
+
+  it('leaves out runs carrying an excluded tag, alone or alongside wanted tags', async () => {
+    mockProjectSelect([]);
+    mockFindChain([]);
+    mockedTraining.countDocuments.mockResolvedValue(0);
+
+    await trainingService.getTrainings('u1', { excludeTags: ['broken'] }, {});
+    expect(mockedTraining.find).toHaveBeenLastCalledWith(expect.objectContaining({ tags: { $nin: ['broken'] } }));
+
+    await trainingService.getTrainings('u1', { tags: ['a', 'b'], excludeTags: ['broken'] }, {});
+    expect(mockedTraining.find).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tags: { $all: ['a', 'b'], $nin: ['broken'] } })
+    );
+  });
+
+  it('fetches only the named runs, ignoring ids that cannot be one', async () => {
+    mockProjectSelect([]);
+    mockFindChain([]);
+    mockedTraining.countDocuments.mockResolvedValue(0);
+
+    await trainingService.getTrainings('u1', { ids: ['64b7f1f77bcf86cd79943aaa', 'nope'] }, {});
+
+    expect(mockedTraining.find).toHaveBeenLastCalledWith(
+      expect.objectContaining({ _id: { $in: [new Types.ObjectId('64b7f1f77bcf86cd79943aaa')] } })
     );
   });
 

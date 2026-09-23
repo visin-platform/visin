@@ -7,6 +7,7 @@ import TestResult from '../models/TestResult';
 import { checkProjectAccess, isWithinTokenScope } from './projectAccessService';
 import type { z } from '@visin/backend-core';
 import type { GetEpochsByTrainingQuery, createEpochsBatchBodySchema } from '../validation/epochSchemas';
+import { MAX_PAGE_SIZE } from '../validation/common';
 
 type CreateEpochsBatchData = z.infer<typeof createEpochsBatchBodySchema>;
 
@@ -110,7 +111,7 @@ export const getEpochsByTraining = async (
     };
   }
 
-  const epochs = await query;
+  const epochs = await query.limit(MAX_PAGE_SIZE);
   return {
     epochs,
     total: epochs.length

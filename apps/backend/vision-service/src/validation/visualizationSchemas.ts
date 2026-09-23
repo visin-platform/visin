@@ -1,4 +1,5 @@
 import { z } from '@visin/backend-core';
+import { MAX_PAGE_SIZE } from './common';
 
 const UPLOAD_URL_REQUIRED_MSG = 'epoch_uuid, filename, type, and mimetype are required';
 
@@ -29,7 +30,7 @@ export type GetVisualizationsByEpochQuery = z.infer<typeof getVisualizationsByEp
 
 export const getVisualizationsByTrainingQuerySchema = z.object({
   type: z.string().optional(),
-  limit: z.coerce.number().int().positive().default(50),
+  limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(50),
   page: z.coerce.number().int().positive().default(1),
   projectId: z.string().optional(),
   includeUrls: z.string().default('true')

@@ -1,9 +1,13 @@
 import { requireActor } from './writeAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
+import { isValidObjectId, type QueryFilter } from 'mongoose';
 import { NotFoundError } from '@visin/backend-core';
 import { trainingService } from './trainingService';
-import Config from '../models/Config';
+import { getVisibleProjectIds } from './projectAccessService';
+import Config, { type IConfig } from '../models/Config';
+import Training from '../models/Training';
 import type { GetAllConfigsQuery } from '../validation/configSchemas';
+import { MAX_PAGE_SIZE } from '../validation/common';
 
 interface ConfigData {
   summary: string;
@@ -12,8 +16,31 @@ interface ConfigData {
   metadata?: unknown;
 }
 
-export const getAllConfigs = async ({ page, limit, sortBy, order }: GetAllConfigsQuery) => {
-  let query = Config.find().sort({ [sortBy]: order });
+/**
+ * Configs are a shared library, but a config says a lot about the run it came
+ * from. One is hidden when every training using it sits in a project the
+ * caller cannot see — a deleted training still counts, so deleting a private
+ * run does not publish its config. The config's owner always sees it.
+ */
+async function visibleConfigFilter(userId: string | undefined): Promise<QueryFilter<IConfig>> {
+  const projectIds = await getVisibleProjectIds(userId);
+  const [hiddenRefs, visibleRefs] = await Promise.all([
+    Training.distinct('configId', { configId: { $nin: [null, ''] }, projectId: { $nin: [...projectIds, null] } }),
+    Training.distinct('configId', {
+      configId: { $nin: [null, ''] },
+      deletedAt: null,
+      $or: [{ projectId: { $in: projectIds } }, { projectId: null }]
+    })
+  ]);
+  const shown = new Set(visibleRefs.map(String));
+  const hidden = hiddenRefs.map(String).filter(id => !shown.has(id) && isValidObjectId(id));
+  if (hidden.length === 0) return {};
+  return { $or: [...(userId ? [{ ownerId: userId }] : []), { _id: { $nin: hidden } }] };
+}
+
+export const getAllConfigs = async ({ page, limit, sortBy, order }: GetAllConfigsQuery, userId?: string) => {
+  const filter = await visibleConfigFilter(userId);
+  let query = Config.find(filter).sort({ [sortBy]: order });
 
   if (page && limit) {
     const numericPage = Number(page);
@@ -23,7 +50,7 @@ export const getAllConfigs = async ({ page, limit, sortBy, order }: GetAllConfig
 
     const [configs, total] = await Promise.all([
       query,
-      Config.countDocuments()
+      Config.countDocuments(filter)
     ]);
 
     return {
@@ -37,7 +64,7 @@ export const getAllConfigs = async ({ page, limit, sortBy, order }: GetAllConfig
     };
   }
 
-  const configs = await query;
+  const configs = await query.limit(MAX_PAGE_SIZE);
   return {
     configs,
     total: configs.length
@@ -63,8 +90,10 @@ export const getConfigsByTraining = async (trainingId: string, userId?: string) 
   };
 };
 
-export const getConfigById = async (id: string) => {
-  const config = await Config.findById(id);
+export const getConfigById = async (id: string, userId?: string) => {
+  const config = isValidObjectId(id)
+    ? await Config.findOne({ $and: [{ _id: id }, await visibleConfigFilter(userId)] })
+    : null;
 
   if (!config) {
     throw new NotFoundError('Config not found');
@@ -73,8 +102,8 @@ export const getConfigById = async (id: string) => {
   return config;
 };
 
-export const getConfigByUuid = async (uuid: string) => {
-  const config = await Config.findOne({ config_uuid: uuid });
+export const getConfigByUuid = async (uuid: string, userId?: string) => {
+  const config = await Config.findOne({ $and: [{ config_uuid: uuid }, await visibleConfigFilter(userId)] });
 
   if (!config) {
     throw new NotFoundError('Config not found');

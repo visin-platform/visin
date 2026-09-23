@@ -4,7 +4,7 @@ import type { GetAllConfigsQuery } from '../validation/configSchemas';
 
 // Get all configs
 export const getAllConfigs = async (req: Request, res: Response): Promise<void> => {
-  const data = await configService.getAllConfigs(req.query as unknown as GetAllConfigsQuery);
+  const data = await configService.getAllConfigs(req.query as unknown as GetAllConfigsQuery, req.user?.id);
 
   res.json({
     success: true,
@@ -26,7 +26,7 @@ export const getConfigsByTraining = async (req: Request, res: Response): Promise
 // Get config by ID
 export const getConfigById = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
-  const config = await configService.getConfigById(id);
+  const config = await configService.getConfigById(id, req.user?.id);
 
   res.json({
     success: true,
@@ -37,7 +37,7 @@ export const getConfigById = async (req: Request, res: Response): Promise<void> 
 // Get config by UUID
 export const getConfigByUuid = async (req: Request, res: Response): Promise<void> => {
   const { uuid } = req.params as { uuid: string };
-  const config = await configService.getConfigByUuid(uuid);
+  const config = await configService.getConfigByUuid(uuid, req.user?.id);
 
   res.json({
     success: true,

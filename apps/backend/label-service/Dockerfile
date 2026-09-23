@@ -10,4 +10,6 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 EXPOSE 5008
+# The base image's unprivileged user: nothing here writes outside /tmp.
+USER node
 CMD ["node", "dist/index.js"]

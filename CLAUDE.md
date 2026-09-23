@@ -64,14 +64,16 @@ including any failures.
 - **The Bearer path is also used by other credentials:** vision-service's project API tokens (opaque, no dots,
   matched before the JWT middleware), user API keys and OAuth access tokens. Each has its own verification path.
 - **Checks on every request:** both middlewares check the account's id, email and `tokenVersion` against `users` on
-  the primary, uncached. Required auth fails closed on a database error; optional auth continues anonymously.
+  the primary, uncached. Required auth fails closed on a database error with a 503, never a 401 (fronts treat
+  401 as signed out); optional auth continues anonymously.
 - **Sessions:** every browser sign-in is a `user_sessions` document (`auth-service/src/models/Session.ts`), named by
   the JWT's `sid` claim. Both middlewares require it to exist and be unexpired, so deleting it revokes the session.
   - Create sessions only through `sessionService.startSession`: a new session per sign-in, never a reused id.
   - Lifetime: 30 days idle, slid forward by `/auth/verify`, capped at 90 days after sign-in. `tokenVersion` stays
     the revoke-everything switch.
-- **Legacy tokens:** tokens from before sessions have no `sid` and a 24-hour life. `isLegacySessionlessToken`
-  accepts only those. So a test fixture that hand-builds a session-less JWT must set `iat` and an `exp` within 24h.
+- **Session tokens are typed:** `typ: 'session'` (`SESSION_TOKEN_TYPE`), which is what separates them from MCP access
+  tokens signed with the same key. A test fixture that hand-builds a session JWT needs `typ`, a `sid`, and a matching
+  unexpired `user_sessions` document.
 - **Frontends never touch the JWT.** `createApiClient` sends `credentials: 'include'`; there is no `localStorage`
   token, so don't add one.
 - **Auth components are factories:** `createProtectedRoute(useAuth)` and `createLoginRedirect(useAuth,
@@ -87,15 +89,19 @@ including any failures.
   - `requireInternalServiceToken`: service callers only.
   - `validateInternalServiceToken` + `allowUserOrInternalService`: a user or a service. Mount `validate*` on the
     router and `allow*` per route, after user auth.
+  - Two routes use their own credential instead: file-service's `/internal/*` takes `X-Internal-Api-Key`
+    (`FILE_SERVICE_API_KEY`), and group-service's `/api/internal/project-groups` takes a 30-second HMAC assertion
+    signed with `JWT_SECRET` (`vision-service/src/clients/projectGroupsClient.ts`). That assertion is read-only;
+    don't reuse it on a route that writes.
 - **Always `fetchWithTimeout`, never bare `fetch`:** a stalled peer otherwise hangs the caller for minutes.
   - Use `TRANSFER_FETCH_TIMEOUT_MS` for calls that move file bytes.
   - An expired deadline becomes a 504 `GatewayTimeoutError`.
 - **Required env vars:** each service asserts them at the top of `index.ts` with `assertRequiredEnv`. A new one goes
-  in that list, the service's `compose.yml` and `.env.example`.
+  in that list, the service's `compose.yml` and `.env.example`. Under `NODE_ENV=production` it also refuses the
+  `dev-only-…` and `<change-me>` placeholders.
 - **Public URLs (OAuth issuer, MCP resource, front/API URLs) come from config only.** Never fall back to a real
   domain: Visin is self-hosted, and a fallback sends another deployment's users there.
   - Examples use `example.com`, test fixtures `example.test`.
-  - CI's `no-hosted-domain` job fails if the hosted domain appears anywhere.
 
 ### vision-service project privacy
 
@@ -133,6 +139,12 @@ including any failures.
   Controller tests should parse their request through the same schema.
 - **Errors:** controllers throw backend-core `HttpError` subclasses (`BadRequestError`, `NotFoundError`, …), and the
   shared `errorHandler` maps them. A plain `Error` for an expected condition is reported as a 500.
+  - Middleware refuses with `next(new UnauthorizedError(…))`, not `res.status().json()` and not `throw`: a wrapper
+    that calls it without awaiting would turn a throw into an unhandled rejection.
+- **Startup:** `index.ts` starts listening with backend-core's `serve`, which drains requests on SIGTERM. Pass
+  `onShutdown` for anything else that must finish first, like a queue worker.
+- **Request ids:** `requestLogger` gives each request an `X-Request-Id`, which is on every log line and forwarded by
+  `fetchWithTimeout`. Log through `logger` and call peers through `fetchWithTimeout`, and the id follows.
 
 ### shell-front (module federation)
 

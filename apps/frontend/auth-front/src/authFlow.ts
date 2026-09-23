@@ -1,4 +1,4 @@
-import { getGlobalConfig } from './config/ConfigProvider';
+import { validateGoogleCredential } from './services/authApi';
 
 // Minimal shape of the Google Identity Services SDK (loaded via external <script>,
 // not installed as an npm package) covering only what this file calls.
@@ -22,24 +22,7 @@ declare global {
 }
 
 function handleCredentialResponse(response: { credential: string }, redirectUri: string) {
-  const idToken = response.credential;
-  const config = getGlobalConfig();
-
-  fetch(`${config.AUTH_SERVICE_URL}/auth/validate`, {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ idToken }),
-    credentials: 'include' // Include cookies in the request
-  })
-    .then(async (res) => {
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}));
-        throw new Error(error.message || `HTTP error! status: ${res.status}`);
-      }
-      return res.json();
-    })
+  validateGoogleCredential(response.credential)
     .then((data) => {
       if (data.success) {
         window.location.href = redirectUri; // Redirect back without JWT

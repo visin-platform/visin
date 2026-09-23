@@ -27,8 +27,23 @@ export function requireEnv(name: string): string {
  */
 export function assertRequiredEnv(names: string[]): void {
   const missing = names.filter((name) => !process.env[name]);
-  if (missing.length === 0) return;
+  // The root compose.yml boots with `dev-only-…` secrets so a fresh clone runs
+  // as-is, and each .env.example ships `<change-me>`. Either one in production
+  // is a secret anyone can read in this repository.
+  const placeholders = process.env.NODE_ENV === 'production'
+    ? names.filter((name) => isPlaceholderSecret(process.env[name]))
+    : [];
+  if (missing.length === 0 && placeholders.length === 0) return;
 
-  logger.error('Fatal: missing required environment variables', { missing });
+  if (missing.length > 0) {
+    logger.error('Fatal: missing required environment variables', { missing });
+  }
+  if (placeholders.length > 0) {
+    logger.error('Fatal: development placeholder values in production; set real secrets', { placeholders });
+  }
   process.exit(1);
+}
+
+function isPlaceholderSecret(value: string | undefined): boolean {
+  return value !== undefined && (value.startsWith('dev-only-') || value === '<change-me>');
 }

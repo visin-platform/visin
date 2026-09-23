@@ -159,15 +159,14 @@ export const startSession = async (
 /**
  * Renews the caller's session (`/auth/verify`, `/auth/refresh`): slides its
  * idle expiry, re-signs the token with fresh group roles, re-sets the cookie.
- * A pre-sessions token has no session to renew, so it is given one — which is
- * how those tokens migrate without anyone being signed out.
  */
 export const renewSession = async (
   req: Request,
   res: Response
 ): Promise<{ payload: UserPayload; token: string }> => {
   const user = req.user!;
-  let session = req.authSession ?? await createSession(req, user.id, 'unknown');
+  if (!req.authSession) throw new UnauthorizedError('Session has ended');
+  let session = req.authSession;
 
   const now = Date.now();
   if (session.lastSeenAt.getTime() <= now - SESSION_TOUCH_INTERVAL_MS) {
@@ -199,11 +198,9 @@ export const continueSessionAlone = async (
   identity: SessionIdentity = {}
 ): Promise<{ payload: UserPayload; token: string }> => {
   const current = req.authSession;
-  await revokeOtherSessions(updatedUser._id.toString(), current?._id.toString());
+  if (!current) throw new UnauthorizedError('Session has ended');
+  await revokeOtherSessions(updatedUser._id.toString(), current._id.toString());
   const resolvedIdentity = { name: identity.name ?? req.user?.name ?? displayName(updatedUser), picture: identity.picture ?? req.user?.picture };
-  if (!current) {
-    return startSession(req, res, updatedUser, 'unknown', resolvedIdentity);
-  }
   return mintSessionToken(
     res,
     current,

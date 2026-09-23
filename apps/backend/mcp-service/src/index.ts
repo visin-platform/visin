@@ -1,4 +1,4 @@
-import { assertRequiredEnv, connectDb, logger } from '@visin/backend-core';
+import { assertRequiredEnv, connectDb, logger, serve } from '@visin/backend-core';
 import app from './app';
 
 /**
@@ -23,16 +23,7 @@ const PORT = process.env.PORT || 5009;
 
 connectDb({ serviceName: 'mcp-service' })
   .then(() => {
-    const server = app.listen(PORT, () =>
-      logger.info('MCP service started successfully', { port: PORT })
-    );
-
-    const shutdown = (signal: string) => {
-      logger.info('Shutting down mcp-service', { signal });
-      server.close(() => process.exit(0));
-    };
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
+    serve(app, { port: PORT, serviceName: 'mcp-service' });
   })
   .catch((err: Error) => {
     logger.error('Failed to start mcp-service', { error: err.message, stack: err.stack });

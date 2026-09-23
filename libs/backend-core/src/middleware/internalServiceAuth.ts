@@ -1,14 +1,11 @@
-import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../logging/logger';
+import { sharedSecretMatches } from '../auth/sharedSecret';
+import { HttpError, UnauthorizedError } from '../errors/HttpError';
 
 export interface InternalServiceRequest extends Request {
   isInternalService?: boolean;
   serviceIdentifier?: string;
-}
-
-function timingSafeTokenMatch(provided: string, expected: string): boolean {
-  return provided.length === expected.length && crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
 }
 
 /**
@@ -16,22 +13,22 @@ function timingSafeTokenMatch(provided: string, expected: string): boolean {
  * services (never by an end-user browser/frontend) — always requires a
  * valid X-Internal-Token header.
  */
-export function requireInternalServiceToken(req: Request, res: Response, next: NextFunction): void {
+export function requireInternalServiceToken(req: Request, _res: Response, next: NextFunction): void {
   const token = req.headers['x-internal-token'] as string | undefined;
   const expected = process.env.INTERNAL_SERVICE_TOKEN;
 
   if (!expected) {
     logger.error('INTERNAL_SERVICE_TOKEN not configured');
-    res.status(500).json({ success: false, message: 'Internal service authentication not configured' });
+    next(new HttpError(500, 'Internal service authentication not configured'));
     return;
   }
   if (!token) {
-    res.status(401).json({ success: false, message: 'Internal service token required' });
+    next(new UnauthorizedError('Internal service token required'));
     return;
   }
-  if (!timingSafeTokenMatch(token, expected)) {
+  if (!sharedSecretMatches(token, expected)) {
     logger.warn('Invalid internal service token', { serviceId: req.headers['x-service-id'] });
-    res.status(401).json({ success: false, message: 'Invalid internal service token' });
+    next(new UnauthorizedError('Invalid internal service token'));
     return;
   }
   next();
@@ -45,7 +42,7 @@ export function requireInternalServiceToken(req: Request, res: Response, next: N
  */
 export function validateInternalServiceToken(
   req: InternalServiceRequest,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): void {
   const token = req.headers['x-internal-token'] as string | undefined;
@@ -57,12 +54,12 @@ export function validateInternalServiceToken(
   const expected = process.env.INTERNAL_SERVICE_TOKEN;
   if (!expected) {
     logger.error('INTERNAL_SERVICE_TOKEN not configured');
-    res.status(500).json({ success: false, message: 'Internal service authentication not configured' });
+    next(new HttpError(500, 'Internal service authentication not configured'));
     return;
   }
-  if (!timingSafeTokenMatch(token, expected)) {
+  if (!sharedSecretMatches(token, expected)) {
     logger.warn('Invalid internal service token', { serviceId: req.headers['x-service-id'] });
-    res.status(401).json({ success: false, message: 'Invalid internal service token' });
+    next(new UnauthorizedError('Invalid internal service token'));
     return;
   }
 
@@ -74,14 +71,14 @@ export function validateInternalServiceToken(
 /** Gate: allow the request through if it's from an authenticated internal service OR a logged-in user. */
 export function allowUserOrInternalService(
   req: InternalServiceRequest,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): void {
   if (req.isInternalService) {
     return next();
   }
   if (!req.user) {
-    res.status(401).json({ success: false, message: 'Authentication required' });
+    next(new UnauthorizedError('Authentication required'));
     return;
   }
   next();

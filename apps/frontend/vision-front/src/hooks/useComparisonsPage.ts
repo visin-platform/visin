@@ -22,6 +22,8 @@ export const useComparisonsPage = () => {
   const theme = useTheme();
   const [sortBy, setSortBy] = useState<'name' | 'type' | 'createdAt' | 'itemCount'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
   const queryClient = useQueryClient();
 
   const {
@@ -30,28 +32,17 @@ export const useComparisonsPage = () => {
     error: loadError,
     refetch: loadComparisons
   } = useQuery({
-    queryKey: ['comparisons', sortBy, sortOrder],
+    queryKey: ['comparisons', sortBy, sortOrder, page, rowsPerPage],
     queryFn: () =>
       comparisonService.getComparisons({
-        page: 1,
-        limit: 100,
-        sortBy: sortBy === 'itemCount' ? 'createdAt' : sortBy, // API doesn't support itemCount sorting
+        page: page + 1,
+        limit: rowsPerPage,
+        sortBy,
         order: sortOrder
       })
   });
 
-  const comparisons = useMemo(() => {
-    let comparisonsData = data?.data.comparisons || [];
-    // Apply client-side sorting for itemCount
-    if (sortBy === 'itemCount') {
-      comparisonsData = [...comparisonsData].sort((a, b) => {
-        const aCount = a.itemIds.length;
-        const bCount = b.itemIds.length;
-        return sortOrder === 'asc' ? aCount - bCount : bCount - aCount;
-      });
-    }
-    return comparisonsData;
-  }, [data, sortBy, sortOrder]);
+  const comparisons = useMemo(() => data?.data.comparisons || [], [data]);
 
   const error = actionError || (loadError ? 'Failed to load comparisons' : null);
 
@@ -99,6 +90,14 @@ export const useComparisonsPage = () => {
       setSortBy(column);
       setSortOrder(column === 'createdAt' ? 'desc' : 'asc'); // Default to desc for dates
     }
+    setPage(0);
+  };
+
+  const handleChangePage = (_event: unknown, newPage: number) => setPage(newPage);
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
   const handleDeleteComparison = (id: string) => {
@@ -130,10 +129,10 @@ export const useComparisonsPage = () => {
     if (comparison.type === 'trainings' && comparison.itemIds.length > 0) {
       setLoadingTrainings(true);
       try {
-        // For now, fetch all trainings and filter - could be optimized later
+        // Just this comparison's members, by id.
         const response = await trainingService.getTrainings({
-          page: 1,
-          limit: 1000 // Large limit to get all trainings
+          ids: comparison.itemIds,
+          limit: comparison.itemIds.length
         });
 
         const trainings = response.data.trainings || [];
@@ -226,6 +225,11 @@ export const useComparisonsPage = () => {
 
   return {
     comparisons,
+    totalComparisons: data?.data.pagination?.total ?? comparisons.length,
+    page,
+    rowsPerPage,
+    handleChangePage,
+    handleChangeRowsPerPage,
     loading,
     error,
     deleteDialogOpen,

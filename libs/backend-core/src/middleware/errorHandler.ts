@@ -55,7 +55,9 @@ export const errorHandler: ErrorRequestHandler = (
   const known = classifyError(error);
 
   if (known) {
-    logger.warn('Request failed', {
+    // A 401 is routine — every signed-out visitor's session check is one — so it
+    // is not worth a warning; the request log line still records it.
+    logger[known.statusCode === 401 ? 'debug' : 'warn']('Request failed', {
       error: redactRequestDiagnostic(known.message, req.originalUrl),
       statusCode: known.statusCode,
       url: safeRequestPath(req.originalUrl),

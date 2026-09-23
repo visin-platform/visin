@@ -7,10 +7,10 @@ import { errorHandler } from '@visin/backend-core';
 import { User } from '../../models/User';
 import authRoutes from '../../routes/authRoutes';
 import { verifyGoogleToken } from '../../services/googleAuthService';
-import { generateJWT as sign, verifyJWT, UserPayload } from '../../services/jwtService';
+import { verifyJWT } from '../../services/jwtService';
+import { signSessionToken } from '../helpers/sessionToken';
 
 // A pre-sessions token: these tests are about identities, not sessions.
-const generateJWT = (payload: UserPayload) => sign(payload, new Date(Date.now() + 24 * 60 * 60 * 1000));
 import * as passwords from '../../services/passwordService';
 import { linkGoogleAccount } from '../../services/googleLinkService';
 
@@ -55,7 +55,8 @@ describe('Google account authority with in-memory MongoDB', () => {
   });
 
   const account = (email = 'victim@example.test', extra = {}) => User.create({ email, signupMethod: 'password', passwordHash, roles: ['admin'], ...extra });
-  const token = (user: { id: string; email: string; tokenVersion: number }, extra = {}) => generateJWT({ id: user.id, email: user.email, name: 'Account', tokenVersion: user.tokenVersion, ...extra });
+  const token = (user: { id: string; email: string; tokenVersion: number }, extra = {}) =>
+    signSessionToken({ id: user.id, email: user.email, name: 'Account', tokenVersion: user.tokenVersion, ...extra }, user.id);
   const post = (path: string, body: object, jwt?: string) => fetch(`${base}${path}`, {
     method: 'POST', headers: { 'content-type': 'application/json', ...(jwt ? { authorization: `Bearer ${jwt}` } : {}) }, body: JSON.stringify(body)
   });
@@ -72,7 +73,7 @@ describe('Google account authority with in-memory MongoDB', () => {
   it('links deliberately and keeps database identity when Google changes email', async () => {
     const user = await account();
     await account('other@example.test');
-    const response = await post('/profile/google', linkBody, token(user));
+    const response = await post('/profile/google', linkBody, await token(user));
     expect(response.status).toBe(200);
     expect(response.headers.get('set-cookie')).toContain('access_token=');
     google.mockResolvedValue({ sub: 'subject-1', email: 'other@example.test' });
@@ -83,33 +84,33 @@ describe('Google account authority with in-memory MongoDB', () => {
     const stored = (await User.findById(user.id).select('+passwordHash +googleSubject'))!;
     expect(stored).toMatchObject({ email: user.email, passwordHash, googleSubject: 'subject-1', roles: ['admin'] });
     expect((await post('/login', { email: user.email, password })).status).toBe(200);
-    expect((await post('/profile/google', linkBody, token(stored))).status).toBe(409);
+    expect((await post('/profile/google', linkBody, await token(stored))).status).toBe(409);
   });
 
   it.each([undefined, {}, { sub: '' }, { sub: 123 }])('refuses Google identity without a valid subject: %j', async identity => {
     const user = await account();
     google.mockResolvedValue(identity);
     expect((await post('/validate', { idToken: 'google-token' })).status).toBe(401);
-    expect((await post('/profile/google', linkBody, token(user))).status).toBe(401);
+    expect((await post('/profile/google', linkBody, await token(user))).status).toBe(401);
   });
 
   it('requires a live matching session, password, and configured valid Google token', async () => {
     const user = await account();
     expect((await post('/profile/google', linkBody)).status).toBe(401);
-    expect((await post('/profile/google', linkBody, token(user, { id: '' }))).status).toBe(401);
-    expect((await post('/profile/google', linkBody, token(user, { id: new mongoose.Types.ObjectId().toString() }))).status).toBe(401);
-    expect((await post('/profile/google', linkBody, token(user, { tokenVersion: 0 }))).status).toBe(401);
-    expect((await post('/profile/google', { idToken: 'google-token' }, token(user))).status).toBe(400);
-    expect((await post('/profile/google', { ...linkBody, currentPassword: 'wrong' }, token(user))).status).toBe(401);
+    expect((await post('/profile/google', linkBody, await token(user, { id: '' }))).status).toBe(401);
+    expect((await post('/profile/google', linkBody, await token(user, { id: new mongoose.Types.ObjectId().toString() }))).status).toBe(401);
+    expect((await post('/profile/google', linkBody, await token(user, { tokenVersion: 0 }))).status).toBe(401);
+    expect((await post('/profile/google', { idToken: 'google-token' }, await token(user))).status).toBe(400);
+    expect((await post('/profile/google', { ...linkBody, currentPassword: 'wrong' }, await token(user))).status).toBe(401);
     google.mockRejectedValue(new Error('Invalid signature'));
-    expect((await post('/profile/google', linkBody, token(user))).status).toBe(401);
+    expect((await post('/profile/google', linkBody, await token(user))).status).toBe(401);
     delete process.env.GOOGLE_CLIENT_ID;
-    expect((await post('/profile/google', linkBody, token(user))).status).toBe(403);
+    expect((await post('/profile/google', linkBody, await token(user))).status).toBe(403);
   });
 
   it('does not borrow authority from a recreated account with the same email', async () => {
     const old = await account();
-    const jwt = token(old);
+    const jwt = await token(old);
     await User.deleteOne({ _id: old.id });
     await account();
     expect((await post('/profile/google', linkBody, jwt)).status).toBe(401);
@@ -117,7 +118,7 @@ describe('Google account authority with in-memory MongoDB', () => {
 
   it('allows only one of two accounts to bind the same Google subject', async () => {
     const users = await Promise.all([account(), account('second@example.test')]);
-    const results = await Promise.all(users.map(user => post('/profile/google', linkBody, token(user))));
+    const results = await Promise.all(users.map(async user => post('/profile/google', linkBody, await token(user))));
     expect(results.map(result => result.status).sort()).toEqual([200, 409]);
     expect(await User.countDocuments({ googleSubject: 'subject-1' })).toBe(1);
   });
@@ -138,7 +139,7 @@ describe('Google account authority with in-memory MongoDB', () => {
         ? { $set: { passwordHash: 'new-hash' } } : { $inc: { tokenVersion: 1 } });
       return result;
     });
-    expect((await post('/profile/google', linkBody, token(user))).status).toBe(409);
+    expect((await post('/profile/google', linkBody, await token(user))).status).toBe(409);
     expect(await User.countDocuments({ googleSubject: { $exists: true } })).toBe(0);
   });
 
@@ -204,7 +205,7 @@ describe('Google account authority with in-memory MongoDB', () => {
     const legacy = await legacyGoogleAccount('victim@example.test', { passwordHash });
     expect((await signIn()).status).toBe(409);
     expect((await User.findById(legacy.id).select('+googleSubject'))!.googleSubject).toBeUndefined();
-    expect((await post('/profile/google', linkBody, token(legacy))).status).toBe(200);
+    expect((await post('/profile/google', linkBody, await token(legacy))).status).toBe(200);
     expect((await signIn()).status).toBe(200);
   });
 

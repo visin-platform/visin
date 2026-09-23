@@ -121,7 +121,7 @@ export const verifyAccessToken = (
   try {
     // `audience` is checked below rather than here so a mismatch is reported as
     // itself instead of collapsing into a generic bad-signature.
-    claims = jwt.verify(token, secret) as AccessTokenClaims;
+    claims = jwt.verify(token, secret, { algorithms: ['HS256'] }) as AccessTokenClaims;
   } catch (error) {
     const expired = (error as Error)?.name === 'TokenExpiredError';
     return { ok: false, rejection: expired ? 'expired' : 'bad-signature' };

@@ -47,3 +47,38 @@ it('prefers the internal address, when one is set, over the public one', async (
     delete process.env.FILE_SERVICE_INTERNAL_URL;
   }
 });
+
+describe('where file-service is', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+    delete process.env.FILE_SERVICE_INTERNAL_URL;
+  });
+
+  it('prefers the container-network address when one is set', async () => {
+    process.env.FILE_SERVICE_INTERNAL_URL = 'http://file-service:5002';
+    fetchMock.mockResolvedValue(jsonResponse({ data: { urls: {}, expiresMs: 1 } }));
+
+    await getDownloadUrls(['frame'], 30);
+
+    expect(fetchMock.mock.calls[0][0]).toBe('http://file-service:5002/internal/download-urls');
+  });
+
+  it('falls back to the host-side dev port outside production', async () => {
+    delete process.env.FILE_SERVICE_URL;
+    process.env.NODE_ENV = 'development';
+    fetchMock.mockResolvedValue(jsonResponse({ data: { urls: {}, expiresMs: 1 } }));
+
+    await getDownloadUrls(['frame'], 30);
+
+    expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:5002/internal/download-urls');
+  });
+
+  it('has no fallback in production, so a missing setting fails loudly', async () => {
+    delete process.env.FILE_SERVICE_URL;
+    process.env.NODE_ENV = 'production';
+
+    await expect(getDownloadUrls(['frame'], 30)).rejects.toThrow('FILE_SERVICE_URL');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

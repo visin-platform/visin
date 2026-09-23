@@ -32,6 +32,7 @@ import { verifyGoogleToken } from '../../services/googleAuthService';
 import { signInWithGoogle } from '../../services/googleSignInService';
 import { verifyJWT } from '../../services/jwtService';
 import { User } from '../../models/User';
+import { makeSession } from '../helpers/sessionModelMock';
 
 const mockedVerifyGoogleToken = verifyGoogleToken as jest.Mock;
 const mockedSignIn = signInWithGoogle as jest.Mock;
@@ -45,8 +46,9 @@ const makeRes = (): MockRes => {
   return res as unknown as MockRes;
 };
 
+// The live session authenticateToken attaches to every signed-in request.
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
-  ({ body: {}, ...overrides } as unknown as Request);
+  ({ body: {}, authSession: makeSession({ lastSeenAt: new Date() }), ...overrides } as unknown as Request);
 
 const dbUser = {
   _id: { toString: () => 'db-id-1' },

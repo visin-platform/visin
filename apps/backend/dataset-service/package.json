@@ -13,8 +13,8 @@
     "start": "node --env-file-if-exists=.env dist/index.js",
     "dev": "nodemon --exec \"node --env-file-if-exists=.env -r ts-node/register\" src/index.ts",
     "build": "tsc",
-    "test": "jest --passWithNoTests",
-    "test:coverage": "jest --coverage --passWithNoTests",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit"
   },

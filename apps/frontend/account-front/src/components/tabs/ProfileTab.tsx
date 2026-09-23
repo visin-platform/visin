@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -14,45 +14,42 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { Person, Save } from '@mui/icons-material';
-import { authService } from '../../services/authService';
 import { profileService } from '../../services/profileService';
 import { useQueryClient } from '@tanstack/react-query';
 import PasswordCard from './PasswordCard';
 import SessionsCard from './SessionsCard';
 import { sessionKeys } from '../../hooks/useSessions';
+import { profileKeys, useProfile } from '../../hooks/useProfile';
 import { User } from '../../types';
 
 const ProfileTab: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const { data: user = null, isLoading: loading, error: loadError } = useProfile();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const queryClient = useQueryClient();
   const theme = useTheme();
 
+  const updateCachedProfile = (update: (current: User | null) => User | null) =>
+    queryClient.setQueryData<User | null>(profileKeys.mine, (current) => update(current ?? null));
+
+  // Seed the form from the first profile that arrives, and only that one: a
+  // later cache update (a password set, a save) must not wipe unsaved edits.
+  const seeded = useRef(false);
   useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const currentUser = await authService.getProfile();
-        if (currentUser) {
-          setUser(currentUser);
-          setEmail(currentUser.email);
-          setFirstName(currentUser.firstName || '');
-          setLastName(currentUser.lastName || '');
-        }
-      } catch (error) {
-        console.error('Failed to load user data:', error);
-        setMessage({ type: 'error', text: 'Failed to load user data' });
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadUserData();
-  }, []);
+    if (!user || seeded.current) return;
+    seeded.current = true;
+    setEmail(user.email);
+    setFirstName(user.firstName || '');
+    setLastName(user.lastName || '');
+  }, [user]);
+
+  useEffect(() => {
+    if (loadError) setMessage({ type: 'error', text: 'Failed to load user data' });
+  }, [loadError]);
 
   useEffect(() => {
     if (user) {
@@ -74,7 +71,7 @@ const ProfileTab: React.FC = () => {
       });
 
       if (response.success) {
-        setUser(response.user);
+        updateCachedProfile(() => response.user);
         setMessage({ type: 'success', text: 'Profile updated successfully' });
         setHasChanges(false);
       } else {
@@ -208,7 +205,7 @@ const ProfileTab: React.FC = () => {
             <PasswordCard
               hasPassword={Boolean(user?.hasPassword)}
               onChanged={() => {
-                setUser((current) => (current ? { ...current, hasPassword: true } : current));
+                updateCachedProfile((current) => (current ? { ...current, hasPassword: true } : current));
                 // A password change signs every other device out.
                 queryClient.invalidateQueries({ queryKey: sessionKeys.mine });
               }}

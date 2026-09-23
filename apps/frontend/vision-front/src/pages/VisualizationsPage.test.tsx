@@ -13,14 +13,9 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-vi.mock('../services/trainingService', () => ({
-  trainingService: {
-    getTrainings: vi.fn()
-  }
-}));
-
 vi.mock('../services/visualizationService', () => ({
   visualizationService: {
+    getVisualizationSummary: vi.fn(),
     getVisualizationsByTraining: vi.fn()
   }
 }));
@@ -30,11 +25,10 @@ vi.mock('../hooks/usePageTitle', () => ({
 }));
 
 import VisualizationsPage from './VisualizationsPage';
-import { trainingService } from '../services/trainingService';
 import { visualizationService } from '../services/visualizationService';
 
-const trainingServiceMock = trainingService as unknown as { getTrainings: ReturnType<typeof vi.fn> };
 const visualizationServiceMock = visualizationService as unknown as {
+  getVisualizationSummary: ReturnType<typeof vi.fn>;
   getVisualizationsByTraining: ReturnType<typeof vi.fn>;
 };
 
@@ -49,8 +43,17 @@ function renderPage() {
   );
 }
 
-const training1 = { _id: 't1', uuid: 'uuid-1', name: 'Training One' };
-const training2 = { _id: 't2', uuid: 'uuid-2', name: 'Training Two' };
+const training1 = {
+  _id: 't1', uuid: 'uuid-1', name: 'Training One', total: 2,
+  types: [{ type: 'segmentation', count: 2, epochs: [1, 2] }]
+};
+const training2 = {
+  _id: 't2', uuid: 'uuid-2', name: 'Training Two', total: 1,
+  types: [{ type: 'segmentation', count: 1, epochs: [1] }]
+};
+const page = (visualizations: unknown[], total = visualizations.length) => ({
+  data: { visualizations, pagination: { page: 1, limit: 200, total, pages: 1 } }
+});
 
 const viz1 = {
   visualization_uuid: 'v1',
@@ -77,8 +80,7 @@ describe('VisualizationsPage', () => {
   });
 
   it('shows a loading spinner while data is loading', async () => {
-    trainingServiceMock.getTrainings.mockReturnValue(new Promise(() => {}));
-    visualizationServiceMock.getVisualizationsByTraining.mockReturnValue(new Promise(() => {}));
+    visualizationServiceMock.getVisualizationSummary.mockReturnValue(new Promise(() => {}));
 
     const { container } = renderPage();
 
@@ -86,10 +88,7 @@ describe('VisualizationsPage', () => {
   });
 
   it('shows the empty state when no trainings have visualizations', async () => {
-    trainingServiceMock.getTrainings.mockResolvedValue({ data: { trainings: [] } });
-    visualizationServiceMock.getVisualizationsByTraining.mockResolvedValue({
-      data: { visualizations: [] }
-    });
+    visualizationServiceMock.getVisualizationSummary.mockResolvedValue([]);
 
     renderPage();
 
@@ -98,106 +97,124 @@ describe('VisualizationsPage', () => {
     });
   });
 
-  it('renders trainings with visualization counts and expands to show types', async () => {
-    trainingServiceMock.getTrainings.mockResolvedValue({ data: { trainings: [training1, training2] } });
-    visualizationServiceMock.getVisualizationsByTraining.mockResolvedValue({
-      data: { visualizations: [viz1, viz2] }
-    });
+  it('shows an error when the overview fails to load', async () => {
+    visualizationServiceMock.getVisualizationSummary.mockRejectedValue(new Error('overview down'));
+
+    renderPage();
+
+    expect(await screen.findByText('overview down')).toBeInTheDocument();
+  });
+
+  it('lists trainings from the summary, loading no images until one is opened', async () => {
+    visualizationServiceMock.getVisualizationSummary.mockResolvedValue([training1, training2]);
 
     renderPage();
 
     await waitFor(() => {
       expect(screen.getByText('Training One')).toBeInTheDocument();
     });
-
     expect(screen.getByText('2 visualizations across 1 types')).toBeInTheDocument();
-    // Training Two has no visualizations so it's filtered out
-    expect(screen.queryByText('Training Two')).not.toBeInTheDocument();
+    expect(screen.getByText('Training Two')).toBeInTheDocument();
+    expect(visualizationServiceMock.getVisualizationsByTraining).not.toHaveBeenCalled();
   });
 
-  it('expands a training and shows the side-by-side comparison when a type is selected', async () => {
-    trainingServiceMock.getTrainings.mockResolvedValue({ data: { trainings: [training1] } });
-    visualizationServiceMock.getVisualizationsByTraining.mockResolvedValue({
-      data: { visualizations: [viz1, viz2] }
-    });
+  it('shows counts and epochs per type before a type is picked', async () => {
+    visualizationServiceMock.getVisualizationSummary.mockResolvedValue([training1]);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Training One')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('ExpandMoreIcon').closest('button')!);
+
+    expect(await screen.findByText('Epoch 1, Epoch 2')).toBeInTheDocument();
+    expect(visualizationServiceMock.getVisualizationsByTraining).not.toHaveBeenCalled();
+  });
+
+  it('expands a training and loads the side-by-side comparison for the selected type', async () => {
+    visualizationServiceMock.getVisualizationSummary.mockResolvedValue([training1]);
+    visualizationServiceMock.getVisualizationsByTraining.mockResolvedValue(page([viz2, viz1]));
 
     renderPage();
     await waitFor(() => expect(screen.getByText('Training One')).toBeInTheDocument());
 
-    // Expand the training
     fireEvent.click(screen.getByTestId('ExpandMoreIcon').closest('button')!);
+    fireEvent.click(await screen.findByRole('button', { name: 'segmentation' }));
 
-    // Select the "segmentation" type button
-    const segmentationTypeButton = await screen.findByRole('button', { name: 'segmentation' });
-    fireEvent.click(segmentationTypeButton);
+    expect(await screen.findByText('segmentation - Comparison View')).toBeInTheDocument();
+    expect(visualizationServiceMock.getVisualizationsByTraining).toHaveBeenCalledWith('uuid-1', {
+      type: 'segmentation',
+      limit: 200,
+      includeUrls: true
+    });
+    const epochs = screen.getAllByText(/^Epoch \d$/).map((node) => node.textContent);
+    expect(epochs).toEqual(['Epoch 1', 'Epoch 2']);
+  });
 
-    expect(screen.getByText('segmentation - Comparison View')).toBeInTheDocument();
-    expect(screen.getByText('Epoch 1')).toBeInTheDocument();
-    expect(screen.getByText('Epoch 2')).toBeInTheDocument();
+  it('says when a type has more images than it shows', async () => {
+    visualizationServiceMock.getVisualizationSummary.mockResolvedValue([training1]);
+    visualizationServiceMock.getVisualizationsByTraining.mockResolvedValue(page([viz1], 350));
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Training One')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('ExpandMoreIcon').closest('button')!);
+    fireEvent.click(await screen.findByRole('button', { name: 'segmentation' }));
+
+    expect(await screen.findByText('Showing the latest 1 of 350')).toBeInTheDocument();
+  });
+
+  it('shows an error when a type\'s images fail to load', async () => {
+    visualizationServiceMock.getVisualizationSummary.mockResolvedValue([training1]);
+    visualizationServiceMock.getVisualizationsByTraining.mockRejectedValue(new Error('down'));
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Training One')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('ExpandMoreIcon').closest('button')!);
+    fireEvent.click(await screen.findByRole('button', { name: 'segmentation' }));
+
+    expect(await screen.findByText('Failed to load segmentation visualizations')).toBeInTheDocument();
   });
 
   it('enters compare mode, selects trainings, and navigates to the comparison route', async () => {
-    trainingServiceMock.getTrainings.mockResolvedValue({ data: { trainings: [training1, training2] } });
-    visualizationServiceMock.getVisualizationsByTraining.mockResolvedValue({
-      data: {
-        visualizations: [
-          viz1,
-          { ...viz1, visualization_uuid: 'v3', training_uuid: 'uuid-2' }
-        ]
-      }
-    });
+    visualizationServiceMock.getVisualizationSummary.mockResolvedValue([training1, training2]);
 
     renderPage();
     await waitFor(() => expect(screen.getByText('Training One')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Compare Trainings'));
 
-    // Select both training chips
     const chips = screen.getAllByText('○');
     fireEvent.click(chips[0]);
     fireEvent.click(chips[1]);
 
     fireEvent.click(screen.getByText('View Comparison'));
 
-    expect(navigateMock).toHaveBeenCalledWith(
-      expect.stringContaining('/visualizations/compare-trainings?ids=')
-    );
+    expect(navigateMock).toHaveBeenCalledWith('/visualizations/compare-trainings?ids=t1,t2');
   });
 
   it('shows an error when trying to view comparison with fewer than 2 trainings selected', async () => {
-    trainingServiceMock.getTrainings.mockResolvedValue({ data: { trainings: [training1] } });
-    visualizationServiceMock.getVisualizationsByTraining.mockResolvedValue({
-      data: { visualizations: [viz1] }
-    });
+    visualizationServiceMock.getVisualizationSummary.mockResolvedValue([training1]);
 
     renderPage();
     await waitFor(() => expect(screen.getByText('Training One')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Compare Trainings'));
-    const chip = screen.getByText('○');
-    fireEvent.click(chip);
+    fireEvent.click(screen.getByText('○'));
 
     // Only 1 selected - "View Comparison" button doesn't render until > 0 selected,
     // but it's disabled below 2 selections.
-    const viewButton = screen.getByText('View Comparison');
-    expect(viewButton).toBeDisabled();
+    expect(screen.getByText('View Comparison')).toBeDisabled();
   });
 
   it('opens the image modal when an image is clicked', async () => {
-    trainingServiceMock.getTrainings.mockResolvedValue({ data: { trainings: [training1] } });
-    visualizationServiceMock.getVisualizationsByTraining.mockResolvedValue({
-      data: { visualizations: [viz1] }
-    });
+    visualizationServiceMock.getVisualizationSummary.mockResolvedValue([training1]);
+    visualizationServiceMock.getVisualizationsByTraining.mockResolvedValue(page([viz1]));
 
     renderPage();
     await waitFor(() => expect(screen.getByText('Training One')).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId('ExpandMoreIcon').closest('button')!);
-    const segmentationTypeButton = await screen.findByRole('button', { name: 'segmentation' });
-    fireEvent.click(segmentationTypeButton);
+    fireEvent.click(await screen.findByRole('button', { name: 'segmentation' }));
 
-    const image = screen.getByAltText('v1.png');
-    fireEvent.click(image);
+    fireEvent.click(await screen.findByAltText('v1.png'));
 
     await waitFor(() => {
       expect(screen.getAllByAltText('v1.png').length).toBeGreaterThan(1);

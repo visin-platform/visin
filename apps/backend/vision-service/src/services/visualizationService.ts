@@ -6,7 +6,7 @@ import { ConflictError, ForbiddenError, NotFoundError, logger } from '@visin/bac
 import EpochVisualization, { IEpochVisualization } from '../models/EpochVisualization';
 import Epoch from '../models/Epoch';
 import Training from '../models/Training';
-import { getSignedUrl, getUploadSignedUrl, type SignedUrlData } from './fileServiceClient';
+import { getSignedUrl, getUploadSignedUrl, type SignedUrlData } from '../clients/fileServiceClient';
 import { checkProjectAccess, getVisibleTrainingIds, resolveProject } from './projectAccessService';
 import type { GetVisualizationsByTrainingQuery } from '../validation/visualizationSchemas';
 
@@ -403,4 +403,70 @@ export const getVisualizationTypes = async (
   }
   const types = await EpochVisualization.distinct('type', query);
   return types.sort();
+};
+
+export interface VisualizationSummary {
+  _id: string;
+  uuid: string;
+  name: string;
+  total: number;
+  types: { type: string; count: number; epochs: number[] }[];
+}
+
+/**
+ * Per training the caller can see, how many visualizations it has of each type
+ * and at which epochs — everything the overview lists, with no images and no
+ * signed URLs. The images of one training are loaded when it is opened.
+ */
+export const getVisualizationSummary = async (userId: string | undefined): Promise<VisualizationSummary[]> => {
+  const visibleTrainingIds = await getVisibleTrainingIds(userId);
+  if (visibleTrainingIds.length === 0) return [];
+
+  const groups = await EpochVisualization.aggregate<{
+    _id: { trainingId: string; type: string };
+    count: number;
+    epochs: number[];
+  }>([
+    { $group: { _id: { epoch_uuid: '$epoch_uuid', type: '$type' }, count: { $sum: 1 } } },
+    {
+      $lookup: {
+        from: Epoch.collection.name,
+        localField: '_id.epoch_uuid',
+        foreignField: 'epoch_uuid',
+        pipeline: [{ $match: { deletedAt: null } }, { $project: { _id: 0, trainingId: 1, epoch: 1 } }],
+        as: 'epoch'
+      }
+    },
+    { $unwind: '$epoch' },
+    { $match: { 'epoch.trainingId': { $in: visibleTrainingIds } } },
+    {
+      $group: {
+        _id: { trainingId: '$epoch.trainingId', type: '$_id.type' },
+        count: { $sum: '$count' },
+        epochs: { $addToSet: '$epoch.epoch' }
+      }
+    }
+  ]);
+
+  const byTraining = new Map<string, VisualizationSummary['types']>();
+  for (const { _id, count, epochs } of groups) {
+    const types = byTraining.get(_id.trainingId) ?? [];
+    types.push({ type: _id.type, count, epochs: epochs.sort((a, b) => a - b) });
+    byTraining.set(_id.trainingId, types);
+  }
+  if (byTraining.size === 0) return [];
+
+  const trainings = await Training.find({ _id: { $in: [...byTraining.keys()] }, deletedAt: null })
+    .select('uuid name')
+    .sort({ createdAt: -1 });
+  return trainings.map((training) => {
+    const types = byTraining.get(training._id.toString())!.sort((a, b) => a.type.localeCompare(b.type));
+    return {
+      _id: training._id.toString(),
+      uuid: training.uuid,
+      name: training.name,
+      total: types.reduce((sum, { count }) => sum + count, 0),
+      types
+    };
+  });
 };

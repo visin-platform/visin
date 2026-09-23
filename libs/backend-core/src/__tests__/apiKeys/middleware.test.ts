@@ -52,7 +52,7 @@ describe('apiKeyAuth — passing through', () => {
 
     expect(verify).not.toHaveBeenCalled();
     expect(req.user).toEqual({ id: 'u9' });
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it.each([
@@ -70,7 +70,7 @@ describe('apiKeyAuth — passing through', () => {
 
     expect(verify).not.toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('ignores a key presented as a cookie', async () => {
@@ -82,7 +82,7 @@ describe('apiKeyAuth — passing through', () => {
 
     expect(verify).not.toHaveBeenCalled();
     expect(req.user).toBeUndefined();
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 });
 
@@ -100,7 +100,7 @@ describe('apiKeyAuth — authenticating', () => {
       label: 'Claude Code',
       required: 'vision:read'
     });
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it.each(['unknown', 'revoked', 'expired', 'bad-secret', 'malformed'])(
@@ -111,12 +111,9 @@ describe('apiKeyAuth — authenticating', () => {
 
       await apiKeyAuth('vision')(makeReq(), res, next);
 
-      expect(res.status).toHaveBeenCalledWith(401);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        message: 'Invalid or expired credentials'
-      });
-      expect(next).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+      expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'Invalid or expired credentials' }));
+      expect(next).not.toHaveBeenCalledWith();
     }
   );
 });
@@ -137,7 +134,7 @@ describe('apiKeyAuth — scope gating', () => {
     await apiKeyAuth('vision')(req, makeRes(), next);
 
     expect(req.apiKey?.required).toBe(required);
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('gates on the domain the route group was mounted for', async () => {
@@ -147,8 +144,8 @@ describe('apiKeyAuth — scope gating', () => {
 
     await apiKeyAuth('dataset')(makeReq(), res, next);
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('refuses a write with a read-only key, and names the scope it wanted', async () => {
@@ -156,14 +153,11 @@ describe('apiKeyAuth — scope gating', () => {
 
     await apiKeyAuth('vision')(makeReq({ method: 'DELETE' }), res, next);
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith({
-      success: false,
-      // Named precisely: the fix is a new key, not a retry, and a caller told
-      // only "forbidden" will retry.
-      message: 'This credential does not carry the "vision:write" scope.'
-    });
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    // Named precisely: the fix is a new key, not a retry, and a caller told
+    // only "forbidden" will retry.
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'This credential does not carry the "vision:write" scope.' }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('lets a read-only key call a read-shaped POST named in readPaths', async () => {
@@ -173,7 +167,7 @@ describe('apiKeyAuth — scope gating', () => {
     await apiKeyAuth('vision', { readPaths: [/\/compare$/] })(req, makeRes(), next);
 
     expect(req.apiKey?.required).toBe('vision:read');
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('still treats other POSTs in that group as writes', async () => {
@@ -185,7 +179,7 @@ describe('apiKeyAuth — scope gating', () => {
       next
     );
 
-    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
   });
 
   it('refuses a key that carries no scopes at all', async () => {
@@ -194,8 +188,8 @@ describe('apiKeyAuth — scope gating', () => {
 
     await apiKeyAuth('vision')(makeReq(), res, next);
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 });
 
@@ -244,8 +238,8 @@ describe('apiKeyAuth — OAuth access tokens', () => {
 
     await apiKeyAuth('vision')(makeReq({ headers: { authorization: `Bearer ${token}` } }), res, next);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('names the user from `sub`, so owner-scoped queries are actually scoped', async () => {
@@ -254,7 +248,7 @@ describe('apiKeyAuth — OAuth access tokens', () => {
     await apiKeyAuth('vision')(req, makeRes(), next);
 
     expect(req.user).toEqual({ id: 'u1', email: 'a@b.com', name: 'A B' });
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('applies the grant\'s scopes, so a read-only connection cannot write', async () => {
@@ -266,8 +260,8 @@ describe('apiKeyAuth — OAuth access tokens', () => {
 
     await apiKeyAuth('vision')(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('lets a write-scoped grant write', async () => {
@@ -279,7 +273,7 @@ describe('apiKeyAuth — OAuth access tokens', () => {
     await apiKeyAuth('vision')(req, makeRes(), next);
 
     expect(req.apiKey?.required).toBe('vision:write');
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('records the client id, not the rotating jti', async () => {
@@ -299,8 +293,8 @@ describe('apiKeyAuth — OAuth access tokens', () => {
 
     await apiKeyAuth('vision')(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 401 }));
+    expect(next).not.toHaveBeenCalledWith();
   });
 
   it('leaves an ordinary session JWT to the session middleware', async () => {
@@ -312,7 +306,7 @@ describe('apiKeyAuth — OAuth access tokens', () => {
 
     expect(req.user).toBeUndefined();
     expect(res.status).not.toHaveBeenCalled();
-    expect(next).toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('never touches the database for a JWT', async () => {

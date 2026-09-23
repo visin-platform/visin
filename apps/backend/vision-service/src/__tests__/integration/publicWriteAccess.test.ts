@@ -26,10 +26,10 @@ import comparisonRoutes from '../../routes/comparisonRoutes';
 import visualizationRoutes from '../../routes/visualizationRoutes';
 import Project from '../../models/Project';
 import Training from '../../models/Training';
-import * as files from '../../services/fileServiceClient';
+import * as files from '../../clients/fileServiceClient';
 
-jest.mock('../../services/fileServiceClient', () => ({
-  ...jest.requireActual('../../services/fileServiceClient'),
+jest.mock('../../clients/fileServiceClient', () => ({
+  ...jest.requireActual('../../clients/fileServiceClient'),
   getUploadSignedUrl: jest.fn(async () => 'https://files.invalid/upload'),
   getSignedUrl: jest.fn(async () => ({ signedUrl: 'https://files.invalid/download' })),
   getPhotoSignedUrl: jest.fn(async () => ({ signedUrl: 'https://files.invalid/photo' })),
@@ -71,6 +71,8 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
 
   beforeEach(async () => {
     await mongoose.connection.collection('users').insertMany([OWNER, STRANGER, EDITOR].map(id => ({ _id: new mongoose.Types.ObjectId(id), email: `${id}@example.test`, tokenVersion: 1 })));
+    // Each test token names a session whose id is its user's.
+    await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
     jest.clearAllMocks();
     jest.mocked(getUserGroups).mockResolvedValue([]);
     jest.mocked(files.getFileMetadata).mockResolvedValue({ size: 10 } as Awaited<ReturnType<typeof files.getFileMetadata>>);
@@ -90,7 +92,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
   });
 
   const request = async (path: string, method = 'GET', body?: unknown, userId: string | undefined = OWNER) => {
-    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
+    const unsigned = [{ alg: 'HS256', typ: 'JWT' }, { id: userId, email: `${userId}@example.test`, tokenVersion: 1, sid: userId, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 }]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
     const token = `${unsigned}.${createHmac('sha256', secret).update(unsigned).digest('base64url')}`;
     const response = await fetch(`${baseUrl}/${path}`, { method,

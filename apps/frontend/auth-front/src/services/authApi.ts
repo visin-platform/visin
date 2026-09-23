@@ -60,3 +60,7 @@ export const linkGoogle = async (currentPassword: string, idToken: string): Prom
     throw new Error(messageFor(error, 'Could not link Google'), { cause: error });
   }
 };
+
+/** Exchanges a Google ID token for a session; the cookie is set by the response. */
+export const validateGoogleCredential = (idToken: string) =>
+  client.post<{ success: boolean; message?: string }>('/auth/validate', { idToken }, { skipAuthRedirect: true });

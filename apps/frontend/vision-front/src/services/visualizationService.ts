@@ -6,7 +6,8 @@ import {
   VisualizationUploadUrlResponse,
   ApiResponse,
   VisualizationsPaginatedResponse,
-  VisualizationsGroupedResponse
+  VisualizationsGroupedResponse,
+  VisualizationSummary
 } from '../types';
 
 export const visualizationService = {
@@ -99,6 +100,12 @@ export const visualizationService = {
 
     const response = await visionApi.get(endpoint, { params: queryParams });
     return response.data as VisualizationsPaginatedResponse | ApiResponse<VisualizationsGroupedResponse>;
+  },
+
+  /** Per visible training, visualization counts and epochs by type — no images. */
+  async getVisualizationSummary(): Promise<VisualizationSummary[]> {
+    const response = await visionApi.get('/visualizations/summary');
+    return (response.data as ApiResponse<{ trainings: VisualizationSummary[] }>).data.trainings;
   },
 
   // Get visualization by UUID

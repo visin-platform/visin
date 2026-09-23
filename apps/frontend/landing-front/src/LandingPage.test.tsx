@@ -11,7 +11,6 @@ const config: { SHELL_FRONT_URL?: string; MCP_PUBLIC_URL?: string } = {
 vi.mock('./config/ConfigProvider', () => ({
   useConfig: () => config
 }));
-vi.mock('./ContactForm', () => ({ default: () => <div>contact-form</div> }));
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -23,7 +22,7 @@ describe('LandingPage structure', () => {
   it('renders every section landmark', () => {
     const { container } = render(<LandingPage />);
 
-    for (const id of ['top', 'product', 'mobile', 'assistant', 'open-source', 'contact']) {
+    for (const id of ['top', 'product', 'mobile', 'assistant', 'open-source']) {
       expect(container.querySelector(`#${id}`)).toBeInTheDocument();
     }
     expect(container.querySelector('main#main')).toBeInTheDocument();
@@ -36,7 +35,7 @@ describe('LandingPage structure', () => {
     const { container } = render(<LandingPage />);
 
     const sections = [...container.querySelectorAll('main section')].map(s => s.id);
-    expect(sections).toEqual(['top', 'product', 'mobile', 'assistant', 'open-source', 'contact']);
+    expect(sections).toEqual(['top', 'product', 'mobile', 'assistant', 'open-source']);
   });
 
   it('leads with the headline and the product summary', () => {
@@ -172,12 +171,6 @@ describe('LandingPage structure', () => {
     );
   });
 
-  it('mounts the contact form', () => {
-    render(<LandingPage />);
-
-    expect(screen.getByText('contact-form')).toBeInTheDocument();
-  });
-
   it('offers a skip link before the navigation', () => {
     render(<LandingPage />);
 
@@ -225,8 +218,8 @@ describe('LandingPage calls to action', () => {
     expect(within(nav).getByRole('link', { name: 'Product' })).toHaveAttribute('href', '#product');
     expect(within(nav).getByRole('link', { name: 'Assistant' })).toHaveAttribute('href', '#assistant');
     expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '#open-source');
-    expect(within(nav).getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '#contact');
     // The old sections are gone; nothing may still point at where they were.
+    expect(within(nav).queryByRole('link', { name: 'Contact' })).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Features' })).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'How it works' })).not.toBeInTheDocument();
   });

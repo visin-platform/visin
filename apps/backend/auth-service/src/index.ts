@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
 import authRoutes from './routes/authRoutes';
 import oauthRoutes from './routes/oauthRoutes';
 import { authorizationServerMetadata } from './controllers/oauthController';
@@ -33,7 +33,7 @@ const PORT = process.env.PORT || 5001;
 // before this point.
 const app = createBaseApp({
   corsMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id'],
+  corsAllowedHeaders: STANDARD_CORS_ALLOWED_HEADERS,
   // An origin allowlist defeats dynamic registration: the client is one nobody
   // enumerated. /oauth/authorize included — form navigations ignore CORS anyway,
   // and the consent token is what actually protects it.
@@ -93,7 +93,7 @@ connectDb({ serviceName: 'auth-service' })
   .then(async () => {
     // Do not serve setup unless MongoDB can enforce its singleton insert.
     await initializeBootstrap();
-    app.listen(PORT, () => logger.info('Auth service started successfully', { port: PORT }));
+    serve(app, { port: PORT, serviceName: 'auth-service' });
   })
   .catch((err: Error) => {
     logger.error('Failed to start auth-service', { error: err.message, stack: err.stack });

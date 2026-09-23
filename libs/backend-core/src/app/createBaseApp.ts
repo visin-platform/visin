@@ -1,10 +1,11 @@
-import express, { Express } from 'express';
+import express, { Express, Request } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { securityHeaders } from '../middleware/security';
 import { requestLogger } from '../middleware/requestLogger';
 import { ForbiddenError } from '../errors/HttpError';
+import { sharedSecretMatches } from '../auth/sharedSecret';
 
 export interface CreateBaseAppOptions {
   /** Allowed CORS origins. Defaults to process.env.CORS_ORIGIN (comma-separated). */
@@ -21,6 +22,13 @@ export interface CreateBaseAppOptions {
   /** Pass false to skip the global express.json() call, e.g. for services that parse JSON per-route or stream raw bodies. */
   json?: false | Parameters<typeof express.json>[0];
 }
+
+/**
+ * The request headers a Visin front may send cross-origin, for services whose
+ * preflight answers from a fixed list (`corsAllowedHeaders`). `X-Request-Id`
+ * lets a caller name the request it is tracing.
+ */
+export const STANDARD_CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-Id'];
 
 /**
  * Builds an Express app with the baseline middleware every Visin service
@@ -48,13 +56,15 @@ export function createBaseApp(options: CreateBaseAppOptions = {}): Express {
   // bundle import PUTs tens of thousands of files from a single container IP.
   // Sharing the browser-sized bucket meant a large import 429'd itself partway
   // through — and, worse, could have starved every other service's internal
-  // calls while it ran. `/internal/*` routes are credential-gated
-  // (`requireApiKey` / `requireInternalServiceToken`) by every service that
-  // mounts them, so this bucket exists to bound a runaway loop, not to
-  // authenticate.
+  // calls while it ran. The large bucket is only for a caller presenting a
+  // valid internal credential: going by path alone handed anyone who typed
+  // `/internal/` 20,000 guesses a minute at the credential gating it.
   const internalLimit = Number(process.env.INTERNAL_RATE_LIMIT_PER_MINUTE || 20_000);
   const publicLimit = Number(process.env.RATE_LIMIT_PER_MINUTE || 500);
-  const isInternal = (path: string): boolean => path === '/internal' || path.startsWith('/internal/');
+  const isInternal = (req: Request): boolean =>
+    (req.path === '/internal' || req.path.startsWith('/internal/')) &&
+    (sharedSecretMatches(req.headers['x-internal-token'], process.env.INTERNAL_SERVICE_TOKEN) ||
+      sharedSecretMatches(req.headers['x-internal-api-key'], process.env.FILE_SERVICE_API_KEY));
 
   app.use(
     rateLimit({
@@ -62,7 +72,7 @@ export function createBaseApp(options: CreateBaseAppOptions = {}): Express {
       limit: internalLimit,
       standardHeaders: true,
       legacyHeaders: false,
-      skip: (req) => !isInternal(req.path)
+      skip: (req) => !isInternal(req)
     })
   );
   app.use(
@@ -71,7 +81,7 @@ export function createBaseApp(options: CreateBaseAppOptions = {}): Express {
       limit: publicLimit,
       standardHeaders: true,
       legacyHeaders: false,
-      skip: (req) => isInternal(req.path)
+      skip: (req) => isInternal(req)
     })
   );
 

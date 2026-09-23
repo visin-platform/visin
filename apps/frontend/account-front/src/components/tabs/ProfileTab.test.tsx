@@ -8,7 +8,7 @@ vi.mock('./SessionsCard', () => ({ default: () => null }));
 
 const renderTab = () =>
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <ProfileTab />
     </QueryClientProvider>
   );

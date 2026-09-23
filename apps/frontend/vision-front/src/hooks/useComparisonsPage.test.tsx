@@ -63,6 +63,31 @@ describe('useComparisonsPage', () => {
     });
   });
 
+  it('pages through comparisons on the server, back to the first page when the sort changes', async () => {
+    mockedComparison.getComparisons.mockResolvedValue({
+      success: true,
+      data: { comparisons: [makeComparison()], pagination: { page: 1, limit: 50, total: 103, pages: 3 } }
+    });
+    const { result } = renderHook(() => useComparisonsPage(), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.totalComparisons).toBe(103);
+    expect(mockedComparison.getComparisons).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, limit: 50 }));
+
+    act(() => result.current.handleChangePage(null, 2));
+    await waitFor(() =>
+      expect(mockedComparison.getComparisons).toHaveBeenLastCalledWith(expect.objectContaining({ page: 3, limit: 50 }))
+    );
+
+    act(() => result.current.handleChangeRowsPerPage({ target: { value: '100' } } as React.ChangeEvent<HTMLInputElement>));
+    await waitFor(() =>
+      expect(mockedComparison.getComparisons).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, limit: 100 }))
+    );
+
+    act(() => result.current.handleChangePage(null, 1));
+    act(() => result.current.handleSort('name'));
+    await waitFor(() => expect(result.current.page).toBe(0));
+  });
+
   it('loads comparisons on mount', async () => {
     const { result } = renderHook(() => useComparisonsPage(), { wrapper: makeWrapper() });
 
@@ -70,25 +95,27 @@ describe('useComparisonsPage', () => {
     expect(result.current.comparisons).toHaveLength(1);
   });
 
-  it('sorts client-side by itemCount when that column is selected', async () => {
+  it('asks the server to sort by item count, and shows its order as is', async () => {
+    const { result } = renderHook(() => useComparisonsPage(), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
     mockedComparison.getComparisons.mockResolvedValue({
       success: true,
       data: {
-        comparisons: [
-          makeComparison({ _id: 'c1', itemIds: ['a', 'b', 'c'] }),
-          makeComparison({ _id: 'c2', itemIds: ['a'] })
-        ],
+        comparisons: [makeComparison({ _id: 'c1', itemIds: ['a', 'b', 'c'] }), makeComparison({ _id: 'c2', itemIds: ['a'] })],
         pagination: {} as any
       }
     });
-    const { result } = renderHook(() => useComparisonsPage(), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => {
       result.current.handleSort('itemCount');
     });
 
-    await waitFor(() => expect(result.current.comparisons[0]._id).toBe('c2'));
+    await waitFor(() =>
+      expect(mockedComparison.getComparisons).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sortBy: 'itemCount', order: 'asc', page: 1 })
+      )
+    );
+    await waitFor(() => expect(result.current.comparisons.map((c) => c._id)).toEqual(['c1', 'c2']));
   });
 
   it('handleSort toggles order when the same column is clicked twice', async () => {
@@ -178,6 +205,18 @@ describe('useComparisonsPage', () => {
     expect(result.current.editDialogOpen).toBe(true);
     expect(result.current.editName).toBe('Comparison 1');
     expect(result.current.trainingData).toEqual({ t1: 'Training One' });
+  });
+
+  it('asks for just the comparison\'s own trainings, by id', async () => {
+    mockedTraining.getTrainings.mockResolvedValue({ success: true, data: { trainings: [], pagination: {} as any } });
+    const { result } = renderHook(() => useComparisonsPage(), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.handleEditComparison(makeComparison());
+    });
+
+    expect(mockedTraining.getTrainings).toHaveBeenCalledWith({ ids: ['t1', 't2'], limit: 2 });
   });
 
   it('handleEditComparison falls back to raw IDs when the training fetch fails', async () => {

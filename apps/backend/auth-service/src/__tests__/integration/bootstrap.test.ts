@@ -5,10 +5,9 @@ import { User } from '../../models/User';
 import { getSetupStatus, login, register, setupFirstUser } from '../../controllers/authController';
 import { optionalAuth } from '../../middleware/authMiddleware';
 import * as passwords from '../../services/passwordService';
-import { generateJWT as sign, UserPayload } from '../../services/jwtService';
+import { signSessionToken } from '../helpers/sessionToken';
 
 // A pre-sessions token: these tests are about accounts, not sessions.
-const generateJWT = (payload: UserPayload) => sign(payload, new Date(Date.now() + 24 * 60 * 60 * 1000));
 import { setupBodySchema } from '../../validation/authSchemas';
 import { initializeBootstrap, recoverAdministrator } from '../../services/bootstrapService';
 
@@ -152,7 +151,7 @@ describe('first-run setup with in-memory MongoDB', () => {
   });
 
   it('does not recreate a missing account from an old OAuth browser session', async () => {
-    const token = generateJWT({ id: new mongoose.Types.ObjectId().toString(), email: credentials.email, name: 'Old user', tokenVersion: 1 });
+    const token = await signSessionToken({ id: new mongoose.Types.ObjectId().toString(), email: credentials.email, name: 'Old user', tokenVersion: 1 });
     const req = { cookies: { access_token: token }, headers: {} } as unknown as Request;
     const next = jest.fn();
 
@@ -171,7 +170,7 @@ describe('first-run setup with in-memory MongoDB', () => {
       [{ ...claims, tokenVersion: 2 }, false],
       [{ ...claims, id: new mongoose.Types.ObjectId().toString() }, false],
     ] as const) {
-      const req = { cookies: {}, headers: { authorization: `Bearer ${generateJWT(payload)}` } } as Request;
+      const req = { cookies: {}, headers: { authorization: `Bearer ${await signSessionToken(payload, user._id.toString())}` } } as Request;
       await optionalAuth(req, response(), jest.fn());
       expect(Boolean(req.user)).toBe(accepted);
     }

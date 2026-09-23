@@ -1,4 +1,4 @@
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, authenticateToken, optionalAuth, assertRequiredEnv } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, authenticateToken, optionalAuth, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
 import jobRoutes from './routes/jobRoutes';
 import taskRoutes from './routes/taskRoutes';
 import meRoutes from './routes/meRoutes';
@@ -8,7 +8,7 @@ import meRoutes from './routes/meRoutes';
 assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'INTERNAL_SERVICE_TOKEN', 'FILE_SERVICE_API_KEY', 'DATASET_SERVICE_URL']);
 
 const app = createBaseApp({
-  corsAllowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'x-session-id']
+  corsAllowedHeaders: STANDARD_CORS_ALLOWED_HEADERS
 });
 
 // Health check endpoint
@@ -38,13 +38,7 @@ const PORT = process.env.PORT || 5008;
 // the container restart policy.
 connectDb({ serviceName: 'label-service' })
   .then(() => {
-    const server = app.listen(PORT, () => logger.info('Label service started successfully', { port: PORT }));
-    const shutdown = (signal: string) => {
-      logger.info('Shutting down label-service', { signal });
-      server.close(() => process.exit(0));
-    };
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
+    serve(app, { port: PORT, serviceName: 'label-service' });
   })
   .catch((err: Error) => {
     logger.error('Failed to start label-service', { error: err.message, stack: err.stack });

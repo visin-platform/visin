@@ -1,11 +1,17 @@
 import { z } from '@visin/backend-core';
 
+/**
+ * The most rows one list request returns. Paged requests may not ask for more,
+ * and an endpoint that returns everything when no page is given stops here.
+ */
+export const MAX_PAGE_SIZE = 1000;
+
 /** page/limit query params — left optional (no default) since several list
  * endpoints branch on whether pagination was requested at all vs. returning
  * everything; only defaulting sort direction/field is safe to do unconditionally. */
 export const paginationSchema = {
   page: z.coerce.number().int().positive().optional(),
-  limit: z.coerce.number().int().positive().optional()
+  limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).optional()
 };
 
 /** Validates 'asc'|'desc' and transforms it straight to the Mongo sort direction. */

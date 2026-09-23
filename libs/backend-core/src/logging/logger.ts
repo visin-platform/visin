@@ -1,4 +1,5 @@
 import winston from 'winston';
+import { currentRequestId } from './requestContext';
 
 const levels = { error: 0, warn: 1, info: 2, http: 3, debug: 4 };
 
@@ -8,7 +9,15 @@ function level(): string {
   return process.env.NODE_ENV === 'production' ? 'info' : 'debug';
 }
 
+/** Tags a line written while handling a request with that request's id. */
+const withRequestId = winston.format((info) => {
+  const requestId = currentRequestId();
+  if (requestId && info.requestId === undefined) info.requestId = requestId;
+  return info;
+});
+
 const consoleFormat = winston.format.combine(
+  withRequestId(),
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.colorize({ all: true }),
   winston.format.printf(({ timestamp, level, message, ...meta }) => {
@@ -18,6 +27,7 @@ const consoleFormat = winston.format.combine(
 );
 
 const jsonFormat = winston.format.combine(
+  withRequestId(),
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
   winston.format.json()
