@@ -1,4 +1,17 @@
 # Visin Changelog
+## [1.22.0](https://github.com/visin-platform/visin/compare/v1.21.0...v1.22.0) (2026-09-24)
+
+
+### Features
+
+* add documentation ([ef40f4a](https://github.com/visin-platform/visin/commit/ef40f4a7efc7ef438abc58fc427a3409ffad3305))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.7.0 ([96bc95f](https://github.com/visin-platform/visin/commit/96bc95f28eca929c917b90b5b918a81d23de3330))
+* **release:** @visin/frontend-core 1.11.0 ([faac19b](https://github.com/visin-platform/visin/commit/faac19b2ea078b9d4a92d1e984745704e5ef4042))
+
 ## [1.21.0](https://github.com/visin-platform/visin/compare/v1.20.0...v1.21.0) (2026-09-24)
 
 
