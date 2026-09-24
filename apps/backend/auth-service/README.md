@@ -111,6 +111,18 @@ The bootstrap regression suite runs automatically under `npm test` using
 `mongodb-memory-server` with MongoDB 8.3.9. It needs no external database or
 Docker service; the first run downloads and caches the test binary.
 
+## API docs
+
+`docs/openapi.yml` is served by Swagger UI at `/api/docs`. Request bodies and path parameters that a route
+validates with Zod `$ref` `docs/generated/request-schemas.json`, generated from `src/validation/`; after
+changing a schema, run `npm run docs:generate --workspace=auth-service` and commit the result.
+
+Two tests hold the spec to the code, using `@visin/backend-core/openapi-testing`: `src/__tests__/openapi/` fails
+when a route and the spec disagree, and `src/__tests__/integration/apiContract.test.ts` checks every response of
+the sign-in, API key and OAuth flows against it. Sign-in, session, profile, admin and internal operations are
+marked `x-internal`, which keeps them out of the public reference at `/docs/api` (`npm run openapi:bundle` at the
+repo root).
+
 ## Docker Compose
 
 ```bash

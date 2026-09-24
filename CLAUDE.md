@@ -35,6 +35,13 @@ workspace that depends on it: rebuild the lib first (`npm run build` in it), the
 4. `npm run build --workspace=<ws>` (what the Dockerfile runs; also catches bundling/federation errors)
 5. `npm run test:e2e --workspace=<ws>` for a front with an `e2e/` suite (account, auth, label, landing, vision)
 
+Run the workspaces one after another, never in parallel (no `&`, no concurrent background jobs). One test run takes up
+to ~5 GB: each test config caps its workers (Jest ≤4, Vitest ≤16) and scales them down with free memory. Parallel
+runs have run this machine out of memory and killed the editor.
+
+Vitest pre-bundles MUI and Emotion (`deps.optimizer.client` in each front's config), so a test can't `vi.mock` those
+packages; mock your own module that wraps them instead.
+
 If a step can't run here, say so; don't count it as passed. In the report, list what ran and the results,
 including any failures.
 
@@ -53,6 +60,10 @@ including any failures.
     every version.
 - **Coverage floors** sit just below current coverage. Raise them when you add coverage; never lower one to pass.
 - **CI** runs checks only for the workspaces a change touches; a lib change triggers every consumer.
+- **API docs:** a vision- or auth-service API change updates that service's `docs/openapi.yml` in the same change.
+  Then run `npm run docs:generate --workspace=<service>` (request schemas from Zod) and `npm run openapi:bundle`
+  (the copies landing-front publishes at `/docs/api`). The service's tests and CI's `api-docs` job fail on drift.
+  Operations only Visin's own pages use are marked `x-internal`, which keeps them out of the public reference.
 
 ## Architecture
 

@@ -1,0 +1,86 @@
+Every request carries one credential, in the same header:
+
+```http
+Authorization: Bearer <credential>
+```
+
+What changes is which credential, and that depends on what you are building.
+
+| You are building                          | Use                                  | It can reach                                       |
+| ----------------------------------------- | ------------------------------------ | -------------------------------------------------- |
+| A training script or pipeline             | [Project token](#project-tokens)     | One project: its runs, epochs and results          |
+| A script or notebook that reads your data | [User API key](#user-api-keys)       | What your account can see, within the key's scopes |
+| An AI assistant                           | [MCP, signed in as you](#assistants) | What you allow when you connect it                 |
+
+## Project tokens
+
+A project token is what a training pipeline writes with. It belongs to one project, and every run, epoch, test
+result and benchmark it sends lands there.
+
+**Create one:** open the project, go to its **Settings** tab, and under **API Tokens** choose **Generate New
+Token**. Only the project's owner sees this tab. You can set an expiry in days, or leave it empty for a token that
+lasts until you revoke it. The token is shown once, so copy it before you close the dialog.
+
+**What it can do:**
+
+- Create runs in its project, and post their epochs, test results, benchmarks and visualizations.
+- Read its own project's runs and results. A list it asks for includes that project only.
+
+**What it can't do:**
+
+- Write to any other project, even one owned by the same person.
+- Create, change or delete projects, or create or revoke tokens. These answer `403` with
+  `Project tokens cannot manage projects or credentials`. Do them signed in to the app.
+
+**Revoke one** from the same list in **Settings**. It stops working at once.
+
+## User API keys
+
+A user API key lets software act as you: a notebook that pulls results, a CI job that compares runs, a script
+that tags them. It never reaches more than your account can already see, and only the parts you grant.
+
+**Create one:** in the app, open **Account**, then **API keys**, and choose **New key**. Pick its scopes and,
+optionally, when it expires. Keys start with `vsn_live_`, which makes a leaked one easy to find in logs.
+
+A key's scopes come in read and write pairs, one pair per area:
+
+| Scope                             | Covers                                                             |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `vision:read`, `vision:write`     | Projects, trainings, epochs, test results, benchmarks, comparisons |
+| `dataset:read`, `dataset:write`   | Datasets, their images and categories                              |
+| `label:read`, `label:write`       | Labeling jobs and tasks                                            |
+| `analysis:read`, `analysis:write` | Written findings about runs                                        |
+
+A `GET` needs the read scope and anything that changes data needs the write scope. Comparing runs is a `POST`
+that changes nothing, so it needs only `vision:read`.
+
+A request outside the key's scopes answers `403` and names the scope it needed, for example
+`This credential does not carry the "vision:write" scope.` The fix is a key with that scope, not a retry.
+
+<Callout kind="tip" title="Start read-only">
+  A key with only read scopes can answer every question about your runs and can't change any of them. Grant write scopes
+  when a tool needs to write.
+</Callout>
+
+## Assistants
+
+An assistant such as Claude connects through Visin's MCP server. You sign in when it asks and tick what it may
+do, and it gets a credential of its own with those scopes. You never paste a key into it. Connected assistants are
+listed under **Account**, then **Connected apps**, where you can disconnect one. See
+[connecting an assistant](/docs/assistants) for the address to give it and what it can do.
+
+## When a request is refused
+
+| Status | Means                                                   | What to do                                                                          |
+| ------ | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `401`  | No credential, or one that is wrong, expired or revoked | Check the header and the token. `Access token required` means none arrived.         |
+| `403`  | The credential is valid but may not do this             | A project token outside its project or managing projects, or a key missing a scope. |
+| `404`  | Not found, or not visible to you                        | A private project you can't see can read as missing rather than forbidden.          |
+
+## Keeping credentials safe
+
+- Read tokens and keys from the environment or a secret store, never from source code. Anyone holding one can use
+  it.
+- Give each pipeline or tool its own token or key, named after it, so you can revoke one without stopping the
+  others.
+- To rotate, create the new credential, switch your pipeline to it, then revoke the old one.

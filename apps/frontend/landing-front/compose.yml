@@ -9,6 +9,10 @@ services:
       # The "open the app" link: shell-front, which renders every app on one page.
       SHELL_FRONT_URL: ${SHELL_FRONT_URL}
       MCP_PUBLIC_URL: ${MCP_PUBLIC_URL}
+      # vision-service's public address: the API reference's "try it" server.
+      VISION_API_URL: ${VISION_API_URL}
+      # auth-service's public address: the API reference's "try it" server for API keys and OAuth.
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
       # The page's own address, for its canonical link, Open Graph tags and sitemap.
       LANDING_FRONT_URL: ${LANDING_FRONT_URL}
     ports:

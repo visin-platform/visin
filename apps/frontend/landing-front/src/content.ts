@@ -58,17 +58,22 @@ export const SHOWCASE: ShowcaseItem[] = [
 ];
 
 /**
- * How a run gets in: the training loop posts each epoch. The snippet is the real
- * endpoint and payload (`POST /api/epochs/upload`, a project token as Bearer),
- * written with plain `requests` so it needs nothing that is not shipped.
+ * How a run gets in: the script starts the run, then the training loop posts
+ * each epoch. The snippet is the real endpoints and payload (`POST
+ * /api/trainings`, then `POST /api/epochs/upload`, a project token as Bearer),
+ * written with plain `requests` so it needs nothing that is not shipped. The
+ * run has to exist before its epochs, so the snippet cannot skip that call.
  */
 export const SCRIPT_SNIPPET = [
   'import requests',
   '',
+  'AUTH = {"Authorization": f"Bearer {TOKEN}"}',
+  'requests.post(f"{VISIN}/api/trainings", headers=AUTH,',
+  '              json={"uuid": RUN, "name": "window16 ablation"})',
+  '',
   'for epoch in range(epochs):',
   '    loss, val = train_one_epoch()',
-  '    requests.post(f"{VISIN}/api/epochs/upload",',
-  '        headers={"Authorization": f"Bearer {TOKEN}"},',
+  '    requests.post(f"{VISIN}/api/epochs/upload", headers=AUTH,',
   '        json={"training_uuid": RUN, "epoch": epoch, "results": {',
   '            "train": {"loss": loss},',
   '            "val": {"mean_iou": val.miou,',
@@ -76,19 +81,21 @@ export const SCRIPT_SNIPPET = [
 ].join('\n');
 
 /**
- * What Visin makes of that payload, named the way the app names it: sections of
- * a run's results are conditions, keys that hold metrics are classes.
+ * What Visin reads from that payload: `train` and `val` are the run's training
+ * and validation curves, the numbers under them are the metrics its charts
+ * read, and a key holding metrics is a class, found without being declared.
+ * (Conditions are a test-results idea; an epoch has none.)
  */
 export const SCRIPT_DISCOVERED = [
-  { kind: 'Conditions', names: ['train', 'val'] },
+  { kind: 'Curves', names: ['train', 'val'] },
   { kind: 'Classes', names: ['vehicle'] },
   { kind: 'Metrics', names: ['loss', 'mean_iou', 'iou'] }
 ];
 
 export const SCRIPT_POINTS: OpenSourcePoint[] = [
-  { title: 'No schema to declare', body: 'Metrics, classes and conditions are found in what you send.' },
+  { title: 'Nothing to declare', body: 'A new class, or a new test condition, is found in what you send.' },
   { title: 'One token per project', body: 'A project token writes to its own project and nowhere else.' },
-  { title: 'Not only epochs', body: 'Test results, benchmarks, configs and prediction frames post the same way.' }
+  { title: 'Not only epochs', body: 'Test results, benchmarks and prediction frames post the same way.' }
 ];
 
 /** The installed app on a phone: the same data, in your pocket. */

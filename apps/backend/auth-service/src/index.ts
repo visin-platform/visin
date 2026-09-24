@@ -1,9 +1,7 @@
 import express, { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
-import authRoutes from './routes/authRoutes';
-import oauthRoutes from './routes/oauthRoutes';
-import { authorizationServerMetadata } from './controllers/oauthController';
+import { API_ROUTE_GROUPS } from './routes/apiRoutes';
 import path from 'path';
 import { initializeBootstrap } from './services/bootstrapService';
 
@@ -61,14 +59,10 @@ app.use('/auth/profile/google', passwordLimiter);
 // Serve static documentation files
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));
 
-// RFC 8414. Served at the issuer root, not under /oauth, because that is where
-// a client looks for it — it is the first thing read in the flow and it is
-// unauthenticated by design, revealing only which endpoints exist.
-app.get('/.well-known/oauth-authorization-server', authorizationServerMetadata);
-
-// Routes
-app.use('/auth', authRoutes);
-app.use('/oauth', oauthRoutes);
+// Routes: /auth, /oauth, and the OAuth metadata under /.well-known (see apiRoutes.ts)
+for (const { path: mountPath, router } of API_ROUTE_GROUPS) {
+  app.use(mountPath, router);
+}
 
 // Documentation root redirect
 app.get('/docs', (req: Request, res: Response) => {

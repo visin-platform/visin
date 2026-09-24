@@ -1,0 +1,91 @@
+What the API answers when a request does not work, which failures are worth retrying, the limits on how much and how
+often you can send, and how lists come back in pages.
+
+## The error body
+
+Every failure has the same JSON body, with the HTTP status that fits it:
+
+```json
+{ "success": false, "error": "NotFoundError", "message": "Training not found with uuid: 5f0c6a2e-…" }
+```
+
+`error` says what kind of failure it was, and `message` says what went wrong in words, naming the field or the
+record. Log the message: it is usually the fix.
+
+| Status              | Means                                                                                                                          | Retry?                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| `400`               | The request is wrong: a missing or malformed field, or a body that is not valid JSON. The message names the field.             | No, fix the request             |
+| `401`               | No credential, or one that is wrong, expired or revoked. See [authentication](/docs/authentication#when-a-request-is-refused). | No                              |
+| `403`               | The credential may not do this, such as a project token outside its project                                                    | No                              |
+| `404`               | The record does not exist, or you cannot see it                                                                                | No                              |
+| `409`               | It already exists, such as a second run with the same `uuid`                                                                   | No, it is already there         |
+| `413`               | The request body is too large                                                                                                  | No, send less at once           |
+| `429`               | Too many requests in the last minute. The body is plain text, not JSON.                                                        | Yes, after a pause              |
+| `500`               | Something failed in Visin                                                                                                      | No; report it, with the message |
+| `502`, `503`, `504` | Visin, or a service it needed, did not answer in time                                                                          | Yes, after a pause              |
+
+## Retrying safely
+
+A training loop should not die because Visin was briefly unreachable. Retry what is worth retrying, with a growing
+pause, and let the rest fail loudly:
+
+```python
+import time
+
+
+def post(path, body, attempts=5):
+    """POST to Visin, retrying what is worth retrying; raise on the rest."""
+    for attempt in range(attempts):
+        try:
+            response = requests.post(f"{VISIN_URL}{path}", headers=HEADERS, json=body, timeout=30)
+        except requests.ConnectionError:
+            response = None
+        if response is not None and response.status_code not in (429, 502, 503, 504):
+            response.raise_for_status()
+            return response.json()["data"]
+        time.sleep(2**attempt)
+    raise RuntimeError(f"Visin did not answer {path} after {attempts} attempts")
+
+
+post("/api/epochs/upload", {"training_uuid": run_id, "epoch": 13, "results": {"train": {"loss": 0.4}}})
+```
+
+A retry can repeat a request that did arrive, whose answer was lost. Send your own ids and a repeat is harmless:
+with a `uuid` on the run and an `epoch_uuid` on each epoch, the second copy answers `409` instead of being stored
+twice. Without an `epoch_uuid`, a repeated epoch is stored again.
+
+## Limits
+
+| Limit                                                  | Default                                | Set by                                                             |
+| ------------------------------------------------------ | -------------------------------------- | ------------------------------------------------------------------ |
+| Requests per minute, per client address                | 500                                    | `RATE_LIMIT_PER_MINUTE` on each service                            |
+| Body of a run, epoch, test result or benchmark request | 50 MB                                  |                                                                    |
+| Body of any other request                              | 1 MB                                   |                                                                    |
+| Items per page                                         | 1000                                   |                                                                    |
+| One prediction frame                                   | 50 MiB for an image, 1 GiB for a video | See [prediction frames](/docs/prediction-frames#types-and-formats) |
+
+One request per epoch stays far below the rate limit. To send a whole run's history at once, use
+[`POST /api/epochs/batch`](/docs/sending-results#sending-many-epochs-at-once) rather than one request per epoch.
+
+## Pages
+
+Lists come back a page at a time. Ask for one with `page` (from 1) and `limit`, and read `pagination` for how many
+there are:
+
+```python
+page = 1
+names = []
+while True:
+    data = requests.get(f"{VISIN_URL}/api/trainings", headers=HEADERS,
+                        params={"page": page, "limit": 100}).json()["data"]
+    names += [t["name"] for t in data["trainings"]]
+    if page >= data["pagination"]["pages"]:
+        break
+    page += 1
+```
+
+`pagination` holds `page`, `limit`, `total` and `pages`. The list itself sits under a key named for what it holds:
+`trainings`, `epochs`, `benchmarks` and so on. The [API reference](/docs/api) shows each one.
+
+Findings are the exception: they page with a cursor. Pass the last finding's `createdAt`, an underscore and its
+`_id` as `before`, and stop at a page shorter than `limit`.

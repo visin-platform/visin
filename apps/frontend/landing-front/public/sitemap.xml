@@ -1,15 +1,61 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  The landing page is a single page; its sections are in-page anchors, which
-  belong to the same URL. The app, auth and account frontends are behind
-  sign-in and are deliberately not listed. The address is filled in from
-  LANDING_FRONT_URL by docker-entrypoint.sh, which removes this file when that
-  is unset.
+  The landing page and the docs. The landing page's sections are in-page
+  anchors, which belong to the same URL. The app, auth and account frontends
+  are behind sign-in and are deliberately not listed. A new docs page belongs
+  here too (src/docs/pages.ts lists them; a test checks the two agree). The
+  address is filled in from LANDING_FRONT_URL by docker-entrypoint.sh, which
+  removes this file when that is unset.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>__LANDING_FRONT_URL__/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>__LANDING_FRONT_URL__/docs</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>__LANDING_FRONT_URL__/docs/quickstart</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>__LANDING_FRONT_URL__/docs/authentication</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>__LANDING_FRONT_URL__/docs/sending-results</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>__LANDING_FRONT_URL__/docs/test-results-and-benchmarks</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>__LANDING_FRONT_URL__/docs/prediction-frames</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>__LANDING_FRONT_URL__/docs/errors-and-limits</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>__LANDING_FRONT_URL__/docs/assistants</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>__LANDING_FRONT_URL__/docs/api</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
   </url>
 </urlset>

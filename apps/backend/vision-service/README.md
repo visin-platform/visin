@@ -39,6 +39,23 @@ The finding pagination and project-token integration tests run automatically und
 using `mongodb-memory-server` 11.2.0 with MongoDB 8.3.9. They need no separate
 MongoDB service or Docker container. The first run downloads and caches the binary.
 
+## API docs
+
+`docs/openapi.yml` is served by Swagger UI at `/api/docs`. Request bodies and query parameters are not written
+there by hand: they `$ref` `docs/generated/request-schemas.json`, which is generated from the Zod schemas in
+`src/validation/`. A test (`src/__tests__/openapi/`) fails when a route is missing from the spec, the spec lists a
+route that no longer exists, an operation refers to a schema other than the one its route validates with, or the
+generated file is stale. After changing a validation schema, run `npm run docs:generate --workspace=vision-service`
+and commit the result.
+
+`src/__tests__/integration/apiContract.test.ts` walks an integrator's path (a project and token, a run, its epochs,
+test results and benchmarks, and the errors a script meets) against the real routes, and checks every response's
+status and body against the spec.
+
+At the repo root, `npm run openapi:lint` lints the spec, and `npm run openapi:bundle` writes the self-contained copy
+the docs site renders at `/docs/api` (`apps/frontend/landing-front/public/openapi/vision.json`). CI's `api-docs` job
+fails when that copy is older than the spec, so bundle and commit it with any spec change.
+
 ## Project token permissions
 
 A project API token can read and ingest its project's trainings, epochs, test

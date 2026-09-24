@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Box, Button, Chip, Container, Grid, Stack, Typography, useMediaQuery } from '@mui/material';
-import { CheckCircleOutlined, Replay } from '@mui/icons-material';
+import { ArrowForward, CheckCircleOutlined, Replay } from '@mui/icons-material';
 import { chartSeries } from '@visin/frontend-core';
 import { SCRIPT_DISCOVERED, SCRIPT_POINTS, SCRIPT_SNIPPET } from '../content';
 import { INK, MONO } from '../theme';
@@ -94,7 +94,8 @@ function Arrivals() {
       <Stack direction="row" spacing={3} sx={{ mb: 1, fontFamily: MONO, fontSize: '0.8rem', color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
         <span>train.loss {trainLoss(epoch).toFixed(3)}</span>
         <span>
-          val.mean_iou <Box component="strong" sx={{ color: LINE }}>{valMiou(epoch).toFixed(4)}</Box>
+          {/* Ink, not the line's colour: that is too light for small text on white. */}
+          val.mean_iou <Box component="strong" sx={{ color: 'text.primary' }}>{valMiou(epoch).toFixed(4)}</Box>
         </span>
       </Stack>
 
@@ -133,7 +134,7 @@ function Arrivals() {
       {/* Found in the first post, before anyone configured anything. */}
       <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider', opacity: epoch >= 1 ? 1 : 0, transition: 'opacity .4s ease' }}>
         <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 1 }}>
-          Found in the first epoch
+          Read from the first epoch
         </Typography>
         <Stack spacing={0.75} sx={{ mt: 0.5 }}>
           {SCRIPT_DISCOVERED.map(({ kind, names }) => (
@@ -215,6 +216,10 @@ export default function FromYourScript() {
             </Grid>
           ))}
         </Grid>
+
+        <Button href="/docs/quickstart" endIcon={<ArrowForward />} size="large" sx={{ mt: { xs: 4, md: 5 }, ml: -1.5 }}>
+          Read the quickstart
+        </Button>
       </Container>
     </Box>
   );

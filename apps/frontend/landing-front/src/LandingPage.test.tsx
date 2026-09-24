@@ -220,17 +220,43 @@ describe('LandingPage calls to action', () => {
     }
   });
 
-  it('anchors the nav to the sections on the page', () => {
+  it('anchors the nav to the sections on the page, from any page', () => {
     render(<LandingPage />);
 
+    // Absolute, so the same nav works on /docs: on / they only change the #fragment.
     const nav = screen.getByRole('navigation', { name: 'Main' });
-    expect(within(nav).getByRole('link', { name: 'Product' })).toHaveAttribute('href', '#product');
-    expect(within(nav).getByRole('link', { name: 'Assistant' })).toHaveAttribute('href', '#assistant');
-    expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '#open-source');
+    expect(within(nav).getByRole('link', { name: 'Product' })).toHaveAttribute('href', '/#product');
+    expect(within(nav).getByRole('link', { name: 'Assistant' })).toHaveAttribute('href', '/#assistant');
+    expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '/#open-source');
     // The old sections are gone; nothing may still point at where they were.
     expect(within(nav).queryByRole('link', { name: 'Contact' })).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Features' })).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'How it works' })).not.toBeInTheDocument();
+  });
+
+  it('links the docs from the nav and the footer, current only while in the docs', () => {
+    render(<LandingPage />);
+
+    const docs = within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Docs' });
+    expect(docs).toHaveAttribute('href', '/docs');
+    expect(docs).not.toHaveAttribute('aria-current');
+    const footer = within(screen.getByRole('navigation', { name: 'Footer' }));
+    expect(footer.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', '/docs');
+    expect(footer.getByRole('link', { name: 'Quickstart' })).toHaveAttribute('href', '/docs/quickstart');
+    expect(footer.getByRole('link', { name: 'API reference' })).toHaveAttribute('href', '/docs/api');
+  });
+
+  it('marks Docs as the current page on a docs address', () => {
+    window.history.pushState({}, '', '/docs/quickstart');
+    try {
+      render(<LandingPage />);
+      expect(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Docs' })).toHaveAttribute(
+        'aria-current',
+        'page'
+      );
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
   });
 });
 
@@ -305,6 +331,21 @@ describe('From your training loop', () => {
     expect(code).toHaveTextContent('/api/epochs/upload');
     expect(code).toHaveTextContent('Bearer {TOKEN}');
     expect(code).toHaveTextContent(SCRIPT_SNIPPET.split('\n')[0]);
+  });
+
+  it('starts the run before posting its epochs, as the API requires', () => {
+    // An epoch for a run that does not exist yet is a 404.
+    const lines = SCRIPT_SNIPPET.split('\n');
+    const create = lines.findIndex((line) => line.includes('/api/trainings'));
+    const upload = lines.findIndex((line) => line.includes('/api/epochs/upload'));
+    expect(create).toBeGreaterThan(-1);
+    expect(create).toBeLessThan(upload);
+  });
+
+  it('leads on to the quickstart', () => {
+    render(<LandingPage />);
+
+    expect(screen.getByRole('link', { name: /read the quickstart/i })).toHaveAttribute('href', '/docs/quickstart');
   });
 
   it('shows the finished run and what was found in it where the page cannot play it', () => {

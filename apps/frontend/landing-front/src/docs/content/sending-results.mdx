@@ -1,0 +1,109 @@
+An epoch is one `POST /api/epochs/upload`. This page is about the `results` you put in it: which names Visin
+charts, which it finds by itself, and what else an epoch can carry. The examples use `VISIN_URL`, `HEADERS` and a
+run's `run_id` as in the [quickstart](/docs/quickstart).
+
+## An epoch
+
+```python
+requests.post(
+    f"{VISIN_URL}/api/epochs/upload",
+    headers=HEADERS,
+    json={
+        "training_uuid": run_id,
+        "epoch_uuid": epoch_id,
+        "epoch": 12,
+        "epoch_time": 84.2,
+        "learning_rate": 0.0006,
+        "results": {
+            "train": {"loss": 0.412, "mean_iou": 0.611},
+            "val": {
+                "loss": 0.455,
+                "mean_iou": 0.583,
+                "pixel_accuracy": 0.912,
+                "car": {"iou": 0.71, "precision": 0.80, "recall": 0.77},
+                "pedestrian": {"iou": 0.42, "precision": 0.55, "recall": 0.49},
+            },
+        },
+    },
+).raise_for_status()
+```
+
+Besides `results`, an epoch can carry:
+
+| Field           | What it is for                                                                                                                                                                                                    |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `epoch`         | The epoch number. Required.                                                                                                                                                                                       |
+| `epoch_uuid`    | Your own id for the epoch, so [test results](/docs/test-results-and-benchmarks) and [frames](/docs/prediction-frames) can name it later. One is generated if you leave it out, and returned as `data.epoch_uuid`. |
+| `epoch_time`    | Seconds the epoch took. Visin adds these up for the run's training time, and for its cost when the project has rates set.                                                                                         |
+| `learning_rate` | The learning rate at the end of the epoch.                                                                                                                                                                        |
+| `timestamp`     | When the epoch finished, as an ISO date. The time of the request otherwise.                                                                                                                                       |
+| `metadata`      | Anything else you want kept with the epoch. It is stored as sent.                                                                                                                                                 |
+
+## What the run's charts read
+
+`results` is yours to shape, and everything in it is stored and returned as sent. The run's charts look for these
+names:
+
+| Chart                               | Reads                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------- |
+| Loss                                | `train.loss` and `val.loss`                                                                 |
+| Mean IoU                            | `train.mean_iou` and `val.mean_iou`                                                         |
+| Pixel accuracy, mean accuracy, Dice | `pixel_accuracy`, `mean_accuracy` and `dice_score`, under `train` and `val`                 |
+| Per class                           | Any key under `val` or `train` whose value holds `iou`, `precision`, `recall`, `f1` or `ap` |
+
+`train` and `val` become the training and validation curve of each chart. A chart stays empty until some epoch
+reports the metric it reads, so a run that never reports Dice has an empty Dice chart. Metrics no chart reads are kept too:
+the API returns them, and an assistant can read and compare them.
+
+## Classes are found for you
+
+A key under `val` or `train` whose value is itself a set of metrics is a class. There is nothing to declare: the
+first epoch that reports `car` adds a `car` line to the per-class charts. You can also group classes under
+`per_class`:
+
+```json
+{ "val": { "mean_iou": 0.58, "per_class": { "car": { "iou": 0.71 }, "pedestrian": { "iou": 0.42 } } } }
+```
+
+`ap` may be a number or an object with a `mean`. F1 is read from `f1`, `f1_score` or `mean_f1`, whichever you send.
+
+## Leave out what an epoch did not measure
+
+If you validate every fifth epoch, send `val` on those epochs only. A missing metric is a gap in the chart; a `0`
+is a real reading, and would show the model collapsing. The same holds for classes: leave out a class an epoch did
+not see, rather than sending it with zeros.
+
+## Which end is better
+
+Visin compares runs at their best epoch, and "best" depends on the metric: the most IoU, but the least loss. In the
+app, open the project's **Settings**, add the metric under **Metrics**, and choose **Lower is better** for anything
+like a loss, an error or a latency. Nothing changes in what you send.
+
+## Sending many epochs at once
+
+To backfill a run from a log, post them together. Each epoch in a batch names its run by both `trainingId` (the
+run's `_id`) and `training_uuid`:
+
+```python
+requests.post(
+    f"{VISIN_URL}/api/epochs/batch",
+    headers=HEADERS,
+    json={
+        "epochs": [
+            {
+                "trainingId": training["_id"],
+                "training_uuid": run_id,
+                "epoch": row["epoch"],
+                "results": {"train": {"loss": row["train_loss"]}, "val": {"loss": row["val_loss"]}},
+            }
+            for row in history
+        ]
+    },
+).raise_for_status()
+```
+
+A request may be up to 50 MB, which is thousands of epochs.
+
+<Callout kind="tip" title="Numbers, not strings">
+  Send metrics as JSON numbers. `"0.58"` in quotes is stored as a string, not a number.
+</Callout>

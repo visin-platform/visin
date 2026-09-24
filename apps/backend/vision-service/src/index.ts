@@ -1,18 +1,8 @@
 import express from 'express';
 import { identityContextMiddleware } from './middleware/requestIdentityContext';
-import writeCapabilitiesRoutes from './routes/writeCapabilitiesRoutes';
 import path from 'path';
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, apiKeyAuth, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
-import trainingRoutes from './routes/trainingRoutes';
-import epochRoutes from './routes/epochRoutes';
-import configRoutes from './routes/configRoutes';
-import testResultRoutes from './routes/testResultRoutes';
-import visualizationRoutes from './routes/visualizationRoutes';
-import benchmarkRoutes from './routes/benchmarkRoutes';
-import comparisonRoutes from './routes/comparisonRoutes';
-import projectRoutes from './routes/projectRoutes';
-import apiTokenRoutes from './routes/apiTokenRoutes';
-import findingRoutes from './routes/findingRoutes';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
+import { API_ROUTE_GROUPS } from './routes/apiRoutes';
 import { apiTokenMiddleware } from './middleware/apiTokenMiddleware';
 
 // JWT_SECRET verifies user sessions; FILE_SERVICE_API_KEY authenticates every
@@ -38,42 +28,10 @@ app.use((req, res, next) => {
 // Global Middleware
 app.use(identityContextMiddleware, apiTokenMiddleware);
 
-/**
- * User API keys (`vsn_live_…`), for non-browser callers like the MCP server.
- *
- * Mounted per route group rather than once globally, for two reasons. This
- * service answers for three scope domains — `vision` for runs and their
- * results, `dataset` for the data they were trained on, `analysis` for written
- * conclusions — so there is no single domain a global mount could name. And forgetting the guard on a route group added
- * later fails *closed*: keys simply don't authenticate there and the JWT
- * middleware answers 401, rather than the group silently accepting any key.
- *
- * `apiKeyAuth` runs ahead of each route's own authMiddleware/optionalAuthMiddleware
- * and cooperates with them through the `if (req.user) return next()` guard both
- * begin with. Read vs. write is derived from the HTTP method; the `readPaths`
- * entries are the comparison endpoints, which are POSTs that read two runs and
- * write nothing.
- */
-const COMPARE_IS_A_READ = { readPaths: [/^\/compare(\/|$)/] };
-
-app.use('/api/write-capabilities', writeCapabilitiesRoutes);
-app.use('/api/trainings', apiKeyAuth('vision', COMPARE_IS_A_READ), trainingRoutes);
-app.use('/api/epochs', apiKeyAuth('vision'), epochRoutes);
-app.use('/api/configs', apiKeyAuth('vision'), configRoutes);
-app.use('/api/test-results', apiKeyAuth('vision', COMPARE_IS_A_READ), testResultRoutes);
-app.use('/api/visualizations', apiKeyAuth('vision'), visualizationRoutes);
-app.use('/api/benchmarks', apiKeyAuth('vision'), benchmarkRoutes);
-app.use('/api/comparisons', apiKeyAuth('vision'), comparisonRoutes);
-app.use('/api/projects', apiKeyAuth('vision'), projectRoutes);
-// Deliberately no apiKeyAuth: this route group mints and revokes the
-// project-scoped tokens the training pipeline authenticates with. Issuing a
-// credential is a thing a person does while signed in, never something one
-// credential should be able to do on behalf of another.
-app.use('/api/api-tokens', apiTokenRoutes);
-// Written conclusions. Its own scope domain, so an assistant can be granted
-// "read my experiments and record what you conclude" without also being able to
-// rename projects or retag runs.
-app.use('/api/findings', apiKeyAuth('analysis'), findingRoutes);
+// Route groups, each behind its own user-API-key guard (see apiRoutes.ts)
+for (const { path: mountPath, guards, router } of API_ROUTE_GROUPS) {
+  app.use(mountPath, ...guards, router);
+}
 
 // Serve OpenAPI docs as static files
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));

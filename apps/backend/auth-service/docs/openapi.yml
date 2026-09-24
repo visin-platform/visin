@@ -1,10 +1,18 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: Auth Service API
-  description: API for user authentication, authorization, and profile management
+  description: |
+    Accounts, sessions, user API keys, and OAuth for AI assistants.
+
+    Scripts do not sign in here. A training pipeline uses a project token (vision-service); software that
+    acts as a person uses a **user API key**, created in the app under Account, then API keys. An assistant
+    connects through **OAuth**: it registers itself, the person approves it on a consent page, and it gets
+    an access token scoped to what they ticked.
+
   version: 1.0.0
-  contact:
-    name: Visin Team
+  license:
+    name: MIT
+    identifier: MIT
 servers:
   - url: http://localhost:5001
     description: Development server
@@ -13,739 +21,1137 @@ servers:
     variables:
       host:
         default: auth-api.example.com
-        description: Public hostname of auth-service (AUTH_SERVICE_PUBLIC_URL)
 
 tags:
-  - name: Authentication
-    description: User authentication operations (login, logout, token management)
+  - name: API keys
+    description: Keys that let software act as a user, within the scopes the key carries
+  - name: OAuth
+    description: Authorization for assistants (OAuth 2.1 with PKCE and dynamic client registration)
+  - name: Connected apps
+    description: The assistants a user has approved, and taking an approval back
+  - name: Assistant activity
+    description: What connected assistants and API keys have done on a user's behalf
+  - name: Sign-in
+    description: Setting up the first account, signing up and signing in (the app's sign-in page)
+  - name: Sessions
+    description: The devices a user is signed in on
   - name: Profile
-    description: User profile management
+    description: The signed-in user's own account
   - name: Admin
-    description: Administrative operations for user management
+    description: Operations for administrators
   - name: Internal
-    description: Internal service operations
+    description: Calls between Visin's own services
 
 components:
-  schemas:
-    CredentialsRequest:
-      type: object
-      required: [email, password]
-      properties:
-        email:
-          type: string
-          format: email
-          example: owner@example.com
-        password:
-          type: string
-          format: password
-          minLength: 10
-          maxLength: 200
-          description: At least 10 characters; hashed with scrypt before storage.
-        firstName:
-          type: string
-          maxLength: 100
-        lastName:
-          type: string
-          maxLength: 100
-
-    Error:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: false
-        message:
-          type: string
-          example: "Error description"
-      required:
-        - success
-        - message
-
-    User:
-      type: object
-      properties:
-        _id:
-          type: string
-          example: "507f1f77bcf86cd799439011"
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-        firstName:
-          type: string
-          example: "John"
-        lastName:
-          type: string
-          example: "Doe"
-        signupMethod:
-          type: string
-          example: "google"
-          enum: ["google"]
-        roles:
-          type: array
-          items:
-            type: string
-          example: ["user", "admin"]
-        lastLoginAt:
-          type: string
-          format: date-time
-          example: "2023-01-01T00:00:00.000Z"
-        tokenVersion:
-          type: integer
-          example: 1
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-      required:
-        - email
-        - signupMethod
-
-    UserProfile:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "507f1f77bcf86cd799439011"
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-        firstName:
-          type: string
-          example: "John"
-        lastName:
-          type: string
-          example: "Doe"
-        name:
-          type: string
-          example: "John Doe"
-        picture:
-          type: string
-          format: uri
-          example: "https://lh3.googleusercontent.com/photo.jpg"
-      required:
-        - id
-        - email
-
-    AuthResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: true
-        user:
-          $ref: '#/components/schemas/UserPayload'
-        token:
-          type: string
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-      required:
-        - success
-        - user
-        - token
-
-    UserPayload:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "507f1f77bcf86cd799439011"
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-        name:
-          type: string
-          example: "John Doe"
-        picture:
-          type: string
-          format: uri
-          example: "https://lh3.googleusercontent.com/photo.jpg"
-        groups:
-          type: array
-          items:
-            type: string
-          example: ["group1", "group2"]
-        tokenVersion:
-          type: integer
-          example: 1
-      required:
-        - id
-        - email
-
-    VerifyResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: true
-        authenticated:
-          type: boolean
-          example: true
-        user:
-          $ref: '#/components/schemas/UserPayload'
-        token:
-          type: string
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-      required:
-        - success
-        - authenticated
-        - user
-        - token
-
-    RefreshResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: true
-        token:
-          type: string
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-        groups:
-          type: array
-          items:
-            type: string
-          example: ["group1", "group2"]
-      required:
-        - success
-        - token
-        - groups
-
-    ProfileResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: true
-        user:
-          $ref: '#/components/schemas/UserProfile'
-      required:
-        - success
-        - user
-
-    UsersListResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: true
-        users:
-          type: array
-          items:
-            $ref: '#/components/schemas/User'
-      required:
-        - success
-        - users
-
-    SuccessResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: true
-        message:
-          type: string
-          example: "Operation completed successfully"
-        data:
-          type: object
-          description: "Response data (varies by endpoint)"
-      required:
-        - success
-        - message
-
-    # Request schemas
-    ValidateTokenRequest:
-      type: object
-      properties:
-        idToken:
-          type: string
-          description: "Google OAuth ID token"
-          example: "eyJhbGciOiJSUzI1NiIsImtpZCI6..."
-      required:
-        - idToken
-
-    UpdateProfileRequest:
-      type: object
-      properties:
-        firstName:
-          type: string
-          example: "John"
-        lastName:
-          type: string
-          example: "Doe"
-
-    ApproveUserRequest:
-      type: object
-      properties:
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-      required:
-        - email
-
-    InvalidateTokensRequest:
-      type: object
-      properties:
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-      required:
-        - email
-
   securitySchemes:
-    bearerAuth:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: The signed-in browser session.
+    BearerSession:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT token obtained from /auth/validate endpoint
-    internalAuth:
+      description: 'A session token, sent as `Authorization: Bearer <token>` by a front that cannot use the cookie.'
+    InternalToken:
       type: apiKey
       in: header
-      name: x-internal-token
-      description: Internal service token for inter-service communication
+      name: X-Internal-Token
+      description: The token Visin's services share (`INTERNAL_SERVICE_TOKEN`).
+
+  schemas:
+    Error:
+      type: object
+      required: [success, error, message]
+      properties:
+        success: { type: boolean, enum: [false] }
+        error: { type: string, description: The kind of failure, example: NotFoundError }
+        message: { type: string, description: What went wrong, example: API key not found }
+    NotConfigured:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean, enum: [false] }
+        message:
+          type: string
+          example: API keys are not enabled on this deployment. Set API_KEY_ENCRYPTION_SECRET on auth-service to turn them on.
+    OAuthError:
+      type: object
+      description: An OAuth error (RFC 6749 section 5.2), which OAuth clients parse.
+      required: [error, error_description]
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, invalid_client, invalid_grant, unsupported_grant_type]
+        error_description: { type: string }
+    Scope:
+      type: string
+      enum:
+        [vision:read, vision:write, dataset:read, dataset:write, label:read, label:write, analysis:read, analysis:write]
+    ApiKey:
+      type: object
+      description: A key as listed. Never carries the secret.
+      required: [id, name, prefix, scopes, createdAt, lastUsedAt, expiresAt, revokedAt]
+      properties:
+        id: { type: string }
+        name: { type: string, example: nightly benchmark job }
+        prefix: { type: string, description: 'The start of the key, to recognise it by', example: vsn_live_3f9a2c… }
+        scopes: { type: array, items: { $ref: '#/components/schemas/Scope' } }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: [string, 'null'], format: date-time }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+    Connection:
+      type: object
+      required: [id, clientId, clientName, scopes, createdAt, lastRenewedAt, revokedAt]
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        clientName: { type: string, example: Claude }
+        scopes: { type: array, items: { $ref: '#/components/schemas/Scope' } }
+        createdAt: { type: string, format: date-time }
+        lastRenewedAt: { type: [string, 'null'], format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+    UserPayload:
+      type: object
+      description: Who a session belongs to, as its token carries it.
+      required: [id, email]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        name: { type: string }
+        picture: { type: string }
+        roles: { type: array, items: { type: string } }
+        groupRoles:
+          type: array
+          description: The group roles the user holds (owner, admin, member)
+          items: { type: string }
+        tokenVersion: { type: integer }
+        sid: { type: string, description: The session this token belongs to }
+    SessionResponse:
+      type: object
+      required: [success, user, token]
+      properties:
+        success: { type: boolean, enum: [true] }
+        user: { $ref: '#/components/schemas/UserPayload' }
+        token: { type: string, description: 'The session token, also set as the `access_token` cookie' }
+    Profile:
+      type: object
+      required: [id, email]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        firstName: { type: string }
+        lastName: { type: string }
+        name: { type: string }
+        picture: { type: string }
+        hasPassword: { type: boolean }
+    Session:
+      type: object
+      required: [id, device, method, createdAt, lastSeenAt, expiresAt, current]
+      properties:
+        id: { type: string }
+        device: { type: string, example: Firefox on Linux }
+        method: { type: string, example: password }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        current: { type: boolean, description: Whether this is the session making the request }
+    ToolUsage:
+      type: object
+      required: [tool, calls, failed, totalTokens, avgTokens, avgMs, maxTokens]
+      properties:
+        tool: { type: string, example: get_training }
+        calls: { type: integer }
+        failed: { type: integer }
+        totalTokens: { type: integer }
+        avgTokens: { type: number }
+        avgMs: { type: number }
+        maxTokens: { type: integer }
+    ToolCall:
+      type: object
+      required: [at, tool, ms, tokens, failed, actorLabel, actorKind]
+      properties:
+        at: { type: string, format: date-time }
+        tool: { type: string }
+        ms: { type: number }
+        tokens: { type: integer }
+        failed: { type: boolean }
+        actorLabel: { type: string, example: Claude }
+        actorKind: { type: string, enum: [api_key, oauth] }
+    User:
+      type: object
+      properties:
+        _id: { type: string }
+        email: { type: string, format: email }
+        firstName: { type: string }
+        lastName: { type: string }
+        roles: { type: array, items: { type: string } }
+        lastLoginAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+  responses:
+    BadRequest:
+      description: The request was rejected by validation
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Not signed in, or the session has ended
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Signed in, but not allowed to do this
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: The record does not exist, or is not this user's
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: The request conflicts with what already exists
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Rate limited; wait and try again
+      content:
+        text/plain:
+          schema: { type: string, example: 'Too many requests, please try again later.' }
+    ApiKeysDisabled:
+      description: API keys are not enabled on this deployment (`API_KEY_ENCRYPTION_SECRET` is unset)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/NotConfigured' }
+    Error:
+      description: The request failed; the status and message say why
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
 
 paths:
-  # Password strategy (public)
-  /auth/setup-status:
+  /.well-known/oauth-authorization-server:
     get:
-      tags: [Authentication]
-      summary: Whether this instance still needs its first account
-      description: |
-        Public. Lets the sign-in page decide what to render before asking for
-        credentials: a deployment with no users has no way to create one, so
-        the first visitor is offered the setup form instead of a login that
-        could never succeed. Also reports whether Google sign-in is configured,
-        so the button can be hidden rather than rendered and failing on click.
+      tags: [OAuth]
+      summary: OAuth server metadata
+      operationId: authorizationServerMetadata
+      description: RFC 8414 metadata. An OAuth client reads this first to find the other endpoints.
+      security: [{}]
       responses:
         '200':
-          description: Status retrieved
+          description: Where to authorize, exchange codes and register, and what is supported
           content:
             application/json:
               schema:
                 type: object
+                required: [issuer, authorization_endpoint, token_endpoint, registration_endpoint, scopes_supported]
                 properties:
-                  success: { type: boolean, example: true }
-                  needsSetup:
-                    type: boolean
-                    description: True while the users collection is empty.
-                    example: false
-                  googleEnabled:
-                    type: boolean
-                    description: True when the server has a GOOGLE_CLIENT_ID.
-                    example: true
+                  issuer: { type: string, example: 'https://auth.example.com' }
+                  authorization_endpoint: { type: string }
+                  token_endpoint: { type: string }
+                  registration_endpoint: { type: string }
+                  scopes_supported: { type: array, items: { $ref: '#/components/schemas/Scope' } }
+                  response_types_supported: { type: array, items: { type: string, enum: [code] } }
+                  grant_types_supported:
+                    { type: array, items: { type: string, enum: [authorization_code, refresh_token] } }
+                  code_challenge_methods_supported: { type: array, items: { type: string, enum: [S256] } }
+                  token_endpoint_auth_methods_supported: { type: array, items: { type: string, enum: [none] } }
+                  authorization_response_iss_parameter_supported: { type: boolean }
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/Error'
 
-  /auth/setup:
+  /oauth/register:
     post:
-      tags: [Authentication]
-      summary: Create the first (owner) account
+      tags: [OAuth]
+      summary: Register a client
+      operationId: registerOAuthClient
       description: |
-        Public, but only while no user exists. Existing installations return 409.
-        The account it creates is an admin, because there is nobody who could
-        promote it. A unique bootstrap marker permits only one concurrent insert.
-        Signs the new owner in on success. If the insert succeeded but the response
-        was interrupted, recover through normal password login with those credentials.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CredentialsRequest'
-      responses:
-        '201':
-          description: Owner created and signed in
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '400':
-          description: Validation failed (e.g. password too short)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: Setup has already been completed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /auth/register:
-    post:
-      tags: [Authentication]
-      summary: Register with email and password
-      description: |
-        Public after initial setup, and signs the new account straight in.
-        Returns 409 while the installation has no users. There is no approval
-        step: what a user can reach is decided by group membership and by
-        whether a project is public, so a fresh account simply sees only
-        public work until it is invited to a group.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CredentialsRequest'
-      responses:
-        '201':
-          description: Account created and signed in
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '409':
-          description: Initial setup is required, or an account with that email already exists
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /auth/login:
-    post:
-      tags: [Authentication]
-      summary: Sign in with email and password
-      description: |
-        Public. Returns the same session as Google sign-in: a JWT plus the
-        HTTP-only `access_token` cookie. An unknown email and a wrong password
-        give the same 401, so the response cannot be used to discover which
-        emails have accounts.
+        RFC 7591 dynamic registration. Open by design: registering grants nothing, it only lets the client
+        ask a person for consent. Redirect URIs must be https, or http on localhost.
+      security: [{}]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [email, password]
+              required: [redirect_uris]
               properties:
-                email: { type: string, format: email }
-                password: { type: string, format: password }
+                client_name: { type: string, example: My research assistant }
+                redirect_uris:
+                  type: array
+                  minItems: 1
+                  items: { type: string }
+                  example: ['http://localhost:6274/oauth/callback']
       responses:
-        '200':
-          description: Authentication successful
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '401':
-          description: Incorrect email or password
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  # Authentication Endpoints
-  /auth/validate:
-    post:
-      tags: [Authentication]
-      summary: Validate Google OAuth token and authenticate user
-      description: |
-        Validates a Google OAuth ID token and signs in the account bound to its subject.
-        A Google sign-up account from before subjects were stored, without a password,
-        is bound on first use. An unknown Google identity with a verified email signs
-        up a new account once initial setup is complete.
-        This endpoint is public and used for initial login/authentication.
-        On success, returns a JWT token and sets an HTTP-only cookie.
-
-        Returns 403 when the server has no `GOOGLE_CLIENT_ID` — Google is
-        optional, and an instance may run with password sign-in only.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ValidateTokenRequest'
-      responses:
-        '200':
-          description: Authentication successful
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '400':
-          description: Bad request - missing or invalid token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Invalid Google token, or an email Google has not verified
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: The email belongs to an account Google cannot enter (sign in with its password and link Google), or initial setup is incomplete
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /auth/refresh:
-    post:
-      tags: [Authentication]
-      summary: Refresh JWT token
-      description: |
-        Refreshes the JWT token with updated user groups from the group service.
-        Requires a valid JWT token in the Authorization header.
-      responses:
-        '200':
-          description: Token refreshed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RefreshResponse'
-        '401':
-          description: Unauthorized - invalid or missing token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - bearerAuth: []
-
-  /auth/logout:
-    post:
-      tags: [Authentication]
-      summary: Logout user
-      description: |
-        Logs out the user by clearing the authentication cookie.
-        Requires a valid JWT token.
-      responses:
-        '200':
-          description: Logout successful
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '401':
-          description: Unauthorized - invalid or missing token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - bearerAuth: []
-
-  /auth/verify:
-    get:
-      tags: [Authentication]
-      summary: Verify authentication and refresh token
-      description: |
-        Verifies the current authentication status and refreshes the JWT token
-        with the latest user groups. Requires a valid JWT token.
-      responses:
-        '200':
-          description: Authentication verified and token refreshed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VerifyResponse'
-        '401':
-          description: Unauthorized - invalid or missing token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - bearerAuth: []
-
-  # Profile Endpoints
-  /auth/profile:
-    get:
-      tags: [Profile]
-      summary: Get user profile
-      description: |
-        Retrieves the current user's profile information including
-        first name, last name, and other profile data.
-        Requires a valid JWT token.
-      responses:
-        '200':
-          description: Profile retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProfileResponse'
-        '401':
-          description: Unauthorized - invalid or missing token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - bearerAuth: []
-
-    put:
-      tags: [Profile]
-      summary: Update user profile
-      description: |
-        Updates the current user's profile information (first name, last name).
-        Requires a valid JWT token.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateProfileRequest'
-      responses:
-        '200':
-          description: Profile updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '400':
-          description: Bad request - invalid input data
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized - invalid or missing token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - bearerAuth: []
-
-  # Admin Endpoints
-  /auth/admin/users:
-    get:
-      tags: [Admin]
-      summary: List all users
-      description: |
-        Retrieves a list of all users in the system (limited to 200 most recent).
-        Requires admin role and a valid JWT token.
-      responses:
-        '200':
-          description: Users retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UsersListResponse'
-        '401':
-          description: Unauthorized - invalid token or insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden - admin role required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - bearerAuth: []
-
-  # Internal Service Endpoints
-  /auth/internal/invalidate-tokens:
-    post:
-      tags: [Internal]
-      summary: Invalidate user tokens (Internal)
-      description: |
-        Invalidates all tokens for a user by incrementing their token version.
-        This is an internal endpoint used by other services to force token refresh.
-        Requires internal service authentication.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InvalidateTokensRequest'
-      responses:
-        '200':
-          description: Tokens invalidated successfully
+        '201':
+          description: The client, with the id to use in the rest of the flow
           content:
             application/json:
               schema:
                 type: object
+                required: [client_id, client_name, redirect_uris]
                 properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "User tokens invalidated successfully"
-                  newTokenVersion:
-                    type: integer
-                    example: 2
+                  client_id: { type: string }
+                  client_name: { type: string }
+                  redirect_uris: { type: array, items: { type: string } }
+                  token_endpoint_auth_method: { type: string, enum: [none] }
+                  grant_types: { type: array, items: { type: string } }
+                  response_types: { type: array, items: { type: string } }
         '400':
-          description: Bad request - missing email
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /oauth/authorize:
+    get:
+      tags: [OAuth]
+      summary: Ask a person for consent
+      operationId: authorize
+      description: |
+        Opened in the person's browser. Signed out, it sends them through Visin's sign-in and back. Signed in,
+        it shows a consent page listing the requested scopes, each of which they can untick.
+      security: [{}, { SessionCookie: [] }]
+      parameters:
+        - { name: response_type, in: query, required: true, schema: { type: string, enum: [code] } }
+        - { name: client_id, in: query, required: true, schema: { type: string } }
+        - { name: redirect_uri, in: query, required: true, schema: { type: string } }
+        - { name: code_challenge, in: query, required: true, schema: { type: string } }
+        - { name: code_challenge_method, in: query, required: true, schema: { type: string, enum: [S256] } }
+        - name: scope
+          in: query
+          description: Space-separated scopes to ask for
+          schema: { type: string, example: 'vision:read analysis:write' }
+        - { name: state, in: query, schema: { type: string } }
+        - name: resource
+          in: query
+          description: The MCP server the token is for (RFC 8707)
+          schema: { type: string }
+      responses:
+        '200':
+          description: The consent page
+          content:
+            text/html:
+              schema: { type: string }
+        '302':
+          description: Not signed in; sent to Visin's sign-in, which returns here
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [OAuth]
+      summary: Record the consent decision
+      operationId: authorizeDecision
+      description: |
+        Submitted by the consent page, not by clients. Redirects to the client's `redirect_uri` with a `code`,
+        or with `error=access_denied` when the person declined or granted nothing.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                decision: { type: string, enum: [approve, deny] }
+                client_id: { type: string }
+                redirect_uri: { type: string }
+                resource: { type: string }
+                code_challenge: { type: string }
+                requested_scope: { type: string }
+                scope:
+                  { type: array, items: { $ref: '#/components/schemas/Scope' }, description: The scopes left ticked }
+                consent_token: { type: string }
+                state: { type: string }
+      responses:
+        '302':
+          description: Back to the client's redirect URI, with `code` or `error`
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /oauth/token:
+    post:
+      tags: [OAuth]
+      summary: Exchange a code or refresh token
+      operationId: token
+      description: |
+        Trades an authorization code (with its PKCE `code_verifier`) or a refresh token for an access token.
+        Refresh tokens rotate: each use returns a new one, and presenting a used one ends the connection.
+      security: [{}]
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, client_id]
+              properties:
+                grant_type: { type: string, enum: [authorization_code, refresh_token] }
+                client_id: { type: string }
+                code: { type: string }
+                redirect_uri: { type: string }
+                code_verifier: { type: string }
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: An access token, and the refresh token to use next
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                type: object
+                required: [access_token, token_type, expires_in, scope, refresh_token]
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, enum: [Bearer] }
+                  expires_in: { type: integer, description: Seconds until the access token expires }
+                  scope: { type: string, example: 'vision:read analysis:write' }
+                  refresh_token: { type: string }
+        '400':
+          description: The grant was refused
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthError' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /oauth/connections:
+    get:
+      tags: [Connected apps]
+      summary: List connected apps
+      operationId: getConnections
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      responses:
+        '200':
+          description: Every assistant the user has approved, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data: { type: array, items: { $ref: '#/components/schemas/Connection' } }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /oauth/connections/{clientId}:
+    delete:
+      tags: [Connected apps]
+      summary: Disconnect an app
+      operationId: revokeConnection
+      description: Ends the app's access at once; its refresh tokens stop working.
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      parameters:
+        - { name: clientId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [clientId, revoked]
+                    properties:
+                      clientId: { type: string }
+                      revoked: { type: integer, description: How many refresh tokens were ended }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: User not found
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/api-keys:
+    get:
+      tags: [API keys]
+      summary: List your API keys
+      operationId: listKeys
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      responses:
+        '200':
+          description: The user's keys, newest first, without their secrets
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data: { type: array, items: { $ref: '#/components/schemas/ApiKey' } }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [API keys]
+      summary: Create an API key
+      operationId: createKey
+      description: |
+        The response is the only one that carries the key without asking for it again. Give it at least one
+        scope; `expiresInDays` is at most 365, or leave it out for a key that lasts until revoked.
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/CreateApiKeyBody
+            example:
+              name: nightly benchmark job
+              scopes: [vision:read]
+              expiresInDays: 90
+      responses:
+        '201':
+          description: The key, and its secret
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-      security:
-        - internalAuth: []
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  message: { type: string }
+                  data:
+                    type: object
+                    required: [key, token]
+                    properties:
+                      key: { $ref: '#/components/schemas/ApiKey' }
+                      token:
+                        {
+                          type: string,
+                          description: 'The key itself (`vsn_live_…`)',
+                          example: 'vsn_live_3f9a2c1d8e7b_…'
+                        }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '501':
+          $ref: '#/components/responses/ApiKeysDisabled'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/api-keys/{id}/reveal:
+    post:
+      tags: [API keys]
+      summary: Show an API key again
+      operationId: revealKey
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The key's secret
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [token]
+                    properties:
+                      token: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '501':
+          $ref: '#/components/responses/ApiKeysDisabled'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/api-keys/{id}/revoke:
+    post:
+      tags: [API keys]
+      summary: Revoke an API key
+      operationId: revokeKey
+      description: The key stops working at once. It stays listed, marked revoked.
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/ApiKey' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/api-keys/{id}:
+    delete:
+      tags: [API keys]
+      summary: Delete an API key
+      operationId: removeKey
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  message: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/tool-usage:
+    get:
+      tags: [Assistant activity]
+      summary: Tool usage by assistants and keys
+      operationId: getToolUsage
+      description: Totals per tool over the last `days` (30 unless given, at most 365), costliest first.
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 365, default: 30 } }
+      responses:
+        '200':
+          description: Per-tool totals
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [windowDays, usage]
+                    properties:
+                      windowDays: { type: integer }
+                      usage: { type: array, items: { $ref: '#/components/schemas/ToolUsage' } }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/tool-calls:
+    get:
+      tags: [Assistant activity]
+      summary: Recent tool calls
+      operationId: getToolCalls
+      description: The latest calls, newest first (`limit`, 100 unless given, at most 500).
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        '200':
+          description: The calls
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data: { type: array, items: { $ref: '#/components/schemas/ToolCall' } }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/setup-status:
+    get:
+      tags: [Sign-in]
+      summary: Whether the first account still has to be created
+      operationId: getSetupStatus
+      x-internal: true
+      security: [{}]
+      responses:
+        '200':
+          description: What the sign-in page should offer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, needsSetup, googleEnabled]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  needsSetup: { type: boolean }
+                  googleEnabled: { type: boolean }
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/setup:
+    post:
+      tags: [Sign-in]
+      summary: Create the first account
+      operationId: setupFirstUser
+      x-internal: true
+      security: [{}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/SetupBody
+      responses:
+        '201':
+          description: The owner account, signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/register:
+    post:
+      tags: [Sign-in]
+      summary: Sign up with a password
+      operationId: register
+      x-internal: true
+      security: [{}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/RegisterBody
+      responses:
+        '201':
+          description: The new account, signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/login:
+    post:
+      tags: [Sign-in]
+      summary: Sign in with a password
+      operationId: login
+      x-internal: true
+      security: [{}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/LoginBody
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/validate:
+    post:
+      tags: [Sign-in]
+      summary: Sign in with Google
+      operationId: validateToken
+      x-internal: true
+      security: [{}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/ValidateTokenBody
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Google sign-in is not configured on this deployment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/verify:
+    get:
+      tags: [Sign-in]
+      summary: Check and renew the session
+      operationId: verifyAuth
+      description: What every front calls on load. Slides the idle expiry forward and re-signs the token.
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      responses:
+        '200':
+          description: Still signed in
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SessionResponse'
+                  - type: object
+                    required: [authenticated]
+                    properties:
+                      authenticated: { type: boolean, enum: [true] }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/refresh:
+    post:
+      tags: [Sign-in]
+      summary: Renew the session
+      operationId: refreshToken
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      responses:
+        '200':
+          description: A fresh session token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, token]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  token: { type: string }
+                  groupRoles: { type: array, items: { type: string } }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/logout:
+    post:
+      tags: [Sign-in]
+      summary: Sign out
+      operationId: logout
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      responses:
+        '200':
+          description: Signed out; the session is ended and the cookie cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  message: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/sessions:
+    get:
+      tags: [Sessions]
+      summary: List signed-in devices
+      operationId: listSessions
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      responses:
+        '200':
+          description: The user's sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data: { type: array, items: { $ref: '#/components/schemas/Session' } }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/sessions/revoke-others:
+    post:
+      tags: [Sessions]
+      summary: Sign out every other device
+      operationId: revokeOtherSessions
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      responses:
+        '200':
+          description: The other sessions are ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, revoked]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  revoked: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/sessions/{id}:
+    delete:
+      tags: [Sessions]
+      summary: Sign out one device
+      operationId: revokeSession
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            $ref: ./generated/request-schemas.json#/SessionIdParams/properties/id
+      responses:
+        '200':
+          description: The session is ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, signedOut]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  signedOut: { type: boolean, description: Whether it was this device's own session }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/profile:
+    get:
+      tags: [Profile]
+      summary: Get your profile
+      operationId: getProfile
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      responses:
+        '200':
+          description: The signed-in user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, user]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  user: { $ref: '#/components/schemas/Profile' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      tags: [Profile]
+      summary: Update your name
+      operationId: updateProfile
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/UpdateProfileBody
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, user]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  user: { $ref: '#/components/schemas/Profile' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/profile/google:
+    post:
+      tags: [Profile]
+      summary: Link a Google account
+      operationId: linkGoogle
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/LinkGoogleBody
+      responses:
+        '200':
+          description: Linked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean, enum: [true] }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/profile/password:
+    post:
+      tags: [Profile]
+      summary: Set or change your password
+      operationId: changePassword
+      description: Signs out every other session; this one continues with a fresh token.
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/ChangePasswordBody
+      responses:
+        '200':
+          description: The password is set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, hasPassword, token]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  hasPassword: { type: boolean, enum: [true] }
+                  token: { type: string }
+                  message: { type: string }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/admin/users:
+    get:
+      tags: [Admin]
+      summary: List users
+      operationId: listUsers
+      x-internal: true
+      security: [{ SessionCookie: [] }, { BearerSession: [] }]
+      responses:
+        '200':
+          description: The newest 200 users
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, users]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  users: { type: array, items: { $ref: '#/components/schemas/User' } }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/internal/invalidate-tokens:
+    post:
+      tags: [Internal]
+      summary: Sign a user out everywhere
+      operationId: invalidateUserTokens
+      x-internal: true
+      security: [{ InternalToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/InvalidateUserTokensBody
+      responses:
+        '200':
+          description: Every session of the user has ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, newTokenVersion]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  message: { type: string }
+                  newTokenVersion: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'

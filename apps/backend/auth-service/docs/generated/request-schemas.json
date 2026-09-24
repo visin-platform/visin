@@ -1,0 +1,192 @@
+{
+  "ChangePasswordBody": {
+    "type": "object",
+    "properties": {
+      "currentPassword": {
+        "type": "string",
+        "minLength": 1
+      },
+      "newPassword": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 200
+      }
+    },
+    "required": [
+      "newPassword"
+    ]
+  },
+  "CreateApiKeyBody": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 60
+      },
+      "scopes": {
+        "maxItems": 8,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "vision:read",
+            "vision:write",
+            "dataset:read",
+            "dataset:write",
+            "label:read",
+            "label:write",
+            "analysis:read",
+            "analysis:write"
+          ]
+        }
+      },
+      "expiresInDays": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 365
+      }
+    },
+    "required": [
+      "name",
+      "scopes"
+    ]
+  },
+  "InvalidateUserTokensBody": {
+    "type": "object",
+    "properties": {
+      "email": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "email"
+    ]
+  },
+  "LinkGoogleBody": {
+    "type": "object",
+    "properties": {
+      "idToken": {
+        "type": "string",
+        "minLength": 1
+      },
+      "currentPassword": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "required": [
+      "idToken",
+      "currentPassword"
+    ]
+  },
+  "LoginBody": {
+    "type": "object",
+    "properties": {
+      "email": {
+        "type": "string",
+        "format": "email",
+        "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+      },
+      "password": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "email",
+      "password"
+    ]
+  },
+  "RegisterBody": {
+    "type": "object",
+    "properties": {
+      "email": {
+        "type": "string",
+        "format": "email",
+        "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+      },
+      "password": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 200
+      },
+      "firstName": {
+        "type": "string",
+        "maxLength": 100
+      },
+      "lastName": {
+        "type": "string",
+        "maxLength": 100
+      }
+    },
+    "required": [
+      "email",
+      "password"
+    ]
+  },
+  "SessionIdParams": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-f\\d]{24}$"
+      }
+    },
+    "required": [
+      "id"
+    ]
+  },
+  "SetupBody": {
+    "type": "object",
+    "properties": {
+      "email": {
+        "type": "string",
+        "format": "email",
+        "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+      },
+      "password": {
+        "type": "string",
+        "minLength": 10,
+        "maxLength": 200
+      },
+      "firstName": {
+        "type": "string",
+        "maxLength": 100
+      },
+      "lastName": {
+        "type": "string",
+        "maxLength": 100
+      }
+    },
+    "required": [
+      "email",
+      "password"
+    ]
+  },
+  "UpdateProfileBody": {
+    "type": "object",
+    "properties": {
+      "firstName": {
+        "type": "string"
+      },
+      "lastName": {
+        "type": "string"
+      }
+    }
+  },
+  "ValidateTokenBody": {
+    "type": "object",
+    "properties": {
+      "idToken": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "required": [
+      "idToken"
+    ]
+  }
+}

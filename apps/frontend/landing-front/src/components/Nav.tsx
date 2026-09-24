@@ -19,11 +19,16 @@ import GitHubIcon from './GitHubIcon';
 import { GITHUB_URL } from '../content';
 import { INK } from '../theme';
 
+// Absolute, so they also work from the docs: on the landing page itself a
+// link that differs only in its #fragment scrolls instead of reloading.
 const LINKS = [
-  { label: 'Product', href: '#product' },
-  { label: 'Assistant', href: '#assistant' },
-  { label: 'Self-hosting', href: '#open-source' }
+  { label: 'Product', href: '/#product' },
+  { label: 'Docs', href: '/docs' },
+  { label: 'Assistant', href: '/#assistant' },
+  { label: 'Self-hosting', href: '/#open-source' }
 ];
+
+const isCurrent = (href: string) => href === '/docs' && window.location.pathname.startsWith('/docs');
 
 interface NavProps {
   appUrl: string;
@@ -40,7 +45,7 @@ export default function Nav({ appUrl }: NavProps) {
     >
       <Container maxWidth="lg" disableGutters>
         <Toolbar sx={{ gap: 2, px: { xs: 2, sm: 3 } }}>
-          <Box component="a" href="#top" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: 'inherit', textDecoration: 'none' }}>
+          <Box component="a" href="/#top" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: 'inherit', textDecoration: 'none' }}>
             <Box component="img" src="/logo.svg" alt="" sx={{ width: 30, height: 30 }} />
             <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.5px' }}>
               Visin
@@ -54,9 +59,11 @@ export default function Nav({ appUrl }: NavProps) {
               <Link
                 key={link.href}
                 href={link.href}
+                aria-current={isCurrent(link.href) ? 'page' : undefined}
                 underline="none"
                 sx={{
                   color: 'rgba(255,255,255,0.72)',
+                  '&[aria-current="page"]': { color: '#fff' },
                   fontSize: '0.925rem',
                   fontWeight: 500,
                   '&:hover': { color: '#fff' }
@@ -110,7 +117,12 @@ export default function Nav({ appUrl }: NavProps) {
         <List>
           {LINKS.map((link) => (
             <ListItem key={link.href} disablePadding>
-              <ListItemButton component="a" href={link.href} onClick={() => setOpen(false)}>
+              <ListItemButton
+                component="a"
+                href={link.href}
+                aria-current={isCurrent(link.href) ? 'page' : undefined}
+                onClick={() => setOpen(false)}
+              >
                 <ListItemText primary={link.label} />
               </ListItemButton>
             </ListItem>

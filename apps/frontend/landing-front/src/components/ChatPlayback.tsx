@@ -172,7 +172,7 @@ function ToolCall({ name, progress }: { name: string; progress: number }) {
       {done ? (
         <CheckCircle sx={{ fontSize: 14, color: '#34D399' }} />
       ) : (
-        <CircularProgress size={12} thickness={6} sx={{ color: 'primary.light' }} />
+        <CircularProgress size={12} thickness={6} aria-label="Running" sx={{ color: 'primary.light' }} />
       )}
       <Typography sx={{ fontFamily: MONO, fontSize: '0.775rem', color: done ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.85)' }}>
         {name}

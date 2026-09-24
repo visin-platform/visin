@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { ZodError, ZodType } from 'zod';
 import { BadRequestError } from '../errors/HttpError';
 
@@ -7,6 +7,9 @@ export interface RequestSchemas {
   query?: ZodType;
   params?: ZodType;
 }
+
+/** A `validateRequest` middleware, which still carries the schemas it checks against. */
+export type ValidateRequestHandler = RequestHandler & { readonly requestSchemas: RequestSchemas };
 
 function formatZodError(error: ZodError): string {
   return error.issues
@@ -25,9 +28,13 @@ function formatZodError(error: ZodError): string {
  * getter` under strict mode, which is what compiled TS emits) — so the parsed
  * result is applied via `Object.defineProperty` instead of assignment. `body`
  * and `params` are plain writable own properties and don't need this.
+ *
+ * The schemas stay readable on the returned middleware as `requestSchemas`, so a
+ * service's docs test can find what each route really accepts and check its
+ * OpenAPI spec against that.
  */
-export function validateRequest(schemas: RequestSchemas) {
-  return (req: Request, _res: Response, next: NextFunction): void => {
+export function validateRequest(schemas: RequestSchemas): ValidateRequestHandler {
+  const middleware = (req: Request, _res: Response, next: NextFunction): void => {
     try {
       if (schemas.body) {
         req.body = schemas.body.parse(req.body);
@@ -49,4 +56,5 @@ export function validateRequest(schemas: RequestSchemas) {
       next(error);
     }
   };
+  return Object.assign(middleware, { requestSchemas: schemas });
 }

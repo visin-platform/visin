@@ -1,6 +1,11 @@
 import type { Config } from 'jest';
+import { freemem } from 'os';
 
 const config: Config = {
+  // At most 4 test processes, fewer when memory is short (about one per 2 free GB).
+  // More don't help: a run is bound by its slowest suite (~5s), and one per core
+  // (19 here) took ~10 GB per workspace and ran this machine out of memory.
+  maxWorkers: Math.max(1, Math.min(4, Math.floor(freemem() / 2 ** 31))),
   testEnvironment: 'node',
   transform: {
     '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
@@ -18,9 +23,9 @@ const config: Config = {
   coverageThreshold: {
     global: {
       statements: 97,
-      branches: 88,
-      functions: 96,
-      lines: 97,
+      branches: 91,
+      functions: 98,
+      lines: 98,
     },
   },
 };

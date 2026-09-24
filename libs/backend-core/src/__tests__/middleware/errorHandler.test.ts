@@ -93,6 +93,29 @@ describe('errorHandler', () => {
     expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('dup key');
   });
 
+  it.each([
+    ['entity.parse.failed', 400, 'BadRequestError', 'The request body is not valid JSON'],
+    ['entity.too.large', 413, 'PayloadTooLargeError', 'The request body is larger than this endpoint accepts'],
+    ['entity.verify.failed', 403, 'RequestBodyError', 'The request body could not be read']
+  ])('maps a body-parsing error (%s) to its status, not a 500', (type, status, name, message) => {
+    // The shape express.json() gives these: http-errors with a status and an `entity.*` type.
+    const error = Object.assign(new SyntaxError('Unexpected token b in JSON'), { type, status, statusCode: status, expose: true });
+    const res = makeRes();
+
+    errorHandler(error, makeReq(), res, next);
+
+    expect(res.status).toHaveBeenCalledWith(status);
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: name, message });
+  });
+
+  it('leaves an error with a non-client status or no entity type to the 500 path', () => {
+    for (const shape of [{ type: 'entity.parse.failed', status: 500 }, { type: 'request.aborted', status: 400 }, { type: 'entity.x', status: '400' }]) {
+      const res = makeRes();
+      errorHandler(Object.assign(new Error('x'), shape), makeReq(), res, next);
+      expect(res.status).toHaveBeenCalledWith(500);
+    }
+  });
+
   it('treats an unrecognized error as a 500 and logs it with its stack', () => {
     const res = makeRes();
     const error = new Error('db exploded');

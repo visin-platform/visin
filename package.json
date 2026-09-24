@@ -29,9 +29,13 @@
     "sync:libs:check": "node scripts/sync-lib-versions.mjs --check",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lockfiles": "node scripts/gen-lockfiles.mjs",
-    "lockfiles:check": "node scripts/gen-lockfiles.mjs --check"
+    "lockfiles:check": "node scripts/gen-lockfiles.mjs --check",
+    "openapi:lint": "node scripts/openapi.mjs lint",
+    "openapi:bundle": "node scripts/openapi.mjs bundle",
+    "openapi:bundle:check": "node scripts/openapi.mjs bundle --check"
   },
   "devDependencies": {
+    "@redocly/openapi-core": "^2.54.2",
     "concurrently": "^10.0.5",
     "prettier": "^3.9.6"
   },

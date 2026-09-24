@@ -131,4 +131,11 @@ describe('validateRequest', () => {
     expect(next).toHaveBeenCalledTimes(1);
     expect(next).toHaveBeenCalledWith();
   });
+
+  it('keeps its schemas readable, for docs tests that check a spec against the routes', () => {
+    const body = z.object({ name: z.string() });
+    const query = z.object({ page: z.coerce.number().default(1) });
+
+    expect(validateRequest({ body, query }).requestSchemas).toEqual({ body, query });
+  });
 });

@@ -4,6 +4,16 @@
   "description": "Shared backend functionality for Visin services",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./openapi-testing": {
+      "types": "./dist/openapi-testing/index.d.ts",
+      "default": "./dist/openapi-testing/index.js"
+    }
+  },
   "files": [
     "dist"
   ],
@@ -45,7 +55,21 @@
     "zod": "^4.6.4"
   },
   "peerDependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "yaml": "^2.9.1"
+  },
+  "peerDependenciesMeta": {
+    "ajv": {
+      "optional": true
+    },
+    "ajv-formats": {
+      "optional": true
+    },
+    "yaml": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -55,11 +79,14 @@
     "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.5.1",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "eslint": "^10.10.0",
     "jest": "^30.5.1",
     "standard-version": "^9.5.0",
     "ts-jest": "^29.4.12",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.0"
+    "typescript-eslint": "^8.70.0",
+    "yaml": "^2.9.1"
   }
 }

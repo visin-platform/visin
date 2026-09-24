@@ -6,3 +6,6 @@ coverage/
 *.log
 import
 cache
+
+# Written by a test from the Zod schemas; formatting it would churn on every regenerate
+**/docs/generated/

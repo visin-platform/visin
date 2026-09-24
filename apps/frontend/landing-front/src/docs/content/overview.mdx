@@ -1,0 +1,39 @@
+Visin has an HTTP API. Your training script uses it to send runs as they happen, your own tools use it to read
+results back, and an AI assistant reaches the same data through MCP.
+
+## What you can do
+
+- **Log training runs from your script.** Post each epoch's losses and metrics as it finishes. Visin charts them
+  as they arrive and compares runs at their best epoch. Start with the [quickstart](/docs/quickstart).
+- **Send test results and benchmarks.** Per-class and per-condition scores after training post the same way, with
+  the same project token. See [test results and benchmarks](/docs/test-results-and-benchmarks).
+- **Read results back.** Pull runs, epochs and comparisons into a notebook or a CI job with a
+  [user API key](/docs/authentication#user-api-keys).
+- **Ask an assistant.** Connect Claude or another MCP client and ask about your runs in plain language. See
+  [connecting an assistant](/docs/assistants).
+
+## The API at a glance
+
+- **Address:** your deployment's API address. On a local `docker compose up` it is `http://localhost:4010`.
+- **Paths:** every path starts with `/api`, as in `/api/trainings`.
+- **Format:** JSON in and JSON out.
+- **Credentials:** `Authorization: Bearer <credential>` on every request. See [authentication](/docs/authentication).
+
+A request that works answers with its result under `data`:
+
+```json
+{ "success": true, "data": { "_id": "6ab5932a0e9a6b7570e30e2e", "name": "resnet50-baseline" } }
+```
+
+One that fails answers with the matching HTTP status and a message that names the problem:
+
+```json
+{ "success": false, "error": "BadRequestError", "message": "results: Results are required" }
+```
+
+## Where to start
+
+1. [Quickstart](/docs/quickstart): send a run from a script and see it charted.
+2. [Authentication](/docs/authentication): pick the right credential for what you are building.
+3. [API reference](/docs/api): every endpoint, its parameters and responses, and a way to try each one against your
+   own Visin.

@@ -41,7 +41,8 @@ export const getProjectById = async (req: AuthRequest, res: Response): Promise<v
 
 // Get project by ID or slug
 export const getProjectByIdOrSlug = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { identifier } = req.params as { identifier: string };
+  // An id or a slug.
+  const { id: identifier } = req.params as { id: string };
 
   const project = await projectService.getProjectByIdOrSlug(identifier, req.user?.id);
 

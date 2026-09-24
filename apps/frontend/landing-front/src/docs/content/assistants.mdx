@@ -1,0 +1,52 @@
+An AI assistant such as Claude can read your runs and answer questions about them: which run is best at night, whether
+a curve has plateaued, what a prediction frame shows. It connects to Visin's MCP server, signed in as you, and
+reaches only what you allow.
+
+## Connect it
+
+Give your assistant this address as a custom MCP server or connector:
+
+<McpEndpoint />
+
+In Claude Code, for example:
+
+```bash
+claude mcp add --transport http visin http://localhost:5009/mcp
+```
+
+The first time it connects, a Visin page opens in your browser. Sign in, look at what the assistant asks for, untick
+anything you would rather not give, and approve. The assistant never sees your password or a key: it gets its own
+access, limited to what you ticked.
+
+<Callout kind="note" title="Hosted assistants need a public address">
+  An assistant that runs in the cloud, such as Claude on the web, reaches your Visin from the internet. Serve the MCP
+  server over HTTPS at a public address behind your reverse proxy, and set it as `MCP_PUBLIC_URL`. An assistant on your
+  own machine can use the local address.
+</Callout>
+
+## What it can do
+
+What you tick decides which tools the assistant has:
+
+| Permission       | Tools                                                                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vision:read`    | List and read projects and runs, sample a run's training curve, compare runs at their best epoch, read test results and benchmarks, list and look at prediction frames |
+| `vision:write`   | Create and rename projects, rename and retag runs                                                                                                                      |
+| `dataset:read`   | List and read datasets                                                                                                                                                 |
+| `analysis:read`  | List and read findings                                                                                                                                                 |
+| `analysis:write` | Record a finding: a written conclusion about runs, kept in the project                                                                                                 |
+
+It sees only what your account can see, and cannot write epochs or results: those come from your training pipeline,
+with a [project token](/docs/authentication#project-tokens).
+
+## With an API key instead
+
+An MCP client that lets you set a request header can connect with a [user API key](/docs/authentication#user-api-keys)
+rather than signing in: send `Authorization: Bearer vsn_live_…`. The key's scopes decide the tools, as above.
+
+## Seeing what it did, and taking access back
+
+In the app, under **Account**:
+
+- **Connected apps** lists every assistant you approved and what it may do. **Disconnect** ends its access at once.
+- **Assistant activity** shows which tools were called, when, and how much each cost in tokens.

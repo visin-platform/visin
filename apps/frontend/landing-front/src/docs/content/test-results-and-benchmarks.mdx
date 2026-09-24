@@ -1,0 +1,110 @@
+After training, two more kinds of result say how good a model is and how fast it runs: **test results**, scores on
+held-out data, and **benchmarks**, speed and size on a device. Both post with the same project token as the run.
+
+## Test results
+
+A test result belongs to one epoch, usually the checkpoint you would ship. Name it by the `epoch_uuid` you sent
+with that epoch (see [sending results](/docs/sending-results#an-epoch)), or the one its upload returned.
+
+```python
+requests.post(
+    f"{VISIN_URL}/api/test-results/upload",
+    headers=HEADERS,
+    json={
+        "epoch": 12,
+        "epoch_uuid": epoch_id,
+        "test_results": {
+            "day": {
+                "overall": {"pixel_accuracy": 0.93, "mean_accuracy": 0.81},
+                "car": {"iou": 0.74, "precision": 0.82, "recall": 0.79},
+                "pedestrian": {"iou": 0.47, "precision": 0.58, "recall": 0.52},
+            },
+            "night": {
+                "overall": {"pixel_accuracy": 0.86, "mean_accuracy": 0.69},
+                "car": {"iou": 0.61, "precision": 0.70, "recall": 0.66},
+                "pedestrian": {"iou": 0.29, "precision": 0.41, "recall": 0.33},
+            },
+        },
+    },
+).raise_for_status()
+```
+
+### Conditions, classes and metrics
+
+`test_results` has three levels, and Visin finds every name at each of them:
+
+- **Conditions** are the top-level keys: `day` and `night` above, or `clear`, `rain`, `fog`, or one per test set.
+  Each is shown on its own in the run's test results, and runs can be compared condition by condition.
+- **Classes** are the keys inside a condition whose values hold metrics: `car` and `pedestrian`.
+- **Metrics** are the numbers inside a class: any name, such as `iou`, `precision`, `recall`, `f1` or `ap`.
+
+Three keys are not conditions or classes:
+
+| Key              | Holds                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `overall`        | Metrics for a whole condition, such as `pixel_accuracy` or `mean_accuracy`. At the top level of `test_results`, metrics for the whole test. |
+| `inference_time` | Timing of the test run: `total_seconds`, `samples`, `batches`, `avg_per_sample_ms`, `avg_per_batch_ms`, `throughput_fps`.                   |
+| `metadata`       | Anything else to keep with the result.                                                                                                      |
+
+To show conditions or classes under nicer names, in a set order or with fixed colours, open the project's
+**Settings**. The names you send stay the same.
+
+## Benchmarks
+
+A benchmark records how the model runs: time per image, frames per second, parameters, FLOPs and memory, on one
+or more devices. Link it to the run with `training_uuid`, and to a checkpoint with `epoch_uuid` if you like.
+
+```python
+requests.post(
+    f"{VISIN_URL}/api/benchmarks/upload",
+    headers=HEADERS,
+    json={
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "training_uuid": run_id,
+        "epoch_uuid": epoch_id,
+        "system_info": {"cpu_count": 8, "cpu_count_logical": 16, "memory_total_gb": 31.2},
+        "results": [
+            {
+                "device": "cuda",
+                "device_type": "NVIDIA RTX 4090",
+                "batch_size": 1,
+                "image_size": 512,
+                "mean_time_ms": 8.4,
+                "std_time_ms": 0.3,
+                "fps": 119.0,
+                "total_parameters_m": 27.4,
+                "flops_giga": 62.1,
+                "gpu_memory_max_mb": 1830,
+            },
+            {
+                "device": "cpu",
+                "device_type": "AMD Ryzen 9 7950X",
+                "batch_size": 1,
+                "image_size": 512,
+                "mean_time_ms": 142.0,
+                "std_time_ms": 6.1,
+                "fps": 7.0,
+            },
+        ],
+    },
+).raise_for_status()
+```
+
+`timestamp`, `system_info` (with `cpu_count`, `cpu_count_logical` and `memory_total_gb`) and `results` are
+required. Each entry of `results` is one measurement, usually one device and batch size. The benchmark pages show
+these fields when they are present:
+
+| Field                                    | Meaning                                                 |
+| ---------------------------------------- | ------------------------------------------------------- |
+| `device`, `device_type`                  | Where it ran, such as `cuda` and the GPU's name         |
+| `batch_size`, `image_size`               | The input it was timed on                               |
+| `mean_time_ms`, `std_time_ms`            | Inference time: its mean and spread over the timed runs |
+| `fps`                                    | Throughput                                              |
+| `total_parameters_m`, `flops_giga`       | Model size, in millions of parameters and GFLOPs        |
+| `gpu_memory_max_mb`, `ram_memory_max_mb` | Peak memory                                             |
+
+Other fields are kept with the benchmark and returned by the API.
+
+<Callout kind="note" title="Import the timestamp's helpers">
+  The example uses `from datetime import datetime, timezone`. Any ISO date works, as long as it is a string.
+</Callout>

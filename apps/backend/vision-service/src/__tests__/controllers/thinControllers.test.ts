@@ -410,7 +410,7 @@ describe('projectController', () => {
     await projectCtrl.getProjectById(makeReq({ params: { id: 'i' } }), makeRes());
     expect(mockedProjectSvc.getProjectById).toHaveBeenCalledWith('i', 'u1');
 
-    await projectCtrl.getProjectByIdOrSlug(makeReq({ params: { identifier: 'x' } }), makeRes());
+    await projectCtrl.getProjectByIdOrSlug(makeReq({ params: { id: 'x' } }), makeRes());
     expect(mockedProjectSvc.getProjectByIdOrSlug).toHaveBeenCalledWith('x', 'u1');
 
     const createRes = makeRes();

@@ -1,28 +1,28 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: Vision Service API
   description: |
-    API for managing training runs, model evaluation, and analysis. Datasets are served by dataset-service.
+    Training runs, their epochs and results, and what is built on them: test results, benchmarks,
+    comparisons, visualizations and written findings. New here? Start with the
+    [quickstart](/docs/quickstart).
 
-    Configurations are a public shared library, even when selected by private trainings. Their
-    direct lookup, list, download, and export endpoints do not inherit project
-    privacy. Upload only non-confidential content and remove credentials before
-    ingestion; arbitrary JSON and archive contents are not automatically redacted.
-    A training's selected-config relationship follows the training's visibility.
-    Public visibility does not grant write access. Project owners and current
-    members of assigned editor groups can modify project data; project settings,
-    grants, deletion, and tokens remain owner-only. Standalone/library creators
-    control their records. Unowned records require operator migration before editing.
-    New file references must consume an uploader/parent-bound reservation.
+    **Credentials.** A training script writes with a *project token*, which reaches its own project only.
+    Tools that act as a person use a *user API key* (see the auth API). Both go in
+    `Authorization: Bearer <token>`.
 
-    ## Key Features
-    - Training run orchestration
-    - Model evaluation and benchmarking
-    - Visualization generation
-    - Project organization
+    **Responses.** Every path starts with `/api`. A request that works answers
+    `{ "success": true, "data": … }`; one that fails answers `{ "success": false, "error": …, "message": … }`
+    with the matching status.
+
+    **Privacy.** A private project, and everything in it, is visible only to its owner and the members of
+    its editor groups. Configurations are the exception: they are a shared library and stay public even when
+    a private run uses one, so upload nothing confidential in them.
   version: 1.0.0
   contact:
     name: Visin Team
+  license:
+    name: MIT
+    identifier: MIT
 servers:
   - url: http://localhost:4010/api
     description: Development server
@@ -50,6 +50,8 @@ tags:
     description: Training/test/benchmark comparison management
   - name: Projects
     description: Project management for organizing experiments
+  - name: Findings
+    description: Written conclusions about runs, by people or assistants
   - name: API Tokens
     description: API token management for programmatic access
 
@@ -57,16 +59,23 @@ components:
   schemas:
     Error:
       type: object
+      required:
+        - success
+        - error
+        - message
       properties:
         success:
           type: boolean
-          example: false
+          enum:
+            - false
+        error:
+          type: string
+          description: The kind of failure
+          example: NotFoundError
         message:
           type: string
-          example: "Error description"
-      required:
-        - success
-        - message
+          description: What went wrong, naming the field or record
+          example: 'Training not found with uuid: 5f0c6a2e-1d4b-4c3a-9a53-2b7e1f0d8c11'
 
     Success:
       type: object
@@ -76,16 +85,6 @@ components:
           example: true
       required:
         - success
-
-    PaginatedResponse:
-      type: object
-      properties:
-        visualizations:
-          type: array
-          items:
-            $ref: '#/components/schemas/Visualization'
-        pagination:
-          $ref: '#/components/schemas/PaginationMeta'
 
     PaginationMeta:
       type: object
@@ -164,13 +163,26 @@ components:
       properties:
         _id:
           type: string
-        epoch_uuid:
+        trainingId:
           type: string
         training_uuid:
           type: string
+        epoch_uuid:
+          type: string
         epoch:
           type: integer
-        metrics:
+        timestamp:
+          type: string
+          format: date-time
+        results:
+          type: object
+          description: What the epoch reported, as sent. Conditions, classes and metrics are discovered from it.
+        learning_rate:
+          type: number
+        epoch_time:
+          type: number
+          description: Seconds the epoch took
+        metadata:
           type: object
         createdAt:
           type: string
@@ -268,16 +280,30 @@ components:
           type: string
         name:
           type: string
+        description:
+          type: string
         type:
           type: string
-          enum: [training, test, benchmark]
-        items:
+          enum:
+            - trainings
+            - tests
+            - benchmarks
+            - epochs
+          description: What `itemIds` name
+        itemIds:
           type: array
           items:
             type: string
-        results:
+        projectId:
+          type: string
+        ownerId:
+          type: string
+        metadata:
           type: object
         createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
 
@@ -331,22 +357,43 @@ components:
         createdAt:
           type: string
           format: date-time
+    Finding:
+      type: object
+      required: [_id, projectId, title, body, createdAt, trainingIds, citedTrainings, authorKind, authorLabel]
+      properties:
+        _id: { type: string }
+        projectId: { type: string }
+        trainingId: { type: string }
+        title: { type: string }
+        body: { type: string }
+        recommendations: { type: string }
+        createdAt: { type: string, format: date-time }
+        authorKind: { type: string, enum: [person, assistant] }
+        authorLabel: { type: string }
+        trainingIds: { type: array, items: { type: string } }
+        citedTrainings:
+          type: array
+          items:
+            type: object
+            properties:
+              _id: { type: string }
+              name: { type: string }
+              status: { type: string }
 
   securitySchemes:
     BearerCredential:
       type: http
       scheme: bearer
-      description: User session, project token, or supported user API key/OAuth access token
+      description: "A user API key (`vsn_live_…`) or an assistant's OAuth access token, sent as `Authorization: Bearer <key>`."
     SessionCookie:
       type: apiKey
       in: cookie
       name: access_token
-      description: User session cookie
-    ApiToken:
-      type: apiKey
-      in: header
-      name: x-api-token
-      description: API token for authentication
+      description: The signed-in browser session. Not for scripts.
+    ProjectToken:
+      type: http
+      scheme: bearer
+      description: "A project token, created in the project's settings. It writes to its own project only. Sent as `Authorization: Bearer <token>`."
 
   # Referenced throughout `paths` — every error goes through the shared
   # errorHandler, so they all share the Error shape.
@@ -363,8 +410,20 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-    InternalError:
-      description: Unexpected server error
+    Unauthorized:
+      description: No credential, or one that is invalid, expired or revoked
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The credential is valid but may not do this
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error:
+      description: The request failed; the status and message say why
       content:
         application/json:
           schema:
@@ -374,24 +433,24 @@ paths:
   /write-capabilities:
     get:
       summary: Current browser-session write capabilities
+      operationId: getCapabilities
+      x-internal: true
       description: Anonymous users and project credentials receive false. Responses are not cached. Resource writes independently recheck permissions.
       security:
-        - SessionCookie: []
-        - BearerCredential: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
         - {}
       parameters:
-        - in: query
-          name: kind
+        - name: kind
+          in: query
           required: true
-          schema:
-            type: string
-            enum: [project, training, comparison, benchmark, test-result, analysis, dataset]
-        - in: query
-          name: ids
+          schema: { $ref: ./generated/request-schemas.json#/WriteCapabilitiesQuery/properties/kind }
+        - name: ids
+          in: query
           required: true
           description: One to 100 comma-separated ObjectIds
-          schema:
-            type: string
+          schema: { $ref: ./generated/request-schemas.json#/WriteCapabilitiesQuery/properties/ids }
       responses:
         '200':
           description: Map of resource IDs to write permission
@@ -408,12 +467,18 @@ paths:
                       type: boolean
         '400':
           $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/Error'
+
   /write-capabilities/groups:
     get:
       summary: Groups the signed-in project owner can assign
+      operationId: getGroups
+      x-internal: true
       security:
-        - SessionCookie: []
-        - BearerCredential: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       responses:
         '200':
           description: Current live group IDs and names
@@ -433,11 +498,16 @@ paths:
                           type: string
                         name:
                           type: string
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /findings:
     get:
-      tags: [Projects]
+      tags: [Findings]
       summary: List visible recorded findings
+      operationId: getFindings
       description: |
         Includes public projects and the authenticated user's own projects.
         Visibility and subject/citation filters apply before the limit. Results
@@ -453,18 +523,18 @@ paths:
         - name: project
           in: query
           description: Project slug or ID; an inaccessible project returns 403.
-          schema: { type: string }
+          schema: { $ref: ./generated/request-schemas.json#/ListFindingsQuery/properties/project }
         - name: training
           in: query
           description: Matches the finding's subject training or a cited training.
-          schema: { type: string }
+          schema: { $ref: ./generated/request-schemas.json#/ListFindingsQuery/properties/training }
         - name: limit
           in: query
-          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+          schema: { $ref: ./generated/request-schemas.json#/ListFindingsQuery/properties/limit }
         - name: before
           in: query
           description: The previous page's final createdAt (UTC ISO timestamp with milliseconds), underscore, and lowercase 24-character ObjectId.
-          schema: { type: string, minLength: 49, maxLength: 49 }
+          schema: { $ref: ./generated/request-schemas.json#/ListFindingsQuery/properties/before }
       responses:
         '200':
           description: One page of visible findings, including visible cited training names.
@@ -477,83 +547,227 @@ paths:
                   success: { type: boolean, enum: [true] }
                   data:
                     type: array
-                    items:
-                      type: object
-                      required: [_id, projectId, title, body, createdAt, trainingIds, citedTrainings, authorKind, authorLabel]
-                      properties:
-                        _id: { type: string }
-                        projectId: { type: string }
-                        trainingId: { type: string }
-                        title: { type: string }
-                        body: { type: string }
-                        recommendations: { type: string }
-                        createdAt: { type: string, format: date-time }
-                        authorKind: { type: string, enum: [person, assistant] }
-                        authorLabel: { type: string }
-                        trainingIds: { type: array, items: { type: string } }
-                        citedTrainings:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              _id: { type: string }
-                              name: { type: string }
-                              status: { type: string }
+                    items: { $ref: '#/components/schemas/Finding' }
         '400':
           description: Invalid limit or cursor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           description: The selected project is not visible to this caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: The selected project does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+    post:
+      tags: [Findings]
+      summary: Record a finding
+      operationId: createFinding
+      description: A written conclusion about one or more runs in a project. The caller must be able to edit the project.
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/CreateFindingBody
+      responses:
+        '201':
+          description: Finding recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/Finding' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403':
+          description: The caller cannot edit this project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404': { $ref: '#/components/responses/NotFound' }
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /findings/{id}:
+    get:
+      tags: [Findings]
+      summary: Get a finding
+      operationId: getFindingById
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The finding, with the cited trainings the caller can see
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Finding' }
+        '403':
+          description: The finding's project is not visible to this caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404': { $ref: '#/components/responses/NotFound' }
+        default:
+          $ref: '#/components/responses/Error'
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+    delete:
+      tags: [Findings]
+      summary: Delete a finding
+      operationId: deleteFinding
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Finding deleted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Success' }
+        '403':
+          description: The caller cannot edit this finding's project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404': { $ref: '#/components/responses/NotFound' }
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /findings/{id}/latex:
+    get:
+      tags: [Findings]
+      summary: Export a finding as LaTeX
+      operationId: exportFinding
+      description: |
+        The finding as a `.tex` section with a results table of its cited runs.
+        Returned as JSON rather than a file download, so the app and an assistant
+        can both use it. `selectBy` names the metric that decides which epoch each
+        run is reported at, and `direction` says which end of it is better.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - name: selectBy
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/ExportFindingQuery/properties/selectBy }
+        - name: direction
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/ExportFindingQuery/properties/direction }
+        - name: metrics
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/ExportFindingQuery/properties/metrics }
+      responses:
+        '200':
+          description: The LaTeX source and a suggested file name
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    required: [filename, tex]
+                    properties:
+                      filename: { type: string, example: augmentation-helps-at-night.tex }
+                      tex: { type: string }
+        '403':
+          description: The finding's project is not visible to this caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404': { $ref: '#/components/responses/NotFound' }
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+
   /trainings:
     get:
       tags: [Trainings]
       summary: Get all trainings
+      operationId: getTrainings
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: page
           in: query
-          schema:
-            type: integer
-            default: 1
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/page }
         - name: limit
           in: query
-          schema:
-            type: integer
-            default: 10
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/limit }
         - name: search
           in: query
-          schema:
-            type: string
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/search }
         - name: status
           in: query
-          schema:
-            type: string
-            enum: [pending, running, completed, failed]
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/status }
         - name: datasetId
           in: query
-          schema:
-            type: string
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/datasetId }
         - name: projectId
           in: query
-          schema:
-            type: string
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/projectId }
         - name: tags
           in: query
-          schema:
-            type: array
-            items:
-              type: string
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/tags }
+        - name: excludeTags
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/excludeTags }
+        - name: ids
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/ids }
         - name: sortBy
           in: query
-          schema:
-            type: string
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/sortBy }
         - name: order
           in: query
-          schema:
-            type: string
-            enum: [asc, desc]
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/order }
       responses:
         '200':
           description: Successful response
@@ -574,34 +788,28 @@ paths:
                           $ref: '#/components/schemas/Training'
                       pagination:
                         $ref: '#/components/schemas/PaginationMeta'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       tags: [Trainings]
       summary: Create a new training
+      operationId: createTraining
+      description: |
+        Start a run before posting its epochs. Send your own `uuid` to refer to the
+        run by an id your script already knows; one is generated otherwise. With a
+        project token the run goes into the token's project and `projectId` is ignored.
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                description:
-                  type: string
-                datasetId:
-                  type: string
-                configId:
-                  type: string
-                projectId:
-                  type: string
-                tags:
-                  type: array
-                  items:
-                    type: string
-                metadata:
-                  type: object
+              $ref: ./generated/request-schemas.json#/CreateTrainingBody
       responses:
         '201':
           description: Training created successfully
@@ -615,11 +823,20 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Training'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/Error'
 
   /trainings/stats:
     get:
       tags: [Trainings]
       summary: Get training statistics
+      operationId: getTrainingStats
       description: |
         Cost estimates use each project's current CPU/GPU rates. Amounts are
         grouped by currency without exchange-rate conversion. Legacy scalar cost
@@ -627,7 +844,10 @@ paths:
         Coverage includes unpriced trainings and measured durations in seconds;
         zero rates count as priced. These are current estimates, not historical bills.
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       responses:
         '200':
           description: Successful response
@@ -691,24 +911,68 @@ paths:
                             description: Measured seconds without configured rates
                       filters:
                         type: object
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingStatsQuery/properties/status }
+        - name: datasetId
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingStatsQuery/properties/datasetId }
+        - name: projectId
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingStatsQuery/properties/projectId }
+        - name: tags
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingStatsQuery/properties/tags }
+
+  /trainings/tags:
+    get:
+      tags: [Trainings]
+      summary: List the tags in use
+      operationId: getTrainingTags
+      description: Every tag on a training the caller can see, for filter suggestions.
+      responses:
+        '200':
+          description: Tag names
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { type: string }
+        default:
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
 
   /trainings/compare:
     post:
       tags: [Trainings]
       summary: Compare trainings
+      operationId: compareTrainings
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                trainingIds:
-                  type: array
-                  items:
-                    type: string
+              $ref: ./generated/request-schemas.json#/CompareTrainingsBody
       responses:
         '200':
           description: Comparison results
@@ -722,13 +986,21 @@ paths:
                     example: true
                   data:
                     type: object
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /trainings/{id}:
     get:
       tags: [Trainings]
       summary: Get training by ID
+      operationId: getTrainingById
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: id
           in: path
@@ -750,11 +1022,16 @@ paths:
                     $ref: '#/components/schemas/Training'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
     put:
       tags: [Trainings]
       summary: Update training
+      operationId: updateTraining
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: id
           in: path
@@ -766,21 +1043,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                description:
-                  type: string
-                status:
-                  type: string
-                  enum: [pending, running, completed, failed]
-                tags:
-                  type: array
-                  items:
-                    type: string
-                metadata:
-                  type: object
+              $ref: ./generated/request-schemas.json#/UpdateTrainingBody
       responses:
         '200':
           description: Training updated successfully
@@ -794,11 +1057,24 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Training'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
     delete:
       tags: [Trainings]
       summary: Delete training
+      operationId: deleteTraining
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: id
           in: path
@@ -812,30 +1088,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Success'
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /trainings/deleted:
     get:
       tags: [Trainings]
       summary: List deleted trainings the caller can restore
+      operationId: getDeletedTrainings
       description: >
-        Most recently deleted first: runs in projects the caller may edit, and
-        standalone runs they own. Requires a signed-in caller.
+        Most recently deleted first: runs in projects the caller may edit, and standalone runs they own. Requires a signed-in caller.
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: page
           in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
+          schema: { $ref: ./generated/request-schemas.json#/GetDeletedTrainingsQuery/properties/page }
         - name: limit
           in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 30
+          schema: { $ref: ./generated/request-schemas.json#/GetDeletedTrainingsQuery/properties/limit }
       responses:
         '200':
           description: Successful response
@@ -865,17 +1144,24 @@ paths:
                             type: integer
                           pages:
                             type: integer
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /trainings/{id}/restore:
     post:
       tags: [Trainings]
       summary: Restore a deleted training
+      operationId: restoreTraining
       description: >
-        Brings the training back with the epochs and test results its delete
-        removed. Rows deleted separately beforehand stay deleted, and the training
-        is not re-added to comparisons it was removed from.
+        Brings the training back with the epochs and test results its delete removed. Rows deleted separately beforehand stay deleted, and the training is not re-added to comparisons it was removed from.
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: id
           in: path
@@ -897,13 +1183,23 @@ paths:
                     $ref: '#/components/schemas/Training'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /trainings/uuid/{uuid}:
     get:
       tags: [Trainings]
       summary: Get training by UUID
+      operationId: getTrainingByUuid
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: uuid
           in: path
@@ -925,29 +1221,34 @@ paths:
                     $ref: '#/components/schemas/Training'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   /trainings/{id}/epochs:
     get:
       tags: [Trainings]
       summary: Get epochs for a training
+      operationId: getTrainingWithEpochs
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
-        - name: page
+        - name: sortBy
           in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingWithEpochsQuery/properties/sortBy }
+        - name: order
           in: query
-          schema:
-            type: integer
-            default: 50
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingWithEpochsQuery/properties/order }
+        - name: sample
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingWithEpochsQuery/properties/sample }
       responses:
         '200':
           description: Successful response
@@ -968,47 +1269,18 @@ paths:
                           $ref: '#/components/schemas/Epoch'
                       pagination:
                         $ref: '#/components/schemas/PaginationMeta'
-
-  /trainings/{id}/comments:
-    get:
-      tags: [Trainings]
-      summary: Get comments for a training
-      security:
-        - ApiToken: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 1000
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      comments:
-                        type: array
-                        items:
-                          type: object  # Would define Comment schema if it existed
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /trainings/{id}/configs:
     get:
       tags: [Trainings]
       summary: Get configurations for a training
+      operationId: getConfigsByTraining
       description: |
         Resolves a non-deleted training and checks its project visibility before
         returning its selected config. Public and standalone trainings allow
@@ -1016,9 +1288,10 @@ paths:
         Project tokens are additionally restricted to their own project.
         The config's content remains available through the shared public library.
       security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
         - {}
-        - BearerCredential: []
-        - SessionCookie: []
       parameters:
         - name: id
           in: path
@@ -1048,31 +1321,35 @@ paths:
                         enum: [0, 1]
         '403':
           description: The caller cannot access this training's project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: Training is missing or deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
 
   # Epochs
   /epochs:
     post:
       tags: [Epochs]
       summary: Create a new epoch
+      operationId: createEpoch
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                epoch_uuid:
-                  type: string
-                training_uuid:
-                  type: string
-                epoch:
-                  type: integer
-                metrics:
-                  type: object
+              $ref: ./generated/request-schemas.json#/CreateEpochBody
       responses:
         '201':
           description: Epoch created successfully
@@ -1086,33 +1363,32 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Epoch'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   /epochs/batch:
     post:
       tags: [Epochs]
       summary: Create multiple epochs
+      operationId: createEpochsBatch
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                epochs:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      epoch_uuid:
-                        type: string
-                      training_uuid:
-                        type: string
-                      epoch:
-                        type: integer
-                      metrics:
-                        type: object
+              $ref: ./generated/request-schemas.json#/CreateEpochsBatchBody
       responses:
         '201':
           description: Epochs created successfully
@@ -1128,28 +1404,49 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Epoch'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   /epochs/upload:
     post:
       tags: [Epochs]
       summary: Upload epoch data from JSON
+      operationId: createEpochFromJson
+      description: |
+        Post one epoch of a run, usually at the end of each epoch in the training loop.
+        Name the run with `training_uuid` (or its `trainingId`); it must already exist,
+        so create it with `POST /trainings` first.
+
+        `results` is stored as sent. The run's charts read `train` and `val` (the training and validation
+        curves) and the metrics under them, such as `loss` and `mean_iou`; a key under `val` or `train` that
+        holds metrics such as `iou` is a class, found without being declared. A metric an epoch did not
+        report is left out, not sent as `0`. See /docs/sending-results for every name the charts read.
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                epoch_uuid:
-                  type: string
-                training_uuid:
-                  type: string
-                epoch:
-                  type: integer
-                metrics:
-                  type: object
+              $ref: ./generated/request-schemas.json#/CreateEpochFromJsonBody
+            example:
+              training_uuid: 5f0c6a2e-1d4b-4c3a-9a53-2b7e1f0d8c11
+              epoch: 12
+              results:
+                train: { loss: 0.214 }
+                val:
+                  mean_iou: 0.447
+                  car: { iou: 0.61 }
       responses:
         '201':
           description: Epoch uploaded successfully
@@ -1163,13 +1460,27 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Epoch'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   /epochs/{id}:
     get:
       tags: [Epochs]
       summary: Get epoch by ID
+      operationId: getEpochById
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: id
           in: path
@@ -1191,11 +1502,16 @@ paths:
                     $ref: '#/components/schemas/Epoch'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
     put:
       tags: [Epochs]
       summary: Update epoch
+      operationId: updateEpoch
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: id
           in: path
@@ -1207,10 +1523,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                metrics:
-                  type: object
+              $ref: ./generated/request-schemas.json#/UpdateEpochBody
       responses:
         '200':
           description: Epoch updated successfully
@@ -1224,12 +1537,25 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Epoch'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
     delete:
       tags: [Epochs]
       summary: Delete epoch
+      operationId: deleteEpoch
       description: Soft-deletes the epoch together with the test results recorded against it.
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: id
           in: path
@@ -1245,13 +1571,23 @@ paths:
                 $ref: '#/components/schemas/Success'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /epochs/uuid/{uuid}:
     get:
       tags: [Epochs]
       summary: Get epoch by UUID
+      operationId: getEpochByUuid
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: uuid
           in: path
@@ -1273,29 +1609,37 @@ paths:
                     $ref: '#/components/schemas/Epoch'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
-  /epochs/uuid/{uuid}/test-results:
+  /epochs/uuid/{epochUuid}/test-results:
     get:
       tags: [Epochs]
       summary: Get test results for an epoch
+      operationId: getTestResultsByEpochUuid
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
-        - name: uuid
+        - name: epochUuid
           in: path
           required: true
           schema:
             type: string
         - name: page
           in: query
-          schema:
-            type: integer
-            default: 1
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsByEpochUuidQuery/properties/page }
         - name: limit
           in: query
-          schema:
-            type: integer
-            default: 50
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsByEpochUuidQuery/properties/limit }
+        - name: sortBy
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsByEpochUuidQuery/properties/sortBy }
+        - name: order
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsByEpochUuidQuery/properties/order }
       responses:
         '200':
           description: Successful response
@@ -1316,19 +1660,41 @@ paths:
                           $ref: '#/components/schemas/TestResult'
                       pagination:
                         $ref: '#/components/schemas/PaginationMeta'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /epochs/training/{trainingId}:
     get:
       tags: [Epochs]
       summary: Get epochs by training ID
+      operationId: getEpochsByTraining
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: trainingId
           in: path
           required: true
           schema:
             type: string
+        - name: page
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetEpochsByTrainingQuery/properties/page }
+        - name: limit
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetEpochsByTrainingQuery/properties/limit }
+        - name: sortBy
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetEpochsByTrainingQuery/properties/sortBy }
+        - name: order
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetEpochsByTrainingQuery/properties/order }
       responses:
         '200':
           description: Successful response
@@ -1341,17 +1707,37 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Epoch'
+                    type: object
+                    required:
+                      - epochs
+                    description: With `page` or `limit`, a page and its `pagination`; without, every epoch and their `total`.
+                    properties:
+                      epochs:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Epoch'
+                      pagination:
+                        $ref: '#/components/schemas/PaginationMeta'
+                      total:
+                        type: integer
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   # Configurations
   /configs:
     get:
       tags: [Configurations]
       summary: Get all configurations
+      operationId: getAllConfigs
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       responses:
         '200':
           description: Successful response
@@ -1367,24 +1753,37 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Configuration'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      parameters:
+        - name: page
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetAllConfigsQuery/properties/page }
+        - name: limit
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetAllConfigsQuery/properties/limit }
+        - name: sortBy
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetAllConfigsQuery/properties/sortBy }
+        - name: order
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetAllConfigsQuery/properties/order }
     post:
       tags: [Configurations]
       summary: Create a new configuration
+      operationId: createConfig
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                trainingId:
-                  type: string
-                config:
-                  type: object
+              $ref: ./generated/request-schemas.json#/CreateConfigBody
       responses:
         '201':
           description: Configuration created successfully
@@ -1398,26 +1797,30 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Configuration'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /configs/upload:
     post:
       tags: [Configurations]
       summary: Upload configuration from JSON
+      operationId: createConfigFromJson
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                trainingId:
-                  type: string
-                config:
-                  type: object
+              $ref: ./generated/request-schemas.json#/CreateConfigFromJsonBody
       responses:
         '201':
           description: Configuration uploaded successfully
@@ -1431,13 +1834,25 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Configuration'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /configs/{id}:
     get:
       tags: [Configurations]
       summary: Get configuration by ID
+      operationId: getConfigById
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: id
           in: path
@@ -1459,13 +1874,19 @@ paths:
                     $ref: '#/components/schemas/Configuration'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   /configs/uuid/{uuid}:
     get:
       tags: [Configurations]
       summary: Get configuration by UUID
+      operationId: getConfigByUuid
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: uuid
           in: path
@@ -1487,25 +1908,45 @@ paths:
                     $ref: '#/components/schemas/Configuration'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   # Test Results
   /test-results:
     get:
       tags: [Test Results]
       summary: Get all test results
+      operationId: getTestResults
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: page
           in: query
-          schema:
-            type: integer
-            default: 1
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/page }
         - name: limit
           in: query
-          schema:
-            type: integer
-            default: 50
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/limit }
+        - name: sortBy
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/sortBy }
+        - name: order
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/order }
+        - name: epoch
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/epoch }
+        - name: epoch_uuids
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/epoch_uuids }
+        - name: training_uuid
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/training_uuid }
+        - name: projectId
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/projectId }
       responses:
         '200':
           description: Successful response
@@ -1526,28 +1967,24 @@ paths:
                           $ref: '#/components/schemas/TestResult'
                       pagination:
                         $ref: '#/components/schemas/PaginationMeta'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       tags: [Test Results]
       summary: Create a new test result
+      operationId: createTestResult
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                testUuid:
-                  type: string
-                epochUuid:
-                  type: string
-                trainingUuid:
-                  type: string
-                metrics:
-                  type: object
-                results:
-                  type: object
+              $ref: ./generated/request-schemas.json#/CreateTestResultBody
       responses:
         '201':
           description: Test result created successfully
@@ -1561,30 +1998,32 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/TestResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   /test-results/upload:
     post:
       tags: [Test Results]
       summary: Upload test result from JSON
+      operationId: createTestResultFromJson
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                testUuid:
-                  type: string
-                epochUuid:
-                  type: string
-                trainingUuid:
-                  type: string
-                metrics:
-                  type: object
-                results:
-                  type: object
+              $ref: ./generated/request-schemas.json#/CreateTestResultBody
       responses:
         '201':
           description: Test result uploaded successfully
@@ -1598,24 +2037,33 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/TestResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   /test-results/compare:
     post:
       tags: [Test Results]
       summary: Compare test results
+      operationId: compareTestResults
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                testResultIds:
-                  type: array
-                  items:
-                    type: string
+              $ref: ./generated/request-schemas.json#/CompareTestResultsBody
       responses:
         '200':
           description: Comparison results
@@ -1629,24 +2077,27 @@ paths:
                     example: true
                   data:
                     type: object
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /test-results/compare/aggregated:
     post:
       tags: [Test Results]
       summary: Compare aggregated test results by training
+      operationId: compareAggregatedTestResultsByTraining
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                trainingIds:
-                  type: array
-                  items:
-                    type: string
+              $ref: ./generated/request-schemas.json#/CompareAggregatedTestResultsBody
       responses:
         '200':
           description: Aggregated comparison results
@@ -1660,13 +2111,21 @@ paths:
                     example: true
                   data:
                     type: object
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /test-results/epochs:
     get:
       tags: [Test Results]
       summary: Get test result epochs
+      operationId: getTestResultEpochs
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       responses:
         '200':
           description: Successful response
@@ -1682,13 +2141,21 @@ paths:
                     type: array
                     items:
                       type: integer
+        default:
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /test-results/{id}:
     get:
       tags: [Test Results]
       summary: Get test result by ID
+      operationId: getTestResultById
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: id
           in: path
@@ -1710,11 +2177,16 @@ paths:
                     $ref: '#/components/schemas/TestResult'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
     put:
       tags: [Test Results]
       summary: Update test result
+      operationId: updateTestResult
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: id
           in: path
@@ -1726,12 +2198,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                metrics:
-                  type: object
-                results:
-                  type: object
+              $ref: ./generated/request-schemas.json#/UpdateTestResultBody
       responses:
         '200':
           description: Test result updated successfully
@@ -1745,11 +2212,24 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/TestResult'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
     delete:
       tags: [Test Results]
       summary: Delete test result
+      operationId: deleteTestResult
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: id
           in: path
@@ -1763,13 +2243,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Success'
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /test-results/test/{testUuid}:
     get:
       tags: [Test Results]
       summary: Get test result by test UUID
+      operationId: getTestResultByTestUuid
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: testUuid
           in: path
@@ -1791,54 +2283,25 @@ paths:
                     $ref: '#/components/schemas/TestResult'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   # Visualizations
   /visualizations:
-    get:
-      tags: [Visualizations]
-      summary: Get all visualizations
-      security:
-        - ApiToken: []
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Visualization'
     post:
       tags: [Visualizations]
       summary: Create a new visualization
+      operationId: createVisualization
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                visualization_uuid:
-                  type: string
-                epoch_uuid:
-                  type: string
-                training_uuid:
-                  type: string
-                type:
-                  type: string
-                filename:
-                  type: string
-                fileId:
-                  type: string
-                  description: file-service storage path for the file.
+              $ref: ./generated/request-schemas.json#/CreateVisualizationBody
       responses:
         '201':
           description: Visualization created successfully
@@ -1852,28 +2315,30 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Visualization'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /visualizations/upload-url:
     post:
       tags: [Visualizations]
       summary: Get upload URL for visualization
+      operationId: getVisualizationUploadUrl
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                epoch_uuid:
-                  type: string
-                filename:
-                  type: string
-                type:
-                  type: string
-                mimetype:
-                  type: string
+              $ref: ./generated/request-schemas.json#/GetVisualizationUploadUrlBody
       responses:
         '200':
           description: Upload URL generated successfully
@@ -1892,13 +2357,25 @@ paths:
                         type: string
                       visualization_uuid:
                         type: string
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /visualizations/types:
     get:
       tags: [Visualizations]
       summary: Get visualization types
+      operationId: getVisualizationTypes
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       responses:
         '200':
           description: Successful response
@@ -1911,16 +2388,39 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: array
-                    items:
-                      type: string
+                    type: object
+                    required:
+                      - types
+                    properties:
+                      types:
+                        type: array
+                        items:
+                          type: string
+                        example:
+                          - overlay
+                          - ground_truth
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      parameters:
+        - name: training_uuid
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationTypesQuery/properties/training_uuid }
+        - name: epoch_uuid
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationTypesQuery/properties/epoch_uuid }
 
   /visualizations/{visualization_uuid}:
     get:
       tags: [Visualizations]
       summary: Get visualization by UUID
+      operationId: getVisualizationByUuid
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: visualization_uuid
           in: path
@@ -1942,11 +2442,16 @@ paths:
                     $ref: '#/components/schemas/Visualization'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
     delete:
       tags: [Visualizations]
       summary: Delete visualization
+      operationId: deleteVisualization
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: visualization_uuid
           in: path
@@ -1960,19 +2465,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Success'
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /visualizations/epoch/{epoch_uuid}:
     get:
       tags: [Visualizations]
       summary: Get visualizations by epoch UUID
+      operationId: getVisualizationsByEpoch
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: epoch_uuid
           in: path
           required: true
           schema:
             type: string
+        - name: type
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByEpochQuery/properties/type }
       responses:
         '200':
           description: Successful response
@@ -1993,13 +2513,23 @@ paths:
                           $ref: '#/components/schemas/Visualization'
                       total:
                         type: integer
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /visualizations/training/{training_uuid}:
     get:
       tags: [Visualizations]
       summary: Get visualizations by training UUID
+      operationId: getVisualizationsByTraining
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: training_uuid
           in: path
@@ -2008,27 +2538,19 @@ paths:
             type: string
         - name: type
           in: query
-          schema:
-            type: string
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/type }
         - name: limit
           in: query
-          schema:
-            type: integer
-            default: 50
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/limit }
+        - name: page
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/page }
         - name: projectId
           in: query
-          schema:
-            type: string
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/projectId }
         - name: includeUrls
           in: query
-          schema:
-            type: boolean
-            default: true
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/includeUrls }
       responses:
         '200':
           description: Successful response
@@ -2041,44 +2563,159 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    oneOf:
-                      - $ref: '#/components/schemas/PaginatedResponse'
-                      - type: object
-                        properties:
-                          trainings:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                training_uuid:
-                                  type: string
-                                training_name:
-                                  type: string
-                                visualizations:
-                                  type: array
-                                  items:
-                                    $ref: '#/components/schemas/Visualization'
-                          total:
-                            type: integer
+                    type: object
+                    required:
+                      - visualizations
+                      - total
+                      - pagination
+                    properties:
+                      visualizations:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Visualization'
+                      total:
+                        type: integer
+                      pagination:
+                        $ref: '#/components/schemas/PaginationMeta'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /visualizations/training:
+    get:
+      tags: [Visualizations]
+      summary: List visualizations across visible trainings
+      operationId: getVisualizationsAcrossTrainings
+      description: The same listing as for one training, over every training the caller can see.
+      responses:
+        '200':
+          description: Visualizations grouped by training
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      trainings:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            training_uuid: { type: string }
+                            training_name: { type: string }
+                            visualizations:
+                              type: array
+                              items: { $ref: '#/components/schemas/Visualization' }
+                      total: { type: integer }
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      parameters:
+        - name: type
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/type }
+        - name: limit
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/limit }
+        - name: page
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/page }
+        - name: projectId
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/projectId }
+        - name: includeUrls
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/includeUrls }
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+
+  /visualizations/summary:
+    get:
+      tags: [Visualizations]
+      summary: Visualization counts per training
+      operationId: getVisualizationSummary
+      description: For each visible training, how many visualizations it has of each type and at which epochs. No images or signed URLs.
+      responses:
+        '200':
+          description: One entry per training that has visualizations, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      trainings:
+                        type: array
+                        items:
+                          type: object
+                          required: [_id, uuid, name, total, types]
+                          properties:
+                            _id: { type: string }
+                            uuid: { type: string }
+                            name: { type: string }
+                            total: { type: integer }
+                            types:
+                              type: array
+                              items:
+                                type: object
+                                required: [type, count, epochs]
+                                properties:
+                                  type: { type: string }
+                                  count: { type: integer }
+                                  epochs: { type: array, items: { type: integer } }
+        default:
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
 
   # Benchmarks
   /benchmarks:
     get:
       tags: [Benchmarks]
       summary: Get all benchmarks
+      operationId: getBenchmarks
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: page
           in: query
-          schema:
-            type: integer
-            default: 1
+          schema: { $ref: ./generated/request-schemas.json#/GetBenchmarksQuery/properties/page }
         - name: limit
           in: query
-          schema:
-            type: integer
-            default: 50
+          schema: { $ref: ./generated/request-schemas.json#/GetBenchmarksQuery/properties/limit }
+        - name: training_uuid
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetBenchmarksQuery/properties/training_uuid }
+        - name: projectId
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetBenchmarksQuery/properties/projectId }
+        - name: sortBy
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetBenchmarksQuery/properties/sortBy }
+        - name: order
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetBenchmarksQuery/properties/order }
       responses:
         '200':
           description: Successful response
@@ -2099,26 +2736,24 @@ paths:
                           $ref: '#/components/schemas/Benchmark'
                       pagination:
                         $ref: '#/components/schemas/PaginationMeta'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       tags: [Benchmarks]
       summary: Create a new benchmark
+      operationId: createBenchmark
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                model:
-                  type: string
-                dataset:
-                  type: string
-                metrics:
-                  type: object
+              $ref: ./generated/request-schemas.json#/CreateBenchmarkBody
       responses:
         '201':
           description: Benchmark created successfully
@@ -2132,28 +2767,32 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Benchmark'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   /benchmarks/upload:
     post:
       tags: [Benchmarks]
       summary: Upload benchmark from JSON
+      operationId: uploadBenchmark
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                model:
-                  type: string
-                dataset:
-                  type: string
-                metrics:
-                  type: object
+              $ref: ./generated/request-schemas.json#/CreateBenchmarkBody
       responses:
         '201':
           description: Benchmark uploaded successfully
@@ -2167,13 +2806,27 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Benchmark'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
   /benchmarks/stats:
     get:
       tags: [Benchmarks]
       summary: Get benchmark statistics
+      operationId: getBenchmarkStats
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       responses:
         '200':
           description: Successful response
@@ -2187,13 +2840,25 @@ paths:
                     example: true
                   data:
                     type: object
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      parameters:
+        - name: training_uuid
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetBenchmarkStatsQuery/properties/training_uuid }
 
   /benchmarks/{id}:
     get:
       tags: [Benchmarks]
       summary: Get benchmark by ID
+      operationId: getBenchmarkById
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: id
           in: path
@@ -2215,25 +2880,100 @@ paths:
                     $ref: '#/components/schemas/Benchmark'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      tags: [Benchmarks]
+      summary: Update benchmark
+      operationId: updateBenchmark
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/UpdateBenchmarkBody
+      responses:
+        '200':
+          description: Benchmark updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/Benchmark' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Benchmarks]
+      summary: Delete benchmark
+      operationId: deleteBenchmark
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Benchmark deleted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Success' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   # Comparisons
   /comparisons:
     get:
       tags: [Comparisons]
       summary: Get all comparisons
+      operationId: getComparisons
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: page
           in: query
-          schema:
-            type: integer
-            default: 1
+          schema: { $ref: ./generated/request-schemas.json#/GetComparisonsQuery/properties/page }
         - name: limit
           in: query
-          schema:
-            type: integer
-            default: 50
+          schema: { $ref: ./generated/request-schemas.json#/GetComparisonsQuery/properties/limit }
+        - name: search
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetComparisonsQuery/properties/search }
+        - name: type
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetComparisonsQuery/properties/type }
+        - name: projectId
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetComparisonsQuery/properties/projectId }
+        - name: sortBy
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetComparisonsQuery/properties/sortBy }
+        - name: order
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetComparisonsQuery/properties/order }
       responses:
         '200':
           description: Successful response
@@ -2254,29 +2994,24 @@ paths:
                           $ref: '#/components/schemas/Comparison'
                       pagination:
                         $ref: '#/components/schemas/PaginationMeta'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       tags: [Comparisons]
       summary: Create a new comparison
+      operationId: createComparison
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                type:
-                  type: string
-                  enum: [training, test, benchmark]
-                items:
-                  type: array
-                  items:
-                    type: string
-                results:
-                  type: object
+              $ref: ./generated/request-schemas.json#/CreateComparisonBody
       responses:
         '201':
           description: Comparison created successfully
@@ -2290,13 +3025,25 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Comparison'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /comparisons/stats:
     get:
       tags: [Comparisons]
       summary: Get comparison statistics
+      operationId: getComparisonStats
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       responses:
         '200':
           description: Successful response
@@ -2310,13 +3057,28 @@ paths:
                     example: true
                   data:
                     type: object
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      parameters:
+        - name: type
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetComparisonStatsQuery/properties/type }
+        - name: projectId
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetComparisonStatsQuery/properties/projectId }
 
   /comparisons/{id}:
     get:
       tags: [Comparisons]
       summary: Get comparison by ID
+      operationId: getComparisonById
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: id
           in: path
@@ -2338,13 +3100,77 @@ paths:
                     $ref: '#/components/schemas/Comparison'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      tags: [Comparisons]
+      summary: Update comparison
+      operationId: updateComparison
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/UpdateComparisonBody
+      responses:
+        '200':
+          description: Comparison updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/Comparison' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Comparisons]
+      summary: Delete comparison
+      operationId: deleteComparison
+      security:
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Comparison deleted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Success' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /comparisons/uuid/{uuid}:
     get:
       tags: [Comparisons]
       summary: Get comparison by UUID
+      operationId: getComparisonByUuid
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: uuid
           in: path
@@ -2366,25 +3192,30 @@ paths:
                     $ref: '#/components/schemas/Comparison'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
 
-  # Analysis
+  # Projects
   /projects:
     get:
       tags: [Projects]
       summary: Get all projects
+      operationId: getProjects
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
-        - name: page
+        - name: search
           in: query
-          schema:
-            type: integer
-            default: 1
-        - name: limit
+          schema: { $ref: ./generated/request-schemas.json#/GetProjectsQuery/properties/search }
+        - name: sortBy
           in: query
-          schema:
-            type: integer
-            default: 50
+          schema: { $ref: ./generated/request-schemas.json#/GetProjectsQuery/properties/sortBy }
+        - name: sortOrder
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/GetProjectsQuery/properties/sortOrder }
       responses:
         '200':
           description: Successful response
@@ -2397,41 +3228,26 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: object
-                    properties:
-                      projects:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Project'
-                      pagination:
-                        $ref: '#/components/schemas/PaginationMeta'
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       tags: [Projects]
       summary: Create a new project
+      operationId: createProject
       security:
-        - ApiToken: []
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - name
-              properties:
-                name:
-                  type: string
-                slug:
-                  type: string
-                description:
-                  type: string
-                editorGroupIds:
-                  type: array
-                  maxItems: 100
-                  description: Owner-controlled group grants. New groups must belong to the caller's current memberships; an empty array removes all grants.
-                  items:
-                    type: string
-                    pattern: '^[0-9a-fA-F]{24}$'
+              $ref: ./generated/request-schemas.json#/CreateProjectBody
       responses:
         '201':
           description: Project created successfully
@@ -2445,19 +3261,32 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/Error'
 
   /projects/{id}:
     get:
       tags: [Projects]
       summary: Get project by ID or slug
+      operationId: getProjectByIdOrSlug
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+          description: Project id or slug
       responses:
         '200':
           description: Successful response
@@ -2473,11 +3302,15 @@ paths:
                     $ref: '#/components/schemas/Project'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
     put:
       tags: [Projects]
       summary: Update project
+      operationId: updateProject
       security:
-        - ApiToken: []
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: id
           in: path
@@ -2489,21 +3322,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                slug:
-                  type: string
-                description:
-                  type: string
-                editorGroupIds:
-                  type: array
-                  maxItems: 100
-                  description: Owner-controlled group grants. New groups must belong to the caller's current memberships; an empty array removes all grants.
-                  items:
-                    type: string
-                    pattern: '^[0-9a-fA-F]{24}$'
+              $ref: ./generated/request-schemas.json#/UpdateProjectBody
       responses:
         '200':
           description: Project updated successfully
@@ -2517,11 +3336,23 @@ paths:
                     example: true
                   data:
                     $ref: '#/components/schemas/Project'
+        default:
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
     delete:
       tags: [Projects]
       summary: Delete project
+      operationId: deleteProject
       security:
-        - ApiToken: []
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: id
           in: path
@@ -2535,13 +3366,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Success'
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /projects/{id}/dashboard-stats:
     get:
       tags: [Projects]
       summary: Get project dashboard statistics
+      operationId: getProjectDashboardStats
       security:
-        - ApiToken: []
+        - { ProjectToken: [] }
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
       parameters:
         - name: id
           in: path
@@ -2561,17 +3404,59 @@ paths:
                     example: true
                   data:
                     type: object
+        default:
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   # API Tokens
   /api-tokens:
+    post:
+      tags: [API Tokens]
+      summary: Create a new API token
+      operationId: createToken
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/CreateTokenBody
+      responses:
+        '201':
+          description: API token created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ApiToken'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api-tokens/project/{projectId}:
     get:
       tags: [API Tokens]
       summary: Get API tokens for project
+      operationId: getTokens
       security:
-        - ApiToken: []
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: projectId
-          in: query
+          in: path
           required: true
           schema:
             type: string
@@ -2590,52 +3475,21 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ApiToken'
-    post:
-      tags: [API Tokens]
-      summary: Create a new API token
-      security:
-        - ApiToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-                - projectId
-              properties:
-                name:
-                  type: string
-                projectId:
-                  type: string
-                permissions:
-                  type: array
-                  items:
-                    type: string
-                expiresAt:
-                  type: string
-                  format: date-time
-      responses:
-        '201':
-          description: API token created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: '#/components/schemas/ApiToken'
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api-tokens/{id}:
     delete:
       tags: [API Tokens]
       summary: Revoke API token
+      operationId: revokeToken
       security:
-        - ApiToken: []
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
       parameters:
         - name: id
           in: path
@@ -2649,23 +3503,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Success'
-
-  # Health Check
-  /health:
-    get:
-      tags: [System]
-      summary: Health check endpoint
-      responses:
-        '200':
-          description: Service is healthy
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "ok"
-                  timestamp:
-                    type: string
-                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'

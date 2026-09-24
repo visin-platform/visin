@@ -1,0 +1,76 @@
+A prediction frame is an image your script renders at an epoch: a prediction overlaid on the input, a
+ground-truth comparison, a segmentation map. Visin keeps them with the epoch, shows them in the run's
+**Visualizations** tab, and an assistant can look at them.
+
+Images go to your deployment's file-service, not through the API, so storing one takes three calls: reserve a
+place for it, upload the bytes there, then record it.
+
+## Upload a frame
+
+```python
+def upload_frame(epoch_uuid, path, kind="prediction", mimetype="image/png"):
+    """Store one image against an epoch: reserve, upload the bytes, record it."""
+    path = Path(path)
+    data = path.read_bytes()
+
+    reserved = requests.post(
+        f"{VISIN_URL}/api/visualizations/upload-url",
+        headers=HEADERS,
+        json={"epoch_uuid": epoch_uuid, "filename": path.name, "type": kind, "mimetype": mimetype},
+    )
+    reserved.raise_for_status()
+    grant = reserved.json()["data"]
+
+    # A signed URL on your file-service: it carries its own permission, so no token.
+    requests.put(grant["uploadUrl"], data=data, headers={"Content-Type": mimetype}).raise_for_status()
+
+    requests.post(
+        f"{VISIN_URL}/api/visualizations",
+        headers=HEADERS,
+        json={
+            "epoch_uuid": epoch_uuid,
+            "visualization_uuid": grant["visualization_uuid"],
+            "filename": path.name,
+            "type": kind,
+            "fileId": grant["fileId"],
+            "mimetype": mimetype,
+            "size": len(data),
+        },
+    ).raise_for_status()
+```
+
+It needs `from pathlib import Path`, and the epoch's `epoch_uuid` from [sending results](/docs/sending-results#an-epoch).
+Call it after the epoch is posted:
+
+```python
+upload_frame(epoch_id, "renders/epoch-12/overlay-0001.png", kind="overlay")
+```
+
+## What each step checks
+
+1. **Reserve.** `POST /api/visualizations/upload-url` checks the token may write to the epoch's run, and returns an
+   `uploadUrl` that is valid for 15 minutes, with the `fileId` and `visualization_uuid` to record the frame by.
+2. **Upload.** `PUT` the file's bytes to `uploadUrl`. The URL points at your file-service, so the machine running
+   the script has to reach it. The URL itself is the permission, so send no token with it.
+3. **Record.** `POST /api/visualizations` attaches the file to the epoch. It is refused if the file's size or type
+   differs from what was reserved, which is why `size` is the exact byte count.
+
+## Types and formats
+
+`type` is your own name for what the image shows, such as `prediction`, `overlay`, `ground_truth` or
+`segmentation`. The run's **Visualizations** tab filters frames by it, so keep one name per kind.
+
+| Format               | `mimetype`                                           | Largest file |
+| -------------------- | ---------------------------------------------------- | ------------ |
+| PNG, JPEG, GIF, WebP | `image/png`, `image/jpeg`, `image/gif`, `image/webp` | 50 MiB       |
+| MP4, MOV             | `video/mp4`, `video/quicktime`                       | 1 GiB        |
+| PDF                  | `application/pdf`                                    | 50 MiB       |
+
+The file name's extension has to match `mimetype`, and the bytes are checked against the format when the upload
+finishes.
+
+<Callout kind="tip" title="A few frames per epoch">
+  A handful of fixed samples every few epochs shows a model learning better than hundreds of random ones. Render the
+  same inputs each time under the same file name: the **Visualizations** tab filters by image name too, so you can
+  follow one image from epoch to epoch.
+</Callout>

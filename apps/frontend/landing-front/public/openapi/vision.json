@@ -1,0 +1,7191 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Vision Service API",
+    "description": "Training runs, their epochs and results, and what is built on them: test results, benchmarks,\ncomparisons, visualizations and written findings. New here? Start with the\n[quickstart](/docs/quickstart).\n\n**Credentials.** A training script writes with a *project token*, which reaches its own project only.\nTools that act as a person use a *user API key* (see the auth API). Both go in\n`Authorization: Bearer <token>`.\n\n**Responses.** Every path starts with `/api`. A request that works answers\n`{ \"success\": true, \"data\": … }`; one that fails answers `{ \"success\": false, \"error\": …, \"message\": … }`\nwith the matching status.\n\n**Privacy.** A private project, and everything in it, is visible only to its owner and the members of\nits editor groups. Configurations are the exception: they are a shared library and stay public even when\na private run uses one, so upload nothing confidential in them.\n",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Visin Team"
+    },
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "{visinUrl}/api",
+      "description": "Your deployment's vision-service",
+      "variables": {
+        "visinUrl": {
+          "default": "http://localhost:4010",
+          "description": "Your Visin API address. A local `docker compose up` answers at http://localhost:4010."
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "Trainings",
+      "description": "Training run management and orchestration"
+    },
+    {
+      "name": "Epochs",
+      "description": "Training epoch data and test results management"
+    },
+    {
+      "name": "Configurations",
+      "description": "Training configuration management"
+    },
+    {
+      "name": "Test Results",
+      "description": "Model testing and evaluation results"
+    },
+    {
+      "name": "Visualizations",
+      "description": "Training epoch visualization management"
+    },
+    {
+      "name": "Benchmarks",
+      "description": "Model benchmark results and performance metrics"
+    },
+    {
+      "name": "Comparisons",
+      "description": "Training/test/benchmark comparison management"
+    },
+    {
+      "name": "Projects",
+      "description": "Project management for organizing experiments"
+    },
+    {
+      "name": "Findings",
+      "description": "Written conclusions about runs, by people or assistants"
+    },
+    {
+      "name": "API Tokens",
+      "description": "API token management for programmatic access"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "success",
+          "error",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "The kind of failure",
+            "example": "NotFoundError"
+          },
+          "message": {
+            "type": "string",
+            "description": "What went wrong, naming the field or record",
+            "example": "Training not found with uuid: 5f0c6a2e-1d4b-4c3a-9a53-2b7e1f0d8c11"
+          }
+        }
+      },
+      "Success": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "limit": {
+            "type": "integer",
+            "example": 50
+          },
+          "total": {
+            "type": "integer",
+            "example": 150
+          },
+          "pages": {
+            "type": "integer",
+            "example": 3
+          }
+        }
+      },
+      "Training": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "datasetId": {
+            "type": "string"
+          },
+          "configId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "totalTime": {
+                "type": "number"
+              },
+              "epochCount": {
+                "type": "integer"
+              },
+              "maxEpoch": {
+                "type": "integer"
+              },
+              "lastEpochTimestamp": {
+                "type": "string"
+              },
+              "cpuCost": {
+                "type": "number"
+              },
+              "gpuCost": {
+                "type": "number"
+              },
+              "totalCost": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "Epoch": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "trainingId": {
+            "type": "string"
+          },
+          "training_uuid": {
+            "type": "string"
+          },
+          "epoch_uuid": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "results": {
+            "type": "object",
+            "description": "What the epoch reported, as sent. Conditions, classes and metrics are discovered from it."
+          },
+          "learning_rate": {
+            "type": "number"
+          },
+          "epoch_time": {
+            "type": "number",
+            "description": "Seconds the epoch took"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Configuration": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "trainingId": {
+            "type": "string"
+          },
+          "config": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TestResult": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "testUuid": {
+            "type": "string"
+          },
+          "epochUuid": {
+            "type": "string"
+          },
+          "trainingUuid": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object"
+          },
+          "results": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Visualization": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "visualization_uuid": {
+            "type": "string"
+          },
+          "epoch_uuid": {
+            "type": "string"
+          },
+          "training_uuid": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "fileId": {
+            "type": "string",
+            "description": "file-service storage path for the file."
+          },
+          "signedUrl": {
+            "type": "string"
+          },
+          "signedUrlExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Benchmark": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "dataset": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Comparison": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "trainings",
+              "tests",
+              "benchmarks",
+              "epochs"
+            ],
+            "description": "What `itemIds` name"
+          },
+          "itemIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "isPublic": {
+            "type": "boolean"
+          },
+          "editorGroupIds": {
+            "type": "array",
+            "maxItems": 100,
+            "description": "Current members of these groups can read and edit project data. Only the project owner manages grants.",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ApiToken": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Finding": {
+        "type": "object",
+        "required": [
+          "_id",
+          "projectId",
+          "title",
+          "body",
+          "createdAt",
+          "trainingIds",
+          "citedTrainings",
+          "authorKind",
+          "authorLabel"
+        ],
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "trainingId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "recommendations": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "authorKind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "assistant"
+            ]
+          },
+          "authorLabel": {
+            "type": "string"
+          },
+          "trainingIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "citedTrainings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "CreateFindingBody": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "minLength": 1
+          },
+          "training": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "recommendations": {
+            "type": "string",
+            "maxLength": 5000
+          },
+          "trainingIds": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "project",
+          "title",
+          "body"
+        ]
+      },
+      "CreateTrainingBody": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "datasetId": {
+            "type": "string"
+          },
+          "configId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "status": {
+            "default": "pending",
+            "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "startTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {}
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "CompareTrainingsBody": {
+        "type": "object",
+        "properties": {
+          "trainingIds": {
+            "minItems": 1,
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "trainingIds"
+        ]
+      },
+      "UpdateTrainingBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "datasetId": {
+            "type": "string"
+          },
+          "configId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "startTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {}
+        }
+      },
+      "CreateEpochBody": {
+        "type": "object",
+        "properties": {
+          "trainingId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "training_uuid": {
+            "type": "string",
+            "minLength": 1
+          },
+          "epoch_uuid": {
+            "type": "string"
+          },
+          "system_info": {},
+          "epoch": {
+            "type": "number"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "results": {},
+          "learning_rate": {
+            "type": "number"
+          },
+          "epoch_time": {
+            "type": "number"
+          },
+          "metadata": {}
+        },
+        "required": [
+          "trainingId",
+          "training_uuid",
+          "epoch",
+          "results"
+        ]
+      },
+      "CreateEpochsBatchBody": {
+        "type": "object",
+        "properties": {
+          "epochs": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "trainingId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "training_uuid": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "epoch_uuid": {
+                  "type": "string"
+                },
+                "epoch": {
+                  "type": "number"
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "results": {},
+                "learning_rate": {
+                  "type": "number"
+                },
+                "epoch_time": {
+                  "type": "number"
+                },
+                "metadata": {}
+              },
+              "required": [
+                "trainingId",
+                "training_uuid",
+                "epoch",
+                "results"
+              ]
+            }
+          }
+        },
+        "required": [
+          "epochs"
+        ]
+      },
+      "CreateEpochFromJsonBody": {
+        "type": "object",
+        "properties": {
+          "trainingId": {
+            "type": "string"
+          },
+          "training_uuid": {
+            "type": "string"
+          },
+          "epoch_uuid": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "number"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "results": {},
+          "learning_rate": {
+            "type": "number"
+          },
+          "epoch_time": {
+            "type": "number"
+          },
+          "metadata": {}
+        },
+        "required": [
+          "epoch",
+          "results"
+        ]
+      },
+      "UpdateEpochBody": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "results": {},
+          "learning_rate": {
+            "type": "number"
+          },
+          "epoch_time": {
+            "type": "number"
+          },
+          "metadata": {}
+        }
+      },
+      "CreateConfigBody": {
+        "type": "object",
+        "properties": {
+          "summary": {},
+          "config_data": {},
+          "config_name": {
+            "type": "string"
+          },
+          "metadata": {}
+        },
+        "required": [
+          "summary",
+          "config_data"
+        ]
+      },
+      "CreateConfigFromJsonBody": {
+        "type": "object",
+        "properties": {
+          "config_data": {},
+          "Summary": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "config_name": {
+            "type": "string"
+          },
+          "metadata": {}
+        },
+        "required": [
+          "config_data"
+        ]
+      },
+      "CreateTestResultBody": {
+        "type": "object",
+        "properties": {
+          "epoch": {
+            "type": "number"
+          },
+          "epoch_uuid": {
+            "type": "string",
+            "minLength": 1
+          },
+          "test_uuid": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "test_results": {}
+        },
+        "required": [
+          "epoch",
+          "epoch_uuid",
+          "test_results"
+        ]
+      },
+      "CompareTestResultsBody": {
+        "type": "object",
+        "properties": {
+          "testResultIds": {
+            "minItems": 1,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "testResultIds"
+        ]
+      },
+      "CompareAggregatedTestResultsBody": {
+        "type": "object",
+        "properties": {
+          "trainingIds": {
+            "minItems": 1,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "trainingIds"
+        ]
+      },
+      "UpdateTestResultBody": {
+        "type": "object",
+        "properties": {
+          "epoch": {
+            "type": "number"
+          },
+          "epoch_uuid": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "test_results": {}
+        }
+      },
+      "CreateVisualizationBody": {
+        "type": "object",
+        "properties": {
+          "epoch_uuid": {
+            "type": "string",
+            "minLength": 1
+          },
+          "visualization_uuid": {
+            "type": "string",
+            "minLength": 1
+          },
+          "filename": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fileId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mimetype": {
+            "type": "string",
+            "minLength": 1
+          },
+          "size": {
+            "type": "number"
+          },
+          "metadata": {}
+        },
+        "required": [
+          "epoch_uuid",
+          "visualization_uuid",
+          "filename",
+          "type",
+          "fileId",
+          "mimetype",
+          "size"
+        ]
+      },
+      "GetVisualizationUploadUrlBody": {
+        "type": "object",
+        "properties": {
+          "epoch_uuid": {
+            "type": "string",
+            "minLength": 1
+          },
+          "filename": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mimetype": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "epoch_uuid",
+          "filename",
+          "type",
+          "mimetype"
+        ]
+      },
+      "CreateBenchmarkBody": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "system_info": {
+            "type": "object",
+            "properties": {
+              "cpu_count": {
+                "type": "number"
+              },
+              "cpu_count_logical": {
+                "type": "number"
+              },
+              "memory_total_gb": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "cpu_count",
+              "cpu_count_logical",
+              "memory_total_gb"
+            ],
+            "additionalProperties": {}
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "training_uuid": {
+            "type": "string"
+          },
+          "epoch_uuid": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "timestamp",
+          "system_info",
+          "results"
+        ]
+      },
+      "UpdateBenchmarkBody": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "system_info": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "training_uuid": {
+            "type": "string"
+          },
+          "epoch_uuid": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "number"
+          }
+        }
+      },
+      "CreateComparisonBody": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "trainings",
+              "tests",
+              "benchmarks",
+              "epochs"
+            ]
+          },
+          "itemIds": {
+            "minItems": 1,
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "metadata": {}
+        },
+        "required": [
+          "name",
+          "type",
+          "itemIds"
+        ]
+      },
+      "UpdateComparisonBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "itemIds": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metadata": {}
+        }
+      },
+      "CreateProjectBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "editorGroupIds": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          "isPublic": {
+            "default": false,
+            "type": "boolean"
+          },
+          "taxonomy": {
+            "type": "object",
+            "properties": {
+              "conditionLabel": {
+                "type": "string",
+                "maxLength": 50
+              },
+              "conditions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 100
+                    },
+                    "color": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "order": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "key"
+                  ]
+                }
+              },
+              "classes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 100
+                    },
+                    "color": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "order": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "key"
+                  ]
+                }
+              },
+              "metrics": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 100
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "higher",
+                        "lower"
+                      ]
+                    },
+                    "decimals": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10
+                    },
+                    "format": {
+                      "type": "string",
+                      "enum": [
+                        "number",
+                        "percent",
+                        "ms",
+                        "fps"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key"
+                  ]
+                }
+              },
+              "overallMetrics": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "taskType": {
+                "type": "string",
+                "enum": [
+                  "segmentation",
+                  "detection",
+                  "classification",
+                  "other"
+                ]
+              },
+              "exportPathPrefix": {
+                "type": "string",
+                "maxLength": 200
+              }
+            }
+          },
+          "costing": {
+            "type": "object",
+            "properties": {
+              "cpuRatePerHour": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gpuRatePerHour": {
+                "type": "number",
+                "minimum": 0
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              }
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateProjectBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "editorGroupIds": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          "isPublic": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "taxonomy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "conditionLabel": {
+                    "type": "string",
+                    "maxLength": 50
+                  },
+                  "conditions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "label": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "color": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-fA-F]{6}$"
+                        },
+                        "order": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "key"
+                      ]
+                    }
+                  },
+                  "classes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "label": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "color": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-fA-F]{6}$"
+                        },
+                        "order": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "key"
+                      ]
+                    }
+                  },
+                  "metrics": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "label": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "direction": {
+                          "type": "string",
+                          "enum": [
+                            "higher",
+                            "lower"
+                          ]
+                        },
+                        "decimals": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        "format": {
+                          "type": "string",
+                          "enum": [
+                            "number",
+                            "percent",
+                            "ms",
+                            "fps"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "key"
+                      ]
+                    }
+                  },
+                  "overallMetrics": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "taskType": {
+                    "type": "string",
+                    "enum": [
+                      "segmentation",
+                      "detection",
+                      "classification",
+                      "other"
+                    ]
+                  },
+                  "exportPathPrefix": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "costing": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "cpuRatePerHour": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "gpuRatePerHour": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "currency": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}$"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "CreateTokenBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "projectId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expiresInDays": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "name",
+          "projectId"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "BearerCredential": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A user API key (`vsn_live_…`) or an assistant's OAuth access token, sent as `Authorization: Bearer <key>`."
+      },
+      "SessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "access_token",
+        "description": "The signed-in browser session. Not for scripts."
+      },
+      "ProjectToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A project token, created in the project's settings. It writes to its own project only. Sent as `Authorization: Bearer <token>`."
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "The request was rejected by validation",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "The requested resource does not exist",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "No credential, or one that is invalid, expired or revoked",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "The credential is valid but may not do this",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error": {
+        "description": "The request failed; the status and message say why",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/findings": {
+      "get": {
+        "tags": [
+          "Findings"
+        ],
+        "summary": "List visible recorded findings",
+        "operationId": "getFindings",
+        "description": "Includes public projects and the authenticated user's own projects.\nVisibility and subject/citation filters apply before the limit. Results\nare ordered by createdAt descending, then _id descending to break ties.\nTo continue, set before to the last row's createdAt + \"_\" + _id, keeping\nthe same filters. Example: 2026-09-01T00:00:00.000Z_507f1f77bcf86cd799439011.\nStop when a page has fewer than limit rows; a full final page may be\nfollowed by an empty page. The response data remains an array.\nThe cursor still works if its row is deleted. Each page reapplies current\nvisibility; this is not a snapshot. Refresh to see newly added findings\nabove the cursor or findings made visible since an earlier page.\n",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Project slug or ID; an inaccessible project returns 403.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "training",
+            "in": "query",
+            "description": "Matches the finding's subject training or a cited training.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "The previous page's final createdAt (UTC ISO timestamp with milliseconds), underscore, and lowercase 24-character ObjectId.",
+            "schema": {
+              "type": "string",
+              "minLength": 49,
+              "maxLength": 49
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of visible findings, including visible cited training names.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Finding"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid limit or cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The selected project is not visible to this caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The selected project does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ]
+      },
+      "post": {
+        "tags": [
+          "Findings"
+        ],
+        "summary": "Record a finding",
+        "operationId": "createFinding",
+        "description": "A written conclusion about one or more runs in a project. The caller must be able to edit the project.",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFindingBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Finding recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Finding"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "The caller cannot edit this project.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/findings/{id}": {
+      "get": {
+        "tags": [
+          "Findings"
+        ],
+        "summary": "Get a finding",
+        "operationId": "getFindingById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The finding, with the cited trainings the caller can see",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Finding"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The finding's project is not visible to this caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Findings"
+        ],
+        "summary": "Delete a finding",
+        "operationId": "deleteFinding",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Finding deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "description": "The caller cannot edit this finding's project.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/findings/{id}/latex": {
+      "get": {
+        "tags": [
+          "Findings"
+        ],
+        "summary": "Export a finding as LaTeX",
+        "operationId": "exportFinding",
+        "description": "The finding as a `.tex` section with a results table of its cited runs.\nReturned as JSON rather than a file download, so the app and an assistant\ncan both use it. `selectBy` names the metric that decides which epoch each\nrun is reported at, and `direction` says which end of it is better.\n",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "selectBy",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "max",
+                "min"
+              ]
+            }
+          },
+          {
+            "name": "metrics",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The LaTeX source and a suggested file name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "filename",
+                        "tex"
+                      ],
+                      "properties": {
+                        "filename": {
+                          "type": "string",
+                          "example": "augmentation-helps-at-night.tex"
+                        },
+                        "tex": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "description": "The finding's project is not visible to this caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ]
+      }
+    },
+    "/trainings": {
+      "get": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Get all trainings",
+        "operationId": "getTrainings",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "datasetId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "excludeTags",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "default": "updatedAt",
+              "type": "string",
+              "enum": [
+                "name",
+                "status",
+                "createdAt",
+                "updatedAt",
+                "epochCount",
+                "totalTime",
+                "cpuCost",
+                "gpuCost",
+                "totalCost"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "trainings": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Training"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Create a new training",
+        "operationId": "createTraining",
+        "description": "Start a run before posting its epochs. Send your own `uuid` to refer to the\nrun by an id your script already knows; one is generated otherwise. With a\nproject token the run goes into the token's project and `projectId` is ignored.\n",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTrainingBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Training created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Training"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/trainings/stats": {
+      "get": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Get training statistics",
+        "operationId": "getTrainingStats",
+        "description": "Cost estimates use each project's current CPU/GPU rates. Amounts are\ngrouped by currency without exchange-rate conversion. Legacy scalar cost\nfields and currency are present only when exactly one currency is priced.\nCoverage includes unpriced trainings and measured durations in seconds;\nzero rates count as priced. These are current estimates, not historical bills.\n",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "totalTrainings": {
+                          "type": "integer"
+                        },
+                        "totalTime": {
+                          "type": "number"
+                        },
+                        "totalEpochs": {
+                          "type": "integer"
+                        },
+                        "avgEpochTime": {
+                          "type": "number"
+                        },
+                        "totalCpuCost": {
+                          "type": "number"
+                        },
+                        "totalGpuCost": {
+                          "type": "number"
+                        },
+                        "totalCost": {
+                          "type": "number"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "description": "ISO currency code of the optional scalar costs"
+                        },
+                        "costTotalsByCurrency": {
+                          "type": "array",
+                          "description": "One subtotal per currency, sorted by currency code; empty if unpriced",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "currency",
+                              "totalCpuCost",
+                              "totalGpuCost",
+                              "totalCost"
+                            ],
+                            "properties": {
+                              "currency": {
+                                "type": "string",
+                                "example": "EUR"
+                              },
+                              "totalCpuCost": {
+                                "type": "number"
+                              },
+                              "totalGpuCost": {
+                                "type": "number"
+                              },
+                              "totalCost": {
+                                "type": "number"
+                              }
+                            }
+                          }
+                        },
+                        "costCoverage": {
+                          "type": "object",
+                          "required": [
+                            "pricedTrainings",
+                            "unpricedTrainings",
+                            "pricedTime",
+                            "unpricedTime"
+                          ],
+                          "properties": {
+                            "pricedTrainings": {
+                              "type": "integer"
+                            },
+                            "unpricedTrainings": {
+                              "type": "integer"
+                            },
+                            "pricedTime": {
+                              "type": "number",
+                              "description": "Measured seconds with configured rates"
+                            },
+                            "unpricedTime": {
+                              "type": "number",
+                              "description": "Measured seconds without configured rates"
+                            }
+                          }
+                        },
+                        "filters": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "datasetId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/trainings/tags": {
+      "get": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "List the tags in use",
+        "operationId": "getTrainingTags",
+        "description": "Every tag on a training the caller can see, for filter suggestions.",
+        "responses": {
+          "200": {
+            "description": "Tag names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ]
+      }
+    },
+    "/trainings/compare": {
+      "post": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Compare trainings",
+        "operationId": "compareTrainings",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareTrainingsBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Comparison results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/trainings/{id}": {
+      "get": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Get training by ID",
+        "operationId": "getTrainingById",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Training"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Update training",
+        "operationId": "updateTraining",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTrainingBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Training updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Training"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Delete training",
+        "operationId": "deleteTraining",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Training deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/trainings/deleted": {
+      "get": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "List deleted trainings the caller can restore",
+        "operationId": "getDeletedTrainings",
+        "description": "Most recently deleted first: runs in projects the caller may edit, and standalone runs they own. Requires a signed-in caller.\n",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "default": 30,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "trainings": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Training"
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "integer"
+                            },
+                            "limit": {
+                              "type": "integer"
+                            },
+                            "total": {
+                              "type": "integer"
+                            },
+                            "pages": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/trainings/{id}/restore": {
+      "post": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Restore a deleted training",
+        "operationId": "restoreTraining",
+        "description": "Brings the training back with the epochs and test results its delete removed. Rows deleted separately beforehand stay deleted, and the training is not re-added to comparisons it was removed from.\n",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Training restored successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Training"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/trainings/uuid/{uuid}": {
+      "get": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Get training by UUID",
+        "operationId": "getTrainingByUuid",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Training"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/trainings/{id}/epochs": {
+      "get": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Get epochs for a training",
+        "operationId": "getTrainingWithEpochs",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "default": "epoch",
+              "type": "string",
+              "enum": [
+                "epoch",
+                "createdAt",
+                "updatedAt",
+                "timestamp"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "default": "asc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "sample",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "epochs": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Epoch"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/trainings/{id}/configs": {
+      "get": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Get configurations for a training",
+        "operationId": "getConfigsByTraining",
+        "description": "Resolves a non-deleted training and checks its project visibility before\nreturning its selected config. Public and standalone trainings allow\nanonymous access; private trainings require their owner's identity.\nProject tokens are additionally restricted to their own project.\nThe config's content remains available through the shared public library.\n",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "configs": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Configuration"
+                          }
+                        },
+                        "total": {
+                          "type": "integer",
+                          "enum": [
+                            0,
+                            1
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller cannot access this training's project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Training is missing or deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/epochs": {
+      "post": {
+        "tags": [
+          "Epochs"
+        ],
+        "summary": "Create a new epoch",
+        "operationId": "createEpoch",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEpochBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Epoch created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Epoch"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/epochs/batch": {
+      "post": {
+        "tags": [
+          "Epochs"
+        ],
+        "summary": "Create multiple epochs",
+        "operationId": "createEpochsBatch",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEpochsBatchBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Epochs created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Epoch"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/epochs/upload": {
+      "post": {
+        "tags": [
+          "Epochs"
+        ],
+        "summary": "Upload epoch data from JSON",
+        "operationId": "createEpochFromJson",
+        "description": "Post one epoch of a run, usually at the end of each epoch in the training loop.\nName the run with `training_uuid` (or its `trainingId`); it must already exist,\nso create it with `POST /trainings` first.\n\n`results` is stored as sent. The run's charts read `train` and `val` (the training and validation\ncurves) and the metrics under them, such as `loss` and `mean_iou`; a key under `val` or `train` that\nholds metrics such as `iou` is a class, found without being declared. A metric an epoch did not\nreport is left out, not sent as `0`. See /docs/sending-results for every name the charts read.\n",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEpochFromJsonBody"
+              },
+              "example": {
+                "training_uuid": "5f0c6a2e-1d4b-4c3a-9a53-2b7e1f0d8c11",
+                "epoch": 12,
+                "results": {
+                  "train": {
+                    "loss": 0.214
+                  },
+                  "val": {
+                    "mean_iou": 0.447,
+                    "car": {
+                      "iou": 0.61
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Epoch uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Epoch"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/epochs/{id}": {
+      "get": {
+        "tags": [
+          "Epochs"
+        ],
+        "summary": "Get epoch by ID",
+        "operationId": "getEpochById",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Epoch"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Epochs"
+        ],
+        "summary": "Update epoch",
+        "operationId": "updateEpoch",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEpochBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Epoch updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Epoch"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Epochs"
+        ],
+        "summary": "Delete epoch",
+        "operationId": "deleteEpoch",
+        "description": "Soft-deletes the epoch together with the test results recorded against it.",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Epoch deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/epochs/uuid/{uuid}": {
+      "get": {
+        "tags": [
+          "Epochs"
+        ],
+        "summary": "Get epoch by UUID",
+        "operationId": "getEpochByUuid",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Epoch"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/epochs/uuid/{epochUuid}/test-results": {
+      "get": {
+        "tags": [
+          "Epochs"
+        ],
+        "summary": "Get test results for an epoch",
+        "operationId": "getTestResultsByEpochUuid",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "epochUuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "default": "timestamp",
+              "type": "string",
+              "enum": [
+                "epoch",
+                "createdAt",
+                "updatedAt",
+                "timestamp",
+                "test_uuid"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "testResults": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/TestResult"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/epochs/training/{trainingId}": {
+      "get": {
+        "tags": [
+          "Epochs"
+        ],
+        "summary": "Get epochs by training ID",
+        "operationId": "getEpochsByTraining",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "trainingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "default": "epoch",
+              "type": "string",
+              "enum": [
+                "epoch",
+                "createdAt",
+                "updatedAt",
+                "timestamp"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "default": "asc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "epochs"
+                      ],
+                      "description": "With `page` or `limit`, a page and its `pagination`; without, every epoch and their `total`.",
+                      "properties": {
+                        "epochs": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Epoch"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/configs": {
+      "get": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "Get all configurations",
+        "operationId": "getAllConfigs",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Configuration"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "default": "createdAt",
+              "type": "string",
+              "enum": [
+                "createdAt",
+                "updatedAt",
+                "config_uuid"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "Create a new configuration",
+        "operationId": "createConfig",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConfigBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Configuration created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Configuration"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/configs/upload": {
+      "post": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "Upload configuration from JSON",
+        "operationId": "createConfigFromJson",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConfigFromJsonBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Configuration uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Configuration"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/configs/{id}": {
+      "get": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "Get configuration by ID",
+        "operationId": "getConfigById",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Configuration"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/configs/uuid/{uuid}": {
+      "get": {
+        "tags": [
+          "Configurations"
+        ],
+        "summary": "Get configuration by UUID",
+        "operationId": "getConfigByUuid",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Configuration"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test-results": {
+      "get": {
+        "tags": [
+          "Test Results"
+        ],
+        "summary": "Get all test results",
+        "operationId": "getTestResults",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "default": "timestamp",
+              "type": "string",
+              "enum": [
+                "epoch",
+                "createdAt",
+                "updatedAt",
+                "timestamp",
+                "test_uuid"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "epoch",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "epoch_uuids",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "training_uuid",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "testResults": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/TestResult"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Test Results"
+        ],
+        "summary": "Create a new test result",
+        "operationId": "createTestResult",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTestResultBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Test result created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TestResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test-results/upload": {
+      "post": {
+        "tags": [
+          "Test Results"
+        ],
+        "summary": "Upload test result from JSON",
+        "operationId": "createTestResultFromJson",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTestResultBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Test result uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TestResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test-results/compare": {
+      "post": {
+        "tags": [
+          "Test Results"
+        ],
+        "summary": "Compare test results",
+        "operationId": "compareTestResults",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareTestResultsBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Comparison results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test-results/compare/aggregated": {
+      "post": {
+        "tags": [
+          "Test Results"
+        ],
+        "summary": "Compare aggregated test results by training",
+        "operationId": "compareAggregatedTestResultsByTraining",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareAggregatedTestResultsBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aggregated comparison results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test-results/epochs": {
+      "get": {
+        "tags": [
+          "Test Results"
+        ],
+        "summary": "Get test result epochs",
+        "operationId": "getTestResultEpochs",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test-results/{id}": {
+      "get": {
+        "tags": [
+          "Test Results"
+        ],
+        "summary": "Get test result by ID",
+        "operationId": "getTestResultById",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TestResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Test Results"
+        ],
+        "summary": "Update test result",
+        "operationId": "updateTestResult",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTestResultBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Test result updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TestResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Test Results"
+        ],
+        "summary": "Delete test result",
+        "operationId": "deleteTestResult",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test result deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/test-results/test/{testUuid}": {
+      "get": {
+        "tags": [
+          "Test Results"
+        ],
+        "summary": "Get test result by test UUID",
+        "operationId": "getTestResultByTestUuid",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "testUuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TestResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/visualizations": {
+      "post": {
+        "tags": [
+          "Visualizations"
+        ],
+        "summary": "Create a new visualization",
+        "operationId": "createVisualization",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVisualizationBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Visualization created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Visualization"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/visualizations/upload-url": {
+      "post": {
+        "tags": [
+          "Visualizations"
+        ],
+        "summary": "Get upload URL for visualization",
+        "operationId": "getVisualizationUploadUrl",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetVisualizationUploadUrlBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload URL generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "uploadUrl": {
+                          "type": "string"
+                        },
+                        "visualization_uuid": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/visualizations/types": {
+      "get": {
+        "tags": [
+          "Visualizations"
+        ],
+        "summary": "Get visualization types",
+        "operationId": "getVisualizationTypes",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "types"
+                      ],
+                      "properties": {
+                        "types": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "example": [
+                            "overlay",
+                            "ground_truth"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "training_uuid",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "epoch_uuid",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/visualizations/{visualization_uuid}": {
+      "get": {
+        "tags": [
+          "Visualizations"
+        ],
+        "summary": "Get visualization by UUID",
+        "operationId": "getVisualizationByUuid",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "visualization_uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Visualization"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Visualizations"
+        ],
+        "summary": "Delete visualization",
+        "operationId": "deleteVisualization",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "visualization_uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visualization deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/visualizations/epoch/{epoch_uuid}": {
+      "get": {
+        "tags": [
+          "Visualizations"
+        ],
+        "summary": "Get visualizations by epoch UUID",
+        "operationId": "getVisualizationsByEpoch",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "epoch_uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "visualizations": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Visualization"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/visualizations/training/{training_uuid}": {
+      "get": {
+        "tags": [
+          "Visualizations"
+        ],
+        "summary": "Get visualizations by training UUID",
+        "operationId": "getVisualizationsByTraining",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "training_uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeUrls",
+            "in": "query",
+            "schema": {
+              "default": "true",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "visualizations",
+                        "total",
+                        "pagination"
+                      ],
+                      "properties": {
+                        "visualizations": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Visualization"
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/visualizations/training": {
+      "get": {
+        "tags": [
+          "Visualizations"
+        ],
+        "summary": "List visualizations across visible trainings",
+        "operationId": "getVisualizationsAcrossTrainings",
+        "description": "The same listing as for one training, over every training the caller can see.",
+        "responses": {
+          "200": {
+            "description": "Visualizations grouped by training",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "trainings": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "training_uuid": {
+                                "type": "string"
+                              },
+                              "training_name": {
+                                "type": "string"
+                              },
+                              "visualizations": {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/components/schemas/Visualization"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeUrls",
+            "in": "query",
+            "schema": {
+              "default": "true",
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ]
+      }
+    },
+    "/visualizations/summary": {
+      "get": {
+        "tags": [
+          "Visualizations"
+        ],
+        "summary": "Visualization counts per training",
+        "operationId": "getVisualizationSummary",
+        "description": "For each visible training, how many visualizations it has of each type and at which epochs. No images or signed URLs.",
+        "responses": {
+          "200": {
+            "description": "One entry per training that has visualizations, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "trainings": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "_id",
+                              "uuid",
+                              "name",
+                              "total",
+                              "types"
+                            ],
+                            "properties": {
+                              "_id": {
+                                "type": "string"
+                              },
+                              "uuid": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "total": {
+                                "type": "integer"
+                              },
+                              "types": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "required": [
+                                    "type",
+                                    "count",
+                                    "epochs"
+                                  ],
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    },
+                                    "count": {
+                                      "type": "integer"
+                                    },
+                                    "epochs": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ]
+      }
+    },
+    "/benchmarks": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "summary": "Get all benchmarks",
+        "operationId": "getBenchmarks",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "training_uuid",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "default": "timestamp",
+              "type": "string",
+              "enum": [
+                "createdAt",
+                "updatedAt",
+                "timestamp"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "benchmarks": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Benchmark"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "summary": "Create a new benchmark",
+        "operationId": "createBenchmark",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBenchmarkBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Benchmark created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Benchmark"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/benchmarks/upload": {
+      "post": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "summary": "Upload benchmark from JSON",
+        "operationId": "uploadBenchmark",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBenchmarkBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Benchmark uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Benchmark"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/benchmarks/stats": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "summary": "Get benchmark statistics",
+        "operationId": "getBenchmarkStats",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "training_uuid",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/benchmarks/{id}": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "summary": "Get benchmark by ID",
+        "operationId": "getBenchmarkById",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Benchmark"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "summary": "Update benchmark",
+        "operationId": "updateBenchmark",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBenchmarkBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Benchmark updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Benchmark"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "summary": "Delete benchmark",
+        "operationId": "deleteBenchmark",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Benchmark deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/comparisons": {
+      "get": {
+        "tags": [
+          "Comparisons"
+        ],
+        "summary": "Get all comparisons",
+        "operationId": "getComparisons",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "trainings",
+                "tests",
+                "benchmarks",
+                "epochs"
+              ]
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "default": "updatedAt",
+              "type": "string",
+              "enum": [
+                "name",
+                "type",
+                "createdAt",
+                "updatedAt",
+                "uuid",
+                "itemCount"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "comparisons": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Comparison"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Comparisons"
+        ],
+        "summary": "Create a new comparison",
+        "operationId": "createComparison",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateComparisonBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comparison created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Comparison"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/comparisons/stats": {
+      "get": {
+        "tags": [
+          "Comparisons"
+        ],
+        "summary": "Get comparison statistics",
+        "operationId": "getComparisonStats",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "trainings",
+                "tests",
+                "benchmarks",
+                "epochs"
+              ]
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/comparisons/{id}": {
+      "get": {
+        "tags": [
+          "Comparisons"
+        ],
+        "summary": "Get comparison by ID",
+        "operationId": "getComparisonById",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Comparison"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Comparisons"
+        ],
+        "summary": "Update comparison",
+        "operationId": "updateComparison",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateComparisonBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Comparison updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Comparison"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Comparisons"
+        ],
+        "summary": "Delete comparison",
+        "operationId": "deleteComparison",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comparison deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/comparisons/uuid/{uuid}": {
+      "get": {
+        "tags": [
+          "Comparisons"
+        ],
+        "summary": "Get comparison by UUID",
+        "operationId": "getComparisonByUuid",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Comparison"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/projects": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Get all projects",
+        "operationId": "getProjects",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "default": "createdAt",
+              "type": "string",
+              "enum": [
+                "name",
+                "createdAt",
+                "updatedAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Project"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Create a new project",
+        "operationId": "createProject",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Project created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Project"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Get project by ID or slug",
+        "operationId": "getProjectByIdOrSlug",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Project id or slug"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Project"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Update project",
+        "operationId": "updateProject",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Project updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Project"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Delete project",
+        "operationId": "deleteProject",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/projects/{id}/dashboard-stats": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Get project dashboard statistics",
+        "operationId": "getProjectDashboardStats",
+        "security": [
+          {
+            "ProjectToken": []
+          },
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api-tokens": {
+      "post": {
+        "tags": [
+          "API Tokens"
+        ],
+        "summary": "Create a new API token",
+        "operationId": "createToken",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTokenBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "API token created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ApiToken"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api-tokens/project/{projectId}": {
+      "get": {
+        "tags": [
+          "API Tokens"
+        ],
+        "summary": "Get API tokens for project",
+        "operationId": "getTokens",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApiToken"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api-tokens/{id}": {
+      "delete": {
+        "tags": [
+          "API Tokens"
+        ],
+        "summary": "Revoke API token",
+        "operationId": "revokeToken",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API token revoked successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  }
+}

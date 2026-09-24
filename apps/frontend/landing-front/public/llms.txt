@@ -1,0 +1,21 @@
+# Visin
+
+> Visin is an open-source, self-hosted platform for computer vision work: training runs and their metrics, test results, benchmarks, prediction frames, datasets and labeling. A training script sends its results over an HTTP API with a project token; people and tools read them back with a user API key; AI assistants connect over MCP.
+
+Every deployment is its own: addresses below are this deployment's. Examples in the docs use `http://localhost:4010` for a local `docker compose up`.
+
+## Docs
+
+- [Integrate with Visin](__LANDING_FRONT_URL__/docs): Send training runs from your own scripts, read results back, and connect an assistant.
+- [Quickstart](__LANDING_FRONT_URL__/docs/quickstart): Send a training run from a script and see it charted. About ten minutes.
+- [Authentication](__LANDING_FRONT_URL__/docs/authentication): Which credential to use, what it can reach, and what the errors mean.
+- [Sending results](__LANDING_FRONT_URL__/docs/sending-results): What an epoch can carry, which names the charts read, and what Visin finds by itself.
+- [Test results and benchmarks](__LANDING_FRONT_URL__/docs/test-results-and-benchmarks): Scores on held-out data by condition and class, and how fast a model runs.
+- [Prediction frames](__LANDING_FRONT_URL__/docs/prediction-frames): Store the images a run renders, and see them epoch by epoch.
+- [Errors, limits and pages](__LANDING_FRONT_URL__/docs/errors-and-limits): What a failed request answers, what to retry, how much you can send, and paging through lists.
+- [Connecting an assistant](__LANDING_FRONT_URL__/docs/assistants): Let Claude or another MCP client read your runs, with only the access you choose.
+
+## API reference
+
+- [Runs and results](__LANDING_FRONT_URL__/openapi/vision.json): OpenAPI 3.1 spec of vision-service: runs, epochs, test results, benchmarks, visualizations, comparisons, findings, projects and project tokens.
+- [API keys and OAuth](__LANDING_FRONT_URL__/openapi/auth.json): OpenAPI 3.1 spec of auth-service's public API: user API keys, OAuth for assistants, connected apps and assistant activity.

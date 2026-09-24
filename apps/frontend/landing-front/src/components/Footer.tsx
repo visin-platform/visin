@@ -4,8 +4,11 @@ import { GITHUB_URL } from '../content';
 import { INK } from '../theme';
 
 const FOOTER_LINKS = [
-  { label: 'Product', href: '#product' },
-  { label: 'Self-hosting', href: '#open-source' }
+  { label: 'Product', href: '/#product' },
+  { label: 'Docs', href: '/docs' },
+  { label: 'Quickstart', href: '/docs/quickstart' },
+  { label: 'API reference', href: '/docs/api' },
+  { label: 'Self-hosting', href: '/#open-source' }
 ];
 
 interface FooterProps {

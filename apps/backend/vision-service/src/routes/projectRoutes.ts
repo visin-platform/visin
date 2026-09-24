@@ -15,7 +15,8 @@ const router = express.Router();
 
 // Reads are public + private (optional auth); writes require a logged-in owner.
 router.get('/', optionalAuthMiddleware, validateRequest({ query: getProjectsQuerySchema }), getProjects);
-router.get('/:identifier', optionalAuthMiddleware, getProjectByIdOrSlug);
+// `:id` also takes a slug; one name for all three /:id routes keeps them one path in the API docs.
+router.get('/:id', optionalAuthMiddleware, getProjectByIdOrSlug);
 router.get('/:id/dashboard-stats', optionalAuthMiddleware, getProjectDashboardStats);
 router.post('/', authMiddleware, validateRequest({ body: createProjectBodySchema }), createProject);
 router.put('/:id', authMiddleware, validateRequest({ body: updateProjectBodySchema }), updateProject);

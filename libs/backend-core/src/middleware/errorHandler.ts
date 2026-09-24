@@ -17,6 +17,15 @@ interface KnownError {
  * not server bugs, but thrown as plain Mongoose error classes — and the
  * driver's duplicate-key error.
  */
+const BODY_ERRORS: Record<string, { name: string; message: string }> = {
+  'entity.parse.failed': { name: 'BadRequestError', message: 'The request body is not valid JSON' },
+  'entity.too.large': {
+    name: 'PayloadTooLargeError',
+    message: 'The request body is larger than this endpoint accepts'
+  },
+  default: { name: 'RequestBodyError', message: 'The request body could not be read' }
+};
+
 function classifyError(error: Error): KnownError | null {
   if (error instanceof HttpError) {
     return { statusCode: error.statusCode, name: error.name, message: error.message };
@@ -31,6 +40,20 @@ function classifyError(error: Error): KnownError | null {
   // fixed message goes out instead.
   if ((error as { code?: unknown }).code === 11000) {
     return { statusCode: 409, name: 'ConflictError', message: 'A resource with this identifier already exists' };
+  }
+  // Express's body parsing refuses a malformed or oversized body before any
+  // route runs. Its errors carry the status and an `entity.*` type; without
+  // this they read as a 500, and a script that sent bad JSON is told the
+  // server broke.
+  const body = error as { type?: unknown; status?: unknown };
+  if (
+    typeof body.type === 'string' &&
+    body.type.startsWith('entity.') &&
+    typeof body.status === 'number' &&
+    body.status >= 400 &&
+    body.status < 500
+  ) {
+    return { statusCode: body.status, ...(BODY_ERRORS[body.type] ?? BODY_ERRORS.default) };
   }
   return null;
 }

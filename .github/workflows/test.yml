@@ -124,6 +124,29 @@ jobs:
       - name: Check per-service lockfiles match their package.json
         run: npm run lockfiles:check
 
+  api-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint the API specs
+        run: npm run openapi:lint
+
+      # landing-front publishes a bundled copy of each spec, since its Docker
+      # build cannot read the services. A spec change has to be bundled and
+      # committed with it, or the published reference describes the old API.
+      - name: Check the published API specs are current
+        run: npm run openapi:bundle:check
+
   lint:
     needs: changes
     if: needs.changes.outputs.workspaces != '[]'

@@ -1,0 +1,158 @@
+You will create a project, give a script a token for it, and send a training run of 20 epochs. At the end
+you have a run in Visin with its loss and IoU curves, and a script you can drop into your own training loop.
+
+You need a running Visin you can sign in to and Python 3 with `requests` (`pip install requests`). To run Visin on
+your own machine, clone it and start it with Docker:
+
+```bash
+git clone https://github.com/visin-platform/visin
+cd visin
+docker compose up -d
+```
+
+## Create a project
+
+A training run always belongs to a project. In the app, open **Projects** and choose **New project**. Any name
+will do.
+
+## Create a project token
+
+A project token lets a script write to that one project and nowhere else.
+
+1. Open the project and go to its **Settings** tab.
+2. Under **API Tokens**, choose **Generate New Token** and give it a name, such as `quickstart`.
+3. Copy the token.
+
+<Callout kind="warning" title="Copy it now">
+  The token is shown once. Visin keeps only a hash of it, so if you lose it, revoke it and generate another.
+</Callout>
+
+## Tell your shell where Visin is
+
+The script reads the address and the token from the environment, so neither ends up in your code:
+
+```bash
+export VISIN_URL=http://localhost:4010
+export VISIN_TOKEN=paste-your-token-here
+```
+
+`VISIN_URL` is your deployment's API address. On a local `docker compose up` it is `http://localhost:4010`.
+
+## Send a run
+
+Save this as `quickstart.py` and run `python quickstart.py`. It starts a run, posts 20 epochs of made-up numbers
+and marks the run finished. If you would rather try one call from the terminal first, the curl tab sends one
+epoch.
+
+<CodeTabs>
+
+```python
+import math
+import os
+import random
+import uuid
+
+import requests
+
+VISIN_URL = os.environ["VISIN_URL"]
+HEADERS = {"Authorization": f"Bearer {os.environ['VISIN_TOKEN']}"}
+
+
+def train_one_epoch(epoch):
+    """Stand-in for your training step: returns made-up losses and an IoU."""
+    train_loss = 1.2 * math.exp(-epoch / 6) + 0.1 + random.uniform(0, 0.02)
+    val_loss = train_loss + 0.05 + 0.002 * epoch
+    val_miou = 0.3 + 0.35 * (1 - math.exp(-epoch / 5))
+    return train_loss, val_loss, val_miou
+
+
+# 1. Start the run. Sending your own uuid lets you name it in every later call.
+run_id = str(uuid.uuid4())
+created = requests.post(
+    f"{VISIN_URL}/api/trainings",
+    headers=HEADERS,
+    json={"uuid": run_id, "name": "quickstart", "status": "running"},
+)
+created.raise_for_status()
+training = created.json()["data"]
+
+# 2. Post each epoch as it finishes.
+for epoch in range(1, 21):
+    train_loss, val_loss, val_miou = train_one_epoch(epoch)
+    requests.post(
+        f"{VISIN_URL}/api/epochs/upload",
+        headers=HEADERS,
+        json={
+            "training_uuid": run_id,
+            "epoch": epoch,
+            "results": {
+                "train": {"loss": train_loss},
+                "val": {"loss": val_loss, "mean_iou": val_miou},
+            },
+        },
+    ).raise_for_status()
+
+# 3. Mark it finished.
+requests.put(
+    f"{VISIN_URL}/api/trainings/{training['_id']}",
+    headers=HEADERS,
+    json={"status": "completed"},
+).raise_for_status()
+
+print(f"Sent 20 epochs to training {training['_id']}")
+```
+
+```bash title="curl"
+RUN_ID=$(uuidgen)
+
+# Start the run
+curl -fsS "$VISIN_URL/api/trainings" \
+  -H "Authorization: Bearer $VISIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"uuid": "'"$RUN_ID"'", "name": "quickstart-curl", "status": "running"}'
+
+# Post an epoch
+curl -fsS "$VISIN_URL/api/epochs/upload" \
+  -H "Authorization: Bearer $VISIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"training_uuid": "'"$RUN_ID"'", "epoch": 1,
+       "results": {"train": {"loss": 0.92}, "val": {"loss": 0.97, "mean_iou": 0.41}}}'
+```
+
+</CodeTabs>
+
+It prints the new run's id:
+
+```text
+Sent 20 epochs to training 6ab5932a0e9a6b7570e30e2e
+```
+
+## See it in Visin
+
+Open the project's **Trainings** tab and choose **quickstart**. You will see a loss chart with a training and a
+validation curve, and a mean IoU chart:
+
+- `train` and `val` are the training and validation curves.
+- `loss` and `mean_iou` under them are the metrics the loss and mean IoU charts read.
+
+Classes need no setup: `"val": {"car": {"iou": 0.61}}` adds a `car` line to the per-class charts the first time
+it arrives. [Sending results](/docs/sending-results) lists every name the charts read.
+
+<Callout kind="note" title="Start the run before its epochs">
+  An epoch names its run by `training_uuid`, and the run has to exist first. An epoch for a run that doesn't answers
+  `404` with `Training not found with uuid: …`.
+</Callout>
+
+## Use it in your training loop
+
+Replace `train_one_epoch` with your own training step and post what it returns. Two things are worth keeping:
+
+- **Your own uuid.** Generate it once when the run starts and send it with every epoch. You never need to read an
+  id back from a response.
+- **Leave out what an epoch did not measure.** If you validate every fifth epoch, send `val` only on those epochs.
+  A metric that is missing shows as a gap in the chart, where a `0` would show as a real drop.
+
+<Callout kind="tip" title="Keep the token out of your code">
+  Read it from the environment as the script does, and in CI store it as a secret. Anyone with the token can write to
+  the project.
+</Callout>
