@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@visin/backend-core": "1.6.0",
+    "@visin/backend-core": "1.7.0",
     "bullmq": "^6.3.4",
     "express": "^5.2.1",
     "ioredis": "^6.0.0",
