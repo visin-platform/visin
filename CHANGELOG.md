@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.21.0](https://github.com/visin-platform/visin/compare/v1.20.0...v1.21.0) (2026-09-24)
+
+
+### Features
+
+* add dark theme ([e685b53](https://github.com/visin-platform/visin/commit/e685b5323813e0e80be52fee3bea86356f0667d5))
+
+
+### Chores
+
+* **release:** @visin/frontend-core 1.10.0 ([d75d19c](https://github.com/visin-platform/visin/commit/d75d19ce569687db7345b39037a93f7518db6d19))
+
 ## [1.20.0](https://github.com/visin-platform/visin/compare/v1.19.0...v1.20.0) (2026-09-23)
 
 
