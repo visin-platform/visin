@@ -1,7 +1,8 @@
 import React, { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Box, ButtonBase, Checkbox, Chip, IconButton, ListItemIcon, Menu, MenuItem, Typography, alpha, useTheme } from '@mui/material';
+import { Box, ButtonBase, Checkbox, Chip, IconButton, ListItemIcon, Menu, MenuItem, Typography, useTheme } from '@mui/material';
 import { MoreVert as MoreVertIcon } from '@mui/icons-material';
+import { livePalette, tint } from '@visin/frontend-core';
 
 /**
  * The phone form of Vision's list tables (runs, test results, benchmarks,
@@ -116,7 +117,7 @@ export const MobileListRow: React.FC<MobileListRowProps> = ({
         borderBottom: 1,
         borderColor: 'divider',
         '&:last-of-type': { borderBottom: 0 },
-        bgcolor: selected ? alpha(theme.palette.primary.main, 0.06) : 'transparent'
+        bgcolor: selected ? tint(livePalette(theme).primary.main, 0.06) : 'transparent'
       }}
     >
       {selectable && (

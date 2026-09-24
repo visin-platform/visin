@@ -18,6 +18,7 @@ import {
   TaxonomyTerm
 } from '../../types/taxonomy';
 import { humanize } from '../../taxonomy/humanize';
+import { PALETTE } from '../../taxonomy/resolveTaxonomy';
 
 /**
  * Optional per-project display settings.
@@ -117,7 +118,7 @@ const TermRows: React.FC<{
               size="small"
               type="color"
               label="Colour"
-              value={term.color ?? '#1976d2'}
+              value={term.color ?? PALETTE[index % PALETTE.length]}
               onChange={e => update(index, { color: e.target.value })}
               disabled={disabled}
               sx={{ width: 90 }}

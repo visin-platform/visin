@@ -13,18 +13,19 @@ import {
   MenuItem,
   MenuList,
   Typography,
+  useColorScheme,
   useTheme
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import { ExpandMore, Login, Logout, Person } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 
-import { VISIN_COLORS } from '../../theme';
+import { chrome, glass, livePalette, pageBackground, surface } from '../../theme';
+import { COLOR_MODE_OPTIONS, type ColorMode } from '../ColorMode';
 import { TAB_BAR_HEIGHT, useCompactLayout } from '../Page/layout';
 
 const RAIL_WIDTH = 88;
 const APP_BAR_HEIGHT = 56;
-const RAIL_BORDER = 'rgba(255,255,255,0.08)';
+
 
 interface NavItemBase {
   text: string;
@@ -137,6 +138,12 @@ export function AppLayout({
   // for the rail but not the rail *and* a readable content column.
   const mobile = useCompactLayout();
 
+  const palette = livePalette(theme);
+  const { mode, setMode } = useColorScheme();
+  const colorMode = COLOR_MODE_OPTIONS.find((option) => option.value === (mode ?? 'system')) ?? COLOR_MODE_OPTIONS[0];
+  const nextColorMode: ColorMode =
+    COLOR_MODE_OPTIONS[(COLOR_MODE_OPTIONS.indexOf(colorMode) + 1) % COLOR_MODE_OPTIONS.length].value;
+
   const [accountAnchor, setAccountAnchor] = useState<HTMLElement | null>(null);
   const [sectionAnchor, setSectionAnchor] = useState<HTMLElement | null>(null);
   const closeAccount = () => setAccountAnchor(null);
@@ -196,7 +203,7 @@ export function AppLayout({
             <Avatar
               src={user?.picture}
               alt=""
-              sx={{ width: 26, height: 26, fontSize: '0.8rem', bgcolor: theme.palette.secondary.main }}
+              sx={{ width: 26, height: 26, fontSize: '0.8rem', bgcolor: 'secondary.main' }}
             >
               {initial}
             </Avatar>
@@ -217,7 +224,7 @@ export function AppLayout({
   // children to manage focus.
   const accountMenuItems = [
     <MenuItem key="who" disabled sx={{ gap: 1.5, py: 1.25, '&.Mui-disabled': { opacity: 1 } }}>
-      <Avatar src={user?.picture} alt="" sx={{ width: 36, height: 36, bgcolor: theme.palette.secondary.main }}>
+      <Avatar src={user?.picture} alt="" sx={{ width: 36, height: 36, bgcolor: 'secondary.main' }}>
         {initial}
       </Avatar>
       <Box sx={{ minWidth: 0 }}>
@@ -233,7 +240,24 @@ export function AppLayout({
     </MenuItem>,
     <Divider key="who-divider" />,
     ...accountItems.map((item) => menuItem(item, closeAccount)),
-    ...(accountItems.length > 0 ? [<Divider key="logout-divider" />] : []),
+    ...(accountItems.length > 0 ? [<Divider key="appearance-divider" />] : []),
+    // One item that steps through Auto, Light and Dark, and leaves the menu open
+    // so the change can be seen. A toggle group here could not be reached from
+    // the keyboard: Tab closes a menu.
+    <MenuItem
+      key="appearance"
+      onClick={() => setMode(nextColorMode)}
+      aria-label={`Appearance: ${colorMode.label}. Switch to ${COLOR_MODE_OPTIONS.find((option) => option.value === nextColorMode)?.label}`}
+    >
+      <ListItemIcon>
+        <colorMode.Icon fontSize="small" />
+      </ListItemIcon>
+      <ListItemText>Appearance</ListItemText>
+      <Typography variant="body2" sx={{ color: 'text.secondary', ml: 2 }}>
+        {colorMode.label}
+      </Typography>
+    </MenuItem>,
+    <Divider key="logout-divider" />,
     <MenuItem
       key="logout"
       onClick={() => {
@@ -256,6 +280,8 @@ export function AppLayout({
       slotProps={{
         paper: {
           sx: {
+            ...glass,
+            borderBottom: 'none',
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
             maxHeight: '85dvh',
@@ -294,9 +320,9 @@ export function AppLayout({
     zIndex: theme.zIndex.appBar,
     display: 'flex',
     alignItems: 'center',
-    bgcolor: VISIN_COLORS.appBar,
-    color: '#fff',
-    borderBottom: `1px solid ${RAIL_BORDER}`,
+    ...chrome.surface,
+    color: chrome.ink,
+    borderBottom: `1px solid ${chrome.edge}`,
     // Under a status bar the installed app draws into (viewport-fit=cover).
     pt: 'env(safe-area-inset-top)'
   } as const;
@@ -330,7 +356,7 @@ export function AppLayout({
               minWidth: 0,
               maxWidth: '100%',
               px: 1.25,
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.12)' }
+              '&:hover': { bgcolor: surface.hover }
             }}
           >
             {/* A page of the group that is none of its sections is named by the group. */}
@@ -371,10 +397,13 @@ export function AppLayout({
                   px: 1.75,
                   height: 36,
                   fontWeight: active ? 700 : 500,
-                  color: active ? '#fff' : 'rgba(255,255,255,0.72)',
-                  bgcolor: active ? 'rgba(255,255,255,0.16)' : 'transparent',
+                  color: active ? palette.primary.main : chrome.inkMuted,
+                  bgcolor: active ? theme.alpha(palette.primary.main, 0.12) : 'transparent',
                   '& .MuiButton-startIcon svg': { fontSize: 20 },
-                  '&:hover': { bgcolor: active ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.1)', color: '#fff' }
+                  '&:hover': {
+                    bgcolor: active ? theme.alpha(palette.primary.main, 0.18) : surface.hover,
+                    color: active ? palette.primary.main : chrome.ink
+                  }
                 }}
               >
                 {item.text}
@@ -396,7 +425,7 @@ export function AppLayout({
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', ...pageBackground }}>
       <CssBaseline />
 
       {!mobile && (
@@ -418,9 +447,9 @@ export function AppLayout({
             px: 0.5,
             py: 2,
             overflowY: 'auto',
-            bgcolor: VISIN_COLORS.rail,
-            color: '#fff',
-            borderRight: `1px solid ${RAIL_BORDER}`
+            ...chrome.surface,
+            color: chrome.ink,
+            borderRight: `1px solid ${chrome.edge}`
           }}
         >
           {homePath ? (
@@ -434,7 +463,7 @@ export function AppLayout({
                 mb: 2,
                 p: 0.5,
                 borderRadius: '10px',
-                '&.Mui-focusVisible': { outline: `2px solid ${theme.palette.primary.light}`, outlineOffset: 1 }
+                '&.Mui-focusVisible': { outline: `2px solid ${palette.primary.main}`, outlineOffset: 1 }
               }}
             >
               <Box component="img" src="/logo.svg" alt="Visin" sx={{ display: 'block', width: 32, height: 32 }} />
@@ -485,11 +514,9 @@ export function AppLayout({
             px: 0.5,
             pt: 0.75,
             pb: 'calc(6px + env(safe-area-inset-bottom))',
-            bgcolor: 'background.paper',
-            color: 'text.secondary',
-            borderTop: 1,
-            borderColor: 'divider',
-            boxShadow: '0 -4px 16px rgba(15, 23, 42, 0.04)'
+            ...chrome.surface,
+            color: chrome.inkMuted,
+            borderTop: `1px solid ${chrome.edge}`
           }}
         >
           {railEntries}
@@ -519,26 +546,18 @@ interface NavButtonProps {
 function NavButton({ label, icon, active, current, mobile, target, onClick, expanded }: NavButtonProps) {
   const theme = useTheme();
 
-  // The rail is dark; the phone's tab bar is light, under a coloured app bar.
-  const tone = mobile
-    ? {
-        idle: theme.palette.text.secondary,
-        active: theme.palette.text.primary,
-        activeIcon: theme.palette.primary.main,
-        pill: alpha(theme.palette.primary.main, 0.12),
-        pillHover: alpha(theme.palette.primary.main, 0.18),
-        idleHover: theme.palette.action.hover,
-        focus: theme.palette.primary.main
-      }
-    : {
-        idle: 'rgba(255,255,255,0.62)',
-        active: '#fff',
-        activeIcon: theme.palette.primary.light,
-        pill: alpha(theme.palette.primary.main, 0.24),
-        pillHover: alpha(theme.palette.primary.main, 0.34),
-        idleHover: 'rgba(255,255,255,0.08)',
-        focus: theme.palette.primary.light
-      };
+  const palette = livePalette(theme);
+
+  // The rail and the phone's tab bar are the same frosted chrome, in either scheme.
+  const tone = {
+    idle: chrome.inkMuted,
+    active: chrome.ink,
+    activeIcon: palette.primary.main,
+    pill: theme.alpha(palette.primary.main, 0.14),
+    pillHover: theme.alpha(palette.primary.main, 0.2),
+    idleHover: surface.hover,
+    focus: palette.primary.main
+  };
 
   const sx = {
     flex: mobile ? 1 : 'none',

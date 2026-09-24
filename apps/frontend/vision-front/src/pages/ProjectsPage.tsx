@@ -34,7 +34,7 @@ import {
   Folder as FolderIcon,
   MoreVert as MoreVertIcon
 } from '@mui/icons-material';
-import { EmptyState, ListRow, PageHeader, Panel, RowIcon, useCompactLayout } from '@visin/frontend-core';
+import { EmptyState, ListRow, PageHeader, Panel, RowIcon, useCompactLayout, livePalette } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
 import { Project } from '../types/Project';
@@ -205,7 +205,7 @@ const ProjectsPage: React.FC = () => {
             key={project._id}
             to={`/projects/${project._id}`}
             leading={
-              <RowIcon color={project.isPublic ? theme.palette.success.main : theme.palette.primary.main}>
+              <RowIcon color={project.isPublic ? livePalette(theme).success.main : livePalette(theme).primary.main}>
                 {project.isPublic ? <PublicIcon fontSize="small" /> : <FolderIcon fontSize="small" />}
               </RowIcon>
             }
@@ -266,7 +266,7 @@ const ProjectsPage: React.FC = () => {
                 <TableRow key={project._id} hover sx={{ '&:last-child td': { border: 0 } }}>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <RowIcon color={project.isPublic ? theme.palette.success.main : theme.palette.primary.main}>
+                      <RowIcon color={project.isPublic ? livePalette(theme).success.main : livePalette(theme).primary.main}>
                         {project.isPublic ? <PublicIcon fontSize="small" /> : <FolderIcon fontSize="small" />}
                       </RowIcon>
                       <Typography

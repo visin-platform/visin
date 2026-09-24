@@ -23,6 +23,7 @@ import {
   Delete as DeleteIcon,
   ZoomIn as ZoomInIcon
 } from '@mui/icons-material';
+import { surface } from '@visin/frontend-core';
 import { Visualization } from '../../types';
 import { formatDateTime } from '../../utils';
 
@@ -140,7 +141,7 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
                         right: 8,
                         opacity: 0,
                         transition: 'opacity 0.2s',
-                        bgcolor: 'rgba(255,255,255,0.8)',
+                        bgcolor: surface.scrim,
                         borderRadius: 1,
                         '.MuiCard-root:hover &': { opacity: 1 }
                       }}

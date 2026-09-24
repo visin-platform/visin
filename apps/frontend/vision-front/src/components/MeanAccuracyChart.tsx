@@ -2,7 +2,12 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { Epoch } from '../types';
+import { useChartColors } from '@visin/frontend-core';
 import { useMobileChartTooltip } from '../hooks/useMobileChartTooltip';
+
+// A pipeline that does not compute a metric often writes 0 for it: a line of
+// nothing but zeros is "not reported", not a result.
+const isReported = (value: number | null) => value !== null && value !== 0;
 
 interface MeanAccuracyChartProps {
   epochs: Epoch[];
@@ -10,13 +15,15 @@ interface MeanAccuracyChartProps {
 
 const MeanAccuracyChart: React.FC<MeanAccuracyChartProps> = ({ epochs }) => {
   const { isMobile } = useMobileChartTooltip();
+  const colors = useChartColors();
   // Prepare chart data from epochs
   const chartData = React.useMemo(() => {
     const sortedEpochs = [...epochs].sort((a, b) => a.epoch - b.epoch);
+    // An epoch that did not report the metric is a gap in the line, not a drop to zero.
 
     const epochs_data = sortedEpochs.map(e => e.epoch);
-    const train_mean_accuracy = sortedEpochs.map(e => e.results?.train?.mean_accuracy ?? 0);
-    const val_mean_accuracy = sortedEpochs.map(e => e.results?.val?.mean_accuracy ?? 0);
+    const train_mean_accuracy = sortedEpochs.map(e => e.results?.train?.mean_accuracy ?? null);
+    const val_mean_accuracy = sortedEpochs.map(e => e.results?.val?.mean_accuracy ?? null);
 
     return {
       epochs: epochs_data,
@@ -30,7 +37,7 @@ const MeanAccuracyChart: React.FC<MeanAccuracyChartProps> = ({ epochs }) => {
       <Typography variant="subtitle1" gutterBottom>
         Training and Validation Mean Accuracy
       </Typography>
-      {chartData.train_mean_accuracy.some(v => v > 0) || chartData.val_mean_accuracy.some(v => v > 0) ? (
+      {chartData.train_mean_accuracy.some(isReported) || chartData.val_mean_accuracy.some(isReported) ? (
         <Box sx={{
           ...(isMobile && {
             '& .MuiTooltip-root': {
@@ -49,13 +56,13 @@ const MeanAccuracyChart: React.FC<MeanAccuracyChartProps> = ({ epochs }) => {
               {
                 data: chartData.train_mean_accuracy,
                 label: 'Training Mean Accuracy',
-                color: '#1976d2',
+                color: colors.slot(0),
                 showMark: false
               },
               {
                 data: chartData.val_mean_accuracy,
                 label: 'Validation Mean Accuracy',
-                color: '#dc004e',
+                color: colors.slot(1),
                 showMark: false
               }
             ]}

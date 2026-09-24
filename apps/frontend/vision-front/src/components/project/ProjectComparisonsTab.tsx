@@ -1,6 +1,6 @@
 import { useWriteCapabilities } from '../../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
-import { useCompactLayout } from '@visin/frontend-core';
+import { useCompactLayout, livePalette } from '@visin/frontend-core';
 import { MobileListRow } from '../common/MobileList';
 import {
   Box,
@@ -276,7 +276,7 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
                                 e.stopPropagation();
                                 handleEditComparison(comparison);
                               }}
-                              sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.primary.main } }}
+                              sx={{ color: livePalette(theme).text.secondary, '&:hover': { color: livePalette(theme).primary.main } }}
                             >
                               <EditIcon fontSize="small" />
                             </IconButton>
@@ -289,7 +289,7 @@ const ProjectComparisonsTab: React.FC<ProjectComparisonsTabProps> = ({ projectId
                                 e.stopPropagation();
                                 handleDeleteComparison(comparison);
                               }}
-                              sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.error.main } }}
+                              sx={{ color: livePalette(theme).text.secondary, '&:hover': { color: livePalette(theme).error.main } }}
                             >
                               <DeleteIcon fontSize="small" />
                             </IconButton>

@@ -10,7 +10,6 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  alpha,
   useTheme
 } from '@mui/material';
 import {
@@ -18,6 +17,7 @@ import {
   ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
 import { Code as CodeIcon } from '@mui/icons-material';
+import { livePalette, tint, surface } from '@visin/frontend-core';
 import { Link } from 'react-router-dom';
 import LatexModal from '../common/LatexModal';
 import MetricCell from './MetricCell';
@@ -203,9 +203,9 @@ const SingleMetricComparisonTable: React.FC<SingleMetricComparisonTableProps> = 
     <Paper
       sx={{
         mb: 4,
-        boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
-        bgcolor: alpha(theme.palette.primary.main, 0.05),
-        border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
+        boxShadow: `0 4px 12px ${tint(livePalette(theme).primary.main, 0.2)}`,
+        bgcolor: tint(livePalette(theme).primary.main, 0.05),
+        border: `1px solid ${tint(livePalette(theme).primary.main, 0.1)}`
       }}
     >
       <Box sx={{ p: 3, pb: 2 }}>
@@ -258,7 +258,7 @@ const SingleMetricComparisonTable: React.FC<SingleMetricComparisonTableProps> = 
                 <TableBody>
                   {getSortedData(condition.key).map(comp => (
                     <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'action.hover' } }}>
-                      <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 150 }}>
+                      <TableCell sx={{ fontWeight: 600, borderRight: `2px solid ${surface.divider}`, minWidth: 150 }}>
                         <Link to={`/trainings/${comp.training._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                           <Typography variant="body2" sx={{ fontWeight: 600, display: 'inline' }}>
                             {comp.training.name}

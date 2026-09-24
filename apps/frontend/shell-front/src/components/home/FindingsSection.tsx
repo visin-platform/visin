@@ -1,4 +1,5 @@
 import { useTheme } from '@mui/material';
+import { livePalette } from '@visin/frontend-core';
 import { AutoAwesome, EditNote } from '@mui/icons-material';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { HomeFinding } from '../../services/homeApi';
@@ -42,11 +43,11 @@ export function FindingsSection({ query, projectNames, now }: FindingsSectionPro
               }
               leading={
                 assistant ? (
-                  <RowIcon color={theme.palette.primary.main}>
+                  <RowIcon color={livePalette(theme).primary.main}>
                     <AutoAwesome fontSize="small" />
                   </RowIcon>
                 ) : (
-                  <RowIcon color={theme.palette.text.secondary}>
+                  <RowIcon color={livePalette(theme).text.secondary}>
                     <EditNote fontSize="small" />
                   </RowIcon>
                 )

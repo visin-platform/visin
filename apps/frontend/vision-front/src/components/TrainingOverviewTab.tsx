@@ -8,6 +8,7 @@ import {
   Stack
 } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
+import { useChartColors } from '@visin/frontend-core';
 import { Training, Epoch, EpochConditionResults } from '../types';
 import ClassIoUOverEpochsChart from '../components/ClassIoUOverEpochsChart';
 import LossChart from '../components/LossChart';
@@ -35,6 +36,7 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
   training,
   epochs
 }) => {
+  const colors = useChartColors();
   // Calculate chart data
   const lastEpoch = epochs[epochs.length - 1];
   const classMetrics = lastEpoch?.results?.metrics?.per_class || {};
@@ -351,8 +353,8 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
                     <LineChart
                       xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
                       series={[
-                        { data: trainStandardIoU, label: 'Training IoU', color: '#1976d2', showMark: false },
-                        { data: valStandardIoU, label: 'Validation IoU', color: '#2e7d32', showMark: false }
+                        { data: trainStandardIoU, label: 'Training IoU', color: colors.slot(0), showMark: false },
+                        { data: valStandardIoU, label: 'Validation IoU', color: colors.slot(1), showMark: false }
                       ]}
                       margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
                       slotProps={{ legend: { position: { vertical: 'top', horizontal: 'end' } } }}

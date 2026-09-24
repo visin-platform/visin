@@ -9,7 +9,6 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  alpha,
   useTheme,
   Button
 } from '@mui/material';
@@ -19,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { Code as CodeIcon } from '@mui/icons-material';
+import { livePalette, tint, surface } from '@visin/frontend-core';
 import { TrainingComparison } from '../../types';
 import LatexModal from '../common/LatexModal';
 
@@ -232,7 +232,7 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
         variant="body2"
         sx={{
           fontWeight: isBest ? 700 : 400,
-          color: isBest ? 'black' : 'inherit'
+          color: isBest ? 'text.primary' : 'inherit'
         }}
       >
         {formatMeanStd(iouData, 2, 100)}
@@ -293,9 +293,9 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
       <Paper
         sx={{
           mb: 4,
-          boxShadow: `0 4px 12px ${alpha(theme.palette.grey[500], 0.2)}`,
-          bgcolor: alpha(theme.palette.grey[50], 0.5),
-          border: `1px solid ${alpha(theme.palette.grey[300], 0.5)}`
+          boxShadow: `0 4px 12px ${tint(livePalette(theme).text.secondary, 0.15)}`,
+          bgcolor: surface.sunken,
+          border: `1px solid ${surface.divider}`
         }}
       >
         <Box sx={{ p: 3, textAlign: 'center' }}>
@@ -318,9 +318,9 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
     <Paper
       sx={{
         mb: 4,
-        boxShadow: `0 4px 12px ${alpha(theme.palette.grey[500], 0.2)}`,
-        bgcolor: alpha(theme.palette.grey[50], 0.5),
-        border: `1px solid ${alpha(theme.palette.grey[300], 0.5)}`
+        boxShadow: `0 4px 12px ${tint(livePalette(theme).text.secondary, 0.15)}`,
+        bgcolor: surface.sunken,
+        border: `1px solid ${surface.divider}`
       }}
     >
       <Box sx={{ p: 3, pb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -367,7 +367,7 @@ const TrainingClassIoUTable: React.FC<TrainingClassIoUTableProps> = ({
                     to={`/trainings/${comp.training._id}`}
                     style={{ textDecoration: 'none' }}
                   >
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'black' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       {comp.training.name}
                     </Typography>
                   </Link>

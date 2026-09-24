@@ -9,9 +9,9 @@ import {
   TableHead,
   TableRow,
   Box,
-  useTheme,
-  alpha
+  useTheme
 } from '@mui/material';
+import { livePalette, tint } from '@visin/frontend-core';
 
 interface ConfusionMatrixProps {
   confusionMatrix: number[][];
@@ -72,8 +72,8 @@ const ConfusionMatrix: React.FC<ConfusionMatrixProps> = ({
       <Box
         sx={{
           p: 2,
-          bgcolor: alpha(theme.palette.primary.main, 0.04),
-          borderBottom: `1px solid ${theme.palette.divider}`
+          bgcolor: tint(livePalette(theme).primary.main, 0.04),
+          borderBottom: `1px solid ${livePalette(theme).divider}`
         }}>
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
           {title}
@@ -87,8 +87,8 @@ const ConfusionMatrix: React.FC<ConfusionMatrixProps> = ({
       <TableContainer>
         <Table size="small">
           <TableHead>
-            <TableRow sx={{ bgcolor: alpha(theme.palette.action.hover, 0.5) }}>
-              <TableCell sx={{ fontWeight: 600, borderRight: `1px solid ${theme.palette.divider}` }}>
+            <TableRow sx={{ bgcolor: tint(livePalette(theme).action.hover, 0.5) }}>
+              <TableCell sx={{ fontWeight: 600, borderRight: `1px solid ${livePalette(theme).divider}` }}>
                 Actual / Predicted
               </TableCell>
               {classNames.slice(0, matrixSize).map((className, index) => (
@@ -112,7 +112,7 @@ const ConfusionMatrix: React.FC<ConfusionMatrixProps> = ({
                 <TableCell
                   sx={{
                     fontWeight: 600,
-                    borderRight: `1px solid ${theme.palette.divider}`,
+                    borderRight: `1px solid ${livePalette(theme).divider}`,
                     fontSize: '0.75rem'
                   }}
                 >
@@ -126,7 +126,7 @@ const ConfusionMatrix: React.FC<ConfusionMatrixProps> = ({
                       fontFamily: 'monospace',
                       fontSize: '0.75rem',
                       bgcolor: rowIndex === colIndex
-                        ? alpha(theme.palette.success.main, 0.1)
+                        ? tint(livePalette(theme).success.main, 0.1)
                         : 'inherit'
                     }}
                   >

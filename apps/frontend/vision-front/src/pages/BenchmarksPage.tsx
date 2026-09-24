@@ -1,6 +1,6 @@
 import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
-import { PageHeader, useCompactLayout } from '@visin/frontend-core';
+import { PageHeader, useCompactLayout, livePalette, tint } from '@visin/frontend-core';
 import { MobileListRow } from '../components/common/MobileList';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -25,7 +25,6 @@ import {
   Button,
   Collapse,
   useTheme,
-  alpha,
   Container
 } from '@mui/material';
 import {
@@ -199,7 +198,7 @@ const BenchmarksPage: React.FC = () => {
         </Alert>
       )}
       {compact ? (
-        <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, overflow: 'hidden' }}>
+        <Paper elevation={0} sx={{ border: `1px solid ${livePalette(theme).divider}`, overflow: 'hidden' }}>
           {benchmarks.map((benchmark) => {
             const { avgFps, totalParamsM, avgFlopsG, meanTimeGpu, meanTimeCpu } = summarizeBenchmark(benchmark);
             const trainingId =
@@ -236,13 +235,13 @@ const BenchmarksPage: React.FC = () => {
         elevation={0} 
         sx={{ 
           borderRadius: 2, 
-          border: `1px solid ${theme.palette.divider}`,
+          border: `1px solid ${livePalette(theme).divider}`,
           overflow: 'hidden'
         }}
       >
         <Table>
           <TableHead>
-            <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+            <TableRow sx={{ bgcolor: tint(livePalette(theme).primary.main, 0.02) }}>
               <TableCell sx={{ fontWeight: 600 }}></TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Training Name</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Mean FPS</TableCell>

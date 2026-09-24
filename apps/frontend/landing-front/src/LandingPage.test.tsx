@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LandingPage from './LandingPage';
-import { ASK_CONVERSATION, ASSISTANT_LIMITS, CONNECT_STEPS, GITHUB_URL, PHONE_SCREENS, SHOWCASE } from './content';
+import {
+  ASK_CONVERSATION,
+  ASSISTANT_LIMITS,
+  CONNECT_STEPS,
+  GITHUB_URL,
+  PHONE_SCREENS,
+  SCRIPT_DISCOVERED,
+  SCRIPT_SNIPPET,
+  SHOWCASE
+} from './content';
 
 const config: { SHELL_FRONT_URL?: string; MCP_PUBLIC_URL?: string } = {
   SHELL_FRONT_URL: 'http://shell.test',
@@ -22,7 +31,7 @@ describe('LandingPage structure', () => {
   it('renders every section landmark', () => {
     const { container } = render(<LandingPage />);
 
-    for (const id of ['top', 'product', 'mobile', 'assistant', 'open-source']) {
+    for (const id of ['top', 'product', 'script', 'mobile', 'assistant', 'open-source']) {
       expect(container.querySelector(`#${id}`)).toBeInTheDocument();
     }
     expect(container.querySelector('main#main')).toBeInTheDocument();
@@ -35,7 +44,7 @@ describe('LandingPage structure', () => {
     const { container } = render(<LandingPage />);
 
     const sections = [...container.querySelectorAll('main section')].map(s => s.id);
-    expect(sections).toEqual(['top', 'product', 'mobile', 'assistant', 'open-source']);
+    expect(sections).toEqual(['top', 'product', 'script', 'mobile', 'assistant', 'open-source']);
   });
 
   it('leads with the headline and the product summary', () => {
@@ -285,5 +294,29 @@ describe('LandingPage claims', () => {
       expect(img.getAttribute('src')).toMatch(/^\//);
     }
     expect(container.innerHTML).not.toContain('unsplash');
+  });
+});
+
+describe('From your training loop', () => {
+  it('shows the real endpoint the loop posts to, with a project token', () => {
+    render(<LandingPage />);
+
+    const code = screen.getByLabelText(/post each epoch/i);
+    expect(code).toHaveTextContent('/api/epochs/upload');
+    expect(code).toHaveTextContent('Bearer {TOKEN}');
+    expect(code).toHaveTextContent(SCRIPT_SNIPPET.split('\n')[0]);
+  });
+
+  it('shows the finished run and what was found in it where the page cannot play it', () => {
+    // jsdom has no IntersectionObserver: the section must still say something.
+    const { container } = render(<LandingPage />);
+    const section = within(container.querySelector('#script') as HTMLElement);
+
+    expect(section.getByText(/Completed · 60 epochs/)).toBeInTheDocument();
+    for (const { names } of SCRIPT_DISCOVERED) {
+      for (const name of names) expect(section.getByText(name)).toBeInTheDocument();
+    }
+    expect(section.getByRole('img', { name: /validation mean iou over 60 epochs/i })).toBeInTheDocument();
+    expect(section.queryByRole('button', { name: /replay/i })).not.toBeInTheDocument();
   });
 });

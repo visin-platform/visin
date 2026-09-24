@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PageHeader } from '@visin/frontend-core';
+import { PageHeader, onImage } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -411,10 +411,10 @@ export const VisualizationsPage: React.FC = () => {
               position: 'absolute',
               right: 8,
               top: 8,
-              bgcolor: 'rgba(0, 0, 0, 0.5)',
-              color: 'white',
+              bgcolor: onImage.scrim,
+              color: onImage.ink,
               '&:hover': {
-                bgcolor: 'rgba(0, 0, 0, 0.7)',
+                bgcolor: onImage.scrimStrong,
               },
               zIndex: 1,
             }}

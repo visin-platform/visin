@@ -15,7 +15,7 @@ import {
   useTheme
 } from '@mui/material';
 import { Add, AssignmentOutlined } from '@mui/icons-material';
-import { EmptyState, Loader, PageHeader, Panel, RowIcon } from '@visin/frontend-core';
+import { EmptyState, livePalette, Loader, PageHeader, Panel, RowIcon } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { getMyGroups, listJobs } from '../services/jobService';
 import { LabelJob } from '../types';
@@ -110,7 +110,7 @@ const JobsPage: React.FC = () => {
           <Card key={job._id}>
             <CardContent sx={{ pb: 1 }}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                <RowIcon color={theme.palette.primary.main}>
+                <RowIcon color={livePalette(theme).primary.main}>
                   <AssignmentOutlined fontSize="small" />
                 </RowIcon>
                 <Box sx={{ minWidth: 0, flexGrow: 1 }}>

@@ -10,6 +10,19 @@ import { useConfig } from '../config/useConfig';
 
 type Phase = 'checking' | 'authenticated' | 'form';
 
+/* eslint-disable no-restricted-syntax -- The brand panel is the landing page's dark ink in either scheme,
+   so its colours are its own rather than the theme's. */
+const BRAND_PANEL = {
+  ink: '#111827',
+  text: '#fff',
+  glowNarrow: 'radial-gradient(500px 200px at 20% 0%, rgba(37,99,235,0.45), transparent 65%)',
+  glowWide:
+    'radial-gradient(800px 400px at 20% 0%, rgba(37,99,235,0.4), transparent 60%), radial-gradient(600px 400px at 90% 20%, rgba(96,165,250,0.2), transparent 55%)',
+  shotBorder: '1px solid rgba(255,255,255,0.14)',
+  shotShadow: '0 30px 80px rgba(2, 6, 23, 0.55)'
+} as const;
+/* eslint-enable no-restricted-syntax */
+
 const HEADINGS: Record<CredentialsMode, { title: string; subtitle: string }> = {
   setup: {
     title: 'Create the owner account',
@@ -137,9 +150,9 @@ const LoginPage: React.FC = () => {
           px: 3,
           pt: 'calc(20px + env(safe-area-inset-top))',
           pb: 3,
-          bgcolor: '#111827',
-          color: '#fff',
-          backgroundImage: 'radial-gradient(500px 200px at 20% 0%, rgba(37,99,235,0.45), transparent 65%)'
+          bgcolor: BRAND_PANEL.ink,
+          color: BRAND_PANEL.text,
+          backgroundImage: BRAND_PANEL.glowNarrow
         }}
       >
         <Box component="img" src="/logo.svg" alt="" sx={{ width: 32, height: 32 }} />
@@ -159,10 +172,9 @@ const LoginPage: React.FC = () => {
           flexDirection: 'column',
           justifyContent: 'center',
           p: { md: 5, lg: 7 },
-          bgcolor: '#111827',
-          color: '#fff',
-          backgroundImage:
-            'radial-gradient(800px 400px at 20% 0%, rgba(37,99,235,0.4), transparent 60%), radial-gradient(600px 400px at 90% 20%, rgba(96,165,250,0.2), transparent 55%)'
+          bgcolor: BRAND_PANEL.ink,
+          color: BRAND_PANEL.text,
+          backgroundImage: BRAND_PANEL.glowWide
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 'auto' }}>
@@ -178,8 +190,8 @@ const LoginPage: React.FC = () => {
             width: '100%',
             maxWidth: 640,
             borderRadius: '14px',
-            border: '1px solid rgba(255,255,255,0.14)',
-            boxShadow: '0 30px 80px rgba(2, 6, 23, 0.55)',
+            border: BRAND_PANEL.shotBorder,
+            boxShadow: BRAND_PANEL.shotShadow,
             my: 5
           }}
         />

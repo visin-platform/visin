@@ -1,4 +1,5 @@
 import { useTheme } from '@mui/material';
+import { livePalette } from '@visin/frontend-core';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { HomeTraining } from '../../services/homeApi';
 import { formatRelative } from './formatting';
@@ -32,7 +33,7 @@ export function TrainingsSection({ query, projectNames, now }: TrainingsSectionP
               to={`/trainings/${training._id}`}
               // The status is named in the text; the icon only repeats it.
               leading={
-                <RowIcon color={theme.palette[tone].main}>
+                <RowIcon color={livePalette(theme)[tone].main}>
                   <Icon fontSize="small" />
                 </RowIcon>
               }

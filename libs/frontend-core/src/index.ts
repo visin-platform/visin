@@ -37,7 +37,39 @@ export type {
   ResponsiveAction,
   ResponsiveActionsProps
 } from './components/Page';
-export { createVisinTheme, VISIN_COLORS } from './theme';
+export {
+  createVisinTheme,
+  visinTheme,
+  VISIN_COLORS,
+  COLOR_SCHEME_ATTRIBUTE,
+  COLOR_MODE_STORAGE_KEY,
+  COLOR_SCHEME_STORAGE_KEY,
+  brand,
+  schemes,
+  ink,
+  surface,
+  pageBackground,
+  glass,
+  glassInteractive,
+  liftOnHover,
+  raisedShadow,
+  mainAction,
+  chrome,
+  onImage,
+  tint,
+  livePalette,
+  chartSeries
+} from './theme';
+export type { ColorSchemeName } from './theme';
+export {
+  VisinThemeProvider,
+  ColorModeSetting,
+  COLOR_MODE_OPTIONS,
+  useThemeColorMeta,
+  useActivePalette,
+  useChartColors
+} from './components/ColorMode';
+export type { VisinThemeProviderProps, ColorMode, ColorModeSettingProps, ChartColors } from './components/ColorMode';
 export { createVisinNavigation } from './navigation';
 export type { VisinApp, VisinAppUrls, VisinNavigation } from './navigation';
 export { createProtectedRoute } from './components/ProtectedRoute';

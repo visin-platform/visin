@@ -13,10 +13,10 @@ import {
   Box,
   Typography,
   Button,
-  alpha,
   useTheme
 } from '@mui/material';
 import { CloudUpload as CloudUploadIcon, Upload as UploadIcon } from '@mui/icons-material';
+import { livePalette, tint } from '@visin/frontend-core';
 import { Epoch } from '../../types';
 
 interface UploadVisualizationDialogProps {
@@ -97,7 +97,7 @@ const UploadVisualizationDialog: React.FC<UploadVisualizationDialogProps> = ({
 
           <Box 
             sx={{ 
-              border: `2px dashed ${theme.palette.divider}`,
+              border: `2px dashed ${livePalette(theme).divider}`,
               borderRadius: 2,
               p: 4,
               textAlign: 'center',
@@ -105,7 +105,7 @@ const UploadVisualizationDialog: React.FC<UploadVisualizationDialogProps> = ({
               cursor: 'pointer',
               '&:hover': {
                 borderColor: 'primary.main',
-                bgcolor: alpha(theme.palette.primary.main, 0.02)
+                bgcolor: tint(livePalette(theme).primary.main, 0.02)
               }
             }}
             component="label"

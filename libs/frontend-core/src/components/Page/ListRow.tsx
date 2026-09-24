@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, ButtonBase, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { tint } from '../../theme';
 import { ChevronRight } from '@mui/icons-material';
 
 // Up to two lines, then an ellipsis: one line cut a phone row's detail off
@@ -125,7 +125,8 @@ export function RowIcon({ color, children }: { color: string; children: ReactNod
         placeItems: 'center',
         flexShrink: 0,
         color,
-        bgcolor: alpha(color, 0.12)
+        // `tint`, not MUI's `alpha`: the colour may be a theme variable.
+        bgcolor: tint(color, 0.12)
       }}
     >
       {children}

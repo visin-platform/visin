@@ -41,6 +41,28 @@ export default tseslint.config(
           ignoreRestSiblings: true,
         },
       ],
+      // A colour written out stays the same in light and dark. Use a palette
+      // path in `sx` ('text.secondary'), a token from @visin/frontend-core
+      // (`surface.divider`, `livePalette(theme)`, `tint`) or, for a chart
+      // series, `useChartColors()`.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: String.raw`Literal[value=/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$|(?:^|\s)#[0-9a-fA-F]{6}\b|\b(?:rgba?|hsla?)\(/]`,
+          message: 'Colour literal: use a theme palette path, a @visin/frontend-core token, or useChartColors().',
+        },
+        {
+          selector: String.raw`TemplateElement[value.raw=/(?:^|\s)#[0-9a-fA-F]{6}\b|\b(?:rgba?|hsla?)\(/]`,
+          message: 'Colour literal: use a theme palette path, a @visin/frontend-core token, or useChartColors().',
+        },
+      ],
+    },
+  },
+  {
+    // Fixtures describe stored data, which may well carry a colour.
+    files: ['**/*.test.{ts,tsx}', '**/__tests__/**/*.{ts,tsx}', 'e2e/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
     },
   }
 );

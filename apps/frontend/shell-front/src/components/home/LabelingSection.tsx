@@ -1,14 +1,13 @@
 import { Box, useTheme } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { livePalette, useChartColors } from '@visin/frontend-core';
 import { Assignment } from '@mui/icons-material';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { remainingTasks, type HomeJob } from '../../services/homeApi';
 import { formatCount } from './formatting';
 import { HomeSection, ListRow, RowIcon, SectionBody } from './HomeSection';
+import { LABELING_SLOT } from './accents';
 
 const SHOWN = 4;
-/** The Bundles shortcut's colour: labeling reads as one thing across the page. */
-const LABELING_COLOR = '#7c3aed';
 
 /** A share of a whole: the fill on a lighter track of the same hue. */
 function Meter({ value, max, label }: { value: number; max: number; label: string }) {
@@ -22,7 +21,7 @@ function Meter({ value, max, label }: { value: number; max: number; label: strin
       aria-valuemin={0}
       aria-valuemax={max}
       aria-valuenow={value}
-      sx={{ mt: 1, height: 6, borderRadius: '3px', overflow: 'hidden', bgcolor: alpha(theme.palette.primary.main, 0.15) }}
+      sx={{ mt: 1, height: 6, borderRadius: '3px', overflow: 'hidden', bgcolor: theme.alpha(livePalette(theme).primary.main, 0.15) }}
     >
       <Box
         sx={{
@@ -38,6 +37,8 @@ function Meter({ value, max, label }: { value: number; max: number; label: strin
 }
 
 export function LabelingSection({ query }: { query: UseQueryResult<HomeJob[]> }) {
+  const labeling = useChartColors().slot(LABELING_SLOT);
+
   return (
     <HomeSection id="home-labeling" title="Labeling" seeAll={{ to: '/jobs', label: 'See all jobs' }}>
       <SectionBody
@@ -54,7 +55,7 @@ export function LabelingSection({ query }: { query: UseQueryResult<HomeJob[]> })
               key={job._id}
               to={`/jobs/${job._id}`}
               leading={
-                <RowIcon color={LABELING_COLOR}>
+                <RowIcon color={labeling}>
                   <Assignment fontSize="small" />
                 </RowIcon>
               }

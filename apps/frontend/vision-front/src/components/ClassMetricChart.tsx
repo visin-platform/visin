@@ -1,10 +1,12 @@
 import React from 'react';
 import { Box, Paper } from '@mui/material';
 import { LineChart } from '@mui/x-charts';
+import { useChartColors } from '@visin/frontend-core';
 import { Epoch } from '../types';
 import { discoverEpochClasses, readMetric } from '../taxonomy/discover';
 import { useTaxonomy } from '../taxonomy/useTaxonomy';
 import { PALETTE } from '../taxonomy/resolveTaxonomy';
+import { dashedSeriesSx, withDistinctDashes } from './charts/seriesDashes';
 
 export type ClassMetric = 'iou' | 'precision' | 'recall' | 'f1' | 'ap';
 
@@ -47,6 +49,7 @@ const ClassMetricChart: React.FC<ClassMetricChartProps> = ({
   includeZeroValues = false
 }) => {
   const taxonomy = useTaxonomy();
+  const colors = useChartColors();
 
   if (epochs.length === 0) {
     return null;
@@ -70,13 +73,19 @@ const ClassMetricChart: React.FC<ClassMetricChartProps> = ({
   const labelFor = (className: string) =>
     labelFormatter ? labelFormatter(className) : taxonomy.classLabel(className);
 
+  // Past eight classes (or where a project gave two the same colour) colours
+  // repeat; a line pattern keeps the repeats apart.
   const createChartSeries = (classList: string[]) =>
-    classList.map((className, index) => ({
-      data: epochs.map(epoch => findMetricValue(epoch, className, metric)),
-      label: labelFor(className),
-      color: termFor(className)?.color ?? PALETTE[index % PALETTE.length],
-      showMark: false
-    }));
+    withDistinctDashes(
+      classList.map((className, index) => ({
+        id: `${metric}-${className}`,
+        data: epochs.map(epoch => findMetricValue(epoch, className, metric)),
+        label: labelFor(className),
+        color: colors.adapt(termFor(className)?.color ?? PALETTE[index % PALETTE.length]),
+        labelMarkType: 'line' as const,
+        showMark: false
+      }))
+    );
 
   const regularSeries = createChartSeries(regularClasses);
   const twoDSeries = createChartSeries(twoDClasses);
@@ -92,7 +101,8 @@ const ClassMetricChart: React.FC<ClassMetricChartProps> = ({
       <Box sx={{ width: '100%', height: 400 }}>
         <LineChart
           xAxis={[{ data: epochNumbers, label: 'Epoch' }]}
-          series={series}
+          series={series.map(({ dash: _dash, ...line }) => line)}
+          sx={dashedSeriesSx(series)}
           margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
           slotProps={{
             legend: {

@@ -4,6 +4,7 @@ import { theme } from './theme';
 import Nav from './components/Nav';
 import Hero from './components/Hero';
 import Showcase from './components/Showcase';
+import FromYourScript from './components/FromYourScript';
 import OnYourPhone from './components/OnYourPhone';
 import Assistant from './components/Assistant';
 import OpenSource from './components/OpenSource';
@@ -14,8 +15,10 @@ function LandingPage() {
   const appUrl = config.SHELL_FRONT_URL || '#';
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    // Light only, and not remembered: the page has no switch, and must not
+    // pick up the app's stored choice (`visin-mode`) on a shared origin.
+    <ThemeProvider theme={theme} defaultMode="light" storageManager={null}>
+      <CssBaseline enableColorScheme />
       {/* Keyboard users can skip the nav; visible only once focused. */}
       <Link
         href="#main"
@@ -39,6 +42,7 @@ function LandingPage() {
       <Box component="main" id="main">
         <Hero appUrl={appUrl} />
         <Showcase />
+        <FromYourScript />
         <OnYourPhone />
         <Assistant />
         <OpenSource />

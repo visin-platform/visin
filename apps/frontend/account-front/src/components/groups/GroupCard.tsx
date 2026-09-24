@@ -14,7 +14,7 @@ import {
   Typography,
   useTheme
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { livePalette } from '@visin/frontend-core';
 import { Check, Close, Delete, Edit, ExpandMore } from '@mui/icons-material';
 import { Group, GroupRole, permissionsFor, roleOf } from '../../types/group';
 import GroupMembers from './GroupMembers';
@@ -79,7 +79,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexGrow: 1, minWidth: 0, pr: 1 }}>
           <Avatar
             variant="rounded"
-            sx={{ width: 40, height: 40, borderRadius: '12px', fontWeight: 700, bgcolor: alpha(theme.palette.primary.main, 0.12), color: 'primary.main' }}
+            sx={{ width: 40, height: 40, borderRadius: '12px', fontWeight: 700, bgcolor: theme.alpha(livePalette(theme).primary.main, 0.12), color: 'primary.main' }}
           >
             {group.name.trim().charAt(0).toUpperCase()}
           </Avatar>

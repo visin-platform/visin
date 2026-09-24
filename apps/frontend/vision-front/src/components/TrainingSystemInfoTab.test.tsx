@@ -51,7 +51,31 @@ describe('TrainingSystemInfoTab', () => {
     expect(screen.getByText('System Memory Usage')).toBeInTheDocument();
     expect(screen.getByText('GPU Memory Usage')).toBeInTheDocument();
     expect(screen.getByText('GPU Power Consumption')).toBeInTheDocument();
-    expect(screen.getByText('GPU Temperature & Fan Speed')).toBeInTheDocument();
+    // One unit per chart: temperature and fan speed no longer share two y-axes.
+    expect(screen.getByText('GPU Temperature')).toBeInTheDocument();
+    expect(screen.getByText('GPU Fan Speed')).toBeInTheDocument();
+  });
+
+  it('leaves out a reading no epoch reported, rather than charting it as zero', () => {
+    const withoutFan = (epoch: number): Epoch => {
+      const base = makeEpoch(epoch);
+      const info = base.results.system_info as { gpu: { gpu_0: Record<string, number> } };
+      delete info.gpu.gpu_0.fan_speed_percent;
+      return base;
+    };
+
+    render(<TrainingSystemInfoTab epochs={[withoutFan(1), withoutFan(2)]} />);
+
+    expect(screen.getByText('GPU Temperature')).toBeInTheDocument();
+    expect(screen.queryByText('GPU Fan Speed')).not.toBeInTheDocument();
+  });
+
+  it('says so when the epochs carry system info but none of the charted readings', () => {
+    const bare = (epoch: number): Epoch => ({ ...makeEpoch(epoch), results: { system_info: { cpu_count: 8 } } });
+
+    render(<TrainingSystemInfoTab epochs={[bare(1)]} />);
+
+    expect(screen.getByText(/none of the readings charted here/)).toBeInTheDocument();
   });
 
   it('filters out epochs without system info while still rendering others', () => {

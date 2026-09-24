@@ -10,7 +10,6 @@ import {
   Grid,
   Stack,
   useTheme,
-  alpha,
   Tooltip
 } from '@mui/material';
 import {
@@ -25,6 +24,7 @@ import {
   TrendingDown as TrendingDownIcon,
   Timer as TimerIcon
 } from '@mui/icons-material';
+import { livePalette, tint } from '@visin/frontend-core';
 import { Training, Epoch } from '../types';
 import { costOf } from '../costing/costing';
 import { useCosting, useFormatCost } from '../costing/useCosting';
@@ -137,8 +137,8 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
       sx={{
         p: 2,
         height: '100%',
-        bgcolor: alpha(color, 0.04),
-        borderColor: alpha(color, 0.2),
+        bgcolor: tint(color, 0.04),
+        borderColor: tint(color, 0.2),
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between'
@@ -268,7 +268,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                       title="Epochs" 
                       value={epochs.length.toString()} 
                       icon={<SpeedIcon />} 
-                      color={theme.palette.primary.main} 
+                      color={livePalette(theme).primary.main} 
                     />
                   </Grid>
                   <Grid size={{ xs: 6, sm: 3 }}>
@@ -276,7 +276,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                       title="Total Time" 
                       value={formatTime(epochs.reduce((sum, epoch) => sum + (epoch.epoch_time || 0), 0))} 
                       icon={<AccessTimeIcon />} 
-                      color={theme.palette.info.main} 
+                      color={livePalette(theme).info.main} 
                     />
                   </Grid>
                   <Grid size={{ xs: 6, sm: 3 }}>
@@ -284,7 +284,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                       title="Avg / Epoch" 
                       value={epochs.length ? formatTime(epochs.reduce((sum, epoch) => sum + (epoch.epoch_time || 0), 0) / epochs.length) : '-'} 
                       icon={<TimerIcon />} 
-                      color={theme.palette.secondary.main} 
+                      color={livePalette(theme).secondary.main} 
                     />
                   </Grid>
                   <Grid size={{ xs: 6, sm: 3 }}>
@@ -293,7 +293,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                       value={costData ? formatCost(costData.totalCost) : '-'}
                       subValue={costData ? `CPU: ${formatCost(costData.cpuCost)} | GPU: ${formatCost(costData.gpuCost)}` : undefined}
                       icon={<MoneyIcon />} 
-                      color={theme.palette.warning.main} 
+                      color={livePalette(theme).warning.main} 
                     />
                   </Grid>
                 </Grid>
@@ -316,7 +316,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                         title="Train Loss" 
                         value={formatNumber(lastEpoch.results?.train?.loss)} 
                         icon={<TrendingDownIcon />} 
-                        color={theme.palette.error.main} 
+                        color={livePalette(theme).error.main} 
                       />
                     </Grid>
                     <Grid size={{ xs: 6, sm: 3 }}>
@@ -324,7 +324,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                         title="Val Loss" 
                         value={formatNumber(lastEpoch.results?.val?.loss)} 
                         icon={<TrendingDownIcon />} 
-                        color={theme.palette.error.dark} 
+                        color={livePalette(theme).error.dark} 
                       />
                     </Grid>
                     <Grid size={{ xs: 6, sm: 3 }}>
@@ -332,7 +332,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                         title="Train mIoU" 
                         value={formatNumber(lastEpoch.results?.train?.mean_iou)} 
                         icon={<TrendingUpIcon />} 
-                        color={theme.palette.success.main} 
+                        color={livePalette(theme).success.main} 
                       />
                     </Grid>
                     <Grid size={{ xs: 6, sm: 3 }}>
@@ -340,7 +340,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                         title="Val mIoU" 
                         value={formatNumber(lastEpoch.results?.val?.mean_iou)} 
                         icon={<TrendingUpIcon />} 
-                        color={theme.palette.success.dark} 
+                        color={livePalette(theme).success.dark} 
                       />
                     </Grid>
                   </Grid>

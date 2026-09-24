@@ -1,5 +1,4 @@
-import { CssBaseline, ThemeProvider } from '@mui/material';
-import { createConfigProvider, createVisinTheme } from '@visin/frontend-core';
+import { createConfigProvider, VisinThemeProvider } from '@visin/frontend-core';
 
 export interface AppConfig {
   VISION_API_URL?: string;
@@ -21,18 +20,13 @@ function createDevConfig(): AppConfig {
   };
 }
 
-// The one Visin theme, so crossing apps inside the shell never changes the look.
-const theme = createVisinTheme();
-
 export const { ConfigProvider, ConfigContext, useConfig, getGlobalConfig } = createConfigProvider<AppConfig>({
   createDevConfig,
   isDev: import.meta.env.DEV,
   // This app's own config.json, even when shell-front's page is the one running it.
   configUrl: new URL(/* @vite-ignore */ '/config.json', import.meta.url).href,
+  // The one Visin theme and light/dark switch, so crossing apps inside the shell never changes the look.
   renderChildren: (children) => (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      {children}
-    </ThemeProvider>
+    <VisinThemeProvider>{children}</VisinThemeProvider>
   )
 });

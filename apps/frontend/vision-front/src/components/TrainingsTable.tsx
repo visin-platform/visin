@@ -17,10 +17,9 @@ import {
   Checkbox,
   MenuItem,
   TextField,
-  useTheme,
-  alpha
+  useTheme
 } from '@mui/material';
-import { useCompactLayout } from '@visin/frontend-core';
+import { useCompactLayout, livePalette, tint } from '@visin/frontend-core';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -61,30 +60,30 @@ interface TrainingsTableProps {
 const StatusChip: React.FC<{ status: Training['status'] }> = ({ status }) => {
   const theme = useTheme();
   
-  let color = theme.palette.text.secondary;
-  let bgcolor = theme.palette.action.hover;
+  let color = livePalette(theme).text.secondary;
+  let bgcolor = livePalette(theme).action.hover;
   let icon = <PendingIcon style={{ fontSize: 16 }} />;
   const label = status;
 
   switch (status) {
     case 'completed':
-      color = theme.palette.success.main;
-      bgcolor = alpha(theme.palette.success.main, 0.1);
+      color = livePalette(theme).success.main;
+      bgcolor = tint(livePalette(theme).success.main, 0.1);
       icon = <SuccessIcon style={{ fontSize: 16 }} />;
       break;
     case 'running':
-      color = theme.palette.info.main;
-      bgcolor = alpha(theme.palette.info.main, 0.1);
+      color = livePalette(theme).info.main;
+      bgcolor = tint(livePalette(theme).info.main, 0.1);
       icon = <RunIcon style={{ fontSize: 16 }} />;
       break;
     case 'failed':
-      color = theme.palette.error.main;
-      bgcolor = alpha(theme.palette.error.main, 0.1);
+      color = livePalette(theme).error.main;
+      bgcolor = tint(livePalette(theme).error.main, 0.1);
       icon = <ErrorIcon style={{ fontSize: 16 }} />;
       break;
     case 'pending':
-      color = theme.palette.warning.main;
-      bgcolor = alpha(theme.palette.warning.main, 0.1);
+      color = livePalette(theme).warning.main;
+      bgcolor = tint(livePalette(theme).warning.main, 0.1);
       icon = <PendingIcon style={{ fontSize: 16 }} />;
       break;
   }
@@ -147,9 +146,9 @@ const SortableTableCell: React.FC<SortableTableCellProps> = ({
         fontWeight: 600,
         cursor: 'pointer',
         userSelect: 'none',
-        color: isActive ? theme.palette.primary.main : 'text.primary',
+        color: isActive ? livePalette(theme).primary.main : 'text.primary',
         transition: 'background-color 0.2s',
-        '&:hover': { backgroundColor: theme.palette.action.hover }
+        '&:hover': { backgroundColor: livePalette(theme).action.hover }
       }}
       onClick={() => onSort(column)}
     >
@@ -323,7 +322,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
           p: 6, 
           textAlign: 'center', 
           borderRadius: 2,
-          border: `1px solid ${theme.palette.divider}`,
+          border: `1px solid ${livePalette(theme).divider}`,
           bgcolor: 'background.paper'
         }}
       >
@@ -348,7 +347,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
       elevation={0} 
       sx={{ 
         borderRadius: 2, 
-        border: `1px solid ${theme.palette.divider}`,
+        border: `1px solid ${livePalette(theme).divider}`,
         overflow: 'hidden'
       }}
     >
@@ -370,7 +369,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
       ) : (
       <TableContainer sx={{ overflowX: 'auto' }}>
         <Table sx={{ minWidth: 650 }}>
-          <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+          <TableHead sx={{ bgcolor: tint(livePalette(theme).primary.main, 0.02) }}>
             <TableRow>
               <TableCell padding="checkbox">
                 <Checkbox
@@ -420,9 +419,9 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                     cursor: 'pointer',
                     transition: 'background-color 0.2s',
                     '&.Mui-selected': {
-                      backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                      backgroundColor: tint(livePalette(theme).primary.main, 0.08),
                       '&:hover': {
-                        backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                        backgroundColor: tint(livePalette(theme).primary.main, 0.12),
                       }
                     }
                   }}
@@ -463,7 +462,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                               sx={{
                                 height: '20px',
                                 fontSize: '0.65rem',
-                                borderColor: alpha(theme.palette.divider, 0.8),
+                                borderColor: tint(livePalette(theme).divider, 0.8),
                                 '& .MuiChip-label': { px: 0.5, py: 0 }
                               }}
                             />
@@ -533,7 +532,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                                 e.stopPropagation();
                                 onEdit(training);
                               }}
-                              sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.primary.main } }}
+                              sx={{ color: livePalette(theme).text.secondary, '&:hover': { color: livePalette(theme).primary.main } }}
                             >
                               <EditIcon fontSize="small" />
                             </IconButton>
@@ -546,7 +545,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                                 e.stopPropagation();
                                 onDelete(training._id);
                               }}
-                              sx={{ color: theme.palette.text.secondary, '&:hover': { color: theme.palette.error.main } }}
+                              sx={{ color: livePalette(theme).text.secondary, '&:hover': { color: livePalette(theme).error.main } }}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
@@ -571,7 +570,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
         onPageChange={onPageChange}
         onRowsPerPageChange={onRowsPerPageChange}
         labelRowsPerPage={compact ? 'Rows' : 'Rows per page:'}
-        sx={{ borderTop: compact ? 0 : `1px solid ${theme.palette.divider}` }}
+        sx={{ borderTop: compact ? 0 : `1px solid ${livePalette(theme).divider}` }}
       />
     </Paper>
   );

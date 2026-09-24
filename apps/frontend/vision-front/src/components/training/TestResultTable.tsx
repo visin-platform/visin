@@ -13,10 +13,10 @@ import {
   IconButton,
   Tooltip,
   Typography,
-  useTheme,
-  alpha
+  useTheme
 } from '@mui/material';
 import { Code as CodeIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { livePalette, tint } from '@visin/frontend-core';
 import { TestResult } from '../../types';
 import ConfusionMatrix from './ConfusionMatrix';
 import { isRecord, readMetric } from '../../taxonomy/discover';
@@ -96,8 +96,8 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          bgcolor: alpha(theme.palette.primary.main, 0.04),
-          borderBottom: `1px solid ${theme.palette.divider}`
+          bgcolor: tint(livePalette(theme).primary.main, 0.04),
+          borderBottom: `1px solid ${livePalette(theme).divider}`
         }}>
         <Box>
         </Box>
@@ -117,7 +117,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
                 onClick={() => onDeleteTestResult(testResult._id)}
                 sx={{
                   color: 'text.secondary',
-                  '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) }
+                  '&:hover': { color: 'error.main', bgcolor: tint(livePalette(theme).error.main, 0.1) }
                 }}
               >
                 <DeleteIcon fontSize="small" />
@@ -129,8 +129,8 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
       <TableContainer>
         <Table size="small">
           <TableHead>
-            <TableRow sx={{ bgcolor: alpha(theme.palette.action.hover, 0.5) }}>
-              <TableCell rowSpan={2} sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontWeight: 600 }}>
+            <TableRow sx={{ bgcolor: tint(livePalette(theme).action.hover, 0.5) }}>
+              <TableCell rowSpan={2} sx={{ borderRight: `1px solid ${livePalette(theme).divider}`, fontWeight: 600 }}>
                 {taxonomy.conditionLabel}
               </TableCell>
               {CLASS_METRICS.map(metric => (
@@ -138,7 +138,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
                   key={metric}
                   colSpan={classes.length}
                   align="center"
-                  sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontWeight: 600 }}
+                  sx={{ borderRight: `1px solid ${livePalette(theme).divider}`, fontWeight: 600 }}
                 >
                   {taxonomy.metric(metric).label}
                 </TableCell>
@@ -149,7 +149,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
                 </TableCell>
               )}
             </TableRow>
-            <TableRow sx={{ bgcolor: alpha(theme.palette.action.hover, 0.5) }}>
+            <TableRow sx={{ bgcolor: tint(livePalette(theme).action.hover, 0.5) }}>
               {CLASS_METRICS.map(metric =>
                 classes.map((className, index) => (
                   <TableCell
@@ -158,7 +158,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
                     sx={{
                       fontSize: '0.75rem',
                       ...(index === classes.length - 1
-                        ? { borderRight: `1px solid ${theme.palette.divider}` }
+                        ? { borderRight: `1px solid ${livePalette(theme).divider}` }
                         : {})
                     }}
                   >
@@ -181,7 +181,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
 
               return (
                 <TableRow key={condition.key} hover>
-                  <TableCell sx={{ fontWeight: 600, borderRight: `1px solid ${theme.palette.divider}` }}>
+                  <TableCell sx={{ fontWeight: 600, borderRight: `1px solid ${livePalette(theme).divider}` }}>
                     {condition.label}
                   </TableCell>
                   {CLASS_METRICS.map(metric =>
@@ -192,7 +192,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
                         sx={{
                           fontFamily: 'monospace',
                           ...(index === classes.length - 1
-                            ? { borderRight: `1px solid ${theme.palette.divider}` }
+                            ? { borderRight: `1px solid ${livePalette(theme).divider}` }
                             : {})
                         }}
                       >
@@ -210,15 +210,15 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
             })}
             {/* Overall row for all conditions combined */}
             {isRecord(overallBlock) && (
-              <TableRow hover sx={{ bgcolor: alpha(theme.palette.secondary.main, 0.04) }}>
-                <TableCell sx={{ fontWeight: 600, borderRight: `1px solid ${theme.palette.divider}` }}>
+              <TableRow hover sx={{ bgcolor: tint(livePalette(theme).secondary.main, 0.04) }}>
+                <TableCell sx={{ fontWeight: 600, borderRight: `1px solid ${livePalette(theme).divider}` }}>
                   All
                 </TableCell>
                 {perClassColumns > 0 && (
                   <TableCell
                     colSpan={perClassColumns}
                     align="center"
-                    sx={{ borderRight: `1px solid ${theme.palette.divider}`, fontStyle: 'italic' }}
+                    sx={{ borderRight: `1px solid ${livePalette(theme).divider}`, fontStyle: 'italic' }}
                   >
                     -
                   </TableCell>

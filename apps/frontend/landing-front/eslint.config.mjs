@@ -4,7 +4,8 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'coverage/**'] },
+  // scripts/: local dev tools (the showcase capture), kept out of git.
+  { ignores: ['dist/**', 'coverage/**', 'scripts/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

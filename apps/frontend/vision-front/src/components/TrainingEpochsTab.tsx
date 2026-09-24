@@ -13,14 +13,14 @@ import {
   TableRow,
   Button,
   Tooltip,
-  useTheme,
-  alpha
+  useTheme
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
   CloudUpload as CloudUploadIcon,
   Add as AddIcon
 } from '@mui/icons-material';
+import { livePalette, tint } from '@visin/frontend-core';
 import { Epoch } from '../types';
 import DeleteConfirmationDialog from './training/DeleteConfirmationDialog';
 import UploadResultsDialog from './training/UploadResultsDialog';
@@ -183,7 +183,7 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
         ) : (
           <TableContainer>
             <Table sx={{ minWidth: 650 }}>
-              <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.04) }}>
+              <TableHead sx={{ bgcolor: tint(livePalette(theme).primary.main, 0.04) }}>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 600 }}>Epoch</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600 }}>Train Loss</TableCell>
@@ -231,7 +231,7 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
                             onClick={() => onDeleteClick(epoch)}
                             sx={{ 
                               color: 'text.secondary',
-                              '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) }
+                              '&:hover': { color: 'error.main', bgcolor: tint(livePalette(theme).error.main, 0.1) }
                             }}
                           >
                             <DeleteIcon fontSize="small" />

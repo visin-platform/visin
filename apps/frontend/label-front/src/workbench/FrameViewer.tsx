@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box } from '@mui/material';
+import { onImage } from '@visin/frontend-core';
 import { TaskImages } from '../types';
 import { DecodedImage } from './idmapLoader';
 import { MaskIndex, applyMaskCutout, buildHighlightOverlay, maskIdAtPoint } from './maskIndex';
@@ -191,7 +192,7 @@ const FrameViewer: React.FC<FrameViewerProps> = ({
         overflow: 'hidden',
         width: '100%',
         height: '100%',
-        bgcolor: '#0b0f19',
+        bgcolor: onImage.backdrop,
         // A grab hand hides the pixel it is over, which is the one being judged:
         // masks here go down to a few pixels. Crosshair while picking, hand only
         // while actually panning.

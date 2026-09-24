@@ -21,8 +21,9 @@ interface HeroProps {
 
 /**
  * One line of promise, then the product itself: a real recording of the app —
- * a project's runs, one opened, its curves — with the installed phone app
- * beside it. Someone who asked for less motion gets the still frame.
+ * a project's runs, one opened, its curves, then runs compared at their best and
+ * exported for a paper — with the installed phone app beside it. Someone who
+ * asked for less motion gets the still frame.
  */
 export default function Hero({ appUrl }: HeroProps) {
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -99,8 +100,9 @@ export default function Hero({ appUrl }: HeroProps) {
               muted
               playsInline
               preload="metadata"
-              aria-label="A tour of Visin: a project's training runs, one opened, its loss and IoU curves"
-              sx={{ display: 'block', width: '100%', aspectRatio: '1440 / 900', bgcolor: '#F6F7FB' }}
+              aria-label="A tour of Visin: a project's training runs, one opened with its curves and per-class scores, then nine runs compared at their best epoch and exported as LaTeX"
+              // The app's dark page, so the frame is the right colour before the first frame arrives.
+              sx={{ display: 'block', width: '100%', aspectRatio: '1440 / 900', bgcolor: '#0b0f17' }}
             />
           </BrowserFrame>
           <PhoneFrame

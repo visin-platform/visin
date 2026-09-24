@@ -1,4 +1,5 @@
 import { useTheme } from '@mui/material';
+import { livePalette } from '@visin/frontend-core';
 import { Folder } from '@mui/icons-material';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { HomeProject } from '../../services/homeApi';
@@ -23,7 +24,7 @@ export function ProjectsSection({ query, now }: { query: UseQueryResult<HomeProj
             key={project._id}
             to={`/projects/${project.slug || project._id}`}
             leading={
-              <RowIcon color={theme.palette.primary.main}>
+              <RowIcon color={livePalette(theme).primary.main}>
                 <Folder fontSize="small" />
               </RowIcon>
             }

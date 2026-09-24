@@ -119,25 +119,27 @@ export function initializeGoogleSignIn(clientId: string, redirectUri: string, on
     const buttonElement = document.getElementById('google-signin-button');
     if (buttonElement && !buttonElement.hasChildNodes()) {
       const fallback = document.createElement('div');
-      fallback.style.cssText = 'padding: 20px; text-align: center; color: #d32f2f; border: 1px solid #ddd; border-radius: 4px;';
+      // Built with the DOM rather than JSX, so it names the theme's variables
+      // itself (they follow light and dark); the system colours are fallbacks.
+      fallback.style.cssText = 'padding: 20px; text-align: center; color: var(--mui-palette-error-main, CanvasText); border: 1px solid var(--mui-palette-divider, GrayText); border-radius: 4px;';
 
       const title = document.createElement('p');
       title.style.cssText = 'margin: 0 0 10px 0;';
       title.textContent = 'Google Sign-In failed to load';
 
       const description = document.createElement('p');
-      description.style.cssText = 'margin: 0 0 15px 0; font-size: 0.9rem; color: #666;';
+      description.style.cssText = 'margin: 0 0 15px 0; font-size: 0.9rem; color: var(--mui-palette-text-secondary, GrayText);';
       description.textContent = 'This might be due to network issues or browser extensions blocking Google services.';
 
       const reloadButton = document.createElement('button');
       reloadButton.type = 'button';
-      reloadButton.style.cssText = 'padding: 10px 20px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;';
+      reloadButton.style.cssText = 'padding: 10px 20px; background: var(--mui-palette-primary-main, ButtonFace); color: var(--mui-palette-primary-contrastText, ButtonText); border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;';
       reloadButton.textContent = 'Reload Page';
       reloadButton.addEventListener('click', () => window.location.reload());
 
       const skipButton = document.createElement('button');
       skipButton.type = 'button';
-      skipButton.style.cssText = 'padding: 10px 20px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;';
+      skipButton.style.cssText = 'padding: 10px 20px; background: transparent; color: var(--mui-palette-text-secondary, ButtonText); border: 1px solid var(--mui-palette-divider, GrayText); border-radius: 4px; cursor: pointer;';
       skipButton.textContent = 'Skip Login';
       skipButton.addEventListener('click', () => {
         window.location.href = redirectUri;

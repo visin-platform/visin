@@ -131,7 +131,7 @@ const VisualizationsComparisonPage: React.FC = () => {
                       objectFit: 'contain',
                       bgcolor: 'background.paper',
                       border: '1px solid',
-                      borderColor: 'grey.300',
+                      borderColor: 'divider',
                       borderRadius: 1
                     }}
                   />
@@ -183,7 +183,7 @@ const VisualizationsComparisonPage: React.FC = () => {
                       objectFit: 'contain',
                       bgcolor: 'background.paper',
                       border: '1px solid',
-                      borderColor: 'grey.300',
+                      borderColor: 'divider',
                       borderRadius: 1
                     }}
                   />

@@ -3,7 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="initial-scale=1, width=device-width" />
-    <meta name="theme-color" content="#111827" />
+    <meta name="theme-color" content="#f6f7fb" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Sets light or dark before the first paint, from the key the theme provider
+         keeps it under (visin-mode), so a dark page never flashes white. After the
+         theme-color meta, which it also sets, so the browser's bar matches too. -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem('visin-mode') || 'system';
+          var dark = mode === 'dark' || (mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.setAttribute('data-color-scheme', dark ? 'dark' : 'light');
+          if (dark) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0b0f17');
+        } catch (e) {}
+      })();
+    </script>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />

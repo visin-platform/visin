@@ -1,7 +1,4 @@
-import { CssBaseline, ThemeProvider } from '@mui/material';
-import { createConfigProvider, createVisinTheme } from '@visin/frontend-core';
-
-const theme = createVisinTheme();
+import { createConfigProvider, VisinThemeProvider } from '@visin/frontend-core';
 
 export interface AppConfig {
   GOOGLE_CLIENT_ID?: string;
@@ -23,9 +20,6 @@ export const { ConfigProvider, ConfigContext, useConfig, getGlobalConfig } = cre
   // The one Visin theme: the sign-in page is the first screen of the app, and
   // should look like it.
   renderChildren: (children) => (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      {children}
-    </ThemeProvider>
+    <VisinThemeProvider>{children}</VisinThemeProvider>
   )
 });

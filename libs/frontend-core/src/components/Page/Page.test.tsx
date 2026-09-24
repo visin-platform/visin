@@ -2,7 +2,6 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { EmptyState, ListRow, PageHeader, Panel, ResponsiveActions, RowIcon, SectionHeading } from '.';
-import { createVisinTheme, VISIN_COLORS } from '../../theme';
 
 const onPhone = () =>
   Object.defineProperty(window, 'matchMedia', {
@@ -119,22 +118,6 @@ describe('SectionHeading and EmptyState', () => {
     expect(screen.getByText('Nothing yet')).toBeInTheDocument();
     expect(screen.getByText('Add one.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
-  });
-});
-
-describe('createVisinTheme', () => {
-  it('is built on the brand colour, the Inter typeface and sentence-case buttons', () => {
-    const theme = createVisinTheme();
-
-    expect(theme.palette.primary.main).toBe(VISIN_COLORS.brand);
-    expect(theme.typography.fontFamily).toMatch(/^"Inter"/);
-    expect(theme.typography.button.textTransform).toBe('none');
-    // MUI's unit: the apps' `borderRadius: 2` must stay 8px, not become a pill.
-    expect(theme.shape.borderRadius).toBe(4);
-  });
-
-  it('takes overrides', () => {
-    expect(createVisinTheme({ palette: { primary: { main: '#000000' } } }).palette.primary.main).toBe('#000000');
   });
 });
 

@@ -9,7 +9,6 @@ import {
   Stack,
   Grid,
   useTheme,
-  alpha,
   IconButton,
   Tooltip
 } from '@mui/material';
@@ -19,6 +18,7 @@ import {
   Info as InfoIcon,
   AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
+import { livePalette, tint } from '@visin/frontend-core';
 import { Config } from '../types';
 
 interface TrainingConfigTabProps {
@@ -166,7 +166,7 @@ const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
                 <Box 
                   sx={{ 
                     p: 2, 
-                    bgcolor: alpha(theme.palette.primary.main, 0.04), 
+                    bgcolor: tint(livePalette(theme).primary.main, 0.04), 
                     borderRadius: 2,
                     height: '100%'
                   }}
@@ -235,8 +235,8 @@ const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  borderBottom: `1px solid ${theme.palette.divider}`,
-                  bgcolor: alpha(theme.palette.action.hover, 0.5)
+                  borderBottom: `1px solid ${livePalette(theme).divider}`,
+                  bgcolor: tint(livePalette(theme).action.hover, 0.5)
                 }}>
                 <Typography variant="subtitle2" sx={{
                   fontWeight: 600
@@ -254,8 +254,8 @@ const TrainingConfigTab: React.FC<TrainingConfigTabProps> = ({
                   p: 0,
                   maxHeight: '600px',
                   overflowY: 'auto',
-                  bgcolor: theme.palette.grey[900],
-                  color: theme.palette.grey[100],
+                  bgcolor: livePalette(theme).grey[900],
+                  color: livePalette(theme).grey[100],
                 }}
               >
                 <Box

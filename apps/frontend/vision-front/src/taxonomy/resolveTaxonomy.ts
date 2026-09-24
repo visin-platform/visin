@@ -1,3 +1,4 @@
+import { chartSeries } from '@visin/frontend-core';
 import {
   MetricDirection,
   MetricFormat,
@@ -20,18 +21,12 @@ import { humanize } from './humanize';
  * a new class shows up immediately instead of vanishing.
  */
 
-export const PALETTE = [
-  '#1976d2',
-  '#d32f2f',
-  '#f57c00',
-  '#388e3c',
-  '#7b1fa2',
-  '#00796b',
-  '#c2185b',
-  '#0097a7',
-  '#fbc02d',
-  '#6a1b9a'
-];
+/**
+ * An unconfigured class's colour: the shared chart series, in slot order. Kept
+ * as the light steps; charts draw them through `useChartColors().adapt`, which
+ * swaps in the dark step when dark is showing.
+ */
+export const PALETTE: readonly string[] = chartSeries.light;
 
 const DEFAULT_DECIMALS = 4;
 

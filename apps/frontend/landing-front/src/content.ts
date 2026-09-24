@@ -33,19 +33,19 @@ export interface ShowcaseItem {
 export const SHOWCASE: ShowcaseItem[] = [
   {
     src: '/showcase/charts.webp',
-    alt: 'Training and validation loss and mean IoU curves over 100 epochs',
+    alt: 'Training and validation loss and mean IoU curves of one run over 100 epochs',
     title: 'Every epoch, charted',
     caption: 'See the loss and metric curves your training script sends.'
   },
   {
     src: '/showcase/compare.webp',
-    alt: 'A table comparing nine runs by time, best epoch and best validation mIoU',
+    alt: 'Nine runs compared by training time, best epoch and best validation mIoU, with a LaTeX export button',
     title: 'Runs compared at their best',
-    caption: 'Compare each run at its strongest epoch.'
+    caption: 'Each run at its strongest epoch, and the table ready for your paper as LaTeX.'
   },
   {
     src: '/showcase/tests.webp',
-    alt: 'Per-class IoU, precision, recall and AP for each weather condition',
+    alt: 'Per-class IoU, precision, recall and AP for five weather conditions',
     title: 'Per class, per condition',
     caption: 'Break test scores down to match your data.'
   },
@@ -57,11 +57,45 @@ export const SHOWCASE: ShowcaseItem[] = [
   }
 ];
 
+/**
+ * How a run gets in: the training loop posts each epoch. The snippet is the real
+ * endpoint and payload (`POST /api/epochs/upload`, a project token as Bearer),
+ * written with plain `requests` so it needs nothing that is not shipped.
+ */
+export const SCRIPT_SNIPPET = [
+  'import requests',
+  '',
+  'for epoch in range(epochs):',
+  '    loss, val = train_one_epoch()',
+  '    requests.post(f"{VISIN}/api/epochs/upload",',
+  '        headers={"Authorization": f"Bearer {TOKEN}"},',
+  '        json={"training_uuid": RUN, "epoch": epoch, "results": {',
+  '            "train": {"loss": loss},',
+  '            "val": {"mean_iou": val.miou,',
+  '                    "vehicle": {"iou": val.iou["vehicle"]}}}})'
+].join('\n');
+
+/**
+ * What Visin makes of that payload, named the way the app names it: sections of
+ * a run's results are conditions, keys that hold metrics are classes.
+ */
+export const SCRIPT_DISCOVERED = [
+  { kind: 'Conditions', names: ['train', 'val'] },
+  { kind: 'Classes', names: ['vehicle'] },
+  { kind: 'Metrics', names: ['loss', 'mean_iou', 'iou'] }
+];
+
+export const SCRIPT_POINTS: OpenSourcePoint[] = [
+  { title: 'No schema to declare', body: 'Metrics, classes and conditions are found in what you send.' },
+  { title: 'One token per project', body: 'A project token writes to its own project and nowhere else.' },
+  { title: 'Not only epochs', body: 'Test results, benchmarks, configs and prediction frames post the same way.' }
+];
+
 /** The installed app on a phone: the same data, in your pocket. */
 export const PHONE_SCREENS = [
   { src: '/showcase/phone-home.webp', alt: 'Visin home on a phone: projects, trainings and tasks to label' },
   { src: '/showcase/phone-trainings.webp', alt: 'A project’s training runs listed on a phone' },
-  { src: '/showcase/phone-charts.webp', alt: 'A run’s loss curve on a phone' }
+  { src: '/showcase/phone-charts.webp', alt: 'A run’s mean IoU curve on a phone' }
 ];
 
 export interface OpenSourcePoint {

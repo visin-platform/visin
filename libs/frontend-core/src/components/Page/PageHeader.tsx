@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Fab, Typography } from '@mui/material';
+import { livePalette, mainAction } from '../../theme';
 import { TAB_BAR_HEIGHT, useCompactLayout } from './layout';
 
 const visuallyHidden = {
@@ -65,7 +66,8 @@ export function PageHeader({ title, subtitle, actions, primaryAction, hideTitleO
           zIndex: (theme) => theme.zIndex.speedDial,
           gap: 1,
           px: 2.5,
-          boxShadow: '0 8px 24px rgba(37, 99, 235, 0.35)'
+          ...mainAction,
+          boxShadow: (theme) => `0 8px 24px ${theme.alpha(livePalette(theme).primary.main, 0.35)}`
         }}
       >
         {primaryAction.icon}
@@ -78,7 +80,7 @@ export function PageHeader({ title, subtitle, actions, primaryAction, hideTitleO
         onClick={primaryAction.onClick}
         disabled={primaryAction.disabled}
         startIcon={primaryAction.icon}
-        sx={{ flexShrink: 0, height: 40, px: 2.25 }}
+        sx={{ flexShrink: 0, height: 40, px: 2.25, ...mainAction }}
       >
         {primaryAction.label}
       </Button>

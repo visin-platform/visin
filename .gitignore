@@ -16,3 +16,6 @@ paper
 
 # Local database backups (contain user data)
 /backups
+
+# Local dev tools that need a copy of real data to run (the landing showcase capture)
+/apps/frontend/landing-front/scripts/

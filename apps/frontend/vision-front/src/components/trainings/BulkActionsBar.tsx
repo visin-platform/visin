@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   Button,
-  alpha,
   useTheme
 } from '@mui/material';
 import {
@@ -11,6 +10,7 @@ import {
   Compare as CompareIcon,
   Download as DownloadIcon
 } from '@mui/icons-material';
+import { livePalette, tint } from '@visin/frontend-core';
 
 interface BulkActionsBarProps {
   selectedCount: number;
@@ -39,8 +39,8 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
         display: 'flex', 
         alignItems: 'center', 
         gap: 2,
-        bgcolor: alpha(theme.palette.primary.main, 0.05),
-        border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+        bgcolor: tint(livePalette(theme).primary.main, 0.05),
+        border: `1px solid ${tint(livePalette(theme).primary.main, 0.1)}`,
         borderRadius: 2
       }}
     >

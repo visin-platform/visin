@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, ButtonBase, Link, Skeleton, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { tint } from '@visin/frontend-core';
 import { ChevronRight } from '@mui/icons-material';
 import { panelSx } from './panel';
 
@@ -133,7 +133,8 @@ export function RowIcon({ color, children }: { color: string; children: ReactNod
         placeItems: 'center',
         flexShrink: 0,
         color,
-        bgcolor: alpha(color, 0.12)
+        // `tint`: the colour may be a theme variable, which MUI's `alpha` cannot read.
+        bgcolor: tint(color, 0.12)
       }}
     >
       {children}

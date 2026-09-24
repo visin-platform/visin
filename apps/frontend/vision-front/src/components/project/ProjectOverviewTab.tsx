@@ -19,7 +19,7 @@ import {
   Add as AddIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import type { AuthUser } from '@visin/frontend-core';
+import { tint, type AuthUser } from '@visin/frontend-core';
 import { TrainingStats } from '../../services/trainingService';
 import { ProjectDashboardStats } from '../../services/projectService';
 import { useFormatCost } from '../../costing/useCosting';
@@ -38,7 +38,7 @@ interface StatTile {
   label: string;
   value: string | number;
   icon: React.ReactElement<SvgIconProps>;
-  /** Palette family for the icon chip; `.light` backs `.main`. */
+  /** Palette family for the icon chip: `.main` on a tint of itself. */
   color: string;
   /** Column width from the `sm` breakpoint up; phones always show two per row. */
   width: number;
@@ -53,7 +53,7 @@ const StatCard: React.FC<{ tile: StatTile }> = ({ tile }) => (
             display: 'flex',
             p: { xs: 0.5, sm: 1 },
             borderRadius: 1,
-            bgcolor: `${tile.color}.light`,
+            bgcolor: tint(`var(--mui-palette-${tile.color}-main)`, 0.12),
             color: `${tile.color}.main`,
             mr: { xs: 1, sm: 2 },
             '& .MuiSvgIcon-root': { fontSize: { xs: '1rem', sm: '1.5rem' } }

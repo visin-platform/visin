@@ -3,17 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="initial-scale=1, width=device-width" />
-    <meta name="theme-color" content="#111827" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f6f7fb" />
+    <!-- The app's own light/dark choice (visin-mode), as each front's index.html reads it. -->
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem('visin-mode') || 'system';
+          var dark = mode === 'dark' || (mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.setAttribute('data-color-scheme', dark ? 'dark' : 'light');
+          if (dark) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0b0f17');
+        } catch (e) {}
+      })();
+    </script>
     <title>Visin — offline</title>
     <style>
+      /* The theme's light and dark values (libs/frontend-core/src/theme/tokens.ts). */
+      :root {
+        --page: #f6f7fb;
+        --ink: #0f172a;
+        --body: #475569;
+        --primary: #2563eb;
+        --on-primary: #ffffff;
+      }
+      :root[data-color-scheme='dark'] {
+        color-scheme: dark;
+        --page: #0b0f17;
+        --ink: #e6eaf2;
+        --body: #b3bccb;
+        --primary: #60a5fa;
+        --on-primary: #0b1220;
+      }
       body {
         margin: 0;
         min-height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #F6F7FB;
-        color: #0f172a;
+        background: var(--page);
+        color: var(--ink);
         font-family: 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
         text-align: center;
       }
@@ -26,15 +54,15 @@
         margin: 16px 0 8px;
       }
       p {
-        color: #475569;
+        color: var(--body);
         line-height: 1.5;
         margin: 0 0 24px;
       }
       button {
         font: inherit;
         font-weight: 500;
-        color: #fff;
-        background: #2563eb;
+        color: var(--on-primary);
+        background: var(--primary);
         border: 0;
         border-radius: 12px;
         padding: 10px 20px;

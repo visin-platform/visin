@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, ButtonBase, Skeleton, Typography } from '@mui/material';
+import { glassInteractive } from '@visin/frontend-core';
 import { formatCount } from './formatting';
 import { panelSx } from './panel';
 
@@ -35,6 +36,7 @@ export function StatTiles({ tiles }: { tiles: StatTile[] }) {
           to={tile.to}
           sx={{
             ...panelSx,
+            ...glassInteractive(),
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',
@@ -44,8 +46,6 @@ export function StatTiles({ tiles }: { tiles: StatTile[] }) {
             textAlign: 'left',
             color: 'text.primary',
             WebkitTapHighlightColor: 'transparent',
-            transition: 'transform .15s ease, border-color .15s ease',
-            '&:hover': { borderColor: 'primary.light' },
             '&:active': { transform: 'scale(0.97)' }
           }}
         >

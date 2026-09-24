@@ -9,9 +9,9 @@ import {
   TableHead,
   TableRow,
   Typography,
-  alpha,
   useTheme
 } from '@mui/material';
+import { livePalette, tint } from '@visin/frontend-core';
 import { Epoch, EpochMetrics } from '../types';
 
 interface PerClassMetricsTableProps {
@@ -67,7 +67,7 @@ export const PerClassMetricsTable: React.FC<PerClassMetricsTableProps> = ({
 
   const tableContent = (
       <Table size={size}>
-        <TableHead sx={highlightHeader ? { bgcolor: alpha(theme.palette.primary.main, 0.05) } : undefined}>
+        <TableHead sx={highlightHeader ? { bgcolor: tint(livePalette(theme).primary.main, 0.05) } : undefined}>
           <TableRow>
             <TableCell><strong>Class</strong></TableCell>
             <TableCell align="right"><strong>IoU</strong></TableCell>

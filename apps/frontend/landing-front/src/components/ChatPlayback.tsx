@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, CircularProgress, Stack, Typography, useMediaQuery } from '@mui/material';
+import { MONO } from '../theme';
 import { AutoAwesome, CheckCircle, Replay } from '@mui/icons-material';
 import type { ChatTurn } from '../content';
 
@@ -15,7 +16,6 @@ import type { ChatTurn } from '../content';
  * is simply at its end, and the whole transcript shows at once.
  */
 
-const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 const TOOL_MS = 650;
 const WORD_MS = 38;
 const CHART_MS = 1400;

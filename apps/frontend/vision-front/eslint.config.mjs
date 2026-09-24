@@ -33,15 +33,32 @@ export default tseslint.config(
           ignoreRestSiblings: true,
         },
       ],
+      // A colour written out stays the same in light and dark. Use a palette
+      // path in `sx` ('text.secondary'), a token from @visin/frontend-core
+      // (`surface.divider`, `livePalette(theme)`, `tint`) or, for a chart
+      // series, `useChartColors()`.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: String.raw`Literal[value=/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$|(?:^|\s)#[0-9a-fA-F]{6}\b|\b(?:rgba?|hsla?)\(/]`,
+          message: 'Colour literal: use a theme palette path, a @visin/frontend-core token, or useChartColors().',
+        },
+        {
+          selector: String.raw`TemplateElement[value.raw=/(?:^|\s)#[0-9a-fA-F]{6}\b|\b(?:rgba?|hsla?)\(/]`,
+          message: 'Colour literal: use a theme palette path, a @visin/frontend-core token, or useChartColors().',
+        },
+      ],
     },
   },
   {
     // Test fixtures and mocked-component props deliberately use `any` for
     // throwaway shapes (partial API fixtures, vi.mock prop stand-ins) —
     // production code and real types are still held to no-explicit-any.
-    files: ['**/*.test.{ts,tsx}', '**/__tests__/**/*.{ts,tsx}'],
+    files: ['**/*.test.{ts,tsx}', '**/__tests__/**/*.{ts,tsx}', 'e2e/**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
+      // Fixtures describe stored data, which may well carry a colour.
+      'no-restricted-syntax': 'off',
     },
   }
 );

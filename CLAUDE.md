@@ -163,6 +163,26 @@ including any failures.
   deployed remotes) and only serves `offline.html`. Don't add precaching.
 - **Tests:** the federation plugin is off under Vitest.
 
+### Theme and colour (fronts)
+
+- **One theme, light and dark:** `VisinThemeProvider` (`@visin/frontend-core`) in each front's `ConfigProvider`.
+  Colours are CSS variables switched by `data-color-scheme` on `<html>`, so the shell's switch restyles its remotes.
+  - The choice is kept under `visin-mode`. Each front's `index.html` reads it in a pre-paint script that sets the
+    attribute and `theme-color`; a new front needs the same script, or dark pages flash white.
+  - landing-front is light only, by design.
+- **No colour literals:** ESLint fails on hex, `rgb()` and `hsl()` outside tests.
+  - In `sx`: palette paths (`'text.secondary'`) and tokens (`ink`, `surface`, `glass`, `chrome`, `onImage`).
+  - In JS: `livePalette(theme)`, never `theme.palette` (it holds the light values in both schemes). Mix with
+    `theme.alpha` or `tint`, never MUI's `alpha()`, which cannot parse a variable.
+  - A new token needs values for both schemes; `theme/theme.test.ts` fails any text colour under WCAG AA.
+- **Glass only on chrome and floating surfaces** (rail, bars, menus, popovers). Tables, lists, charts and dialogs
+  stay solid.
+- **Charts:** series colours from `useChartColors()`, in slot order (training slot 1, validation slot 2); `adapt()`
+  for a stored class colour.
+  - One unit per chart, never two y-axes.
+  - A reading an epoch did not report is `null` (a gap), never `0`.
+  - Past eight lines, `withDistinctDashes` + `dashedSeriesSx` (vision-front `components/charts/seriesDashes.ts`).
+
 ### Frontend data fetching
 
 - **vision-front API calls go through `config/visionApi.ts`.** The exception is the direct PUT to a file-service

@@ -10,7 +10,6 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  alpha,
   useTheme
 } from '@mui/material';
 import {
@@ -18,6 +17,7 @@ import {
   ArrowDownward as ArrowDownwardIcon
 } from '@mui/icons-material';
 import { Code as CodeIcon } from '@mui/icons-material';
+import { livePalette, tint, surface } from '@visin/frontend-core';
 import { Link } from 'react-router-dom';
 import LatexModal from '../common/LatexModal';
 import MetricCell from './MetricCell';
@@ -150,9 +150,9 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
     <Paper
       sx={{
         mb: 4,
-        boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
-        bgcolor: alpha(theme.palette.primary.main, 0.05),
-        border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
+        boxShadow: `0 4px 12px ${tint(livePalette(theme).primary.main, 0.2)}`,
+        bgcolor: tint(livePalette(theme).primary.main, 0.05),
+        border: `1px solid ${tint(livePalette(theme).primary.main, 0.1)}`
       }}
     >
       <Box sx={{ p: 3, pb: 2 }}>
@@ -186,7 +186,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'background.default' }}>
-                    <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 120 }}>
+                    <TableCell sx={{ fontWeight: 600, borderRight: `2px solid ${surface.divider}`, minWidth: 120 }}>
                       Test Result
                     </TableCell>
                     {classes.map(className => (
@@ -194,7 +194,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                         key={className.key}
                         colSpan={metrics.length}
                         align="center"
-                        sx={{ fontWeight: 600, borderRight: '1px solid rgba(224, 224, 224, 1)' }}
+                        sx={{ fontWeight: 600, borderRight: `1px solid ${surface.divider}` }}
                       >
                         {className.label}
                       </TableCell>
@@ -234,7 +234,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                     const conditionData = comp.aggregatedResults?.[condition.key] as ConditionAggregates | undefined;
                     return (
                       <TableRow key={comp.training._id} sx={{ '&:nth-of-type(odd)': { bgcolor: 'action.hover' } }}>
-                        <TableCell sx={{ fontWeight: 600, borderRight: '2px solid rgba(224, 224, 224, 1)', minWidth: 150 }}>
+                        <TableCell sx={{ fontWeight: 600, borderRight: `2px solid ${surface.divider}`, minWidth: 150 }}>
                           <Link to={`/trainings/${comp.training._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                             <Typography variant="body2" sx={{ fontWeight: 600, display: 'inline' }}>
                               {comp.training.name}
@@ -264,7 +264,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                                     best={mean !== undefined && mean === bestValues[metric.key]}
                                     borderRight={
                                       metricIndex === metrics.length - 1 && !isLastClass
-                                        ? '1px solid rgba(224, 224, 224, 1)'
+                                        ? `1px solid ${surface.divider}`
                                         : undefined
                                     }
                                   />

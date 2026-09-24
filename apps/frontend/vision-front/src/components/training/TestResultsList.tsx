@@ -91,7 +91,8 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
     <>
       <Stack spacing={4}>
         {/* Group test results by epoch */}
-        {availableTestEpochs.sort((a, b) => a - b).map((epoch) => {
+        {/* A copy: sorting the prop in place would reorder the caller's memoised array. */}
+        {[...availableTestEpochs].sort((a, b) => a - b).map((epoch) => {
           // Filter test results for this epoch
           const epochTestResults = allTestResults.filter(tr => tr.epoch === epoch);
 

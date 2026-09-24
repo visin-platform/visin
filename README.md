@@ -3,21 +3,21 @@
 **A clear view of your computer vision work.** Track training runs, compare results, label images, and review the
 data behind each decision. Visin runs on your hardware, is MIT licensed, and can connect to an AI assistant.
 
-<img src="docs/media/tour.webp" alt="A tour of Visin: a project's training runs, one opened, its loss and IoU curves" width="100%" />
+<img src="docs/media/tour.webp" alt="A tour of Visin: a project's training runs, one opened with its curves and per-class scores, then nine runs compared at their best epoch and exported as LaTeX" width="100%" />
 
 <table>
   <tr>
-    <td width="50%"><img src="apps/frontend/landing-front/public/showcase/charts.webp" alt="Loss and mean IoU curves over 100 epochs" /><br /><b>Every epoch, charted</b><br />See the curves your training script sends.</td>
-    <td width="50%"><img src="apps/frontend/landing-front/public/showcase/compare.webp" alt="Nine runs compared by best epoch and best validation mIoU" /><br /><b>Runs compared at their best</b><br />Compare each run at its strongest epoch.</td>
+    <td width="50%"><img src="apps/frontend/landing-front/public/showcase/charts.webp" alt="Training and validation loss and mean IoU curves of one run over 100 epochs" /><br /><b>Every epoch, charted</b><br />See the curves your training script sends.</td>
+    <td width="50%"><img src="apps/frontend/landing-front/public/showcase/compare.webp" alt="Nine runs compared by training time, best epoch and best validation mIoU, with a LaTeX export button" /><br /><b>Runs compared at their best</b><br />Each run at its strongest epoch, and the table ready for your paper as LaTeX.</td>
   </tr>
   <tr>
-    <td><img src="apps/frontend/landing-front/public/showcase/tests.webp" alt="Per-class IoU, precision, recall and AP for each weather condition" /><br /><b>Per class, per condition</b><br />Break test scores down to match your data.</td>
+    <td><img src="apps/frontend/landing-front/public/showcase/tests.webp" alt="Per-class IoU, precision, recall and AP for five weather conditions" /><br /><b>Per class, per condition</b><br />Break test scores down to match your data.</td>
     <td><img src="apps/frontend/landing-front/public/showcase/label.webp" alt="A labeling job at 1,002 of 4,110 frames" /><br /><b>Labeling as a team</b><br />Share labeling work across your group.</td>
   </tr>
 </table>
 
 <p align="center">
-  <img src="docs/media/phones.webp" alt="Visin installed on a phone: home, a project's runs, a run's loss curve" width="560" /><br />
+  <img src="docs/media/phones.webp" alt="Visin installed on a phone: home, a project's runs, a run's mean IoU curve" width="560" /><br />
   <b>Review runs from your phone</b><br />Open Visin in the browser and add it to your home screen.
 </p>
 

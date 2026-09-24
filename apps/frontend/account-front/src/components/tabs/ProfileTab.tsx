@@ -12,12 +12,13 @@ import {
   Fade,
   useTheme
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { livePalette } from '@visin/frontend-core';
 import { Person, Save } from '@mui/icons-material';
 import { profileService } from '../../services/profileService';
 import { useQueryClient } from '@tanstack/react-query';
 import PasswordCard from './PasswordCard';
 import SessionsCard from './SessionsCard';
+import AppearanceCard from './AppearanceCard';
 import { sessionKeys } from '../../hooks/useSessions';
 import { profileKeys, useProfile } from '../../hooks/useProfile';
 import { User } from '../../types';
@@ -138,7 +139,7 @@ const ProfileTab: React.FC = () => {
                     height: 64,
                     fontSize: '1.5rem',
                     fontWeight: 700,
-                    bgcolor: alpha(theme.palette.primary.main, 0.12),
+                    bgcolor: theme.alpha(livePalette(theme).primary.main, 0.12),
                     color: 'primary.main'
                   }}
                 >
@@ -210,6 +211,10 @@ const ProfileTab: React.FC = () => {
                 queryClient.invalidateQueries({ queryKey: sessionKeys.mine });
               }}
             />
+          </Grid>
+
+          <Grid size={12}>
+            <AppearanceCard />
           </Grid>
 
           <Grid size={12}>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Paper, Typography, Box } from '@mui/material';
 import { BarChart } from '@mui/x-charts';
+import { useChartColors } from '@visin/frontend-core';
 import { Epoch } from '../types';
 import { useMobileChartTooltip } from '../hooks/useMobileChartTooltip';
 
@@ -12,6 +13,7 @@ const TrainingTimeMetrics: React.FC<TrainingTimeMetricsProps> = ({
   epochs
 }) => {
   const { isMobile } = useMobileChartTooltip();
+  const colors = useChartColors();
   if (epochs.length === 0) {
     return null;
   }
@@ -26,9 +28,10 @@ const TrainingTimeMetrics: React.FC<TrainingTimeMetricsProps> = ({
 
   // Get per-epoch times and cumulative times
   const epochNumbers = epochs.map(e => e.epoch);
-  const epochTimes = epochs.map(e => e.epoch_time || 0);
+  // An epoch with no recorded time has no bar, rather than a bar of zero.
+  const epochTimes = epochs.map(e => e.epoch_time ?? null);
 
-  const hasTimeData = epochTimes.some(t => t > 0);
+  const hasTimeData = epochTimes.some(t => t !== null && t > 0);
 
   return (
     <Box
@@ -65,8 +68,8 @@ const TrainingTimeMetrics: React.FC<TrainingTimeMetricsProps> = ({
                 series={[{
                   data: epochTimes,
                   label: 'Time per Epoch',
-                  color: '#1976d2',
-                  valueFormatter: (value) => formatTime(value as number)
+                  color: colors.slot(0),
+                  valueFormatter: (value) => (value === null ? 'Not recorded' : formatTime(value))
                 }]}
                 margin={{ top: 10, bottom: 40, left: 60, right: 10 }}
               />

@@ -1,13 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { createTheme } from '@mui/material';
 import { MobileListHeader, MobileListRow } from './MobileList';
 import PageBreadcrumbs from './PageBreadcrumbs';
 import ConfigsTable from '../configs/ConfigsTable';
-import ComparisonsTable from '../comparisons/ComparisonsTable';
 import TrainingDetailHeader from '../training/TrainingDetailHeader';
-import type { Comparison, Config, Training } from '../../types';
+import type { Config, Training } from '../../types';
 
 // Everything here is the phone layout: the compact media query matches.
 beforeEach(() => {
@@ -153,58 +151,6 @@ describe('ConfigsTable on a phone', () => {
     render(<ConfigsTable configs={[]} loading={false} onViewDetails={vi.fn()} />);
 
     expect(screen.getByText('No configs uploaded yet')).toBeInTheDocument();
-  });
-});
-
-describe('ComparisonsTable on a phone', () => {
-  const comparison = {
-    _id: 'k1',
-    uuid: 'u1',
-    name: 'Window ablation',
-    description: 'All windows',
-    type: 'tests',
-    itemIds: ['a', 'b'],
-    createdAt: '2026-03-12T22:00:00.000Z'
-  } as unknown as Comparison;
-
-  const renderTable = (canDelete: boolean) => {
-    const props = {
-      comparisons: [comparison],
-      sortBy: 'createdAt' as const,
-      sortOrder: 'desc' as const,
-      onSort: vi.fn(),
-      onViewComparison: vi.fn(),
-      onEditComparison: vi.fn(),
-      onDeleteComparison: vi.fn(),
-      canDelete: () => canDelete,
-      formatTimestamp: () => '12.03.2026',
-      getTypeColor: () => 'primary' as const,
-      theme: createTheme()
-    };
-    render(<ComparisonsTable {...props} />);
-    return props;
-  };
-
-  it('opens a comparison from its row, and edits or deletes it from the menu', () => {
-    const props = renderTable(true);
-
-    fireEvent.click(screen.getByRole('button', { name: /^Window ablation/ }));
-    expect(props.onViewComparison).toHaveBeenCalledWith(comparison);
-    expect(screen.getByText('2 items')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Actions for Window ablation' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
-    expect(props.onEditComparison).toHaveBeenCalledWith(comparison);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Actions for Window ablation' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
-    expect(props.onDeleteComparison).toHaveBeenCalledWith('k1');
-  });
-
-  it('offers no menu on comparisons the viewer cannot change', () => {
-    renderTable(false);
-
-    expect(screen.queryByRole('button', { name: /Actions for/ })).not.toBeInTheDocument();
   });
 });
 

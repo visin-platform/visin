@@ -1,6 +1,6 @@
 import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
-import { PageHeader, useCompactLayout } from '@visin/frontend-core';
+import { PageHeader, useCompactLayout, livePalette, tint } from '@visin/frontend-core';
 import { MobileListHeader, MobileListRow } from '../components/common/MobileList';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
@@ -25,8 +25,7 @@ import {
   IconButton,
   Tooltip,
   Checkbox,
-  useTheme,
-  alpha
+  useTheme
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -241,7 +240,7 @@ export const TestResultsPage: React.FC = () => {
           No test results found
         </Typography>
       ) : compact ? (
-          <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, overflow: 'hidden' }}>
+          <Paper elevation={0} sx={{ border: `1px solid ${livePalette(theme).divider}`, overflow: 'hidden' }}>
             <MobileListHeader
               selectAll={{
                 checked: selectedTestResults.size === testResults.length && testResults.length > 0,
@@ -291,13 +290,13 @@ export const TestResultsPage: React.FC = () => {
           elevation={0} 
           sx={{ 
             borderRadius: 2, 
-            border: `1px solid ${theme.palette.divider}`,
+            border: `1px solid ${livePalette(theme).divider}`,
             overflow: 'hidden'
           }}
         >
               <Table>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
+                  <TableRow sx={{ bgcolor: tint(livePalette(theme).primary.main, 0.02) }}>
                     <TableCell padding="checkbox">
                       <Checkbox
                         checked={selectedTestResults.size === testResults.length && testResults.length > 0}

@@ -6,10 +6,10 @@ import {
   Autocomplete,
   Chip,
   Paper,
-  useTheme,
-  alpha
+  useTheme
 } from '@mui/material';
 import { Search as SearchIcon, FilterList as FilterIcon } from '@mui/icons-material';
+import { livePalette, tint } from '@visin/frontend-core';
 
 interface TrainingFiltersProps {
   searchTerm: string;
@@ -39,7 +39,7 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
         p: 2, 
         mb: 3, 
         borderRadius: 2,
-        border: `1px solid ${theme.palette.divider}`,
+        border: `1px solid ${livePalette(theme).divider}`,
         bgcolor: 'background.paper'
       }}
     >
@@ -85,8 +85,8 @@ export const TrainingFilters: React.FC<TrainingFiltersProps> = ({
                     label={option}
                     size="small"
                     sx={{
-                      bgcolor: alpha(theme.palette.primary.main, 0.1),
-                      color: theme.palette.primary.main,
+                      bgcolor: tint(livePalette(theme).primary.main, 0.1),
+                      color: livePalette(theme).primary.main,
                       fontWeight: 500
                     }}
                   />

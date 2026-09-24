@@ -17,7 +17,7 @@ import {
   Typography
 } from '@mui/material';
 import { Add as AddIcon, Download as DownloadIcon, FolderZip as ZipIcon, Search as SearchIcon } from '@mui/icons-material';
-import { EmptyState, PageHeader, Panel } from '@visin/frontend-core';
+import { EmptyState, liftOnHover, PageHeader, Panel } from '@visin/frontend-core';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -36,7 +36,7 @@ const DatasetCard: React.FC<{ dataset: Dataset; downloading: boolean; onDownload
   const upload = useDatasetUpload(dataset._id);
   const sending = isActive(upload);
   return (
-    <Card sx={{ display: 'flex', flexDirection: 'column', transition: 'border-color .15s ease', '&:hover': { borderColor: 'primary.light' } }}>
+    <Card sx={{ display: 'flex', flexDirection: 'column', ...liftOnHover() }}>
       <CardActionArea onClick={() => navigate(`/datasets/${dataset._id}`)} sx={{ flexGrow: 1, alignItems: 'stretch' }}>
         {dataset.coverUrl ? (
           <CardMedia component="img" image={dataset.coverUrl} alt="" loading="lazy" sx={{ height: 150, objectFit: 'cover' }} />

@@ -19,9 +19,10 @@ const LoggedInUser: React.FC<LoggedInUserProps> = ({ user, onContinue, onLogout 
       sx={{ 
         p: 3, 
         mb: 4, 
-        bgcolor: '#f8fafc', 
+        bgcolor: 'background.default',
         borderRadius: 3,
-        border: '1px solid #e2e8f0',
+        border: '1px solid',
+        borderColor: 'divider',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center'
@@ -34,8 +35,9 @@ const LoggedInUser: React.FC<LoggedInUserProps> = ({ user, onContinue, onLogout 
           width: 80, 
           height: 80, 
           mb: 2,
-          border: '4px solid white',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          border: '4px solid',
+          borderColor: 'background.paper',
+          boxShadow: 2
         }} 
       />
       <Typography
@@ -43,12 +45,12 @@ const LoggedInUser: React.FC<LoggedInUserProps> = ({ user, onContinue, onLogout 
         gutterBottom
         sx={{
           fontWeight: 700,
-          color: "#0f172a"
+          color: 'text.primary'
         }}>
         {user.name}
       </Typography>
       <Typography variant="body2" sx={{
-        color: "#64748b"
+        color: 'text.secondary'
       }}>
         {user.email}
       </Typography>
@@ -70,7 +72,7 @@ const LoggedInUser: React.FC<LoggedInUserProps> = ({ user, onContinue, onLogout 
           fontWeight: 600,
           boxShadow: 'none',
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            boxShadow: 3
           }
         }}
       >
@@ -88,12 +90,12 @@ const LoggedInUser: React.FC<LoggedInUserProps> = ({ user, onContinue, onLogout 
           textTransform: 'none',
           fontSize: '1rem',
           fontWeight: 500,
-          color: '#64748b',
-          borderColor: '#e2e8f0',
+          color: 'text.secondary',
+          borderColor: 'divider',
           '&:hover': {
-            borderColor: '#cbd5e1',
-            bgcolor: '#f8fafc',
-            color: '#0f172a'
+            borderColor: 'text.disabled',
+            bgcolor: 'action.hover',
+            color: 'text.primary'
           }
         }}
       >

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { AppLayout, type AppLayoutNavGroup, type AppLayoutNavItem, type AppLayoutUser } from './AppLayout';
+import { VisinThemeProvider } from '../ColorMode';
 
 const navGroups: AppLayoutNavGroup[] = [
   {
@@ -268,6 +269,31 @@ describe('AppLayout', () => {
       expect(main().getByRole('button', { name: 'Account' })).toHaveAttribute('aria-current', 'true');
       expect(sectionBar('Account').getByRole('link', { name: 'Groups' })).toHaveAttribute('aria-current', 'page');
       expect(screen.getByRole('heading', { level: 1, name: 'Groups' })).toBeInTheDocument();
+    });
+
+    it('steps through Auto, Light and Dark from the menu, and stays open to show it', async () => {
+      render(
+        <VisinThemeProvider>
+          <MemoryRouter initialEntries={['/projects']}>
+            <AppLayout appName="Visin App" navGroups={navGroups} user={null} onLogout={onLogout}>
+              <div />
+            </AppLayout>
+          </MemoryRouter>
+        </VisinThemeProvider>
+      );
+
+      openAccount();
+      const appearance = () => screen.getByRole('menuitem', { name: /^Appearance/ });
+      expect(appearance()).toHaveAccessibleName('Appearance: Auto. Switch to Light');
+
+      fireEvent.click(appearance());
+      expect(appearance()).toHaveAccessibleName('Appearance: Light. Switch to Dark');
+      fireEvent.click(appearance());
+
+      await waitFor(() => expect(document.documentElement).toHaveAttribute('data-color-scheme', 'dark'));
+      expect(screen.getByRole('menu', { name: 'Account' })).toBeInTheDocument();
+      fireEvent.click(appearance());
+      expect(appearance()).toHaveAccessibleName('Appearance: Auto. Switch to Light');
     });
 
     it('offers Login in its place to an anonymous visitor', () => {

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Box, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { livePalette } from '../../theme';
 
 export interface EmptyStateProps {
   icon: ReactNode;
@@ -24,7 +24,7 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
           display: 'grid',
           placeItems: 'center',
           color: 'primary.main',
-          bgcolor: alpha(theme.palette.primary.main, 0.1),
+          bgcolor: theme.alpha(livePalette(theme).primary.main, 0.1),
           '& svg': { fontSize: 28 }
         })}
       >

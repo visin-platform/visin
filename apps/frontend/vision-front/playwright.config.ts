@@ -11,7 +11,9 @@ export default defineConfig({
     trace: 'on-first-retry'
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } }
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    // The same run with the device set to dark: every page must render, and follow it.
+    { name: 'chromium-dark', use: { ...devices['Desktop Chrome'], colorScheme: 'dark' } }
   ],
   webServer: {
     command: 'npm run dev',

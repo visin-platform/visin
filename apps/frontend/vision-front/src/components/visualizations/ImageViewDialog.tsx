@@ -11,6 +11,7 @@ import {
   Button
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
+import { onImage } from '@visin/frontend-core';
 import { Visualization } from '../../types';
 
 interface ImageViewDialogProps {
@@ -60,8 +61,8 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({
               gap: 2,
               mr: "auto"
             }}>
-            <Chip label={selectedImage.type} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
-            <Chip label={`Epoch ${selectedImage.epoch}`} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white' }} />
+            <Chip label={selectedImage.type} size="small" sx={{ bgcolor: onImage.chip, color: onImage.ink }} />
+            <Chip label={`Epoch ${selectedImage.epoch}`} size="small" sx={{ bgcolor: onImage.chip, color: onImage.ink }} />
           </Box>
         )}
         <Button onClick={onClose} sx={{ color: 'white' }}>Close</Button>
