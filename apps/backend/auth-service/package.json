@@ -21,7 +21,7 @@
     "docs:generate": "UPDATE_OPENAPI_SCHEMAS=1 jest src/__tests__/openapi"
   },
   "dependencies": {
-    "@visin/backend-core": "1.7.0",
+    "@visin/backend-core": "1.7.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "google-auth-library": "^11.0.2",
