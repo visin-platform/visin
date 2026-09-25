@@ -32,12 +32,15 @@ docker compose up -d
 ```
 
 Open <http://localhost:3000>. The first run builds the images and takes a few minutes.
+Choose **Get started**; an empty installation offers **Create owner account** on its sign-in page.
 
 - **From another machine:** `PUBLIC_HOST=http://192.168.1.10 docker compose up -d`
-- **On a network:** override `JWT_SECRET`, `INTERNAL_SERVICE_TOKEN`, `FILE_SERVICE_API_KEY` and
-  `FILE_SERVICE_HMAC_SECRET` in a `.env` beside `compose.yml`, set `NODE_ENV=production` (which enables `Secure`
-  cookies), and serve it over HTTPS.
+- **On a network:** follow [Production deployment](#production-deployment) before inviting users.
 - **Stop:** `docker compose down`; add `-v` to discard the database and uploaded files too.
+
+For a first integration, follow the [training script quickstart](apps/frontend/landing-front/src/docs/content/quickstart.mdx).
+The running site also serves the [guides](http://localhost:3000/docs) and
+[API reference](http://localhost:3000/docs/api).
 
 ## Connect an assistant
 
@@ -68,12 +71,13 @@ exports size themselves to them — two classes give you two columns, and nothin
   "epoch": 40,
   "epoch_uuid": "…",
   "test_results": {
-    "line_a": {                                       // a "condition": any grouping you like
-      "scratch": { "iou": 0.41, "precision": 0.55 },  // a class: whatever your model predicts
-      "dent":    { "iou": 0.88, "precision": 0.91 },
+    "line_a": {
+      // a "condition": any grouping you like
+      "scratch": { "iou": 0.41, "precision": 0.55 }, // a class: whatever your model predicts
+      "dent": { "iou": 0.88, "precision": 0.91 },
       "overall": { "mean_dice": 0.64 }
     },
-    "line_b": { "scratch": { "iou": 0.39 }, "overall": { "mean_dice": 0.60 } }
+    "line_b": { "scratch": { "iou": 0.39 }, "overall": { "mean_dice": 0.6 } }
   }
 }
 ```
@@ -87,21 +91,21 @@ higher or lower is better**, the one thing your data cannot say. It never restri
 
 <br />
 
-| Workspace        | Port | Purpose                                           |
-| ---------------- | ---- | ------------------------------------------------- |
-| `vision-service` | 4010 | Projects, training, analysis, benchmarks          |
-| `auth-service`   | 5001 | Authentication, sessions, user management         |
-| `file-service`   | 5002 | File upload and download with signed URLs         |
-| `group-service`  | 5006 | User groups                                       |
-| `label-service`  | 5008 | Labeling jobs, tasks, answers, export             |
-| `mcp-service`    | 5009 | MCP server exposing Visin data to AI assistants   |
-| `dataset-service`| 5010 | Dataset zips, their imported images, image groups |
-| `landing-front`  | 3000 | Public landing page                               |
-| `auth-front`     | 3004 | Sign-in                                           |
-| `account-front`  | 3007 | Account settings                                  |
-| `label-front`    | 3008 | Labeling workbench and job administration         |
-| `shell-front`    | 3010 | One page for Vision, Labeling and Account         |
-| `vision-front`   | 3012 | Main application UI                               |
+| Workspace         | Port | Purpose                                           |
+| ----------------- | ---- | ------------------------------------------------- |
+| `vision-service`  | 4010 | Projects, training, analysis, benchmarks          |
+| `auth-service`    | 5001 | Authentication, sessions, user management         |
+| `file-service`    | 5002 | File upload and download with signed URLs         |
+| `group-service`   | 5006 | User groups                                       |
+| `label-service`   | 5008 | Labeling jobs, tasks, answers, export             |
+| `mcp-service`     | 5009 | MCP server exposing Visin data to AI assistants   |
+| `dataset-service` | 5010 | Dataset zips, their imported images, image groups |
+| `landing-front`   | 3000 | Public landing page                               |
+| `auth-front`      | 3004 | Sign-in                                           |
+| `account-front`   | 3007 | Account settings                                  |
+| `label-front`     | 3008 | Labeling workbench and job administration         |
+| `shell-front`     | 3010 | One page for Vision, Labeling and Account         |
+| `vision-front`    | 3012 | Main application UI                               |
 
 Each app has its own `package.json`, `Dockerfile` and `compose.yml`, and depends on nothing outside its own
 directory at build or run time. MongoDB serves every service except file-service; Redis serves dataset-service's
@@ -109,8 +113,10 @@ import queue. The root `compose.yml` runs both.
 
 </details>
 
+## Develop on it
+
 <details>
-<summary><b>Develop on it</b></summary>
+<summary><b>Local development steps</b></summary>
 
 <br />
 
@@ -144,27 +150,53 @@ refreshes the per-service lockfiles. CI fails on drift in either. Architecture n
 
 </details>
 
+## Production deployment
+
 <details>
-<summary><b>Production deployment</b></summary>
+<summary><b>Deployment steps</b></summary>
 
 <br />
 
-The root `compose.yml` is a complete deployment: set the four secrets above, `NODE_ENV=production` and a
-`PUBLIC_HOST` your users can reach, and put TLS in front of it.
+The root `compose.yml` runs one host with a single public hostname and distinct
+ports for each app and API. Copy [the root template](.env.example) to `.env` and set
+`JWT_SECRET`, `INTERNAL_SERVICE_TOKEN`, `FILE_SERVICE_API_KEY` and
+`FILE_SERVICE_HMAC_SECRET` to fresh random values. Set `NODE_ENV=production`,
+`PUBLIC_HOST=https://visin.example.com`, `COOKIE_DOMAIN=visin.example.com`,
+`COMPOSE_BIND=127.0.0.1` and `CORS_ORIGIN` to all six HTTPS frontend origins.
+For the example hostname, the CORS value is:
 
-To run services individually — separate hosts, a subset, your own orchestrator — each has its own `compose.yml`:
-
-```sh
-cp .env.example .env   # fill in the values
-docker compose -f apps/backend/auth-service/compose.yml up -d
+```dotenv
+CORS_ORIGIN=https://visin.example.com:3000,https://visin.example.com:3004,https://visin.example.com:3007,https://visin.example.com:3008,https://visin.example.com:3010,https://visin.example.com:3012
 ```
 
-They run the published images from `ghcr.io/visin-platform`, built for `linux/amd64` and `linux/arm64` (a laptop
-or a Raspberry Pi). Pin a release with `TAG=1.0.0` — `latest` moves, and cannot be rolled back — and point
-`REGISTRY` elsewhere if you mirror the images. Both work on the root `compose.yml` too.
+Use your own hostname. Set `API_KEY_ENCRYPTION_SECRET` if users need to create API keys.
 
-On separate hostnames, put any reverse proxy in front; with one shared parent domain, set `COOKIE_DOMAIN` to it so
-the session cookie reaches every subdomain.
+Put a TLS reverse proxy on the same host. Bind its listeners to the host's public
+address so they do not conflict with Docker's loopback listeners. It must listen on
+each published application port and forward to the matching `127.0.0.1` port; for example,
+`https://visin.example.com:3000` → `127.0.0.1:3000` and
+`https://visin.example.com:5001` → `127.0.0.1:5001`. `PUBLIC_HOST` must not
+include a port because Compose appends one. With `COMPOSE_BIND=127.0.0.1`,
+clients cannot reach the plain HTTP ports directly. MongoDB and Redis are
+already bound to loopback. Start the stack with `docker compose up -d`.
+
+To deploy services individually, use each app's `.env.example` and
+`compose.yml`. Provide MongoDB, Redis (for dataset-service), and the shared
+secrets and URLs needed by that app. The per-service files join an external
+Docker network; create it once before starting them:
+
+```sh
+cp apps/backend/auth-service/.env.example apps/backend/auth-service/.env
+# Fill in the production values in that file.
+docker network create visinnet
+docker compose --env-file apps/backend/auth-service/.env -f apps/backend/auth-service/compose.yml up -d
+```
+
+The per-service image names default to `ghcr.io/visin-platform` for
+`linux/amd64` and `linux/arm64`; their Compose files also support local
+builds. Pin `TAG` to a release and set `REGISTRY` if you mirror the images.
+For separate hostnames, configure browser-facing URLs for each service and
+set `COOKIE_DOMAIN` to their shared parent domain.
 
 </details>
 

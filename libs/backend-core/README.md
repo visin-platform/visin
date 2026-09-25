@@ -46,13 +46,23 @@ logger.info('Service started');
 ### Inter-service calls
 
 ```typescript
-import { requireInternalServiceToken, validateInternalServiceToken, allowUserOrInternalService } from '@visin/backend-core';
+import {
+  requireInternalServiceToken,
+  validateInternalServiceToken,
+  allowUserOrInternalService
+} from '@visin/backend-core';
 
 // Route only ever called by other services
 router.post('/internal/sync', requireInternalServiceToken, syncHandler);
 
 // Route callable by an end user OR another service
-router.get('/groups/:id', validateInternalServiceToken, authenticateToken /* or optionalAuth */, allowUserOrInternalService, getGroup);
+router.get(
+  '/groups/:id',
+  validateInternalServiceToken,
+  authenticateToken /* or optionalAuth */,
+  allowUserOrInternalService,
+  getGroup
+);
 ```
 
 ### Throwing typed errors
@@ -60,11 +70,14 @@ router.get('/groups/:id', validateInternalServiceToken, authenticateToken /* or 
 ```typescript
 import { NotFoundError, asyncHandler } from '@visin/backend-core';
 
-router.get('/projects/:id', asyncHandler(async (req, res) => {
-  const project = await Project.findById(req.params.id);
-  if (!project) throw new NotFoundError('Project not found');
-  res.json({ success: true, data: project });
-}));
+router.get(
+  '/projects/:id',
+  asyncHandler(async (req, res) => {
+    const project = await Project.findById(req.params.id);
+    if (!project) throw new NotFoundError('Project not found');
+    res.json({ success: true, data: project });
+  })
+);
 ```
 
 ## Session revocation
@@ -72,7 +85,8 @@ router.get('/projects/:id', asyncHandler(async (req, res) => {
 `authenticateToken` and `optionalAuth` verify the JWT and check its immutable
 account ID, normalized email and token version against the auth-owned `users`
 collection through the existing shared MongoDB connection. A session needs an
-ObjectId account ID, an email and a positive safe-integer `tokenVersion`.
+ObjectId account ID, an email, a positive safe-integer `tokenVersion`,
+`typ: 'session'` and a `sid` naming an unexpired `user_sessions` record.
 
 There is no cross-request cache. Once a password change or account invalidation
 has acknowledged its version increment, every subsequent authorization check
@@ -81,8 +95,9 @@ that increment may finish. Deleted accounts cannot authenticate or borrow a new
 account with the same email. No additional connection or environment variable is
 needed; MongoDB must be connected before serving authenticated requests.
 
-Required auth returns 401 if the session cannot be established, including database
-failure. Optional auth continues anonymously so public content remains available.
+Required auth returns 401 for a missing or invalid session and 503 when the
+session store cannot be reached. Optional auth continues anonymously so public
+content remains available.
 Middleware is asynchronous: direct callers/tests must await it. Pre-authenticated
 API keys, project tokens, OAuth access tokens and internal-service authentication
 retain their existing separate verification and revocation rules. File-service
@@ -125,9 +140,8 @@ retain their normal expiry (up to one hour); this change governs refresh authori
 
 ## Consuming this package in a standalone Docker build
 
-Each service's `Dockerfile` builds from its own directory in isolation, so a
-workspace dependency on `@visin/backend-core` needs to be resolvable inside that
-build context — either by publishing this package to npm first and installing it
-normally, or by adjusting the build context / adding a copy step so
-`node_modules/@visin/backend-core` is populated before `npm ci`. Not yet wired up;
-see the repo's `TODO.md`.
+Each service's `Dockerfile` builds from its own directory in isolation. Services
+install the exact pinned `@visin/backend-core` version from npm rather than
+copying the local workspace into the image. Publish a library change before
+building consumers, then run `npm run sync:libs` and `npm run lockfiles` at the
+repository root and commit the updated pins and lockfiles.

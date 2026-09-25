@@ -131,7 +131,7 @@ inspect content bytes for actual MIME type or enforce storage quotas.
 
 Historical file references without verified reservations are retained during
 record deletion for explicit operator cleanup. Broader upload
-limits and cleanup reconciliation remain tracked in `todo.md`.
+limits and cleanup reconciliation still require operator planning.
 
 ## Finding pagination
 
@@ -146,8 +146,12 @@ See `docs/openapi.yml` for the query and response contract.
 
 ## Docker Compose
 
+Copy `apps/backend/vision-service/.env.example` to `apps/backend/vision-service/.env`
+and fill in the values. Create the external network only if it does not exist yet.
+
 ```bash
-docker compose -f apps/backend/vision-service/compose.yml up --build
+docker network create visinnet  # once per Docker host
+docker compose --env-file apps/backend/vision-service/.env -f apps/backend/vision-service/compose.yml up --build
 ```
 
 The compose file expects MongoDB and file-service configuration through env vars, and joins the external `visinnet` network.

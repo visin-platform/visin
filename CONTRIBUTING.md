@@ -3,7 +3,8 @@
 ## Getting started
 
 1. Fork the repository and clone your fork.
-2. Follow the [Quickstart](README.md#quickstart) setup in the README.
+2. Follow [Develop on it](README.md#develop-on-it) in the README. For the API,
+   see the [training script quickstart](apps/frontend/landing-front/src/docs/content/quickstart.mdx).
 3. Create a branch from `main`:
    ```bash
    git checkout -b feat/your-feature-name
@@ -11,12 +12,12 @@
 
 ## Branch naming
 
-| Prefix | When to use |
-|---|---|
-| `feat/` | New feature |
-| `fix/` | Bug fix |
-| `chore/` | Tooling, deps, config |
-| `docs/` | Documentation only |
+| Prefix      | When to use                          |
+| ----------- | ------------------------------------ |
+| `feat/`     | New feature                          |
+| `fix/`      | Bug fix                              |
+| `chore/`    | Tooling, deps, config                |
+| `docs/`     | Documentation only                   |
 | `refactor/` | Refactoring without behaviour change |
 
 ## Commit messages

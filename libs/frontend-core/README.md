@@ -12,22 +12,25 @@ npm install @visin/frontend-core
 
 ```typescript
 import { createApiClient } from '@visin/frontend-core';
+import { getGlobalConfig } from './ConfigProvider';
 
 export const api = createApiClient({
-  baseUrl: () => getGlobalConfig().VISION_API_URL,
-  getToken: () => localStorage.getItem('authToken'),
-  onUnauthorized: () => { window.location.href = '/login'; }
+  baseUrl: () => getGlobalConfig().VISION_API_URL || 'http://localhost:4010',
+  onUnauthorized: () => {
+    window.location.href = '/login';
+  }
 });
 
-const { id } = await api.get('/projects/123');
+const { data: project } = await api.get<{ success: true; data: { _id: string; name: string } }>(
+  '/api/projects/<project-id>'
+);
 ```
 
-## Status
+Adapt the config import to your app. The client sends the shared HTTP-only `access_token` cookie with each request
+(`credentials: 'include'`). Browser code does not read or store the JWT. Use a
+project token or user API key in a non-browser client instead.
 
-Only `createApiClient` is extracted so far — it matches the Bearer-token-from-
-`localStorage` transport already used independently in `account-front` and
-`vision-front`. Auth state (login/logout/session) is **not** unified yet:
-`account-front`, `auth-front`, and `vision-front` each implement it differently
-(`authService.ts`, `authFlow.ts`, `AuthContext.tsx`) rather than as copies of one
-pattern, so that needs its own design pass before landing here. See the repo's
-`TODO.md`.
+The package also exports `createAuthService`, `createAuthContext`, route guards,
+navigation, configuration and shared UI components. Each frontend creates its
+own auth context with the shared factory so it can run both standalone and in
+`shell-front`.

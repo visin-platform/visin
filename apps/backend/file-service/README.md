@@ -37,8 +37,12 @@ npm run typecheck --workspace=file-service
 
 ## Docker Compose
 
+Copy `apps/backend/file-service/.env.example` to `apps/backend/file-service/.env`
+and fill in the values. Create the external network only if it does not exist yet.
+
 ```bash
-docker compose -f apps/backend/file-service/compose.yml up --build
+docker network create visinnet  # once per Docker host
+docker compose --env-file apps/backend/file-service/.env -f apps/backend/file-service/compose.yml up --build
 ```
 
 The compose file stores data in the `file_data` volume, bound to `FILE_DATA_PATH` or `./data`, and joins the external `visinnet` network.

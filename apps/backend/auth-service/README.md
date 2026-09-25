@@ -8,9 +8,8 @@ Google sign-in identifies an account by `User.googleSubject`, the Google ID toke
 immutable `sub`, in this order:
 
 1. The account already bound to that subject signs in, whatever email Google reports now.
-2. An account created by Google sign-up before subjects were stored (`signupMethod:
-   'google'`, no subject, no password) is bound to the subject on its first Google
-   sign-in. Its address came from a Google-verified token, so no password
+2. An account created by Google sign-up before subjects were stored (with `signupMethod: 'google'`,
+   no subject and no password) is bound to the subject on its first Google sign-in. Its address came from a Google-verified token, so no password
    registration can have claimed it.
 3. Otherwise Google sign-up creates an account bound to the subject, behind the same
    gate as password registration (closed until initial setup).
@@ -38,8 +37,8 @@ and be unexpired, so deleting it revokes the session on the next request.
   created/last-active times, and which one is `current`.
 - **`DELETE /auth/sessions/:id`** signs one of the caller's sessions out; `signedOut: true` if it was their own.
 - **`POST /auth/sessions/revoke-others`** signs out every session but the caller's.
-- A password change or Google link keeps the caller's session and ends the rest; `POST
-  /auth/internal/invalidate-tokens` ends all of them.
+- A password change or Google link keeps the caller's session and ends the rest;
+  `POST /auth/internal/invalidate-tokens` ends all of them.
 
 Pre-sessions tokens (no `sid`, 24-hour lifetime) are still accepted until they expire, and `/auth/verify` upgrades
 one to a session.
@@ -125,8 +124,12 @@ repo root).
 
 ## Docker Compose
 
+Copy `apps/backend/auth-service/.env.example` to `apps/backend/auth-service/.env`
+and fill in the values. Create the external network only if it does not exist yet.
+
 ```bash
-docker compose -f apps/backend/auth-service/compose.yml up --build
+docker network create visinnet  # once per Docker host
+docker compose --env-file apps/backend/auth-service/.env -f apps/backend/auth-service/compose.yml up --build
 ```
 
 The compose file expects the same env vars to be present in the shell or an env file, and joins the external `visinnet` network.

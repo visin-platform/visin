@@ -32,7 +32,8 @@
     "lockfiles:check": "node scripts/gen-lockfiles.mjs --check",
     "openapi:lint": "node scripts/openapi.mjs lint",
     "openapi:bundle": "node scripts/openapi.mjs bundle",
-    "openapi:bundle:check": "node scripts/openapi.mjs bundle --check"
+    "openapi:bundle:check": "node scripts/openapi.mjs bundle --check",
+    "docs:check": "node scripts/check-docs.mjs"
   },
   "devDependencies": {
     "@redocly/openapi-core": "^2.54.2",

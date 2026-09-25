@@ -32,8 +32,8 @@ Please include:
 
 ## Scope notes
 
-- The six backend services (`auth-service`, `file-service`, `group-service`,
-  `label-service`, `mcp-service`, `vision-service`) handle authentication, signed
+- The seven backend services (`auth-service`, `dataset-service`, `file-service`,
+  `group-service`, `label-service`, `mcp-service`, `vision-service`) handle authentication, signed
   file access, project-scoped API tokens, and internal service-to-service tokens —
   issues in those areas are the highest priority.
 - Vulnerabilities in third-party dependencies should be reported upstream,

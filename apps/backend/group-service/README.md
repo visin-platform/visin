@@ -58,8 +58,12 @@ authorization, restore/delete races, and ordinary ownership handover.
 
 ## Docker Compose
 
+Copy `apps/backend/group-service/.env.example` to `apps/backend/group-service/.env`
+and fill in the values. Create the external network only if it does not exist yet.
+
 ```bash
-docker compose -f apps/backend/group-service/compose.yml up --build
+docker network create visinnet  # once per Docker host
+docker compose --env-file apps/backend/group-service/.env -f apps/backend/group-service/compose.yml up --build
 ```
 
 The compose file expects the same env vars to be present in the shell or an env file, and joins the external `visinnet` network.
@@ -100,5 +104,5 @@ Role changes and removals target `/api/groups/:id/members/:memberId` by account 
 
 No email verification or mail delivery is implemented. Group changes take effect
 through live membership checks; they do not log a person out across applications.
-The platform's separate session-revocation and Google-account-linking limitations
-remain tracked in the root `todo.md`.
+Review auth-service's current session and Google-account-linking behavior before
+changing invitation or membership flows.
