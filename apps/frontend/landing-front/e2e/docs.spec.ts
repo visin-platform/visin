@@ -1,13 +1,18 @@
-import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'fs';
+import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-/** Every docs page, from the sitemap (a unit test holds it to src/docs/pages.ts). */
-const docsPaths = async (page: Page) => {
-  const sitemap = await (await page.request.get('/sitemap.xml')).text();
-  return [...sitemap.matchAll(/<loc>__LANDING_FRONT_URL__(\/docs[^<]*)<\/loc>/g)]
-    .map(([, path]) => path)
-    .filter((path) => path !== '/docs/api');
-};
+/**
+ * Every docs page, from the sitemap the site serves (a unit test holds it to
+ * src/docs/pages.ts). Read from disk so tests can be generated per page.
+ */
+const DOCS_PATHS = [
+  ...readFileSync(new URL('../public/sitemap.xml', import.meta.url), 'utf8').matchAll(
+    /<loc>__LANDING_FRONT_URL__(\/docs[^<]*)<\/loc>/g
+  )
+]
+  .map(([, path]) => path)
+  .filter((path) => path !== '/docs/api');
 
 test('reaches the quickstart from the landing page and copies its code', async ({ page, context }) => {
   const pageErrors: string[] = [];
@@ -36,9 +41,8 @@ test('reads on a phone without scrolling sideways', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
 
   // The guides' tables and code must scroll inside their own box, never the page.
-  const pages = await docsPaths(page);
-  expect(pages.length).toBeGreaterThan(5);
-  for (const path of pages) {
+  expect(DOCS_PATHS.length).toBeGreaterThan(5);
+  for (const path of DOCS_PATHS) {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -91,17 +95,16 @@ test("keeps the reference's styles off the landing page", async ({ page }) => {
   expect(scalarStyles).toBe(false);
 });
 
-test('has no serious accessibility problems on the landing page or any guide', async ({ page }) => {
-  const problems: string[] = [];
-  for (const path of ['/', ...(await docsPaths(page))]) {
+// One test per page: an axe scan takes about two seconds, and the whole site
+// in one test ran past Playwright's 30 s limit whenever the machine was busy.
+for (const path of ['/', ...DOCS_PATHS]) {
+  test(`has no serious accessibility problems on ${path}`, async ({ page }) => {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     const { violations } = await new AxeBuilder({ page }).analyze();
-    for (const violation of violations) {
-      if (violation.impact === 'serious' || violation.impact === 'critical') {
-        problems.push(`${path}: ${violation.id} (${violation.nodes.length}) ${violation.nodes[0]?.target.join(' ')}`);
-      }
-    }
-  }
-  expect(problems).toEqual([]);
-});
+    const problems = violations
+      .filter((violation) => violation.impact === 'serious' || violation.impact === 'critical')
+      .map((violation) => `${violation.id} (${violation.nodes.length}) ${violation.nodes[0]?.target.join(' ')}`);
+    expect(problems).toEqual([]);
+  });
+}

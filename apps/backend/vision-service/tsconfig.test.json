@@ -1,5 +1,6 @@
 {
   "extends": "./tsconfig.json",
+  // ts-jest compiles tests to CommonJS with Bundler resolution; typecheck them the same way.
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "bundler",

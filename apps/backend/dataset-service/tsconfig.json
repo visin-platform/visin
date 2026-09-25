@@ -1,16 +1,24 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "lib": ["ES2022"],
-    "moduleResolution": "Node16",
-    "outDir": "dist",
-    "rootDir": "src",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
+    // Node 26 runs ES2025 natively, so nothing is downleveled.
+    "target": "ES2025",
+    "lib": ["ES2025"],
+    // TypeScript 6 no longer adds every @types package on its own.
+    "types": ["node"],
+    "module": "NodeNext",
+    // Implied by "module", but ts-jest falls back to Node10 when it is unset,
+    // and Node10 cannot see package "exports" subpaths.
+    "moduleResolution": "NodeNext",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "rootDir": "./src",
+    "outDir": "./dist",
     "strict": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "src/__tests__"]
+  "exclude": ["node_modules", "dist", "src/__tests__"]
 }

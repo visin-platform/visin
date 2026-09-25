@@ -72,18 +72,19 @@ describe('docs pages', () => {
     }
   });
 
-  it('links each page to its own source file on GitHub, which exists', () => {
-    const sources = Object.keys(import.meta.glob('./content/*.mdx')).map((file) => file.replace('./content/', ''));
-    for (const page of DOC_PAGES) {
-      const { unmount } = renderAt(docPath(page));
+  it.each(DOC_PAGES.map((page) => [docPath(page), page] as const))(
+    '%s links to its own source file on GitHub, which exists',
+    (path, page) => {
+      const sources = Object.keys(import.meta.glob('./content/*.mdx')).map((file) => file.replace('./content/', ''));
+      renderAt(path);
+
       expect(screen.getByRole('link', { name: /edit this page on github/i })).toHaveAttribute(
         'href',
         `${GITHUB_URL}/edit/main/${docSource(page)}`
       );
       expect(sources).toContain(docSource(page).split('/').pop());
-      unmount();
     }
-  });
+  );
 
   it('lists every page in the sidebar by section, marking the open one', () => {
     renderAt('/docs/quickstart');

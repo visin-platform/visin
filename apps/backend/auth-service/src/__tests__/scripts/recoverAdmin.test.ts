@@ -37,7 +37,7 @@ async function runCommand() {
     // Share the test doubles with the isolated command instance.
     jest.doMock('mongoose', () => ({ __esModule: true, default: mongoose }));
     jest.doMock('../../services/bootstrapService', () => ({ recoverAdministrator }));
-    await (await import('../../scripts/recoverAdmin')).completion;
+    await jest.requireActual<typeof import('../../scripts/recoverAdmin')>('../../scripts/recoverAdmin').completion;
   });
 }
 

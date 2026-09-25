@@ -4,7 +4,10 @@ import FromYourScript from './FromYourScript';
 
 const observeWith = (visible: boolean) => {
   class Observer {
-    constructor(private readonly callback: (entries: { isIntersecting: boolean }[]) => void) {}
+    private readonly callback: (entries: { isIntersecting: boolean }[]) => void;
+    constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
+      this.callback = callback;
+    }
     observe() {
       this.callback([{ isIntersecting: visible }]);
     }

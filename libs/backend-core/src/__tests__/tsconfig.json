@@ -1,8 +1,7 @@
 {
   "extends": "../../tsconfig.test.json",
   "compilerOptions": {
-    "noEmit": true,
-    "module": "Node16"
+    "noEmit": true
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules"]

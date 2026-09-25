@@ -3,17 +3,17 @@ import { remoteUploads, useRemoteLoaded } from '../remotes';
 
 /** A missing upload corner costs nothing but the corner: never the page. */
 class Quiet extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
+  override state = { failed: false };
 
   static getDerivedStateFromError() {
     return { failed: true };
   }
 
-  componentDidCatch(error: Error): void {
+  override componentDidCatch(error: Error): void {
     console.error('Vision upload panel failed to load', error);
   }
 
-  render() {
+  override render() {
     return this.state.failed ? null : this.props.children;
   }
 }

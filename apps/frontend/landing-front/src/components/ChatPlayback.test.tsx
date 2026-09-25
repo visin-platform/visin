@@ -15,7 +15,10 @@ describe('ChatPlayback, played', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
     // On screen at once: the observer reports the chat visible as soon as it is watched.
     class VisibleAtOnce {
-      constructor(private readonly callback: (entries: { isIntersecting: boolean }[]) => void) {}
+      private readonly callback: (entries: { isIntersecting: boolean }[]) => void;
+      constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
+        this.callback = callback;
+      }
       observe() {
         this.callback([{ isIntersecting: true }]);
       }
@@ -76,7 +79,10 @@ describe('ChatPlayback, a reply that calls no tools', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
     class VisibleAtOnce {
-      constructor(private readonly callback: (entries: { isIntersecting: boolean }[]) => void) {}
+      private readonly callback: (entries: { isIntersecting: boolean }[]) => void;
+      constructor(callback: (entries: { isIntersecting: boolean }[]) => void) {
+        this.callback = callback;
+      }
       observe() {
         this.callback([{ isIntersecting: true }]);
       }

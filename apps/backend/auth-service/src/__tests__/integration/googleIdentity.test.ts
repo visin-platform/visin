@@ -79,7 +79,7 @@ describe('Google account authority with in-memory MongoDB', () => {
     google.mockResolvedValue({ sub: 'subject-1', email: 'other@example.test' });
     const login = await post('/validate', { idToken: 'google-token' });
     expect(login.status).toBe(200);
-    const result = await login.json();
+    const result = (await login.json()) as { token: string };
     expect(verifyJWT(result.token)).toMatchObject({ id: user.id, email: user.email, tokenVersion: 2 });
     const stored = (await User.findById(user.id).select('+passwordHash +googleSubject'))!;
     expect(stored).toMatchObject({ email: user.email, passwordHash, googleSubject: 'subject-1', roles: ['admin'] });
@@ -155,7 +155,7 @@ describe('Google account authority with in-memory MongoDB', () => {
   const legacyGoogleAccount = (email = 'victim@example.test', extra = {}) => User.create({ email, signupMethod: 'google', roles: [], ...extra });
   const signIn = async () => {
     const response = await post('/validate', { idToken: 'google-token' });
-    return { status: response.status, body: await response.json() };
+    return { status: response.status, body: (await response.json()) as { token: string } };
   };
 
   it('signs up a new Google user bound to its subject once setup is complete', async () => {

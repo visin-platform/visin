@@ -17,17 +17,17 @@ interface RemoteBoundaryState {
  * a bug — the menu, and every other app, has to keep working through it.
  */
 export class RemoteBoundary extends Component<RemoteBoundaryProps, RemoteBoundaryState> {
-  state: RemoteBoundaryState = { error: null };
+  override state: RemoteBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): RemoteBoundaryState {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo): void {
+  override componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error(`${this.props.appTitle} failed to render`, error, info.componentStack);
   }
 
-  render() {
+  override render() {
     const { error } = this.state;
     if (!error) {
       return this.props.children;

@@ -52,11 +52,11 @@ describe('browser sessions across auth-service and the shared middleware', () =>
     const response = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': userAgent },
       body: JSON.stringify({ email, password }) });
     expect(response.status).toBe(200);
-    return (await response.json()).token;
+    return ((await response.json()) as { token: string }).token;
   };
   const sidOf = (token: string) => decodeJWT(token)!.sid!;
   const status = async (token: string, path = '/protected') => (await fetch(`${base}${path}`, { headers: headersFor(token) })).status;
-  const optionalId = async (token: string) => (await (await fetch(`${base}/optional`, { headers: headersFor(token) })).json()).id;
+  const optionalId = async (token: string) => ((await (await fetch(`${base}/optional`, { headers: headersFor(token) })).json()) as { id?: string }).id;
   const call = (method: string, path: string, token: string, body?: unknown) => fetch(`${base}/auth${path}`, {
     method, headers: { ...headersFor(token), ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
 
@@ -94,7 +94,7 @@ describe('browser sessions across auth-service and the shared middleware', () =>
     const changed = await fetch(`${base}/auth/profile/password`, { method: 'POST', headers: { ...headersFor(here, cookie), 'content-type': 'application/json' },
       body: JSON.stringify({ currentPassword: password, newPassword: 'replacement-password' }) });
     expect(changed.status).toBe(200);
-    const renewed = (await changed.json()).token;
+    const renewed = ((await changed.json()) as { token: string }).token;
 
     // The old token is refused on its version; the other device on both counts.
     expect(await status(here)).toBe(401);
@@ -113,7 +113,7 @@ describe('browser sessions across auth-service and the shared middleware', () =>
     const phone = await signIn(CHROME_ANDROID);
     await signIn(FIREFOX_WINDOWS);
 
-    const listed = await (await call('GET', '/sessions', phone)).json();
+    const listed = (await (await call('GET', '/sessions', phone)).json()) as { data: unknown[] };
 
     expect(listed.data).toHaveLength(2);
     expect(listed.data).toEqual(expect.arrayContaining([
@@ -172,7 +172,7 @@ describe('browser sessions across auth-service and the shared middleware', () =>
     const verified = await call('GET', '/verify', token);
 
     expect(verified.status).toBe(200);
-    const renewed = (await verified.json()).token;
+    const renewed = ((await verified.json()) as { token: string }).token;
     expect(sidOf(renewed)).toBe(sid);
     const session = (await Session.findById(sid))!;
     expect(session.expiresAt.getTime()).toBe(cap.getTime());

@@ -76,7 +76,7 @@ export const getUserGroupRoles = async (userId: string): Promise<string[]> => {
       );
 
       if (groupResponse.ok) {
-        const groupResult = await groupResponse.json();
+        const groupResult = (await groupResponse.json()) as { success?: boolean; data?: string[] };
         if (groupResult.success) {
           groupRoles = groupResult.data || [];
         }

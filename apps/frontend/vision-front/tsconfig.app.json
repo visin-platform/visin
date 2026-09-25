@@ -1,18 +1,25 @@
 {
   "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    // Vite builds for "esnext" and only strips types; these say which APIs the code may use.
     "target": "ES2025",
-    // DOM for the callbacks e2e tests run inside the page.
     "lib": ["ES2025", "DOM"],
-    "types": ["node"],
+    "types": ["vite/client"],
 
     /* Bundler mode */
     "module": "ESNext",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
     "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Path mapping for shared components */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
 
     /* Linting */
     "strict": true,
@@ -25,5 +32,5 @@
     "noUncheckedSideEffectImports": true,
     "skipLibCheck": true
   },
-  "include": ["vite.config.ts"]
+  "include": ["src"]
 }
