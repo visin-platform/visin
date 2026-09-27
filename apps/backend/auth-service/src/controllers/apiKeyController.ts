@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import {
   BadRequestError,
+  ForbiddenError,
   NotFoundError,
   UnauthorizedError,
   createApiKey,
   deleteApiKey,
+  isProjectKeyScope,
   isEncryptionConfigured,
   listApiKeys,
   revealApiKey,
@@ -13,6 +15,7 @@ import {
 } from '@visin/backend-core';
 import type { ApiKeyScope } from '@visin/backend-core';
 import { displayName } from '../services/sessionService';
+import { getKeyProject } from '../clients/visionProjectClient';
 
 /**
  * Issuing and managing the API keys a non-browser client acts with — an MCP
@@ -58,14 +61,36 @@ function requireUser(req: Request): { id: string; email: string; name: string } 
   return { id: req.user.id, email, name };
 }
 
+/**
+ * The project a key is to be limited to, checked before the key exists: its
+ * scopes must all live inside a project, and its owner must be able to write
+ * there. The key keeps the project's name, so listing keys never calls out.
+ */
+async function projectForKey(
+  projectId: string,
+  userId: string,
+  scopes: ApiKeyScope[]
+): Promise<{ id: string; name: string }> {
+  if (!scopes.every(isProjectKeyScope)) {
+    throw new BadRequestError('A key limited to a project can only have Vision and Analysis permissions');
+  }
+  const project = await getKeyProject(projectId, userId);
+  if (!project) throw new NotFoundError('Project not found');
+  if (!project.canWrite) {
+    throw new ForbiddenError('You can only limit a key to a project you can write to');
+  }
+  return { id: project.id, name: project.name };
+}
+
 export const createKey = async (req: Request, res: Response): Promise<void> => {
   if (!assertConfigured(res)) return;
 
   const user = requireUser(req);
-  const { name, scopes, expiresInDays } = req.body as {
+  const { name, scopes, expiresInDays, projectId } = req.body as {
     name: string;
     scopes: ApiKeyScope[];
     expiresInDays?: number;
+    projectId?: string;
   };
 
   // A key that reaches nothing would authenticate and then be refused every
@@ -73,6 +98,8 @@ export const createKey = async (req: Request, res: Response): Promise<void> => {
   if (scopes.length === 0) {
     throw new BadRequestError('Choose at least one permission for this key');
   }
+
+  const project = projectId ? await projectForKey(projectId, user.id, scopes) : null;
 
   const expiresAt = expiresInDays
     ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
@@ -84,10 +111,11 @@ export const createKey = async (req: Request, res: Response): Promise<void> => {
     userName: user.name,
     name,
     scopes,
-    expiresAt
+    expiresAt,
+    project
   });
 
-  logger.info('API key created', { userId: user.id, keyId: summary.id, scopes });
+  logger.info('API key created', { userId: user.id, keyId: summary.id, scopes, projectId: project?.id });
 
   res.status(201).json({
     success: true,

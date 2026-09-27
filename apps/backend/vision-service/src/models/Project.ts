@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { VISIBILITIES, type ResourceOwner, type Visibility } from '@visin/backend-core';
 import { IProjectTaxonomy, TaxonomySchema } from './taxonomy';
 import { CostingSchema, IProjectCosting } from './costing';
 
@@ -7,14 +8,28 @@ export interface IProject extends Document {
   name: string;
   slug?: string;
   description?: string;
-  isPublic: boolean;
-  ownerId: string;
+  /** who controls it: a person, or a group whose current roles decide who may do what */
+  owner: ResourceOwner;
+  /** attribution only: never changes and grants nothing */
+  createdBy: string;
+  visibility: Visibility;
+  /** groups it is shared with for collaboration: their members get `contribute` */
   editorGroupIds?: string[];
+  /** set while it is in the trash; its trainings carry the same timestamp */
+  trashedAt?: Date;
   taxonomy?: IProjectTaxonomy;
   costing?: IProjectCosting;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const OwnerSchema = new Schema<ResourceOwner>(
+  {
+    kind: { type: String, enum: ['user', 'group'], required: true },
+    id: { type: String, required: true }
+  },
+  { _id: false }
+);
 
 const ProjectSchema: Schema = new Schema(
   {
@@ -37,17 +52,11 @@ const ProjectSchema: Schema = new Schema(
       trim: true,
       maxlength: 500
     },
-    isPublic: {
-      type: Boolean,
-      default: false,
-      index: true
-    },
-    ownerId: {
-      type: String,
-      required: true,
-      index: true
-    },
+    owner: { type: OwnerSchema, required: true },
+    createdBy: { type: String, required: true },
+    visibility: { type: String, enum: VISIBILITIES, default: 'private', index: true },
     editorGroupIds: { type: [String], default: [], index: true },
+    trashedAt: { type: Date },
     taxonomy: {
       type: TaxonomySchema,
       required: false
@@ -61,6 +70,9 @@ const ProjectSchema: Schema = new Schema(
     timestamps: true
   }
 );
+
+ProjectSchema.index({ 'owner.kind': 1, 'owner.id': 1 });
+ProjectSchema.index({ trashedAt: 1 }, { sparse: true });
 
 // Index for searching
 ProjectSchema.index({ name: 'text', description: 'text' });

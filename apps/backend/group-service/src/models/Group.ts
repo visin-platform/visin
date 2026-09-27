@@ -10,13 +10,27 @@ export interface IGroupMember {
   lastActivity?: Date;
 }
 
+/**
+ * An invitation: either a link (`tokenHash`, whoever holds the link may accept)
+ * or addressed to one account (`userId`, found through "Add member" and
+ * accepted by that account in the app). Never both.
+ */
+export interface IGroupInvitation {
+  _id?: Types.ObjectId;
+  tokenHash?: string;
+  userId?: string;
+  role: GroupRole;
+  createdBy: string;
+  expiresAt: Date;
+}
+
 export interface IGroup extends Document {
   _id: Types.ObjectId;
   __v?: number;
   name: string;
   createdBy: string; // immutable account ID
   members: IGroupMember[];
-  invitations?: { tokenHash: string; role: GroupRole; createdBy: string; expiresAt: Date }[];
+  invitations?: IGroupInvitation[];
   deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -38,7 +52,8 @@ const GroupSchema = new Schema<IGroup>(
     invitations: {
       type: [
         {
-          tokenHash: { type: String, required: true },
+          tokenHash: { type: String },
+          userId: { type: String },
           role: { type: String, enum: ['owner', 'admin', 'member'], required: true },
           createdBy: { type: String, required: true },
           expiresAt: { type: Date, required: true }
@@ -54,6 +69,7 @@ const GroupSchema = new Schema<IGroup>(
 
 GroupSchema.index({ 'members.userId': 1 });
 GroupSchema.index({ 'invitations.tokenHash': 1 });
+GroupSchema.index({ 'invitations.userId': 1 });
 // Invitation hashes are internal state, including on documents loaded for acceptance.
 GroupSchema.set('toJSON', {
   transform: (_doc, value) => {

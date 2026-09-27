@@ -1,11 +1,16 @@
+jest.mock('../../clients/ownedResourcesClient', () => ({
+  ownedByGroup: jest.fn().mockResolvedValue({ projects: { count: 0, names: [] }, datasets: { count: 0, names: [] } }),
+}));
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { ResourceEvent } from '@visin/backend-core';
 import { Group } from '../../models/Group';
 import {
   createInvitation,
   acceptInvitation,
   createGroup,
   deleteGroup,
+  groupActivity,
   permanentlyDeleteGroup,
   removeMember,
   restoreGroup,
@@ -181,5 +186,26 @@ describe('group ownership against in-memory MongoDB', () => {
     await deleteGroup(id, 'second@example.test');
     await permanentlyDeleteGroup(id, 'second@example.test');
     expect(await Group.findById(id)).toBeNull();
+  });
+
+  it("shows its owners and admins what happened to what the group owns, newest first", async () => {
+    const group = await createGroup('first@example.test', 'Team');
+    const id = group._id.toString();
+    await addMember(id, 'first@example.test', 'admin@example.test', 'admin');
+    await addMember(id, 'first@example.test', 'member@example.test');
+    await Group.updateOne({ _id: group._id, 'members.userId': 'admin@example.test' }, { $set: { 'members.$.email': 'admin@example.test' } });
+    await ResourceEvent.create([
+      { at: new Date(1000), service: 'vision-service', resourceType: 'project', resourceId: 'p1', resourceName: 'Road', action: 'trash', actorId: 'admin@example.test', groupIds: [id] },
+      { at: new Date(2000), service: 'dataset-service', resourceType: 'dataset', resourceId: 'd1', action: 'transfer', actorId: 'gone@example.test', groupIds: [id], from: { kind: 'user', id: 'gone@example.test' }, to: { kind: 'group', id } },
+      { at: new Date(3000), service: 'vision-service', resourceType: 'project', resourceId: 'p2', action: 'trash', actorId: 'x', groupIds: ['another'] }
+    ]);
+
+    const events = await groupActivity(id, 'admin@example.test');
+    expect(events.map((event) => [event.resourceId, event.actorEmail])).toEqual([['d1', undefined], ['p1', 'admin@example.test']]);
+    await expect(groupActivity(id, 'member@example.test')).rejects.toMatchObject({ statusCode: 403 });
+    await expect(groupActivity(id, 'stranger@example.test')).rejects.toMatchObject({ statusCode: 403 });
+    await deleteGroup(id, 'first@example.test');
+    await expect(groupActivity(id, 'first@example.test')).rejects.toMatchObject({ statusCode: 404 });
+    await ResourceEvent.deleteMany({});
   });
 });

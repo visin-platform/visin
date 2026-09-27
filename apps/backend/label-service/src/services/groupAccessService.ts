@@ -1,60 +1,13 @@
 import { Request } from 'express';
-import { ForbiddenError, UnauthorizedError, UserPayload } from '@visin/backend-core';
-import * as groups from '../clients/groupServiceClient';
-import { GroupMembership } from '../clients/groupServiceClient';
+import { UnauthorizedError, UserPayload } from '@visin/backend-core';
 
-// Per-request membership cache: several access checks in one request (e.g. job +
-// dataset in the same group) should cost one group-service call, not two.
-const requestCaches = new WeakMap<Request, Map<string, Promise<GroupMembership>>>();
-
+/**
+ * The signed-in caller, or a 401. Who may do what with a job is decided by its
+ * dataset (`jobAccessService`), not by a group of the job's own.
+ */
 export const requireUser = (req: Request): UserPayload => {
   if (!req.user?.id) {
     throw new UnauthorizedError('Authenticated user required');
   }
   return req.user;
-};
-
-const membershipFor = (req: Request, groupId: string): Promise<GroupMembership> => {
-  const user = requireUser(req);
-  let cache = requestCaches.get(req);
-  if (!cache) {
-    cache = new Map();
-    requestCaches.set(req, cache);
-  }
-  let membership = cache.get(groupId);
-  if (!membership) {
-    membership = groups.checkMembership(groupId, user.id);
-    cache.set(groupId, membership);
-  }
-  return membership;
-};
-
-/** Any group member may work jobs. */
-export const assertMember = async (req: Request, groupId: string): Promise<void> => {
-  const { member } = await membershipFor(req, groupId);
-  if (!member) {
-    throw new ForbiddenError('Not a member of this group');
-  }
-};
-
-/** Like `assertMember`, but answers rather than throws — for reads that fall back to public data. */
-export const isMember = async (req: Request, groupId: string): Promise<boolean> => {
-  if (!req.user?.id) return false;
-  const { member } = await membershipFor(req, groupId);
-  return member === true;
-};
-
-/** Read capabilities may fall back to public data for callers without this role. */
-export const isGroupAdmin = async (req: Request, groupId: string): Promise<boolean> => {
-  if (!req.user?.id) return false;
-  const { member, role } = await membershipFor(req, groupId);
-  return member === true && (role === 'owner' || role === 'admin');
-};
-
-/** Group owner/admin administers jobs. */
-export const assertAdmin = async (req: Request, groupId: string): Promise<void> => {
-  requireUser(req);
-  if (!(await isGroupAdmin(req, groupId))) {
-    throw new ForbiddenError('Group owner/admin required');
-  }
 };

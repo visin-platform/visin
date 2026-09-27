@@ -149,7 +149,10 @@
       "config_name": {
         "type": "string"
       },
-      "metadata": {}
+      "metadata": {},
+      "projectId": {
+        "type": "string"
+      }
     },
     "required": [
       "summary",
@@ -169,7 +172,10 @@
       "config_name": {
         "type": "string"
       },
-      "metadata": {}
+      "metadata": {},
+      "projectId": {
+        "type": "string"
+      }
     },
     "required": [
       "config_data"
@@ -351,9 +357,33 @@
           "pattern": "^[0-9a-fA-F]{24}$"
         }
       },
-      "isPublic": {
-        "default": false,
-        "type": "boolean"
+      "visibility": {
+        "default": "private",
+        "type": "string",
+        "enum": [
+          "private",
+          "public"
+        ]
+      },
+      "owner": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
       },
       "taxonomy": {
         "type": "object",
@@ -524,27 +554,6 @@
       "epoch",
       "epoch_uuid",
       "test_results"
-    ]
-  },
-  "CreateTokenBody": {
-    "type": "object",
-    "properties": {
-      "name": {
-        "type": "string",
-        "minLength": 1
-      },
-      "projectId": {
-        "type": "string",
-        "minLength": 1
-      },
-      "expiresInDays": {
-        "type": "integer",
-        "exclusiveMinimum": 0
-      }
-    },
-    "required": [
-      "name",
-      "projectId"
     ]
   },
   "CreateTrainingBody": {
@@ -858,6 +867,24 @@
       "search": {
         "type": "string"
       },
+      "access": {
+        "type": "string",
+        "enum": [
+          "contribute"
+        ]
+      },
+      "owner": {
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "me"
+          },
+          {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
+          }
+        ]
+      },
       "sortBy": {
         "default": "createdAt",
         "type": "string",
@@ -978,6 +1005,12 @@
       },
       "projectId": {
         "type": "string"
+      },
+      "access": {
+        "type": "string",
+        "enum": [
+          "contribute"
+        ]
       },
       "tags": {
         "anyOf": [
@@ -1191,6 +1224,34 @@
       }
     }
   },
+  "TransferProjectBody": {
+    "type": "object",
+    "properties": {
+      "owner": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
+      }
+    },
+    "required": [
+      "owner"
+    ]
+  },
   "UpdateBenchmarkBody": {
     "type": "object",
     "properties": {
@@ -1281,8 +1342,12 @@
           "pattern": "^[0-9a-fA-F]{24}$"
         }
       },
-      "isPublic": {
-        "type": "boolean"
+      "visibility": {
+        "type": "string",
+        "enum": [
+          "private",
+          "public"
+        ]
       },
       "slug": {
         "type": "string"

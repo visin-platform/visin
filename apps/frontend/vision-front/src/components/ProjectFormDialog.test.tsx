@@ -13,6 +13,11 @@ const baseProps = {
   onNameChange: vi.fn(),
   description: '',
   onDescriptionChange: vi.fn(),
+  owner: { kind: 'user' as const, id: 'u1' },
+  onOwnerChange: vi.fn(),
+  userId: 'u1',
+  groups: [],
+  canShare: true,
   isPublic: false,
   onIsPublicChange: vi.fn(),
   taxonomy: {},
@@ -56,7 +61,7 @@ describe('ProjectFormDialog', () => {
   it('toggles isPublic via the switch', async () => {
     const onIsPublicChange = vi.fn();
     render(<ProjectFormDialog {...baseProps} onIsPublicChange={onIsPublicChange} />);
-    await userEvent.click(screen.getByRole('switch'));
+    await userEvent.click(screen.getByRole('radio', { name: 'Public' }));
     expect(onIsPublicChange).toHaveBeenCalledWith(true);
   });
 

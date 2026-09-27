@@ -1,13 +1,15 @@
 import express from 'express';
 import { identityContextMiddleware } from './middleware/requestIdentityContext';
 import path from 'path';
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve, startSweeper } from '@visin/backend-core';
 import { API_ROUTE_GROUPS } from './routes/apiRoutes';
-import { apiTokenMiddleware } from './middleware/apiTokenMiddleware';
+import internalRoutes from './routes/internalRoutes';
+import { purgeExpiredTrash } from './services/purgeService';
 
 // JWT_SECRET verifies user sessions; FILE_SERVICE_API_KEY authenticates every
-// dataset-image/visualization storage call.
-assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'FILE_SERVICE_API_KEY']);
+// dataset-image/visualization storage call; INTERNAL_SERVICE_TOKEN gates
+// /internal/*, which auth-service calls when issuing a project-limited API key.
+assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'FILE_SERVICE_API_KEY', 'INTERNAL_SERVICE_TOKEN']);
 
 const PORT = process.env.PORT || 4010;
 
@@ -26,7 +28,9 @@ app.use((req, res, next) => {
 });
 
 // Global Middleware
-app.use(identityContextMiddleware, apiTokenMiddleware);
+app.use(identityContextMiddleware);
+
+app.use('/internal', internalRoutes);
 
 // Route groups, each behind its own user-API-key guard (see apiRoutes.ts)
 for (const { path: mountPath, guards, router } of API_ROUTE_GROUPS) {
@@ -48,7 +52,9 @@ app.use(errorHandler);
 // container restart policy.
 connectDb({ serviceName: 'vision-service' })
   .then(() => {
-    serve(app, { port: PORT, serviceName: 'vision-service' });
+    // Projects and trainings trashed more than 30 days ago are deleted: hourly, and once now.
+    const trashSweeper = startSweeper({ name: 'vision-trash-purge', run: async () => void (await purgeExpiredTrash()) });
+    serve(app, { port: PORT, serviceName: 'vision-service', onShutdown: () => trashSweeper.stop() });
   })
   .catch((err: Error) => {
     logger.error('Failed to start vision-service', { error: err.message, stack: err.stack });

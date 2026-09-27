@@ -45,6 +45,10 @@
         "type": "integer",
         "minimum": 1,
         "maximum": 365
+      },
+      "projectId": {
+        "type": "string",
+        "pattern": "^[a-f\\d]{24}$"
       }
     },
     "required": [
@@ -125,6 +129,25 @@
     "required": [
       "email",
       "password"
+    ]
+  },
+  "SearchUsersQuery": {
+    "type": "object",
+    "properties": {
+      "q": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 254
+      },
+      "limit": {
+        "default": 20,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 25
+      }
+    },
+    "required": [
+      "q"
     ]
   },
   "SessionIdParams": {

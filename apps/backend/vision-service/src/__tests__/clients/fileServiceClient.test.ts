@@ -7,6 +7,7 @@ import {
   getSignedUrl,
   getUploadSignedUrl,
   deleteFile,
+  deleteFiles,
   getFileMetadata,
 } from '../../clients/fileServiceClient';
 import { GatewayTimeoutError } from '@visin/backend-core';
@@ -79,6 +80,26 @@ describe('getUploadSignedUrl', () => {
   it('keeps a timeout a 504', async () => {
     mockFetch.mockRejectedValue(new GatewayTimeoutError('file-service timed out'));
     await expect(getUploadSignedUrl('f1', 'image/png')).rejects.toMatchObject({ statusCode: 504 });
+  });
+});
+
+describe('deleteFiles', () => {
+  it("sends file-service's limit per call, and nothing for no files", async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 200 });
+    const ids = Array.from({ length: 1001 }, (_, i) => `f${i}`);
+
+    await deleteFiles(ids);
+    await deleteFiles([]);
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[0][0]).toBe('http://files:5002/internal/delete-files');
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).fileIds).toHaveLength(1000);
+    expect(JSON.parse(mockFetch.mock.calls[1][1].body).fileIds).toEqual(['f1000']);
+  });
+
+  it('throws when file-service refuses, so the records that name the files stay', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+    await expect(deleteFiles(['f1'])).rejects.toMatchObject({ statusCode: 502 });
   });
 });
 

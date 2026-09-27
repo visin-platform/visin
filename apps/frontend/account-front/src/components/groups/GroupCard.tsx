@@ -19,6 +19,8 @@ import { Check, Close, Delete, Edit, ExpandMore } from '@mui/icons-material';
 import { Group, GroupRole, permissionsFor, roleOf } from '../../types/group';
 import GroupMembers from './GroupMembers';
 import GroupInvitations from './GroupInvitations';
+import AddMember from './AddMember';
+import GroupActivity from './GroupActivity';
 
 interface GroupCardProps {
   group: Group;
@@ -141,9 +143,17 @@ const GroupCard: React.FC<GroupCardProps> = ({
         />
 
         {permissions.canManageMembers && (
-          <Box sx={{ mt: 3 }}>
-            <GroupInvitations groupId={group._id} canInviteOwner={permissions.canManageOwners} />
-          </Box>
+          <>
+            <Box sx={{ mt: 3 }}>
+              <AddMember groupId={group._id} canInviteOwner={permissions.canManageOwners} />
+            </Box>
+            <Box sx={{ mt: 3 }}>
+              <GroupInvitations groupId={group._id} canInviteOwner={permissions.canManageOwners} />
+            </Box>
+            <Box sx={{ mt: 3 }}>
+              <GroupActivity groupId={group._id} />
+            </Box>
+          </>
         )}
 
         {permissions.canDeleteGroup && (

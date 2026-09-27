@@ -1,4 +1,12 @@
-import { requireEnv, fetchWithTimeout, BadGatewayError, NotFoundError, TRANSFER_FETCH_TIMEOUT_MS } from '@visin/backend-core';
+import {
+  requireEnv,
+  fetchWithTimeout,
+  BadGatewayError,
+  NotFoundError,
+  TRANSFER_FETCH_TIMEOUT_MS,
+  type Permission,
+  type ResourceOwner
+} from '@visin/backend-core';
 
 /**
  * dataset-service's internal API. Datasets — the zips and the images imported
@@ -10,9 +18,8 @@ export interface DatasetSummary {
   _id: string;
   name: string;
   description?: string;
-  ownerId: string;
-  visibility: 'public' | 'group';
-  groupId?: string;
+  owner: ResourceOwner;
+  visibility: 'private' | 'public';
   groups: { name: string; images: number; jsons: number }[];
   imageCount: number;
   importStatus?: string;
@@ -72,8 +79,26 @@ const datasetPath = (id: string): string => `/datasets/${encodeURIComponent(id)}
 
 export const getDataset = (id: string): Promise<DatasetSummary> => call('GET', datasetPath(id));
 
-/** Datasets the user can read — what the job wizard offers. */
-export const listDatasetsFor = (userId: string): Promise<DatasetSummary[]> => call('GET', '/datasets', { userId });
+/** Live datasets the user may do at least `min` with: `manage` is what the job wizard offers. */
+export const listDatasetsFor = (userId: string, min: Permission = 'manage'): Promise<DatasetSummary[]> =>
+  call('GET', '/datasets', { userId, min });
+
+/** Ids only, for job lists: "jobs on datasets where I can …". No user: public datasets. */
+export const datasetIdsFor = (userId: string | undefined, min: Permission): Promise<string[]> =>
+  call('GET', '/datasets/ids', { userId, min });
+
+/**
+ * What one account may do with one dataset, and so with its label jobs. A
+ * dataset in the trash or gone reads as `none`: its jobs go with it.
+ */
+export const getPermission = async (id: string, userId?: string): Promise<Permission> => {
+  try {
+    return (await call<{ permission: Permission }>('GET', `${datasetPath(id)}/permission`, { userId })).permission;
+  } catch (error) {
+    if (error instanceof NotFoundError) return 'none';
+    throw error;
+  }
+};
 
 /** Every item matching the filter, in path order, following dataset-service's keyset pages. */
 export const listItems = async (

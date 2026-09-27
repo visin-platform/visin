@@ -21,6 +21,11 @@ export interface ApiKeyContext {
   label: string;
   /** the scope this particular request had to carry */
   required: ApiKeyScope;
+  /**
+   * The one project the key is limited to. The service enforces it: only it
+   * knows which project a request touches.
+   */
+  projectId?: string;
 }
 
 export interface ApiKeyAuthOptions {
@@ -51,7 +56,11 @@ interface Verified {
   keyId?: string;
   label?: string;
   scopes?: ApiKeyScope[];
+  projectId?: string;
 }
+
+/** The domains that sit inside a project, and so the only ones a project-limited key may reach. */
+const PROJECT_DOMAINS: ReadonlySet<ApiKeyDomain> = new Set(['vision', 'analysis']);
 
 const verifiedAccessToken = (token: string, audience?: string): Verified => {
   // No default audience. A deployment accepts tokens for the MCP server it
@@ -155,6 +164,13 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
       return;
     }
 
+    // Its scopes already keep a limited key out of other domains; saying so
+    // plainly tells its owner that the limit, not a missing scope, is the reason.
+    if (verification.projectId && !PROJECT_DOMAINS.has(domain)) {
+      next(new ForbiddenError('This key is limited to one project and cannot reach this API.'));
+      return;
+    }
+
     const isRead =
       READ_METHODS.has(req.method) || readPaths.some((pattern) => pattern.test(req.path));
     const required = isRead ? readScope(domain) : writeScope(domain);
@@ -181,7 +197,8 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
       keyId: verification.keyId as string,
       scopes,
       label: verification.label as string,
-      required
+      required,
+      ...(verification.projectId ? { projectId: verification.projectId } : {})
     };
 
     next();

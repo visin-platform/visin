@@ -3,17 +3,18 @@ import type { Request, Response } from 'express';
 jest.mock('../../services/jobService', () => ({ getJob: jest.fn() }));
 jest.mock('../../services/materializationService', () => ({}));
 jest.mock('../../services/exportService', () => ({ jobStats: jest.fn() }));
-jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn() }));
+jest.mock('../../clients/datasetServiceClient', () => ({ getPermission: jest.fn() }));
 
 import { jobStats } from '../../controllers/jobController';
 import { getJob } from '../../services/jobService';
 import * as exportSvc from '../../services/exportService';
-import { checkMembership } from '../../clients/groupServiceClient';
+import { getPermission } from '../../clients/datasetServiceClient';
 
+const permission = getPermission as jest.Mock;
 const aggregate = { tasks: 12, completed: 4, answers: 7, perStratum: [{ stratum: 'night', tasks: 12, completed: 4 }], agreement: 0.8 };
 const perUser = [{ userEmail: 'private@example.test', userName: 'Private Labeler', answered: 7 }];
 const makeReq = (user: unknown = { id: 'account-id', email: 'viewer@example.test' }) => ({
-  params: { id: 'job-id' }, query: { groupId: 'other-group', role: 'owner' }, body: { groupId: 'other-group' }, user,
+  params: { id: 'job-id' }, query: { datasetId: 'other', role: 'owner' }, body: { datasetId: 'other' }, user,
 }) as unknown as Request;
 const respond = async (req = makeReq()) => {
   const json = jest.fn();
@@ -23,53 +24,44 @@ const respond = async (req = makeReq()) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (getJob as jest.Mock).mockResolvedValue({ _id: 'job-id', groupId: 'actual-group', isPublic: true, status: 'active' });
+  (getJob as jest.Mock).mockResolvedValue({ _id: 'job-id', datasetId: 'actual-dataset', isPublic: true, status: 'active', createdBy: { userId: 'c' } });
   (exportSvc.jobStats as jest.Mock).mockResolvedValue({ ...aggregate, perUser });
 });
 
-it('keeps anonymous aggregate statistics available without a membership lookup', async () => {
+it('keeps aggregate statistics of a public job on a public dataset open to anonymous callers', async () => {
+  permission.mockResolvedValue('read');
   expect(await respond(makeReq(null))).toEqual({ success: true, data: aggregate });
-  expect(checkMembership).not.toHaveBeenCalled();
+  expect(permission).toHaveBeenCalledWith('actual-dataset', undefined);
 });
 
-it.each([
-  { member: true, role: 'member' },
-  { member: false, role: null },
-  { member: false, role: 'admin' },
-  { member: true, role: null },
-  { member: true, role: 'unknown' },
-])('hides identities for membership $member / role $role', async membership => {
-  (checkMembership as jest.Mock).mockResolvedValue(membership);
+it.each(['read', 'contribute'])('hides identities from a caller who may %s the dataset', async level => {
+  permission.mockResolvedValue(level);
   const result = await respond();
   expect(result).toEqual({ success: true, data: aggregate });
   expect(JSON.stringify(result)).not.toMatch(/private@example.test|Private Labeler|perUser/);
-  expect(checkMembership).toHaveBeenCalledWith('actual-group', 'account-id');
+  expect(permission).toHaveBeenCalledWith('actual-dataset', 'account-id');
 });
 
-it.each(['owner', 'admin'])('preserves the full breakdown for a current group %s', async role => {
-  (checkMembership as jest.Mock).mockResolvedValue({ member: true, role });
+it.each(['manage', 'own'])('keeps the full breakdown for a caller who may %s the dataset', async level => {
+  permission.mockResolvedValue(level);
   expect(await respond()).toEqual({ success: true, data: { ...aggregate, perUser } });
-  expect(checkMembership).toHaveBeenCalledWith('actual-group', 'account-id');
 });
 
-it('does not grant access from caller-supplied roles or a different group', async () => {
-  (checkMembership as jest.Mock).mockImplementation(async groupId => ({ member: groupId === 'other-group', role: 'admin' }));
-  const result = await respond(makeReq({ id: 'account-id', role: 'admin', groupId: 'other-group' }));
-  expect(result.data).toEqual(aggregate);
-  expect(checkMembership).toHaveBeenCalledWith('actual-group', 'account-id');
+it('asks about the job’s own dataset, whatever the request names', async () => {
+  permission.mockImplementation(async (datasetId: string) => (datasetId === 'other' ? 'manage' : 'read'));
+  expect((await respond()).data).toEqual(aggregate);
 });
 
-it('checks permissions again on the next request after demotion', async () => {
-  (checkMembership as jest.Mock).mockResolvedValueOnce({ member: true, role: 'admin' }).mockResolvedValueOnce({ member: true, role: 'member' });
+it('checks again on the next request, after a demotion', async () => {
+  permission.mockResolvedValueOnce('manage').mockResolvedValueOnce('contribute');
   expect((await respond()).data.perUser).toEqual(perUser);
   expect((await respond()).data).toEqual(aggregate);
-  expect(checkMembership).toHaveBeenCalledTimes(2);
 });
 
-it('fails before reading or sending statistics if membership verification fails', async () => {
-  (checkMembership as jest.Mock).mockRejectedValue(new Error('group-service unavailable'));
+it('fails before reading or sending statistics if the check fails', async () => {
+  permission.mockRejectedValue(new Error('dataset-service unavailable'));
   const json = jest.fn();
-  await expect(jobStats(makeReq(), { json } as unknown as Response)).rejects.toThrow('group-service unavailable');
+  await expect(jobStats(makeReq(), { json } as unknown as Response)).rejects.toThrow('dataset-service unavailable');
   expect(exportSvc.jobStats).not.toHaveBeenCalled();
   expect(json).not.toHaveBeenCalled();
 });

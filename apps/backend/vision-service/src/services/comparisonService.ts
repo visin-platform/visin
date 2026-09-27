@@ -1,7 +1,7 @@
 import { assertResourceWrite, requireActor } from './writeAccessService';
 import { resolveProject } from './projectAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
-import { QueryFilter, Types } from 'mongoose';
+import { QueryFilter, Types, isValidObjectId } from 'mongoose';
 import { ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Comparison, { IComparison } from '../models/Comparison';
 import { checkProjectAccess, getVisibleProjectIds } from './projectAccessService';
@@ -29,24 +29,41 @@ interface UpdateComparisonData {
   metadata?: Record<string, unknown>;
 }
 
-/** References written by a project credential must stay inside that project. */
-async function assertTokenItems(type: IComparison['type'], ids: string[], userId: string | undefined) {
-  if (!tokenProjectId()) return;
+/**
+ * Every item must be in a project the caller can read. Always for a personal
+ * comparison across projects; for one in a project, only when a project
+ * credential wrote it, which must stay inside its own project.
+ */
+async function assertItemsReadable(
+  type: IComparison['type'],
+  ids: string[],
+  userId: string | undefined,
+  projectId?: string | null,
+  { viewing = false }: { viewing?: boolean } = {}
+) {
+  if (projectId && !tokenProjectId()) return;
+  // Viewing checks where each item lives, deleted or not; an item gone for
+  // good has no project left to hide. Writing takes live items only.
+  const live = viewing ? {} : { deletedAt: null };
   for (const id of new Set(ids)) {
     let trainingId: string | undefined;
     if (type === 'trainings') trainingId = id;
     else if (type === 'benchmarks') {
-      const benchmark = await Benchmark.findOne({ _id: id, deletedAt: null });
+      const benchmark = await Benchmark.findOne({ _id: id, ...live });
       trainingId = benchmark?.training_id?.toString();
     } else {
-      const test = type === 'tests' ? await TestResult.findOne({ _id: id, deletedAt: null }) : undefined;
-      if (type === 'tests' && !test) throw new ForbiddenError();
+      const test = type === 'tests' ? await TestResult.findOne({ _id: id, ...live }) : undefined;
+      if (type === 'tests' && !test) {
+        if (viewing) continue;
+        throw new ForbiddenError();
+      }
       const epoch = type === 'epochs'
-        ? await Epoch.findOne({ _id: id, deletedAt: null })
-        : await Epoch.findOne({ epoch_uuid: test!.epoch_uuid, deletedAt: null });
+        ? await Epoch.findOne({ _id: id, ...live })
+        : await Epoch.findOne({ epoch_uuid: test!.epoch_uuid, ...live });
       trainingId = epoch?.trainingId;
     }
-    const training = trainingId ? await Training.findOne({ _id: trainingId, deletedAt: null }) : null;
+    const training = trainingId && isValidObjectId(trainingId) ? await Training.findOne({ _id: trainingId, ...live }) : null;
+    if (viewing && !training) continue;
     if (!(await checkProjectAccess(userId, training?.projectId))) throw new ForbiddenError();
   }
 }
@@ -81,8 +98,8 @@ const buildScopedComparisonQuery = async (
   const visibleProjectIds = await getVisibleProjectIds(userId);
   query.$or = [
     { projectId: { $in: visibleProjectIds } },
-    { projectId: { $exists: false } },
-    { projectId: null }
+    // A comparison across projects is personal: its creator's, and nobody else's.
+    ...(userId && !tokenProjectId() ? [{ projectId: null, ownerId: userId }] : [])
   ];
 
   return query;
@@ -95,10 +112,14 @@ const getAccessibleComparison = async (idQuery: QueryFilter<IComparison>, userId
     throw new NotFoundError('Comparison not found');
   }
 
-  if (!(await checkProjectAccess(userId, comparison.projectId))) {
-    throw new ForbiddenError();
+  if (comparison.projectId) {
+    if (!(await checkProjectAccess(userId, comparison.projectId))) throw new ForbiddenError();
+    return comparison;
   }
-
+  // Across projects: its creator's alone, and only while they can still read
+  // every project it draws from.
+  if (!userId || tokenProjectId() || comparison.ownerId !== userId) throw new ForbiddenError();
+  await assertItemsReadable(comparison.type, comparison.itemIds, userId, null, { viewing: true });
   return comparison;
 };
 
@@ -170,8 +191,8 @@ export const createComparison = async (
   const project = reference ? await resolveProject(reference) : null;
   if (reference && !project) throw new ForbiddenError();
   const effectiveProjectId = project?._id.toString();
-  await assertResourceWrite({ ownerId, projectId: effectiveProjectId }, userId);
-  await assertTokenItems(data.type, data.itemIds, userId);
+  await assertResourceWrite({ ownerId, projectId: effectiveProjectId }, userId, true);
+  await assertItemsReadable(data.type, data.itemIds, userId, effectiveProjectId);
 
   if (effectiveProjectId && !(await checkProjectAccess(userId, effectiveProjectId))) {
     throw new ForbiddenError('Access denied to project');
@@ -220,8 +241,8 @@ export const getComparisonStats = async (filters: GetComparisonStatsQuery, userI
 
 export const updateComparison = async (id: string, updateData: UpdateComparisonData, userId: string | undefined) => {
   const comparison = await getAccessibleComparison({ _id: id }, userId);
-  await assertResourceWrite(comparison, userId);
-  if (updateData.itemIds !== undefined) await assertTokenItems(comparison.type, updateData.itemIds, userId);
+  await assertResourceWrite(comparison, userId, true);
+  if (updateData.itemIds !== undefined) await assertItemsReadable(comparison.type, updateData.itemIds, userId, comparison.projectId);
 
   if (updateData.name !== undefined) {
     comparison.name = updateData.name.trim();
@@ -241,7 +262,7 @@ export const updateComparison = async (id: string, updateData: UpdateComparisonD
 
 export const deleteComparison = async (id: string, userId: string | undefined) => {
   const comparison = await getAccessibleComparison({ _id: id }, userId);
-  await assertResourceWrite(comparison, userId);
+  await assertResourceWrite(comparison, userId, true);
   comparison.deletedAt = new Date();
   await comparison.save();
 };

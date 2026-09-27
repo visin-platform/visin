@@ -8,13 +8,20 @@ import { LabelJob, JOB_STATUSES, JobStatus } from '../../models/LabelJob';
 import { LabelTask } from '../../models/LabelTask';
 import jobRoutes from '../../routes/jobRoutes';
 import taskRoutes from '../../routes/taskRoutes';
-import { checkMembership } from '../../clients/groupServiceClient';
+import { addHold, datasetIdsFor, getDataset, getPermission } from '../../clients/datasetServiceClient';
 import { getDownloadUrls } from '../../clients/fileServiceClient';
 import { setJobVisibility } from '../../services/jobService';
 
-jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn() }));
+jest.mock('../../clients/datasetServiceClient', () => ({
+  getPermission: jest.fn(),
+  datasetIdsFor: jest.fn(),
+  getDataset: jest.fn(),
+  addHold: jest.fn()
+}));
 jest.mock('../../clients/fileServiceClient', () => ({ getDownloadUrls: jest.fn() }));
-const membership = checkMembership as jest.Mock;
+const permission = getPermission as jest.Mock;
+/** Whether dataset d1 is public: what lets a job on it be seen outside its owners. */
+let datasetPublic = false;
 const sign = getDownloadUrls as jest.Mock;
 const actors: Record<string, string> = { owner: '000000000000000000000001', member: '000000000000000000000002', stranger: '000000000000000000000003' };
 const creator = { userId: 'owner', email: 'PRIVATE_CREATOR@example.test' };
@@ -41,7 +48,17 @@ describe('job publication and task access with in-memory MongoDB', () => {
     // Each test token names a session whose id is its user's.
     await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
     jest.clearAllMocks();
-    membership.mockImplementation(async (groupId, userId) => ({ member: groupId === 'actual-group' && [actors.member, actors.owner].includes(userId), role: userId === actors.owner ? 'owner' : 'member' }));
+    datasetPublic = false;
+    // The owner manages dataset d1, the member contributes to it; others read it only while it is public.
+    permission.mockImplementation(async (datasetId: string, userId?: string) => {
+      if (datasetId !== 'd1') return 'none';
+      if (userId === actors.owner) return 'manage';
+      if (userId === actors.member) return 'contribute';
+      return datasetPublic ? 'read' : 'none';
+    });
+    (datasetIdsFor as jest.Mock).mockImplementation(async () => (datasetPublic ? ['d1'] : []));
+    (getDataset as jest.Mock).mockResolvedValue({ _id: 'd1', name: 'Frames', groups: [{ name: 'frames', images: 1, jsons: 0 }] });
+    (addHold as jest.Mock).mockResolvedValue(undefined);
     sign.mockResolvedValue({ 'frame-file': 'SIGNED_IMAGE_URL' });
   });
   afterEach(async () => {
@@ -59,14 +76,14 @@ describe('job publication and task access with in-memory MongoDB', () => {
     ...(body ? { body: JSON.stringify(body) } : {})
   });
   const fixture = async (status: JobStatus = 'active', isPublic?: boolean) => {
-    const job = await LabelJob.create({ name: 'Private content', groupId: 'actual-group', createdBy: creator, status,
+    const job = await LabelJob.create({ name: 'Private content', createdBy: creator, status,
       datasetId: 'd1', taskType: 'single_choice', question: { prompt: 'Private prompt', choices: [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }] }, tasksCount: 1, ...(isPublic !== undefined ? { isPublic } : {}) });
     const task = await LabelTask.create({ jobId: job.id, frame: { fileId: 'frame-file', path: 'frames/frame.png', stem: 'frame' }, order: 0 });
     return { job, task };
   };
   const paths = (jobId: string, taskId: string) => [`/jobs/${jobId}`, `/jobs/${jobId}/stats`, `/tasks/${taskId}`, `/jobs/${jobId}/tasks/at/0`, `/jobs/${jobId}/tasks/at/999`];
 
-  it.each(JOB_STATUSES)('requires group access for private %s jobs on every read route', async status => {
+  it.each(JOB_STATUSES)('requires access to the dataset for private %s jobs on every read route', async status => {
     const { job, task } = await fixture(status);
     for (const path of paths(job.id, task.id)) {
       expect((await request(path)).status).toBe(403);
@@ -75,10 +92,17 @@ describe('job publication and task access with in-memory MongoDB', () => {
     expect(sign).not.toHaveBeenCalled();
     for (const path of paths(job.id, task.id)) expect((await request(path, 'member')).status).toBe(200);
     expect(sign).toHaveBeenCalledTimes(2);
-    expect(membership).toHaveBeenCalledWith('actual-group', actors.member);
+    expect(permission).toHaveBeenCalledWith('d1', actors.member);
   });
 
-  it.each(JOB_STATUSES)('exposes a published %s job outside its group only while active', async status => {
+  it('keeps a published job closed while its dataset is private', async () => {
+    const { job, task } = await fixture('active', true);
+    for (const path of paths(job.id, task.id)) expect((await request(path)).status).toBe(403);
+    expect(((await (await request('/jobs')).json()) as { data: unknown[] }).data).toHaveLength(0);
+  });
+
+  it.each(JOB_STATUSES)('exposes a published %s job on a public dataset outside its owners only while active', async status => {
+    datasetPublic = true;
     const { job, task } = await fixture(status, true);
     const expected = status === 'active' ? 200 : 403;
     for (const path of paths(job.id, task.id)) expect((await request(path)).status).toBe(expected);
@@ -87,7 +111,8 @@ describe('job publication and task access with in-memory MongoDB', () => {
     expect(list.data).toHaveLength(expected === 200 ? 1 : 0);
   });
 
-  it('makes activation independent of publication and restricts visibility changes to group administrators', async () => {
+  it('makes activation independent of publication and restricts visibility changes to the dataset’s managers', async () => {
+    datasetPublic = true;
     const { job, task } = await fixture('draft');
     expect((await request(`/jobs/${job.id}/activate`, 'owner', 'POST')).status).toBe(200);
     expect((await LabelJob.findById(job.id))!.isPublic).toBe(false);
@@ -97,8 +122,9 @@ describe('job publication and task access with in-memory MongoDB', () => {
     }
     expect((await request(`/jobs/${job.id}/visibility`, 'owner', 'PUT', { isPublic: 'true' })).status).toBe(400);
     expect((await request(`/jobs/${job.id}/visibility`, 'owner', 'PUT', { isPublic: true })).status).toBe(200);
+    // A public job on a public dataset: anyone signed in may label it.
     const publicView = await (await request(`/jobs/${job.id}`, 'stranger')).json() as { data: { canLabel: boolean; createdBy?: unknown } };
-    expect(publicView.data.canLabel).toBe(false);
+    expect(publicView.data.canLabel).toBe(true);
     expect(publicView.data.createdBy).toBeUndefined();
     expect((await request(`/tasks/${task.id}`)).status).toBe(200);
     expect((await request(`/jobs/${job.id}/visibility`, 'owner', 'PUT', { isPublic: false })).status).toBe(200);
@@ -107,15 +133,15 @@ describe('job publication and task access with in-memory MongoDB', () => {
     expect(sign).not.toHaveBeenCalled();
   });
 
-  it('rechecks membership and uses the task actual parent, even if another job is public', async () => {
+  it('rechecks access and uses the task actual parent, even if another job is public', async () => {
     const { job, task } = await fixture();
     await fixture('active', true);
     expect((await request(`/tasks/${task.id}`, 'member')).status).toBe(200);
-    membership.mockResolvedValue({ member: false, role: 'owner' });
+    permission.mockResolvedValue('none');
     sign.mockClear();
-    expect((await request(`/tasks/${task.id}?groupId=other-group&isPublic=true`, 'member')).status).toBe(403);
+    expect((await request(`/tasks/${task.id}?datasetId=other&isPublic=true`, 'member')).status).toBe(403);
     expect(sign).not.toHaveBeenCalled();
-    membership.mockRejectedValue(new Error('membership unavailable'));
+    permission.mockRejectedValue(new Error('dataset-service unavailable'));
     expect((await request(`/jobs/${job.id}/tasks/at/0`, 'member')).status).toBe(500);
     expect(sign).not.toHaveBeenCalled();
   });
@@ -131,8 +157,9 @@ describe('job publication and task access with in-memory MongoDB', () => {
     expect(sign).not.toHaveBeenCalled();
   });
 
-  it('ignores publication fields during creation and grants labeling capability only to members', async () => {
-    const response = await request('/jobs', 'owner', 'POST', { name: 'New job', groupId: 'actual-group', taskType: 'single_choice', question: { prompt: 'P' }, isPublic: true });
+  it('ignores publication fields during creation and grants labeling capability only to contributors', async () => {
+    expect((await request('/jobs', 'member', 'POST', { name: 'New job', datasetId: 'd1', taskType: 'single_choice', question: { prompt: 'P' } })).status).toBe(403);
+    const response = await request('/jobs', 'owner', 'POST', { name: 'New job', datasetId: 'd1', taskType: 'single_choice', question: { prompt: 'P' }, isPublic: true });
     expect(response.status).toBe(201);
     expect((await response.json() as { data: { isPublic: boolean } }).data.isPublic).toBe(false);
     const { job } = await fixture('completed');

@@ -9,6 +9,7 @@ jest.mock('../../services/jobService', () => ({
     return rest;
   }),
   getJob: jest.fn(),
+  jobDataset: jest.fn(),
   deleteJob: jest.fn(),
   getJobProgress: jest.fn(),
   transitionJob: jest.fn(),
@@ -25,25 +26,20 @@ jest.mock('../../services/exportService', () => ({
 }));
 jest.mock('../../services/groupAccessService', () => ({
   requireUser: jest.fn((req: Request) => req.user),
-  assertMember: jest.fn(),
-  assertAdmin: jest.fn(),
-  isGroupAdmin: jest.fn(),
 }));
 
-jest.mock('../../services/jobAccessService', () => ({ getJobReadAccess: jest.fn() }));
-import { getJobReadAccess } from '../../services/jobAccessService';
+jest.mock('../../services/jobAccessService', () => ({ getJobReadAccess: jest.fn(), assertJobAdmin: jest.fn() }));
+import { assertJobAdmin, getJobReadAccess } from '../../services/jobAccessService';
 
 import * as ctrl from '../../controllers/jobController';
 import * as svc from '../../services/jobService';
 import * as materialization from '../../services/materializationService';
 import * as exportSvc from '../../services/exportService';
-import { assertAdmin, assertMember } from '../../services/groupAccessService';
 
 const mockedSvc = svc as unknown as Record<string, jest.Mock>;
 const mockedMat = materialization as unknown as Record<string, jest.Mock>;
 const mockedExport = exportSvc as unknown as Record<string, jest.Mock>;
-const mockedAdmin = assertAdmin as jest.Mock;
-const mockedMember = assertMember as jest.Mock;
+const mockedAdmin = assertJobAdmin as jest.Mock;
 
 type MockRes = Response & { json: jest.Mock; status: jest.Mock; send: jest.Mock; setHeader: jest.Mock };
 
@@ -58,33 +54,33 @@ const makeReq = (overrides: Record<string, unknown> = {}): Request =>
 
 const job = {
   _id: 'j1',
-  groupId: 'g1',
-  toObject: () => ({ _id: 'j1', groupId: 'g1', createdBy: { email: 'owner@x.com' } }),
+  datasetId: 'd1',
+  toObject: () => ({ _id: 'j1', datasetId: 'd1', createdBy: { email: 'owner@x.com' } }),
 };
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockedSvc.getJob.mockResolvedValue(job);
-  (getJobReadAccess as jest.Mock).mockImplementation(async (_job, userId) => ({ member: Boolean(userId), isAdmin: false }));
+  mockedSvc.jobDataset.mockResolvedValue({ _id: 'd1', name: 'Road', owner: { kind: 'group', id: 'g1' } });
+  (getJobReadAccess as jest.Mock).mockImplementation(async (_job, userId) => ({ member: Boolean(userId), isAdmin: false, canWork: false }));
 });
 
 describe('createJob', () => {
-  it('requires group admin, then creates', async () => {
+  it('creates through the service, which checks the caller manages the dataset', async () => {
     mockedSvc.createJob.mockResolvedValue(job);
-    const req = makeReq({ body: { name: 'J', groupId: 'g1' } });
+    const req = makeReq({ body: { name: 'J', datasetId: 'd1' } });
     const res = makeRes();
 
     await ctrl.createJob(req, res);
 
-    expect(mockedAdmin).toHaveBeenCalledWith(req, 'g1');
+    expect(mockedSvc.createJob).toHaveBeenCalledWith(req.user, { name: 'J', datasetId: 'd1' });
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
-  it('propagates access denial before creating', async () => {
-    mockedAdmin.mockRejectedValueOnce(new Error('forbidden'));
+  it('propagates a refusal', async () => {
+    mockedSvc.createJob.mockRejectedValueOnce(new Error('forbidden'));
 
-    await expect(ctrl.createJob(makeReq({ body: { groupId: 'g1' } }), makeRes())).rejects.toThrow('forbidden');
-    expect(mockedSvc.createJob).not.toHaveBeenCalled();
+    await expect(ctrl.createJob(makeReq({ body: { datasetId: 'd1' } }), makeRes())).rejects.toThrow('forbidden');
   });
 });
 
@@ -138,7 +134,15 @@ describe('getJob', () => {
     expect(mockedSvc.getJobProgress).toHaveBeenCalledWith(job, 'u1');
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { canLabel: false, _id: 'j1', groupId: 'g1', createdBy: { email: 'owner@x.com' }, progress: { tasks: 3 } },
+      data: {
+        canLabel: false,
+        canManage: false,
+        _id: 'j1',
+        datasetId: 'd1',
+        dataset: { _id: 'd1', name: 'Road', owner: { kind: 'group', id: 'g1' } },
+        createdBy: { email: 'owner@x.com' },
+        progress: { tasks: 3 },
+      },
     });
   });
 
@@ -152,10 +156,10 @@ describe('getJob', () => {
     await ctrl.getJob(makeReq({ params: { id: 'j1' }, user: undefined }), res);
 
     expect(mockedSvc.getJobProgress).toHaveBeenCalledWith(job, '');
-    expect(mockedMember).not.toHaveBeenCalled();
+    expect(mockedSvc.jobDataset).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { canLabel: false, _id: 'j1', groupId: 'g1', progress: { tasks: 3, myAnswers: 0 } },
+      data: { canLabel: false, canManage: false, _id: 'j1', datasetId: 'd1', progress: { tasks: 3, myAnswers: 0 } },
     });
   });
 });
@@ -168,7 +172,7 @@ describe('deleteJob', () => {
 
     await ctrl.deleteJob(req, res);
 
-    expect(mockedAdmin).toHaveBeenCalledWith(req, 'g1');
+    expect(mockedAdmin).toHaveBeenCalledWith(job, 'u1');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: { tasks: 10, answers: 12 } });
   });
 
@@ -192,7 +196,7 @@ describe('transitions', () => {
 
     await ctrl[handler](req, makeRes());
 
-    expect(mockedAdmin).toHaveBeenCalledWith(req, 'g1');
+    expect(mockedAdmin).toHaveBeenCalledWith(job, 'u1');
     expect(mockedSvc.transitionJob).toHaveBeenCalledWith('j1', action);
   });
 });
@@ -273,6 +277,5 @@ describe('jobStats', () => {
     await ctrl.jobStats(makeReq({ params: { id: 'j1' }, user: undefined }), res);
 
     expect(res.json).toHaveBeenCalledWith({ success: true, data: { tasks: 1, perStratum: [] } });
-    expect(mockedMember).not.toHaveBeenCalled();
   });
 });

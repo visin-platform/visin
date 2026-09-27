@@ -15,30 +15,6 @@ export const getProjects = async (req: AuthRequest, res: Response): Promise<void
   });
 };
 
-// Get project by slug
-export const getProjectBySlug = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { slug } = req.params as { slug: string };
-
-  const project = await projectService.getProjectBySlug(slug, req.user?.id);
-
-  res.json({
-    success: true,
-    data: project
-  });
-};
-
-// Get project by ID
-export const getProjectById = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { id } = req.params as { id: string };
-
-  const project = await projectService.getProjectById(id, req.user?.id);
-
-  res.json({
-    success: true,
-    data: project
-  });
-};
-
 // Get project by ID or slug
 export const getProjectByIdOrSlug = async (req: AuthRequest, res: Response): Promise<void> => {
   // An id or a slug.
@@ -55,9 +31,9 @@ export const getProjectByIdOrSlug = async (req: AuthRequest, res: Response): Pro
 // Create project
 export const createProject = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user!.id;
-  const { name, description, isPublic, taxonomy, costing, editorGroupIds } = req.body;
+  const { name, description, visibility, owner, taxonomy, costing, editorGroupIds } = req.body;
 
-  const savedProject = await projectService.createProject(userId, { name, description, isPublic, taxonomy, costing, editorGroupIds });
+  const savedProject = await projectService.createProject(userId, { name, description, visibility, owner, taxonomy, costing, editorGroupIds });
 
   res.status(201).json({
     success: true,
@@ -70,9 +46,9 @@ export const createProject = async (req: AuthRequest, res: Response): Promise<vo
 export const updateProject = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
   const userId = req.user!.id;
-  const { name, description, isPublic, slug, taxonomy, costing, editorGroupIds } = req.body;
+  const { name, description, visibility, slug, taxonomy, costing, editorGroupIds } = req.body;
 
-  const updatedProject = await projectService.updateProject(id, userId, { name, description, isPublic, slug, taxonomy, costing, editorGroupIds });
+  const updatedProject = await projectService.updateProject(id, userId, { name, description, visibility, slug, taxonomy, costing, editorGroupIds });
 
   res.json({
     success: true,
@@ -81,17 +57,36 @@ export const updateProject = async (req: AuthRequest, res: Response): Promise<vo
   });
 };
 
-// Delete project
+// Move a project to the trash, with its trainings: restorable by its owner for 30 days
 export const deleteProject = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
-  const userId = req.user!.id;
 
-  await projectService.deleteProject(id, userId);
+  await projectService.trashProject(id, req.user!.id);
 
   res.json({
     success: true,
-    message: 'Project deleted successfully'
+    message: 'Project moved to the trash'
   });
+};
+
+export const listTrashedProjects = async (req: AuthRequest, res: Response): Promise<void> => {
+  res.json({ success: true, data: await projectService.listTrashedProjects(req.user!.id) });
+};
+
+export const restoreProject = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params as { id: string };
+  res.json({ success: true, data: await projectService.restoreProject(id, req.user!.id) });
+};
+
+export const deleteProjectForever = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params as { id: string };
+  await projectService.deleteProjectForever(id, req.user!.id);
+  res.json({ success: true, message: 'Project deleted' });
+};
+
+export const transferProject = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params as { id: string };
+  res.json({ success: true, data: await projectService.transferProject(id, req.user!.id, req.body.owner) });
 };
 
 // Get project dashboard stats (aggregated stats for overview)

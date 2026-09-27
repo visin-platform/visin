@@ -1,5 +1,4 @@
 import type { Router } from 'express';
-import apiTokenRoutes from '../../routes/apiTokenRoutes';
 import benchmarkRoutes from '../../routes/benchmarkRoutes';
 import comparisonRoutes from '../../routes/comparisonRoutes';
 import configRoutes from '../../routes/configRoutes';
@@ -31,12 +30,11 @@ const describeRouter = (router: Router) => {
 
 describe('vision-service routers', () => {
   const routers: Array<[string, Router, number]> = [
-    ['apiTokenRoutes', apiTokenRoutes, 3],
     ['benchmarkRoutes', benchmarkRoutes, 7],
     ['comparisonRoutes', comparisonRoutes, 7],
     ['configRoutes', configRoutes, 5],
     ['epochRoutes', epochRoutes, 9],
-    ['projectRoutes', projectRoutes, 6],
+    ['projectRoutes', projectRoutes, 10],
     ['testResultRoutes', testResultRoutes, 10],
     ['trainingRoutes', trainingRoutes, 13],
     ['visualizationRoutes', visualizationRoutes, 9],
@@ -49,11 +47,6 @@ describe('vision-service routers', () => {
       expect(route.methods.length).toBeGreaterThan(0);
       expect(route.handlerCount).toBeGreaterThanOrEqual(1);
     }
-  });
-
-  it('apiTokenRoutes mounts JWT auth globally (owner-only surface)', () => {
-    const { middlewareNames } = describeRouter(apiTokenRoutes);
-    expect(middlewareNames).toContain('authenticateToken');
   });
 
   it('trainingRoutes protects writes with authMiddleware and reads with optionalAuth', () => {

@@ -5,7 +5,6 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { apiKeyAuth, errorHandler } from '@visin/backend-core';
-import { apiTokenMiddleware } from '../../middleware/apiTokenMiddleware';
 import trainingRoutes from '../../routes/trainingRoutes';
 import configRoutes from '../../routes/configRoutes';
 import Project from '../../models/Project';
@@ -22,6 +21,7 @@ describe('training-config privacy with shared public configs', () => {
   let privateId: string;
   let publicId: string;
   let configId: string;
+  let privateProjectId: string;
   const secret = 'training-config-privacy-test';
   const oldSecret = process.env.JWT_SECRET;
 
@@ -30,7 +30,6 @@ describe('training-config privacy with shared public configs', () => {
     mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     const app = express();
-    app.use(apiTokenMiddleware);
     app.use('/trainings', apiKeyAuth('vision'), trainingRoutes);
     app.use('/configs', apiKeyAuth('vision'), configRoutes);
     app.use(errorHandler);
@@ -43,9 +42,10 @@ describe('training-config privacy with shared public configs', () => {
     await mongoose.connection.collection('users').insertMany([OWNER, STRANGER].map(id => ({ _id: new mongoose.Types.ObjectId(id), email: `${id}@example.test`, tokenVersion: 1 })));
     // Each test token names a session whose id is its user's.
     await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
-    const project = await Project.create({ name: 'Private', ownerId: OWNER });
-    const publicProject = await Project.create({ name: 'Public', ownerId: OWNER, isPublic: true });
-    configId = String((await Config.create({ config_uuid: 'shared', summary: 'Public fixture', config_data: { learning_rate: 0.01 } }))._id);
+    const project = await Project.create({ name: 'Private', owner: { kind: 'user', id: OWNER }, createdBy: OWNER });
+    const publicProject = await Project.create({ name: 'Public', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'public' });
+    configId = String((await Config.create({ config_uuid: 'shared', summary: 'Public fixture', config_data: { learning_rate: 0.01 }, projectId: String(publicProject._id) }))._id);
+    privateProjectId = String(project._id);
     const trainings = await Training.create([
       { name: 'Private run', uuid: 'private-run', projectId: String(project._id), configId },
       { name: 'Public run', uuid: 'public-run', projectId: String(publicProject._id), configId },
@@ -92,7 +92,7 @@ describe('training-config privacy with shared public configs', () => {
     expect((await get(`trainings/${new mongoose.Types.ObjectId()}/configs`, OWNER)).status).toBe(404);
   });
 
-  it('preserves public library contents without exposing a private training association', async () => {
+  it("shows a public project's config to anyone, without naming the private run that also uses it", async () => {
     for (const path of [`configs/${configId}`, 'configs/uuid/shared']) {
       const response = await get(path);
       expect(response.status).toBe(200);
@@ -102,8 +102,8 @@ describe('training-config privacy with shared public configs', () => {
     expect((await get('configs')).body.data.configs).toEqual([expect.objectContaining({ _id: configId })]);
   });
 
-  it('hides a config only private trainings use from everyone who cannot see them', async () => {
-    await Training.updateOne({ _id: publicId }, { $unset: { configId: 1 } });
+  it("hides a private project's config from everyone who cannot read the project", async () => {
+    await Config.updateOne({ _id: configId }, { projectId: privateProjectId });
     for (const user of [undefined, STRANGER]) {
       expect((await get(`configs/${configId}`, user)).status).toBe(404);
       expect((await get('configs/uuid/shared', user)).status).toBe(404);
@@ -113,12 +113,11 @@ describe('training-config privacy with shared public configs', () => {
     expect((await get('configs', OWNER)).body.data.configs).toEqual([expect.objectContaining({ _id: configId })]);
   });
 
-  it('keeps a config hidden after its private training is deleted, but shows it to its own author', async () => {
-    await Training.updateOne({ _id: publicId }, { $unset: { configId: 1 } });
-    await Training.updateOne({ _id: privateId }, { deletedAt: new Date() });
+  it('shows a config from before configs had a project to its author alone', async () => {
+    // ownerId is immutable through the model; set both as a legacy import would have.
+    await Config.collection.updateOne({ _id: new mongoose.Types.ObjectId(configId) }, { $set: { ownerId: STRANGER }, $unset: { projectId: 1 } });
     expect((await get(`configs/${configId}`)).status).toBe(404);
-    // ownerId is immutable through the model; set it as a legacy import would have.
-    await Config.collection.updateOne({ _id: new mongoose.Types.ObjectId(configId) }, { $set: { ownerId: STRANGER } });
+    expect((await get(`configs/${configId}`, OWNER)).status).toBe(404);
     expect((await get(`configs/${configId}`, STRANGER)).status).toBe(200);
     expect((await get('configs/uuid/shared', STRANGER)).status).toBe(200);
   });
@@ -129,19 +128,24 @@ describe('training-config privacy with shared public configs', () => {
 
   it('reapplies project visibility on every association request', async () => {
     const training = await Training.findById(privateId);
-    await Project.updateOne({ _id: training!.projectId }, { isPublic: true });
+    await Project.updateOne({ _id: training!.projectId }, { visibility: 'public' });
     expect((await get(`trainings/${privateId}/configs`)).status).toBe(200);
-    await Project.updateOne({ _id: training!.projectId }, { isPublic: false });
+    await Project.updateOne({ _id: training!.projectId }, { visibility: 'private' });
     expect((await get(`trainings/${privateId}/configs`)).status).toBe(403);
     expect((await get(`trainings/${privateId}/configs`, OWNER)).status).toBe(200);
   });
 
-  it('preserves empty responses and standalone training access', async () => {
-    await Training.updateOne({ _id: publicId }, { $unset: { projectId: 1 } });
-    expect((await get(`trainings/${publicId}/configs`)).status).toBe(200);
+  it('answers an empty list for a run whose config is gone, or that has none', async () => {
     await Config.deleteOne({ _id: configId });
     expect((await get(`trainings/${privateId}/configs`, OWNER)).body.data).toEqual({ configs: [], total: 0 });
     await Training.updateOne({ _id: publicId }, { $unset: { configId: 1 } });
     expect((await get(`trainings/${publicId}/configs`)).body.data).toEqual({ configs: [], total: 0 });
   });
+  it('does not expose a private config through a readable training association', async () => {
+    await Config.updateOne({ _id: configId }, { projectId: privateProjectId });
+    for (const user of [undefined, STRANGER]) {
+      expect((await get(`trainings/${publicId}/configs`, user)).body.data).toMatchObject({ configs: [], total: 0 });
+    }
+  });
+
 });

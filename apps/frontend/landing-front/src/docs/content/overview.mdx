@@ -6,11 +6,27 @@ results back, and an AI assistant reaches the same data through MCP.
 - **Log training runs from your script.** Post each epoch's losses and metrics as it finishes. Visin charts them
   as they arrive and compares runs at their best epoch. Start with the [quickstart](/docs/quickstart).
 - **Send test results and benchmarks.** Per-class and per-condition scores after training post the same way, with
-  the same project token. See [test results and benchmarks](/docs/test-results-and-benchmarks).
+  the same pipeline key. See [test results and benchmarks](/docs/test-results-and-benchmarks).
 - **Read results back.** Pull runs, epochs and comparisons into a notebook or a CI job with a
-  [user API key](/docs/authentication#user-api-keys).
+  [API key](/docs/authentication#api-keys).
 - **Ask an assistant.** Connect Claude or another MCP client and ask about your runs in plain language. See
   [connecting an assistant](/docs/assistants).
+
+## Libraries and tools
+
+You don't have to call the API by hand:
+
+- **[visin-py](https://github.com/visin-platform/visin-py)**, the Python SDK (`pip install visin`). It logs runs
+  from your training loop, keeps working offline and sends later with `visin sync`, and reads runs back into a
+  notebook. `visin check --write` confirms a machine can report before a long job starts. Its
+  [documentation](https://visin-platform.github.io/visin-py/) covers the rest.
+- **[visin-fusion](https://github.com/visin-platform/visin-fusion)**, a complete training pipeline built on
+  visin-py: camera and LiDAR semantic segmentation (CLFT, SwinFusion, MaskFormer, Mask2Former, DeepLabV3+). One
+  config trains, tests, renders prediction frames and benchmarks a model, and reports every stage to Visin. Use it
+  as it is, or as an example of what a pipeline sends.
+
+Both read `VISIN_URL` and `VISIN_TOKEN`, the same two lines a [pipeline key](/docs/authentication#pipeline-keys)
+gives you.
 
 ## The API at a glance
 

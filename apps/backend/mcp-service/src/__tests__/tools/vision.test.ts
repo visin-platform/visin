@@ -77,8 +77,8 @@ beforeEach(() => {
 describe('list_projects', () => {
   it('names each project with the slug the other tools take', async () => {
     mocked.listProjects.mockResolvedValue([
-      { _id: 'p1', name: 'Roadside', slug: 'roadside', isPublic: true, description: 'Cameras' },
-      { _id: 'p2', name: 'Secret', isPublic: false }
+      { _id: 'p1', name: 'Roadside', slug: 'roadside', visibility: 'public', description: 'Cameras' },
+      { _id: 'p2', name: 'Secret', visibility: 'private' }
     ]);
 
     const { text } = await call('list_projects');
@@ -104,7 +104,7 @@ describe('list_projects', () => {
 
   it('caps a very long list and says what it left out', async () => {
     mocked.listProjects.mockResolvedValue(
-      Array.from({ length: 80 }, (_, i) => ({ _id: `p${i}`, name: `P${i}`, isPublic: true }))
+      Array.from({ length: 80 }, (_, i) => ({ _id: `p${i}`, name: `P${i}`, visibility: 'public' }))
     );
 
     const { text } = await call('list_projects');
@@ -118,7 +118,7 @@ describe('get_project', () => {
     mocked.getProject.mockResolvedValue({
       _id: 'p1',
       name: 'Roadside',
-      isPublic: false,
+      visibility: 'private',
       description: 'Cameras'
     });
     mocked.getDashboardStats.mockResolvedValue({
@@ -145,7 +145,7 @@ describe('get_project', () => {
   });
 
   it('leaves out the cost line for a project with no recorded time', async () => {
-    mocked.getProject.mockResolvedValue({ _id: 'p1', name: 'Empty', isPublic: true });
+    mocked.getProject.mockResolvedValue({ _id: 'p1', name: 'Empty', visibility: 'public' });
     mocked.getDashboardStats.mockResolvedValue({
       trainingStats: {
         totalTrainings: 0,
@@ -781,7 +781,7 @@ describe('write tools', () => {
       _id: 'p1',
       name: 'Roadside',
       slug: 'roadside',
-      isPublic: false
+      visibility: 'private'
     });
 
     const { text } = await call('create_project', { name: 'Roadside' });
@@ -789,8 +789,28 @@ describe('write tools', () => {
     expect(text).toBe('Created "Roadside" (private), slug roadside.');
   });
 
+  it('passes what the user asked for as visibility and a group owner', async () => {
+    mocked.createProject.mockResolvedValue({ _id: 'p1', name: 'Team', visibility: 'public' });
+    const group = 'a'.repeat(24);
+
+    await call('create_project', { name: 'Team', isPublic: true, groupId: group });
+    expect(mocked.createProject).toHaveBeenLastCalledWith(expect.anything(), {
+      name: 'Team',
+      description: undefined,
+      visibility: 'public',
+      owner: { kind: 'group', id: group }
+    });
+
+    await call('update_project', { project: 'p1', isPublic: false });
+    expect(mocked.updateProject).toHaveBeenLastCalledWith(expect.anything(), 'p1', {
+      name: undefined,
+      description: undefined,
+      visibility: 'private'
+    });
+  });
+
   it('confirms a project update, including its visibility', async () => {
-    mocked.updateProject.mockResolvedValue({ _id: 'p1', name: 'Renamed', isPublic: true });
+    mocked.updateProject.mockResolvedValue({ _id: 'p1', name: 'Renamed', visibility: 'public' });
 
     expect((await call('update_project', { project: 'p1', name: 'Renamed' })).text).toBe(
       'Updated "Renamed" (public).'

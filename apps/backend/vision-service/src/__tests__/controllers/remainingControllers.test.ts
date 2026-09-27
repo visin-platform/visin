@@ -397,8 +397,8 @@ describe('comparisonController list/stats/update/delete', () => {
         type: 'trainings',
         $or: [
           { projectId: { $in: ['p1'] } },
-          { projectId: { $exists: false } },
-          { projectId: null },
+          // A comparison across projects is its creator's alone.
+          { projectId: null, ownerId: 'u1' },
         ],
       })
     );

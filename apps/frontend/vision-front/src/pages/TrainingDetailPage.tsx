@@ -18,6 +18,7 @@ import LatexExportDialog from '../components/training/LatexExportDialog';
 import DeleteConfirmationDialog from '../components/training/DeleteConfirmationDialog';
 import TrainingDetailHeader from '../components/training/TrainingDetailHeader';
 import TrainingDetailTabs from '../components/training/TrainingDetailTabs';
+import SampleTour from '../components/guide/SampleTour';
 
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useTrainingDetail } from '../hooks/useTrainingDetail';
@@ -65,6 +66,7 @@ const TrainingDetailPage: React.FC = () => {
   });
 
   const project = projectResponse?.data;
+  const [returnToProject, setReturnToProject] = useState(false);
 
   const {
     editDialogOpen,
@@ -109,7 +111,10 @@ const TrainingDetailPage: React.FC = () => {
   } = useTrainingActions({
     trainingId: training?._id,
     refetch,
-    onTrainingDeleted: () => navigate('/trainings')
+    // A sample deleted from its tour goes back to the project, where the
+    // first-run panel is waiting on its next step.
+    onTrainingDeleted: () =>
+      navigate(returnToProject && project ? `/projects/${project.slug || project._id}` : '/trainings')
   });
 
   // Set page title
@@ -173,6 +178,12 @@ const TrainingDetailPage: React.FC = () => {
         onDeleteClick={() => setTrainingDeleteOpen(true)}
       />
       <TrainingDetailTabs value={detailTab} onChange={handleTabChange} />
+      <SampleTour
+        onDeleteSample={() => {
+          setReturnToProject(true);
+          setTrainingDeleteOpen(true);
+        }}
+      />
       {/* Overview Tab */}
       {detailTab === 0 && (
         <TrainingOverviewTab
@@ -272,7 +283,7 @@ const TrainingDetailPage: React.FC = () => {
         onClose={() => setTrainingDeleteOpen(false)}
         onConfirm={handleConfirmDeleteTraining}
         title="Delete Training"
-        message="Are you sure you want to delete this training? This action cannot be undone and will also delete all associated epochs and test results."
+        message="Delete this training, with its epochs and test results? It moves to Deleted trainings on the Trainings page, where you can restore it."
         isDeleting={uploading}
       />
       <UploadResultsDialog

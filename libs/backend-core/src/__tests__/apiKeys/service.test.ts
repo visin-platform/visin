@@ -144,6 +144,41 @@ describe('createApiKey', () => {
   });
 });
 
+describe('createApiKey — limited to a project', () => {
+  const input = {
+    userId: 'u1',
+    userEmail: 'u1@example.com',
+    userName: 'Tester',
+    name: 'nightly training',
+    project: { id: 'p1', name: 'Road scenes' }
+  };
+
+  it('stores the project and shows it in the summary', async () => {
+    create.mockImplementation((doc: Record<string, unknown>) => Promise.resolve(storedKey(doc)));
+
+    const { summary } = await createApiKey({ ...input, scopes: ['vision:read', 'vision:write'] });
+
+    expect(create.mock.calls[0][0]).toMatchObject({ projectId: 'p1', projectName: 'Road scenes' });
+    expect(summary.project).toEqual({ id: 'p1', name: 'Road scenes' });
+  });
+
+  it('refuses a scope outside the project, which nothing could limit', async () => {
+    await expect(createApiKey({ ...input, scopes: ['vision:write', 'dataset:read'] })).rejects.toMatchObject({
+      statusCode: 400
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('leaves an unlimited key without a project', async () => {
+    create.mockImplementation((doc: Record<string, unknown>) => Promise.resolve(storedKey(doc)));
+
+    const { summary } = await createApiKey({ ...input, project: null, scopes: ['dataset:read'] });
+
+    expect(create.mock.calls[0][0]).not.toHaveProperty('projectId');
+    expect(summary.project).toBeNull();
+  });
+});
+
 describe('listApiKeys', () => {
   it("returns the owner's keys newest first, with no secret material", async () => {
     const sort = jest.fn().mockResolvedValue([storedKey(), storedKey({ _id: 'doc-2' })]);
@@ -256,6 +291,12 @@ describe('verifyApiKey', () => {
       scopes: ['vision:read']
     });
     expect(findOne).toHaveBeenCalledWith({ keyId: '0123456789ab' });
+  });
+
+  it('answers with the project a limited key is confined to', async () => {
+    findOne.mockResolvedValue(storedKey({ projectId: 'p1', projectName: 'Road scenes' }));
+
+    await expect(verifyApiKey(token)).resolves.toMatchObject({ ok: true, projectId: 'p1' });
   });
 
   it('rejects an unparseable token without touching the database', async () => {

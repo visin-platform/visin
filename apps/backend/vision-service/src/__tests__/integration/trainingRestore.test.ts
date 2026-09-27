@@ -6,7 +6,6 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { errorHandler } from '@visin/backend-core';
 import { getUserGroups } from '../../clients/projectGroupsClient';
-import { apiTokenMiddleware } from '../../middleware/apiTokenMiddleware';
 import { identityContextMiddleware } from '../../middleware/requestIdentityContext';
 import Epoch from '../../models/Epoch';
 import Project from '../../models/Project';
@@ -38,7 +37,7 @@ describe('restoring a deleted training with in-memory MongoDB', () => {
     mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     const app = express();
-    app.use(express.json(), identityContextMiddleware, apiTokenMiddleware);
+    app.use(express.json(), identityContextMiddleware);
     app.use('/trainings', trainingRoutes);
     app.use('/epochs', epochRoutes);
     app.use(errorHandler);
@@ -54,7 +53,7 @@ describe('restoring a deleted training with in-memory MongoDB', () => {
     // Each test token names a session whose id is its user's.
     await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
     jest.mocked(getUserGroups).mockResolvedValue([]);
-    const projectId = String((await Project.create({ name: 'Private', ownerId: OWNER, isPublic: false }))._id);
+    const projectId = String((await Project.create({ name: 'Private', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'private' }))._id);
     trainingId = String((await Training.create({ name: 'Long run', uuid: 'long-run', ownerId: OWNER, projectId }))._id);
     for (const epoch of [1, 2]) {
       await Epoch.create({
@@ -112,14 +111,22 @@ describe('restoring a deleted training with in-memory MongoDB', () => {
     expect((await request(`trainings/${trainingId}/restore`, 'POST')).status).toBe(404);
   });
 
-  it('offers a standalone run back to its owner only', async () => {
-    const standalone = String((await Training.create({ name: 'Scratch', uuid: 'scratch', ownerId: OWNER }))._id);
-    expect((await request(`trainings/${standalone}`, 'DELETE')).status).toBe(200);
+  it("offers a group member their own runs back, and an admin everyone's", async () => {
+    const group = '0000000000000000000000aa';
+    jest.mocked(getUserGroups).mockImplementation(async userId =>
+      [{ id: group, name: 'Team', role: userId === STRANGER ? 'member' : 'admin' }]);
+    const projectId = String((await Project.create({ name: 'Team', owner: { kind: 'group', id: group }, createdBy: OWNER }))._id);
+    const mine = String((await Training.create({ name: 'Mine', uuid: 'mine', ownerId: STRANGER, projectId }))._id);
+    const theirs = String((await Training.create({ name: 'Theirs', uuid: 'theirs', ownerId: OWNER, projectId }))._id);
+    expect((await request(`trainings/${theirs}`, 'DELETE', STRANGER)).status).toBe(403);
+    expect((await request(`trainings/${mine}`, 'DELETE', STRANGER)).status).toBe(200);
+    expect((await request(`trainings/${theirs}`, 'DELETE')).status).toBe(200);
 
-    expect(await deletedIds()).toEqual([standalone]);
-    expect(await deletedIds(STRANGER)).toEqual([]);
-    expect((await request(`trainings/${standalone}/restore`, 'POST', STRANGER)).status).toBe(403);
-    expect((await request(`trainings/${standalone}/restore`, 'POST')).status).toBe(200);
+    expect(await deletedIds(STRANGER)).toEqual([mine]);
+    expect((await deletedIds()).sort()).toEqual([mine, theirs].sort());
+    expect((await request(`trainings/${theirs}/restore`, 'POST', STRANGER)).status).toBe(403);
+    expect((await request(`trainings/${mine}/restore`, 'POST', STRANGER)).status).toBe(200);
+    expect((await request(`trainings/${theirs}/restore`, 'POST')).status).toBe(200);
   });
 
   it('keeps the deleted list behind sign-in', async () => {

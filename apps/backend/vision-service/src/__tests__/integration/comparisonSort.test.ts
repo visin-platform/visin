@@ -20,8 +20,8 @@ describe('sorting comparisons by how many items they hold', () => {
   });
 
   beforeEach(async () => {
-    const project = await Project.create({ name: 'Public', ownerId: OWNER, isPublic: true });
-    const hidden = await Project.create({ name: 'Private', ownerId: OWNER });
+    const project = await Project.create({ name: 'Public', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'public' });
+    const hidden = await Project.create({ name: 'Private', owner: { kind: 'user', id: OWNER }, createdBy: OWNER });
     await Comparison.create([
       { uuid: 'two', name: 'Two', type: 'trainings', itemIds: ['a', 'b'], projectId: String(project._id) },
       { uuid: 'five', name: 'Five', type: 'trainings', itemIds: ['a', 'b', 'c', 'd', 'e'], projectId: String(project._id) },

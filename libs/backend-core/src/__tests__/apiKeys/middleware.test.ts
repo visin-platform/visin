@@ -118,6 +118,29 @@ describe('apiKeyAuth — authenticating', () => {
   );
 });
 
+describe('apiKeyAuth — a key limited to a project', () => {
+  beforeEach(() => {
+    verify.mockResolvedValue({ ...VALID, scopes: ['vision:read', 'analysis:read'], projectId: 'p1' });
+  });
+
+  it.each(['vision', 'analysis'] as const)('passes the project on for the service to enforce (%s)', async (domain) => {
+    const req = makeReq();
+
+    await apiKeyAuth(domain)(req, makeRes(), next);
+
+    expect(req.apiKey?.projectId).toBe('p1');
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it.each(['dataset', 'label'] as const)('names the limit when refusing %s, which no project holds', async (domain) => {
+    await apiKeyAuth(domain)(makeReq(), makeRes(), next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 403, message: 'This key is limited to one project and cannot reach this API.' })
+    );
+  });
+});
+
 describe('apiKeyAuth — scope gating', () => {
   it.each([
     ['GET', 'vision:read'],

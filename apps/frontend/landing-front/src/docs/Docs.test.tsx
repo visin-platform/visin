@@ -137,12 +137,12 @@ describe('docs pages', () => {
   it('gives each section an anchor and lists it under "On this page"', () => {
     renderAt('/docs/quickstart');
 
-    const heading = article().getByRole('heading', { level: 2, name: /create a project token/i });
-    expect(heading).toHaveAttribute('id', 'create-a-project-token');
+    const heading = article().getByRole('heading', { level: 2, name: /create a pipeline key/i });
+    expect(heading).toHaveAttribute('id', 'create-a-pipeline-key');
     const outline = within(screen.getByRole('navigation', { name: 'On this page' }));
-    expect(outline.getByRole('link', { name: 'Create a project token' })).toHaveAttribute(
+    expect(outline.getByRole('link', { name: 'Create a pipeline key' })).toHaveAttribute(
       'href',
-      '#create-a-project-token'
+      '#create-a-pipeline-key'
     );
   });
 });
@@ -182,7 +182,7 @@ describe('docs scrolling', () => {
   it('opens a page at the section its link names', () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
-    renderAt('/docs/authentication#user-api-keys');
+    renderAt('/docs/authentication#pipeline-keys');
 
     expect(scrollIntoView).toHaveBeenCalled();
     expect(window.scrollTo).not.toHaveBeenCalled();

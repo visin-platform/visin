@@ -9,7 +9,8 @@ import {
   verifyAuth,
   refreshToken,
   invalidateUserTokens,
-  listUsers
+  listUsers,
+  searchUsers
 } from '../controllers/authController';
 import { getProfile, updateProfile, changePassword } from '../controllers/profileController';
 import { linkGoogle } from '../controllers/googleLinkController';
@@ -23,6 +24,7 @@ import {
   validateTokenBodySchema,
   linkGoogleBodySchema,
   invalidateUserTokensBodySchema,
+  searchUsersQuerySchema,
   updateProfileBodySchema,
   changePasswordBodySchema,
   setupBodySchema,
@@ -111,6 +113,9 @@ router.get('/api-keys', authenticateToken, listKeys);
 router.post('/api-keys/:id/reveal', keyLimiter, authenticateToken, revealKey);
 router.post('/api-keys/:id/revoke', authenticateToken, revokeKey);
 router.delete('/api-keys/:id', authenticateToken, removeKey);
+
+// Internal: group-service's "Add member" search.
+router.get('/internal/users/search', requireInternalServiceToken, validateRequest({ query: searchUsersQuerySchema }), searchUsers);
 
 // Internal service endpoints for token management
 router.post(

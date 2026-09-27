@@ -29,7 +29,7 @@ export function ProjectsSection({ query, now }: { query: UseQueryResult<HomeProj
               </RowIcon>
             }
             title={project.name}
-            secondary={`${project.isPublic ? 'Public' : 'Private'} · ${formatRelative(project.updatedAt, now)}`}
+            secondary={`${project.visibility === 'public' ? 'Public' : 'Private'} · ${formatRelative(project.updatedAt, now)}`}
           />
         )}
       </SectionBody>

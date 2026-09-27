@@ -7,6 +7,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof EditProjectDia
   return {
     open: true,
     onClose: vi.fn(),
+    canShare: true,
     formData: { name: 'My Project', description: 'A description', isPublic: false },
     onFormDataChange: vi.fn(),
     onSubmit: vi.fn(),
@@ -25,7 +26,7 @@ describe('EditProjectDialog', () => {
     render(<EditProjectDialog {...baseProps()} />);
     expect(screen.getByDisplayValue('My Project')).toBeInTheDocument();
     expect(screen.getByDisplayValue('A description')).toBeInTheDocument();
-    expect(screen.getByRole('switch')).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Public' })).not.toBeChecked();
   });
 
   it('calls onFormDataChange with updated name on typing', () => {
@@ -45,7 +46,7 @@ describe('EditProjectDialog', () => {
   it('calls onFormDataChange with toggled isPublic on switch click', () => {
     const onFormDataChange = vi.fn();
     render(<EditProjectDialog {...baseProps({ onFormDataChange })} />);
-    fireEvent.click(screen.getByRole('switch'));
+    fireEvent.click(screen.getByRole('radio', { name: 'Public' }));
     expect(onFormDataChange).toHaveBeenCalledWith({ name: 'My Project', description: 'A description', isPublic: true });
   });
 

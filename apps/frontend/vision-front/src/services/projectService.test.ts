@@ -50,4 +50,22 @@ describe('projectService', () => {
     await projectService.deleteProject('p1');
     expect(mockedApi.delete).toHaveBeenCalledWith('/projects/p1');
   });
+  it('uses the ownership and trash endpoints and unwraps groups', async () => {
+    const body = { success: true, data: [] };
+    mockedApi.get.mockResolvedValue({ data: body });
+    mockedApi.post.mockResolvedValue({ data: body });
+    mockedApi.put.mockResolvedValue({ data: body });
+    mockedApi.delete.mockResolvedValue({ data: body });
+    expect(await projectService.getGroups()).toEqual([]);
+    expect(await projectService.getTrash()).toEqual(body);
+    await projectService.restoreProject('p1');
+    await projectService.deleteProjectForever('p1');
+    const owner = { kind: 'group' as const, id: 'g1' };
+    await projectService.transferProject('p1', owner);
+    expect(mockedApi.get).toHaveBeenCalledWith('/write-capabilities/groups');
+    expect(mockedApi.get).toHaveBeenCalledWith('/projects/trash');
+    expect(mockedApi.post).toHaveBeenCalledWith('/projects/p1/restore');
+    expect(mockedApi.delete).toHaveBeenCalledWith('/projects/p1/permanent');
+    expect(mockedApi.put).toHaveBeenCalledWith('/projects/p1/owner', { owner });
+  });
 });

@@ -82,7 +82,7 @@ beforeEach(() => {
   access.mockResolvedValue(true);
   (getVisibleProjectIds as jest.Mock).mockResolvedValue(['mine']);
   project.findOne.mockResolvedValue(null);
-  project.findById.mockResolvedValue({ _id: { toString: () => 'p1' }, ownerId: OWNER });
+  project.findById.mockResolvedValue({ _id: { toString: () => 'p1' }, owner: { kind: 'user', id: OWNER }, visibility: 'private' });
   training.countDocuments.mockResolvedValue(0);
   citedRunsAre([]);
   accessChecker.mockImplementation(() => async () => true);
@@ -312,7 +312,7 @@ describe('createFinding', () => {
 
   it('refuses to annotate a project the caller does not own', async () => {
     // Findings are the owner's record, not a comment section on public work.
-    project.findById.mockResolvedValue({ _id: { toString: () => 'p1' }, ownerId: 'someone-else' });
+    project.findById.mockResolvedValue({ _id: { toString: () => 'p1' }, owner: { kind: 'user', id: 'someone-else' }, visibility: 'private' });
 
     await expect(createFinding({ project: 'p1', title: 'T', body: 'B' }, author)).rejects.toThrow(
       /Project edit permission/
@@ -417,7 +417,7 @@ describe('deleteFinding', () => {
 
   it('refuses anyone but the project owner', async () => {
     finding.findOne.mockResolvedValue(row());
-    project.findById.mockResolvedValue({ ownerId: 'someone-else' });
+    project.findById.mockResolvedValue({ owner: { kind: 'user', id: 'someone-else' }, visibility: 'private' });
 
     await expect(deleteFinding('f1', OWNER)).rejects.toThrow();
   });

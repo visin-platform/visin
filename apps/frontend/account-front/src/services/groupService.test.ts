@@ -30,6 +30,13 @@ describe('groupService reads', () => {
     expect(fetchMock.mock.calls[0][1].credentials).toBe('include');
   });
 
+  it("reads a group's activity", async () => {
+    const fetchMock = stubFetch({ success: true, data: [] });
+
+    await expect(groupService.activity('g1')).resolves.toEqual([]);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://group-api.test/api/groups/g1/activity');
+  });
+
   it('lists deleted groups', async () => {
     const fetchMock = stubFetch({ success: true, data: [] });
 
@@ -151,4 +158,33 @@ it.each(['previewInvitation', 'acceptInvitation'] as const)('%s sends the secret
   expect(url).not.toContain('secret-token');
   expect(init.body).toBe(JSON.stringify({ token: 'secret-token' }));
   expect(init.method).toBe('POST');
+});
+
+describe('groupService: "Add member" and invitations to an account', () => {
+  it('searches candidates with the query encoded', async () => {
+    const fetchMock = stubFetch({ success: true, data: [{ id: 'u1', email: 'm••••@example.test' }] });
+    await expect(groupService.searchCandidates('g1', 'mari tamm')).resolves.toEqual([{ id: 'u1', email: 'm••••@example.test' }]);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://group-api.test/api/groups/g1/candidates?q=mari%20tamm');
+  });
+
+  it('invites an account with a role', async () => {
+    const fetchMock = stubFetch({ success: true, data: { id: 'i1' } });
+    await expect(groupService.inviteAccount('g1', 'u1', 'admin')).resolves.toEqual({ id: 'i1' });
+    expect(fetchMock.mock.calls[0][0]).toBe('http://group-api.test/api/groups/g1/invitations');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ userId: 'u1', role: 'admin' });
+  });
+
+  it('lists, accepts and declines my invitations', async () => {
+    let fetchMock = stubFetch({ success: true, data: [{ id: 'i1' }] });
+    await expect(groupService.listMyInvitations()).resolves.toEqual([{ id: 'i1' }]);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://group-api.test/api/groups/invitations/mine');
+
+    fetchMock = stubFetch({ success: true, data: group });
+    await expect(groupService.acceptMyInvitation('i1')).resolves.toEqual(group);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://group-api.test/api/groups/invitations/i1/accept');
+
+    fetchMock = stubFetch(undefined, 204);
+    await groupService.declineMyInvitation('i1');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://group-api.test/api/groups/invitations/i1/decline');
+  });
 });

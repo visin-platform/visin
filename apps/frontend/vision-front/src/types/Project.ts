@@ -1,3 +1,4 @@
+import type { OwnerRef, Visibility } from '@visin/frontend-core';
 import { ProjectCosting, ProjectTaxonomy } from './taxonomy';
 
 export interface Project {
@@ -5,9 +6,12 @@ export interface Project {
   name: string;
   slug?: string;
   description?: string;
-  isPublic: boolean;
+  visibility: Visibility;
+  owner: OwnerRef & { name?: string };
+  createdBy: string;
+  trashedAt?: string;
+  permissions: { read: boolean; contribute: boolean; manage: boolean; own: boolean };
   editorGroupIds?: string[];
-  ownerId: string;
   /** how this project's conditions, classes and metrics should read; see types/taxonomy */
   taxonomy?: ProjectTaxonomy;
   /** hourly rates for this project's hardware; absent means costs are not shown */
@@ -17,9 +21,10 @@ export interface Project {
 }
 
 export interface CreateProjectData {
+  owner?: OwnerRef;
   name: string;
   description?: string;
-  isPublic?: boolean;
+  visibility?: Visibility;
   editorGroupIds?: string[];
   taxonomy?: ProjectTaxonomy;
   costing?: ProjectCosting;
@@ -29,7 +34,7 @@ export interface UpdateProjectData {
   name?: string;
   slug?: string;
   description?: string;
-  isPublic?: boolean;
+  visibility?: Visibility;
   editorGroupIds?: string[];
   /** null clears the taxonomy, returning the project to pure discovery */
   taxonomy?: ProjectTaxonomy | null;

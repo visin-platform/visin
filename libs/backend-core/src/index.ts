@@ -58,7 +58,7 @@ export type { RequestSchemas, ValidateRequestHandler } from './middleware/valida
 export { z } from 'zod';
 
 // API keys — the credential a non-browser client (an MCP server, a script)
-// acts as a user with. Distinct from vision-service's project-scoped ApiToken.
+// acts as a user with, optionally limited to one project.
 export { ApiKey } from './apiKeys/ApiKey';
 export type { IApiKey } from './apiKeys/ApiKey';
 export {
@@ -85,7 +85,7 @@ export {
 export type { CreateApiKeyInput, CreatedApiKey } from './apiKeys/service';
 export { apiKeyAuth } from './apiKeys/middleware';
 export type { ApiKeyContext, ApiKeyAuthOptions } from './apiKeys/middleware';
-export { API_KEY_SCOPES, isApiKeyScope, readScope, writeScope } from './apiKeys/types';
+export { API_KEY_SCOPES, PROJECT_KEY_SCOPES, isApiKeyScope, isProjectKeyScope, readScope, writeScope } from './apiKeys/types';
 export type {
   ApiKeyScope,
   ApiKeyDomain,
@@ -139,6 +139,13 @@ export type {
 export { AuditEvent } from './audit/AuditEvent';
 export type { IAuditEvent, ToolCall, ActorKind } from './audit/AuditEvent';
 export { recordToolCall, listToolCalls, summariseToolUsage } from './audit/service';
+export { ResourceEvent, RESOURCE_EVENT_ACTIONS } from './audit/ResourceEvent';
+export type { IResourceEvent, ResourceEventAction } from './audit/ResourceEvent';
+export { recordResourceEvent, listResourceEvents } from './audit/resourceEvents';
+export type { RecordResourceEventInput } from './audit/resourceEvents';
+export * from './ownership';
+export { startSweeper } from './sweeper/sweeper';
+export type { Sweeper, SweeperOptions } from './sweeper/sweeper';
 export type { RecordToolCallInput, ToolCallRow, ToolUsage } from './audit/service';
 
 // Database

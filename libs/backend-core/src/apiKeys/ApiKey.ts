@@ -33,6 +33,13 @@ export interface IApiKey extends Document {
   sealedIv: string;
   sealedTag: string;
   scopes: ApiKeyScope[];
+  /**
+   * The one project this key may reach, for a training pipeline. The key still
+   * acts as its owner, with no more than the owner may do there.
+   */
+  projectId?: string;
+  /** the project's name when the key was made, so a listing needs no call to vision-service */
+  projectName?: string;
   lastUsedAt?: Date;
   expiresAt?: Date;
   revokedAt?: Date;
@@ -58,6 +65,8 @@ const ApiKeySchema = new Schema<IApiKey>(
     // created without scopes should authenticate and then be refused every
     // route, not quietly inherit a permission nobody chose.
     scopes: { type: [String], default: [] },
+    projectId: { type: String },
+    projectName: { type: String },
     lastUsedAt: { type: Date },
     expiresAt: { type: Date },
     revokedAt: { type: Date },

@@ -118,7 +118,7 @@ beforeEach(() => {
 });
 
 describe('getBenchmarks', () => {
-  it('scopes unfiltered listings to visible + standalone benchmarks', async () => {
+  it('scopes unfiltered listings to benchmarks of visible trainings', async () => {
     mockedVisibleTrainings.mockResolvedValue(['t1']);
     mockBenchmarkFindChain([benchmarkDoc()]);
     mockedBenchmark.countDocuments.mockResolvedValue(1);
@@ -131,7 +131,6 @@ describe('getBenchmarks', () => {
       deletedAt: null,
       $or: [
         { training_id: { $in: ['t1'] } },
-        { training_id: null, training_uuid: null, epoch_uuid: null },
       ],
     });
     expect((result.benchmarks[0] as AnyDoc).training_id.name).toBe('Training t1');

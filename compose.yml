@@ -105,6 +105,8 @@ services:
       <<: *app-env
       PORT: 5001
       GROUP_SERVICE_URL: http://group-service:5006
+      # Checked when a user limits an API key to a project.
+      VISION_SERVICE_URL: http://vision-service:4010
       # Blank disables the Google button and leaves email + password sign-in.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       # Blank on purpose: a single host needs no shared parent domain, and the
@@ -141,6 +143,8 @@ services:
       <<: *app-env
       PORT: 5006
       AUTH_SERVICE_URL: http://auth-service:5001
+      VISION_SERVICE_URL: http://vision-service:4010
+      DATASET_SERVICE_URL: http://dataset-service:5010
 
   vision-service:
     build: ./apps/backend/vision-service
@@ -290,6 +294,7 @@ services:
       # Read by the home page; unset, the parts they feed are left out.
       VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
       LABEL_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5008
+      GROUP_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5006
 
 volumes:
   mongodb_data:

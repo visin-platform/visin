@@ -1,15 +1,15 @@
 import { useWriteCapabilities } from '../../hooks/useWriteCapabilities';
+import PipelineKeys from './PipelineKeys';
+import FirstRunPanel from './FirstRunPanel';
 import React from 'react';
-import {
-  Box,
-  Paper,
-  Tabs,
-  Tab
-} from '@mui/material';
+import { Box, Paper, Tabs, Tab } from '@mui/material';
 import type { AuthUser } from '@visin/frontend-core';
 
 // New Tab Components
-import ProjectOverviewTab, { type ProjectOverviewStats, type ProjectOverviewDashboardStats } from './ProjectOverviewTab';
+import ProjectOverviewTab, {
+  type ProjectOverviewStats,
+  type ProjectOverviewDashboardStats
+} from './ProjectOverviewTab';
 import ProjectTrainingsTab, { type TrainingSortColumn } from './ProjectTrainingsTab';
 import ProjectTestsTab from './ProjectTestsTab';
 import ProjectVisualizationsTab, { type VisualizationsGroupedResult } from './ProjectVisualizationsTab';
@@ -38,11 +38,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`project-tab-${index}`}
       {...other}
     >
-      {value === index && (
-        <Box sx={{ px: { xs: 1.5, sm: 0 }, py: { xs: 2, sm: 3 } }}>
-          {children}
-        </Box>
-      )}
+      {value === index && <Box sx={{ px: { xs: 1.5, sm: 0 }, py: { xs: 2, sm: 3 } }}>{children}</Box>}
     </div>
   );
 }
@@ -50,7 +46,7 @@ function TabPanel(props: TabPanelProps) {
 interface ProjectTabsProps {
   tabValue: number;
   onTabChange: (event: React.SyntheticEvent, newValue: number) => void;
-  isOwner: boolean;
+  canManage: boolean;
   projectId: string;
   stats: ProjectOverviewStats | undefined;
   dashboardStats: ProjectOverviewDashboardStats | undefined;
@@ -91,7 +87,7 @@ interface ProjectTabsProps {
 const ProjectTabs: React.FC<ProjectTabsProps> = ({
   tabValue,
   onTabChange,
-  isOwner,
+  canManage,
   projectId,
   stats,
   dashboardStats,
@@ -169,12 +165,14 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
           <Tab label="Benchmarks" />
           <Tab label="Comparisons" />
           <Tab label="Analysis" />
-          {isOwner && <Tab label="Settings" />}
+          {canManage && <Tab label="Settings" />}
         </Tabs>
       </Box>
 
       {/* Overview Tab */}
       <TabPanel value={tabValue} index={0}>
+        {canWrite(project._id) && <FirstRunPanel project={project} />}
+        {project.permissions.contribute && !canManage && <PipelineKeys projectId={project._id} />}
         <ProjectOverviewTab
           stats={stats}
           dashboardStats={dashboardStats}
@@ -247,7 +245,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       </TabPanel>
 
       {/* Settings Tab */}
-      {isOwner && (
+      {canManage && (
         <TabPanel value={tabValue} index={7}>
           <Box sx={{ px: { xs: 0, sm: 3 } }}>
             <ProjectSettings project={project} discovered={discoveredVocabulary} />

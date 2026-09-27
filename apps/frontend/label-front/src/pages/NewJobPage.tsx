@@ -46,7 +46,6 @@ const NewJobPage: React.FC = () => {
   // Step 1 — basics
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [groupId, setGroupId] = useState('');
   const [datasetId, setDatasetId] = useState('');
   const [framesGroup, setFramesGroup] = useState('');
 
@@ -69,11 +68,12 @@ const NewJobPage: React.FC = () => {
   const [jobId, setJobId] = useState<string | null>(null);
   const [materialized, setMaterialized] = useState<MaterializeResult | null>(null);
 
-  const adminGroups = (groups || []).filter((group) => group.role === 'owner' || group.role === 'admin');
-  // A public dataset can back any group's job; a group dataset only its own.
-  const available = (datasets || []).filter(
-    (candidate) => candidate.imageCount > 0 && (candidate.visibility === 'public' || candidate.groupId === groupId)
-  );
+  // The server lists only datasets I manage; a job needs images to show.
+  const available = (datasets || []).filter((candidate) => candidate.imageCount > 0);
+  const ownerOf = (candidate: LabelDataset) =>
+    candidate.owner.kind === 'user'
+      ? 'you'
+      : (groups || []).find((group) => group.groupId === candidate.owner.id)?.name || 'a group';
   const dataset = useMemo(() => available.find((candidate) => candidate._id === datasetId), [available, datasetId]);
   const imageGroups = (dataset?.groups || []).filter((group) => group.images > 0).map((group) => group.name);
   // Every group except the frames one can carry annotation layers.
@@ -111,7 +111,7 @@ const NewJobPage: React.FC = () => {
   // payload — the workbench then shows the bare frame and there is nothing to
   // judge, so block it.
   const stepValid = [
-    Boolean(name.trim() && groupId && datasetId && framesGroup),
+    Boolean(name.trim() && datasetId && framesGroup),
     Boolean(prompt.trim()) &&
       (taskType === 'mask_toggle'
         ? annotationSets.length === 1
@@ -130,7 +130,6 @@ const NewJobPage: React.FC = () => {
         const job = await createJob({
           name: name.trim(),
           description: description.trim() || undefined,
-          groupId,
           datasetId,
           framesGroup,
           taskType,
@@ -216,42 +215,29 @@ const NewJobPage: React.FC = () => {
           />
           <TextField
             select
-            label="Group"
-            value={groupId}
-            onChange={(event) => {
-              setGroupId(event.target.value);
-              chooseDataset(undefined);
-            }}
-            helperText="Group members label; owners/admins administer"
-          >
-            {adminGroups.map((group) => (
-              <MenuItem key={group.groupId} value={group.groupId}>
-                {group.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
             label="Dataset"
             value={datasetId}
             onChange={(event) => chooseDataset(available.find((candidate) => candidate._id === event.target.value))}
-            disabled={!groupId}
             helperText={
-              groupId && available.length === 0 ? (
+              datasets && available.length === 0 ? (
                 <>
-                  No dataset with images is available here — upload one in{' '}
+                  No dataset with images that you manage. Upload one in{' '}
                   <Link href={`${visionFrontUrl}/datasets`} target="_blank" rel="noreferrer">
                     Vision → Datasets
                   </Link>
                 </>
+              ) : dataset?.owner.kind === 'group' ? (
+                `Belongs to ${ownerOf(dataset)}: its members label, its owners and admins run the job.`
+              ) : dataset ? (
+                'Yours: you run the job. Transfer the dataset to a group to have its members label.'
               ) : (
-                ' '
+                'The job belongs with its dataset: whoever may change the dataset runs the job.'
               )
             }
           >
             {available.map((candidate) => (
               <MenuItem key={candidate._id} value={candidate._id}>
-                {candidate.name} ({candidate.imageCount.toLocaleString()} images)
+                {candidate.name} ({candidate.imageCount.toLocaleString()} images, {ownerOf(candidate)})
               </MenuItem>
             ))}
           </TextField>

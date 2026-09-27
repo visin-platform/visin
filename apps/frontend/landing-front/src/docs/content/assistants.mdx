@@ -37,11 +37,11 @@ What you tick decides which tools the assistant has:
 | `analysis:write` | Record a finding: a written conclusion about runs, kept in the project                                                                                                 |
 
 It sees only what your account can see, and cannot write epochs or results: those come from your training pipeline,
-with a [project token](/docs/authentication#project-tokens).
+with a [pipeline key](/docs/authentication#pipeline-keys).
 
 ## With an API key instead
 
-An MCP client that lets you set a request header can connect with a [user API key](/docs/authentication#user-api-keys)
+An MCP client that lets you set a request header can connect with an [API key](/docs/authentication#api-keys)
 rather than signing in: send `Authorization: Bearer vsn_live_…`. The key's scopes decide the tools, as above.
 
 ## Seeing what it did, and taking access back

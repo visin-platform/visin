@@ -10,8 +10,8 @@ const choiceSchema = z.object({
 export const createJobBodySchema = z.object({
   name: z.string().trim().min(1, 'name required').max(120),
   description: z.string().trim().max(1000).optional(),
-  groupId: z.string().trim().min(1, 'groupId required'),
-  datasetId: z.string().trim().min(1).optional(),
+  /** the job follows its dataset: the dataset's managers run it, its contributors label it */
+  datasetId: z.string().trim().min(1, 'datasetId required'),
   framesGroup: z.string().trim().min(1).max(100).default('frames'),
   taskType: z.enum(TASK_TYPES),
   question: z.object({

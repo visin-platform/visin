@@ -16,8 +16,18 @@ export interface HomeProject {
   _id: string;
   name: string;
   slug?: string;
-  isPublic: boolean;
+  visibility: 'private' | 'public';
   updatedAt: string;
+}
+
+/** An invitation addressed to the viewer, from a group's owner or admin. */
+export interface HomeInvitation {
+  id: string;
+  groupId: string;
+  groupName: string;
+  role: 'owner' | 'admin' | 'member';
+  invitedBy?: string;
+  expiresAt: string;
 }
 
 export interface HomeJob {
@@ -54,6 +64,9 @@ const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
 const visionApi = createApiClient({
   baseUrl: () => `${stripTrailingSlash(getGlobalConfig().VISION_API_URL ?? '')}/api`
 });
+const groupApi = createApiClient({
+  baseUrl: () => `${stripTrailingSlash(getGlobalConfig().GROUP_SERVICE_URL ?? '')}/api`
+});
 const labelApi = createApiClient({
   baseUrl: () => `${stripTrailingSlash(getGlobalConfig().LABEL_SERVICE_URL ?? '')}/api`
 });
@@ -79,9 +92,30 @@ export const homeApi = {
     return (await visionApi.get<Envelope<HomeProject[]>>('/projects?sortBy=updatedAt&sortOrder=desc')).data;
   },
 
+  /** Projects the viewer can write to (their own, and those their groups edit), newest first. */
+  async myProjects(): Promise<HomeProject[]> {
+    return (
+      await visionApi.get<Envelope<HomeProject[]>>('/projects?access=contribute&sortBy=updatedAt&sortOrder=desc')
+    ).data;
+  },
+
+  /** The groups the viewer is in, as vision-service knows them. */
+  async myGroups(): Promise<{ id: string; name: string }[]> {
+    return (await visionApi.get<Envelope<{ id: string; name: string }[]>>('/write-capabilities/groups')).data;
+  },
+
   /** Findings across every project the viewer can see, newest first. */
   async findings(limit: number): Promise<HomeFinding[]> {
     return (await visionApi.get<Envelope<HomeFinding[]>>(`/findings?limit=${limit}`)).data;
+  },
+
+  /** Invitations waiting for the viewer's answer. */
+  async invitations(): Promise<HomeInvitation[]> {
+    return (await groupApi.get<Envelope<HomeInvitation[]>>('/groups/invitations/mine')).data;
+  },
+
+  async answerInvitation(id: string, accept: boolean): Promise<void> {
+    await groupApi.post(`/groups/invitations/${id}/${accept ? 'accept' : 'decline'}`);
   },
 
   /** Active jobs in the viewer's groups: what there is to label. */

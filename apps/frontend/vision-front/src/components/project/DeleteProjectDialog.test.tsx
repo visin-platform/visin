@@ -11,7 +11,7 @@ describe('DeleteProjectDialog', () => {
   it('renders warning text when open', () => {
     render(<DeleteProjectDialog open={true} onClose={vi.fn()} onConfirm={vi.fn()} isDeleting={false} />);
     expect(screen.getByText('Delete Project')).toBeInTheDocument();
-    expect(screen.getByText(/All trainings, visualizations, and data/)).toBeInTheDocument();
+    expect(screen.getByText(/restore them for 30 days/)).toBeInTheDocument();
   });
 
   it('calls onClose and onConfirm from buttons', () => {

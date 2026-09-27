@@ -5,7 +5,6 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { apiKeyAuth, errorHandler } from '@visin/backend-core';
-import { apiTokenMiddleware } from '../../middleware/apiTokenMiddleware';
 import visualizationRoutes from '../../routes/visualizationRoutes';
 import Project from '../../models/Project';
 import Training from '../../models/Training';
@@ -35,7 +34,6 @@ describe('visualization summary', () => {
     mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     const app = express();
-    app.use(apiTokenMiddleware);
     app.use('/visualizations', apiKeyAuth('vision'), visualizationRoutes);
     app.use(errorHandler);
     server = createServer(app);
@@ -59,8 +57,8 @@ describe('visualization summary', () => {
     // Each test token names a session whose id is its user's.
     await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
 
-    const privateProject = await Project.create({ name: 'Private', ownerId: OWNER });
-    const publicProject = await Project.create({ name: 'Public', ownerId: OWNER, isPublic: true });
+    const privateProject = await Project.create({ name: 'Private', owner: { kind: 'user', id: OWNER }, createdBy: OWNER });
+    const publicProject = await Project.create({ name: 'Public', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'public' });
     const [pub, priv, empty] = await Training.create([
       { name: 'Public run', uuid: 'public-run', projectId: String(publicProject._id) },
       { name: 'Private run', uuid: 'private-run', projectId: String(privateProject._id) },
@@ -115,7 +113,7 @@ describe('visualization summary', () => {
   });
 
   it('answers an empty list when nothing is visible', async () => {
-    await Project.updateMany({}, { isPublic: false });
+    await Project.updateMany({}, { visibility: 'private' });
     expect(await summary()).toEqual([]);
   });
 

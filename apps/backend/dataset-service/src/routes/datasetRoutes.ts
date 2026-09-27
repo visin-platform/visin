@@ -8,21 +8,27 @@ import {
   listDatasetsQuerySchema,
   listItemsQuerySchema,
   startImportBodySchema,
+  transferDatasetBodySchema,
   updateDatasetBodySchema
 } from '../validation/datasetSchemas';
 
 const router = Router();
 
-// Reads enforce dataset visibility inside the service (public, or a group the
-// caller belongs to). Everything that changes a dataset carries
+// Reads enforce dataset visibility inside the service (public, the caller's own,
+// or a group the caller belongs to). Everything that changes a dataset carries
 // `authenticateToken`, so an anonymous caller is turned away at the door.
 router.get('/', validateRequest({ query: listDatasetsQuerySchema }), ctrl.listDatasets);
 router.post('/', authenticateToken, validateRequest({ body: createDatasetBodySchema }), ctrl.createDataset);
-// Before `/:id`, which would otherwise read "groups" as a dataset id.
+// Before `/:id`, which would otherwise read "groups" or "trash" as a dataset id.
 router.get('/groups', authenticateToken, ctrl.listMyGroups);
+router.get('/trash', authenticateToken, ctrl.listTrash);
 router.get('/:id', ctrl.getDataset);
 router.patch('/:id', authenticateToken, validateRequest({ body: updateDatasetBodySchema }), ctrl.updateDataset);
-router.delete('/:id', authenticateToken, ctrl.deleteDataset);
+// Delete moves it to the trash; its owner restores it or deletes it for good.
+router.delete('/:id', authenticateToken, ctrl.trashDataset);
+router.post('/:id/restore', authenticateToken, ctrl.restoreDataset);
+router.delete('/:id/permanent', authenticateToken, ctrl.deletePermanently);
+router.put('/:id/owner', authenticateToken, validateRequest({ body: transferDatasetBodySchema }), ctrl.transferDataset);
 router.delete('/:id/groups/:group', authenticateToken, ctrl.removeGroup);
 router.put('/:id/cover', authenticateToken, validateRequest({ body: setCoverBodySchema }), ctrl.setCover);
 

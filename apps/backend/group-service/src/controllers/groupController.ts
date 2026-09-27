@@ -92,6 +92,10 @@ export const removeMember = async (req: Request, res: Response): Promise<void> =
   res.json({ success: true, data: group });
 };
 
+export const activity = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await svc.groupActivity(req.params.id as string, actorId(req)) });
+};
+
 export const membership = async (req: Request, res: Response): Promise<void> => {
   const userId = actorId(req);
   const result = await svc.checkMembership(req.params.id as string, userId);
@@ -99,7 +103,12 @@ export const membership = async (req: Request, res: Response): Promise<void> => 
 };
 
 export const createInvitation = async (req: Request, res: Response): Promise<void> => {
-  const data = await svc.createInvitation(req.params.id as string, actorId(req), req.body.role as GroupRole);
+  const { role, userId } = req.body as { role: GroupRole; userId?: string };
+  if (userId) {
+    res.status(201).json({ success: true, data: await svc.inviteAccount(req.params.id as string, actorId(req), userId, role) });
+    return;
+  }
+  const data = await svc.createInvitation(req.params.id as string, actorId(req), role);
   res.setHeader('Cache-Control', 'no-store');
   res.status(201).json({ success: true, data });
 };
@@ -120,4 +129,27 @@ export const acceptInvitation = async (req: Request, res: Response): Promise<voi
   const data = await svc.acceptInvitation(req.body.token as string, req.user.id, req.user.email);
   res.setHeader('Cache-Control', 'no-store');
   res.json({ success: true, data });
+};
+
+/** "Add member": accounts an owner or admin could invite, emails masked. */
+export const findCandidates = async (req: Request, res: Response): Promise<void> => {
+  const data = await svc.findCandidates(req.params.id as string, actorId(req), req.query.q as string);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ success: true, data });
+};
+
+/** Invitations addressed to the caller, waiting for an answer. */
+export const listMyInvitations = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await svc.listMyInvitations(actorId(req)) });
+};
+
+export const acceptAccountInvitation = async (req: InternalServiceRequest, res: Response): Promise<void> => {
+  const email = req.isInternalService ? undefined : req.user?.email;
+  const data = await svc.acceptAccountInvitation(req.params.invitationId as string, actorId(req), email);
+  res.json({ success: true, data });
+};
+
+export const declineAccountInvitation = async (req: Request, res: Response): Promise<void> => {
+  await svc.declineAccountInvitation(req.params.invitationId as string, actorId(req));
+  res.status(204).send();
 };

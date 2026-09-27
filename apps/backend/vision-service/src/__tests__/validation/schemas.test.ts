@@ -1,5 +1,4 @@
 import { MAX_PAGE_SIZE, paginationSchema, sortOrderSchema, looseStringParam } from '../../validation/common';
-import { createTokenBodySchema } from '../../validation/apiTokenSchemas';
 import {
   createFindingBodySchema,
   listFindingsQuerySchema,
@@ -78,16 +77,6 @@ describe('common', () => {
     expect(looseStringParam.parse('a')).toBe('a');
     expect(looseStringParam.parse(['a', 'b'])).toBe('a');
     expect(looseStringParam.parse(undefined)).toBeUndefined();
-  });
-});
-
-describe('apiTokenSchemas', () => {
-  it('requires name and projectId, coerces expiresInDays', () => {
-    expect(createTokenBodySchema.parse({ name: ' t ', projectId: 'p', expiresInDays: '30' })).toEqual(
-      { name: 't', projectId: 'p', expiresInDays: 30 }
-    );
-    expect(createTokenBodySchema.safeParse({ name: '', projectId: 'p' }).success).toBe(false);
-    expect(createTokenBodySchema.safeParse({ name: 't' }).success).toBe(false);
   });
 });
 
@@ -202,9 +191,12 @@ describe('projectSchemas', () => {
     expect(getProjectsQuerySchema.parse({})).toEqual({ sortBy: 'createdAt', sortOrder: -1 });
   });
 
-  it('createProjectBodySchema defaults isPublic to false and coerces it', () => {
-    expect(createProjectBodySchema.parse({ name: 'P' }).isPublic).toBe(false);
-    expect(createProjectBodySchema.parse({ name: 'P', isPublic: 'true' }).isPublic).toBe(true);
+  it('createProjectBodySchema defaults to private, and takes an owner of the right shape', () => {
+    expect(createProjectBodySchema.parse({ name: 'P' }).visibility).toBe('private');
+    expect(createProjectBodySchema.parse({ name: 'P', visibility: 'public' }).visibility).toBe('public');
+    expect(createProjectBodySchema.safeParse({ name: 'P', visibility: 'group' }).success).toBe(false);
+    expect(createProjectBodySchema.parse({ name: 'P', owner: { kind: 'group', id: 'a'.repeat(24) } }).owner).toEqual({ kind: 'group', id: 'a'.repeat(24) });
+    expect(createProjectBodySchema.safeParse({ name: 'P', owner: { kind: 'team', id: 'a'.repeat(24) } }).success).toBe(false);
     expect(createProjectBodySchema.safeParse({}).success).toBe(false);
   });
 
@@ -264,8 +256,8 @@ describe('projectSchemas', () => {
     expect(updateProjectBodySchema.safeParse({ costing: { currency: 'EURO' } }).success).toBe(false);
   });
 
-  it('updateProjectBodySchema does not coerce isPublic', () => {
-    expect(updateProjectBodySchema.safeParse({ isPublic: 'yes' }).success).toBe(false);
+  it('updateProjectBodySchema takes only a known visibility', () => {
+    expect(updateProjectBodySchema.safeParse({ visibility: 'yes' }).success).toBe(false);
     expect(updateProjectBodySchema.parse({ slug: 's' }).slug).toBe('s');
   });
 });

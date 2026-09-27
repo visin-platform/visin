@@ -1,7 +1,7 @@
 import { Schema, model, Document, Types } from 'mongoose';
+import { VISIBILITIES, type ResourceOwner, type Visibility } from '@visin/backend-core';
 
-export const DATASET_VISIBILITIES = ['public', 'group'] as const;
-export type DatasetVisibility = (typeof DATASET_VISIBILITIES)[number];
+export type DatasetVisibility = Visibility;
 
 export const IMPORT_STATUSES = ['queued', 'running', 'done', 'failed', 'cancelled'] as const;
 export type ImportStatus = (typeof IMPORT_STATUSES)[number];
@@ -95,11 +95,13 @@ export interface DatasetHold {
 
 export interface IDataset extends Document {
   _id: Types.ObjectId;
-  ownerId: string;
+  /** who controls it: a person, or a group whose current roles decide who may do what */
+  owner: ResourceOwner;
+  /** attribution only: who made it; grants nothing */
+  createdBy: string;
   name: string;
   description?: string;
   visibility: DatasetVisibility;
-  groupId?: string;
   /** every file of this dataset lives under this file-service prefix */
   storagePrefix: string;
   /** `size` and `contents` are absent until the zip has been scanned (a migrated dataset starts that way) */
@@ -116,6 +118,8 @@ export interface IDataset extends Document {
   manifest?: ManifestRow[];
   import?: DatasetImport;
   holds: DatasetHold[];
+  /** in the trash: hidden, and restorable by its owner until the trash is emptied or 30 days pass */
+  trashedAt?: Date;
   /** set when a delete was asked for; the dataset is hidden while the worker removes its files */
   deletingAt?: Date;
   /** image groups being removed: hidden at once, their files and rows removed by the worker */
@@ -124,6 +128,11 @@ export interface IDataset extends Document {
   updatedAt: Date;
 }
 
+const OwnerSchema = new Schema<ResourceOwner>(
+  { kind: { type: String, enum: ['user', 'group'], required: true }, id: { type: String, required: true } },
+  { _id: false }
+);
+
 const HoldSchema = new Schema<DatasetHold>(
   { service: { type: String, required: true }, ref: { type: String, required: true }, createdAt: Date },
   { _id: false }
@@ -131,11 +140,11 @@ const HoldSchema = new Schema<DatasetHold>(
 
 const DatasetSchema = new Schema<IDataset>(
   {
-    ownerId: { type: String, required: true, index: true },
+    owner: { type: OwnerSchema, required: true },
+    createdBy: { type: String, required: true },
     name: { type: String, required: true, trim: true, maxlength: 200 },
     description: { type: String, trim: true, maxlength: 10000 },
-    visibility: { type: String, enum: DATASET_VISIBILITIES, default: 'public' },
-    groupId: { type: String, index: true },
+    visibility: { type: String, enum: VISIBILITIES, default: 'private' },
     storagePrefix: { type: String, required: true },
     archive: {
       type: {
@@ -171,6 +180,7 @@ const DatasetSchema = new Schema<IDataset>(
     manifest: { type: [Schema.Types.Mixed], default: undefined, select: false },
     import: { type: Schema.Types.Mixed },
     holds: { type: [HoldSchema], default: [] },
+    trashedAt: { type: Date },
     deletingAt: { type: Date },
     removingGroups: { type: [String], default: undefined }
   },
@@ -178,6 +188,8 @@ const DatasetSchema = new Schema<IDataset>(
 );
 
 DatasetSchema.index({ visibility: 1, updatedAt: -1 });
+DatasetSchema.index({ 'owner.kind': 1, 'owner.id': 1 });
+DatasetSchema.index({ trashedAt: 1 }, { sparse: true });
 DatasetSchema.index({ name: 'text', description: 'text' });
 
 export const Dataset = model<IDataset>('Dataset', DatasetSchema, 'datasets');

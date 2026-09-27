@@ -11,9 +11,11 @@ const makeRes = () => {
 
 jest.mock('../../models/Epoch');
 jest.mock('../../models/Training');
+jest.mock('../../models/Project', () => ({ __esModule: true, default: { findById: jest.fn().mockResolvedValue({ _id: 'p1' }) } }));
 jest.mock('../../models/TestResult');
 jest.mock('../../services/projectAccessService', () => ({
   checkProjectAccess: jest.fn(),
+  projectPermission: jest.fn().mockResolvedValue('own'),
   isWithinTokenScope: jest.fn().mockReturnValue(true)
 }));
 
@@ -114,8 +116,8 @@ describe('deleteEpoch', () => {
   it('soft-deletes the epoch and its live test results under one timestamp', async () => {
     const epoch: Record<string, unknown> = { trainingId: 't1', epoch_uuid: 'e1', save: jest.fn() };
     mockEpoch.findById.mockResolvedValueOnce(epoch as never);
-    // A standalone run its caller owns: writable without a project lookup.
-    mockTraining.findById.mockResolvedValueOnce({ ownerId: 'u1' } as never);
+    // A run in a project the caller owns.
+    mockTraining.findById.mockResolvedValueOnce({ ownerId: 'u1', projectId: 'p1' } as never);
     mockCheckProjectAccess.mockResolvedValueOnce(true);
     const res = makeRes();
 

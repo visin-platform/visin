@@ -1,38 +1,34 @@
 import { Types } from 'mongoose';
-import { BadRequestError, ConflictError, NotFoundError, UserPayload, logger } from '@visin/backend-core';
+import { atLeast, BadRequestError, ConflictError, ForbiddenError, NotFoundError, UserPayload, logger } from '@visin/backend-core';
 import { LabelJob, ILabelJob, JobStatus } from '../models/LabelJob';
 import { LabelTask } from '../models/LabelTask';
 import { LabelAnswer } from '../models/LabelAnswer';
 import { CreateJobBody } from '../validation/jobSchemas';
-import * as groups from '../clients/groupServiceClient';
 import * as datasets from '../clients/datasetServiceClient';
 
 /**
- * Create a draft job, and claim its dataset so the files its tasks will show
- * cannot be deleted or re-imported from under it.
+ * Create a draft job on a dataset the caller manages, and claim the dataset so
+ * the files its tasks will show cannot be deleted or re-imported from under it.
  *
- * A group dataset can only back a job in that same group; a public one, any job.
- * The claim is made after the job exists (it names the job) and the job is
- * removed again if the claim fails — a job whose images are unprotected must
- * not exist.
+ * The job has no owner of its own: it follows its dataset. The claim is made
+ * after the job exists (it names the job) and the job is removed again if the
+ * claim fails — a job whose images are unprotected must not exist.
  */
 export const createJob = async (user: UserPayload, data: CreateJobBody): Promise<ILabelJob> => {
-  if (data.datasetId) {
-    let dataset: datasets.DatasetSummary;
-    try {
-      dataset = await datasets.getDataset(data.datasetId);
-    } catch (err) {
-      if (err instanceof NotFoundError) throw new BadRequestError('Dataset not found');
-      throw err;
-    }
-    if (dataset.visibility === 'group' && dataset.groupId !== data.groupId) {
-      throw new BadRequestError('Dataset belongs to a different group');
-    }
-    const groupNames = dataset.groups.map((group) => group.name);
-    const unknown = [data.framesGroup, ...data.annotationSets].filter((name) => !groupNames.includes(name));
-    if (unknown.length > 0) {
-      throw new BadRequestError(`Not image groups of this dataset: ${unknown.join(', ')}`);
-    }
+  let dataset: datasets.DatasetSummary;
+  try {
+    dataset = await datasets.getDataset(data.datasetId);
+  } catch (err) {
+    if (err instanceof NotFoundError) throw new BadRequestError('Dataset not found');
+    throw err;
+  }
+  if (!atLeast(await datasets.getPermission(data.datasetId, user.id), 'manage')) {
+    throw new ForbiddenError("Only the dataset's owner, or an owner or admin of the group that owns it, can build a labeling job on it");
+  }
+  const groupNames = dataset.groups.map((group) => group.name);
+  const unknown = [data.framesGroup, ...data.annotationSets].filter((name) => !groupNames.includes(name));
+  if (unknown.length > 0) {
+    throw new BadRequestError(`Not image groups of this dataset: ${unknown.join(', ')}`);
   }
   const job = await LabelJob.create({
     ...data,
@@ -44,13 +40,11 @@ export const createJob = async (user: UserPayload, data: CreateJobBody): Promise
     status: 'draft',
     isPublic: false
   });
-  if (job.datasetId) {
-    try {
-      await datasets.addHold(job.datasetId, job._id.toString());
-    } catch (err) {
-      await LabelJob.deleteOne({ _id: job._id });
-      throw err;
-    }
+  try {
+    await datasets.addHold(data.datasetId, job._id.toString());
+  } catch (err) {
+    await LabelJob.deleteOne({ _id: job._id });
+    throw err;
   }
   return job;
 };
@@ -58,8 +52,9 @@ export const createJob = async (user: UserPayload, data: CreateJobBody): Promise
 export type JobWithProgress = Record<string, unknown> & { progress: JobProgress };
 
 /**
- * role=worker (default): active jobs in any of my groups — the workable list.
- * role=admin: every job (any status) in groups where I am owner/admin.
+ * role=worker (default): active jobs on datasets I contribute to — the workable list.
+ * role=admin: every job (any status) on datasets I manage, and my own drafts
+ * from before every job needed a dataset.
  *
  * Progress rides along so the list can show how far each job has got without a
  * detail request per card.
@@ -68,15 +63,13 @@ export const listJobsForUser = async (
   userId: string,
   role: 'worker' | 'admin'
 ): Promise<JobWithProgress[]> => {
-  const myGroups = await groups.getMyGroups(userId);
+  const datasetIds = await datasets.datasetIdsFor(userId, role === 'admin' ? 'manage' : 'contribute');
   const jobs =
     role === 'admin'
       ? await LabelJob.find({
-          groupId: { $in: myGroups.filter((g) => g.role === 'owner' || g.role === 'admin').map((g) => g.groupId) }
+          $or: [{ datasetId: { $in: datasetIds } }, { datasetId: { $exists: false }, 'createdBy.userId': userId }]
         }).sort({ updatedAt: -1 })
-      : await LabelJob.find({ groupId: { $in: myGroups.map((g) => g.groupId) }, status: 'active' }).sort({
-          updatedAt: -1
-        });
+      : await LabelJob.find({ datasetId: { $in: datasetIds }, status: 'active' }).sort({ updatedAt: -1 });
 
   const progress = await progressForJobs(jobs, userId);
   return jobs.map((job) => ({ ...job.toObject(), progress: progress.get(job._id.toString())! }));
@@ -95,10 +88,12 @@ export const withoutCreatorIdentity = (job: ILabelJob): Record<string, unknown> 
 };
 
 /**
- * Only deliberately published, active jobs are visible outside their group.
+ * Only deliberately published, active jobs on datasets that are themselves
+ * public are visible outside the dataset's owners.
  */
 export const listPublicJobs = async (): Promise<JobWithProgress[]> => {
-  const jobs = await LabelJob.find({ status: 'active', isPublic: true }).sort({ updatedAt: -1 });
+  const publicDatasets = await datasets.datasetIdsFor(undefined, 'read');
+  const jobs = await LabelJob.find({ status: 'active', isPublic: true, datasetId: { $in: publicDatasets } }).sort({ updatedAt: -1 });
   const progress = await progressForJobs(jobs, '');
   return jobs.map((job) => ({
     ...withoutCreatorIdentity(job),
@@ -112,6 +107,21 @@ export const getJob = async (jobId: string): Promise<ILabelJob> => {
     throw new NotFoundError('Job not found');
   }
   return job;
+};
+
+/**
+ * The job's dataset as its page shows it: name and owner. A dataset that is
+ * gone or in the trash reads as nothing, rather than failing the page.
+ */
+export const jobDataset = async (job: ILabelJob): Promise<Pick<datasets.DatasetSummary, '_id' | 'name' | 'owner'> | undefined> => {
+  if (!job.datasetId) return undefined;
+  try {
+    const { _id, name, owner } = await datasets.getDataset(job.datasetId);
+    return { _id, name, owner };
+  } catch (error) {
+    if (error instanceof NotFoundError) return undefined;
+    throw error;
+  }
 };
 
 export const setJobVisibility = async (jobId: string, isPublic: boolean): Promise<ILabelJob> => {

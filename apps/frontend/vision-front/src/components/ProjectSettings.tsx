@@ -6,40 +6,28 @@ import {
   Box,
   Typography,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
   Alert,
   IconButton,
   Tooltip,
-  Chip,
-  FormControlLabel,
-  Switch,
   Card,
   CardContent
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  ContentCopy as ContentCopyIcon,
-  Save as SaveIcon
-} from '@mui/icons-material';
+import { ContentCopy as ContentCopyIcon, Save as SaveIcon } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ApiError } from '@visin/frontend-core';
-import { apiTokenService, ApiToken } from '../services/apiTokenService';
+import {
+  ApiError,
+  OwnerChip,
+  TransferOwnershipDialog,
+  VisibilitySwitch,
+  type OwnerGroup,
+  type OwnerRef
+} from '@visin/frontend-core';
 import { projectService } from '../services/projectService';
 import { Project, UpdateProjectData } from '../types/Project';
-import { formatDateTime } from '../utils';
+import { useAuth } from '../contexts/AuthContext';
 import TaxonomyEditor from './taxonomy/TaxonomyEditor';
+import PipelineKeys from './project/PipelineKeys';
 import CostingEditor from './taxonomy/CostingEditor';
 import { ProjectCosting, ProjectTaxonomy } from '../types/taxonomy';
 
@@ -55,11 +43,8 @@ interface ProjectSettingsProps {
 
 const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }) => {
   const queryClient = useQueryClient();
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [newTokenName, setNewTokenName] = useState('');
-  const [expiresInDays, setExpiresInDays] = useState<string>('30');
-  const [createdToken, setCreatedToken] = useState<ApiToken | null>(null);
-  const [tokenToRevoke, setTokenToRevoke] = useState<ApiToken | null>(null);
+  const { user } = useAuth();
+  const [transferOpen, setTransferOpen] = useState(false);
 
   // Project editing state
   const [editName, setEditName] = useState(project.name);
@@ -67,44 +52,23 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
   const [editDescription, setEditDescription] = useState(project.description || '');
   const [editorGroupIds, setEditorGroupIds] = useState<string[]>(project.editorGroupIds || []);
   const { data: groups = [], isError: groupsFailed } = useQuery({
-    queryKey: ['project-editor-groups', project.ownerId],
+    queryKey: ['project-groups', user?.id],
     queryFn: async () => {
       const response = await visionApi.get('/write-capabilities/groups');
-      return (response.data as { data: { id: string; name: string }[] }).data;
+      return (response.data as { data: OwnerGroup[] }).data;
     }
   });
-  const groupOptions = [...new Set([...groups.map(group => group.id), ...editorGroupIds])];
-  const [editIsPublic, setEditIsPublic] = useState(project.isPublic);
+  const groupOptions = [...new Set([...groups.map((group) => group.id), ...editorGroupIds])];
+  const [editIsPublic, setEditIsPublic] = useState(project.visibility === 'public');
   const [editTaxonomy, setEditTaxonomy] = useState<ProjectTaxonomy>(project.taxonomy ?? {});
   const [editCosting, setEditCosting] = useState<ProjectCosting>(project.costing ?? {});
   const [projectUpdateError, setProjectUpdateError] = useState<string | null>(null);
-
-  const { data: tokensResponse } = useQuery({
-    queryKey: ['api-tokens', project._id],
-    queryFn: () => apiTokenService.getTokens(project._id)
-  });
-
-  const createMutation = useMutation({
-    mutationFn: apiTokenService.createToken,
-    onSuccess: (response) => {
-      setCreatedToken(response.data);
-      queryClient.invalidateQueries({ queryKey: ['api-tokens', project._id] });
-      setNewTokenName('');
-    }
-  });
-
-  const revokeMutation = useMutation({
-    mutationFn: apiTokenService.revokeToken,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['api-tokens', project._id] });
-    }
-  });
 
   const updateProjectMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateProjectData }) => projectService.updateProject(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['project', project._id] });
+      queryClient.invalidateQueries({ queryKey: ['project'] });
       queryClient.invalidateQueries({ queryKey: ['write-capabilities'] });
       setProjectUpdateError(null);
     },
@@ -113,28 +77,18 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
     }
   });
 
-  const handleCreate = () => {
-    createMutation.mutate({
-      name: newTokenName,
-      projectId: project._id,
-      expiresInDays: expiresInDays ? parseInt(expiresInDays) : undefined
-    });
-  };
-
-  const handleCloseDialog = () => {
-    setCreateDialogOpen(false);
-    setCreatedToken(null);
-    setNewTokenName('');
-  };
+  const transferMutation = useMutation({
+    mutationFn: (owner: OwnerRef) => projectService.transferProject(project._id, owner),
+    onSuccess: () => {
+      setTransferOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['project'] });
+      queryClient.invalidateQueries({ queryKey: ['write-capabilities'] });
+    }
+  });
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-  };
-
-  const handleConfirmRevokeToken = () => {
-    if (!tokenToRevoke) return;
-    revokeMutation.mutate(tokenToRevoke._id);
-    setTokenToRevoke(null);
   };
 
   // Form is always editable now — edit fields are initialized with project values
@@ -143,7 +97,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
     const updateData: UpdateProjectData = {
       name: editName,
       description: editDescription,
-      isPublic: editIsPublic,
+      ...(project.permissions.own ? { visibility: editIsPublic ? ('public' as const) : ('private' as const) } : {}),
       editorGroupIds,
       // null clears it: an emptied form puts the project back on pure discovery
       taxonomy: Object.keys(editTaxonomy).length > 0 ? editTaxonomy : null,
@@ -216,24 +170,47 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
               options={groupOptions}
               value={editorGroupIds}
               onChange={(_event, ids) => setEditorGroupIds(ids)}
-              getOptionLabel={id => groups.find(group => group.id === id)?.name || id}
-              renderInput={params => <TextField {...params} label="Editor groups"
-                helperText="Members can read this project and create, edit, and delete its trainings and results. Project settings and tokens remain owner-only." />}
+              getOptionLabel={(id) => groups.find((group) => group.id === id)?.name || id}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Editor groups"
+                  helperText="Members can read this project, add trainings and results, and edit or delete their own contributions."
+                />
+              )}
             />
             {groupsFailed && <Alert severity="error">Could not load your groups. Retry before adding a group.</Alert>}
 
-            <FormControlLabel
-              control={<Switch checked={editIsPublic} onChange={(e) => setEditIsPublic(e.target.checked)} />}
-              label="Public project"
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <OwnerChip owner={project.owner} userId={user?.id} groups={groups} ownerName={project.owner.name} />
+              {project.permissions.own && (
+                <Button
+                  onClick={() => {
+                    transferMutation.reset();
+                    setTransferOpen(true);
+                  }}
+                >
+                  Transfer ownership
+                </Button>
+              )}
+            </Box>
+            <VisibilitySwitch
+              value={editIsPublic ? 'public' : 'private'}
+              onChange={(value) => setEditIsPublic(value === 'public')}
+              canMakePublic={project.permissions.own}
+              disabled={!project.permissions.own || updateProjectMutation.isPending}
             />
             <Typography variant="body2" color="text.secondary">
-              Configs, dataset analyses, and dataset files remain publicly shared, even in a private project.
+              Trainings, results and configs follow this project's visibility.
             </Typography>
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" sx={{
-                color: "text.secondary"
-              }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.secondary'
+                }}
+              >
                 Public URL:
               </Typography>
               <Link
@@ -256,7 +233,9 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
               <Tooltip title="Copy URL">
                 <IconButton
                   size="small"
-                  onClick={() => copyToClipboard(`${window.location.origin}/projects/${editSlug || project.slug || project._id}`)}
+                  onClick={() =>
+                    copyToClipboard(`${window.location.origin}/projects/${editSlug || project.slug || project._id}`)
+                  }
                 >
                   <ContentCopyIcon fontSize="small" />
                 </IconButton>
@@ -279,9 +258,9 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
             </Button>
           </Box>
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-            How this project's conditions, classes and metrics are named and ordered.
-            Purely cosmetic — your training pipeline can report anything it likes and it
-            will still show up. Save with the button at the top of the page.
+            How this project's conditions, classes and metrics are named and ordered. Purely cosmetic — your training
+            pipeline can report anything it likes and it will still show up. Save with the button at the top of the
+            page.
           </Typography>
           <TaxonomyEditor
             value={editTaxonomy}
@@ -305,186 +284,25 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
             </Button>
           </Box>
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-            What an hour on this project's hardware costs. Save with the button at the
-            top of the page.
+            What an hour on this project's hardware costs. Save with the button at the top of the page.
           </Typography>
-          <CostingEditor
-            value={editCosting}
-            onChange={setEditCosting}
-            disabled={updateProjectMutation.isPending}
-          />
+          <CostingEditor value={editCosting} onChange={setEditCosting} disabled={updateProjectMutation.isPending} />
         </CardContent>
       </Card>
-      {/* API Tokens Section */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h6">API Tokens</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setCreateDialogOpen(true)}
-        >
-          Generate New Token
-        </Button>
-      </Box>
-      <Typography
-        variant="body2"
-        sx={{
-          color: "text.secondary",
-          mb: 3
-        }}>
-        API tokens allow you to authenticate requests to the Vision API programmatically. 
-        Use these tokens to submit trainings or track usage from your scripts.
-      </Typography>
-      <TableContainer component={Paper} variant="outlined">
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Prefix</TableCell>
-              <TableCell>Created</TableCell>
-              <TableCell>Expires</TableCell>
-              <TableCell>Last Used</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {tokensResponse?.data?.map((token: ApiToken) => (
-              <TableRow key={token._id}>
-                <TableCell>{token.name}</TableCell>
-                <TableCell>
-                  <Chip label={token.prefix + '...'} size="small" variant="outlined" sx={{ fontFamily: 'monospace' }} />
-                </TableCell>
-                <TableCell>{formatDateTime(token.createdAt)}</TableCell>
-                <TableCell>
-                  {token.expiresAt ? formatDateTime(token.expiresAt) : 'Never'}
-                </TableCell>
-                <TableCell>
-                  {token.lastUsedAt ? formatDateTime(token.lastUsedAt) : 'Never'}
-                </TableCell>
-                <TableCell>
-                  <Chip 
-                    label={token.isActive ? 'Active' : 'Revoked'} 
-                    color={token.isActive ? 'success' : 'default'} 
-                    size="small" 
-                  />
-                </TableCell>
-                <TableCell align="right">
-                  {token.isActive && (
-                    <Tooltip title="Revoke Token">
-                      <IconButton 
-                        color="error" 
-                        size="small"
-                        onClick={() => setTokenToRevoke(token)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-            {( !tokensResponse?.data || tokensResponse?.data?.length === 0) && (
-              <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                  <Typography sx={{
-                    color: "text.secondary"
-                  }}>No API tokens found</Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      <Dialog open={createDialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>Generate API Token</DialogTitle>
-        <DialogContent>
-          {!createdToken ? (
-            <Box sx={{ pt: 1 }}>
-              <TextField
-                autoFocus
-                margin="dense"
-                label="Token Name"
-                fullWidth
-                value={newTokenName}
-                onChange={(e) => setNewTokenName(e.target.value)}
-                placeholder="e.g. CI/CD Pipeline, Local Training Script"
-              />
-              <TextField
-                margin="dense"
-                label="Expiration (Days)"
-                type="number"
-                fullWidth
-                value={expiresInDays}
-                onChange={(e) => setExpiresInDays(e.target.value)}
-                helperText="Leave empty for no expiration"
-              />
-            </Box>
-          ) : (
-            <Box sx={{ pt: 2 }}>
-              <Alert severity="success" sx={{ mb: 2 }}>
-                Token generated successfully! Copy it now, you won't be able to see it again.
-              </Alert>
-              <Paper 
-                variant="outlined" 
-                sx={{ 
-                  p: 2, 
-                  bgcolor: 'background.default',
-                  display: 'flex', 
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}
-              >
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                  {createdToken?.token}
-                </Typography>
-                <IconButton onClick={() => copyToClipboard(createdToken?.token || '')}>
-                  <ContentCopyIcon />
-                </IconButton>
-              </Paper>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          {!createdToken ? (
-            <>
-              <Button onClick={handleCloseDialog}>Cancel</Button>
-              <Button 
-                onClick={handleCreate} 
-                variant="contained"
-                disabled={!newTokenName || createMutation.isPending}
-              >
-                Generate
-              </Button>
-            </>
-          ) : (
-            <Button onClick={handleCloseDialog} variant="contained">
-              Done
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
-      <Dialog open={Boolean(tokenToRevoke)} onClose={() => setTokenToRevoke(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Revoke API Token</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            Are you sure you want to revoke {tokenToRevoke?.name ? `"${tokenToRevoke.name}"` : 'this token'}?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setTokenToRevoke(null)} disabled={revokeMutation.isPending}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleConfirmRevokeToken}
-            color="error"
-            variant="contained"
-            disabled={revokeMutation.isPending}
-          >
-            Revoke
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {project.permissions.contribute && <PipelineKeys projectId={project._id} />}
+      {user && (
+        <TransferOwnershipDialog
+          open={transferOpen}
+          resourceName={project.name}
+          current={project.owner}
+          userId={user.id}
+          groups={groups}
+          busy={transferMutation.isPending}
+          error={transferMutation.error?.message}
+          onClose={() => setTransferOpen(false)}
+          onTransfer={(owner) => transferMutation.mutate(owner)}
+        />
+      )}
     </Box>
   );
 };

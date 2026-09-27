@@ -22,10 +22,10 @@ const config: Config = {
   // ratchet these up as more tests are added.
   coverageThreshold: {
     global: {
-      statements: 97,
-      branches: 91,
+      statements: 98,
+      branches: 92,
       functions: 98,
-      lines: 98,
+      lines: 99,
     },
   },
 };

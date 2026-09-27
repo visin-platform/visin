@@ -1,6 +1,16 @@
 import { randomUUID } from 'crypto';
-import { Types } from 'mongoose';
-import { BadRequestError, ConflictError, ForbiddenError, getUploadPolicy, logger, NotFoundError } from '@visin/backend-core';
+import { QueryFilter, Types } from 'mongoose';
+import {
+  BadRequestError,
+  canTransfer,
+  ConflictError,
+  ForbiddenError,
+  getUploadPolicy,
+  logger,
+  NotFoundError,
+  recordResourceEvent,
+  type ResourceOwner
+} from '@visin/backend-core';
 import { Dataset, IDataset, ImportMapping } from '../models/Dataset';
 import { DatasetItem } from '../models/DatasetItem';
 import * as files from '../clients/fileServiceClient';
@@ -8,8 +18,12 @@ import { summarizeItems } from './importService';
 import { enqueueDelete, enqueueImport, enqueueRemoveGroup, enqueueScan, removeQueuedImport } from '../queue/importQueue';
 import { expectedImportFiles } from '../utils/contents';
 import { normalizeFolder } from '../utils/zipPaths';
-import { DatasetAccess, readableDataset, writableDataset } from './accessService';
+import * as groupService from '../clients/groupServiceClient';
+import { DatasetAccess, DatasetPermissions, LIVE, permissionsOf, readableDataset, requireDataset } from './accessService';
 import type { ArchiveUploadBody, CreateDatasetBody, ListDatasetsQuery, UpdateDatasetBody } from '../validation/datasetSchemas';
+
+/** How long a trashed dataset can still be restored before the sweeper deletes it. */
+export const TRASH_DAYS = 30;
 
 const UPLOAD_URL_MINUTES = 240;
 const DOWNLOAD_URL_MINUTES = 60;
@@ -45,13 +59,15 @@ const signedUrls = (fileIds: (string | undefined)[]) =>
   files.getDownloadUrls(fileIds.filter((fileId): fileId is string => Boolean(fileId)), DOWNLOAD_URL_MINUTES);
 
 /** What a client may see: no storage paths, holds reduced to a count. */
-export const toDatasetView = (dataset: IDataset, canWrite: boolean, coverUrl?: string) => ({
+export const toDatasetView = (dataset: IDataset, permissions: DatasetPermissions, coverUrl?: string, ownerName?: string) => ({
   _id: dataset._id.toString(),
   name: dataset.name,
   description: dataset.description,
-  ownerId: dataset.ownerId,
+  // `name` is the owning group's, when the caller is in it.
+  owner: { kind: dataset.owner.kind, id: dataset.owner.id, ...(ownerName ? { name: ownerName } : {}) },
+  createdBy: dataset.createdBy,
   visibility: dataset.visibility,
-  groupId: dataset.groupId,
+  trashedAt: dataset.trashedAt,
   archive: dataset.archive ? { filename: dataset.archive.filename, size: dataset.archive.size, uploadedAt: dataset.archive.uploadedAt } : undefined,
   uploading: dataset.pendingUpload ? { filename: dataset.pendingUpload.filename, size: dataset.pendingUpload.size } : undefined,
   contents: dataset.contents,
@@ -82,16 +98,40 @@ export const toDatasetView = (dataset: IDataset, canWrite: boolean, coverUrl?: s
       }
     : undefined,
   usedBy: dataset.holds.length,
-  canWrite,
+  permissions,
   createdAt: dataset.createdAt,
   updatedAt: dataset.updatedAt
 });
 
+const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The caller's view of one dataset; group lookups are memoized by `access`. */
+const viewFor = async (access: DatasetAccess, dataset: IDataset, coverUrl?: string) => {
+  const ownerName =
+    dataset.owner.kind === 'group' ? (await access.myGroups()).find((group) => group.groupId === dataset.owner.id)?.name : undefined;
+  return toDatasetView(dataset, permissionsOf(await access.permission(dataset)), coverUrl, ownerName);
+};
+
+/** `owner=me` or `owner=<groupId>`: a list narrowed to one owner. */
+const ownerFilter = (access: DatasetAccess, owner?: string) => {
+  if (!owner) return {};
+  if (owner === 'me') return { 'owner.kind': 'user', 'owner.id': access.userId ?? '' };
+  return { 'owner.kind': 'group', 'owner.id': owner };
+};
+
+const withCovers = async (access: DatasetAccess, datasets: IDataset[]) => {
+  const { urls } = await signedUrls(datasets.map((dataset) => dataset.coverFileId));
+  return Promise.all(datasets.map((dataset) => viewFor(access, dataset, dataset.coverFileId ? urls[dataset.coverFileId] : undefined)));
+};
+
 export const listDatasets = async (access: DatasetAccess, query: ListDatasetsQuery) => {
   const filter = {
-    ...(await access.readableFilter()),
-    ...(query.search ? { name: { $regex: query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } } : {})
-  };
+    $and: [
+      await access.filter('read'),
+      ownerFilter(access, query.owner),
+      query.search ? { name: { $regex: escapeRegex(query.search), $options: 'i' } } : {}
+    ]
+  } as QueryFilter<IDataset>;
   const [datasets, total] = await Promise.all([
     Dataset.find(filter)
       .sort({ updatedAt: -1 })
@@ -99,65 +139,144 @@ export const listDatasets = async (access: DatasetAccess, query: ListDatasetsQue
       .limit(query.limit),
     Dataset.countDocuments(filter)
   ]);
-  const { urls } = await signedUrls(datasets.map((dataset) => dataset.coverFileId));
-  const views = await Promise.all(
-    datasets.map(async (dataset) =>
-      toDatasetView(dataset, await access.canWrite(dataset), dataset.coverFileId ? urls[dataset.coverFileId] : undefined)
-    )
-  );
-  return { datasets: views, pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) } };
+  return {
+    datasets: await withCovers(access, datasets),
+    pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) }
+  };
 };
 
 export const getDataset = async (access: DatasetAccess, id: string) => {
   const dataset = await readableDataset(access, id);
   const { urls } = await signedUrls([dataset.coverFileId]);
-  return toDatasetView(dataset, await access.canWrite(dataset), dataset.coverFileId ? urls[dataset.coverFileId] : undefined);
+  return viewFor(access, dataset, dataset.coverFileId ? urls[dataset.coverFileId] : undefined);
 };
 
-const assertGroupChoice = async (access: DatasetAccess, visibility?: string, groupId?: string): Promise<void> => {
-  if (visibility === 'group' && groupId && !(await access.isMember(groupId))) {
-    throw new ForbiddenError('You can only share a dataset with a group you belong to');
-  }
-};
-
+/**
+ * A new dataset belongs to the caller, or to a group they are in. Making it
+ * public at once takes what making it public later would: being its owner.
+ */
 export const createDataset = async (access: DatasetAccess, body: CreateDatasetBody) => {
-  const ownerId = access.requireUser();
-  await assertGroupChoice(access, body.visibility, body.groupId);
+  const userId = access.requireUser();
+  const owner: ResourceOwner = body.owner ?? { kind: 'user', id: userId };
+  if (owner.kind === 'user' && owner.id !== userId) throw new ForbiddenError('A dataset can belong to you or to one of your groups');
+  if (owner.kind === 'group') {
+    const { member, role } = await access.ownership.membership(owner.id);
+    if (!member) throw new ForbiddenError('You can only create a dataset in a group you belong to');
+    if (body.visibility === 'public' && role !== 'owner') {
+      throw new ForbiddenError("Only the group's owner can make its datasets public");
+    }
+  }
   const _id = new Types.ObjectId();
   const dataset = await Dataset.create({
     _id,
-    ownerId,
+    owner,
+    createdBy: userId,
     name: body.name,
     description: body.description || undefined,
-    visibility: body.visibility || 'public',
-    ...(body.visibility === 'group' ? { groupId: body.groupId } : {}),
+    visibility: body.visibility ?? 'private',
     storagePrefix: datasetStoragePrefix(_id)
   });
-  logger.info('Dataset created', { datasetId: _id.toString(), ownerId });
-  return toDatasetView(dataset, true);
+  logger.info('Dataset created', { datasetId: _id.toString(), owner, createdBy: userId });
+  return viewFor(access, dataset);
 };
 
+/** Name and description need `manage`; who can see it needs `own`. */
 export const updateDataset = async (access: DatasetAccess, id: string, body: UpdateDatasetBody) => {
-  const dataset = await writableDataset(access, id);
-  if (body.visibility !== undefined) {
-    await assertGroupChoice(access, body.visibility, body.groupId);
+  const dataset = await requireDataset(access, id, 'manage');
+  if (body.visibility !== undefined && body.visibility !== dataset.visibility) {
+    await requireDataset(access, id, 'own');
     dataset.visibility = body.visibility;
-    dataset.groupId = body.visibility === 'group' ? body.groupId : undefined;
+    recordEvent(dataset, access.requireUser(), 'visibility', { visibility: body.visibility });
   }
   if (body.name !== undefined) dataset.name = body.name;
   if (body.description !== undefined) dataset.description = body.description || undefined;
   await dataset.save();
-  return toDatasetView(dataset, await access.canWrite(dataset));
+  return viewFor(access, dataset);
+};
+
+const recordEvent = (
+  dataset: IDataset,
+  actorId: string,
+  action: 'transfer' | 'visibility' | 'trash' | 'restore' | 'purge',
+  { owner = dataset.owner, ...extra }: { owner?: ResourceOwner; to?: ResourceOwner; visibility?: string } = {}
+) =>
+  recordResourceEvent({
+    service: 'dataset-service',
+    resourceType: 'dataset',
+    resourceId: dataset._id.toString(),
+    resourceName: dataset.name,
+    action,
+    actorId,
+    owner,
+    ...extra
+  });
+
+/**
+ * Hand the dataset, with its label jobs, to another owner. Who may, per the
+ * shared rules (backend-core `canTransfer`); no files move.
+ */
+export const transferDataset = async (access: DatasetAccess, id: string, to: ResourceOwner) => {
+  const userId = access.requireUser();
+  const dataset = await readableDataset(access, id);
+  const check = await canTransfer(dataset.owner, to, userId, groupService.checkMembership);
+  if (!check.allowed) throw new ForbiddenError(check.reason);
+  const from = dataset.owner;
+  dataset.owner = to;
+  await dataset.save();
+  recordEvent(dataset, userId, 'transfer', { owner: from, to });
+  logger.info('Dataset transferred', { datasetId: id, from, to });
+  return viewFor(access, dataset);
 };
 
 /**
- * Hide the dataset at once and hand removing its files to the worker: tens of
- * thousands of them outlast any request. Refused while a labeling job holds
- * it — checked in the same update that marks it, so a hold taken meanwhile wins.
+ * Move the dataset to the trash: hidden at once, with its label jobs, and
+ * restorable by its owner for 30 days. Its files stay until then.
  */
-export const deleteDataset = async (access: DatasetAccess, id: string): Promise<void> => {
-  const dataset = await writableDataset(access, id);
-  assertNotHeld(dataset, 'delete this dataset');
+export const trashDataset = async (access: DatasetAccess, id: string): Promise<void> => {
+  const dataset = await requireDataset(access, id, 'manage');
+  const marked = await Dataset.updateOne({ _id: dataset._id, ...LIVE }, { $set: { trashedAt: new Date() } });
+  if (marked.matchedCount === 0) throw new ConflictError('The dataset is already in the trash');
+  recordEvent(dataset, access.requireUser(), 'trash');
+  logger.info('Dataset moved to the trash', { datasetId: id });
+};
+
+/** A trashed dataset, when the caller may do at least `min` with it. */
+const trashedDataset = async (access: DatasetAccess, id: string, min: 'manage' | 'own'): Promise<IDataset> => {
+  access.requireUser();
+  const dataset = /^[0-9a-fA-F]{24}$/.test(id)
+    ? await Dataset.findOne({ _id: id, trashedAt: { $exists: true }, deletingAt: { $exists: false } })
+    : null;
+  if (!dataset) throw new NotFoundError('No such dataset in the trash');
+  const permission = permissionsOf(await access.permission(dataset));
+  if (!permission[min]) throw new ForbiddenError("Only the dataset's owner, or the owning group's owner, can do this");
+  return dataset;
+};
+
+export const restoreDataset = async (access: DatasetAccess, id: string) => {
+  const dataset = await trashedDataset(access, id, 'own');
+  dataset.trashedAt = undefined;
+  await dataset.save();
+  recordEvent(dataset, access.requireUser(), 'restore');
+  return viewFor(access, dataset);
+};
+
+/** Trashed datasets the caller manages, most recently trashed first. */
+export const listTrash = async (access: DatasetAccess) => {
+  access.requireUser();
+  const datasets = await Dataset.find({
+    ...(await access.ownership.filter('manage')),
+    trashedAt: { $exists: true },
+    deletingAt: { $exists: false }
+  }).sort({ trashedAt: -1 });
+  return withCovers(access, datasets);
+};
+
+/**
+ * Hand a dataset to the delete worker: its files, then its rows, then it. A
+ * held dataset (labeling jobs still use its images) is refused, checked in the
+ * same update that marks it, so a hold taken meanwhile wins.
+ */
+const purge = async (dataset: IDataset, actorId: string): Promise<boolean> => {
   const activeImport = dataset.import && (dataset.import.status === 'queued' || dataset.import.status === 'running');
   const marked = await Dataset.updateOne(
     { _id: dataset._id, holds: { $size: 0 }, deletingAt: { $exists: false } },
@@ -169,10 +288,35 @@ export const deleteDataset = async (access: DatasetAccess, id: string): Promise<
       }
     }
   );
-  if (marked.matchedCount === 0) throw new ConflictError('The dataset is in use by a labeling job, or already being deleted');
+  if (marked.matchedCount === 0) return false;
   if (activeImport) await removeQueuedImport(dataset.import!.id);
-  await enqueueDelete({ datasetId: id });
-  logger.info('Dataset deletion queued', { datasetId: id });
+  await enqueueDelete({ datasetId: dataset._id.toString() });
+  recordEvent(dataset, actorId, 'purge');
+  logger.info('Dataset deletion queued', { datasetId: dataset._id.toString() });
+  return true;
+};
+
+/** Empty one dataset from the trash now, rather than in 30 days. */
+export const deletePermanently = async (access: DatasetAccess, id: string): Promise<void> => {
+  const dataset = await trashedDataset(access, id, 'own');
+  assertNotHeld(dataset, 'delete this dataset');
+  if (!(await purge(dataset, access.requireUser()))) {
+    throw new ConflictError('The dataset is in use by a labeling job, or already being deleted');
+  }
+};
+
+/**
+ * The sweeper's run: delete every dataset trashed more than 30 days ago. One
+ * still held by labeling jobs stays in the trash until they are deleted.
+ * Idempotent, so a missed or repeated run does no harm.
+ */
+export const purgeExpiredTrash = async (now = new Date()): Promise<number> => {
+  const cutoff = new Date(now.getTime() - TRASH_DAYS * 24 * 60 * 60 * 1000);
+  const expired = await Dataset.find({ trashedAt: { $lte: cutoff }, deletingAt: { $exists: false }, holds: { $size: 0 } });
+  let purged = 0;
+  for (const dataset of expired) if (await purge(dataset, 'system')) purged += 1;
+  if (purged > 0) logger.info('Purged expired datasets from the trash', { count: purged });
+  return purged;
 };
 
 /** The file an interrupted upload was sending, chosen again. One recorded before sizes were (no `size`) matches by name. */
@@ -190,7 +334,7 @@ const isSameFile = (pending: NonNullable<IDataset['pendingUpload']>, body: Archi
  * a new reservation and deletes the abandoned one's partial bytes.
  */
 export const createArchiveUpload = async (access: DatasetAccess, id: string, body: ArchiveUploadBody) => {
-  const dataset = await writableDataset(access, id);
+  const dataset = await requireDataset(access, id, 'contribute');
   assertNotHeld(dataset, 'replace the zip');
   if (isImportActive(dataset)) throw new ConflictError('An import is running — wait for it or cancel it first');
 
@@ -231,7 +375,7 @@ export const createArchiveUpload = async (access: DatasetAccess, id: string, bod
  * dataset keeps the zip it had. Nothing to discard is not an error.
  */
 export const discardArchiveUpload = async (access: DatasetAccess, id: string) => {
-  const dataset = await writableDataset(access, id);
+  const dataset = await requireDataset(access, id, 'contribute');
   const pending = dataset.pendingUpload;
   if (pending) {
     await files.deleteFile(pending.fileId);
@@ -239,7 +383,7 @@ export const discardArchiveUpload = async (access: DatasetAccess, id: string) =>
     await dataset.save();
     logger.info('Dataset upload discarded', { datasetId: id });
   }
-  return toDatasetView(dataset, true);
+  return viewFor(access, dataset);
 };
 
 /**
@@ -247,7 +391,7 @@ export const discardArchiveUpload = async (access: DatasetAccess, id: string) =>
  * one. Stored by path as well as file, so a re-import keeps the choice.
  */
 export const setCover = async (access: DatasetAccess, id: string, itemId: string | null) => {
-  const dataset = await writableDataset(access, id);
+  const dataset = await requireDataset(access, id, 'manage');
   if (itemId) {
     const item = await DatasetItem.findOne({ _id: itemId, datasetId: dataset._id, kind: 'image' });
     if (!item) throw new NotFoundError('That image is not in this dataset');
@@ -259,7 +403,7 @@ export const setCover = async (access: DatasetAccess, id: string, itemId: string
   }
   await dataset.save();
   const { urls } = await signedUrls([dataset.coverFileId]);
-  return toDatasetView(dataset, true, dataset.coverFileId ? urls[dataset.coverFileId] : undefined);
+  return viewFor(access, dataset, dataset.coverFileId ? urls[dataset.coverFileId] : undefined);
 };
 
 /**
@@ -268,7 +412,7 @@ export const setCover = async (access: DatasetAccess, id: string, itemId: string
  * dataset (its tasks may show those images) and while an import runs.
  */
 export const removeGroup = async (access: DatasetAccess, id: string, group: string) => {
-  const dataset = await writableDataset(access, id);
+  const dataset = await requireDataset(access, id, 'manage');
   assertNotHeld(dataset, 'remove an image group');
   if (isImportActive(dataset)) throw new ConflictError('An import is running — wait for it or cancel it first');
   if (!dataset.groups.some((row) => row.name === group)) throw new NotFoundError(`The dataset has no image group "${group}"`);
@@ -280,7 +424,7 @@ export const removeGroup = async (access: DatasetAccess, id: string, group: stri
   if (!marked) throw new ConflictError('That group is already being removed, or a labeling job now uses this dataset');
   await enqueueRemoveGroup({ datasetId: id, group });
   logger.info('Dataset image group removal queued', { datasetId: id, group });
-  return toDatasetView(marked, true);
+  return viewFor(access, marked);
 };
 
 /** Hand reading the archive's index to the worker; the page polls `scan`. */
@@ -299,7 +443,7 @@ const queueScan = async (dataset: IDataset, fileId: string): Promise<void> => {
  * confirmation never arrived (a closed tab): it checks the bytes are there.
  */
 export const completeArchiveUpload = async (access: DatasetAccess, id: string) => {
-  const dataset = await writableDataset(access, id);
+  const dataset = await requireDataset(access, id, 'contribute');
   const pending = dataset.pendingUpload;
   if (!pending) throw new BadRequestError('No upload is in progress for this dataset');
   assertNotHeld(dataset, 'replace the zip');
@@ -313,7 +457,7 @@ export const completeArchiveUpload = async (access: DatasetAccess, id: string) =
   await queueScan(dataset, pending.fileId);
   if (previous && previous !== pending.fileId) await files.deleteFile(previous);
   logger.info('Dataset archive uploaded', { datasetId: id, size });
-  return toDatasetView(dataset, true);
+  return viewFor(access, dataset);
 };
 
 /**
@@ -322,10 +466,10 @@ export const completeArchiveUpload = async (access: DatasetAccess, id: string) =
  * way to retry a scan that failed. Queued, like the one after an upload.
  */
 export const rescanArchive = async (access: DatasetAccess, id: string) => {
-  const dataset = await writableDataset(access, id);
+  const dataset = await requireDataset(access, id, 'contribute');
   if (!dataset.archive) throw new BadRequestError('This dataset has no zip yet');
   await queueScan(dataset, dataset.archive.fileId);
-  return toDatasetView(dataset, true);
+  return viewFor(access, dataset);
 };
 
 export const getArchiveDownload = async (access: DatasetAccess, id: string) => {
@@ -336,7 +480,7 @@ export const getArchiveDownload = async (access: DatasetAccess, id: string) => {
 };
 
 export const startImport = async (access: DatasetAccess, id: string, mapping: ImportMapping) => {
-  const dataset = await writableDataset(access, id);
+  const dataset = await requireDataset(access, id, 'contribute');
   assertNotHeld(dataset, 're-import');
   if (!dataset.archive) throw new BadRequestError('Upload a zip before importing');
   if (isImportActive(dataset)) throw new ConflictError('An import is already running for this dataset');
@@ -367,7 +511,7 @@ export const startImport = async (access: DatasetAccess, id: string, mapping: Im
   await dataset.save();
   await enqueueImport({ datasetId: dataset._id.toString(), importId });
   logger.info('Dataset import queued', { datasetId: id, importId, groups: groupNames.length });
-  return toDatasetView(dataset, true);
+  return viewFor(access, dataset);
 };
 
 /**
@@ -376,7 +520,7 @@ export const startImport = async (access: DatasetAccess, id: string, mapping: Im
  * import already stored. Not for an import of a zip since replaced.
  */
 export const resumeImport = async (access: DatasetAccess, id: string) => {
-  const dataset = await writableDataset(access, id);
+  const dataset = await requireDataset(access, id, 'contribute');
   assertNotHeld(dataset, 're-import');
   const current = dataset.import;
   if (!current || (current.status !== 'cancelled' && current.status !== 'failed')) {
@@ -396,11 +540,11 @@ export const resumeImport = async (access: DatasetAccess, id: string) => {
   await removeQueuedImport(current.id);
   await enqueueImport({ datasetId: id, importId: current.id });
   logger.info('Dataset import resumed', { datasetId: id, importId: current.id });
-  return toDatasetView(resumed, true);
+  return viewFor(access, resumed);
 };
 
 export const cancelImport = async (access: DatasetAccess, id: string) => {
-  const dataset = await writableDataset(access, id);
+  const dataset = await requireDataset(access, id, 'contribute');
   const current = dataset.import;
   if (!current || (current.status !== 'queued' && current.status !== 'running')) {
     throw new ConflictError('No import is running');
@@ -410,5 +554,5 @@ export const cancelImport = async (access: DatasetAccess, id: string) => {
     { $set: { 'import.status': 'cancelled', 'import.finishedAt': new Date() } }
   );
   await removeQueuedImport(current.id);
-  return toDatasetView(await Dataset.findById(dataset._id).orFail(), true);
+  return viewFor(access, await Dataset.findById(dataset._id).orFail());
 };

@@ -16,7 +16,7 @@ import {
   TableRow,
   Typography
 } from '@mui/material';
-import { Loader, ResponsiveActions, type ResponsiveAction } from '@visin/frontend-core';
+import { Loader, OwnerChip, ResponsiveActions, type OwnerRole, type ResponsiveAction } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import {
   JobAction,
@@ -24,7 +24,7 @@ import {
   downloadExport,
   getJob,
   getJobStats,
-  listJobs,
+  getMyGroups,
   transitionJob,
   setJobVisibility
 } from '../services/jobService';
@@ -39,16 +39,18 @@ const STATUS_COLORS: Record<string, 'default' | 'success' | 'warning' | 'info'> 
 
 const JobDetailPage: React.FC = () => {
   const { id: jobId = '' } = useParams();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data: job, isLoading, error: jobError } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
   const { data: stats } = useQuery({ queryKey: ['job-stats', jobId], queryFn: () => getJobStats(jobId) });
-  // Admin controls appear when this job shows up in the caller's admin listing.
-  const { data: adminJobs } = useQuery({ queryKey: ['jobs', 'admin'], queryFn: () => listJobs('admin') });
-  const isAdmin = Boolean(adminJobs?.some((candidate) => candidate._id === jobId));
+  // Running the job is managing its dataset; the server says which it is for this caller.
+  const isAdmin = Boolean(job?.canManage);
+  // Names the dataset's owning group on its chip.
+  const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups, enabled: isAuthenticated });
+  const ownerGroups = (groups || []).map((group) => ({ id: group.groupId, name: group.name, role: group.role as OwnerRole }));
 
   const transition = useMutation({
     mutationFn: (action: JobAction) => transitionJob(jobId, action),
@@ -133,7 +135,13 @@ const JobDetailPage: React.FC = () => {
         </Typography>
         <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', mt: 1 }}>
           <Chip label={job.status} color={STATUS_COLORS[job.status]} size="small" sx={{ textTransform: 'capitalize' }} />
-          <Chip label={job.isPublic ? 'Public sharing enabled' : 'Group only'} size="small" />
+          <Chip label={job.isPublic ? 'Public sharing enabled' : 'Private'} size="small" />
+          {job.dataset && (
+            <>
+              <Chip label={`Dataset: ${job.dataset.name}`} size="small" variant="outlined" />
+              <OwnerChip owner={job.dataset.owner} userId={user?.id} groups={ownerGroups} />
+            </>
+          )}
           <Chip label={job.taskType} size="small" variant="outlined" />
           <Chip label={`K=${job.redundancy}`} size="small" variant="outlined" />
         </Stack>

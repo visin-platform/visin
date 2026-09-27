@@ -19,3 +19,6 @@ paper
 
 # Local dev tools that need a copy of real data to run (the landing showcase capture)
 /apps/frontend/landing-front/scripts/
+
+# One-off data migrations, run by hand against a deployment (not part of the open-source code)
+/migrations

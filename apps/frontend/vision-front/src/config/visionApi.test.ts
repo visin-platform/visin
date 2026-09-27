@@ -58,6 +58,8 @@ describe('visionApi', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(visionApi.get('/projects/x')).rejects.toThrow('Project not found');
+    // The status rides along, for a caller that must tell a 409 from a 404.
+    await expect(visionApi.get('/projects/x')).rejects.toMatchObject({ status: 404 });
   });
 
   it('POST surfaces a server error message on failure', async () => {

@@ -54,12 +54,14 @@ jest.mock('../../services/visualizationService', () => ({
 }));
 jest.mock('../../services/projectService', () => ({
   listProjects: jest.fn(),
-  getProjectBySlug: jest.fn(),
-  getProjectById: jest.fn(),
   getProjectByIdOrSlug: jest.fn(),
   createProject: jest.fn(),
   updateProject: jest.fn(),
-  deleteProject: jest.fn(),
+  trashProject: jest.fn(),
+  listTrashedProjects: jest.fn(),
+  restoreProject: jest.fn(),
+  deleteProjectForever: jest.fn(),
+  transferProject: jest.fn(),
   getProjectDashboardStats: jest.fn(),
 }));
 
@@ -393,35 +395,32 @@ describe('visualizationController', () => {
 describe('projectController', () => {
   it('all handlers delegate with the right identity', async () => {
     mockedProjectSvc.listProjects.mockResolvedValue([]);
-    mockedProjectSvc.getProjectBySlug.mockResolvedValue('p');
-    mockedProjectSvc.getProjectById.mockResolvedValue('p');
     mockedProjectSvc.getProjectByIdOrSlug.mockResolvedValue('p');
     mockedProjectSvc.createProject.mockResolvedValue('new');
     mockedProjectSvc.updateProject.mockResolvedValue('upd');
-    mockedProjectSvc.deleteProject.mockResolvedValue(undefined);
+    mockedProjectSvc.trashProject.mockResolvedValue(undefined);
+    mockedProjectSvc.listTrashedProjects.mockResolvedValue(['t']);
+    mockedProjectSvc.restoreProject.mockResolvedValue('restored');
+    mockedProjectSvc.deleteProjectForever.mockResolvedValue(undefined);
+    mockedProjectSvc.transferProject.mockResolvedValue('moved');
     mockedProjectSvc.getProjectDashboardStats.mockResolvedValue('stats');
 
     await projectCtrl.getProjects(makeReq({ query: { sortBy: 'name' } }), makeRes());
     expect(mockedProjectSvc.listProjects).toHaveBeenCalledWith('u1', { sortBy: 'name' });
-
-    await projectCtrl.getProjectBySlug(makeReq({ params: { slug: 's' } }), makeRes());
-    expect(mockedProjectSvc.getProjectBySlug).toHaveBeenCalledWith('s', 'u1');
-
-    await projectCtrl.getProjectById(makeReq({ params: { id: 'i' } }), makeRes());
-    expect(mockedProjectSvc.getProjectById).toHaveBeenCalledWith('i', 'u1');
 
     await projectCtrl.getProjectByIdOrSlug(makeReq({ params: { id: 'x' } }), makeRes());
     expect(mockedProjectSvc.getProjectByIdOrSlug).toHaveBeenCalledWith('x', 'u1');
 
     const createRes = makeRes();
     await projectCtrl.createProject(
-      makeReq({ body: { name: 'N', description: 'D', isPublic: true } }),
+      makeReq({ body: { name: 'N', description: 'D', visibility: 'public', owner: { kind: 'group', id: 'g' } } }),
       createRes
     );
     expect(mockedProjectSvc.createProject).toHaveBeenCalledWith('u1', {
       name: 'N',
       description: 'D',
-      isPublic: true,
+      visibility: 'public',
+      owner: { kind: 'group', id: 'g' },
     });
     expect(createRes.status).toHaveBeenCalledWith(201);
 
@@ -429,12 +428,25 @@ describe('projectController', () => {
     expect(mockedProjectSvc.updateProject).toHaveBeenCalledWith('i', 'u1', {
       name: 'N',
       description: undefined,
-      isPublic: undefined,
+      visibility: undefined,
       slug: undefined,
     });
 
     await projectCtrl.deleteProject(makeReq({ params: { id: 'i' } }), makeRes());
-    expect(mockedProjectSvc.deleteProject).toHaveBeenCalledWith('i', 'u1');
+    expect(mockedProjectSvc.trashProject).toHaveBeenCalledWith('i', 'u1');
+
+    const trashRes = makeRes();
+    await projectCtrl.listTrashedProjects(makeReq(), trashRes);
+    expect(trashRes.json).toHaveBeenCalledWith({ success: true, data: ['t'] });
+
+    await projectCtrl.restoreProject(makeReq({ params: { id: 'i' } }), makeRes());
+    expect(mockedProjectSvc.restoreProject).toHaveBeenCalledWith('i', 'u1');
+
+    await projectCtrl.deleteProjectForever(makeReq({ params: { id: 'i' } }), makeRes());
+    expect(mockedProjectSvc.deleteProjectForever).toHaveBeenCalledWith('i', 'u1');
+
+    await projectCtrl.transferProject(makeReq({ params: { id: 'i' }, body: { owner: { kind: 'group', id: 'g' } } }), makeRes());
+    expect(mockedProjectSvc.transferProject).toHaveBeenCalledWith('i', 'u1', { kind: 'group', id: 'g' });
 
     await projectCtrl.getProjectDashboardStats(makeReq({ params: { id: 'i' } }), makeRes());
     expect(mockedProjectSvc.getProjectDashboardStats).toHaveBeenCalledWith('i', 'u1');

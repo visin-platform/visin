@@ -2,13 +2,12 @@ import { Request, Response } from 'express';
 import * as svc from '../services/jobService';
 import * as materialization from '../services/materializationService';
 import * as exportSvc from '../services/exportService';
-import { assertAdmin, requireUser } from '../services/groupAccessService';
-import { getJobReadAccess } from '../services/jobAccessService';
+import { requireUser } from '../services/groupAccessService';
+import { assertJobAdmin, getJobReadAccess } from '../services/jobAccessService';
 import { JobAction } from '../services/jobService';
 
 export const createJob = async (req: Request, res: Response): Promise<void> => {
   const user = requireUser(req);
-  await assertAdmin(req, req.body.groupId);
   const job = await svc.createJob(user, req.body);
   res.status(201).json({ success: true, data: job });
 };
@@ -36,14 +35,14 @@ export const getJob = async (req: Request, res: Response): Promise<void> => {
   const access = await getJobReadAccess(job, req.user?.id);
   const progress = await svc.getJobProgress(job, req.user?.id || '');
   const body = access.member ? job.toObject() : svc.withoutCreatorIdentity(job);
-  res.json({ success: true, data: { ...body, progress,
-    canLabel: access.member && (job.status === 'active' || job.status === 'completed')
-  } });
+  // Who the job belongs to is its dataset's owner, shown to those who can reach it.
+  const dataset = access.member ? await svc.jobDataset(job) : undefined;
+  res.json({ success: true, data: { ...body, ...(dataset ? { dataset } : {}), progress, canLabel: access.canWork, canManage: access.isAdmin } });
 };
 
 const transition = (action: JobAction) => async (req: Request, res: Response): Promise<void> => {
   const job = await svc.getJob(req.params.id as string);
-  await assertAdmin(req, job.groupId);
+  await assertJobAdmin(job, req.user?.id);
   const updated = await svc.transitionJob(job._id.toString(), action);
   res.json({ success: true, data: updated });
 };
@@ -55,28 +54,28 @@ export const archiveJob = transition('archive');
 
 export const setJobVisibility = async (req: Request, res: Response): Promise<void> => {
   const job = await svc.getJob(req.params.id as string);
-  await assertAdmin(req, job.groupId);
+  await assertJobAdmin(job, req.user?.id);
   res.json({ success: true, data: await svc.setJobVisibility(job._id.toString(), req.body.isPublic) });
 };
 
 /** Irreversible: the job, its tasks and every answer collected against it. */
 export const deleteJob = async (req: Request, res: Response): Promise<void> => {
   const job = await svc.getJob(req.params.id as string);
-  await assertAdmin(req, job.groupId);
+  await assertJobAdmin(job, req.user?.id);
   const removed = await svc.deleteJob(job._id.toString());
   res.json({ success: true, data: removed });
 };
 
 export const materializeTasks = async (req: Request, res: Response): Promise<void> => {
   const job = await svc.getJob(req.params.id as string);
-  await assertAdmin(req, job.groupId);
+  await assertJobAdmin(job, req.user?.id);
   const result = await materialization.materializeTasks(job, req.body);
   res.json({ success: true, data: result });
 };
 
 export const exportJob = async (req: Request, res: Response): Promise<void> => {
   const job = await svc.getJob(req.params.id as string);
-  await assertAdmin(req, job.groupId);
+  await assertJobAdmin(job, req.user?.id);
 
   if (req.query.format === 'csv') {
     const csv = await exportSvc.exportCsv(job);
@@ -104,8 +103,8 @@ export const exportJob = async (req: Request, res: Response): Promise<void> => {
 };
 
 /**
- * Aggregates follow job visibility. Labeler names/emails require owner/admin membership in
- * the job's group, matching the identity-bearing exports.
+ * Aggregates follow job visibility. Labeler names/emails require managing the
+ * job's dataset, matching the identity-bearing exports.
  */
 export const jobStats = async (req: Request, res: Response): Promise<void> => {
   const job = await svc.getJob(req.params.id as string);

@@ -29,8 +29,11 @@ export interface ILabelJob extends Document {
     email: string;
     name?: string;
   };
-  groupId: string;
-  /** the dataset-service dataset whose images the tasks show; optional while draft, required to activate */
+  /**
+   * the dataset-service dataset whose images the tasks show. Who may do what
+   * with the job follows it: its owner and group roles, its visibility. Only
+   * drafts from before that rule may lack one; their creator alone reaches them.
+   */
   datasetId?: string;
   /** the dataset group holding the frames; `annotationSets` name its annotation groups */
   framesGroup: string;
@@ -58,7 +61,6 @@ const LabelJobSchema = new Schema<ILabelJob>(
       email: { type: String, required: true, lowercase: true },
       name: { type: String }
     },
-    groupId: { type: String, required: true, index: true },
     datasetId: { type: String, index: true },
     framesGroup: { type: String, trim: true, default: 'frames' },
     taskType: { type: String, enum: TASK_TYPES, required: true },
@@ -89,6 +91,6 @@ const LabelJobSchema = new Schema<ILabelJob>(
   { timestamps: true }
 );
 
-LabelJobSchema.index({ groupId: 1, status: 1 });
+LabelJobSchema.index({ datasetId: 1, status: 1 });
 
 export const LabelJob = model<ILabelJob>('LabelJob', LabelJobSchema, 'label_jobs');

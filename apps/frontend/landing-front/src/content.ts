@@ -60,7 +60,7 @@ export const SHOWCASE: ShowcaseItem[] = [
 /**
  * How a run gets in: the script starts the run, then the training loop posts
  * each epoch. The snippet is the real endpoints and payload (`POST
- * /api/trainings`, then `POST /api/epochs/upload`, a project token as Bearer),
+ * /api/trainings`, then `POST /api/epochs/upload`, a pipeline key as Bearer),
  * written with plain `requests` so it needs nothing that is not shipped. The
  * run has to exist before its epochs, so the snippet cannot skip that call.
  */
@@ -94,7 +94,7 @@ export const SCRIPT_DISCOVERED = [
 
 export const SCRIPT_POINTS: OpenSourcePoint[] = [
   { title: 'Nothing to declare', body: 'A new class, or a new test condition, is found in what you send.' },
-  { title: 'One token per project', body: 'A project token writes to its own project and nowhere else.' },
+  { title: 'One key per pipeline', body: 'A pipeline key writes to its own project and nowhere else.' },
   { title: 'Not only epochs', body: 'Test results, benchmarks and prediction frames post the same way.' }
 ];
 

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const listMyGroups = vi.hoisted(() => vi.fn());
 vi.mock('../../services/datasetService', () => ({ listMyGroups }));
+vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 
 import DatasetFormDialog from './DatasetFormDialog';
 import { renderWithClient } from '../../test/renderWithClient';
@@ -13,10 +14,13 @@ const zipFile = (name = 'waymo.zip', size = 2048) => new File([new Uint8Array(si
 describe('DatasetFormDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    listMyGroups.mockResolvedValue([{ id: 'g1', name: 'Team', role: 'admin' }]);
+    listMyGroups.mockResolvedValue([
+      { id: 'g1', name: 'Team', role: 'admin' },
+      { id: 'g2', name: 'Lab', role: 'owner' }
+    ]);
   });
 
-  it('creates: needs a zip, names itself after it, and shares with a chosen group', async () => {
+  it('creates: needs a zip, names itself after it, and belongs to me unless I choose a group', async () => {
     const onSubmit = vi.fn();
     renderWithClient(<DatasetFormDialog open mode="create" busy={false} onCancel={vi.fn()} onSubmit={onSubmit} />);
 
@@ -36,14 +40,34 @@ describe('DatasetFormDialog', () => {
     fireEvent.change(screen.getByTestId('dataset-zip-input'), { target: { files: [] } });
 
     await userEvent.type(screen.getByLabelText('Description'), 'Front camera');
-    fireEvent.click(screen.getByLabelText('A group'));
+    fireEvent.click(screen.getByLabelText('Public'));
     fireEvent.click(screen.getByRole('button', { name: 'Create and upload' }));
-    expect(screen.getByText('Choose the group to share with')).toBeInTheDocument();
+    expect(onSubmit).toHaveBeenLastCalledWith({
+      name: 'waymo',
+      description: 'Front camera',
+      visibility: 'public',
+      owner: { kind: 'user', id: 'u1' },
+      file
+    });
+  });
 
-    fireEvent.mouseDown(screen.getByLabelText('Group'));
+  it('makes a group dataset public only where I own the group', async () => {
+    const onSubmit = vi.fn();
+    renderWithClient(<DatasetFormDialog open mode="create" busy={false} onCancel={vi.fn()} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByTestId('dataset-zip-input'), { target: { files: [zipFile()] } });
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /^Owner/ })).not.toHaveAttribute('aria-disabled'));
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /^Owner/ }));
     fireEvent.click(await screen.findByRole('option', { name: 'Team' }));
+    expect(screen.getByLabelText('Public')).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Create and upload' }));
-    expect(onSubmit).toHaveBeenCalledWith({ name: 'waymo', description: 'Front camera', visibility: 'group', groupId: 'g1', file });
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ visibility: 'private', owner: { kind: 'group', id: 'g1' } }));
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /^Owner/ }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Lab' }));
+    fireEvent.click(screen.getByLabelText('Public'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create and upload' }));
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ visibility: 'public', owner: { kind: 'group', id: 'g2' } }));
   });
 
   it('edits details without a file, and requires a name', async () => {
@@ -58,7 +82,26 @@ describe('DatasetFormDialog', () => {
     expect(screen.getByText('A name is required')).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/Name/), 'ZOD v2');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(onSubmit).toHaveBeenCalledWith({ name: 'ZOD v2', description: '', visibility: 'public', groupId: undefined, file: undefined });
+    expect(onSubmit).toHaveBeenCalledWith({ name: 'ZOD v2', description: '', visibility: 'public', file: undefined });
+    expect(screen.queryByLabelText('Owner')).not.toBeInTheDocument();
+  });
+
+  it('keeps the sharing as it was for someone who may edit but not share', async () => {
+    const onSubmit = vi.fn();
+    renderWithClient(
+      <DatasetFormDialog
+        open
+        mode="edit"
+        initial={{ name: 'ZOD', visibility: 'public' }}
+        canShare={false}
+        busy={false}
+        onCancel={vi.fn()}
+        onSubmit={onSubmit}
+      />
+    );
+    expect(screen.getByLabelText('Private')).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSubmit).toHaveBeenCalledWith({ name: 'ZOD', description: '', visibility: 'public', file: undefined });
   });
 
   it('asks only for the zip when replacing one', async () => {

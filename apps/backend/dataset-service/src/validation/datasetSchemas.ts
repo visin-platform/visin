@@ -1,32 +1,25 @@
-import { z } from '@visin/backend-core';
+import { resourceOwnerSchema, visibilitySchema, z } from '@visin/backend-core';
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Must be a 24-character id');
 
-const visibilityFields = {
-  visibility: z.enum(['public', 'group']).optional(),
-  groupId: objectId.optional()
-};
-
-const requireGroupForGroupVisibility = (value: { visibility?: string; groupId?: string }) =>
-  value.visibility !== 'group' || Boolean(value.groupId);
-
-export const createDatasetBodySchema = z
-  .object({
-    name: z.string().trim().min(1, 'A name is required').max(200),
-    description: z.string().trim().max(10000).optional(),
-    ...visibilityFields
-  })
-  .refine(requireGroupForGroupVisibility, { message: 'A group dataset needs a groupId', path: ['groupId'] });
+/** A new dataset belongs to its creator unless `owner` names one of their groups; private unless made public. */
+export const createDatasetBodySchema = z.object({
+  name: z.string().trim().min(1, 'A name is required').max(200),
+  description: z.string().trim().max(10000).optional(),
+  owner: resourceOwnerSchema.optional(),
+  visibility: visibilitySchema.optional()
+});
 export type CreateDatasetBody = z.infer<typeof createDatasetBodySchema>;
 
-export const updateDatasetBodySchema = z
-  .object({
-    name: z.string().trim().min(1).max(200).optional(),
-    description: z.string().trim().max(10000).optional(),
-    ...visibilityFields
-  })
-  .refine(requireGroupForGroupVisibility, { message: 'A group dataset needs a groupId', path: ['groupId'] });
+export const updateDatasetBodySchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  description: z.string().trim().max(10000).optional(),
+  visibility: visibilitySchema.optional()
+});
 export type UpdateDatasetBody = z.infer<typeof updateDatasetBodySchema>;
+
+export const transferDatasetBodySchema = z.object({ owner: resourceOwnerSchema });
+export type TransferDatasetBody = z.infer<typeof transferDatasetBodySchema>;
 
 /** An image of the dataset to show on its card, or null to go back to the automatic choice. */
 export const setCoverBodySchema = z.object({ itemId: objectId.nullable() });
@@ -34,6 +27,8 @@ export type SetCoverBody = z.infer<typeof setCoverBodySchema>;
 
 export const listDatasetsQuerySchema = z.object({
   search: z.string().trim().max(200).optional(),
+  /** `me`, or a group id: only datasets that owner has */
+  owner: z.union([z.literal('me'), objectId]).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(30)
 });
@@ -80,9 +75,12 @@ export const listItemsQuerySchema = z.object({
 });
 export type ListItemsQuery = z.infer<typeof listItemsQuerySchema>;
 
+/** Datasets an account may do at least `min` with (`manage`: what a label job can be built on). */
 export const internalListQuerySchema = z.object({
-  userId: z.string().min(1).optional()
+  userId: z.string().min(1).optional(),
+  min: z.enum(['read', 'contribute', 'manage', 'own']).default('read')
 });
+export type InternalListQuery = z.infer<typeof internalListQuerySchema>;
 
 export const internalItemsQuerySchema = z.object({
   group: z.string().max(100).optional(),
@@ -100,3 +98,6 @@ export const jsonFieldsQuerySchema = z.object({
   variant: z.string().max(32).optional()
 });
 export type JsonFieldsQuery = z.infer<typeof jsonFieldsQuerySchema>;
+
+/** label-service asking what one account may do with one dataset. */
+export const internalPermissionQuerySchema = z.object({ userId: z.string().min(1).optional() });

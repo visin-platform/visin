@@ -28,15 +28,25 @@ describe('datasetService', () => {
     expect(api.get).toHaveBeenLastCalledWith('');
   });
 
-  it('creates, edits, deletes, imports and cancels', async () => {
+  it('creates, edits, trashes, restores, imports and cancels', async () => {
     api.post.mockResolvedValue({ data: { _id: 'd1' } });
     api.patch.mockResolvedValue({ data: { _id: 'd1', name: 'x' } });
     api.delete.mockResolvedValue({ data: { _id: 'd1' } });
     await service.createDataset({ name: 'n', visibility: 'public' });
     expect(api.post).toHaveBeenLastCalledWith('', { name: 'n', visibility: 'public' });
     expect(await service.updateDataset('d1', { name: 'x' })).toMatchObject({ name: 'x' });
-    await service.deleteDataset('d1');
+    await service.trashDataset('d1');
     expect(api.delete).toHaveBeenLastCalledWith('/d1');
+    api.get.mockResolvedValueOnce({ data: [{ _id: 'd1' }] });
+    expect(await service.listTrash()).toEqual([{ _id: 'd1' }]);
+    expect(api.get).toHaveBeenLastCalledWith('/trash');
+    await service.restoreDataset('d1');
+    expect(api.post).toHaveBeenLastCalledWith('/d1/restore');
+    await service.deleteDatasetForever('d1');
+    expect(api.delete).toHaveBeenLastCalledWith('/d1/permanent');
+    api.put.mockResolvedValueOnce({ data: { _id: 'd1' } });
+    await service.transferDataset('d1', { kind: 'group', id: 'g1' });
+    expect(api.put).toHaveBeenLastCalledWith('/d1/owner', { owner: { kind: 'group', id: 'g1' } });
     await service.startImport('d1', { groups: [{ folder: 'a', group: 'a' }] });
     expect(api.post).toHaveBeenLastCalledWith('/d1/import', { groups: [{ folder: 'a', group: 'a' }] });
     await service.cancelImport('d1');

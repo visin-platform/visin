@@ -17,7 +17,8 @@ import {
 import { Add, AssignmentOutlined } from '@mui/icons-material';
 import { EmptyState, livePalette, Loader, PageHeader, Panel, RowIcon } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
-import { getMyGroups, listJobs } from '../services/jobService';
+import { listJobs } from '../services/jobService';
+import { listDatasets } from '../services/datasetService';
 import { LabelJob } from '../types';
 
 /**
@@ -60,13 +61,11 @@ const JobsPage: React.FC = () => {
   const theme = useTheme();
   const { isAuthenticated } = useAuth();
   const { data: jobs, isLoading, error } = useQuery({ queryKey: ['jobs', 'worker'], queryFn: () => listJobs('worker') });
-  // "My groups" is a question only a signed-in caller can ask; asking it
-  // anonymously would just be a 401 rendered as a broken page.
-  const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups, enabled: isAuthenticated });
-
-  // Creating a job needs a group you administer; without one the wizard's group
+  // A job is built on a dataset I manage; without one the wizard's dataset
   // picker would be empty, so offer the button only where it can be finished.
-  const canCreate = (groups || []).some((group) => group.role === 'owner' || group.role === 'admin');
+  // Only a signed-in caller can ask: anonymously it would be a 401.
+  const { data: datasets } = useQuery({ queryKey: ['datasets'], queryFn: listDatasets, enabled: isAuthenticated });
+  const canCreate = (datasets || []).some((dataset) => dataset.imageCount > 0);
   const newJob = canCreate ? { label: 'New job', icon: <Add />, to: '/jobs/new' } : undefined;
 
   if (isLoading) {
@@ -85,7 +84,18 @@ const JobsPage: React.FC = () => {
             icon={<AssignmentOutlined />}
             title="No labeling jobs yet"
             description={
-              isAuthenticated ? 'Active jobs shared with your groups will appear here.' : 'Active jobs will appear here.'
+              canCreate
+                ? 'A labeling job asks people to label images from a dataset. Start one on a dataset that belongs to a group, and it appears here for everyone in the group.'
+                : isAuthenticated
+                  ? 'Active jobs shared with your groups will appear here.'
+                  : 'Active jobs will appear here.'
+            }
+            action={
+              canCreate ? (
+                <Button component={Link} to="/jobs/new" variant="contained" startIcon={<Add />}>
+                  New job
+                </Button>
+              ) : undefined
             }
           />
         </Panel>

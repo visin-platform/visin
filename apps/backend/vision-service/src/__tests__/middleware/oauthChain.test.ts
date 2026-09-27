@@ -5,26 +5,18 @@ import express from 'express';
 /**
  * The chain, not the parts.
  *
- * vision-service stacks three credential middlewares: apiTokenMiddleware
- * globally, then apiKeyAuth per route group, then each route's own
- * optionalAuth/authenticateToken. An OAuth access token has to survive all
- * three and arrive as a user with an `id` — the bug was that it reached
+ * vision-service stacks two credential middlewares: apiKeyAuth per route
+ * group, then each route's own optionalAuth/authenticateToken. An OAuth access
+ * token has to survive both and arrive as a user with an `id` — the bug was that it reached
  * optionalAuth instead, verified fine, and left `req.user.id` undefined so
  * every private project vanished from the caller's own listing.
  */
 import { apiKeyAuth, mintAccessToken, optionalAuth } from '@visin/backend-core';
-import { apiTokenMiddleware } from '../../middleware/apiTokenMiddleware';
-
-jest.mock('../../models/ApiToken', () => ({
-  __esModule: true,
-  default: { findOne: jest.fn().mockResolvedValue(null), updateOne: jest.fn() },
-}));
 
 const SECRET = 'test-secret';
 const RESOURCE = 'https://mcp.example.test';
 
 const app = express();
-app.use(apiTokenMiddleware);
 app.use('/api/projects', apiKeyAuth('vision'), optionalAuth, (req, res) => {
   res.json({ userId: req.user?.id ?? null, scopes: req.apiKey?.scopes ?? null });
 });
@@ -72,13 +64,6 @@ describe('an OAuth access token through the whole chain', () => {
     // The bug: this was null, and listProjects then returned public projects only.
     expect(res.body.userId).toBe('68987cf71078a6d4d52ba430');
     expect(res.body.scopes).toEqual(['vision:read']);
-  });
-
-  it('is not mistaken for a project token on the way past apiTokenMiddleware', async () => {
-    // That middleware types a credential by "contains no dot"; a JWT has two.
-    const res = await get(`Bearer ${token(['vision:read'])}`);
-
-    expect(res.body.userId).not.toBeNull();
   });
 
   it('still lets an anonymous request through as anonymous', async () => {

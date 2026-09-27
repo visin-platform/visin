@@ -20,11 +20,19 @@ import {
   Delete as DeleteIcon,
   Download as DownloadIcon,
   Edit as EditIcon,
+  SwapHoriz as TransferIcon,
   UploadFile as UploadIcon
 } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ResponsiveActions } from '@visin/frontend-core';
+import {
+  OwnerChip,
+  ResponsiveActions,
+  TransferOwnershipDialog,
+  type OwnerGroup,
+  type OwnerRef,
+  type OwnerRole
+} from '@visin/frontend-core';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DatasetContentsCard from '../components/dataset/DatasetContentsCard';
 import DatasetFormDialog, { DatasetFormValues } from '../components/dataset/DatasetFormDialog';
@@ -33,16 +41,19 @@ import DatasetItemDialog from '../components/dataset/DatasetItemDialog';
 import ImportMappingDialog from '../components/dataset/ImportMappingDialog';
 import ImportStatusPanel from '../components/dataset/ImportStatusPanel';
 import RemoveGroupDialog from '../components/dataset/RemoveGroupDialog';
+import { useAuth } from '../contexts/AuthContext';
 import { useDatasetDownload } from '../hooks/useDatasetDownload';
 import { usePageTitle } from '../hooks/usePageTitle';
 import {
   cancelImport,
   Dataset,
   DatasetItem,
-  deleteDataset,
+  trashDataset,
+  transferDataset,
   discardUpload,
   getDataset,
   ImportMapping,
+  listMyGroups,
   removeGroup,
   resumeImport,
   scanArchive,
@@ -54,7 +65,7 @@ import { isActive, startUpload, useDatasetUpload } from '../services/datasetUplo
 import { formatBytes } from '../utils/datasetMapping';
 import { formatDateTime } from '../utils';
 
-type DialogName = 'edit' | 'replace' | 'mapping' | 'delete' | 'removeGroup' | null;
+type DialogName = 'edit' | 'replace' | 'mapping' | 'delete' | 'removeGroup' | 'transfer' | null;
 
 const isImporting = (dataset?: Dataset): boolean =>
   dataset?.import?.status === 'queued' || dataset?.import?.status === 'running';
@@ -81,6 +92,7 @@ const DatasetDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const arrival = location.state as { chooseGroups?: boolean; uploadError?: string } | null;
 
   const [dialog, setDialog] = useState<DialogName>(null);
@@ -123,7 +135,7 @@ const DatasetDetailPage: React.FC = () => {
     if (!mapWhenReady || !dataset || sending) return;
     if (
       dataset.scan?.status === 'failed' ||
-      !dataset.canWrite ||
+      !dataset.permissions.contribute ||
       upload?.status === 'failed' ||
       upload?.status === 'cancelled'
     ) {
@@ -143,12 +155,19 @@ const DatasetDetailPage: React.FC = () => {
         ? {
             name: dataset.name,
             description: dataset.description,
-            visibility: dataset.visibility,
-            groupId: dataset.groupId
+            visibility: dataset.visibility
           }
         : undefined,
-    [dataset?.name, dataset?.description, dataset?.visibility, dataset?.groupId] // eslint-disable-line react-hooks/exhaustive-deps
+    [dataset?.name, dataset?.description, dataset?.visibility] // eslint-disable-line react-hooks/exhaustive-deps
   );
+
+  // Names the owning group on the chip, and lists where a transfer can go.
+  const groups = useQuery({ queryKey: ['dataset-groups'], queryFn: listMyGroups, enabled: Boolean(user) });
+  const ownerGroups: OwnerGroup[] = (groups.data ?? []).map((group) => ({
+    id: group.id,
+    name: group.name,
+    role: group.role as OwnerRole
+  }));
 
   const openDialog = (name: DialogName) => {
     setActionError(null);
@@ -186,8 +205,15 @@ const DatasetDetailPage: React.FC = () => {
     }
   };
 
-  const handleEdit = ({ name, description, visibility, groupId }: DatasetFormValues) =>
-    run(async () => refresh(await updateDataset(id, { name, description, visibility, groupId })), 'Failed to save');
+  const handleEdit = ({ name, description, visibility }: DatasetFormValues) =>
+    run(async () => refresh(await updateDataset(id, { name, description, visibility })), 'Failed to save');
+
+  const handleTransfer = (owner: OwnerRef) =>
+    run(async () => {
+      const moved = await transferDataset(id, owner);
+      refresh(moved);
+      queryClient.invalidateQueries({ queryKey: ['datasets'] });
+    }, 'Failed to transfer the dataset');
 
   // The upload runs in the corner; the dialog closes at once.
   const handleReplace = ({ file }: DatasetFormValues) =>
@@ -225,10 +251,10 @@ const DatasetDetailPage: React.FC = () => {
 
   const handleDelete = () =>
     run(async () => {
-      await deleteDataset(id);
+      await trashDataset(id);
       queryClient.invalidateQueries({ queryKey: ['datasets'] });
       navigate('/datasets');
-    }, 'Failed to delete dataset');
+    }, 'Failed to move the dataset to the trash');
 
   if (isLoading) {
     return (
@@ -266,7 +292,11 @@ const DatasetDetailPage: React.FC = () => {
 
       <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, overflowWrap: 'anywhere' }}>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, overflowWrap: 'anywhere' }}
+          >
             {dataset.name}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
@@ -279,7 +309,8 @@ const DatasetDetailPage: React.FC = () => {
             ].join(' · ')}
           </Typography>
           <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-            <Chip size="small" label={dataset.visibility === 'group' ? 'Shared with a group' : 'Visible to everyone'} />
+            <OwnerChip owner={dataset.owner} userId={user?.id} groups={ownerGroups} ownerName={dataset.owner.name} />
+            <Chip size="small" label={dataset.visibility === 'public' ? 'Visible to everyone' : 'Private'} />
             {held && <Chip size="small" color="secondary" label={heldReason} />}
           </Stack>
         </Box>
@@ -299,7 +330,7 @@ const DatasetDetailPage: React.FC = () => {
                     }
                   ]
                 : []),
-              ...(dataset.canWrite
+              ...(dataset.permissions.contribute
                 ? [
                     {
                       label: 'Image groups',
@@ -312,13 +343,29 @@ const DatasetDetailPage: React.FC = () => {
                       icon: <UploadIcon />,
                       onClick: () => openDialog('replace'),
                       disabled: importing || scanning || sending || held
-                    },
-                    { label: 'Edit', icon: <EditIcon />, onClick: () => openDialog('edit') },
+                    }
+                  ]
+                : []),
+              ...(dataset.permissions.manage
+                ? [{ label: 'Edit', icon: <EditIcon />, onClick: () => openDialog('edit') }]
+                : []),
+              ...(dataset.permissions.own
+                ? [
                     {
-                      label: 'Delete',
+                      label: 'Transfer',
+                      icon: <TransferIcon />,
+                      onClick: () => openDialog('transfer'),
+                      disabled: sending
+                    }
+                  ]
+                : []),
+              ...(dataset.permissions.manage
+                ? [
+                    {
+                      label: 'Move to trash',
                       icon: <DeleteIcon />,
                       onClick: () => openDialog('delete'),
-                      disabled: held || sending,
+                      disabled: sending,
                       danger: true
                     }
                   ]
@@ -344,7 +391,7 @@ const DatasetDetailPage: React.FC = () => {
       )}
 
       {/* An upload this tab still holds is resumed from the corner, with the file in hand. */}
-      {dataset.uploading && dataset.canWrite && !busy && (!upload || upload.status === 'done') && (
+      {dataset.uploading && dataset.permissions.contribute && !busy && (!upload || upload.status === 'done') && (
         <Alert
           severity="warning"
           sx={{ mb: 3 }}
@@ -382,7 +429,7 @@ const DatasetDetailPage: React.FC = () => {
             severity={dataset.scan?.status === 'failed' ? 'error' : 'info'}
             sx={{ mb: 3 }}
             action={
-              dataset.canWrite && (
+              dataset.permissions.contribute && (
                 <Button color="inherit" size="small" onClick={handleScan} disabled={busy}>
                   {dataset.scan?.status === 'failed' ? 'Scan again' : 'Scan zip'}
                 </Button>
@@ -406,7 +453,7 @@ const DatasetDetailPage: React.FC = () => {
         <ImportStatusPanel
           imported={dataset.import}
           archiveBytes={dataset.import.stale ? undefined : dataset.archive?.size}
-          canWrite={dataset.canWrite && !held}
+          canWrite={dataset.permissions.contribute && !held}
           cancelling={busy}
           onCancel={handleCancelImport}
           onRemap={() => openDialog('mapping')}
@@ -424,7 +471,7 @@ const DatasetDetailPage: React.FC = () => {
         <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, mb: 3, borderRadius: 2 }}>
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
             <Typography variant="h6">Images</Typography>
-            {dataset.canWrite && (
+            {dataset.permissions.manage && (
               <Button
                 size="small"
                 color="error"
@@ -446,7 +493,7 @@ const DatasetDetailPage: React.FC = () => {
             severity="info"
             sx={{ mb: 3 }}
             action={
-              dataset.canWrite && (
+              dataset.permissions.contribute && (
                 <Button color="inherit" size="small" onClick={() => openDialog('mapping')}>
                   Choose folders
                 </Button>
@@ -468,6 +515,7 @@ const DatasetDetailPage: React.FC = () => {
         busy={busy}
         error={actionError}
         resume={dataset.uploading}
+        canShare={dataset.permissions.own}
         onCancel={() => setDialog(null)}
         onSubmit={dialog === 'replace' ? handleReplace : handleEdit}
       />
@@ -488,12 +536,25 @@ const DatasetDetailPage: React.FC = () => {
         onCancel={() => setDialog(null)}
         onConfirm={handleRemoveGroup}
       />
+      {user && (
+        <TransferOwnershipDialog
+          open={dialog === 'transfer'}
+          resourceName={dataset.name}
+          current={dataset.owner}
+          userId={user.id}
+          groups={ownerGroups}
+          busy={busy}
+          error={dialog === 'transfer' ? actionError : null}
+          onClose={() => setDialog(null)}
+          onTransfer={handleTransfer}
+        />
+      )}
       <Dialog open={dialog === 'delete'} onClose={busy ? undefined : () => setDialog(null)}>
-        <DialogTitle>Delete dataset</DialogTitle>
+        <DialogTitle>Move to trash</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Delete "{dataset.name}", its zip and every imported image? This cannot be undone. The dataset disappears at
-            once; its files are removed on the server in the background.
+            Move "{dataset.name}" to the trash? It disappears at once, with its labeling jobs. Its owner can restore it
+            from the trash for 30 days; after that its zip and images are deleted.
           </DialogContentText>
           {actionError && (
             <Alert severity="error" sx={{ mt: 2 }}>
@@ -506,7 +567,7 @@ const DatasetDetailPage: React.FC = () => {
             Cancel
           </Button>
           <Button color="error" variant="contained" onClick={handleDelete} disabled={busy}>
-            Delete
+            Move to trash
           </Button>
         </DialogActions>
       </Dialog>
@@ -514,7 +575,11 @@ const DatasetDetailPage: React.FC = () => {
         datasetId={dataset._id}
         item={openItem}
         onClose={() => setOpenItem(null)}
-        cover={dataset.canWrite ? { path: dataset.coverPath, busy: coverBusy, onChange: handleSetCover } : undefined}
+        cover={
+          dataset.permissions.manage
+            ? { path: dataset.coverPath, busy: coverBusy, onChange: handleSetCover }
+            : undefined
+        }
       />
     </Container>
   );

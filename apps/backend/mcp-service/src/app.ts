@@ -36,7 +36,7 @@ const SERVER_INSTRUCTIONS = [
   'record may be a permissions answer, and worth saying so rather than insisting it does not exist.',
   '',
   'This server reads measurements; it does not make them. Epochs, test results and benchmarks are',
-  'written by the training pipeline itself, which authenticates with a separate project token. If',
+  'written by the training pipeline itself, which authenticates with its own pipeline key. If',
   'the user wants a result recorded, say that it has to come from the pipeline rather than',
   'inventing a run to hold it. The only writes here are the ones a person genuinely does by hand:',
   'naming a project, renaming or retagging a run.',

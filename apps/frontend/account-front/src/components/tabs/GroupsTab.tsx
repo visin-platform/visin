@@ -17,6 +17,7 @@ import {
 import { Group } from '../../types/group';
 import GroupCard from '../groups/GroupCard';
 import DeletedGroups from '../groups/DeletedGroups';
+import MyInvitations from '../groups/MyInvitations';
 import { ConfirmDialog, CreateGroupDialog } from '../groups/GroupDialogs';
 
 type PendingConfirm =
@@ -98,6 +99,8 @@ const GroupsTab: React.FC = () => {
         subtitle="Groups control who you share datasets and labelling work with. Owners and admins can rename a group and manage its members."
         primaryAction={{ label: 'New group', icon: <GroupAdd />, onClick: () => setCreateOpen(true) }}
       />
+
+      <MyInvitations />
 
       {mutationError && (
         <Alert severity="error" sx={{ mb: 3 }}>

@@ -4,7 +4,8 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 const service = vi.hoisted(() => ({
   getDataset: vi.fn(),
   updateDataset: vi.fn(),
-  deleteDataset: vi.fn(),
+  trashDataset: vi.fn(),
+  transferDataset: vi.fn(),
   uploadArchive: vi.fn(),
   startImport: vi.fn(),
   cancelImport: vi.fn(),
@@ -18,6 +19,7 @@ const service = vi.hoisted(() => ({
   resumeImport: vi.fn()
 }));
 vi.mock('../services/datasetService', () => service);
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 
 import { resetDatasetUploads } from '../services/datasetUploads';
 import DatasetDetailPage from './DatasetDetailPage';
@@ -30,9 +32,11 @@ const contents = {
     { path: 'frames', depth: 1, files: 2, images: 2, jsons: 0, bytes: 20 }
   ]
 };
+const ALL = { read: true, contribute: true, manage: true, own: true };
+const READ = { read: true, contribute: false, manage: false, own: false };
 const dataset = (overrides = {}) => ({
-  _id: 'd1', name: 'VLM', description: 'Mask review set', ownerId: 'u1', visibility: 'public', groups: [{ name: 'frames', images: 2, jsons: 0 }],
-  imageCount: 2, usedBy: 0, canWrite: true, contents, removingGroups: [],
+  _id: 'd1', name: 'VLM', description: 'Mask review set', owner: { kind: 'user', id: 'u1' }, createdBy: 'u1', visibility: 'public',
+  groups: [{ name: 'frames', images: 2, jsons: 0 }], imageCount: 2, usedBy: 0, permissions: ALL, contents, removingGroups: [],
   archive: { filename: 'vlm.zip', size: 2048, uploadedAt: '2026-09-01T00:00:00Z' },
   createdAt: '2026-09-01T00:00:00Z', updatedAt: '2026-09-02T00:00:00Z', ...overrides
 });
@@ -55,6 +59,7 @@ describe('DatasetDetailPage', () => {
     expect(screen.getByText(/vlm\.zip · 2\.0 KB · 2 images/)).toBeInTheDocument();
     expect(screen.getByText('Mask review set')).toBeInTheDocument();
     expect(screen.getByText('Visible to everyone')).toBeInTheDocument();
+    expect(screen.getByLabelText('Owner: Me')).toBeInTheDocument();
     expect(screen.getByText('Contents')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Images' })).toBeInTheDocument();
     await waitFor(() => expect(service.listItems).toHaveBeenCalledWith('d1', expect.objectContaining({ kind: 'image' })));
@@ -70,7 +75,7 @@ describe('DatasetDetailPage', () => {
     expect(await within(dialog).findByText('Not allowed')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await screen.findByRole('heading', { name: 'VLM v2' })).toBeInTheDocument();
-    expect(service.updateDataset).toHaveBeenLastCalledWith('d1', { name: 'VLM v2', description: 'Mask review set', visibility: 'public', groupId: undefined });
+    expect(service.updateDataset).toHaveBeenLastCalledWith('d1', { name: 'VLM v2', description: 'Mask review set', visibility: 'public' });
   });
 
   it('replaces the zip, then goes on to choosing image groups and importing', async () => {
@@ -114,27 +119,61 @@ describe('DatasetDetailPage', () => {
     expect(await screen.findByText('The last import was cancelled. The 5 files it stored are kept.')).toBeInTheDocument();
   });
 
-  it('keeps a dataset labeling uses from being deleted or re-imported', async () => {
-    service.getDataset.mockResolvedValue(dataset({ usedBy: 2, visibility: 'group' }));
+  // The trash is fine: the purge leaves a held dataset alone until its jobs go.
+  it('keeps a dataset labeling uses from being re-imported, and shows its owning group', async () => {
+    service.getDataset.mockResolvedValue(dataset({ usedBy: 2, visibility: 'private', owner: { kind: 'group', id: 'g1' } }));
+    service.listMyGroups.mockResolvedValue([{ id: 'g1', name: 'Team', role: 'admin' }]);
     renderPage();
     expect(await screen.findByText('Used by 2 labeling jobs')).toBeInTheDocument();
-    expect(screen.getByText('Shared with a group')).toBeInTheDocument();
-    for (const name of ['Delete', 'Replace zip', 'Image groups']) {
+    expect(screen.getByText('Private')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Owner: Team')).toBeInTheDocument();
+    for (const name of ['Replace zip', 'Image groups']) {
       expect(screen.getByRole('button', { name })).toBeDisabled();
+    }
+    expect(screen.getByRole('button', { name: 'Move to trash' })).toBeEnabled();
+  });
+
+  it('moves to the trash after confirmation', async () => {
+    service.trashDataset.mockResolvedValue(undefined);
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Move to trash' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/restore it from the trash for 30 days/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Move to trash' }));
+    await waitFor(() => expect(screen.getByTestId('elsewhere')).toBeInTheDocument());
+    expect(service.trashDataset).toHaveBeenCalledWith('d1');
+  });
+
+  it('transfers to one of my groups, and reports a refusal in the dialog', async () => {
+    service.listMyGroups.mockResolvedValue([{ id: 'g1', name: 'Team', role: 'owner' }]);
+    service.transferDataset
+      .mockRejectedValueOnce(new Error('Not yours to give'))
+      .mockResolvedValueOnce(dataset({ owner: { kind: 'group', id: 'g1' } }));
+    renderPage();
+    await waitFor(() => expect(service.listMyGroups).toHaveBeenCalled());
+    fireEvent.click(await screen.findByRole('button', { name: 'Transfer' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.mouseDown(within(dialog).getByLabelText('New owner'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Team' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Transfer' }));
+    expect(await within(dialog).findByText('Not yours to give')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Transfer' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(service.transferDataset).toHaveBeenLastCalledWith('d1', { kind: 'group', id: 'g1' });
+    expect(await screen.findByLabelText('Owner: Team')).toBeInTheDocument();
+  });
+
+  it('lets a contributor add images, but not edit, transfer or trash', async () => {
+    service.getDataset.mockResolvedValue(dataset({ permissions: { ...READ, contribute: true } }));
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'Replace zip' })).toBeEnabled();
+    for (const name of ['Edit', 'Transfer', 'Move to trash', 'Remove a group']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
     }
   });
 
-  it('deletes after confirmation', async () => {
-    service.deleteDataset.mockResolvedValue(undefined);
-    renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
-    await waitFor(() => expect(screen.getByTestId('elsewhere')).toBeInTheDocument());
-  });
-
   it('offers only download to a reader, and an upload to an empty dataset', async () => {
-    service.getDataset.mockResolvedValueOnce(dataset({ canWrite: false, description: undefined }));
+    service.getDataset.mockResolvedValueOnce(dataset({ permissions: READ, description: undefined }));
     service.getDownloadUrl.mockRejectedValue(new Error('Expired'));
     const { unmount } = renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Download zip' }));

@@ -11,12 +11,12 @@ import type {
 // Get all trainings
 export const getTrainings = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
-  const { page, limit, search, status, datasetId, projectId, tags, excludeTags, ids, sortBy, order } =
+  const { page, limit, search, status, datasetId, projectId, access, tags, excludeTags, ids, sortBy, order } =
     req.query as unknown as GetTrainingsQuery;
 
   const result = await trainingService.getTrainings(
     userId,
-    { search, status, datasetId, projectId, tags, excludeTags, ids },
+    { search, status, datasetId, projectId, access, tags, excludeTags, ids },
     { page, limit, sortBy, order }
   );
 

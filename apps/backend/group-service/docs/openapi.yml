@@ -259,6 +259,30 @@ components:
           type: string
           enum: [owner, admin, member]
           default: member
+        userId:
+          type: string
+          description: Invite this account, found with the candidates search, instead of making a link.
+
+    Candidate:
+      type: object
+      required: [id, email]
+      properties:
+        id: { type: string }
+        name: { type: string, description: First and last name, when the account has them }
+        email:
+          type: string
+          description: Masked (`m••••@taltech.ee`) unless the query was the whole address.
+
+    MyInvitation:
+      type: object
+      required: [id, groupId, groupName, role, expiresAt]
+      properties:
+        id: { type: string }
+        groupId: { type: string }
+        groupName: { type: string }
+        role: { type: string, enum: [owner, admin, member] }
+        invitedBy: { type: string, description: "The inviter's email, as the group knows it" }
+        expiresAt: { type: string, format: date-time }
     InvitationTokenRequest:
       type: object
       required: [token]
@@ -298,7 +322,7 @@ paths:
         Read-only service assertion using the existing JWT_SECRET. The signature is
         hex HMAC-SHA256 over JSON.stringify(["vision-project-groups", userId, issuedAt]).
         The timestamp must be within 30 seconds. This assertion cannot authenticate
-        ordinary group-management requests. Only live group IDs and names are returned.
+        ordinary group-management requests. Only live group IDs, names and the user's role in each are returned.
       security: []
       requestBody:
         required: true
@@ -334,12 +358,15 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [id, name]
+                      required: [id, name, role]
                       properties:
                         id:
                           type: string
                         name:
                           type: string
+                        role:
+                          type: string
+                          enum: [owner, admin, member]
         '400':
           description: Invalid request body
         '403':
@@ -583,6 +610,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '409':
+          description: The group still owns projects or datasets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: Internal server error
           content:
@@ -683,7 +716,8 @@ paths:
       description: |
         Permanently deletes a group and all its data.
         This action cannot be undone.
-        User must be an owner of the group.
+        User must be an owner of the group, and the group must own nothing: its projects and datasets,
+        including those in the trash, are transferred or deleted first. Otherwise it answers 409, naming them.
       parameters:
         - name: id
           in: path
@@ -717,6 +751,82 @@ paths:
         - internalAuth: []
 
   # Member Management Endpoints
+  /api/groups/{id}/candidates:
+    get:
+      tags: [Group Members]
+      summary: Find accounts to invite
+      description: |
+        For the group's owners and admins: accounts whose email, first name or last name starts with `q`, leaving out
+        members and anyone already invited. At most 10, and 30 searches a minute per account.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 3, maxLength: 254 } }
+      responses:
+        '200':
+          description: Matching accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/Candidate' } }
+        '400': { description: Fewer than three characters }
+        '403': { description: Not an owner or admin of the group }
+        '404': { description: Group not found }
+        '429': { description: Too many searches }
+        '502': { description: auth-service could not be reached }
+
+  /api/groups/invitations/mine:
+    get:
+      tags: [Group Members]
+      summary: Invitations waiting for me
+      description: Invitations addressed to the signed-in account that are unexpired and whose sender may still send them.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Pending invitations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { $ref: '#/components/schemas/MyInvitation' } }
+
+  /api/groups/invitations/{invitationId}/accept:
+    post:
+      tags: [Group Members]
+      summary: Accept an invitation addressed to me
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: invitationId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Joined the group
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupResponse' }
+        '403': { description: The sender can no longer send this invitation }
+        '404': { description: Invalid, expired, or someone else's invitation }
+        '409': { description: Already a member or concurrent change }
+
+  /api/groups/invitations/{invitationId}/decline:
+    post:
+      tags: [Group Members]
+      summary: Decline an invitation addressed to me
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: invitationId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Declined and removed }
+        '404': { description: Invalid or someone else's invitation }
+
   /api/groups/{id}/invitations:
     parameters:
       - name: id
@@ -725,8 +835,11 @@ paths:
         schema: { type: string }
     post:
       tags: [Group Members]
-      summary: Create a single-use invitation
-      description: Owners/admins may invite members or admins; only owners may invite owners. Share the returned link directly. Expires in seven days; at most 100 pending invitations. Response is not cacheable.
+      summary: Create a single-use invitation, or invite an account
+      description: |
+        Owners/admins may invite members or admins; only owners may invite owners. Without `userId`, returns a link
+        token to share directly. With `userId`, invites that account in the app, where it accepts or declines. Either
+        expires in seven days; at most 100 pending invitations. Response is not cacheable.
       security:
         - bearerAuth: []
         - internalAuth: []
@@ -738,7 +851,7 @@ paths:
               $ref: '#/components/schemas/CreateInvitationRequest'
       responses:
         '201':
-          description: Invitation created; token is returned only at creation
+          description: Invitation created; a link's token is returned only at creation
           content:
             application/json:
               schema:
@@ -748,12 +861,14 @@ paths:
                   data:
                     type: object
                     properties:
-                      token: { type: string }
+                      token: { type: string, description: A link invitation only }
+                      id: { type: string, description: An account invitation only }
+                      userId: { type: string, description: An account invitation only }
                       expiresAt: { type: string, format: date-time }
                       role: { type: string, enum: [owner, admin, member] }
         '403': { description: Insufficient permissions }
         '404': { description: Group not found }
-        '409': { description: Concurrent change or invitation limit reached }
+        '409': { description: Already a member, already invited, concurrent change, or invitation limit reached }
     delete:
       tags: [Group Members]
       summary: Revoke all pending invitations
@@ -913,6 +1028,63 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - bearerAuth: []
+        - internalAuth: []
+
+  /api/groups/{id}/activity:
+    get:
+      tags: [Groups]
+      summary: What happened to what the group owns
+      description: |
+        Transfers, visibility changes, and moves to and from the trash of the projects and datasets the
+        group owns or owned, newest first (up to 200). Owners and admins only. `actorEmail` names who did
+        it while they are a member.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Group ID
+      responses:
+        '200':
+          description: The group's activity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        at: { type: string, format: date-time }
+                        service: { type: string }
+                        resourceType: { type: string, enum: [project, dataset] }
+                        resourceId: { type: string }
+                        resourceName: { type: string }
+                        action: { type: string, enum: [transfer, visibility, trash, restore, purge] }
+                        actorId: { type: string }
+                        actorEmail: { type: string }
+                        from: { type: object, properties: { kind: { type: string }, id: { type: string } } }
+                        to: { type: object, properties: { kind: { type: string }, id: { type: string } } }
+                        visibility: { type: string }
+        '403':
+          description: Not an owner or admin of the group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Group not found
           content:
             application/json:
               schema:

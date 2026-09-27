@@ -85,27 +85,30 @@ trainings return 404, and visible trainings with no available config return
 `{ configs: [], total: 0 }`. Making a project private protects this relationship;
 it does not withdraw the selected content from the public libraries.
 
-## Project groups and write permission
+## Project ownership and permissions
 
-Public visibility grants read access. A project owner can assign **Editor groups**
-in project settings. Any current member of an assigned, live group can read the
-private project and create, update, or delete its trainings, epochs, test results,
-benchmarks, visualizations, comparisons, and findings. The project owner alone
-controls project settings, group grants, deletion, and project tokens. A project
-credential remains restricted to its project.
+Every project has an `owner` — a person, or a group — plus a `visibility`
+(`private` or `public`) and `createdBy` (attribution only). What a caller may do
+is one of `read`, `contribute`, `manage` and `own`:
 
-`editorGroupIds` is an array of group IDs on project create/update. Owners may add
-groups they currently belong to and remove existing grants. Group membership is
-verified against group-service once per request; token `groupRoles` are not used
-as permission grants. Removing a member, deleting a group, or removing the project
-grant takes effect on the next request. A failed membership lookup grants no access.
-Membership uses immutable account IDs accepted through group invitations. The
-separate Google-account-linking and session-revocation backlog still applies.
+- the owning person has `own`; for a group-owned project, the caller's current
+  role in the group decides (member `contribute`, admin `manage`, owner `own`);
+- **editor groups** (`editorGroupIds`) share a project with other groups: their
+  current members get `contribute`;
+- `public` gives anyone `read`.
 
-Standalone trainings, benchmarks, comparisons, and shared libraries record their
-creator in `ownerId`. Unowned records are read-only; there is no first-editor
-claim or migration command. Existing records and references require an explicit
-operator migration, which is managed outside this change.
+`contribute` adds runs, results, comparisons and findings, and changes what the
+caller added; `manage` changes project settings and anyone's runs and moves the
+project to the trash; `own` changes visibility, transfers the project
+(`PUT /api/projects/:id/owner`), restores it or deletes it for good. Every run
+belongs to a project. Group membership is read from group-service once per
+request, so a removal takes effect on the next request; a failed lookup grants
+nothing. A key limited to a project stays inside that project.
+
+A project in the trash (`DELETE /api/projects/:id`) takes its live runs with it
+and comes back with exactly those (`POST /api/projects/:id/restore`). A sweeper
+(backend-core `startSweeper`) deletes projects and runs that have been in the
+trash for 30 days, with their visualization files.
 
 The browser reads `GET /api/write-capabilities?kind=training&ids=<comma-separated IDs>`
 (up to 100 IDs) to gate controls; supported kinds also include project, comparison,

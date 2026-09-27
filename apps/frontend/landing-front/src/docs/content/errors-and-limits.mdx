@@ -16,7 +16,7 @@ record. Log the message: it is usually the fix.
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
 | `400`               | The request is wrong: a missing or malformed field, or a body that is not valid JSON. The message names the field.             | No, fix the request             |
 | `401`               | No credential, or one that is wrong, expired or revoked. See [authentication](/docs/authentication#when-a-request-is-refused). | No                              |
-| `403`               | The credential may not do this, such as a project token outside its project                                                    | No                              |
+| `403`               | The credential may not do this, such as a pipeline key outside its project                                                    | No                              |
 | `404`               | The record does not exist, or you cannot see it                                                                                | No                              |
 | `409`               | It already exists, such as a second run with the same `uuid`                                                                   | No, it is already there         |
 | `413`               | The request body is too large                                                                                                  | No, send less at once           |

@@ -1,10 +1,11 @@
 import express from 'express';
-import { apiKeyAuth, assertRequiredEnv, connectDb, createBaseApp, createHealthCheckHandler, errorHandler, logger, optionalAuth, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
+import { apiKeyAuth, assertRequiredEnv, connectDb, createBaseApp, createHealthCheckHandler, errorHandler, logger, optionalAuth, STANDARD_CORS_ALLOWED_HEADERS, serve, startSweeper } from '@visin/backend-core';
 import datasetRoutes from './routes/datasetRoutes';
 import internalRoutes from './routes/internalRoutes';
 import { createImportWorker } from './queue/importWorker';
 import { resumeDeletions } from './services/deleteService';
 import { closeImportQueue } from './queue/importQueue';
+import { purgeExpiredTrash } from './services/datasetService';
 
 // JWT_SECRET verifies sessions; INTERNAL_SERVICE_TOKEN gates /internal and the
 // group-service calls; FILE_SERVICE_API_KEY every storage call; REDIS_URL the
@@ -46,10 +47,12 @@ connectDb({ serviceName: 'dataset-service' })
     // On redeploy, stop taking new work and let the in-flight import finish:
     // `worker.close()` waits for the active job. A hard kill is covered by
     // BullMQ's stalled-job recovery, and the import resumes where it stopped.
+    // Datasets trashed more than 30 days ago are deleted: hourly, and once now.
+    const trashSweeper = startSweeper({ name: 'dataset-trash-purge', run: async () => void (await purgeExpiredTrash()) });
     serve(app, {
       port: PORT,
       serviceName: 'dataset-service',
-      onShutdown: () => Promise.all([importWorker.close(), closeImportQueue()])
+      onShutdown: () => Promise.all([trashSweeper.stop(), importWorker.close(), closeImportQueue()])
     });
   })
   .catch((err: Error) => {

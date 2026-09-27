@@ -1,8 +1,10 @@
 import { createHmac } from 'crypto';
-import { fetchWithTimeout, requireEnv } from '@visin/backend-core';
+import { BadGatewayError, fetchWithTimeout, HttpError, requireEnv, type GroupRole } from '@visin/backend-core';
 import { requestIdentityContext } from '../middleware/requestIdentityContext';
 
-export interface ProjectGroup { id: string; name: string }
+export interface ProjectGroup { id: string; name: string; role: GroupRole }
+
+const ROLES: readonly string[] = ['owner', 'admin', 'member'];
 
 export async function getUserGroups(userId?: string): Promise<ProjectGroup[]> {
   const context = requestIdentityContext.getStore();
@@ -26,16 +28,27 @@ async function fetchGroups(userId: string): Promise<ProjectGroup[]> {
   const baseUrl =
     process.env.GROUP_SERVICE_URL ||
     (process.env.NODE_ENV === 'production' ? requireEnv('GROUP_SERVICE_URL') : 'http://localhost:5006');
-  const response = await fetchWithTimeout(`${baseUrl}/api/internal/project-groups`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, issuedAt, signature }),
-    timeoutMs: 3000, serviceName: 'group-service'
-  });
-  if (!response.ok) throw new Error('Could not verify project group membership');
-  const body: unknown = await response.json();
-  if (!body || typeof body !== 'object' || !('data' in body) || !Array.isArray(body.data) ||
-      !body.data.every(group => group && typeof group.id === 'string' && /^[0-9a-fA-F]{24}$/.test(group.id) && typeof group.name === 'string')) {
-    throw new Error('Invalid group membership response');
+  // Every failure here is group-service's, not this service's: a 502 (or the
+  // 504 a timeout already is), never a 500. A 500 tells API clients the request
+  // itself broke something and is not worth retrying; an unreachable peer is.
+  try {
+    const response = await fetchWithTimeout(`${baseUrl}/api/internal/project-groups`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, issuedAt, signature }),
+      timeoutMs: 3000, serviceName: 'group-service'
+    });
+    if (!response.ok) throw new BadGatewayError(`Could not verify project group membership: group-service answered ${response.status}`);
+    const body: unknown = await response.json();
+    if (!body || typeof body !== 'object' || !('data' in body) || !Array.isArray(body.data) ||
+        !body.data.every(group => group && typeof group.id === 'string' && /^[0-9a-fA-F]{24}$/.test(group.id) && typeof group.name === 'string' &&
+          (group.role === undefined || ROLES.includes(group.role)))) {
+      throw new BadGatewayError('Invalid group membership response');
+    }
+    // A group-service from before roles were sent: the least a member can be.
+    return (body.data as ProjectGroup[]).map(group => ({ ...group, role: group.role ?? 'member' }));
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    // A refused connection or unparseable JSON.
+    throw new BadGatewayError('Could not verify project group membership: group-service is unreachable');
   }
-  return body.data as ProjectGroup[];
 }

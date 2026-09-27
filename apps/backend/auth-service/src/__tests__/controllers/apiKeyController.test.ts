@@ -10,6 +10,9 @@ jest.mock('@visin/backend-core', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
+jest.mock('../../clients/visionProjectClient', () => ({ getKeyProject: jest.fn() }));
+
+import { getKeyProject } from '../../clients/visionProjectClient';
 import {
   createApiKey,
   deleteApiKey,
@@ -118,9 +121,43 @@ describe('createKey', () => {
       name: 'Claude Code',
       scopes: ['vision:read', 'dataset:read'],
       expiresAt: null,
+      project: null,
     });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json.mock.calls[0][0].data.token).toBe('vsn_live_0123456789ab_secret');
+  });
+
+  describe('limited to a project', () => {
+    const projectId = '0000000000000000000000a1';
+    const project = getKeyProject as jest.Mock;
+    const body = { name: 'nightly', scopes: ['vision:read', 'vision:write'], projectId };
+
+    it('checks the project with vision-service and keeps its name on the key', async () => {
+      project.mockResolvedValue({ id: projectId, name: 'Road scenes', canWrite: true });
+      mocked.create.mockResolvedValue({ summary, token: 'vsn_live_0123456789ab_secret' });
+
+      await createKey(makeReq({ body }), makeRes());
+
+      expect(project).toHaveBeenCalledWith(projectId, 'u1');
+      expect(mocked.create).toHaveBeenCalledWith(expect.objectContaining({ project: { id: projectId, name: 'Road scenes' } }));
+    });
+
+    it('allows only scopes that live inside a project, before asking vision-service', async () => {
+      await expect(createKey(makeReq({ body: { ...body, scopes: ['vision:write', 'dataset:read'] } }), makeRes())).rejects.toMatchObject({
+        statusCode: 400
+      });
+      expect(project).not.toHaveBeenCalled();
+      expect(mocked.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a project its owner cannot write to, or one that does not exist', async () => {
+      project.mockResolvedValue({ id: projectId, name: 'Someone else’s', canWrite: false });
+      await expect(createKey(makeReq({ body }), makeRes())).rejects.toMatchObject({ statusCode: 403 });
+
+      project.mockResolvedValue(null);
+      await expect(createKey(makeReq({ body }), makeRes())).rejects.toMatchObject({ statusCode: 404 });
+      expect(mocked.create).not.toHaveBeenCalled();
+    });
   });
 
   it('refuses a key that would reach nothing', async () => {

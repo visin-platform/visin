@@ -1,7 +1,10 @@
 import { randomBytes, createHash } from 'crypto';
-import { ConflictError, ForbiddenError, NotFoundError } from '@visin/backend-core';
+import { ConflictError, ForbiddenError, listResourceEvents, NotFoundError } from '@visin/backend-core';
+import { isValidObjectId } from 'mongoose';
 import { Error as MongooseError } from 'mongoose';
-import { Group, IGroup, GroupRole } from '../models/Group';
+import { Group, IGroup, IGroupInvitation, GroupRole } from '../models/Group';
+import { searchUsers } from '../clients/authUsersClient';
+import { ownedByGroup, type Owned } from '../clients/ownedResourcesClient';
 
 /**
  * `deletedAt` has `default: null`, so the field exists on every document —
@@ -110,11 +113,31 @@ export async function restoreGroup(groupId: string, actingId: string): Promise<I
   return group;
 }
 
+const describe = (owned: Owned, singular: string, plural: string, where: string): string | undefined => {
+  if (owned.count === 0) return undefined;
+  const more = owned.count > owned.names.length ? `, and ${owned.count - owned.names.length} more` : '';
+  return `${owned.count} ${owned.count === 1 ? singular : plural} in ${where} (${owned.names.map((name) => `"${name}"`).join(', ')}${more})`;
+};
+
+/**
+ * A group deleted for good leaves what it owned with nobody who could reach
+ * it, so it must own nothing first: its projects and datasets are transferred
+ * or deleted, including those in the trash.
+ */
+async function assertOwnsNothing(groupId: string): Promise<void> {
+  const { projects, datasets } = await ownedByGroup(groupId);
+  const left = [describe(projects, 'project', 'projects', 'Vision'), describe(datasets, 'dataset', 'datasets', 'Datasets')].filter(Boolean);
+  if (left.length > 0) {
+    throw new ConflictError(`The group still owns ${left.join(' and ')}. Transfer or delete them first, including any in the trash.`);
+  }
+}
+
 export async function permanentlyDeleteGroup(groupId: string, actingId: string): Promise<void> {
   const group = await Group.findOne({ _id: groupId, ...IS_DELETED });
   if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingId);
   if (myRole !== 'owner') throw new ForbiddenError();
+  await assertOwnsNothing(groupId);
 
   // A restore or ownership change after authorization must invalidate deletion.
   const deleted = await Group.findOneAndDelete({
@@ -249,4 +272,170 @@ export async function acceptInvitation(token: string, userId: string, email?: st
   group.$where = { deletedAt: null, invitations: { $elemMatch: { tokenHash, expiresAt: { $gt: new Date() } } } };
   await saveGroup(group);
   return group;
+}
+
+// ---------------------------------------------------------------------------
+// Invitations addressed to an account: "Add member" finds someone who already
+// has an account and invites them in the app, where they accept or decline.
+// ---------------------------------------------------------------------------
+
+const INVITATION_DAYS = 7;
+const MAX_PENDING = 100;
+/** More than a page is fetched, so there are still enough after members and invitees are left out. */
+const CANDIDATE_FETCH = 25;
+const CANDIDATE_LIMIT = 10;
+
+/** Every caller loads the group with `+invitations`, which the schema defaults to an empty list. */
+const pending = (group: IGroup, now = new Date()): IGroupInvitation[] =>
+  group.invitations!.filter((invitation) => invitation.expiresAt > now);
+
+/** An invitation whose sender has since lost the right to send it no longer stands. */
+const stillValid = (group: IGroup, invitation: IGroupInvitation): boolean => {
+  try {
+    assertCanInvite(group, invitation.createdBy, invitation.role);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** `mari.tamm@taltech.ee` → `m••••@taltech.ee`: enough to tell two Maris apart, not enough to write to one. */
+export const maskEmail = (email: string): string => {
+  const at = email.lastIndexOf('@');
+  return at > 0 ? `${email.charAt(0)}••••${email.slice(at)}` : '••••';
+};
+
+export interface Candidate {
+  id: string;
+  name?: string;
+  /** masked unless the query was the whole address */
+  email: string;
+}
+
+/**
+ * People a group's owner or admin could invite: accounts matching `query`
+ * (at least 3 characters, enforced by the route), leaving out the group's
+ * members and anyone already invited. A search on someone's name shows their
+ * address masked; typing the whole address shows it, since the searcher knew it.
+ */
+export async function findCandidates(groupId: string, actorId: string, query: string): Promise<Candidate[]> {
+  const group = await Group.findOne({ _id: groupId, ...NOT_DELETED }).select('+invitations');
+  if (!group) throw new NotFoundError();
+  const role = memberRole(group, actorId);
+  if (role !== 'owner' && role !== 'admin') throw new ForbiddenError();
+
+  const taken = new Set([
+    ...group.members.map((member) => member.userId),
+    ...pending(group).flatMap((invitation) => (invitation.userId ? [invitation.userId] : []))
+  ]);
+  const exact = query.trim().toLowerCase();
+  const matches = await searchUsers(query.trim(), CANDIDATE_FETCH);
+  return matches
+    .filter((user) => !taken.has(user.id))
+    .slice(0, CANDIDATE_LIMIT)
+    .map((user) => ({
+      id: user.id,
+      name: [user.firstName, user.lastName].filter(Boolean).join(' ') || undefined,
+      email: user.email.toLowerCase() === exact ? user.email : maskEmail(user.email)
+    }));
+}
+
+/** Invite one account, with the same role rules and limits as a link. */
+export async function inviteAccount(groupId: string, actorId: string, userId: string, role: GroupRole = 'member') {
+  const group = await Group.findOne({ _id: groupId, ...NOT_DELETED }).select('+invitations');
+  if (!group) throw new NotFoundError();
+  assertCanInvite(group, actorId, role);
+  if (group.members.some((member) => member.userId === userId)) throw new ConflictError('Already a member of this group');
+  const now = new Date();
+  group.invitations = pending(group, now);
+  if (group.invitations.some((invitation) => invitation.userId === userId)) {
+    throw new ConflictError('This person already has an invitation to this group');
+  }
+  if (group.invitations.length >= MAX_PENDING) throw new ConflictError('Revoke pending invitations before creating more');
+  const expiresAt = new Date(now.getTime() + INVITATION_DAYS * 24 * 60 * 60 * 1000);
+  group.invitations.push({ userId, role, createdBy: actorId, expiresAt });
+  await saveGroup(group);
+  const created = group.invitations[group.invitations.length - 1];
+  return { id: String(created._id), userId, role, expiresAt };
+}
+
+export interface MyInvitation {
+  id: string;
+  groupId: string;
+  groupName: string;
+  role: GroupRole;
+  /** the inviter's email, as the group knows it */
+  invitedBy?: string;
+  expiresAt: Date;
+}
+
+/** Invitations waiting for `userId` to accept or decline. */
+export async function listMyInvitations(userId: string): Promise<MyInvitation[]> {
+  const now = new Date();
+  const groups = await Group.find({
+    ...NOT_DELETED,
+    invitations: { $elemMatch: { userId, expiresAt: { $gt: now } } }
+  }).select('+invitations');
+  return groups.flatMap((group) =>
+    pending(group, now)
+      .filter((invitation) => invitation.userId === userId && stillValid(group, invitation))
+      .map((invitation) => ({
+        id: String(invitation._id),
+        groupId: group._id.toString(),
+        groupName: group.name,
+        role: invitation.role,
+        invitedBy: group.members.find((member) => member.userId === invitation.createdBy)?.email,
+        expiresAt: invitation.expiresAt
+      }))
+  );
+}
+
+const UNUSABLE = 'Invitation is invalid or expired';
+
+/** Accept an invitation addressed to `userId`. Only that account can. */
+export async function acceptAccountInvitation(invitationId: string, userId: string, email?: string): Promise<IGroup> {
+  if (!isValidObjectId(invitationId)) throw new NotFoundError(UNUSABLE);
+  const now = new Date();
+  const group = await Group.findOne({
+    ...NOT_DELETED,
+    invitations: { $elemMatch: { _id: invitationId, userId, expiresAt: { $gt: now } } }
+  }).select('+invitations');
+  const invitation = group?.invitations?.find((item) => String(item._id) === invitationId && item.userId === userId);
+  if (!group || !invitation) throw new NotFoundError(UNUSABLE);
+  assertCanInvite(group, invitation.createdBy, invitation.role);
+  if (group.members.some((member) => member.userId === userId)) throw new ConflictError('Already a member of this group');
+  group.members.push({ userId, ...(email ? { email } : {}), role: invitation.role, joinedAt: now });
+  group.invitations = group.invitations!.filter((item) => String(item._id) !== invitationId);
+  // Joining and using up the invitation are one versioned write, as for links.
+  group.$where = { deletedAt: null, invitations: { $elemMatch: { _id: invitation._id, userId, expiresAt: { $gt: now } } } };
+  await saveGroup(group);
+  return group;
+}
+
+/** Decline (and so remove) an invitation addressed to `userId`. */
+export async function declineAccountInvitation(invitationId: string, userId: string): Promise<void> {
+  if (!isValidObjectId(invitationId)) throw new NotFoundError(UNUSABLE);
+  const result = await Group.updateOne(
+    { invitations: { $elemMatch: { _id: invitationId, userId } } },
+    { $pull: { invitations: { _id: invitationId, userId } } }
+  );
+  if (result.modifiedCount === 0) throw new NotFoundError(UNUSABLE);
+}
+
+/**
+ * What happened to what the group owns or owned — transfers, visibility
+ * changes, the trash — newest first, for its owners and admins. The person who
+ * did it is named by their email while they are a member.
+ */
+export async function groupActivity(groupId: string, actingId: string) {
+  const group = await Group.findOne({ _id: groupId, ...NOT_DELETED });
+  if (!group) throw new NotFoundError();
+  const role = memberRole(group, actingId);
+  if (role !== 'owner' && role !== 'admin') throw new ForbiddenError("Only the group's owners and admins can see its activity");
+  const events = await listResourceEvents({ groupId: group._id.toString(), limit: 200 });
+  return events.map((event) => ({
+    ...event,
+    _id: String((event as { _id?: unknown })._id),
+    actorEmail: group.members.find((member) => member.userId === event.actorId)?.email
+  }));
 }

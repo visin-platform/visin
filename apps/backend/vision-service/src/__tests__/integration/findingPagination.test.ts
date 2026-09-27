@@ -26,9 +26,9 @@ describe('visible finding pages with in-memory MongoDB', () => {
 
   beforeEach(async () => {
     const projects = await Project.create([
-      { name: 'Mine', slug: 'mine', ownerId: owner },
-      { name: 'Private', slug: 'private', ownerId: 'someone-else' },
-      { name: 'Public', slug: 'public', ownerId: 'someone-else', isPublic: true },
+      { name: 'Mine', slug: 'mine', owner: { kind: 'user', id: owner }, createdBy: owner },
+      { name: 'Private', slug: 'private', owner: { kind: 'user', id: 'someone-else' }, createdBy: 'someone-else' },
+      { name: 'Public', slug: 'public', owner: { kind: 'user', id: 'someone-else' }, createdBy: 'someone-else', visibility: 'public' },
     ]);
     [mine, hidden, publicProject] = projects.map(project => project._id.toString());
   });
@@ -99,7 +99,7 @@ describe('visible finding pages with in-memory MongoDB', () => {
     const otherPage = await listFindings('someone-else', {});
     expect(otherPage).toHaveLength(6);
     expect(otherPage.every(row => row.projectId !== mine)).toBe(true);
-    await Project.updateOne({ _id: publicProject }, { $set: { isPublic: false } });
+    await Project.updateOne({ _id: publicProject }, { $set: { visibility: 'private' } });
     expect(await listFindings(undefined, { before: cursorFor(publicPage[1]) })).toEqual([]);
     expect(await listFindings('no-projects', {})).toEqual([]);
   });

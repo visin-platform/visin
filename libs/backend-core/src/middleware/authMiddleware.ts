@@ -11,9 +11,7 @@ import { ServiceUnavailableError, UnauthorizedError } from '../errors/HttpError'
  * Cookie first: browser requests carry the shared `access_token` SSO cookie
  * (set by auth-service, readable here since COOKIE_DOMAIN is a shared parent
  * domain across every Visin subdomain — see createBaseApp's cookieParser).
- * Falls back to the Authorization header for non-browser callers, notably
- * vision-service's project-scoped API tokens (apiTokenMiddleware), which
- * were never cookie-based.
+ * Falls back to the Authorization header for non-browser callers.
  */
 function extractToken(req: Request): string | undefined {
   return req.cookies?.access_token || req.headers.authorization?.replace('Bearer ', '');

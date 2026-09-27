@@ -7,7 +7,8 @@ import {
   parseKey,
   secretMatches
 } from './crypto';
-import type { ApiKeyScope, ApiKeySummary, ApiKeyVerification } from './types';
+import { BadRequestError } from '../errors/HttpError';
+import { isProjectKeyScope, type ApiKeyScope, type ApiKeySummary, type ApiKeyVerification } from './types';
 
 export interface CreateApiKeyInput {
   userId: string;
@@ -16,6 +17,8 @@ export interface CreateApiKeyInput {
   name: string;
   scopes: ApiKeyScope[];
   expiresAt?: Date | null;
+  /** limits the key to one project; the caller has checked its owner may write there */
+  project?: { id: string; name: string } | null;
 }
 
 export interface CreatedApiKey {
@@ -29,6 +32,7 @@ const toSummary = (key: IApiKey): ApiKeySummary => ({
   name: key.name,
   prefix: displayPrefix(key.keyId),
   scopes: key.scopes,
+  project: key.projectId ? { id: key.projectId, name: key.projectName ?? '' } : null,
   createdAt: key.createdAt.toISOString(),
   lastUsedAt: key.lastUsedAt?.toISOString() ?? null,
   expiresAt: key.expiresAt?.toISOString() ?? null,
@@ -36,6 +40,11 @@ const toSummary = (key: IApiKey): ApiKeySummary => ({
 });
 
 export const createApiKey = async (input: CreateApiKeyInput): Promise<CreatedApiKey> => {
+  // Checked here too, not only by the route: a limited key with a dataset scope
+  // would reach datasets, which belong to no project, so nothing could limit it.
+  if (input.project && !input.scopes.every(isProjectKeyScope)) {
+    throw new BadRequestError('A key limited to a project can only carry vision and analysis scopes');
+  }
   const { token, id, hash } = generateKey();
   const sealed = encryptSecret(token);
 
@@ -50,7 +59,8 @@ export const createApiKey = async (input: CreateApiKeyInput): Promise<CreatedApi
     sealedIv: sealed.iv,
     sealedTag: sealed.tag,
     scopes: input.scopes,
-    expiresAt: input.expiresAt ?? undefined
+    expiresAt: input.expiresAt ?? undefined,
+    ...(input.project ? { projectId: input.project.id, projectName: input.project.name } : {})
   });
 
   return { summary: toSummary(key), token };
@@ -107,9 +117,8 @@ export const deleteApiKey = async (userId: string, id: string): Promise<boolean>
 /**
  * How stale `lastUsedAt` must be before it is worth a write.
  *
- * Same reasoning as vision-service's `apiTokenMiddleware`: this runs on every
- * request an assistant makes, and writing unconditionally turns every read into
- * a write for a field only the listing UI reads.
+ * This runs on every request an assistant makes, and writing unconditionally
+ * turns every read into a write for a field only the listing UI reads.
  */
 const LAST_USED_STALE_MS = 60_000;
 
@@ -154,6 +163,7 @@ export const verifyApiKey = async (token: unknown): Promise<ApiKeyVerification> 
     userName: key.userName,
     keyId: String(key._id),
     label: key.name,
-    scopes: key.scopes
+    scopes: key.scopes,
+    ...(key.projectId ? { projectId: key.projectId } : {})
   };
 };

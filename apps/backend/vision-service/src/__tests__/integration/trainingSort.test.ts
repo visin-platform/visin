@@ -21,9 +21,9 @@ describe('sorting the trainings list', () => {
   });
 
   beforeEach(async () => {
-    const cheap = await Project.create({ name: 'Cheap', ownerId: OWNER, isPublic: true, costing: { cpuRatePerHour: 1, gpuRatePerHour: 1 } });
-    const dear = await Project.create({ name: 'Dear', ownerId: OWNER, isPublic: true, costing: { cpuRatePerHour: 10, gpuRatePerHour: 20 } });
-    const unpriced = await Project.create({ name: 'Unpriced', ownerId: OWNER, isPublic: true });
+    const cheap = await Project.create({ name: 'Cheap', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'public', costing: { cpuRatePerHour: 1, gpuRatePerHour: 1 } });
+    const dear = await Project.create({ name: 'Dear', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'public', costing: { cpuRatePerHour: 10, gpuRatePerHour: 20 } });
+    const unpriced = await Project.create({ name: 'Unpriced', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'public' });
     // [name, project, epoch seconds]: `alpha` runs longest but on the cheap rates.
     const runs: [string, { _id: unknown }, number[]][] = [
       ['alpha', cheap, [3600, 3600, 3600]],

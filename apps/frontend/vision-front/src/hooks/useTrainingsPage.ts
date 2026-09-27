@@ -19,7 +19,9 @@ export const useTrainingsPage = () => {
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount'>('updatedAt');
+  const [sortBy, setSortBy] = useState<
+    'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount'
+  >('updatedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [trainingName, setTrainingName] = useState('');
@@ -44,26 +46,29 @@ export const useTrainingsPage = () => {
   // reported by the pipeline, so the form shows it read-only and no longer
   // fetches every analysis to fill a picker.
   const { data: projectsData, isLoading: loadingProjects } = useQuery({
-    queryKey: ['projects', 'all'],
-    queryFn: () => projectService.getProjects(),
+    queryKey: ['projects', 'contribute'],
+    queryFn: () => projectService.getProjects({ access: 'contribute' }),
     staleTime: 5 * 60 * 1000,
     enabled: createModalOpen
   });
   const availableProjects = projectsData?.data || [];
-  const canEditProject = useWriteCapabilities('project', availableProjects.map(project => project._id));
-  const projects = availableProjects.filter(project => canEditProject(project._id));
+  const canEditProject = useWriteCapabilities(
+    'project',
+    availableProjects.map((project) => project._id)
+  );
+  const projects = availableProjects.filter((project) => canEditProject(project._id));
 
   // Initialize selectedTags and excludedTags from URL parameters
   useEffect(() => {
     const tagsParam = searchParams.get('tags');
     if (tagsParam) {
-      const tags = tagsParam.split(',').filter(tag => tag.trim().length > 0);
+      const tags = tagsParam.split(',').filter((tag) => tag.trim().length > 0);
       setSelectedTags(tags);
     }
-    
+
     const excludeTagsParam = searchParams.get('excludeTags');
     if (excludeTagsParam) {
-      const excludeTags = excludeTagsParam.split(',').filter(tag => tag.trim().length > 0);
+      const excludeTags = excludeTagsParam.split(',').filter((tag) => tag.trim().length > 0);
       setExcludedTags(excludeTags);
     }
   }, [searchParams]);
@@ -118,7 +123,10 @@ export const useTrainingsPage = () => {
   const displayTrainings = useMemo(() => data?.data?.trainings || [], [data?.data?.trainings]);
   const totalCount = data?.data?.pagination?.total || 0;
 
-  const canWrite = useWriteCapabilities('training', [...displayTrainings.map(row => row._id), ...selectedTrainingIds]);
+  const canWrite = useWriteCapabilities('training', [
+    ...displayTrainings.map((row) => row._id),
+    ...selectedTrainingIds
+  ]);
   const canDeleteSelected = selectedTrainingIds.size > 0 && [...selectedTrainingIds].every(canWrite);
 
   // CSV Export function
@@ -136,7 +144,10 @@ export const useTrainingsPage = () => {
     setPage(0);
   };
 
-  const handleSort = (column: 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount') => {
+  const handleSort = (
+    column:
+      'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount'
+  ) => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
@@ -152,6 +163,11 @@ export const useTrainingsPage = () => {
       return;
     }
 
+    if (!editingTrainingId && !selectedProjectId) {
+      setCreateError('Choose a project for this training');
+      return;
+    }
+
     try {
       setCreating(true);
       setCreateError(null);
@@ -164,7 +180,7 @@ export const useTrainingsPage = () => {
           datasetId: selectedDatasetId || undefined,
           projectId: selectedProjectId || undefined,
           status: selectedStatus,
-          tags: trainingTags,
+          tags: trainingTags
         });
         setCreateSuccess('Training updated successfully!');
       } else {
@@ -174,7 +190,7 @@ export const useTrainingsPage = () => {
           datasetId: selectedDatasetId || undefined,
           projectId: selectedProjectId || undefined,
           status: selectedStatus,
-          tags: trainingTags,
+          tags: trainingTags
         });
         setCreateSuccess(`Training "${trainingName}" created successfully!`);
       }
@@ -279,11 +295,11 @@ export const useTrainingsPage = () => {
     try {
       setCreating(true);
       const trainingsToDelete = Array.from(selectedTrainingIds);
-      
+
       for (const trainingId of trainingsToDelete) {
         await trainingService.deleteTraining(trainingId);
       }
-      
+
       setCreateSuccess(`${trainingsToDelete.length} training(s) deleted successfully!`);
       queryClient.invalidateQueries({ queryKey: ['trainings-deleted'] });
       setDeleteMultipleDialogOpen(false);

@@ -3,6 +3,8 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IConfig extends Document {
   /** Absent on legacy records; never inferred from the first editor. */
   ownerId?: string;
+  /** the project it belongs to, whose readers see it; absent only on configs from before projects owned them */
+  projectId?: string;
   config_uuid: string;
   summary: string;
   config_data: Record<string, unknown>;
@@ -15,6 +17,7 @@ export interface IConfig extends Document {
 const ConfigSchema: Schema = new Schema(
   {
     ownerId: { type: String, immutable: true, index: true },
+    projectId: { type: String, index: true },
     config_uuid: {
       type: String,
       required: true,

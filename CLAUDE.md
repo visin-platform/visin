@@ -72,8 +72,11 @@ including any failures.
 - **Where the token lives:** auth-service sets the JWT as an httpOnly `access_token` cookie on the shared parent
   domain (`COOKIE_DOMAIN`). backend-core's `authenticateToken`/`optionalAuth` read the cookie first and fall back to
   `Authorization: Bearer`.
-- **The Bearer path is also used by other credentials:** vision-service's project API tokens (opaque, no dots,
-  matched before the JWT middleware), user API keys and OAuth access tokens. Each has its own verification path.
+- **The Bearer path is also used by other credentials:** user API keys and OAuth access tokens. Each has its own
+  verification path.
+- **Pipeline keys:** an API key can be limited to one project (`ApiKey.projectId`, only `vision:*`/`analysis:*`
+  scopes). vision-service's `projectKeyAuth` runs such a request in `projectTokenContext`, so the project-limit checks
+  apply; the key keeps its owner's real permissions there, groups included.
 - **Checks on every request:** both middlewares check the account's id, email and `tokenVersion` against `users` on
   the primary, uncached. Required auth fails closed on a database error with a 503, never a 401 (fronts treat
   401 as signed out); optional auth continues anonymously.
@@ -114,12 +117,24 @@ including any failures.
   domain: Visin is self-hosted, and a fallback sends another deployment's users there.
   - Examples use `example.com`, test fixtures `example.test`.
 
+### Ownership (projects and datasets)
+
+- **Projects and datasets have an `owner`** (`{ kind: 'user' | 'group', id }`), a `visibility` (`private` |
+  `public`) and `createdBy` (attribution only). Everything else follows its project or dataset; label jobs follow
+  their dataset.
+- **Permissions** are backend-core `ownership`: `read` < `contribute` < `manage` < `own`. A group owner's role decides
+  (member `contribute`, admin `manage`, owner `own`); `canChangeItem` lets `contribute` change only what the caller
+  added. Transfers go through `canTransfer`; changes are recorded with `recordResourceEvent`.
+- **Deleting is the trash:** `trashedAt`, restorable by `own` for 30 days, then a `startSweeper` purge.
+- **One-off data migrations are never in the repo:** local scripts in the gitignored `/migrations`.
+
 ### vision-service project privacy
 
 - **Every project-scoped read calls `checkProjectAccess(userId, projectId)`** (`services/projectAccessService.ts`),
-  or it leaks private projects.
+  or it leaks private projects. Every training has a project; no project means no access.
 - **Endpoints with no project filter** still scope to `getVisibleProjectIds`/`getVisibleTrainingIds`.
-- **Project API tokens** are confined to their own project on writes by `isWithinTokenScope`.
+- **Editor groups** (`editorGroupIds`) give their members `contribute`.
+- **Pipeline keys** are confined to their own project by `isWithinTokenScope`/`tokenProjectId()`.
 - **Per-row checks** use `createProjectAccessChecker(userId)`: one per request, never hoisted to module scope, or
   privacy changes are served from a stale memo.
 

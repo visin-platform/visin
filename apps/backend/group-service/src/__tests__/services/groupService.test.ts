@@ -1,3 +1,5 @@
+const ownedByGroup = jest.fn();
+jest.mock('../../clients/ownedResourcesClient', () => ({ ownedByGroup: (groupId: string) => ownedByGroup(groupId) }));
 jest.mock('../../models/Group', () => ({
   Group: {
     create: jest.fn(),
@@ -247,6 +249,10 @@ describe('restoreGroup', () => {
 });
 
 describe('permanentlyDeleteGroup', () => {
+  beforeEach(() => {
+    ownedByGroup.mockResolvedValue({ projects: { count: 0, names: [] }, datasets: { count: 0, names: [] } });
+  });
+
   it('throws NotFound when no deleted group matches', async () => {
     mockedGroup.findOne.mockResolvedValue(null);
 
@@ -257,6 +263,19 @@ describe('permanentlyDeleteGroup', () => {
     mockedGroup.findOne.mockResolvedValue(makeGroup({ deletedAt: new Date() }));
 
     await expect(permanentlyDeleteGroup('g1', 'admin@x.com')).rejects.toThrow('Access denied');
+  });
+
+  it('refuses while the group still owns projects or datasets, naming them', async () => {
+    mockedGroup.findOne.mockResolvedValue(makeGroup({ deletedAt: new Date() }));
+    ownedByGroup.mockResolvedValue({ projects: { count: 7, names: ['A', 'B', 'C', 'D', 'E'] }, datasets: { count: 1, names: ['Road'] } });
+
+    await expect(permanentlyDeleteGroup('g1', 'owner@x.com')).rejects.toMatchObject({
+      statusCode: 409,
+      message:
+        'The group still owns 7 projects in Vision ("A", "B", "C", "D", "E", and 2 more) and 1 dataset in Datasets ("Road"). ' +
+        'Transfer or delete them first, including any in the trash.'
+    });
+    expect(mockedGroup.findOneAndDelete).not.toHaveBeenCalled();
   });
 
   it('removes the document', async () => {

@@ -8,6 +8,12 @@ export interface ApiKey {
   /** the public half, enough to tell two keys apart and not enough to use one */
   prefix: string;
   scopes: ApiKeyScope[];
+  /**
+   * The one project the key is limited to (a training pipeline's key, made from
+   * the project's settings), or null for a key that reaches whatever you can.
+   * Absent on keys listed by an auth-service from before project limits.
+   */
+  project?: { id: string; name: string } | null;
   createdAt: string;
   lastUsedAt: string | null;
   expiresAt: string | null;
@@ -50,7 +56,7 @@ export const SCOPE_DESCRIPTIONS: Record<ApiKeyScope, { label: string; detail: st
   },
   'vision:write': {
     label: 'Change projects and runs',
-    detail: 'Create projects, rename and retag runs. Cannot record epochs or results — those come from the training pipeline.'
+    detail: 'Create projects and runs, send epochs and results, rename and retag runs.'
   },
   'dataset:read': {
     label: 'Read datasets',

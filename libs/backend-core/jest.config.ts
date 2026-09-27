@@ -23,10 +23,10 @@ const config: Config = {
   coverageThreshold: {
     global: {
       statements: 99,
-      // 93, not 94: each mongoose model carries a `models.X ? :` re-registration
-      // guard whose second branch cannot run twice in one process, so every
-      // model file added costs a fraction here. Nothing untested was added.
-      branches: 93,
+      // Each mongoose model carries a `models.X ? :` re-registration guard whose
+      // second branch cannot run twice in one process, so every model file added
+      // costs a fraction here, and this sits a little further below current.
+      branches: 95,
       functions: 99.5,
       lines: 99.4,
     },

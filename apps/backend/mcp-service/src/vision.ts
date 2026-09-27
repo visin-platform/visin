@@ -66,13 +66,18 @@ export const vision = {
 
   createProject: (
     apiKey: string,
-    body: { name: string; description?: string; isPublic?: boolean }
+    body: {
+      name: string;
+      description?: string;
+      visibility?: 'private' | 'public';
+      owner?: { kind: 'user' | 'group'; id: string };
+    }
   ): Promise<Project> => post(projectSchema, apiKey, '/projects', body),
 
   updateProject: async (
     apiKey: string,
     id: string,
-    body: { name?: string; description?: string; isPublic?: boolean }
+    body: { name?: string; description?: string; visibility?: 'private' | 'public' }
   ): Promise<Project> =>
     parseResponse(
       projectSchema,

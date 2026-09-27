@@ -3,7 +3,7 @@ import { LabelJob } from '../../models/LabelJob';
 const validJob = {
   name: 'Mask verification',
   createdBy: { userId: 'u1', email: 'Owner@X.com' },
-  groupId: 'g1',
+  datasetId: 'd1',
   taskType: 'mask_toggle',
   question: { prompt: 'Mark all incorrect masks' },
 };
@@ -16,16 +16,15 @@ describe('LabelJob model', () => {
     expect(job.createdBy.email).toBe('owner@x.com');
     expect(job.status).toBe('draft');
     expect(job.redundancy).toBe(1);
-    expect(job.datasetId).toBeUndefined();
     expect(job.framesGroup).toBe('frames');
     expect(LabelJob.collection.name).toBe('label_jobs');
   });
 
-  it('requires name, groupId, taskType and question prompt', () => {
+  it('requires name, taskType and question prompt, and keeps no group of its own', () => {
     const error = new LabelJob({}).validateSync();
 
     expect(error?.errors.name).toBeDefined();
-    expect(error?.errors.groupId).toBeDefined();
+    expect(new LabelJob({ ...validJob, groupId: 'g1' }).toObject()).not.toHaveProperty('groupId');
     expect(error?.errors.taskType).toBeDefined();
     expect(error?.errors['question.prompt']).toBeDefined();
   });

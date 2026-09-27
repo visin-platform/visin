@@ -65,6 +65,8 @@ Copy `.env.example` to `.env` and set:
 - `COOKIE_DOMAIN`: cookie domain for the `access_token` cookie.
 - `INTERNAL_SERVICE_TOKEN`: shared service-to-service token. Must match `group-service`.
 - `GROUP_SERVICE_URL`: URL for group lookup and refresh, usually `http://localhost:5006`.
+- `VISION_SERVICE_URL`: URL for checking the project an API key is limited to, usually `http://localhost:4010`.
+  Required in production. vision-service must share `INTERNAL_SERVICE_TOKEN`.
 
 ## Commands
 

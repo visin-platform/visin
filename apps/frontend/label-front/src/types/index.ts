@@ -24,8 +24,9 @@ export interface LabelJob {
   _id: string;
   name: string;
   description?: string;
-  groupId: string;
-  datasetId?: string;
+  datasetId: string;
+  /** job detail only, for those who can reach the job: the dataset, whose owner the job follows */
+  dataset?: { _id: string; name: string; owner: { kind: 'user' | 'group'; id: string } };
   /** the dataset image group the frames come from */
   framesGroup?: string;
   taskType: TaskType;
@@ -35,6 +36,7 @@ export interface LabelJob {
   status: JobStatus;
   isPublic?: boolean;
   canLabel?: boolean; // current membership capability, present on job detail
+  canManage?: boolean; // may run the job (manage on its dataset), present on job detail
   tasksCount: number;
   createdBy: { userId: string; email: string; name?: string };
   createdAt: string;
@@ -47,8 +49,8 @@ export interface LabelDataset {
   _id: string;
   name: string;
   description?: string;
-  visibility: 'public' | 'group';
-  groupId?: string;
+  owner: { kind: 'user' | 'group'; id: string };
+  visibility: 'private' | 'public';
   groups: { name: string; images: number; jsons: number }[];
   imageCount: number;
   importStatus?: string;

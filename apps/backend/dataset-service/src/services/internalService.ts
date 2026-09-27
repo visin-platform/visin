@@ -1,4 +1,5 @@
 import { QueryFilter } from 'mongoose';
+import { NotFoundError, type Permission } from '@visin/backend-core';
 import { Dataset } from '../models/Dataset';
 import { DatasetItem, IDatasetItem } from '../models/DatasetItem';
 import { createDatasetAccess, findDataset } from './accessService';
@@ -14,21 +15,31 @@ const summary = (dataset: Awaited<ReturnType<typeof findDataset>>) => ({
   _id: dataset._id.toString(),
   name: dataset.name,
   description: dataset.description,
-  ownerId: dataset.ownerId,
+  owner: dataset.owner,
   visibility: dataset.visibility,
-  groupId: dataset.groupId,
   groups: dataset.groups.filter((group) => !dataset.removingGroups?.includes(group.name)),
   imageCount: dataset.imageCount,
   importStatus: dataset.import?.status,
   holds: dataset.holds.map((hold) => ({ service: hold.service, ref: hold.ref }))
 });
 
-/** Datasets a user can read — what a label job wizard offers. */
-export const listReadableFor = async (userId?: string) => {
+/** Live datasets an account may do at least `min` with: `manage` is what a label job wizard offers. */
+export const listFor = async (userId: string | undefined, min: Permission = 'read') => {
   const access = createDatasetAccess(userId);
-  const datasets = await Dataset.find(await access.readableFilter()).sort({ name: 1 }).limit(500);
+  const datasets = await Dataset.find(await access.filter(min)).sort({ name: 1 }).limit(500);
   return datasets.map(summary);
 };
+
+/** Their ids only, for label-service's job lists: "jobs on datasets where I can …". */
+export const idsFor = async (userId: string | undefined, min: Permission = 'read'): Promise<string[]> => {
+  const access = createDatasetAccess(userId);
+  const datasets = await Dataset.find(await access.filter(min), { _id: 1 }).lean();
+  return datasets.map((dataset) => dataset._id.toString());
+};
+
+/** What an account may do with one live dataset; a trashed one is not found. */
+export const permissionFor = async (id: string, userId: string | undefined): Promise<Permission> =>
+  createDatasetAccess(userId).permission(await findDataset(id));
 
 export const getDatasetSummary = async (id: string) => summary(await findDataset(id));
 
@@ -131,7 +142,20 @@ export const addHold = async (id: string, service: string, ref: string) => {
   );
 };
 
+/**
+ * Also for a dataset in the trash: a job deleted while its dataset is there
+ * must still let go, or the dataset could never be deleted for good.
+ */
 export const removeHold = async (id: string, service: string, ref: string) => {
-  const dataset = await findDataset(id);
-  await Dataset.updateOne({ _id: dataset._id }, { $pull: { holds: { service, ref } } });
+  if (!/^[0-9a-fA-F]{24}$/.test(id)) throw new NotFoundError('Dataset not found');
+  const released = await Dataset.updateOne({ _id: id, deletingAt: { $exists: false } }, { $pull: { holds: { service, ref } } });
+  if (released.matchedCount === 0) throw new NotFoundError('Dataset not found');
+};
+
+/** What a group still owns, deleting ones left out: they are already on their way. */
+export const ownedByGroup = async (groupId: string) => {
+  const datasets = await Dataset.find({ 'owner.kind': 'group', 'owner.id': groupId, deletingAt: { $exists: false } })
+    .select('name')
+    .limit(1000);
+  return { count: datasets.length, names: datasets.slice(0, 5).map((dataset) => dataset.name) };
 };

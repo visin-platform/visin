@@ -3,6 +3,8 @@ jest.mock('../../models/LabelJob', () => ({
 }));
 jest.mock('../../clients/datasetServiceClient', () => ({
   getDataset: jest.fn(),
+  getPermission: jest.fn(),
+  datasetIdsFor: jest.fn(),
   addHold: jest.fn(),
   removeHold: jest.fn(),
 }));
@@ -12,28 +14,23 @@ jest.mock('../../models/LabelTask', () => ({
 jest.mock('../../models/LabelAnswer', () => ({
   LabelAnswer: { countDocuments: jest.fn(), deleteMany: jest.fn(), aggregate: jest.fn() },
 }));
-jest.mock('../../clients/groupServiceClient', () => ({
-  getMyGroups: jest.fn(),
-}));
 
 import * as svc from '../../services/jobService';
 import { LabelJob } from '../../models/LabelJob';
 import * as datasets from '../../clients/datasetServiceClient';
 import { LabelTask } from '../../models/LabelTask';
 import { LabelAnswer } from '../../models/LabelAnswer';
-import * as groups from '../../clients/groupServiceClient';
 import { BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
 
 const mockedJob = LabelJob as unknown as Record<string, jest.Mock>;
 const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
 const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
 const mockedAnswer = LabelAnswer as unknown as Record<string, jest.Mock>;
-const mockedGroups = groups as unknown as Record<string, jest.Mock>;
 
 const user = { id: 'u1', email: 'Admin@X.com', name: 'Admin' };
 const body = {
   name: 'Job',
-  groupId: 'g1',
+  datasetId: 'd1',
   taskType: 'mask_toggle' as const,
   question: { prompt: 'p' },
   annotationSets: [],
@@ -44,8 +41,8 @@ const body = {
 const dataset = (extra: Record<string, unknown> = {}) => ({
   _id: 'd1',
   name: 'VLM',
-  ownerId: 'u1',
-  visibility: 'public',
+  owner: { kind: 'group', id: 'g1' },
+  visibility: 'private',
   groups: [{ name: 'frames', images: 2, jsons: 0 }, { name: 'verify', images: 2, jsons: 1 }],
   imageCount: 4,
   ...extra,
@@ -56,73 +53,68 @@ beforeEach(() => {
 });
 
 describe('createJob', () => {
-  it('creates a draft without a dataset, claiming nothing', async () => {
-    mockedJob.create.mockResolvedValue({ _id: 'j1' });
-
-    await svc.createJob(user, body);
-
-    expect(mockedJob.create).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'draft', createdBy: { userId: 'u1', email: 'admin@x.com', name: 'Admin' } })
-    );
-    expect(mockedDatasets.addHold).not.toHaveBeenCalled();
+  beforeEach(() => {
+    mockedDatasets.getDataset.mockResolvedValue(dataset());
+    mockedDatasets.getPermission.mockResolvedValue('manage');
   });
 
   it('claims the dataset so its files cannot go away under the job', async () => {
-    mockedDatasets.getDataset.mockResolvedValue(dataset());
     mockedJob.create.mockResolvedValue({ _id: 'j1', datasetId: 'd1' });
 
-    await svc.createJob(user, { ...body, datasetId: 'd1', annotationSets: ['verify'] });
+    await svc.createJob(user, { ...body, annotationSets: ['verify'] });
 
+    expect(mockedDatasets.getPermission).toHaveBeenCalledWith('d1', 'u1');
+    expect(mockedJob.create).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'draft', datasetId: 'd1', createdBy: { userId: 'u1', email: 'admin@x.com', name: 'Admin' } })
+    );
+    expect(mockedJob.create.mock.calls[0][0]).not.toHaveProperty('groupId');
     expect(mockedDatasets.addHold).toHaveBeenCalledWith('d1', 'j1');
   });
 
-  it('refuses a dataset that is missing, another group\'s, or lacks the named image groups', async () => {
+  it('builds a job only on a dataset the caller manages', async () => {
+    mockedDatasets.getPermission.mockResolvedValue('contribute');
+    await expect(svc.createJob(user, body)).rejects.toMatchObject({ statusCode: 403 });
+    expect(mockedJob.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a dataset that is missing, or lacks the named image groups', async () => {
     mockedDatasets.getDataset.mockRejectedValueOnce(new NotFoundError('Dataset not found'));
     await expect(svc.createJob(user, { ...body, datasetId: 'missing' })).rejects.toThrow(BadRequestError);
 
     mockedDatasets.getDataset.mockRejectedValueOnce(new Error('dataset-service down'));
-    await expect(svc.createJob(user, { ...body, datasetId: 'd1' })).rejects.toThrow('dataset-service down');
+    await expect(svc.createJob(user, body)).rejects.toThrow('dataset-service down');
 
-    mockedDatasets.getDataset.mockResolvedValue(dataset({ visibility: 'group', groupId: 'other-group' }));
-    await expect(svc.createJob(user, { ...body, datasetId: 'd1' })).rejects.toThrow('different group');
-
-    mockedDatasets.getDataset.mockResolvedValue(dataset());
-    await expect(svc.createJob(user, { ...body, datasetId: 'd1', framesGroup: 'nope', annotationSets: ['gone'] })).rejects.toThrow(
+    await expect(svc.createJob(user, { ...body, framesGroup: 'nope', annotationSets: ['gone'] })).rejects.toThrow(
       'Not image groups of this dataset: nope, gone'
     );
     expect(mockedJob.create).not.toHaveBeenCalled();
   });
 
   it('does not leave a job behind when the claim fails', async () => {
-    mockedDatasets.getDataset.mockResolvedValue(dataset());
     mockedJob.create.mockResolvedValue({ _id: 'j1', datasetId: 'd1' });
     mockedDatasets.addHold.mockRejectedValueOnce(new Error('dataset-service down'));
 
-    await expect(svc.createJob(user, { ...body, datasetId: 'd1' })).rejects.toThrow('dataset-service down');
+    await expect(svc.createJob(user, body)).rejects.toThrow('dataset-service down');
 
     expect(mockedJob.deleteOne).toHaveBeenCalledWith({ _id: 'j1' });
   });
 });
 
 describe('listJobsForUser', () => {
-  const myGroups = [
-    { groupId: 'g1', role: 'owner' },
-    { groupId: 'g2', role: 'member' },
-  ];
-
   beforeEach(() => {
     mockedTask.aggregate.mockResolvedValue([]);
     mockedAnswer.aggregate.mockResolvedValue([]);
   });
 
-  it('worker: active jobs across all my groups', async () => {
-    mockedGroups.getMyGroups.mockResolvedValue(myGroups);
+  it('worker: active jobs on datasets I contribute to', async () => {
+    mockedDatasets.datasetIdsFor.mockResolvedValue(['d1', 'd2']);
     const sort = jest.fn().mockResolvedValue([]);
     mockedJob.find.mockReturnValue({ sort });
 
     await svc.listJobsForUser('u1', 'worker');
 
-    expect(mockedJob.find).toHaveBeenCalledWith({ groupId: { $in: ['g1', 'g2'] }, status: 'active' });
+    expect(mockedDatasets.datasetIdsFor).toHaveBeenCalledWith('u1', 'contribute');
+    expect(mockedJob.find).toHaveBeenCalledWith({ datasetId: { $in: ['d1', 'd2'] }, status: 'active' });
   });
 
   it('public: explicitly published active jobs, minus who set it up', async () => {
@@ -133,31 +125,35 @@ describe('listJobsForUser', () => {
     };
     const sort = jest.fn().mockResolvedValue([job]);
     mockedJob.find.mockReturnValue({ sort });
+    mockedDatasets.datasetIdsFor.mockResolvedValue(['d-public']);
 
     const jobs = await svc.listPublicJobs();
 
-    // No group filter at all — a visitor has no groups to scope to. Active only:
-    // a job is active because someone deliberately activated it.
-    expect(mockedJob.find).toHaveBeenCalledWith({ status: 'active', isPublic: true });
-    expect(mockedGroups.getMyGroups).not.toHaveBeenCalled();
+    // Only on public datasets: a job made public on a dataset that later went
+    // private is closed. Active only: a job is active because someone activated it.
+    expect(mockedDatasets.datasetIdsFor).toHaveBeenCalledWith(undefined, 'read');
+    expect(mockedJob.find).toHaveBeenCalledWith({ status: 'active', isPublic: true, datasetId: { $in: ['d-public'] } });
     // Nobody's own answers, since there is nobody.
     expect(jobs[0].progress.myAnswers).toBe(0);
     // `createdBy` is an email address; the progress is what is being shared.
     expect(jobs[0].createdBy).toBeUndefined();
   });
 
-  it('admin: all jobs in groups I own/administer', async () => {
-    mockedGroups.getMyGroups.mockResolvedValue(myGroups);
+  it('admin: every job on datasets I manage, and my own drafts from before datasets were required', async () => {
+    mockedDatasets.datasetIdsFor.mockResolvedValue(['d1']);
     const sort = jest.fn().mockResolvedValue([]);
     mockedJob.find.mockReturnValue({ sort });
 
     await svc.listJobsForUser('u1', 'admin');
 
-    expect(mockedJob.find).toHaveBeenCalledWith({ groupId: { $in: ['g1'] } });
+    expect(mockedDatasets.datasetIdsFor).toHaveBeenCalledWith('u1', 'manage');
+    expect(mockedJob.find).toHaveBeenCalledWith({
+      $or: [{ datasetId: { $in: ['d1'] } }, { datasetId: { $exists: false }, 'createdBy.userId': 'u1' }]
+    });
   });
 
   it('attaches each job its own progress', async () => {
-    mockedGroups.getMyGroups.mockResolvedValue(myGroups);
+    mockedDatasets.datasetIdsFor.mockResolvedValue(['d1']);
     const jobs = [
       { _id: 'j1', redundancy: 1, toObject: () => ({ _id: 'j1', name: 'A' }) },
       { _id: 'j2', redundancy: 1, toObject: () => ({ _id: 'j2', name: 'B' }) },
@@ -307,5 +303,19 @@ describe('deleteJob', () => {
     mockedJob.deleteOne.mockResolvedValue({});
 
     expect(await svc.deleteJob('j1')).toEqual({ tasks: 0, answers: 0 });
+  });
+});
+
+describe('jobDataset', () => {
+  it("names the job's dataset and its owner, and nothing for a dataset that is gone", async () => {
+    mockedDatasets.getDataset.mockResolvedValueOnce(dataset());
+    expect(await svc.jobDataset({ datasetId: 'd1' } as never)).toEqual({ _id: 'd1', name: 'VLM', owner: { kind: 'group', id: 'g1' } });
+
+    mockedDatasets.getDataset.mockRejectedValueOnce(new NotFoundError('gone'));
+    expect(await svc.jobDataset({ datasetId: 'd1' } as never)).toBeUndefined();
+    expect(await svc.jobDataset({} as never)).toBeUndefined();
+
+    mockedDatasets.getDataset.mockRejectedValueOnce(new Error('dataset-service down'));
+    await expect(svc.jobDataset({ datasetId: 'd1' } as never)).rejects.toThrow('dataset-service down');
   });
 });

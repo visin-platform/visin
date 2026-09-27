@@ -128,6 +128,11 @@ const ApiKeysTab: React.FC = () => {
                           {key.name}
                         </Typography>
                         <Chip size="small" label={status} color={STATUS_COLOR[status]} />
+                        {key.project && (
+                          <Tooltip title="Limited to this project: it reaches nothing else">
+                            <Chip size="small" variant="outlined" label={`Project: ${key.project.name}`} />
+                          </Tooltip>
+                        )}
                       </Box>
                       <Typography
                         variant="body2"

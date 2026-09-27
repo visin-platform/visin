@@ -1,11 +1,11 @@
-import { requireActor } from './writeAccessService';
+import { assertResourceWrite, requireActor } from './writeAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
-import { isValidObjectId, type QueryFilter } from 'mongoose';
-import { NotFoundError } from '@visin/backend-core';
+import { type QueryFilter, isValidObjectId } from 'mongoose';
+import { BadRequestError, NotFoundError } from '@visin/backend-core';
 import { trainingService } from './trainingService';
-import { getVisibleProjectIds } from './projectAccessService';
+import { checkProjectAccess, getVisibleProjectIds, resolveProject } from './projectAccessService';
+import { tokenProjectId } from '../middleware/projectTokenContext';
 import Config, { type IConfig } from '../models/Config';
-import Training from '../models/Training';
 import type { GetAllConfigsQuery } from '../validation/configSchemas';
 import { MAX_PAGE_SIZE } from '../validation/common';
 
@@ -14,28 +14,22 @@ interface ConfigData {
   config_data: unknown;
   config_name?: string;
   metadata?: unknown;
+  projectId?: string;
 }
 
 /**
- * Configs are a shared library, but a config says a lot about the run it came
- * from. One is hidden when every training using it sits in a project the
- * caller cannot see — a deleted training still counts, so deleting a private
- * run does not publish its config. The config's owner always sees it.
+ * A config belongs to a project and is seen by whoever can read that project.
+ * One from before configs had a project, which no migration could place, is
+ * seen by its creator alone.
  */
 async function visibleConfigFilter(userId: string | undefined): Promise<QueryFilter<IConfig>> {
   const projectIds = await getVisibleProjectIds(userId);
-  const [hiddenRefs, visibleRefs] = await Promise.all([
-    Training.distinct('configId', { configId: { $nin: [null, ''] }, projectId: { $nin: [...projectIds, null] } }),
-    Training.distinct('configId', {
-      configId: { $nin: [null, ''] },
-      deletedAt: null,
-      $or: [{ projectId: { $in: projectIds } }, { projectId: null }]
-    })
-  ]);
-  const shown = new Set(visibleRefs.map(String));
-  const hidden = hiddenRefs.map(String).filter(id => !shown.has(id) && isValidObjectId(id));
-  if (hidden.length === 0) return {};
-  return { $or: [...(userId ? [{ ownerId: userId }] : []), { _id: { $nin: hidden } }] };
+  return {
+    $or: [
+      { projectId: { $in: projectIds } },
+      ...(userId && !tokenProjectId() ? [{ projectId: null, ownerId: userId }] : [])
+    ]
+  };
 }
 
 export const getAllConfigs = async ({ page, limit, sortBy, order }: GetAllConfigsQuery, userId?: string) => {
@@ -75,7 +69,7 @@ export const getConfigsByTraining = async (trainingId: string, userId?: string) 
   const training = await trainingService.getTrainingById(trainingId, userId);
 
   if (training.configId) {
-    const config = await Config.findById(training.configId);
+    const config = await Config.findOne({ $and: [{ _id: training.configId }, await visibleConfigFilter(userId)] });
     if (config) {
       return {
         configs: [config],
@@ -112,9 +106,18 @@ export const getConfigByUuid = async (uuid: string, userId?: string) => {
   return config;
 };
 
-export const createConfig = async ({ summary, config_data, config_name, metadata }: ConfigData, userId?: string) => {
+export const createConfig = async ({ summary, config_data, config_name, metadata, projectId }: ConfigData, userId?: string) => {
+  const ownerId = requireActor(userId);
+  const reference = tokenProjectId() || projectId;
+  if (!reference) throw new BadRequestError("A config needs a project: pass projectId, the project's id or slug");
+  const project = await resolveProject(reference);
+  if (!project || !(await checkProjectAccess(userId, reference))) {
+    throw new NotFoundError(`Project "${reference}" not found. Create it at /projects?new=1 in Visin, or check the name.`);
+  }
+  await assertResourceWrite({ projectId: project._id.toString(), ownerId }, userId);
   const configData = new Config({
-    ownerId: requireActor(userId),
+    ownerId,
+    projectId: project._id.toString(),
     config_uuid: uuidv4(),
     summary,
     config_data,

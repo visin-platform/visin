@@ -4,7 +4,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 vi.mock('../services/jobService', () => ({
   getJob: vi.fn(),
   getJobStats: vi.fn(),
-  listJobs: vi.fn(),
+  getMyGroups: vi.fn(),
   transitionJob: vi.fn(),
   setJobVisibility: vi.fn(),
   downloadExport: vi.fn(),
@@ -17,13 +17,15 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => authState,
 }));
 
-import { deleteJob, downloadExport, getJob, getJobStats, listJobs, transitionJob, setJobVisibility } from '../services/jobService';
+import { deleteJob, downloadExport, getJob, getJobStats, getMyGroups, transitionJob, setJobVisibility } from '../services/jobService';
 import JobDetailPage from './JobDetailPage';
 import { renderWithProviders } from '../test/renderWithProviders';
 
 const mockedGetJob = getJob as ReturnType<typeof vi.fn>;
 const mockedStats = getJobStats as ReturnType<typeof vi.fn>;
-const mockedListJobs = listJobs as ReturnType<typeof vi.fn>;
+const mockedGroups = getMyGroups as ReturnType<typeof vi.fn>;
+// The server says whether the caller may run the job (manage on its dataset).
+let canManage = false;
 const mockedTransition = transitionJob as ReturnType<typeof vi.fn>;
 const mockedExport = downloadExport as ReturnType<typeof vi.fn>;
 const mockedDelete = deleteJob as ReturnType<typeof vi.fn>;
@@ -33,6 +35,7 @@ const job = (overrides: Record<string, unknown> = {}) => ({
   name: 'Mask check',
   status: 'active',
   canLabel: true,
+  canManage,
   taskType: 'mask_toggle',
   redundancy: 2,
   question: { prompt: 'Mark all incorrect masks' },
@@ -57,9 +60,10 @@ const renderPage = () => renderWithProviders(<JobDetailPage />, { route: '/jobs/
 
 beforeEach(() => {
   vi.clearAllMocks();
+  canManage = false;
   mockedGetJob.mockResolvedValue(job());
   mockedStats.mockResolvedValue(stats);
-  mockedListJobs.mockResolvedValue([]);
+  mockedGroups.mockResolvedValue([]);
 });
 
 
@@ -90,7 +94,8 @@ describe('JobDetailPage', () => {
   });
 
   it('lets an admin pause and export', async () => {
-    mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
+    canManage = true;
+    mockedGetJob.mockResolvedValue(job());
     mockedTransition.mockResolvedValue(job({ status: 'paused' }));
     mockedExport.mockResolvedValue(undefined);
     renderPage();
@@ -106,8 +111,8 @@ describe('JobDetailPage', () => {
   });
 
   it('lets an admin activate a draft and surfaces transition errors', async () => {
+    canManage = true;
     mockedGetJob.mockResolvedValue(job({ status: 'draft' }));
-    mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
     mockedTransition.mockRejectedValue(new Error('Bundle is not ready'));
     renderPage();
 
@@ -119,8 +124,8 @@ describe('JobDetailPage', () => {
 
 describe('JobDetailPage transitions', () => {
   it('resume for paused jobs and archive', async () => {
+    canManage = true;
     mockedGetJob.mockResolvedValue(job({ status: 'paused' }));
-    mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
     mockedTransition.mockResolvedValue(job({ status: 'active' }));
     renderPage();
 
@@ -132,7 +137,8 @@ describe('JobDetailPage transitions', () => {
   });
 
   it('exports JSONL and surfaces export failures', async () => {
-    mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
+    canManage = true;
+    mockedGetJob.mockResolvedValue(job());
     mockedExport.mockRejectedValue(new Error('Export failed (500)'));
     renderPage();
 
@@ -143,7 +149,8 @@ describe('JobDetailPage transitions', () => {
   });
   it('hard-deletes the job once confirmed and returns to the list', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
+    canManage = true;
+    mockedGetJob.mockResolvedValue(job());
     mockedDelete.mockResolvedValue({ tasks: 4135, answers: 7 });
     renderPage();
 
@@ -158,7 +165,8 @@ describe('JobDetailPage transitions', () => {
 
   it('does not delete when the confirmation is declined', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
+    canManage = true;
+    mockedGetJob.mockResolvedValue(job());
     renderPage();
 
     await chooseAction('Delete');
@@ -169,7 +177,8 @@ describe('JobDetailPage transitions', () => {
 });
 
 it('lets administrators explicitly publish and stop sharing', async () => {
-  mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
+  canManage = true;
+  mockedGetJob.mockResolvedValue(job());
   vi.mocked(setJobVisibility).mockImplementation(async (_id, isPublic) => {
     mockedGetJob.mockResolvedValue(job({ isPublic }));
     return job({ isPublic }) as Awaited<ReturnType<typeof setJobVisibility>>;
@@ -182,7 +191,8 @@ it('lets administrators explicitly publish and stop sharing', async () => {
 });
 
 it('surfaces sharing failures', async () => {
-  mockedListJobs.mockResolvedValue([{ _id: 'j1' }]);
+  canManage = true;
+  mockedGetJob.mockResolvedValue(job());
   vi.mocked(setJobVisibility).mockRejectedValue(new Error('Group owner/admin required'));
   renderPage();
   await chooseAction('Enable public sharing');
@@ -202,4 +212,12 @@ it('keeps a signed-in public visitor in browse mode', async () => {
   await screen.findByText('Mask check');
   expect(screen.queryByRole('button', { name: 'Start labeling' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /More actions for/ })).not.toBeInTheDocument();
+});
+
+it("shows the job's dataset and who owns it", async () => {
+  mockedGroups.mockResolvedValue([{ groupId: 'g1', name: 'Road team', role: 'member' }]);
+  mockedGetJob.mockResolvedValue(job({ dataset: { _id: 'd1', name: 'Road scenes', owner: { kind: 'group', id: 'g1' } } }));
+  renderPage();
+  expect(await screen.findByText('Dataset: Road scenes')).toBeInTheDocument();
+  expect(await screen.findByLabelText('Owner: Road team')).toBeInTheDocument();
 });

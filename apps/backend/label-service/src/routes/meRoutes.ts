@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { asyncHandler, BadRequestError, ForbiddenError } from '@visin/backend-core';
-import { isMember, requireUser } from '../services/groupAccessService';
+import { asyncHandler, atLeast, BadRequestError, ForbiddenError } from '@visin/backend-core';
+import { requireUser } from '../services/groupAccessService';
 import * as groups from '../clients/groupServiceClient';
 import * as datasets from '../clients/datasetServiceClient';
 import { MASKS_VARIANT } from '../services/materializationService';
@@ -18,13 +18,13 @@ router.get(
   })
 );
 
-// Datasets I can build a job on, with their image groups — the wizard's dataset
-// picker. Visibility is decided by dataset-service for this user.
+// Datasets I can build a job on (those I manage), with their image groups — the
+// wizard's dataset picker. dataset-service decides for this user.
 router.get(
   '/datasets',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const user = requireUser(req);
-    res.json({ success: true, data: await datasets.listDatasetsFor(user.id) });
+    res.json({ success: true, data: await datasets.listDatasetsFor(user.id, 'manage') });
   })
 );
 
@@ -37,9 +37,9 @@ router.get(
     const set = typeof req.query.set === 'string' ? req.query.set : '';
     if (!set) throw new BadRequestError('set is required');
     const dataset = await datasets.getDataset(req.params.id as string);
-    const readable =
-      dataset.visibility === 'public' || dataset.ownerId === user.id || (dataset.groupId ? await isMember(req, dataset.groupId) : false);
-    if (!readable) throw new ForbiddenError('This dataset is shared with a group you are not in');
+    if (!atLeast(await datasets.getPermission(dataset._id, user.id), 'read')) {
+      throw new ForbiddenError('This dataset is private to its owner');
+    }
     res.json({ success: true, data: await datasets.jsonFields(dataset._id, set, MASKS_VARIANT) });
   })
 );

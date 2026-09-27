@@ -17,7 +17,6 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { apiKeyAuth, errorHandler } from '@visin/backend-core';
-import { apiTokenMiddleware } from '../../middleware/apiTokenMiddleware';
 import trainingRoutes from '../../routes/trainingRoutes';
 import epochRoutes from '../../routes/epochRoutes';
 import testResultRoutes from '../../routes/testResultRoutes';
@@ -56,7 +55,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     const app = express();
-    app.use(express.json(), identityContextMiddleware, apiTokenMiddleware);
+    app.use(express.json(), identityContextMiddleware);
     app.use('/write-capabilities', writeCapabilitiesRoutes);
     for (const [path, router] of Object.entries({ projects: projectRoutes, configs: configRoutes, trainings: trainingRoutes, epochs: epochRoutes,
       'test-results': testResultRoutes, benchmarks: benchmarkRoutes, comparisons: comparisonRoutes,
@@ -76,7 +75,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     jest.clearAllMocks();
     jest.mocked(getUserGroups).mockResolvedValue([]);
     jest.mocked(files.getFileMetadata).mockResolvedValue({ size: 10 } as Awaited<ReturnType<typeof files.getFileMetadata>>);
-    projectId = String((await Project.create({ name: 'Public', ownerId: OWNER, isPublic: true }))._id);
+    projectId = String((await Project.create({ name: 'Public', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'public' }))._id);
     trainingId = String((await Training.create({ name: 'Public run', uuid: 'public-run', projectId }))._id);
     await Epoch.create({ timestamp: new Date(), trainingId, training_uuid: 'public-run', epoch_uuid: 'public-epoch', epoch: 1, results: {} });
     legacyId = String((await Training.create({ name: 'Legacy run', uuid: 'legacy-run' }))._id);
@@ -108,8 +107,9 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Owner update' })).status).toBe(200);
   });
 
-  it('keeps ownerless legacy standalone trainings read-only', async () => {
-    expect((await request(`trainings/${legacyId}`)).status).toBe(200);
+  // Every run has a project; one from before that rule is unreachable until the clean-up removes it.
+  it('leaves a run without a project unreachable', async () => {
+    expect((await request(`trainings/${legacyId}`)).status).toBe(403);
     expect((await request(`trainings/${legacyId}`, 'DELETE')).status).toBe(403);
     expect((await Training.findById(legacyId))?.deletedAt).toBeUndefined();
   });
@@ -117,8 +117,12 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
   const benchmarkBody = { timestamp: new Date().toISOString(), system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }, results: [] };
   const epochBody = () => ({ trainingId, training_uuid: 'public-run', epoch: 2, results: {} });
 
-  it('stamps new standalone records and does not accept an injected owner', async () => {
-    const created = await request('trainings', 'POST', { name: 'Mine', ownerId: STRANGER });
+  it('puts every new run in a project, stamps its creator, and accepts no injected owner', async () => {
+    expect((await request('trainings', 'POST', { name: 'Nowhere' })).status).toBe(400);
+    const unknown = await request('trainings', 'POST', { name: 'Typo', projectId: 'no-such-project' });
+    expect(unknown.status).toBe(404);
+    expect(JSON.stringify(unknown.body)).toContain('Project \\"no-such-project\\" not found');
+    const created = await request('trainings', 'POST', { name: 'Mine', projectId, ownerId: STRANGER });
     expect(created.status).toBe(201);
     const id = String(created.body.data._id);
     expect((await Training.findById(id))?.ownerId).toBe(OWNER);
@@ -126,7 +130,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await request(`trainings/${id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
     expect((await request(`trainings/${id}`, 'DELETE')).status).toBe(200);
     expect((await request('trainings', 'POST', { name: 'Injected', projectId }, STRANGER)).status).toBe(403);
-    expect((await request('trainings', 'POST', { name: 'Anonymous' }, '')).status).toBe(401);
+    expect((await request('trainings', 'POST', { name: 'Anonymous', projectId }, '')).status).toBe(401);
   });
 
   it('checks epoch normal/upload/update and every batch parent before writing', async () => {
@@ -161,7 +165,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await request(`test-results/${test!._id}`, 'DELETE')).status).toBe(200);
   });
 
-  it('protects project and standalone benchmarks including stale and conflicting parent references', async () => {
+  it('protects project benchmarks and refuses standalone writes including stale and conflicting parent references', async () => {
     for (const path of ['benchmarks', 'benchmarks/upload']) {
       expect((await request(path, 'POST', { ...benchmarkBody, training_uuid: 'public-run' }, STRANGER)).status).toBe(403);
       expect((await request(path, 'POST', { ...benchmarkBody, training_uuid: 'missing' })).status).toBe(403);
@@ -173,8 +177,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await request(`benchmarks/${linked!._id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
     expect((await request(`benchmarks/${linked!._id}`, 'PUT', { epoch: 3 })).status).toBe(200);
     const standalone = await request('benchmarks', 'POST', benchmarkBody);
-    expect(standalone.status).toBe(201);
-    expect((await request(`benchmarks/${standalone.body.data._id}`, 'DELETE')).status).toBe(200);
+    expect(standalone.status).toBe(403);
     const legacy = await Benchmark.create(benchmarkBody);
     expect((await request(`benchmarks/${legacy._id}`, 'DELETE')).status).toBe(403);
     const orphan = await Benchmark.create({ ...benchmarkBody, ownerId: OWNER, training_uuid: 'missing' });
@@ -216,8 +219,11 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
   });
 
   it('stamps library creators', async () => {
-    expect((await request('configs', 'POST', { summary: 'Config', config_data: {} })).status).toBe(201);
-    expect((await Config.findOne())?.ownerId).toBe(OWNER);
+    expect((await request('configs', 'POST', { summary: 'Config', config_data: {} })).status).toBe(400);
+    expect((await request('configs', 'POST', { summary: 'Config', config_data: {}, projectId: 'no-such-project' })).status).toBe(404);
+    expect((await request('configs', 'POST', { summary: 'Config', config_data: {}, projectId }, STRANGER)).status).toBe(403);
+    expect((await request('configs', 'POST', { summary: 'Config', config_data: {}, projectId })).status).toBe(201);
+    expect(await Config.findOne()).toMatchObject({ ownerId: OWNER, projectId });
   });
 
   it('returns current browser write capabilities without granting legacy or unrelated access', async () => {
@@ -227,7 +233,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await request(url, 'GET', undefined, STRANGER)).body.data[trainingId]).toBe(false);
     expect((await request(url, 'GET', undefined, '')).body.data[trainingId]).toBe(false);
     expect((await request('write-capabilities?kind=training&ids=invalid')).status).toBe(400);
-    await Project.updateOne({ _id: projectId }, { ownerId: STRANGER });
+    await Project.updateOne({ _id: projectId }, { owner: { kind: 'user', id: STRANGER }, createdBy: STRANGER });
     expect((await request(url)).body.data[trainingId]).toBe(false);
     expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'No longer owner' })).status).toBe(403);
   });
@@ -260,7 +266,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     const groupId = new mongoose.Types.ObjectId().toString();
     const members = new Set([OWNER, EDITOR]);
     jest.mocked(getUserGroups).mockImplementation(async userId => userId && members.has(userId) ? [{ id: groupId, name: 'Researchers' }] : []);
-    const project = await request('projects', 'POST', { name: 'Team project', isPublic: false, editorGroupIds: [groupId] });
+    const project = await request('projects', 'POST', { name: 'Team project', visibility: 'private', editorGroupIds: [groupId] });
     expect(project.status).toBe(201);
     const teamId = String(project.body.data._id);
     expect((await request(`projects/${teamId}`, 'GET', undefined, EDITOR)).status).toBe(200);
@@ -292,17 +298,20 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     jest.mocked(getUserGroups).mockImplementation(async userId => [OWNER, EDITOR].includes(userId || '') ? [{ id: groupId, name: 'Researchers' }] : []);
     expect((await request(`projects/${projectId}`, 'PUT', { editorGroupIds: [new mongoose.Types.ObjectId().toString()] })).status).toBe(403);
     expect((await request(`projects/${projectId}`, 'PUT', { editorGroupIds: [groupId] })).status).toBe(200);
-    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Team edited' }, EDITOR)).status).toBe(200);
+    const own = String((await request('trainings', 'POST', { name: 'Editor run', projectId }, EDITOR)).body.data._id);
+    expect((await request(`trainings/${own}`, 'PUT', { name: 'Team edited' }, EDITOR)).status).toBe(200);
+    // An editor group contributes: its members change their own runs, not the owner's.
+    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Not theirs' }, EDITOR)).status).toBe(403);
     jest.mocked(getUserGroups).mockRejectedValueOnce(new Error('Membership service unavailable'));
-    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'No verified membership' }, EDITOR)).status).toBe(500);
-    expect((await Training.findById(trainingId))?.name).toBe('Team edited');
+    expect((await request(`trainings/${own}`, 'PUT', { name: 'No verified membership' }, EDITOR)).status).toBe(500);
+    expect((await Training.findById(own))?.name).toBe('Team edited');
     expect((await request(`projects/${projectId}`, 'PUT', { editorGroupIds: [] })).status).toBe(200);
-    expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Group removed' }, EDITOR)).status).toBe(403);
+    expect((await request(`trainings/${own}`, 'PUT', { name: 'Group removed' }, EDITOR)).status).toBe(403);
   });
 
   describe('read privacy regressions', () => {
     async function privateResults() {
-      const project = await Project.create({ name: 'Secret', ownerId: OWNER, isPublic: false, editorGroupIds: ['a'.repeat(24)] });
+      const project = await Project.create({ name: 'Secret', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'private', editorGroupIds: ['a'.repeat(24)] });
       const training = await Training.create({ name: 'Secret run', uuid: 'secret-run', projectId: String(project._id) });
       await Epoch.create({ timestamp: new Date(), trainingId: String(training._id), training_uuid: training.uuid, epoch_uuid: 'secret-epoch', epoch: 73, results: {} });
       const result = await TestResult.create({ epoch: 73, epoch_uuid: 'secret-epoch', test_uuid: 'secret-test', timestamp: new Date(), test_results: { secret: { object: { iou: 1 } } } });
@@ -357,14 +366,14 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
       }
       expect(files.getSignedUrl).not.toHaveBeenCalled();
     });
-    it('keeps true standalone benchmarks public while excluding orphan references', async () => {
+    it('excludes standalone benchmarks and orphan references from public lists and stats', async () => {
       await Benchmark.create(benchmarkBody);
       await Benchmark.create({ ...benchmarkBody, training_uuid: 'deleted-run' });
       const response = await request('benchmarks', 'GET', undefined, '');
       expect(response.status).toBe(200);
       expect(JSON.stringify(response.body)).not.toContain('deleted-run');
-      expect(response.body).toMatchObject({ data: { pagination: { total: 1 } } });
-      expect((await request('benchmarks/stats', 'GET', undefined, '')).body).toMatchObject({ data: { totalBenchmarks: 1 } });
+      expect(response.body).toMatchObject({ data: { pagination: { total: 0 } } });
+      expect((await request('benchmarks/stats', 'GET', undefined, '')).body).toMatchObject({ data: { totalBenchmarks: 0 } });
     });
   });
   describe('epoch lifecycle privacy', () => {
@@ -374,7 +383,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
       if (state === 'epoch-deleted') await Epoch.updateOne({ _id: epoch!._id }, { deletedAt: new Date() });
       if (state === 'parent-deleted') await Training.updateOne({ _id: trainingId }, { deletedAt: new Date() });
       if (state === 'parent-missing') {
-        await Project.updateOne({ _id: projectId }, { isPublic: false });
+        await Project.updateOne({ _id: projectId }, { visibility: 'private' });
         expect((await request(`epochs/${epoch!._id}`, 'GET', undefined, '')).status).toBe(403);
         await Training.deleteOne({ _id: trainingId });
       }
@@ -406,19 +415,19 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
       expect((await request(`epochs/training/${trainingId}`)).status).toBe(404);
     });
 
-    it('preserves live standalone, public and authorized private epoch reads', async () => {
+    it('preserves public and authorized private epoch reads', async () => {
       const epoch = await Epoch.findOne({ epoch_uuid: 'public-epoch' });
       const read = (actor: string) => request(`epochs/${epoch!._id}`, 'GET', undefined, actor);
       expect((await read('')).status).toBe(200);
-      await Project.updateOne({ _id: projectId }, { isPublic: false, editorGroupIds: ['editors'] });
+      await Project.updateOne({ _id: projectId }, { visibility: 'private', editorGroupIds: ['editors'] });
       (getUserGroups as jest.Mock).mockImplementation(async actor => actor === EDITOR ? [{ id: 'editors', role: 'member' }] : []);
       expect((await read(OWNER)).status).toBe(200);
       expect((await read(EDITOR)).status).toBe(200);
       expect((await read(STRANGER)).status).toBe(403);
       expect((await read('')).status).toBe(403);
+      // A run without a project is nobody's to read.
       await Training.updateOne({ _id: trainingId }, { $unset: { projectId: 1 } });
-      expect((await read('')).status).toBe(200);
-      expect((await request('epochs/uuid/public-epoch', 'GET', undefined, '')).status).toBe(200);
+      expect((await read(OWNER)).status).toBe(403);
     });
 
     it('rejects updates to tombstoned epochs without changing their results', async () => {
@@ -440,12 +449,12 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
   });
 
   it('stops a revoked session from reading private projects or writing public work', async () => {
-    await Project.updateOne({ _id: projectId }, { isPublic: false });
+    await Project.updateOne({ _id: projectId }, { visibility: 'private' });
     expect((await request(`trainings/${trainingId}`)).status).toBe(200);
     await mongoose.connection.collection('users').updateOne({ _id: new mongoose.Types.ObjectId(OWNER) }, { $inc: { tokenVersion: 1 } });
     expect((await request(`trainings/${trainingId}`)).status).toBe(403);
     expect((await request(`trainings/${trainingId}`, 'PUT', { name: 'Revoked write' })).status).toBe(401);
-    await Project.updateOne({ _id: projectId }, { isPublic: true });
+    await Project.updateOne({ _id: projectId }, { visibility: 'public' });
     expect((await request(`trainings/${trainingId}`)).status).toBe(200);
   });
 

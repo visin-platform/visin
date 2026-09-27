@@ -1,4 +1,5 @@
 import { z } from '@visin/backend-core';
+import { accessFilterSchema } from './projectSchemas';
 import { MAX_PAGE_SIZE, sortOrderSchema } from './common';
 
 const EPOCH_SORT_FIELDS = ['epoch', 'createdAt', 'updatedAt', 'timestamp'] as const;
@@ -42,6 +43,8 @@ export const getTrainingsQuerySchema = z.object({
   status: z.string().optional(),
   datasetId: z.string().optional(),
   projectId: z.string().optional(),
+  /** `contribute`: only runs in projects the caller may write to. */
+  access: accessFilterSchema,
   tags: tagsFilterSchema,
   /** Leave out runs carrying any of these tags. */
   excludeTags: tagsFilterSchema,

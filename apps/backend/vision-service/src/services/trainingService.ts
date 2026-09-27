@@ -1,5 +1,6 @@
+import Config from '../models/Config';
 import { assertResourceWrite, requireActor } from './writeAccessService';
-import { getEditableProjectIds, resolveProject } from './projectAccessService';
+import { getEditableProjectIds, projectFilter, resolveProject } from './projectAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
 import { QueryFilter, Types, isValidObjectId } from 'mongoose';
 import { tokenProjectId } from '../middleware/projectTokenContext';
@@ -124,6 +125,8 @@ interface TrainingFilters {
   status?: string;
   datasetId?: string;
   projectId?: string;
+  /** `contribute`: only runs in projects the caller may write to. */
+  access?: 'contribute';
   tags?: string[];
   excludeTags?: string[];
   /** Only these runs (still subject to visibility). */
@@ -171,15 +174,26 @@ function evenlySpaced<T>(items: T[], n: number): T[] {
   return picked;
 }
 
+/** A config is a child of this project, never a cross-project reference. */
+async function requireProjectConfig(configId: string | undefined, projectId: string | undefined): Promise<void> {
+  if (!configId) return;
+  if (!/^[0-9a-fA-F]{24}$/.test(configId) || !(await Config.exists({ _id: configId, projectId }))) {
+    throw new NotFoundError('Config not found in this project');
+  }
+}
+
 export const trainingService = {
   checkProjectAccess,
 
   async getTrainings(userId: string | undefined, filters: TrainingFilters, pagination: PaginationOptions) {
     const { page = 1, limit = 30, sortBy = 'updatedAt', order = -1 } = pagination;
-    const { search, status, datasetId, projectId, tags, excludeTags, ids } = filters;
+    const { search, status, datasetId, projectId, access, tags, excludeTags, ids } = filters;
 
     const query: QueryFilter<ITraining> = { deletedAt: null };
     if (tokenProjectId()) query.$and = [{ projectId: { $in: await getVisibleProjectIds(userId) } }];
+    if (access === 'contribute') {
+      query.$and = [...(query.$and ?? []), { projectId: { $in: await getEditableProjectIds(userId) } }];
+    }
 
     // Search functionality
     if (search) {
@@ -211,12 +225,7 @@ export const trainingService = {
 
       query.projectId = project._id.toString();
     } else {
-      const projectIds = await getVisibleProjectIds(userId);
-      query.$or = [
-        { projectId: { $in: projectIds } },
-        { projectId: { $exists: false } },
-        { projectId: null }
-      ];
+      query.projectId = { $in: await getVisibleProjectIds(userId) };
     }
 
     if (ids) {
@@ -354,13 +363,8 @@ export const trainingService = {
     const query: QueryFilter<ITraining> = { deletedAt: null };
     if (tokenProjectId()) query.$and = [{ projectId: { $in: await getVisibleProjectIds(userId) } }];
 
-    // The same visible set getTrainings lists, standalone runs included.
-    const projectIds = await getVisibleProjectIds(userId);
-    query.$or = [
-      { projectId: { $in: projectIds } },
-      { projectId: { $exists: false } },
-      { projectId: null }
-    ];
+    // The same visible set getTrainings lists.
+    query.projectId = { $in: await getVisibleProjectIds(userId) };
 
     const tags: unknown[] = await Training.distinct('tags', query);
     return tags
@@ -439,10 +443,12 @@ export const trainingService = {
     return { training, epochs, totalEpochs: ids.length };
   },
 
+ /**
+   * Every training has a project: the one a project-limited credential names,
+   * or `projectId` (an id or a slug). One the caller cannot see reads as not
+   * found, so a private project's name is not confirmed to outsiders.
+   */
   async createTraining(userId: string, data: CreateTrainingData) {
-    if (tokenProjectId() && !(await this.checkProjectAccess(userId, data.projectId))) {
-      throw new ForbiddenError('Access denied to project');
-    }
     const { 
       name, 
       description, 
@@ -461,13 +467,17 @@ export const trainingService = {
     }
 
     const ownerId = requireActor(userId);
-    let resolvedProjectId: string | undefined;
-    if (projectId) {
-      const project = await resolveProject(projectId);
-      if (!project) throw new ForbiddenError('Access denied to project');
-      resolvedProjectId = project._id.toString();
+    if (!projectId) {
+      throw new BadRequestError('A training needs a project: pass projectId, the project\'s id or slug');
     }
+    const project = await resolveProject(projectId);
+    if (!project || !(await this.checkProjectAccess(userId, projectId))) {
+      throw new NotFoundError(`Project "${projectId}" not found. Create it at /projects?new=1 in Visin, or check the name.`);
+    }
+    const resolvedProjectId = project._id.toString();
     await assertResourceWrite({ projectId: resolvedProjectId, ownerId }, userId);
+
+    await requireProjectConfig(configId, resolvedProjectId);
 
     // Generate UUID if not provided
     const uuid = data.uuid || uuidv4();
@@ -522,6 +532,8 @@ export const trainingService = {
       endTime,
       metadata 
     } = data;
+
+    await requireProjectConfig(configId, training.projectId);
 
     if (name !== undefined) training.name = name.trim();
     if (description !== undefined) training.description = description?.trim();
@@ -596,19 +608,22 @@ export const trainingService = {
    * A delete has always been soft — the run, its epochs and its test results stay
    * in the database with a `deletedAt` — but nothing could reach them again, so an
    * accidental delete of a long run was permanent in every way that mattered.
-   * Listed by the rule the delete itself follows: runs in a project the caller may
-   * edit, or standalone runs they own.
+   * Listed by the rule the delete itself follows: the caller's own runs in a
+   * project they contribute to, and anyone's in a project they manage. Runs
+   * trashed with their project are not here: they come back with it.
    */
   async getDeletedTrainings(userId: string, pagination: PaginationOptions) {
     const { page = 1, limit = 30 } = pagination;
 
-    const editableProjects = await getEditableProjectIds(userId);
+    const [contributed, managed] = await Promise.all([
+      getEditableProjectIds(userId),
+      Project.find(await projectFilter(userId, 'manage')).select('_id')
+    ]);
     const query: QueryFilter<ITraining> = {
       deletedAt: { $ne: null },
       $or: [
-        { projectId: { $in: editableProjects } },
-        // A project credential never reaches standalone runs.
-        ...(!tokenProjectId() ? [{ projectId: null, ownerId: userId }] : [])
+        { projectId: { $in: contributed }, ownerId: userId },
+        { projectId: { $in: managed.map(project => project._id.toString()) } }
       ]
     };
 
@@ -690,13 +705,8 @@ export const trainingService = {
       // No project filter given: scope to trainings the caller can actually
       // see — otherwise these aggregate stats are computed across every
       // project regardless of privacy.
-      const visibleProjectIds = await getVisibleProjectIds(userId);
-      // Same set getTrainings lists, explicit-null standalone runs included.
-      matchQuery.$or = [
-        { projectId: { $in: visibleProjectIds } },
-        { projectId: { $exists: false } },
-        { projectId: null }
-      ];
+      // Same set getTrainings lists.
+      matchQuery.projectId = { $in: await getVisibleProjectIds(userId) };
     }
 
     // Filter by tags if provided

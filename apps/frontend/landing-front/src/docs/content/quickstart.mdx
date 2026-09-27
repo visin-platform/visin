@@ -1,4 +1,4 @@
-You will create a project, give a script a token for it, and send a training run of 20 epochs. At the end
+You will create a project, give a script a key for it, and send a training run of 20 epochs. At the end
 you have a run in Visin with its loss and IoU curves, and a script you can drop into your own training loop.
 
 You need a running Visin you can sign in to and Python 3 with `requests` (`pip install requests`). To run Visin on
@@ -15,25 +15,26 @@ docker compose up -d
 A training run always belongs to a project. In the app, open **Projects** and choose **New project**. Any name
 will do.
 
-## Create a project token
+## Create a pipeline key
 
-A project token lets a script write to that one project and nowhere else.
+A pipeline key lets a script send runs to that one project and nowhere else.
 
 1. Open the project and go to its **Settings** tab.
-2. Under **API Tokens**, choose **Generate New Token** and give it a name, such as `quickstart`.
-3. Copy the token.
+2. Under **Pipeline keys**, choose **New pipeline key** and give it a name, such as `quickstart`.
+3. Copy the two lines the dialog shows.
 
-<Callout kind="warning" title="Copy it now">
-  The token is shown once. Visin keeps only a hash of it, so if you lose it, revoke it and generate another.
+<Callout kind="tip" title="Lost it?">
+  You can read a key back later under **Account**, then **API keys**, or revoke it there and make another.
 </Callout>
 
 ## Tell your shell where Visin is
 
-The script reads the address and the token from the environment, so neither ends up in your code:
+The script reads the address and the key from the environment, so neither ends up in your code. Paste the lines
+you copied; they look like this:
 
 ```bash
 export VISIN_URL=http://localhost:4010
-export VISIN_TOKEN=paste-your-token-here
+export VISIN_TOKEN=vsn_live_…
 ```
 
 `VISIN_URL` is your deployment's API address. On a local `docker compose up` it is `http://localhost:4010`.
@@ -152,7 +153,28 @@ Replace `train_one_epoch` with your own training step and post what it returns. 
 - **Leave out what an epoch did not measure.** If you validate every fifth epoch, send `val` only on those epochs.
   A metric that is missing shows as a gap in the chart, where a `0` would show as a real drop.
 
-<Callout kind="tip" title="Keep the token out of your code">
-  Read it from the environment as the script does, and in CI store it as a secret. Anyone with the token can write to
+<Callout kind="tip" title="Keep the key out of your code">
+  Read it from the environment as the script does, and in CI store it as a secret. Anyone with the key can write to
   the project.
 </Callout>
+
+## Or let visin-py do it
+
+The same run with the [Python SDK](https://github.com/visin-platform/visin-py), which makes the uuid, retries a
+failed request, and can keep results offline until the machine can reach Visin:
+
+```bash
+pip install visin
+visin check --write   # confirms this machine can report
+```
+
+```python
+import visin
+
+with visin.init("quickstart") as run:
+    for epoch in range(1, 21):
+        train_loss, val_loss, val_miou = train_one_epoch(epoch)
+        run.log_epoch(epoch, train={"loss": train_loss}, val={"loss": val_loss, "mean_iou": val_miou})
+```
+
+With a pipeline key it needs no project name: the run lands in the key's project.

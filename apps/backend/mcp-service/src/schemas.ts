@@ -31,8 +31,8 @@ export const projectSchema = z
     name: z.string(),
     slug: z.string().optional(),
     description: z.string().optional(),
-    isPublic: z.boolean().catch(false),
-    ownerId: z.string().optional(),
+    visibility: z.enum(['private', 'public']).catch('private'),
+    owner: z.object({ kind: z.enum(['user', 'group']), id: z.string(), name: z.string().optional() }).optional(),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional()
   })
@@ -241,6 +241,9 @@ export const datasetSchema = z
     _id: z.string(),
     name: z.string(),
     description: z.string().optional(),
+    /** a person or a group; `name` is the group's, when the caller is in it */
+    owner: z.object({ kind: z.enum(['user', 'group']), id: z.string(), name: z.string().optional() }).loose().optional(),
+    /** `private` or `public` */
     visibility: z.string().optional(),
     archive: z.object({ filename: z.string(), size: z.number() }).loose().optional(),
     contents: z

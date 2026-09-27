@@ -53,7 +53,7 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
         <Grid container spacing={3}>
           {/* Training Metrics Charts */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
+            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }} data-guide="loss-chart">
               <CardContent>
                 <Box
                   sx={{
@@ -85,7 +85,7 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }}>
+            <Card variant="outlined" sx={{ height: '100%', borderRadius: 2 }} data-guide="miou-chart">
               <CardContent>
                 <Box
                   sx={{

@@ -2,7 +2,7 @@ import { createJobBodySchema, listJobsQuerySchema, materializeBodySchema } from 
 
 const validBody = {
   name: 'Mask verification',
-  groupId: 'g1',
+  datasetId: 'd1',
   taskType: 'mask_toggle',
   question: { prompt: 'Mark all incorrect masks' },
 };
@@ -13,8 +13,10 @@ describe('createJobBodySchema', () => {
 
     expect(parsed.redundancy).toBe(1);
     expect(parsed.annotationSets).toEqual([]);
-    expect(parsed.datasetId).toBeUndefined();
     expect(parsed.framesGroup).toBe('frames');
+    // A job follows its dataset, so it cannot be made without one.
+    const { datasetId: _datasetId, ...withoutDataset } = validBody;
+    expect(createJobBodySchema.safeParse(withoutDataset).success).toBe(false);
     expect(parsed.question.choices).toBeUndefined();
   });
 

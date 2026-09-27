@@ -50,7 +50,7 @@ const assertTrainingAccess = async (
   tokenProjectId?: string,
   tokenScopeMessage = false
 ) => {
-  // Only an existing live training may use the public standalone policy.
+  // Only an existing live training can inherit access from its project.
   if (!training || training.deletedAt || !(await checkProjectAccess(userId, training.projectId))) {
     throw new ForbiddenError();
   }

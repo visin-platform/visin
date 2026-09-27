@@ -14,7 +14,9 @@ export const createConfigBodySchema = z.object({
   summary: z.unknown().refine(v => v !== undefined && v !== null, 'Summary is required'),
   config_data: z.unknown().refine(v => v !== undefined && v !== null, 'Config data is required'),
   config_name: z.string().optional(),
-  metadata: z.unknown().optional()
+  metadata: z.unknown().optional(),
+  /** the project's id or slug; a credential limited to a project supplies its own */
+  projectId: z.string().optional()
 });
 
 // The original handler accepted either `Summary` (capitalized, from some
@@ -26,7 +28,8 @@ export const createConfigFromJsonBodySchema = z
     Summary: z.string().optional(),
     summary: z.string().optional(),
     config_name: z.string().optional(),
-    metadata: z.unknown().optional()
+    metadata: z.unknown().optional(),
+    projectId: z.string().optional()
   })
   .transform(({ Summary, summary, ...rest }) => ({
     ...rest,

@@ -3,7 +3,9 @@ import { screen, waitFor } from '@testing-library/react';
 
 vi.mock('../services/jobService', () => ({
   listJobs: vi.fn(),
-  getMyGroups: vi.fn(),
+}));
+vi.mock('../services/datasetService', () => ({
+  listDatasets: vi.fn(),
 }));
 
 // Signed in unless a test says otherwise — anonymous is the exception here.
@@ -12,12 +14,14 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => authState,
 }));
 
-import { getMyGroups, listJobs } from '../services/jobService';
+import { listJobs } from '../services/jobService';
+import { listDatasets } from '../services/datasetService';
 import JobsPage from './JobsPage';
 import { renderWithProviders } from '../test/renderWithProviders';
 
 const mockedList = listJobs as ReturnType<typeof vi.fn>;
-const mockedGroups = getMyGroups as ReturnType<typeof vi.fn>;
+const mockedDatasets = listDatasets as ReturnType<typeof vi.fn>;
+const managed = { _id: 'd1', name: 'Road', owner: { kind: 'group', id: 'g1' }, visibility: 'private', imageCount: 5, groups: [] };
 
 const job = {
   _id: 'j1',
@@ -30,7 +34,7 @@ const job = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedGroups.mockResolvedValue([]);
+  mockedDatasets.mockResolvedValue([]);
 });
 
 describe('JobsPage', () => {
@@ -40,6 +44,7 @@ describe('JobsPage', () => {
 
     expect(await screen.findByText('No labeling jobs yet')).toBeInTheDocument();
     expect(mockedList).toHaveBeenCalledWith('worker');
+    expect(screen.queryByRole('link', { name: 'New job' })).not.toBeInTheDocument();
   });
 
   it('shows an error', async () => {
@@ -93,13 +98,13 @@ describe('JobsPage', () => {
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
-  it('offers New job only to a group admin', async () => {
+  it('offers New job only to someone who manages a dataset with images', async () => {
     mockedList.mockResolvedValue([job]);
     renderWithProviders(<JobsPage />);
     await screen.findByText('Mask check');
     expect(screen.queryByRole('link', { name: 'New job' })).not.toBeInTheDocument();
 
-    mockedGroups.mockResolvedValue([{ groupId: 'g1', name: 'G', role: 'admin' }]);
+    mockedDatasets.mockResolvedValue([managed]);
     renderWithProviders(<JobsPage />);
 
     await waitFor(() =>
@@ -109,10 +114,30 @@ describe('JobsPage', () => {
 
   it('offers New job from the empty state too', async () => {
     mockedList.mockResolvedValue([]);
-    mockedGroups.mockResolvedValue([{ groupId: 'g1', name: 'G', role: 'owner' }]);
+    mockedDatasets.mockResolvedValue([managed]);
     renderWithProviders(<JobsPage />);
 
     await screen.findByText('No labeling jobs yet');
-    await waitFor(() => expect(screen.getByRole('link', { name: 'New job' })).toBeInTheDocument());
+    // In the header and in the empty state itself, which says what a job is.
+    await waitFor(() => expect(screen.getAllByRole('link', { name: 'New job' })).toHaveLength(2));
+    expect(screen.getByText(/asks people to label images from a dataset/)).toBeInTheDocument();
+  });
+
+  it("shows a visitor the public jobs to browse, and never asks which datasets they manage", async () => {
+    authState.isAuthenticated = false;
+    try {
+      mockedList.mockResolvedValue([job]);
+      const { unmount } = renderWithProviders(<JobsPage />);
+      expect(await screen.findByRole('link', { name: 'View frames' })).toBeInTheDocument();
+      expect(screen.getByText(/Active labeling jobs\./)).toBeInTheDocument();
+      unmount();
+
+      mockedList.mockResolvedValue([]);
+      renderWithProviders(<JobsPage />);
+      expect(await screen.findByText('Active jobs will appear here.')).toBeInTheDocument();
+      expect(mockedDatasets).not.toHaveBeenCalled();
+    } finally {
+      authState.isAuthenticated = true;
+    }
   });
 });

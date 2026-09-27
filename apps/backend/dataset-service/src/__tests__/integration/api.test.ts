@@ -5,12 +5,13 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { BadGatewayError, errorHandler, optionalAuth } from '@visin/backend-core';
-import { checkMembership, getMyGroups } from '../../clients/groupServiceClient';
+import { checkMembership, getMyGroups, type GroupRole } from '../../clients/groupServiceClient';
 import { enqueueDelete, enqueueImport, enqueueRemoveGroup, enqueueScan, removeQueuedImport } from '../../queue/importQueue';
 import { resumeDeletions, runDelete, runRemoveGroup } from '../../services/deleteService';
 import { markScanFailed, runScan } from '../../services/scanService';
 import { NonRetryableImportError } from '../../utils/boundedZip';
 import { Dataset } from '../../models/Dataset';
+import { purgeExpiredTrash } from '../../services/datasetService';
 import { DatasetItem } from '../../models/DatasetItem';
 import datasetRoutes from '../../routes/datasetRoutes';
 import internalRoutes from '../../routes/internalRoutes';
@@ -25,7 +26,13 @@ const OWNER = '000000000000000000000001';
 const MEMBER = '000000000000000000000002';
 const ADMIN = '000000000000000000000003';
 const STRANGER = '000000000000000000000004';
+const GROUP_OWNER = '000000000000000000000005';
 const GROUP = '0000000000000000000000aa';
+const OTHER_GROUP = '0000000000000000000000bb';
+/** Each user's role in GROUP; a test that removes someone deletes their entry. */
+let roles: Record<string, GroupRole>;
+/** Each user's role in OTHER_GROUP. */
+let otherRoles: Record<string, GroupRole>;
 const secret = 'dataset-service-test-secret';
 const internalToken = 'internal-test-token';
 
@@ -51,17 +58,23 @@ beforeAll(async () => {
 }, 120_000);
 
 beforeEach(async () => {
+  roles = { [MEMBER]: 'member', [ADMIN]: 'admin', [GROUP_OWNER]: 'owner' };
   await mongoose.connection.collection('users').insertMany(
-    [OWNER, MEMBER, ADMIN, STRANGER].map((id) => ({ _id: new mongoose.Types.ObjectId(id), email: `${id}@example.test`, tokenVersion: 1 }))
+    [OWNER, MEMBER, ADMIN, STRANGER, GROUP_OWNER].map((id) => ({ _id: new mongoose.Types.ObjectId(id), email: `${id}@example.test`, tokenVersion: 1 }))
   );
   // Each test token names a session whose id is its user's.
   await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
-  jest.mocked(checkMembership).mockImplementation(async (_groupId, userId) =>
-    userId === MEMBER ? { member: true, role: 'member' } : userId === ADMIN ? { member: true, role: 'admin' } : { member: false, role: null }
-  );
-  jest.mocked(getMyGroups).mockImplementation(async (userId) =>
-    userId === MEMBER || userId === ADMIN ? [{ groupId: GROUP, name: 'Team', role: 'member' }] : []
-  );
+  otherRoles = { [GROUP_OWNER]: 'member', [OWNER]: 'member' };
+  const roleIn = (groupId: string, userId: string): GroupRole | undefined =>
+    groupId === GROUP ? roles[userId] : groupId === OTHER_GROUP ? otherRoles[userId] : undefined;
+  jest.mocked(checkMembership).mockImplementation(async (groupId, userId) => {
+    const role = roleIn(groupId, userId);
+    return role ? { member: true, role } : { member: false, role: null };
+  });
+  jest.mocked(getMyGroups).mockImplementation(async (userId) => [
+    ...(roles[userId] ? [{ groupId: GROUP, name: 'Team', role: roles[userId] }] : []),
+    ...(otherRoles[userId] ? [{ groupId: OTHER_GROUP, name: 'Other team', role: otherRoles[userId] }] : [])
+  ]);
 });
 
 afterEach(async () => {
@@ -98,7 +111,7 @@ const call = async (path: string, { method = 'GET', user, body, internal }: { me
   return { status: response.status, body: (text ? JSON.parse(text) : {}) as Body };
 };
 
-const createDataset = async (body: Record<string, unknown> = { name: 'Public set' }, user = OWNER) => {
+const createDataset = async (body: Record<string, unknown> = { name: 'Public set', visibility: 'public' }, user = OWNER) => {
   const response = await call('/api/datasets', { method: 'POST', user, body });
   expect(response.status).toBe(201);
   return response.body.data._id as string;
@@ -112,45 +125,212 @@ const uploadZip = async (id: string, entries: { path: string; data: Buffer }[]) 
   return { fileId, completed: await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER }) };
 };
 
-describe('visibility', () => {
-  it('shows public datasets to everyone and group datasets to the group only', async () => {
-    const publicId = await createDataset();
-    const groupId = await createDataset({ name: 'Team set', visibility: 'group', groupId: GROUP }, MEMBER);
+/** Rows fire-and-forget writes put in `resource_events`, once they land. */
+const events = async (count: number) => {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const rows = await mongoose.connection.collection('resource_events').find({}).sort({ at: 1 }).toArray();
+    if (rows.length >= count) return rows;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`expected ${count} resource events`);
+};
 
-    const names = async (user?: string) =>
-      ((await call('/api/datasets', { user })).body.data.datasets as { name: string }[]).map((row) => row.name).sort();
+const groupDataset = (name = 'Team set', user = MEMBER) => createDataset({ name, owner: { kind: 'group', id: GROUP } }, user);
+
+describe('who can see a dataset', () => {
+  it('shows a public one to everyone, a private one to its owner, and a group one to its members only', async () => {
+    await createDataset();
+    await createDataset({ name: 'Mine only' });
+    const teamId = await groupDataset();
+
+    const names = async (user?: string, query = '') =>
+      ((await call(`/api/datasets${query}`, { user })).body.data.datasets as { name: string }[]).map((row) => row.name).sort();
     expect(await names()).toEqual(['Public set']);
     expect(await names(STRANGER)).toEqual(['Public set']);
+    expect(await names(OWNER)).toEqual(['Mine only', 'Public set']);
     expect(await names(MEMBER)).toEqual(['Public set', 'Team set']);
+    expect(await names(OWNER, '?owner=me')).toEqual(['Mine only', 'Public set']);
+    // An anonymous visitor owns nothing, even among public datasets.
+    expect(await names(undefined, '?owner=me')).toEqual([]);
+    expect(await names(MEMBER, `?owner=${GROUP}`)).toEqual(['Team set']);
+    expect((await call('/api/datasets?search=team', { user: MEMBER })).body.data.pagination.total).toBe(1);
 
-    expect((await call(`/api/datasets/${publicId}`)).status).toBe(200);
-    expect((await call(`/api/datasets/${groupId}`)).status).toBe(401);
-    expect((await call(`/api/datasets/${groupId}`, { user: STRANGER })).status).toBe(403);
-    expect((await call(`/api/datasets/${groupId}`, { user: MEMBER })).body.data).toMatchObject({ canWrite: true, visibility: 'group' });
+    expect((await call(`/api/datasets/${teamId}`)).status).toBe(401);
+    expect((await call(`/api/datasets/${teamId}`, { user: STRANGER })).status).toBe(403);
+    expect((await call(`/api/datasets/${teamId}`, { user: ADMIN })).body.data).toMatchObject({
+      owner: { kind: 'group', id: GROUP, name: 'Team' },
+      createdBy: MEMBER,
+      visibility: 'private',
+      permissions: { read: true, contribute: true, manage: true, own: false }
+    });
     expect((await call('/api/datasets/not-an-id')).status).toBe(404);
-    expect((await call(`/api/datasets?search=team`, { user: MEMBER })).body.data.pagination.total).toBe(1);
+
+    // One the old service made after the owner migration ran: out of sight until it has an owner.
+    const unowned = (await Dataset.collection.insertOne({ name: 'Unowned', ownerId: OWNER, visibility: 'public', storagePrefix: 'x/', groups: [], holds: [], imageCount: 0 })).insertedId;
+    expect(await names()).toEqual(['Public set']);
+    expect((await call(`/api/datasets/${unowned}`, { user: OWNER })).status).toBe(404);
   });
 
-  it('lets the uploader and group admins change a dataset, nobody else', async () => {
-    const id = await createDataset({ name: 'Team set', visibility: 'group', groupId: GROUP }, MEMBER);
-    expect((await call(`/api/datasets/${id}`, { method: 'PATCH', user: STRANGER, body: { name: 'x' } })).status).toBe(403);
-    expect((await call(`/api/datasets/${id}`, { method: 'PATCH', user: ADMIN, body: { description: 'by admin' } })).status).toBe(200);
-    expect((await call(`/api/datasets/${id}`, { method: 'PATCH', user: MEMBER, body: { name: 'Renamed', visibility: 'public' } })).body.data)
-      .toMatchObject({ name: 'Renamed', description: 'by admin', visibility: 'public' });
-    expect((await Dataset.findById(id).lean())?.groupId).toBeUndefined();
-    expect((await call(`/api/datasets/${id}`, { method: 'PATCH', user: ADMIN, body: { name: 'y' } })).status).toBe(403);
+  it('gives each group role its permissions, and a removed uploader none', async () => {
+    const id = await groupDataset();
+    const permissions = async (user: string) => (await call(`/api/datasets/${id}`, { user })).body.data.permissions;
+    expect(await permissions(MEMBER)).toEqual({ read: true, contribute: true, manage: false, own: false });
+    expect(await permissions(GROUP_OWNER)).toEqual({ read: true, contribute: true, manage: true, own: true });
+
+    delete roles[MEMBER];
+    expect((await call(`/api/datasets/${id}`, { user: MEMBER })).status).toBe(403);
+    expect((await call('/api/datasets', { user: MEMBER })).body.data.datasets).toEqual([]);
+    expect((await call(`/api/datasets/${id}/download`, { user: MEMBER })).status).toBe(403);
+    expect((await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: MEMBER, body: { filename: 'x.zip' } })).status).toBe(403);
+    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: MEMBER })).status).toBe(403);
+    // The group keeps it.
+    expect((await call(`/api/datasets/${id}`, { user: ADMIN })).status).toBe(200);
   });
 
-  it('lists the groups a dataset can be shared with', async () => {
+  it('lists the groups a dataset can belong to', async () => {
     expect((await call('/api/datasets/groups')).status).toBe(401);
     expect((await call('/api/datasets/groups', { user: MEMBER })).body.data).toEqual([{ id: GROUP, name: 'Team', role: 'member' }]);
   });
+});
 
-  it('validates creation', async () => {
+describe('creating a dataset', () => {
+  it('makes it private and the creator’s unless told otherwise', async () => {
+    const created = (await call('/api/datasets', { method: 'POST', user: OWNER, body: { name: 'x' } })).body.data;
+    expect(created).toMatchObject({ owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'private', permissions: { own: true } });
+  });
+
+  it('puts it in a group only for the group’s members, and public there only for its owner', async () => {
+    const create = (user: string, body: Record<string, unknown>) => call('/api/datasets', { method: 'POST', user, body: { name: 'x', ...body } });
+    const inGroup = { owner: { kind: 'group', id: GROUP } };
+    expect((await create(STRANGER, inGroup)).status).toBe(403);
+    expect((await create(MEMBER, inGroup)).status).toBe(201);
+    expect((await create(ADMIN, { ...inGroup, visibility: 'public' })).status).toBe(403);
+    expect((await create(GROUP_OWNER, { ...inGroup, visibility: 'public' })).body.data.visibility).toBe('public');
+    expect((await create(MEMBER, { owner: { kind: 'user', id: OWNER } })).status).toBe(403);
+  });
+
+  it('validates what it is given', async () => {
     expect((await call('/api/datasets', { method: 'POST', body: { name: 'x' } })).status).toBe(401);
     expect((await call('/api/datasets', { method: 'POST', user: OWNER, body: { name: '' } })).status).toBe(400);
+    expect((await call('/api/datasets', { method: 'POST', user: OWNER, body: { name: 'x', owner: { kind: 'team', id: GROUP } } })).status).toBe(400);
     expect((await call('/api/datasets', { method: 'POST', user: OWNER, body: { name: 'x', visibility: 'group' } })).status).toBe(400);
-    expect((await call('/api/datasets', { method: 'POST', user: STRANGER, body: { name: 'x', visibility: 'group', groupId: GROUP } })).status).toBe(403);
+  });
+});
+
+describe('changing a dataset', () => {
+  it('lets a manager rename it, and only its owner change who sees it', async () => {
+    const id = await groupDataset();
+    const patch = (user: string, body: Record<string, unknown>) => call(`/api/datasets/${id}`, { method: 'PATCH', user, body });
+    expect((await patch(MEMBER, { name: 'y' })).status).toBe(403);
+    expect((await patch(ADMIN, { name: 'Renamed', description: 'by admin' })).body.data).toMatchObject({ name: 'Renamed', description: 'by admin' });
+    expect((await patch(ADMIN, { description: '' })).body.data.description).toBeUndefined();
+    // The edit form sends the visibility it opened with; unchanged, it needs no more than managing.
+    expect((await patch(ADMIN, { name: 'Again', visibility: 'private' })).status).toBe(200);
+    expect((await patch(ADMIN, { visibility: 'public' })).status).toBe(403);
+    expect((await patch(GROUP_OWNER, { visibility: 'public' })).body.data.visibility).toBe('public');
+    expect((await events(1))[0]).toMatchObject({ action: 'visibility', visibility: 'public', actorId: GROUP_OWNER, groupIds: [GROUP] });
+  });
+});
+
+describe('transferring a dataset', () => {
+  it('lets its owner hand it to a group they are in, one way', async () => {
+    const id = await createDataset({ name: 'Mine' });
+    const transfer = (user: string, owner: Record<string, unknown>) => call(`/api/datasets/${id}/owner`, { method: 'PUT', user, body: { owner } });
+
+    expect((await transfer(OWNER, { kind: 'group', id: GROUP })).status).toBe(403);
+    expect((await transfer(STRANGER, { kind: 'group', id: OTHER_GROUP })).status).toBe(403);
+    const moved = await transfer(OWNER, { kind: 'group', id: OTHER_GROUP });
+    expect(moved.body.data).toMatchObject({ owner: { kind: 'group', id: OTHER_GROUP, name: 'Other team' }, permissions: { own: false } });
+    expect((await events(1))[0]).toMatchObject({
+      action: 'transfer',
+      from: { kind: 'user', id: OWNER },
+      to: { kind: 'group', id: OTHER_GROUP },
+      groupIds: [OTHER_GROUP],
+      resourceName: 'Mine'
+    });
+    // A member of the group now; taking it back is for the group's owner.
+    expect((await transfer(OWNER, { kind: 'user', id: OWNER })).status).toBe(403);
+    expect((await transfer(OWNER, { kind: 'group', id: 'not-an-id' })).status).toBe(400);
+  });
+
+  it("lets the owning group's owner hand it to a member, or to another group they are in", async () => {
+    const id = await groupDataset();
+    const transfer = (user: string, owner: Record<string, unknown>) => call(`/api/datasets/${id}/owner`, { method: 'PUT', user, body: { owner } });
+    expect((await transfer(ADMIN, { kind: 'user', id: ADMIN })).status).toBe(403);
+    expect((await transfer(GROUP_OWNER, { kind: 'user', id: STRANGER })).status).toBe(403);
+    expect((await transfer(GROUP_OWNER, { kind: 'group', id: OTHER_GROUP })).body.data.owner).toMatchObject({ kind: 'group', id: OTHER_GROUP });
+  });
+});
+
+describe('the trash', () => {
+  it('hides a trashed dataset at once, and lets its owner restore it or delete it for good', async () => {
+    const id = await groupDataset();
+    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: MEMBER })).status).toBe(403);
+    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: ADMIN })).status).toBe(200);
+    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: ADMIN })).status).toBe(404);
+    expect((await call(`/api/datasets/${id}`, { user: ADMIN })).status).toBe(404);
+    expect((await call('/api/datasets', { user: ADMIN })).body.data.datasets).toEqual([]);
+    expect((await call(`/internal/datasets/${id}`, { internal: true })).status).toBe(404);
+
+    expect((await call('/api/datasets/trash')).status).toBe(401);
+    expect((await call('/api/datasets/trash', { user: MEMBER })).body.data).toEqual([]);
+    expect((await call('/api/datasets/trash', { user: ADMIN })).body.data.map((row: { _id: string }) => row._id)).toEqual([id]);
+    expect((await call(`/api/datasets/${id}/restore`, { method: 'POST', user: ADMIN })).status).toBe(403);
+    expect((await call(`/api/datasets/not-an-id/restore`, { method: 'POST', user: ADMIN })).status).toBe(404);
+    const restored = await call(`/api/datasets/${id}/restore`, { method: 'POST', user: GROUP_OWNER });
+    expect(restored.body.data.trashedAt).toBeUndefined();
+    expect((await call(`/api/datasets/${id}`, { user: MEMBER })).status).toBe(200);
+
+    expect((await call(`/api/datasets/${id}/permanent`, { method: 'DELETE', user: GROUP_OWNER })).status).toBe(404);
+    await call(`/api/datasets/${id}`, { method: 'DELETE', user: GROUP_OWNER });
+    expect((await call(`/api/datasets/${id}/permanent`, { method: 'DELETE', user: ADMIN })).status).toBe(403);
+    expect((await call(`/api/datasets/${id}/permanent`, { method: 'DELETE', user: GROUP_OWNER })).status).toBe(202);
+    expect(enqueueDelete).toHaveBeenCalledWith({ datasetId: id });
+    expect((await events(4)).map((row) => row.action)).toEqual(['trash', 'restore', 'trash', 'purge']);
+  });
+
+  it('deletes what has been in the trash for 30 days, except what labeling still uses', async () => {
+    const old = await createDataset({ name: 'old' });
+    const held = await createDataset({ name: 'held' });
+    const recent = await createDataset({ name: 'recent' });
+    const monthAgo = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await Dataset.updateMany({ _id: { $in: [old, held] } }, { $set: { trashedAt: monthAgo } });
+    await Dataset.updateOne({ _id: recent }, { $set: { trashedAt: new Date() } });
+    await Dataset.updateOne({ _id: held }, { $push: { holds: { service: 'label-service', ref: 'j1', createdAt: new Date() } } });
+
+    expect(await purgeExpiredTrash()).toBe(1);
+    expect(enqueueDelete).toHaveBeenCalledWith({ datasetId: old });
+    expect((await Dataset.findById(old).lean())?.deletingAt).toBeInstanceOf(Date);
+    expect((await Dataset.findById(held).lean())?.deletingAt).toBeUndefined();
+    expect(await purgeExpiredTrash()).toBe(0);
+  });
+});
+
+describe('what label-service asks', () => {
+  it('tells group-service what a group still owns, trashed datasets included', async () => {
+    const team = await groupDataset();
+    await call(`/api/datasets/${team}`, { method: 'DELETE', user: ADMIN });
+    await createDataset({ name: 'Mine' });
+    expect((await call(`/internal/groups/${GROUP}/owned`, { internal: true })).body.data).toEqual({ count: 1, names: ['Team set'] });
+    expect((await call(`/internal/groups/${GROUP}/owned`)).status).toBe(401);
+  });
+
+  it('answers what one account may do with a dataset, and which datasets it may do something with', async () => {
+    const team = await groupDataset();
+    const open = await createDataset();
+    const permission = async (id: string, userId?: string) =>
+      (await call(`/internal/datasets/${id}/permission${userId ? `?userId=${userId}` : ''}`, { internal: true })).body.data.permission;
+    expect(await permission(team, ADMIN)).toBe('manage');
+    expect(await permission(team, STRANGER)).toBe('none');
+    expect(await permission(open)).toBe('read');
+
+    const ids = async (query: string) => (await call(`/internal/datasets/ids?${query}`, { internal: true })).body.data.sort();
+    expect(await ids(`userId=${ADMIN}&min=manage`)).toEqual([team]);
+    expect(await ids(`userId=${MEMBER}&min=contribute`)).toEqual([team]);
+    expect(await ids(`userId=${MEMBER}`)).toEqual([open, team].sort());
+    expect((await call(`/internal/datasets?userId=${ADMIN}&min=manage`, { internal: true })).body.data.map((row: { _id: string; owner: unknown }) => [row._id, row.owner]))
+      .toEqual([[team, { kind: 'group', id: GROUP }]]);
+    expect((await call(`/internal/datasets/ids?min=owner`, { internal: true })).status).toBe(400);
   });
 });
 
@@ -350,7 +530,7 @@ describe('resuming an import', () => {
 });
 
 describe('holds', () => {
-  it('protects a dataset a labeling job uses until the hold is released', async () => {
+  it('keeps a dataset labeling uses from being deleted for good, though it can go in the trash', async () => {
     const id = await createDataset();
     const { fileId } = await uploadZip(id, [{ path: 'frames/1.png', data: Buffer.from('x') }]);
     expect((await call(`/internal/datasets/${id}/holds/label-service/job1`, { method: 'PUT' })).status).toBe(401);
@@ -358,26 +538,28 @@ describe('holds', () => {
     expect((await call(`/internal/datasets/${id}/holds/label-service/job1`, { method: 'PUT', internal: true })).status).toBe(204);
     expect((await call(`/api/datasets/${id}`)).body.data.usedBy).toBe(1);
 
-    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER })).status).toBe(409);
     expect((await call(`/api/datasets/${id}/import`, { method: 'POST', user: OWNER, body: { groups: [{ folder: '', group: 'all' }] } })).status).toBe(409);
     expect((await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename: 'b.zip' } })).status).toBe(409);
+    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER })).status).toBe(200);
+    expect((await call(`/api/datasets/${id}/permanent`, { method: 'DELETE', user: OWNER })).status).toBe(409);
 
+    // A job deleted while its dataset is in the trash still lets go of it.
     expect((await call(`/internal/datasets/${id}/holds/label-service/job1`, { method: 'DELETE', internal: true })).status).toBe(204);
+    expect((await call(`/internal/datasets/not-an-id/holds/label-service/job1`, { method: 'DELETE', internal: true })).status).toBe(404);
     await DatasetItem.create({ datasetId: id, group: 'g', path: 'p.png', stem: 'p', kind: 'image', size: 1 });
     await Dataset.updateOne({ _id: id }, { $set: { 'import.id': 'i', 'import.status': 'queued' } });
-    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: STRANGER })).status).toBe(403);
-    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER })).status).toBe(202);
+    expect((await call(`/api/datasets/${id}/permanent`, { method: 'DELETE', user: STRANGER })).status).toBe(403);
+    expect((await call(`/api/datasets/${id}/permanent`, { method: 'DELETE', user: OWNER })).status).toBe(202);
     expect(removeQueuedImport).toHaveBeenCalledWith('i');
     expect(enqueueDelete).toHaveBeenCalledWith({ datasetId: id });
 
-    // Gone for every reader at once, and no longer claimable; the files wait for the worker.
+    // Gone for every reader, and no longer claimable; the files wait for the worker.
     expect((await call(`/api/datasets/${id}`)).status).toBe(404);
-    expect((await call('/api/datasets')).body.data.datasets).toEqual([]);
+    expect((await call('/api/datasets/trash', { user: OWNER })).body.data).toEqual([]);
     expect((await call(`/internal/datasets/${id}/holds/label-service/job2`, { method: 'PUT', internal: true })).status).toBe(404);
     expect((await Dataset.findById(id).lean())?.import?.status).toBe('cancelled');
     expect(fileStore.stored.has(fileId)).toBe(true);
-    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER })).status).toBe(404);
-
+    expect((await call(`/api/datasets/${id}/permanent`, { method: 'DELETE', user: OWNER })).status).toBe(404);
     expect(await resumeDeletions()).toBe(1);
     await runDelete(id);
     expect(fileStore.stored.has(fileId)).toBe(false);
@@ -386,8 +568,9 @@ describe('holds', () => {
     await runDelete(id);
   });
 
-  it('refuses a delete that loses the race to a new hold', async () => {
+  it('refuses a permanent delete that loses the race to a new hold', async () => {
     const id = await createDataset();
+    await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER });
     const findOne = Dataset.findOne.bind(Dataset);
     // The hold lands between reading the dataset and marking it.
     const spy = jest.spyOn(Dataset, 'findOne').mockImplementationOnce(((...args: Parameters<typeof Dataset.findOne>) => {
@@ -397,7 +580,7 @@ describe('holds', () => {
         return dataset;
       });
     }) as unknown as typeof Dataset.findOne);
-    const response = await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER });
+    const response = await call(`/api/datasets/${id}/permanent`, { method: 'DELETE', user: OWNER });
     spy.mockRestore();
     expect(response.status).toBe(409);
     expect((await Dataset.findById(id).lean())?.deletingAt).toBeUndefined();

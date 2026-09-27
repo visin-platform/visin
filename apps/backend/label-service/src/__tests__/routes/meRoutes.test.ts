@@ -4,17 +4,17 @@ jest.mock('../../clients/groupServiceClient', () => ({
 }));
 jest.mock('../../clients/datasetServiceClient', () => ({
   getDataset: jest.fn(),
+  getPermission: jest.fn(),
   listDatasetsFor: jest.fn(),
   jsonFields: jest.fn(),
 }));
 
 import type { Request, Response } from 'express';
 import router from '../../routes/meRoutes';
-import { checkMembership, getMyGroups } from '../../clients/groupServiceClient';
+import { getMyGroups } from '../../clients/groupServiceClient';
 import * as datasets from '../../clients/datasetServiceClient';
 
 const mockedGetMyGroups = getMyGroups as jest.Mock;
-const mockedMembership = checkMembership as jest.Mock;
 const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
 
 type Layer = {
@@ -65,21 +65,23 @@ describe('meRoutes', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('lists the datasets a job can be built on', async () => {
+  it('lists the datasets a job can be built on: those the caller manages', async () => {
     mockedDatasets.listDatasetsFor.mockResolvedValue([{ _id: 'd1', name: 'VLM' }]);
 
     const { res } = await call('/datasets', {});
 
-    expect(mockedDatasets.listDatasetsFor).toHaveBeenCalledWith('u1');
+    expect(mockedDatasets.listDatasetsFor).toHaveBeenCalledWith('u1', 'manage');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ _id: 'd1', name: 'VLM' }] });
   });
 
-  it('serves mask fields of a public dataset, and needs the set', async () => {
-    mockedDatasets.getDataset.mockResolvedValue({ _id: 'd1', visibility: 'public', ownerId: 'someone' });
+  it('serves mask fields of a dataset the caller may read, and needs the set', async () => {
+    mockedDatasets.getDataset.mockResolvedValue({ _id: 'd1', visibility: 'public', owner: { kind: 'user', id: 'someone' } });
+    mockedDatasets.getPermission.mockResolvedValue('read');
     mockedDatasets.jsonFields.mockResolvedValue([{ field: 'stratum', values: [] }]);
 
     const { res } = await call('/datasets/:id/mask-fields', { params: { id: 'd1' }, query: { set: 'verify' } });
 
+    expect(mockedDatasets.getPermission).toHaveBeenCalledWith('d1', 'u1');
     expect(mockedDatasets.jsonFields).toHaveBeenCalledWith('d1', 'verify', 'masks');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ field: 'stratum', values: [] }] });
 
@@ -87,26 +89,12 @@ describe('meRoutes', () => {
     expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'set is required' }));
   });
 
-  it('refuses a group dataset the caller is not in, and allows a member or the owner', async () => {
-    mockedDatasets.getDataset.mockResolvedValue({ _id: 'd1', visibility: 'group', groupId: 'g1', ownerId: 'someone' });
-    mockedMembership.mockResolvedValue({ member: false, role: null });
+  it('refuses a dataset the caller may not read, whoever uploaded it', async () => {
+    mockedDatasets.getDataset.mockResolvedValue({ _id: 'd1', visibility: 'private', owner: { kind: 'group', id: 'g1' } });
+    mockedDatasets.getPermission.mockResolvedValue('none');
 
     const refused = await call('/datasets/:id/mask-fields', { params: { id: 'd1' }, query: { set: 'verify' } });
     expect(refused.next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
     expect(mockedDatasets.jsonFields).not.toHaveBeenCalled();
-
-    mockedMembership.mockResolvedValue({ member: true, role: 'member' });
-    mockedDatasets.jsonFields.mockResolvedValue([]);
-    const allowed = await call('/datasets/:id/mask-fields', { params: { id: 'd1' }, query: { set: 'verify' } });
-    expect(allowed.res.json).toHaveBeenCalled();
-
-    mockedDatasets.getDataset.mockResolvedValue({ _id: 'd1', visibility: 'group', ownerId: 'u1' });
-    const owner = await call('/datasets/:id/mask-fields', { params: { id: 'd1' }, query: { set: 'verify' } });
-    expect(owner.res.json).toHaveBeenCalled();
-
-    // A group dataset with no group named is readable by nobody but its owner.
-    mockedDatasets.getDataset.mockResolvedValue({ _id: 'd1', visibility: 'group', ownerId: 'someone' });
-    const orphaned = await call('/datasets/:id/mask-fields', { params: { id: 'd1' }, query: { set: 'verify' } });
-    expect(orphaned.next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
   });
 });

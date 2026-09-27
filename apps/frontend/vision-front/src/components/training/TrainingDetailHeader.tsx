@@ -69,8 +69,9 @@ const TrainingDetailHeader: React.FC<TrainingDetailHeaderProps> = ({
         )}
       </Box>
 
-      <ResponsiveActions
-        menuLabel={`More actions for ${training.name}`}
+      <Box data-guide="training-actions" sx={{ flexShrink: 0 }}>
+        <ResponsiveActions
+          menuLabel={`More actions for ${training.name}`}
         actions={[
           { label: 'Refresh', icon: <RefreshIcon />, onClick: onRefresh, disabled: isLoading },
           ...(isAuthenticated
@@ -80,7 +81,8 @@ const TrainingDetailHeader: React.FC<TrainingDetailHeaderProps> = ({
               ]
             : [])
         ]}
-      />
+        />
+      </Box>
     </Box>
   </Box>
 );

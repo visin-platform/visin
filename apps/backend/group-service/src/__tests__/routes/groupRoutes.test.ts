@@ -39,7 +39,12 @@ describe('groupRoutes', () => {
     expect(find('patch', '/:id/members/:memberId')).toBeDefined();
     expect(find('delete', '/:id/members/:memberId')).toBeDefined();
     expect(find('get', '/:id/membership')).toBeDefined();
-    expect(routes).toHaveLength(16);
+    expect(find('get', '/:id/activity')).toBeDefined();
+    expect(find('get', '/:id/candidates')).toBeDefined();
+    expect(find('get', '/invitations/mine')).toBeDefined();
+    expect(find('post', '/invitations/:invitationId/accept')).toBeDefined();
+    expect(find('post', '/invitations/:invitationId/decline')).toBeDefined();
+    expect(routes).toHaveLength(21);
   });
 
   it('gates every route behind allowUserOrInternalService', () => {

@@ -51,12 +51,28 @@ it('passes a variant through, and asks for mask fields and the manifest', async 
   expect(await datasets.getManifest('d1')).toEqual([{ stem: 'a', attributes: { stratum: 'day' } }]);
 });
 
-it('lists what one user may read', async () => {
+it('lists what one user may manage, or any other level', async () => {
   fetchMock.mockResolvedValue(jsonResponse([{ _id: 'd1', name: 'VLM' }]));
 
   await datasets.listDatasetsFor('u1');
+  expect(url()).toBe('http://dataset-service:5010/internal/datasets?userId=u1&min=manage');
 
-  expect(url()).toBe('http://dataset-service:5010/internal/datasets?userId=u1');
+  fetchMock.mockResolvedValue(jsonResponse(['d1']));
+  expect(await datasets.datasetIdsFor('u1', 'contribute')).toEqual(['d1']);
+  expect(url(1)).toBe('http://dataset-service:5010/internal/datasets/ids?userId=u1&min=contribute');
+  await datasets.datasetIdsFor(undefined, 'read');
+  expect(url(2)).toBe('http://dataset-service:5010/internal/datasets/ids?min=read');
+});
+
+it('asks what one user may do with a dataset, reading a missing one as nothing', async () => {
+  fetchMock.mockResolvedValue(jsonResponse({ permission: 'manage' }));
+  expect(await datasets.getPermission('d1', 'u1')).toBe('manage');
+  expect(url()).toBe('http://dataset-service:5010/internal/datasets/d1/permission?userId=u1');
+
+  fetchMock.mockResolvedValue(jsonResponse(null, 404));
+  expect(await datasets.getPermission('gone', 'u1')).toBe('none');
+  fetchMock.mockResolvedValue(jsonResponse(null, 503));
+  await expect(datasets.getPermission('d1')).rejects.toBeInstanceOf(BadGatewayError);
 });
 
 it('claims and releases a dataset for a job, escaping both ids', async () => {

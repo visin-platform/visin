@@ -1,16 +1,27 @@
 import { Router } from 'express';
-import { validateInternalServiceToken, allowUserOrInternalService } from '../middleware/internalServiceAuth';
+import { validateInternalServiceToken, allowUserOrInternalService, type InternalServiceRequest } from '../middleware/internalServiceAuth';
 import * as ctrl from '../controllers/groupController';
-import { validateRequest } from '@visin/backend-core';
+import { createRateLimiter, validateRequest } from '@visin/backend-core';
 import {
   createGroupBodySchema,
   updateGroupBodySchema,
   createInvitationBodySchema,
   invitationTokenBodySchema,
+  candidatesQuerySchema,
   updateRoleBodySchema
 } from '../validation/groupSchemas';
 
 const router = Router();
+
+/**
+ * "Add member" search, per signed-in account: enough to type a name and correct
+ * it, too few to walk through the accounts on the instance.
+ */
+const searchLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => (req as InternalServiceRequest).user?.id ?? 'internal-service'
+});
 
 // Apply internal service token validation to all routes
 router.use(validateInternalServiceToken);
@@ -32,6 +43,16 @@ router.post(
   validateRequest({ body: invitationTokenBodySchema }),
   ctrl.acceptInvitation
 );
+router.get('/invitations/mine', allowUserOrInternalService, ctrl.listMyInvitations);
+router.post('/invitations/:invitationId/accept', allowUserOrInternalService, ctrl.acceptAccountInvitation);
+router.post('/invitations/:invitationId/decline', allowUserOrInternalService, ctrl.declineAccountInvitation);
+router.get(
+  '/:id/candidates',
+  allowUserOrInternalService,
+  searchLimiter,
+  validateRequest({ query: candidatesQuerySchema }),
+  ctrl.findCandidates
+);
 router.get('/:id', allowUserOrInternalService, ctrl.getOne);
 router.patch('/:id', allowUserOrInternalService, validateRequest({ body: updateGroupBodySchema }), ctrl.updateGroup);
 router.delete('/:id', allowUserOrInternalService, ctrl.deleteGroup);
@@ -52,5 +73,6 @@ router.patch(
 );
 router.delete('/:id/members/:memberId', allowUserOrInternalService, ctrl.removeMember);
 router.get('/:id/membership', allowUserOrInternalService, ctrl.membership);
+router.get('/:id/activity', allowUserOrInternalService, ctrl.activity);
 
 export default router;

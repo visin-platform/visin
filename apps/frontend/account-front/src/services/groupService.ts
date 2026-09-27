@@ -1,7 +1,7 @@
 import { createApiClient } from '@visin/frontend-core';
 import { getGlobalConfig } from '../config/ConfigProvider';
 import { ApiResponse } from '../types';
-import { Group, GroupRole } from '../types/group';
+import { Candidate, Group, GroupActivityEvent, GroupRole, MyInvitation } from '../types/group';
 
 /**
  * group-service is a separate origin from auth-service, so it needs its own
@@ -33,6 +33,10 @@ export const groupService = {
   restore: async (groupId: string): Promise<Group> =>
     unwrap(await groupApi.post<ApiResponse<Group>>(`/api/groups/${groupId}/restore`)),
 
+  /** Transfers, visibility changes and the trash, for what the group owns; owners and admins only. */
+  activity: async (groupId: string): Promise<GroupActivityEvent[]> =>
+    unwrap(await groupApi.get<ApiResponse<GroupActivityEvent[]>>(`/api/groups/${groupId}/activity`)),
+
   deleteForever: (groupId: string): Promise<void> =>
     groupApi.delete<void>(`/api/groups/${groupId}/permanent`),
 
@@ -46,6 +50,22 @@ export const groupService = {
 
   acceptInvitation: async (token: string): Promise<Group> =>
     unwrap(await groupApi.post('/api/groups/invitations/accept', { token })),
+
+  /** "Add member": accounts to invite, three characters at least. */
+  searchCandidates: async (groupId: string, query: string): Promise<Candidate[]> =>
+    unwrap(await groupApi.get<ApiResponse<Candidate[]>>(`/api/groups/${groupId}/candidates?q=${encodeURIComponent(query)}`)),
+
+  inviteAccount: async (groupId: string, userId: string, role: GroupRole): Promise<{ id: string }> =>
+    unwrap(await groupApi.post(`/api/groups/${groupId}/invitations`, { userId, role })),
+
+  listMyInvitations: async (): Promise<MyInvitation[]> =>
+    unwrap(await groupApi.get<ApiResponse<MyInvitation[]>>('/api/groups/invitations/mine')),
+
+  acceptMyInvitation: async (invitationId: string): Promise<Group> =>
+    unwrap(await groupApi.post<ApiResponse<Group>>(`/api/groups/invitations/${invitationId}/accept`)),
+
+  declineMyInvitation: (invitationId: string): Promise<void> =>
+    groupApi.post<void>(`/api/groups/invitations/${invitationId}/decline`),
 
   updateMemberRole: async (groupId: string, userId: string, role: GroupRole): Promise<Group> =>
     unwrap(

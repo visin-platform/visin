@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Vision Service API",
-    "description": "Training runs, their epochs and results, and what is built on them: test results, benchmarks,\ncomparisons, visualizations and written findings. New here? Start with the\n[quickstart](/docs/quickstart).\n\n**Credentials.** A training script writes with a *project token*, which reaches its own project only.\nTools that act as a person use a *user API key* (see the auth API). Both go in\n`Authorization: Bearer <token>`.\n\n**Responses.** Every path starts with `/api`. A request that works answers\n`{ \"success\": true, \"data\": … }`; one that fails answers `{ \"success\": false, \"error\": …, \"message\": … }`\nwith the matching status.\n\n**Privacy.** A private project, and everything in it, is visible only to its owner and the members of\nits editor groups. Configurations are the exception: they are a shared library and stay public even when\na private run uses one, so upload nothing confidential in them.\n",
+    "description": "Training runs, their epochs and results, and what is built on them: test results, benchmarks,\ncomparisons, visualizations and written findings. New here? Start with the\n[quickstart](/docs/quickstart).\n\n**Credentials.** Training scripts use a *pipeline key*: a personal API key limited to one project.\nOther personal API keys can reach projects their owner may access, narrowed by their scopes.\nSend either in `Authorization: Bearer <token>`.\n\n**Responses.** Every path starts with `/api`. A request that works answers\n`{ \"success\": true, \"data\": … }`; one that fails answers `{ \"success\": false, \"error\": …, \"message\": … }`\nwith the matching status.\n\n**Privacy.** Projects default to private. A private project, its configurations and results are visible\nto its owning person or owning group’s current members, and to members of its editor groups.\nPublic projects allow anonymous reads. Current group roles determine who can contribute, manage or transfer.\n",
     "version": "1.0.0",
     "contact": {
       "name": "Visin Team"
@@ -60,10 +60,6 @@
     {
       "name": "Findings",
       "description": "Written conclusions about runs, by people or assistants"
-    },
-    {
-      "name": "API Tokens",
-      "description": "API token management for programmatic access"
     }
   ],
   "components": {
@@ -146,7 +142,8 @@
             "type": "string"
           },
           "configId": {
-            "type": "string"
+            "type": "string",
+            "description": "Configuration belonging to this training’s project."
           },
           "projectId": {
             "type": "string"
@@ -437,20 +434,42 @@
           "description": {
             "type": "string"
           },
-          "ownerId": {
-            "type": "string"
+          "owner": {
+            "$ref": "#/components/schemas/ResourceOwner"
           },
-          "isPublic": {
-            "type": "boolean"
+          "createdBy": {
+            "type": "string",
+            "description": "The account that created it. Attribution only; it grants nothing."
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ],
+            "description": "`public`: anyone can read it, signed in or not. `private`: its owner, the owning group's members, and editor groups."
           },
           "editorGroupIds": {
             "type": "array",
             "maxItems": 100,
-            "description": "Current members of these groups can read and edit project data. Only the project owner manages grants.",
+            "description": "Groups the project is shared with. Their current members get `contribute`. Changing the list takes `manage`.",
             "items": {
               "type": "string",
               "pattern": "^[0-9a-fA-F]{24}$"
             }
+          },
+          "trashedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Set while it is in the trash."
+          },
+          "purgeAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "In the trash listing, when it will be deleted for good."
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/ProjectPermissions"
           },
           "createdAt": {
             "type": "string",
@@ -462,34 +481,46 @@
           }
         }
       },
-      "ApiToken": {
+      "ResourceOwner": {
         "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "description": "A person, or a group whose members' current roles decide who may do what.",
         "properties": {
-          "_id": {
-            "type": "string"
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
           },
           "name": {
-            "type": "string"
-          },
-          "token": {
-            "type": "string"
-          },
-          "projectId": {
-            "type": "string"
-          },
-          "permissions": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "expiresAt": {
             "type": "string",
-            "format": "date-time"
+            "description": "The group's name, when you are in it."
+          }
+        }
+      },
+      "ProjectPermissions": {
+        "type": "object",
+        "description": "What you may do with the project. Each level includes the ones before it.\n`read`: see it. `contribute`: add runs, results and findings, and change your own\n(a group member, or an editor group). `manage`: settings, anyone's runs, the\ntrash (a group admin). `own`: who can see it, transfer, restore or delete it for\ngood (its owner, or the owning group's owner).\n",
+        "properties": {
+          "read": {
+            "type": "boolean"
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
+          "contribute": {
+            "type": "boolean"
+          },
+          "manage": {
+            "type": "boolean"
+          },
+          "own": {
+            "type": "boolean"
           }
         }
       },
@@ -859,7 +890,10 @@
           "config_name": {
             "type": "string"
           },
-          "metadata": {}
+          "metadata": {},
+          "projectId": {
+            "type": "string"
+          }
         },
         "required": [
           "summary",
@@ -879,7 +913,10 @@
           "config_name": {
             "type": "string"
           },
-          "metadata": {}
+          "metadata": {},
+          "projectId": {
+            "type": "string"
+          }
         },
         "required": [
           "config_data"
@@ -1194,9 +1231,33 @@
               "pattern": "^[0-9a-fA-F]{24}$"
             }
           },
-          "isPublic": {
-            "default": false,
-            "type": "boolean"
+          "visibility": {
+            "default": "private",
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "group"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{24}$"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ]
           },
           "taxonomy": {
             "type": "object",
@@ -1362,8 +1423,12 @@
               "pattern": "^[0-9a-fA-F]{24}$"
             }
           },
-          "isPublic": {
-            "type": "boolean"
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
           },
           "slug": {
             "type": "string"
@@ -1525,25 +1590,32 @@
           }
         }
       },
-      "CreateTokenBody": {
+      "TransferProjectBody": {
         "type": "object",
         "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1
-          },
-          "projectId": {
-            "type": "string",
-            "minLength": 1
-          },
-          "expiresInDays": {
-            "type": "integer",
-            "exclusiveMinimum": 0
+          "owner": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "group"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{24}$"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ]
           }
         },
         "required": [
-          "name",
-          "projectId"
+          "owner"
         ]
       }
     },
@@ -1551,18 +1623,13 @@
       "BearerCredential": {
         "type": "http",
         "scheme": "bearer",
-        "description": "A user API key (`vsn_live_…`) or an assistant's OAuth access token, sent as `Authorization: Bearer <key>`."
+        "description": "A user API key (`vsn_live_…`) or an assistant's OAuth access token, sent as `Authorization: Bearer <key>`.\nA key can be limited to one project, which is what a training pipeline uses: it then reaches only that\nproject, runs it creates land there whatever project the request names, and it cannot manage projects.\n"
       },
       "SessionCookie": {
         "type": "apiKey",
         "in": "cookie",
         "name": "access_token",
         "description": "The signed-in browser session. Not for scripts."
-      },
-      "ProjectToken": {
-        "type": "http",
-        "scheme": "bearer",
-        "description": "A project token, created in the project's settings. It writes to its own project only. Sent as `Authorization: Bearer <token>`."
       }
     },
     "responses": {
@@ -1729,9 +1796,6 @@
         },
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -1748,9 +1812,6 @@
         "operationId": "createFinding",
         "description": "A written conclusion about one or more runs in a project. The caller must be able to edit the project.",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -1872,9 +1933,6 @@
         },
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -1890,9 +1948,6 @@
         "summary": "Delete a finding",
         "operationId": "deleteFinding",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -2043,9 +2098,6 @@
         },
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -2063,9 +2115,6 @@
         "summary": "Get all trainings",
         "operationId": "getTrainings",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -2118,6 +2167,17 @@
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "access",
+            "in": "query",
+            "description": "`contribute` keeps only runs in projects you can write to, leaving out other people's public work.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "contribute"
+              ]
             }
           },
           {
@@ -2248,11 +2308,8 @@
         ],
         "summary": "Create a new training",
         "operationId": "createTraining",
-        "description": "Start a run before posting its epochs. Send your own `uuid` to refer to the\nrun by an id your script already knows; one is generated otherwise. With a\nproject token the run goes into the token's project and `projectId` is ignored.\n",
+        "description": "Start a run before posting its epochs. Send your own `uuid` to refer to the\nrun by an id your script already knows; one is generated otherwise.\n\nEvery run belongs to a project: `projectId` (its id or slug) is required, except\nwith a credential limited to a project, where the run goes into that project and\n`projectId` is ignored. A project that does not exist, or that you cannot see,\nanswers 404 with its name; create it under Projects first. Adding a run takes\n`contribute` on the project.\n",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -2314,9 +2371,6 @@
         "operationId": "getTrainingStats",
         "description": "Cost estimates use each project's current CPU/GPU rates. Amounts are\ngrouped by currency without exchange-rate conversion. Legacy scalar cost\nfields and currency are present only when exactly one currency is priced.\nCoverage includes unpriced trainings and measured durations in seconds;\nzero rates count as priced. These are current estimates, not historical bills.\n",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -2517,9 +2571,6 @@
         },
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -2537,9 +2588,6 @@
         "summary": "Compare trainings",
         "operationId": "compareTrainings",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -2596,9 +2644,6 @@
         "operationId": "getTrainingById",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -2651,9 +2696,6 @@
         "summary": "Update training",
         "operationId": "updateTraining",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -2726,9 +2768,6 @@
         "operationId": "deleteTraining",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -2778,11 +2817,8 @@
         ],
         "summary": "List deleted trainings the caller can restore",
         "operationId": "getDeletedTrainings",
-        "description": "Most recently deleted first: runs in projects the caller may edit, and standalone runs they own. Requires a signed-in caller.\n",
+        "description": "Most recently deleted first: the caller’s runs in projects they contribute to, and all runs in projects they manage. Requires a signed-in caller.\n",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -2878,9 +2914,6 @@
         "description": "Brings the training back with the epochs and test results its delete removed. Rows deleted separately beforehand stay deleted, and the training is not re-added to comparisons it was removed from.\n",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -2941,9 +2974,6 @@
         "operationId": "getTrainingByUuid",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -2998,9 +3028,6 @@
         "summary": "Get epochs for a training",
         "operationId": "getTrainingWithEpochs",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -3104,11 +3131,8 @@
         ],
         "summary": "Get configurations for a training",
         "operationId": "getConfigsByTraining",
-        "description": "Resolves a non-deleted training and checks its project visibility before\nreturning its selected config. Public and standalone trainings allow\nanonymous access; private trainings require their owner's identity.\nProject tokens are additionally restricted to their own project.\nThe config's content remains available through the shared public library.\n",
+        "description": "Resolves a non-deleted training and checks its project visibility before\nreturning its selected config, whose project must also be readable.\nPublic projects allow anonymous reads; private projects require access through\nits owner, the owning group, or an editor group. Project-limited keys are\nadditionally restricted to their own project.\n",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -3197,9 +3221,6 @@
         "operationId": "createEpoch",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -3262,9 +3283,6 @@
         "summary": "Create multiple epochs",
         "operationId": "createEpochsBatch",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -3332,9 +3350,6 @@
         "operationId": "createEpochFromJson",
         "description": "Post one epoch of a run, usually at the end of each epoch in the training loop.\nName the run with `training_uuid` (or its `trainingId`); it must already exist,\nso create it with `POST /trainings` first.\n\n`results` is stored as sent. The run's charts read `train` and `val` (the training and validation\ncurves) and the metrics under them, such as `loss` and `mean_iou`; a key under `val` or `train` that\nholds metrics such as `iou` is a class, found without being declared. A metric an epoch did not\nreport is left out, not sent as `0`. See /docs/sending-results for every name the charts read.\n",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -3414,9 +3429,6 @@
         "operationId": "getEpochById",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -3469,9 +3481,6 @@
         "summary": "Update epoch",
         "operationId": "updateEpoch",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -3545,9 +3554,6 @@
         "description": "Soft-deletes the epoch together with the test results recorded against it.",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -3598,9 +3604,6 @@
         "summary": "Get epoch by UUID",
         "operationId": "getEpochByUuid",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -3656,9 +3659,6 @@
         "summary": "Get test results for an epoch",
         "operationId": "getTestResultsByEpochUuid",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -3772,9 +3772,6 @@
         "summary": "Get epochs by training ID",
         "operationId": "getEpochsByTraining",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -3895,9 +3892,6 @@
         "operationId": "getAllConfigs",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -3986,10 +3980,8 @@
         ],
         "summary": "Create a new configuration",
         "operationId": "createConfig",
+        "description": "A configuration belongs to a project and is seen by whoever can read that project.\n`projectId` (its id or slug) is required, except with a credential limited to a\nproject, which supplies its own.\n",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -4051,9 +4043,6 @@
         "operationId": "createConfigFromJson",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -4114,9 +4103,6 @@
         "operationId": "getConfigById",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -4172,9 +4158,6 @@
         "operationId": "getConfigByUuid",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -4229,9 +4212,6 @@
         "summary": "Get all test results",
         "operationId": "getTestResults",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -4361,9 +4341,6 @@
         "operationId": "createTestResult",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -4426,9 +4403,6 @@
         "summary": "Upload test result from JSON",
         "operationId": "createTestResultFromJson",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -4493,9 +4467,6 @@
         "operationId": "compareTestResults",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -4550,9 +4521,6 @@
         "summary": "Compare aggregated test results by training",
         "operationId": "compareAggregatedTestResultsByTraining",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -4609,9 +4577,6 @@
         "operationId": "getTestResultEpochs",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -4659,9 +4624,6 @@
         "summary": "Get test result by ID",
         "operationId": "getTestResultById",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -4715,9 +4677,6 @@
         "summary": "Update test result",
         "operationId": "updateTestResult",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -4790,9 +4749,6 @@
         "operationId": "deleteTestResult",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -4843,9 +4799,6 @@
         "summary": "Get test result by test UUID",
         "operationId": "getTestResultByTestUuid",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -4901,9 +4854,6 @@
         "summary": "Create a new visualization",
         "operationId": "createVisualization",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -4964,9 +4914,6 @@
         "summary": "Get upload URL for visualization",
         "operationId": "getVisualizationUploadUrl",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -5035,9 +4982,6 @@
         "summary": "Get visualization types",
         "operationId": "getVisualizationTypes",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -5115,9 +5059,6 @@
         "operationId": "getVisualizationByUuid",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -5171,9 +5112,6 @@
         "operationId": "deleteVisualization",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -5224,9 +5162,6 @@
         "summary": "Get visualizations by epoch UUID",
         "operationId": "getVisualizationsByEpoch",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -5303,9 +5238,6 @@
         "summary": "Get visualizations by training UUID",
         "operationId": "getVisualizationsByTraining",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -5521,9 +5453,6 @@
         ],
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -5624,9 +5553,6 @@
         },
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -5644,9 +5570,6 @@
         "summary": "Get all benchmarks",
         "operationId": "getBenchmarks",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -5760,9 +5683,6 @@
         "operationId": "createBenchmark",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -5825,9 +5745,6 @@
         "summary": "Upload benchmark from JSON",
         "operationId": "uploadBenchmark",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -5892,9 +5809,6 @@
         "operationId": "getBenchmarkStats",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -5949,9 +5863,6 @@
         "operationId": "getBenchmarkById",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -6004,9 +5915,6 @@
         "summary": "Update benchmark",
         "operationId": "updateBenchmark",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -6082,9 +5990,6 @@
         "operationId": "deleteBenchmark",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -6135,9 +6040,6 @@
         "summary": "Get all comparisons",
         "operationId": "getComparisons",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -6265,10 +6167,8 @@
         ],
         "summary": "Create a new comparison",
         "operationId": "createComparison",
+        "description": "A comparison with a `projectId` follows that project. One without is personal:\nonly its creator sees it, only while they can read every project its items come\nfrom, and a credential limited to a project cannot make one.\n",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -6329,9 +6229,6 @@
         "summary": "Get comparison statistics",
         "operationId": "getComparisonStats",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -6400,9 +6297,6 @@
         "operationId": "getComparisonById",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -6455,9 +6349,6 @@
         "summary": "Update comparison",
         "operationId": "updateComparison",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -6533,9 +6424,6 @@
         "operationId": "deleteComparison",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -6586,9 +6474,6 @@
         "summary": "Get comparison by UUID",
         "operationId": "getComparisonByUuid",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -6645,9 +6530,6 @@
         "operationId": "getProjects",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -6661,6 +6543,34 @@
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "access",
+            "in": "query",
+            "description": "`contribute` keeps only projects you can write to (yours, and those your groups edit), leaving out other people's public projects.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "contribute"
+              ]
+            }
+          },
+          {
+            "name": "owner",
+            "in": "query",
+            "description": "`me`, or a group id: only the projects that owner has.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "me"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-fA-F]{24}$"
+                }
+              ]
             }
           },
           {
@@ -6726,6 +6636,7 @@
         ],
         "summary": "Create a new project",
         "operationId": "createProject",
+        "description": "It belongs to you, or with `owner` to a group you are in. Only a group's owner can\nmake one of its projects public.\n",
         "security": [
           {
             "BearerCredential": []
@@ -6788,9 +6699,6 @@
         "operationId": "getProjectByIdOrSlug",
         "security": [
           {
-            "ProjectToken": []
-          },
-          {
             "BearerCredential": []
           },
           {
@@ -6843,6 +6751,7 @@
         ],
         "summary": "Update project",
         "operationId": "updateProject",
+        "description": "Settings take `manage`; changing `visibility` takes `own`.",
         "security": [
           {
             "BearerCredential": []
@@ -6912,8 +6821,9 @@
         "tags": [
           "Projects"
         ],
-        "summary": "Delete project",
+        "summary": "Move a project to the trash",
         "operationId": "deleteProject",
+        "description": "Hidden at once, with its runs. Its owner can restore it for 30 days; after that it\nis deleted for good with everything in it. Takes `manage`.\n",
         "security": [
           {
             "BearerCredential": []
@@ -6934,7 +6844,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Project deleted successfully",
+            "description": "Project moved to the trash",
             "content": {
               "application/json": {
                 "schema": {
@@ -6942,6 +6852,80 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/projects/{id}/owner": {
+      "put": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Transfer a project",
+        "operationId": "transferProject",
+        "description": "Hand the project, with everything in it, to another owner. You can move your own\nproject to a group you are in (one way); a group's owner can move the group's\nproject to one of its members, or to another group they are in.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferProjectBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Project transferred",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Project"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -6966,9 +6950,6 @@
         "summary": "Get project dashboard statistics",
         "operationId": "getProjectDashboardStats",
         "security": [
-          {
-            "ProjectToken": []
-          },
           {
             "BearerCredential": []
           },
@@ -7006,177 +6987,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/api-tokens": {
-      "post": {
-        "tags": [
-          "API Tokens"
-        ],
-        "summary": "Create a new API token",
-        "operationId": "createToken",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateTokenBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "API token created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/ApiToken"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/api-tokens/project/{projectId}": {
-      "get": {
-        "tags": [
-          "API Tokens"
-        ],
-        "summary": "Get API tokens for project",
-        "operationId": "getTokens",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "projectId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ApiToken"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/api-tokens/{id}": {
-      "delete": {
-        "tags": [
-          "API Tokens"
-        ],
-        "summary": "Revoke API token",
-        "operationId": "revokeToken",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "API token revoked successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Success"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"

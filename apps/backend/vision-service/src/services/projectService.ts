@@ -1,6 +1,19 @@
 import { getUserGroups } from '../clients/projectGroupsClient';
 import { QueryFilter } from 'mongoose';
-import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
+import {
+  atLeast,
+  BadRequestError,
+  canTransfer,
+  ConflictError,
+  ForbiddenError,
+  logger,
+  NotFoundError,
+  recordResourceEvent,
+  UnauthorizedError,
+  type Permission,
+  type ResourceOwner,
+  type Visibility
+} from '@visin/backend-core';
 import Project, { IProject } from '../models/Project';
 import {
   IProjectTaxonomy,
@@ -11,68 +24,90 @@ import { IProjectCosting, costOf, resolveCosting } from '../models/costing';
 import Training from '../models/Training';
 import Epoch from '../models/Epoch';
 import Benchmark from '../models/Benchmark';
+import TestResult from '../models/TestResult';
 import type { GetProjectsQuery } from '../validation/projectSchemas';
-import { requireUserCredential, tokenProjectId } from '../middleware/projectTokenContext';
-import { isWithinTokenScope, canEditProject, resolveProject } from './projectAccessService';
+import { requireUserCredential } from '../middleware/projectTokenContext';
+import { callerGroups, membershipOf, projectFilter, projectPermission, resolveProject } from './projectAccessService';
+import { purgeProject, TRASH_DAYS } from './purgeService';
 
-
-async function assertAccess(project: IProject, userId: string | undefined): Promise<void> {
-  if (!isWithinTokenScope(undefined, project._id.toString()) || (!project.isPublic && !(await canEditProject(project, userId)))) {
-    throw new ForbiddenError();
-  }
+export interface ProjectPermissions {
+  read: boolean;
+  contribute: boolean;
+  manage: boolean;
+  own: boolean;
 }
 
-async function resolveByIdentifier(identifier: string): Promise<IProject | null> {
-  return resolveProject(identifier);
+const permissionsOf = (permission: Permission): ProjectPermissions => ({
+  read: atLeast(permission, 'read'),
+  contribute: atLeast(permission, 'contribute'),
+  manage: atLeast(permission, 'manage'),
+  own: atLeast(permission, 'own')
+});
+
+/**
+ * A project as the API returns it: its stored fields, less the legacy
+ * `ownerId` and `isPublic` a migrated document still carries, plus what the
+ * caller may do with it and, for a group owner the caller is in, its name.
+ */
+export type ProjectView = Record<string, unknown> & {
+  owner: ResourceOwner & { name?: string };
+  permissions: ProjectPermissions;
+};
+
+export async function toProjectView(project: IProject, userId: string | undefined, permission?: Permission): Promise<ProjectView> {
+  const held = permission ?? (await projectPermission(project, userId, { trashed: true }));
+  const { ownerId: _ownerId, isPublic: _isPublic, __v: _v, ...fields } = project.toObject() as Record<string, unknown>;
+  const ownerName =
+    project.owner.kind === 'group' && userId
+      ? (await callerGroups.getMyGroups(userId)).find(group => group.groupId === project.owner.id)?.name
+      : undefined;
+  return {
+    ...fields,
+    owner: { kind: project.owner.kind, id: project.owner.id, ...(ownerName ? { name: ownerName } : {}) },
+    permissions: permissionsOf(held)
+  };
 }
 
-export const listProjects = async (userId: string | undefined, filters: GetProjectsQuery): Promise<IProject[]> => {
-  const { search, sortBy, sortOrder } = filters;
-
-  // If user is logged in, include their private projects
-  const groups = userId && !tokenProjectId() ? await getUserGroups(userId) : [];
-  const visibilityFilter = userId ? [{ isPublic: true }, { ownerId: userId }, ...(groups.length ? [{ editorGroupIds: { $in: groups.map(group => group.id) } }] : [])] : [{ isPublic: true }];
-  const query: QueryFilter<IProject> = { $or: visibilityFilter };
-  if (tokenProjectId()) query._id = tokenProjectId();
-
-  if (search) {
-    query.$text = { $search: search };
+/** The project, when the caller may do at least `min` with it: 404 when it does not exist, 403 otherwise. */
+export async function requireProject(identifier: string, userId: string | undefined, min: Permission = 'read'): Promise<IProject> {
+  const project = await resolveProject(identifier);
+  if (!project || project.trashedAt) throw new NotFoundError('Project not found');
+  if (!atLeast(await projectPermission(project, userId), min)) {
+    if (!userId && min !== 'read') throw new UnauthorizedError('Authentication required');
+    throw new ForbiddenError(min === 'read' ? undefined : `This needs ${min} permission on the project`);
   }
-
-  return Project.find(query).sort({ [sortBy]: sortOrder });
-};
-
-export const getProjectBySlug = async (slug: string, userId: string | undefined): Promise<IProject> => {
-  const project = await Project.findOne({ slug });
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
-  await assertAccess(project, userId);
   return project;
+}
+
+/** `owner=me` or `owner=<groupId>`: a list narrowed to one owner. */
+const ownerFilter = (userId: string | undefined, owner?: string): QueryFilter<IProject> => {
+  if (!owner) return {};
+  if (owner === 'me') return { 'owner.kind': 'user', 'owner.id': userId ?? '' };
+  return { 'owner.kind': 'group', 'owner.id': owner };
 };
 
-export const getProjectById = async (id: string, userId: string | undefined): Promise<IProject> => {
-  const project = await Project.findById(id);
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
-  await assertAccess(project, userId);
-  return project;
+export const listProjects = async (userId: string | undefined, filters: GetProjectsQuery): Promise<ProjectView[]> => {
+  const { search, sortBy, sortOrder, access, owner } = filters;
+  const query: QueryFilter<IProject> = {
+    $and: [
+      await projectFilter(userId, access === 'contribute' ? 'contribute' : 'read'),
+      ownerFilter(userId, owner),
+      ...(search ? [{ $text: { $search: search } }] : [])
+    ]
+  };
+  const projects = await Project.find(query).sort({ [sortBy]: sortOrder });
+  return Promise.all(projects.map(project => toProjectView(project, userId)));
 };
 
-export const getProjectByIdOrSlug = async (identifier: string, userId: string | undefined): Promise<IProject> => {
-  const project = await resolveByIdentifier(identifier);
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
-  await assertAccess(project, userId);
-  return project;
-};
+export const getProjectByIdOrSlug = async (identifier: string, userId: string | undefined): Promise<ProjectView> =>
+  toProjectView(await requireProject(identifier, userId), userId);
 
 interface CreateProjectData {
   name: string;
   description?: string;
-  isPublic?: boolean;
+  visibility?: Visibility;
+  /** who it belongs to: the caller (the default), or one of their groups */
+  owner?: ResourceOwner;
   editorGroupIds?: string[];
   taxonomy?: IProjectTaxonomy;
   costing?: IProjectCosting;
@@ -101,38 +136,53 @@ async function assertAssignableGroups(next: string[], existing: string[], userId
   if (added.some(id => !available.has(id))) throw new ForbiddenError('You can only assign groups you belong to');
 }
 
-export const createProject = async (userId: string, data: CreateProjectData): Promise<IProject> => {
+/**
+ * A new project belongs to the caller, or to a group they are in. Making a
+ * group's project public takes being that group's owner, as it would after.
+ */
+export const createProject = async (userId: string, data: CreateProjectData): Promise<ProjectView> => {
   requireUserCredential();
+  const owner: ResourceOwner = data.owner ?? { kind: 'user', id: userId };
+  if (owner.kind === 'user' && owner.id !== userId) throw new ForbiddenError('A project can belong to you or to one of your groups');
+  if (owner.kind === 'group') {
+    const { member, role } = await callerGroups.checkMembership(owner.id, userId);
+    if (!member) throw new ForbiddenError('You can only create a project in a group you belong to');
+    if (data.visibility === 'public' && role !== 'owner') throw new ForbiddenError("Only the group's owner can make its projects public");
+  }
   await assertAssignableGroups(data.editorGroupIds || [], [], userId);
-  const project = new Project({
+  const project = await new Project({
     ...data,
-    taxonomy: applyTaskTypePresets(data.taxonomy),
-    ownerId: userId
-  });
-  return project.save();
+    owner,
+    createdBy: userId,
+    visibility: data.visibility ?? 'private',
+    taxonomy: applyTaskTypePresets(data.taxonomy)
+  }).save();
+  return toProjectView(project, userId);
 };
 
 interface UpdateProjectData {
   name?: string;
   description?: string;
-  isPublic?: boolean;
+  visibility?: Visibility;
   editorGroupIds?: string[];
   slug?: string;
   taxonomy?: IProjectTaxonomy | null;
   costing?: IProjectCosting | null;
 }
 
-export const updateProject = async (id: string, userId: string, data: UpdateProjectData): Promise<IProject> => {
+/** Settings need `manage`; who can see it needs `own`. */
+export const updateProject = async (id: string, userId: string, data: UpdateProjectData): Promise<ProjectView> => {
   requireUserCredential();
-  const project = await Project.findById(id);
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
-  if (project.ownerId !== userId) {
-    throw new ForbiddenError();
-  }
+  const project = await requireProject(id, userId, 'manage');
 
-  const { name, description, isPublic, slug, taxonomy, costing, editorGroupIds } = data;
+  const { name, description, visibility, slug, taxonomy, costing, editorGroupIds } = data;
+  if (visibility !== undefined && visibility !== project.visibility) {
+    if ((await projectPermission(project, userId)) !== 'own') {
+      throw new ForbiddenError('Only the project’s owner can change who can see it');
+    }
+    project.visibility = visibility;
+    recordEvent(project, userId, 'visibility', { visibility });
+  }
   if (editorGroupIds !== undefined) {
     await assertAssignableGroups(editorGroupIds, project.editorGroupIds || [], userId);
     project.editorGroupIds = [...new Set(editorGroupIds)];
@@ -140,7 +190,6 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
 
   if (name) project.name = name;
   if (description !== undefined) project.description = description;
-  if (isPublic !== undefined) project.isPublic = isPublic;
   if (slug !== undefined) {
     if (slug.trim()) {
       // An id-shaped slug is ambiguous with the project that id names, and a
@@ -149,7 +198,7 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
         throw new BadRequestError('Slug cannot look like a project id');
       }
       // Check if slug is unique
-      const existingProject = await Project.findOne({ slug: slug.trim(), _id: { $ne: id } });
+      const existingProject = await Project.findOne({ slug: slug.trim(), _id: { $ne: project._id } });
       if (existingProject) {
         throw new BadRequestError('Slug already exists');
       }
@@ -168,19 +217,110 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
     project.costing = costing === null ? undefined : costing;
   }
 
-  return project.save();
+  await project.save();
+  return toProjectView(project, userId);
 };
 
-export const deleteProject = async (id: string, userId: string): Promise<void> => {
+const recordEvent = (
+  project: IProject,
+  actorId: string,
+  action: 'transfer' | 'visibility' | 'trash' | 'restore' | 'purge',
+  { owner = project.owner, ...extra }: { owner?: ResourceOwner; to?: ResourceOwner; visibility?: string } = {}
+) =>
+  recordResourceEvent({
+    service: 'vision-service',
+    resourceType: 'project',
+    resourceId: project._id.toString(),
+    resourceName: project.name,
+    action,
+    actorId,
+    owner,
+    ...extra
+  });
+
+/**
+ * Hand the project, with everything in it, to another owner. Who may is
+ * backend-core's `canTransfer`: the same rule as for datasets.
+ */
+export const transferProject = async (id: string, userId: string, to: ResourceOwner): Promise<ProjectView> => {
   requireUserCredential();
-  const project = await Project.findById(id);
-  if (!project) {
-    throw new NotFoundError('Project not found');
+  const project = await requireProject(id, userId);
+  const check = await canTransfer(project.owner, to, userId, membershipOf);
+  if (!check.allowed) throw new ForbiddenError(check.reason);
+  const from = project.owner;
+  project.owner = to;
+  await project.save();
+  recordEvent(project, userId, 'transfer', { owner: from, to });
+  logger.info('Project transferred', { projectId: id, from, to });
+  return toProjectView(project, userId);
+};
+
+/**
+ * Move the project to the trash, with its live trainings, epochs and test
+ * results, all stamped with the same time. Restoring it brings back exactly
+ * those; a training trashed on its own beforehand stays in the trash.
+ */
+export const trashProject = async (id: string, userId: string): Promise<void> => {
+  requireUserCredential();
+  const project = await requireProject(id, userId, 'manage');
+  const now = new Date();
+  const marked = await Project.updateOne({ _id: project._id, trashedAt: null }, { $set: { trashedAt: now } });
+  if (marked.matchedCount === 0) throw new ConflictError('The project is already in the trash');
+  const projectId = project._id.toString();
+  const trainingIds = (await Training.find({ projectId, deletedAt: null }).select('_id')).map(training => training._id.toString());
+  await Training.updateMany({ _id: { $in: trainingIds }, deletedAt: null }, { $set: { deletedAt: now } });
+  const epochUuids = (await Epoch.find({ trainingId: { $in: trainingIds }, deletedAt: null }).select('epoch_uuid')).map(epoch => epoch.epoch_uuid);
+  await Epoch.updateMany({ trainingId: { $in: trainingIds }, deletedAt: null }, { $set: { deletedAt: now } });
+  await TestResult.updateMany({ epoch_uuid: { $in: epochUuids }, deletedAt: null }, { $set: { deletedAt: now } });
+  recordEvent(project, userId, 'trash');
+  logger.info('Project moved to the trash', { projectId, trainings: trainingIds.length });
+};
+
+/** A trashed project, when the caller may do at least `min` with it. */
+const trashedProject = async (id: string, userId: string, min: Permission): Promise<IProject> => {
+  const project = /^[0-9a-fA-F]{24}$/.test(id) ? await Project.findOne({ _id: id, trashedAt: { $ne: null } }) : null;
+  if (!project) throw new NotFoundError('No such project in the trash');
+  if (!atLeast(await projectPermission(project, userId, { trashed: true }), min)) {
+    throw new ForbiddenError("Only the project's owner, or the owning group's owner, can do this");
   }
-  if (project.ownerId !== userId) {
-    throw new ForbiddenError();
-  }
-  await project.deleteOne();
+  return project;
+};
+
+/** Projects in the trash the caller manages, most recently trashed first. */
+export const listTrashedProjects = async (userId: string): Promise<(ProjectView & { purgeAt: Date })[]> => {
+  requireUserCredential();
+  const projects = await Project.find(await projectFilter(userId, 'manage', { trashed: true })).sort({ trashedAt: -1 });
+  return Promise.all(
+    projects.map(async project => ({
+      ...(await toProjectView(project, userId)),
+      purgeAt: new Date(project.trashedAt!.getTime() + TRASH_DAYS * 24 * 60 * 60 * 1000)
+    }))
+  );
+};
+
+export const restoreProject = async (id: string, userId: string): Promise<ProjectView> => {
+  requireUserCredential();
+  const project = await trashedProject(id, userId, 'own');
+  const trashedAt = project.trashedAt!;
+  const projectId = project._id.toString();
+  const trainingIds = (await Training.find({ projectId, deletedAt: trashedAt }).select('_id')).map(training => training._id.toString());
+  const epochUuids = (await Epoch.find({ trainingId: { $in: trainingIds }, deletedAt: trashedAt }).select('epoch_uuid')).map(epoch => epoch.epoch_uuid);
+  await TestResult.updateMany({ epoch_uuid: { $in: epochUuids }, deletedAt: trashedAt }, { $unset: { deletedAt: 1 } });
+  await Epoch.updateMany({ trainingId: { $in: trainingIds }, deletedAt: trashedAt }, { $unset: { deletedAt: 1 } });
+  await Training.updateMany({ _id: { $in: trainingIds }, deletedAt: trashedAt }, { $unset: { deletedAt: 1 } });
+  project.trashedAt = undefined;
+  await project.save();
+  recordEvent(project, userId, 'restore');
+  return toProjectView(project, userId);
+};
+
+/** Out of the trash for good, now rather than in 30 days. */
+export const deleteProjectForever = async (id: string, userId: string): Promise<void> => {
+  requireUserCredential();
+  const project = await trashedProject(id, userId, 'own');
+  await purgeProject(project);
+  recordEvent(project, userId, 'purge');
+  logger.info('Project deleted for good', { projectId: id });
 };
 
 interface ProjectDashboardStats {
@@ -205,11 +345,7 @@ export const getProjectDashboardStats = async (
   identifier: string,
   userId: string | undefined
 ): Promise<ProjectDashboardStats> => {
-  const project = await resolveByIdentifier(identifier);
-  if (!project) {
-    throw new NotFoundError('Project not found');
-  }
-  await assertAccess(project, userId);
+  const project = await requireProject(identifier, userId);
 
   const projectId = project._id.toString();
   const NOT_DELETED = [{ deletedAt: null }, { deletedAt: { $exists: false } }];

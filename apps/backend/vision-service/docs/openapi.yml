@@ -6,17 +6,17 @@ info:
     comparisons, visualizations and written findings. New here? Start with the
     [quickstart](/docs/quickstart).
 
-    **Credentials.** A training script writes with a *project token*, which reaches its own project only.
-    Tools that act as a person use a *user API key* (see the auth API). Both go in
-    `Authorization: Bearer <token>`.
+    **Credentials.** Training scripts use a *pipeline key*: a personal API key limited to one project.
+    Other personal API keys can reach projects their owner may access, narrowed by their scopes.
+    Send either in `Authorization: Bearer <token>`.
 
     **Responses.** Every path starts with `/api`. A request that works answers
     `{ "success": true, "data": … }`; one that fails answers `{ "success": false, "error": …, "message": … }`
     with the matching status.
 
-    **Privacy.** A private project, and everything in it, is visible only to its owner and the members of
-    its editor groups. Configurations are the exception: they are a shared library and stay public even when
-    a private run uses one, so upload nothing confidential in them.
+    **Privacy.** Projects default to private. A private project, its configurations and results are visible
+    to its owning person or owning group’s current members, and to members of its editor groups.
+    Public projects allow anonymous reads. Current group roles determine who can contribute, manage or transfer.
   version: 1.0.0
   contact:
     name: Visin Team
@@ -117,6 +117,7 @@ components:
           type: string
         configId:
           type: string
+          description: Configuration belonging to this training’s project.
         projectId:
           type: string
         status:
@@ -318,17 +319,32 @@ components:
           type: string
         description:
           type: string
-        ownerId:
+        owner:
+          $ref: '#/components/schemas/ResourceOwner'
+        createdBy:
           type: string
-        isPublic:
-          type: boolean
+          description: The account that created it. Attribution only; it grants nothing.
+        visibility:
+          type: string
+          enum: [private, public]
+          description: '`public`: anyone can read it, signed in or not. `private`: its owner, the owning group''s members, and editor groups.'
         editorGroupIds:
           type: array
           maxItems: 100
-          description: Current members of these groups can read and edit project data. Only the project owner manages grants.
+          description: Groups the project is shared with. Their current members get `contribute`. Changing the list takes `manage`.
           items:
             type: string
             pattern: '^[0-9a-fA-F]{24}$'
+        trashedAt:
+          type: string
+          format: date-time
+          description: Set while it is in the trash.
+        purgeAt:
+          type: string
+          format: date-time
+          description: In the trash listing, when it will be deleted for good.
+        permissions:
+          $ref: '#/components/schemas/ProjectPermissions'
         createdAt:
           type: string
           format: date-time
@@ -336,27 +352,35 @@ components:
           type: string
           format: date-time
 
-    ApiToken:
+    ResourceOwner:
       type: object
+      required: [kind, id]
+      description: A person, or a group whose members' current roles decide who may do what.
       properties:
-        _id:
+        kind:
           type: string
+          enum: [user, group]
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
         name:
           type: string
-        token:
-          type: string
-        projectId:
-          type: string
-        permissions:
-          type: array
-          items:
-            type: string
-        expiresAt:
-          type: string
-          format: date-time
-        createdAt:
-          type: string
-          format: date-time
+          description: The group's name, when you are in it.
+
+    ProjectPermissions:
+      type: object
+      description: |
+        What you may do with the project. Each level includes the ones before it.
+        `read`: see it. `contribute`: add runs, results and findings, and change your own
+        (a group member, or an editor group). `manage`: settings, anyone's runs, the
+        trash (a group admin). `own`: who can see it, transfer, restore or delete it for
+        good (its owner, or the owning group's owner).
+      properties:
+        read: { type: boolean }
+        contribute: { type: boolean }
+        manage: { type: boolean }
+        own: { type: boolean }
+
     Finding:
       type: object
       required: [_id, projectId, title, body, createdAt, trainingIds, citedTrainings, authorKind, authorLabel]
@@ -384,16 +408,16 @@ components:
     BearerCredential:
       type: http
       scheme: bearer
-      description: "A user API key (`vsn_live_…`) or an assistant's OAuth access token, sent as `Authorization: Bearer <key>`."
+      description: |
+        A user API key (`vsn_live_…`) or an assistant's OAuth access token, sent as `Authorization: Bearer <key>`.
+        A key can be limited to one project, which is what a training pipeline uses: it then reaches only that
+        project, runs it creates land there whatever project the request names, and it cannot manage projects.
     SessionCookie:
       type: apiKey
       in: cookie
       name: access_token
       description: The signed-in browser session. Not for scripts.
-    ProjectToken:
-      type: http
-      scheme: bearer
-      description: "A project token, created in the project's settings. It writes to its own project only. Sent as `Authorization: Bearer <token>`."
+
 
   # Referenced throughout `paths` — every error goes through the shared
   # errorHandler, so they all share the Error shape.
@@ -437,7 +461,6 @@ paths:
       x-internal: true
       description: Anonymous users and project credentials receive false. Responses are not cached. Resource writes independently recheck permissions.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -476,7 +499,6 @@ paths:
       operationId: getGroups
       x-internal: true
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       responses:
@@ -569,7 +591,6 @@ paths:
         default:
           $ref: '#/components/responses/Error'
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -579,7 +600,6 @@ paths:
       operationId: createFinding
       description: A written conclusion about one or more runs in a project. The caller must be able to edit the project.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -639,7 +659,6 @@ paths:
         default:
           $ref: '#/components/responses/Error'
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -648,7 +667,6 @@ paths:
       summary: Delete a finding
       operationId: deleteFinding
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -719,7 +737,6 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -730,7 +747,6 @@ paths:
       summary: Get all trainings
       operationId: getTrainings
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -753,6 +769,10 @@ paths:
         - name: projectId
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/projectId }
+        - name: access
+          in: query
+          description: '`contribute` keeps only runs in projects you can write to, leaving out other people''s public work.'
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/access }
         - name: tags
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/tags }
@@ -798,10 +818,14 @@ paths:
       operationId: createTraining
       description: |
         Start a run before posting its epochs. Send your own `uuid` to refer to the
-        run by an id your script already knows; one is generated otherwise. With a
-        project token the run goes into the token's project and `projectId` is ignored.
+        run by an id your script already knows; one is generated otherwise.
+
+        Every run belongs to a project: `projectId` (its id or slug) is required, except
+        with a credential limited to a project, where the run goes into that project and
+        `projectId` is ignored. A project that does not exist, or that you cannot see,
+        answers 404 with its name; create it under Projects first. Adding a run takes
+        `contribute` on the project.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -844,7 +868,6 @@ paths:
         Coverage includes unpriced trainings and measured durations in seconds;
         zero rates count as priced. These are current estimates, not historical bills.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -952,7 +975,6 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -963,7 +985,6 @@ paths:
       summary: Compare trainings
       operationId: compareTrainings
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -997,7 +1018,6 @@ paths:
       summary: Get training by ID
       operationId: getTrainingById
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1029,7 +1049,6 @@ paths:
       summary: Update training
       operationId: updateTraining
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -1072,7 +1091,6 @@ paths:
       summary: Delete training
       operationId: deleteTraining
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -1103,9 +1121,8 @@ paths:
       summary: List deleted trainings the caller can restore
       operationId: getDeletedTrainings
       description: >
-        Most recently deleted first: runs in projects the caller may edit, and standalone runs they own. Requires a signed-in caller.
+        Most recently deleted first: the caller’s runs in projects they contribute to, and all runs in projects they manage. Requires a signed-in caller.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -1159,7 +1176,6 @@ paths:
       description: >
         Brings the training back with the epochs and test results its delete removed. Rows deleted separately beforehand stay deleted, and the training is not re-added to comparisons it was removed from.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -1196,7 +1212,6 @@ paths:
       summary: Get training by UUID
       operationId: getTrainingByUuid
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1230,7 +1245,6 @@ paths:
       summary: Get epochs for a training
       operationId: getTrainingWithEpochs
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1283,12 +1297,11 @@ paths:
       operationId: getConfigsByTraining
       description: |
         Resolves a non-deleted training and checks its project visibility before
-        returning its selected config. Public and standalone trainings allow
-        anonymous access; private trainings require their owner's identity.
-        Project tokens are additionally restricted to their own project.
-        The config's content remains available through the shared public library.
+        returning its selected config, whose project must also be readable.
+        Public projects allow anonymous reads; private projects require access through
+        its owner, the owning group, or an editor group. Project-limited keys are
+        additionally restricted to their own project.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1341,7 +1354,6 @@ paths:
       summary: Create a new epoch
       operationId: createEpoch
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -1380,7 +1392,6 @@ paths:
       summary: Create multiple epochs
       operationId: createEpochsBatch
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -1430,7 +1441,6 @@ paths:
         holds metrics such as `iou` is a class, found without being declared. A metric an epoch did not
         report is left out, not sent as `0`. See /docs/sending-results for every name the charts read.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -1477,7 +1487,6 @@ paths:
       summary: Get epoch by ID
       operationId: getEpochById
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1509,7 +1518,6 @@ paths:
       summary: Update epoch
       operationId: updateEpoch
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -1553,7 +1561,6 @@ paths:
       operationId: deleteEpoch
       description: Soft-deletes the epoch together with the test results recorded against it.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -1584,7 +1591,6 @@ paths:
       summary: Get epoch by UUID
       operationId: getEpochByUuid
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1618,7 +1624,6 @@ paths:
       summary: Get test results for an epoch
       operationId: getTestResultsByEpochUuid
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1673,7 +1678,6 @@ paths:
       summary: Get epochs by training ID
       operationId: getEpochsByTraining
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1734,7 +1738,6 @@ paths:
       summary: Get all configurations
       operationId: getAllConfigs
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1774,8 +1777,11 @@ paths:
       tags: [Configurations]
       summary: Create a new configuration
       operationId: createConfig
+      description: |
+        A configuration belongs to a project and is seen by whoever can read that project.
+        `projectId` (its id or slug) is required, except with a credential limited to a
+        project, which supplies its own.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -1812,7 +1818,6 @@ paths:
       summary: Upload configuration from JSON
       operationId: createConfigFromJson
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -1849,7 +1854,6 @@ paths:
       summary: Get configuration by ID
       operationId: getConfigById
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1883,7 +1887,6 @@ paths:
       summary: Get configuration by UUID
       operationId: getConfigByUuid
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1918,7 +1921,6 @@ paths:
       summary: Get all test results
       operationId: getTestResults
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -1976,7 +1978,6 @@ paths:
       summary: Create a new test result
       operationId: createTestResult
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -2015,7 +2016,6 @@ paths:
       summary: Upload test result from JSON
       operationId: createTestResultFromJson
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -2054,7 +2054,6 @@ paths:
       summary: Compare test results
       operationId: compareTestResults
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2088,7 +2087,6 @@ paths:
       summary: Compare aggregated test results by training
       operationId: compareAggregatedTestResultsByTraining
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2122,7 +2120,6 @@ paths:
       summary: Get test result epochs
       operationId: getTestResultEpochs
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2152,7 +2149,6 @@ paths:
       summary: Get test result by ID
       operationId: getTestResultById
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2184,7 +2180,6 @@ paths:
       summary: Update test result
       operationId: updateTestResult
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -2227,7 +2222,6 @@ paths:
       summary: Delete test result
       operationId: deleteTestResult
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -2258,7 +2252,6 @@ paths:
       summary: Get test result by test UUID
       operationId: getTestResultByTestUuid
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2293,7 +2286,6 @@ paths:
       summary: Create a new visualization
       operationId: createVisualization
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -2330,7 +2322,6 @@ paths:
       summary: Get upload URL for visualization
       operationId: getVisualizationUploadUrl
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -2372,7 +2363,6 @@ paths:
       summary: Get visualization types
       operationId: getVisualizationTypes
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2417,7 +2407,6 @@ paths:
       summary: Get visualization by UUID
       operationId: getVisualizationByUuid
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2449,7 +2438,6 @@ paths:
       summary: Delete visualization
       operationId: deleteVisualization
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -2480,7 +2468,6 @@ paths:
       summary: Get visualizations by epoch UUID
       operationId: getVisualizationsByEpoch
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2526,7 +2513,6 @@ paths:
       summary: Get visualizations by training UUID
       operationId: getVisualizationsByTraining
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2634,7 +2620,6 @@ paths:
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/includeUrls }
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2681,7 +2666,6 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2693,7 +2677,6 @@ paths:
       summary: Get all benchmarks
       operationId: getBenchmarks
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2745,7 +2728,6 @@ paths:
       summary: Create a new benchmark
       operationId: createBenchmark
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -2784,7 +2766,6 @@ paths:
       summary: Upload benchmark from JSON
       operationId: uploadBenchmark
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -2823,7 +2804,6 @@ paths:
       summary: Get benchmark statistics
       operationId: getBenchmarkStats
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2855,7 +2835,6 @@ paths:
       summary: Get benchmark by ID
       operationId: getBenchmarkById
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -2887,7 +2866,6 @@ paths:
       summary: Update benchmark
       operationId: updateBenchmark
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -2922,7 +2900,6 @@ paths:
       summary: Delete benchmark
       operationId: deleteBenchmark
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -2948,7 +2925,6 @@ paths:
       summary: Get all comparisons
       operationId: getComparisons
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -3002,8 +2978,11 @@ paths:
       tags: [Comparisons]
       summary: Create a new comparison
       operationId: createComparison
+      description: |
+        A comparison with a `projectId` follows that project. One without is personal:
+        only its creator sees it, only while they can read every project its items come
+        from, and a credential limited to a project cannot make one.
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       requestBody:
@@ -3040,7 +3019,6 @@ paths:
       summary: Get comparison statistics
       operationId: getComparisonStats
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -3075,7 +3053,6 @@ paths:
       summary: Get comparison by ID
       operationId: getComparisonById
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -3107,7 +3084,6 @@ paths:
       summary: Update comparison
       operationId: updateComparison
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -3142,7 +3118,6 @@ paths:
       summary: Delete comparison
       operationId: deleteComparison
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
       parameters:
@@ -3167,7 +3142,6 @@ paths:
       summary: Get comparison by UUID
       operationId: getComparisonByUuid
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -3202,7 +3176,6 @@ paths:
       summary: Get all projects
       operationId: getProjects
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -3210,6 +3183,14 @@ paths:
         - name: search
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetProjectsQuery/properties/search }
+        - name: access
+          in: query
+          description: '`contribute` keeps only projects you can write to (yours, and those your groups edit), leaving out other people''s public projects.'
+          schema: { $ref: ./generated/request-schemas.json#/GetProjectsQuery/properties/access }
+        - name: owner
+          in: query
+          description: '`me`, or a group id: only the projects that owner has.'
+          schema: { $ref: ./generated/request-schemas.json#/GetProjectsQuery/properties/owner }
         - name: sortBy
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetProjectsQuery/properties/sortBy }
@@ -3239,6 +3220,9 @@ paths:
       tags: [Projects]
       summary: Create a new project
       operationId: createProject
+      description: |
+        It belongs to you, or with `owner` to a group you are in. Only a group's owner can
+        make one of its projects public.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -3276,7 +3260,6 @@ paths:
       summary: Get project by ID or slug
       operationId: getProjectByIdOrSlug
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -3308,6 +3291,7 @@ paths:
       tags: [Projects]
       summary: Update project
       operationId: updateProject
+      description: Settings take `manage`; changing `visibility` takes `own`.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -3348,8 +3332,11 @@ paths:
           $ref: '#/components/responses/NotFound'
     delete:
       tags: [Projects]
-      summary: Delete project
+      summary: Move a project to the trash
       operationId: deleteProject
+      description: |
+        Hidden at once, with its runs. Its owner can restore it for 30 days; after that it
+        is deleted for good with everything in it. Takes `manage`.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -3361,7 +3348,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Project deleted successfully
+          description: Project moved to the trash
           content:
             application/json:
               schema:
@@ -3375,13 +3362,163 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /projects/trash:
+    get:
+      tags: [Projects]
+      summary: Projects in the trash
+      operationId: listTrashedProjects
+      description: Projects in the trash that you manage, most recently trashed first, each with `purgeAt`.
+      x-internal: true
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /projects/{id}/restore:
+    post:
+      tags: [Projects]
+      summary: Restore a project from the trash
+      operationId: restoreProject
+      description: Brings back the project and the runs that went to the trash with it. Takes `own`.
+      x-internal: true
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Project restored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /projects/{id}/permanent:
+    delete:
+      tags: [Projects]
+      summary: Delete a project for good
+      operationId: deleteProjectForever
+      description: |
+        Only from the trash, and only for its owner: deletes the project, its runs, results,
+        visualizations and their files, comparisons, findings and configurations at once,
+        rather than after 30 days.
+      x-internal: true
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Project deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /projects/{id}/owner:
+    put:
+      tags: [Projects]
+      summary: Transfer a project
+      operationId: transferProject
+      description: |
+        Hand the project, with everything in it, to another owner. You can move your own
+        project to a group you are in (one way); a group's owner can move the group's
+        project to one of its members, or to another group they are in.
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/TransferProjectBody
+      responses:
+        '200':
+          description: Project transferred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
   /projects/{id}/dashboard-stats:
     get:
       tags: [Projects]
       summary: Get project dashboard statistics
       operationId: getProjectDashboardStats
       security:
-        - { ProjectToken: [] }
         - { BearerCredential: [] }
         - { SessionCookie: [] }
         - {}
@@ -3406,108 +3543,5 @@ paths:
                     type: object
         default:
           $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  # API Tokens
-  /api-tokens:
-    post:
-      tags: [API Tokens]
-      summary: Create a new API token
-      operationId: createToken
-      security:
-        - { BearerCredential: [] }
-        - { SessionCookie: [] }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ./generated/request-schemas.json#/CreateTokenBody
-      responses:
-        '201':
-          description: API token created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: '#/components/schemas/ApiToken'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        default:
-          $ref: '#/components/responses/Error'
-
-  /api-tokens/project/{projectId}:
-    get:
-      tags: [API Tokens]
-      summary: Get API tokens for project
-      operationId: getTokens
-      security:
-        - { BearerCredential: [] }
-        - { SessionCookie: [] }
-      parameters:
-        - name: projectId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApiToken'
-        default:
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api-tokens/{id}:
-    delete:
-      tags: [API Tokens]
-      summary: Revoke API token
-      operationId: revokeToken
-      security:
-        - { BearerCredential: [] }
-        - { SessionCookie: [] }
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: API token revoked successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Success'
-        default:
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'

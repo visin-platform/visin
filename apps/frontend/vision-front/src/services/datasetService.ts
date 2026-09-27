@@ -1,7 +1,19 @@
+import type { OwnerRef, Visibility } from '@visin/frontend-core';
 import { datasetApi } from '../config/datasetApi';
 import { uploadToSignedUrl } from '../utils/chunkedUpload';
 
-export type DatasetVisibility = 'public' | 'group';
+export type DatasetVisibility = Visibility;
+
+/** What the caller may do with a dataset, as dataset-service decides it. */
+export interface DatasetPermissions {
+  read: boolean;
+  /** upload a zip, import images */
+  contribute: boolean;
+  /** rename, set the cover, remove image groups, move to the trash, run label jobs */
+  manage: boolean;
+  /** make it public, transfer it, restore it or delete it for good */
+  own: boolean;
+}
 export type ImportStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
 export type ScanStatus = 'queued' | 'running' | 'done' | 'failed';
 
@@ -54,9 +66,12 @@ export interface Dataset {
   _id: string;
   name: string;
   description?: string;
-  ownerId: string;
+  /** `name` is the owning group's, when the caller is in it */
+  owner: OwnerRef & { name?: string };
+  createdBy: string;
   visibility: DatasetVisibility;
-  groupId?: string;
+  /** set while it is in the trash */
+  trashedAt?: string;
   /** `size` is absent until the zip has been scanned (a dataset migrated from labeling starts that way) */
   archive?: { filename: string; size?: number; uploadedAt: string };
   /** an upload that stopped before it finished: choosing the same file again resumes it */
@@ -74,7 +89,7 @@ export interface Dataset {
   import?: DatasetImport;
   /** labeling jobs whose tasks show this dataset's images */
   usedBy: number;
-  canWrite: boolean;
+  permissions: DatasetPermissions;
   createdAt: string;
   updatedAt: string;
 }
@@ -121,7 +136,8 @@ const query = (params: Record<string, string | number | undefined>): string => {
   return text ? `?${text}` : '';
 };
 
-export const listDatasets = async (params: { search?: string; page?: number; limit?: number } = {}) =>
+/** `owner`: `me`, or a group id — only that owner's datasets. */
+export const listDatasets = async (params: { search?: string; page?: number; limit?: number; owner?: string } = {}) =>
   (await datasetApi.get<Envelope<{ datasets: Dataset[]; pagination: Pagination }>>(query(params))).data;
 
 export const getDataset = async (id: string) => (await datasetApi.get<Envelope<Dataset>>(`/${id}`)).data;
@@ -132,7 +148,8 @@ export interface DatasetFields {
   name: string;
   description?: string;
   visibility: DatasetVisibility;
-  groupId?: string;
+  /** who it belongs to at creation; afterwards it moves by transfer */
+  owner?: OwnerRef;
 }
 
 export const createDataset = async (fields: DatasetFields) => (await datasetApi.post<Envelope<Dataset>>('', fields)).data;
@@ -140,9 +157,24 @@ export const createDataset = async (fields: DatasetFields) => (await datasetApi.
 export const updateDataset = async (id: string, fields: Partial<DatasetFields>) =>
   (await datasetApi.patch<Envelope<Dataset>>(`/${id}`, fields)).data;
 
-export const deleteDataset = async (id: string): Promise<void> => {
+/** Into the trash, where its owner can restore it for 30 days. */
+export const trashDataset = async (id: string): Promise<void> => {
   await datasetApi.delete(`/${id}`);
 };
+
+/** Trashed datasets the caller manages, most recently trashed first. */
+export const listTrash = async () => (await datasetApi.get<Envelope<Dataset[]>>('/trash')).data;
+
+export const restoreDataset = async (id: string) => (await datasetApi.post<Envelope<Dataset>>(`/${id}/restore`)).data;
+
+/** Out of the trash for good: its files are deleted. */
+export const deleteDatasetForever = async (id: string): Promise<void> => {
+  await datasetApi.delete(`/${id}/permanent`);
+};
+
+/** Hand it, with its label jobs, to another owner. */
+export const transferDataset = async (id: string, owner: OwnerRef) =>
+  (await datasetApi.put<Envelope<Dataset>>(`/${id}/owner`, { owner })).data;
 
 /**
  * Tell dataset-service a zip has arrived. It swaps the archive in and queues

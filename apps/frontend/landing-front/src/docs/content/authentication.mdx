@@ -6,41 +6,21 @@ Authorization: Bearer <credential>
 
 What changes is which credential, and that depends on what you are building.
 
-| You are building                          | Use                                  | It can reach                                       |
-| ----------------------------------------- | ------------------------------------ | -------------------------------------------------- |
-| A training script or pipeline             | [Project token](#project-tokens)     | One project: its runs, epochs and results          |
-| A script or notebook that reads your data | [User API key](#user-api-keys)       | What your account can see, within the key's scopes |
-| An AI assistant                           | [MCP, signed in as you](#assistants) | What you allow when you connect it                 |
+| You are building                          | Use                                                 | It can reach                                       |
+| ----------------------------------------- | --------------------------------------------------- | -------------------------------------------------- |
+| A training script or pipeline             | [An API key limited to the project](#pipeline-keys) | One project: its runs, epochs and results          |
+| A script or notebook that reads your data | [An API key](#api-keys)                             | What your account can see, within the key's scopes |
+| An AI assistant                           | [MCP, signed in as you](#assistants)                | What you allow when you connect it                 |
 
-## Project tokens
+## API keys
 
-A project token is what a training pipeline writes with. It belongs to one project, and every run, epoch, test
-result and benchmark it sends lands there.
-
-**Create one:** open the project, go to its **Settings** tab, and under **API Tokens** choose **Generate New
-Token**. Only the project's owner sees this tab. You can set an expiry in days, or leave it empty for a token that
-lasts until you revoke it. The token is shown once, so copy it before you close the dialog.
-
-**What it can do:**
-
-- Create runs in its project, and post their epochs, test results, benchmarks and visualizations.
-- Read its own project's runs and results. A list it asks for includes that project only.
-
-**What it can't do:**
-
-- Write to any other project, even one owned by the same person.
-- Create, change or delete projects, or create or revoke tokens. These answer `403` with
-  `Project tokens cannot manage projects or credentials`. Do them signed in to the app.
-
-**Revoke one** from the same list in **Settings**. It stops working at once.
-
-## User API keys
-
-A user API key lets software act as you: a notebook that pulls results, a CI job that compares runs, a script
-that tags them. It never reaches more than your account can already see, and only the parts you grant.
+An API key lets software act as you: a training pipeline that sends runs, a notebook that pulls results, a CI job
+that compares runs, a script that tags them. It never reaches more than your account can, and only the parts you
+grant. If you lose access to a project, your keys lose it too.
 
 **Create one:** in the app, open **Account**, then **API keys**, and choose **New key**. Pick its scopes and,
-optionally, when it expires. Keys start with `vsn_live_`, which makes a leaked one easy to find in logs.
+optionally, when it expires. Keys start with `vsn_live_`, which makes a leaked one easy to find in logs. You can
+read a key back later from the same page.
 
 A key's scopes come in read and write pairs, one pair per area:
 
@@ -62,6 +42,44 @@ A request outside the key's scopes answers `403` and names the scope it needed, 
   when a tool needs to write.
 </Callout>
 
+### Pipeline keys
+
+A training pipeline's key is limited to its project. Every run, epoch, test result and benchmark it sends lands
+there, whatever project the request names.
+
+**Create one:** open the project, go to its **Settings** tab, and under **Pipeline keys** choose **New pipeline
+key**. It carries `vision:read` and `vision:write`, limited to that project. The dialog shows the two lines your
+script needs, `VISIN_URL` and `VISIN_TOKEN`, ready to copy.
+
+**What it can do:**
+
+- Create runs in its project, and post their epochs, test results, benchmarks and visualizations.
+- Read its own project's runs and results. A list it asks for includes that project only.
+
+**What it can't do:**
+
+- Reach any other project, even another of yours, or a public one.
+- Create, change or delete projects, or manage keys. These answer `403`. Do them signed in to the app.
+- Reach datasets or labeling, which belong to no project.
+
+**Revoke one** from the project's **Pipeline keys** list, or from **Account**, then **API keys**. It stops working at
+once.
+
+## Who can do what in a project
+
+A project belongs to you or to a group, and is **private** or **public**. A key never has more access than its
+owner, so what a key can do in a project is what you can do there:
+
+| You are                                          | You can                                                                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------- |
+| Anyone, on a public project                      | Read its runs and results                                                 |
+| A member of the owning group, or an editor group | Also send runs and results, and change or delete your own                 |
+| An admin of the owning group                     | Also change settings, anyone's runs, and move the project to the trash    |
+| Its owner, or the owning group's owner           | Also make it public, transfer it, and restore or delete it from the trash |
+
+Every run belongs to a project. A key that isn't limited to one sends `projectId`, the project's id or slug, with
+each new run. A project that doesn't exist, or that you can't see, answers `404` with its name.
+
 ## Assistants
 
 An assistant such as Claude connects through Visin's MCP server. You sign in when it asks and tick what it may
@@ -71,16 +89,14 @@ listed under **Account**, then **Connected apps**, where you can disconnect one.
 
 ## When a request is refused
 
-| Status | Means                                                   | What to do                                                                          |
-| ------ | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `401`  | No credential, or one that is wrong, expired or revoked | Check the header and the token. `Access token required` means none arrived.         |
-| `403`  | The credential is valid but may not do this             | A project token outside its project or managing projects, or a key missing a scope. |
-| `404`  | Not found, or not visible to you                        | A private project you can't see can read as missing rather than forbidden.          |
+| Status | Means                                                   | What to do                                                                         |
+| ------ | ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `401`  | No credential, or one that is wrong, expired or revoked | Check the header and the token. `Access token required` means none arrived.        |
+| `403`  | The credential is valid but may not do this             | A pipeline key outside its project or managing projects, or a key missing a scope. |
+| `404`  | Not found, or not visible to you                        | A private project you can't see can read as missing rather than forbidden.         |
 
 ## Keeping credentials safe
 
-- Read tokens and keys from the environment or a secret store, never from source code. Anyone holding one can use
-  it.
-- Give each pipeline or tool its own token or key, named after it, so you can revoke one without stopping the
-  others.
+- Read keys from the environment or a secret store, never from source code. Anyone holding one can use it.
+- Give each pipeline or tool its own key, named after it, so you can revoke one without stopping the others.
 - To rotate, create the new credential, switch your pipeline to it, then revoke the old one.

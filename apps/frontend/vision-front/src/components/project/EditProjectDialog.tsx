@@ -1,16 +1,6 @@
 import React from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormControlLabel,
-  Switch,
-  Button,
-  Box,
-  Typography
-} from '@mui/material';
+import { VisibilitySwitch } from '@visin/frontend-core';
+import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, Box, Alert } from '@mui/material';
 
 interface EditProjectDialogProps {
   open: boolean;
@@ -23,6 +13,8 @@ interface EditProjectDialogProps {
   onFormDataChange: (data: { name: string; description: string; isPublic: boolean }) => void;
   onSubmit: () => void;
   isUpdating: boolean;
+  canShare: boolean;
+  error?: string;
 }
 
 const EditProjectDialog: React.FC<EditProjectDialogProps> = ({
@@ -31,7 +23,9 @@ const EditProjectDialog: React.FC<EditProjectDialogProps> = ({
   formData,
   onFormDataChange,
   onSubmit,
-  isUpdating
+  isUpdating,
+  canShare,
+  error
 }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -53,27 +47,18 @@ const EditProjectDialog: React.FC<EditProjectDialogProps> = ({
             multiline
             rows={3}
           />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={formData.isPublic}
-                onChange={(e) => onFormDataChange({ ...formData, isPublic: e.target.checked })}
-              />
-            }
-            label="Public project"
+          <VisibilitySwitch
+            value={formData.isPublic ? 'public' : 'private'}
+            onChange={(value) => onFormDataChange({ ...formData, isPublic: value === 'public' })}
+            canMakePublic={canShare}
+            disabled={isUpdating || !canShare}
           />
-          <Typography variant="body2" color="text.secondary">
-            Configs, dataset analyses, and dataset files remain publicly shared, even in a private project.
-          </Typography>
+          {error && <Alert severity="error">{error}</Alert>}
         </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button
-          onClick={onSubmit}
-          variant="contained"
-          disabled={isUpdating || !formData.name.trim()}
-        >
+        <Button onClick={onSubmit} variant="contained" disabled={isUpdating || !formData.name.trim()}>
           {isUpdating ? 'Updating...' : 'Update'}
         </Button>
       </DialogActions>

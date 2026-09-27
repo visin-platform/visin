@@ -7,10 +7,8 @@
  * acts on its own, so a key carries explicit scopes and every request made with
  * it is gated on them.
  *
- * Distinct from vision-service's `ApiToken`, which is a different credential
- * for a different job: that one is minted per project for the training pipeline
- * to POST epochs and benchmarks with, carries no scopes, and is pinned to one
- * project. This one identifies a *user* and is scoped by domain.
+ * It identifies a *user* and is scoped by domain; a training pipeline's key is
+ * additionally limited to one project.
  */
 
 /**
@@ -45,6 +43,21 @@ export const API_KEY_SCOPES = [
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 
+/**
+ * The scopes a key limited to one project may carry: that project's runs and
+ * results, and the analysis written about them. Datasets and labeling do not
+ * belong to a project, so a limited key never reaches them.
+ */
+export const PROJECT_KEY_SCOPES = [
+  'vision:read',
+  'vision:write',
+  'analysis:read',
+  'analysis:write'
+] as const satisfies readonly ApiKeyScope[];
+
+export const isProjectKeyScope = (scope: ApiKeyScope): boolean =>
+  (PROJECT_KEY_SCOPES as readonly string[]).includes(scope);
+
 export const isApiKeyScope = (value: unknown): value is ApiKeyScope =>
   typeof value === 'string' && (API_KEY_SCOPES as readonly string[]).includes(value);
 
@@ -66,6 +79,8 @@ export interface ApiKeySummary {
   /** the public half, shown in listings so a key is identifiable at a glance */
   prefix: string;
   scopes: ApiKeyScope[];
+  /** the one project this key is limited to, or null for a key that reaches whatever its owner can */
+  project: { id: string; name: string } | null;
   createdAt: string;
   lastUsedAt: string | null;
   expiresAt: string | null;
@@ -92,4 +107,6 @@ export interface ApiKeyVerification {
   /** what the owner called this key, for a log line a person can read */
   label?: string;
   scopes?: ApiKeyScope[];
+  /** set when the key is limited to one project */
+  projectId?: string;
 }

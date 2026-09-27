@@ -10,6 +10,7 @@ import type {
   ListItemsQuery,
   SetCoverBody,
   StartImportBody,
+  TransferDatasetBody,
   UpdateDatasetBody
 } from '../validation/datasetSchemas';
 
@@ -43,9 +44,28 @@ export const updateDataset = async (req: Request, res: Response): Promise<void> 
   res.json({ success: true, data: await datasets.updateDataset(accessFor(req), idOf(req), req.body as UpdateDatasetBody) });
 };
 
-export const deleteDataset = async (req: Request, res: Response): Promise<void> => {
-  await datasets.deleteDataset(accessFor(req), idOf(req));
+/** Into the trash, where its owner can restore it for 30 days. */
+export const trashDataset = async (req: Request, res: Response): Promise<void> => {
+  await datasets.trashDataset(accessFor(req), idOf(req));
+  res.json({ success: true, message: 'Dataset moved to the trash' });
+};
+
+export const listTrash = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await datasets.listTrash(accessFor(req)) });
+};
+
+export const restoreDataset = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await datasets.restoreDataset(accessFor(req), idOf(req)) });
+};
+
+export const deletePermanently = async (req: Request, res: Response): Promise<void> => {
+  await datasets.deletePermanently(accessFor(req), idOf(req));
   res.status(202).json({ success: true, message: 'Dataset deletion queued' });
+};
+
+export const transferDataset = async (req: Request, res: Response): Promise<void> => {
+  const { owner } = req.body as TransferDatasetBody;
+  res.json({ success: true, data: await datasets.transferDataset(accessFor(req), idOf(req), owner) });
 };
 
 export const removeGroup = async (req: Request, res: Response): Promise<void> => {

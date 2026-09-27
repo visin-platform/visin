@@ -1,3 +1,4 @@
+import type { OwnerGroup, OwnerRef } from '@visin/frontend-core';
 import { visionApi } from '../config/visionApi';
 import { Project, CreateProjectData, UpdateProjectData } from '../types/Project';
 import { ApiResponse } from '../types';
@@ -18,9 +19,32 @@ export interface ProjectDashboardStats {
 }
 
 export const projectService = {
+  async getGroups(): Promise<OwnerGroup[]> {
+    const response = await visionApi.get('/write-capabilities/groups');
+    return (response.data as ApiResponse<OwnerGroup[]>).data;
+  },
+
+  async getTrash(): Promise<ApiResponse<Project[]>> {
+    return (await visionApi.get('/projects/trash')).data as ApiResponse<Project[]>;
+  },
+
+  async restoreProject(id: string): Promise<ApiResponse<Project>> {
+    return (await visionApi.post(`/projects/${id}/restore`)).data as ApiResponse<Project>;
+  },
+
+  async deleteProjectForever(id: string): Promise<ApiResponse<void>> {
+    return (await visionApi.delete(`/projects/${id}/permanent`)).data as ApiResponse<void>;
+  },
+
+  async transferProject(id: string, owner: OwnerRef): Promise<ApiResponse<Project>> {
+    return (await visionApi.put(`/projects/${id}/owner`, { owner })).data as ApiResponse<Project>;
+  },
+
   // Get all projects
   async getProjects(params?: {
     search?: string;
+    owner?: string;
+    access?: 'contribute';
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
   }): Promise<ApiResponse<Project[]>> {

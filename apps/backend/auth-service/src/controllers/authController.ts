@@ -146,6 +146,31 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, message: 'Logged out successfully' });
 };
 
+const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Accounts whose email, first name or last name starts with `q`, for
+ * group-service's "Add member" search. Internal only: group-service decides who
+ * may search, drops people already in the group, and masks the emails it shows.
+ */
+export const searchUsers = async (req: Request, res: Response): Promise<void> => {
+  const { q, limit } = req.query as unknown as { q: string; limit: number };
+  const prefix = new RegExp(`^${escapeRegex(q)}`, 'i');
+  const users = await User.find({ $or: [{ email: prefix }, { firstName: prefix }, { lastName: prefix }] })
+    .select('email firstName lastName')
+    .sort({ email: 1 })
+    .limit(limit);
+  res.json({
+    success: true,
+    data: users.map((user) => ({
+      id: user._id.toString(),
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName
+    }))
+  });
+};
+
 export const invalidateUserTokens = async (req: Request, res: Response): Promise<void> => {
   const { email } = req.body;
 

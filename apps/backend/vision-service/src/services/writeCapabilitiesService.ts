@@ -4,6 +4,7 @@ import Comparison from '../models/Comparison';
 import Benchmark from '../models/Benchmark';
 import TestResult from '../models/TestResult';
 import { canWriteResource, assertEpochWrite } from './writeAccessService';
+import { canEditProject, resolveProject } from './projectAccessService';
 import { assertBenchmarkWrite } from './benchmarkService';
 
 export type WritableKind = 'project' | 'training' | 'comparison' | 'benchmark' | 'test-result';
@@ -15,9 +16,10 @@ export async function getWriteCapabilities(kind: WritableKind, ids: string[], us
     if (!userId) continue;
     try {
       switch (kind) {
-        case 'project': result[id] = await canWriteResource({ projectId: id }, userId); break;
+        // Adding to it: a run, a comparison, a finding.
+        case 'project': result[id] = await canEditProject(await resolveProject(id), userId); break;
         case 'training': result[id] = await canWriteResource(await Training.findById(id), userId); break;
-        case 'comparison': result[id] = await canWriteResource(await Comparison.findById(id), userId); break;
+        case 'comparison': result[id] = await canWriteResource(await Comparison.findById(id), userId, true); break;
         case 'benchmark': {
           const benchmark = await Benchmark.findOne({ _id: id, deletedAt: null });
           if (benchmark) { await assertBenchmarkWrite(benchmark, userId); result[id] = true; }

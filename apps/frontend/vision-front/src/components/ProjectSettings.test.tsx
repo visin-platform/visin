@@ -5,25 +5,19 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import ProjectSettings from './ProjectSettings';
-import { apiTokenService, ApiToken } from '../services/apiTokenService';
 import { projectService } from '../services/projectService';
 import { Project } from '../types/Project';
 
-vi.mock('../services/apiTokenService', () => ({
-  apiTokenService: {
-    getTokens: vi.fn(),
-    createToken: vi.fn(),
-    revokeToken: vi.fn()
-  }
-}));
+// Its own tests cover it; here it only has to be there.
+vi.mock('./project/PipelineKeys', () => ({ default: () => <div>pipeline-keys</div> }));
 
 vi.mock('../services/projectService', () => ({
   projectService: {
-    updateProject: vi.fn()
+    updateProject: vi.fn(),
+    transferProject: vi.fn()
   }
 }));
 
-const mockedApiTokenService = vi.mocked(apiTokenService);
 const mockedProjectService = vi.mocked(projectService);
 
 Object.assign(navigator, {
@@ -35,31 +29,24 @@ const project: Project = {
   name: 'My Project',
   slug: 'my-project',
   description: 'A project',
-  isPublic: false,
-  ownerId: 'u1',
+  visibility: 'private' as const,
+  owner: { kind: 'user' as const, id: 'u1' },
+  createdBy: 'u1',
+  permissions: { read: true, contribute: true, manage: true, own: true },
   createdAt: '2026-01-01T10:00:00.000Z',
   updatedAt: '2026-01-01T10:00:00.000Z'
 };
 
-const token: ApiToken = {
-  _id: 'tok1',
-  name: 'CI Token',
-  prefix: 'abcd1234',
-  projectId: 'p1',
-  createdBy: 'u1',
-  isActive: true,
-  createdAt: '2026-01-01T10:00:00.000Z'
-};
 
 const makeQueryClient = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 
-const renderComponent = () => {
+const renderComponent = (value: Project = project) => {
   const qc = makeQueryClient();
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <ProjectSettings project={project} />
+        <ProjectSettings project={value} />
       </MemoryRouter>
     </QueryClientProvider>
   );
@@ -69,7 +56,6 @@ describe('ProjectSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(visionApi.get).mockResolvedValue({ data: { data: [] } });
-    mockedApiTokenService.getTokens.mockResolvedValue({ data: [] } as any);
   });
 
   it('saves an editor group selected from the owner’s groups', async () => {
@@ -81,7 +67,12 @@ describe('ProjectSettings', () => {
     fireEvent.mouseDown(picker);
     fireEvent.click(await screen.findByRole('option', { name: 'Researchers' }));
     fireEvent.click(screen.getByRole('button', { name: /save/i }));
-    await waitFor(() => expect(mockedProjectService.updateProject).toHaveBeenCalledWith('p1', expect.objectContaining({ editorGroupIds: [id] })));
+    await waitFor(() =>
+      expect(mockedProjectService.updateProject).toHaveBeenCalledWith(
+        'p1',
+        expect.objectContaining({ editorGroupIds: [id] })
+      )
+    );
   });
 
   it('renders project fields pre-filled from the project prop', async () => {
@@ -91,20 +82,9 @@ describe('ProjectSettings', () => {
     expect(screen.getByDisplayValue('A project')).toBeInTheDocument();
   });
 
-  it('shows "No API tokens found" when there are none', async () => {
+  it('shows pipeline keys', () => {
     renderComponent();
-    await waitFor(() => {
-      expect(screen.getByText('No API tokens found')).toBeInTheDocument();
-    });
-  });
-
-  it('renders existing API tokens', async () => {
-    mockedApiTokenService.getTokens.mockResolvedValue({ data: [token] } as any);
-    renderComponent();
-    await waitFor(() => {
-      expect(screen.getByText('CI Token')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getByText('pipeline-keys')).toBeInTheDocument();
   });
 
   it('saves project changes when Save is clicked', async () => {
@@ -134,57 +114,40 @@ describe('ProjectSettings', () => {
     });
   });
 
-  it('opens the create token dialog and generates a token', async () => {
-    mockedApiTokenService.createToken.mockResolvedValue({
-      data: { ...token, token: 'raw-secret-token-value' }
-    } as any);
-    renderComponent();
-
-    fireEvent.click(screen.getByRole('button', { name: /generate new token/i }));
-    expect(screen.getByText('Generate API Token')).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('Token Name'), { target: { value: 'New Token' } });
-    fireEvent.click(screen.getByRole('button', { name: /^generate$/i }));
-
-    await waitFor(() => {
-      expect(mockedApiTokenService.createToken).toHaveBeenCalled();
-    });
-    expect(mockedApiTokenService.createToken.mock.calls[0][0]).toEqual({
-      name: 'New Token',
-      projectId: 'p1',
-      expiresInDays: 30
-    });
-    await waitFor(() => {
-      expect(screen.getByText('raw-secret-token-value')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /done/i }));
-  });
-
-  it('revokes a token after confirming', async () => {
-    mockedApiTokenService.getTokens.mockResolvedValue({ data: [token] } as any);
-    mockedApiTokenService.revokeToken.mockResolvedValue({ data: undefined } as any);
-    renderComponent();
-
-    await waitFor(() => {
-      expect(screen.getByText('CI Token')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /revoke token/i }));
-    expect(screen.getByText('Revoke API Token')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^revoke$/i }));
-
-    await waitFor(() => {
-      expect(mockedApiTokenService.revokeToken).toHaveBeenCalled();
-    });
-    expect(mockedApiTokenService.revokeToken.mock.calls[0][0]).toBe('tok1');
-  });
-
   it('copies the public project URL to the clipboard', async () => {
     renderComponent();
     fireEvent.click(screen.getByRole('button', { name: /copy url/i }));
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      expect.stringContaining('/projects/my-project')
-    );
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining('/projects/my-project'));
+  });
+  it('allows an admin to edit settings without submitting visibility', async () => {
+    renderComponent({
+      ...project,
+      owner: { kind: 'group', id: 'g1' },
+      permissions: { ...project.permissions, own: false }
+    });
+    expect(screen.getByRole('radio', { name: 'Public' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Transfer ownership' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mockedProjectService.updateProject).toHaveBeenCalled());
+    expect(mockedProjectService.updateProject.mock.calls[0][1]).not.toHaveProperty('visibility');
+  });
+
+  it('transfers the project to a selected group and displays a refused transfer', async () => {
+    const id = 'a'.repeat(24);
+    vi.mocked(visionApi.get).mockResolvedValue({ data: { data: [{ id, name: 'Researchers', role: 'member' }] } });
+    mockedProjectService.transferProject.mockRejectedValueOnce(new Error('Membership changed'));
+    renderComponent();
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }));
+    const picker = await screen.findByRole('combobox', { name: 'New owner' });
+    fireEvent.mouseDown(picker);
+    fireEvent.click(await screen.findByRole('option', { name: 'Researchers' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer' }));
+    expect(await screen.findByText('Membership changed')).toBeInTheDocument();
+    expect(mockedProjectService.transferProject).toHaveBeenCalledWith('p1', { kind: 'group', id });
+    mockedProjectService.transferProject.mockResolvedValue({ success: true, data: project });
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 });
+
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));

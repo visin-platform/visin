@@ -30,6 +30,12 @@ export const linkGoogleBodySchema = validateTokenBodySchema.extend({
   currentPassword: z.string().min(1).max(MAX_PASSWORD_LENGTH)
 });
 
+/** For group-service's "Add member" search; it enforces who may search and how short a query may be. */
+export const searchUsersQuerySchema = z.object({
+  q: z.string().trim().min(1, 'q is required').max(254),
+  limit: z.coerce.number().int().min(1).max(25).default(20)
+});
+
 export const invalidateUserTokensBodySchema = z.object({
   email: z.string().min(1, 'Email is required')
 });
@@ -53,7 +59,10 @@ export const createApiKeyBodySchema = z.object({
   // Capped at a year. A key that never expires is a credential nobody ever
   // revisits; an explicit `undefined` still means "no expiry", which is a
   // choice someone made rather than a default they inherited.
-  expiresInDays: z.number().int().min(1).max(365).optional()
+  expiresInDays: z.number().int().min(1).max(365).optional(),
+  // Limits the key to one project, for a training pipeline. It may then carry
+  // only vision and analysis scopes, and its owner must be able to write there.
+  projectId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid project id').optional()
 });
 
 export const sessionIdParamsSchema = z.object({

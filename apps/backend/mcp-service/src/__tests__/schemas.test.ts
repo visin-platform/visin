@@ -13,7 +13,7 @@ import {
 describe('parseResponse', () => {
   it('returns the parsed value when the shape matches', () => {
     const parsed = parseResponse(projectsResponseSchema, '/projects', [
-      { _id: 'p1', name: 'Roadside', isPublic: true }
+      { _id: 'p1', name: 'Roadside', visibility: 'public' }
     ]);
 
     expect(parsed[0].name).toBe('Roadside');
@@ -49,7 +49,7 @@ describe('tolerating what the API actually sends', () => {
     // These endpoints return far more than is rendered; rejecting an unknown
     // field would be a self-inflicted outage on the next unrelated deploy.
     const parsed = parseResponse(projectsResponseSchema, '/projects', [
-      { _id: 'p1', name: 'Roadside', isPublic: false, __v: 0, deletedAt: null, ownerId: 'u1' }
+      { _id: 'p1', name: 'Roadside', visibility: 'private', __v: 0, deletedAt: null, owner: { kind: 'user', id: 'u1' } }
     ]);
 
     expect(parsed).toHaveLength(1);

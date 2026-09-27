@@ -1,4 +1,4 @@
-import { Request } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { authenticateToken, optionalAuth } from '@visin/backend-core';
 
 // req.user is now typed globally via @visin/backend-core's Express.Request
@@ -6,5 +6,8 @@ import { authenticateToken, optionalAuth } from '@visin/backend-core';
 // across this service don't need to change.
 export type AuthRequest = Request;
 
-export const authMiddleware = authenticateToken;
+/** Required auth: backend-core's session or Bearer check. */
+export const authMiddleware = (req: Request, res: Response, next: NextFunction): Promise<void> | void =>
+  authenticateToken(req, res, next);
+
 export const optionalAuthMiddleware = optionalAuth;

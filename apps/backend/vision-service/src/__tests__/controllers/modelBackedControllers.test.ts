@@ -23,7 +23,7 @@ jest.mock('../../services/writeAccessService', () => ({
 }));
 /**
  * Covers the controllers that talk to Mongoose models directly (older style):
- * config / apiToken.
+ * config.
  */
 jest.mock('../../models/Config', () => {
   const ctor = Object.assign(jest.fn(), {
@@ -31,13 +31,6 @@ jest.mock('../../models/Config', () => {
     findOne: jest.fn(),
     findById: jest.fn(),
     countDocuments: jest.fn(),
-  });
-  return { __esModule: true, default: ctor };
-});
-jest.mock('../../models/ApiToken', () => {
-  const ctor = Object.assign(jest.fn(), {
-    find: jest.fn(),
-    findById: jest.fn(),
   });
   return { __esModule: true, default: ctor };
 });
@@ -53,9 +46,9 @@ jest.mock('../../clients/fileServiceClient', () => ({
 }));
 jest.mock('../../services/projectAccessService', () => ({
   ...jest.requireActual('../../services/projectAccessService'),
-  isProjectOwner: jest.fn(),
   checkProjectAccess: jest.fn().mockResolvedValue(true),
   getVisibleProjectIds: jest.fn().mockResolvedValue([]),
+  resolveProject: jest.fn().mockResolvedValue({ _id: { toString: () => 'p1' } }),
 }));
 jest.mock('@visin/backend-core', () => ({
   ...jest.requireActual('@visin/backend-core'),
@@ -64,16 +57,11 @@ jest.mock('@visin/backend-core', () => ({
 
 import type { Request, Response } from 'express';
 import * as configCtrl from '../../controllers/configController';
-import * as apiTokenCtrl from '../../controllers/apiTokenController';
 import Config from '../../models/Config';
-import ApiToken from '../../models/ApiToken';
 import Training from '../../models/Training';
-import { isProjectOwner } from '../../services/projectAccessService';
 
 const mockedConfig = Config as unknown as jest.Mock & Record<string, jest.Mock>;
-const mockedApiToken = ApiToken as unknown as jest.Mock & Record<string, jest.Mock>;
 const mockedTraining = Training as unknown as Record<string, jest.Mock>;
-const mockedIsOwner = isProjectOwner as jest.Mock;
 
 type AnyDoc = Record<string, unknown>;
 
@@ -140,7 +128,7 @@ describe('configController', () => {
     ).rejects.toThrow('Training not found');
 
     mockedTraining.findOne.mockResolvedValue({ _id: 't1', configId: 'c1' });
-    mockedConfig.findById.mockResolvedValue({ _id: 'c1' });
+    mockedConfig.findOne.mockResolvedValue({ _id: 'c1' });
     const res = makeRes();
     await configCtrl.getConfigsByTraining(makeReq({ params: { trainingId: 't1' } }), res);
     expect(res.json.mock.calls[0][0].data.total).toBe(1);
@@ -180,94 +168,13 @@ describe('configController', () => {
     }));
     const res = makeRes();
 
-    await configCtrl.createConfig(makeReq({ body: { summary: 's', config_data: {} } }), res);
+    await configCtrl.createConfig(makeReq({ body: { summary: 's', config_data: {}, projectId: 'slug' } }), res);
     expect(mockedConfig.mock.calls[0][0].config_uuid).toMatch(/^[0-9a-f-]{36}$/);
+    expect(mockedConfig.mock.calls[0][0].projectId).toBe('p1');
     expect(res.status).toHaveBeenCalledWith(201);
 
-    await configCtrl.createConfigFromJson(makeReq({ body: { summary: 's2', config_data: {} } }), makeRes());
+    await configCtrl.createConfigFromJson(makeReq({ body: { summary: 's2', config_data: {}, projectId: 'slug' } }), makeRes());
     expect(mockedConfig.mock.calls[1][0].summary).toBe('s2');
   });
 });
 
-describe('apiTokenController', () => {
-  it('createToken is owner-only and returns the raw token exactly once', async () => {
-    mockedIsOwner.mockResolvedValue(false);
-    await expect(
-      apiTokenCtrl.createToken(makeReq({ body: { name: 'T', projectId: 'p1' } }), makeRes())
-    ).rejects.toThrow('Only the project owner');
-
-    mockedIsOwner.mockResolvedValue(true);
-    mockedApiToken.mockImplementation((d: AnyDoc) => ({
-      ...d,
-      toObject: () => ({ ...d }),
-      save: jest.fn().mockResolvedValue(undefined),
-    }));
-    const res = makeRes();
-
-    await apiTokenCtrl.createToken(
-      makeReq({ body: { name: 'T', projectId: 'p1', expiresInDays: 30 } }),
-      res
-    );
-
-    const ctorArg = mockedApiToken.mock.calls[0][0];
-    expect(ctorArg.tokenHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(ctorArg.expiresAt).toBeInstanceOf(Date);
-    const body = res.json.mock.calls[0][0];
-    expect(body.data.token).toMatch(/^[0-9a-f]{64}$/);
-    expect(body.data.prefix).toBe(body.data.token.substring(0, 7));
-    expect(res.status).toHaveBeenCalledWith(201);
-  });
-
-  it('createToken leaves expiresAt unset without expiresInDays', async () => {
-    mockedIsOwner.mockResolvedValue(true);
-    mockedApiToken.mockImplementation((d: AnyDoc) => ({
-      ...d,
-      toObject: () => ({ ...d }),
-      save: jest.fn().mockResolvedValue(undefined),
-    }));
-
-    await apiTokenCtrl.createToken(makeReq({ body: { name: 'T', projectId: 'p1' } }), makeRes());
-
-    expect(mockedApiToken.mock.calls[0][0].expiresAt).toBeUndefined();
-  });
-
-  it('getTokens is owner-only and lists active tokens', async () => {
-    mockedIsOwner.mockResolvedValue(false);
-    await expect(
-      apiTokenCtrl.getTokens(makeReq({ params: { projectId: 'p1' } }), makeRes())
-    ).rejects.toThrow('Only the project owner');
-
-    mockedIsOwner.mockResolvedValue(true);
-    mockChain(mockedApiToken.find, [{ _id: 't1' }]);
-    const res = makeRes();
-    await apiTokenCtrl.getTokens(makeReq({ params: { projectId: 'p1' } }), res);
-    expect(mockedApiToken.find).toHaveBeenCalledWith({ projectId: 'p1', isActive: true });
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ _id: 't1' }] });
-  });
-
-  it('revokeToken 404s, checks ownership, then deactivates', async () => {
-    mockedApiToken.findById.mockResolvedValue(null);
-    await expect(
-      apiTokenCtrl.revokeToken(makeReq({ params: { id: 'x' } }), makeRes())
-    ).rejects.toThrow('Token not found');
-
-    const token: AnyDoc = {
-      _id: 't1',
-      projectId: { toString: () => 'p1' },
-      isActive: true,
-      save: jest.fn().mockResolvedValue(undefined),
-    };
-    mockedApiToken.findById.mockResolvedValue(token);
-    mockedIsOwner.mockResolvedValue(false);
-    await expect(
-      apiTokenCtrl.revokeToken(makeReq({ params: { id: 't1' } }), makeRes())
-    ).rejects.toThrow('Only the project owner');
-
-    mockedIsOwner.mockResolvedValue(true);
-    const res = makeRes();
-    await apiTokenCtrl.revokeToken(makeReq({ params: { id: 't1' } }), res);
-    expect(token.isActive).toBe(false);
-    expect(token.save).toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Token revoked' });
-  });
-});

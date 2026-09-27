@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { Box } from '@mui/material';
-import { Assignment, Folder, ModelTraining, PlayArrow } from '@mui/icons-material';
+import { Box, Button } from '@mui/material';
+import { Assignment, Folder, ModelTraining, PlayArrow, School } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { useConfig } from '../config/ConfigProvider';
 import { homeApi, remainingTasks } from '../services/homeApi';
 import { GreetingHeader } from '../components/home/GreetingHeader';
@@ -11,6 +12,8 @@ import { TrainingsSection } from '../components/home/TrainingsSection';
 import { ProjectsSection } from '../components/home/ProjectsSection';
 import { LabelingSection } from '../components/home/LabelingSection';
 import { FindingsSection } from '../components/home/FindingsSection';
+import { GetStarted } from '../components/home/GetStarted';
+import { InvitationsCard } from '../components/home/InvitationsCard';
 
 const RECENT_TRAININGS = 5;
 const RECENT_FINDINGS = 4;
@@ -34,6 +37,7 @@ export function HomePage({ userName, now }: HomePageProps) {
   const config = useConfig();
   const vision = Boolean(config.VISION_API_URL);
   const label = Boolean(config.LABEL_SERVICE_URL);
+  const groups = Boolean(config.GROUP_SERVICE_URL);
   const today = useMemo(() => now ?? new Date(), [now]);
 
   const recent = useQuery({
@@ -47,6 +51,24 @@ export function HomePage({ userName, now }: HomePageProps) {
     enabled: vision
   });
   const projects = useQuery({ queryKey: ['home', 'projects'], queryFn: homeApi.projects, enabled: vision });
+  const invitations = useQuery({ queryKey: ['home', 'invitations'], queryFn: homeApi.invitations, enabled: groups });
+  // "Get started" is for someone with nothing yet: no project of their own and no group.
+  const myProjects = useQuery({ queryKey: ['home', 'my-projects'], queryFn: homeApi.myProjects, enabled: vision });
+  const myGroups = useQuery({ queryKey: ['home', 'my-groups'], queryFn: homeApi.myGroups, enabled: vision });
+  const newcomer = myProjects.data?.length === 0 && myGroups.data?.length === 0;
+  // `?tutorial=1` brings the card back for anyone; in the URL only, so nothing is remembered.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reopened = searchParams.get('tutorial') === '1';
+  const setReopened = (open: boolean) =>
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        if (open) next.set('tutorial', '1');
+        else next.delete('tutorial');
+        return next;
+      },
+      { replace: true }
+    );
   const jobs = useQuery({ queryKey: ['home', 'jobs'], queryFn: homeApi.jobs, enabled: label });
   const findings = useQuery({
     queryKey: ['home', 'findings'],
@@ -110,7 +132,25 @@ export function HomePage({ userName, now }: HomePageProps) {
 
       <QuickActions apps={{ vision: Boolean(config.VISION_FRONT_URL), label: Boolean(config.LABEL_FRONT_URL) }} />
 
-      {tiles.length > 0 && <StatTiles tiles={tiles} />}
+      <InvitationsCard query={invitations} />
+
+      {newcomer || reopened ? (
+        <GetStarted
+          hasAccountApp={Boolean(config.ACCOUNT_FRONT_URL)}
+          onClose={newcomer ? undefined : () => setReopened(false)}
+        />
+      ) : (
+        <>
+          {tiles.length > 0 && <StatTiles tiles={tiles} />}
+          {vision && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: { xs: -2, md: -3 } }}>
+              <Button size="small" startIcon={<School />} onClick={() => setReopened(true)}>
+                Getting started
+              </Button>
+            </Box>
+          )}
+        </>
+      )}
 
       {/* Two columns from md up, read row by row; one column on a phone in the
           same order: what ran, what there is to label, what was concluded. */}

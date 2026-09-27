@@ -74,7 +74,6 @@ import Comparison from '../../models/Comparison';
 import { Types } from 'mongoose';
 import { testResultService } from '../../services/testResultService';
 import { checkProjectAccess, getVisibleProjectIds } from '../../services/projectAccessService';
-import { projectTokenContext } from '../../middleware/projectTokenContext';
 
 const mockedTraining = Training as unknown as jest.Mock & Record<string, jest.Mock>;
 const mockedEpoch = Epoch as unknown as Record<string, jest.Mock>;
@@ -145,7 +144,7 @@ beforeEach(() => {
 });
 
 describe('getTrainings', () => {
-  it('scopes an authenticated caller to visible + unscoped trainings', async () => {
+  it('scopes an authenticated caller to trainings in visible projects', async () => {
     mockProjectSelect(['p1']);
     const doc = trainingDoc('t1');
     mockFindChain([doc]);
@@ -160,7 +159,7 @@ describe('getTrainings', () => {
     expect(mockedTraining.find).toHaveBeenCalledWith(
       expect.objectContaining({
         deletedAt: null,
-        $or: [{ projectId: { $in: ['p1'] } }, { projectId: { $exists: false } }, { projectId: null }],
+        projectId: { $in: ['p1'] },
       })
     );
     expect((result.trainings[0] as TrainingWithMetrics).metrics.totalTime).toBe(7200);
@@ -334,7 +333,7 @@ describe('getTrainingTags', () => {
       'tags',
       expect.objectContaining({
         deletedAt: null,
-        $or: [{ projectId: { $in: ['p1'] } }, { projectId: { $exists: false } }, { projectId: null }],
+        projectId: { $in: ['p1'] },
       })
     );
     expect(tags).toEqual(['alpha', 'zebra']);
@@ -350,7 +349,7 @@ describe('getTrainingTags', () => {
     expect(mockedTraining.distinct).toHaveBeenCalledWith(
       'tags',
       expect.objectContaining({
-        $or: [{ projectId: { $in: ['pub'] } }, { projectId: { $exists: false } }, { projectId: null }],
+        projectId: { $in: ['pub'] },
       })
     );
   });
@@ -476,10 +475,15 @@ describe('createTraining', () => {
     );
   });
 
+  it('refuses a training without a project', async () => {
+    await expect(trainingService.createTraining('u1', { name: 'T' })).rejects.toThrow('A training needs a project');
+  });
+
   it('creates with a generated uuid and normalized tags', async () => {
     const result = await trainingService.createTraining('u1', {
       name: ' My Training ',
       tags: 'single-tag',
+      projectId: 'slug',
     });
 
     const ctorArg = mockedTraining.mock.calls[0][0];
@@ -491,21 +495,27 @@ describe('createTraining', () => {
   });
 
   it('keeps a provided uuid and array tags', async () => {
-    await trainingService.createTraining('u1', { name: 'T', uuid: 'fixed', tags: ['a', 'b'] });
+    await trainingService.createTraining('u1', { name: 'T', uuid: 'fixed', tags: ['a', 'b'], projectId: 'slug' });
 
     const ctorArg = mockedTraining.mock.calls[0][0];
     expect(ctorArg.uuid).toBe('fixed');
     expect(ctorArg.tags).toEqual(['a', 'b']);
   });
 
-  it('403s when the target project is not accessible', async () => {
+  it('reads a project the caller cannot see as not found, naming it', async () => {
     mockedProject.findOne.mockResolvedValue({ _id: 'p1' });
-    jest.mocked(assertResourceWrite).mockRejectedValueOnce(new ForbiddenError('Access denied to project'));
     mockedCheckAccess.mockResolvedValue(false);
 
     await expect(
       trainingService.createTraining('u1', { name: 'T', projectId: 'private' })
-    ).rejects.toThrow('Access denied to project');
+    ).rejects.toThrow('Project "private" not found');
+  });
+
+  it('403s when the caller may read the project but not add to it', async () => {
+    mockedProject.findOne.mockResolvedValue({ _id: 'p1' });
+    jest.mocked(assertResourceWrite).mockRejectedValueOnce(new ForbiddenError('Write permission is required'));
+
+    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'public' })).rejects.toThrow('Write permission');
   });
 
   it('resolves a project slug to its id', async () => {
@@ -520,7 +530,7 @@ describe('createTraining', () => {
     mockedProject.findOne.mockResolvedValue(null);
     mockedProject.findById.mockResolvedValue(null);
 
-    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'raw-id' })).rejects.toThrow('Access denied to project');
+    await expect(trainingService.createTraining('u1', { name: 'T', projectId: 'raw-id' })).rejects.toThrow('Project "raw-id" not found');
   });
 });
 
@@ -617,35 +627,22 @@ describe('deleteTraining', () => {
 });
 
 describe('getDeletedTrainings', () => {
-  it('lists deleted runs the caller could restore, most recent deletion first', async () => {
+  it("lists my deleted runs where I contribute and anyone's where I manage, most recent first", async () => {
     const chain = mockFindChain([trainingDoc('t1')]);
     mockedTraining.countDocuments.mockResolvedValue(41);
+    mockedProject.find.mockReturnValue({ select: jest.fn().mockResolvedValue([{ _id: { toString: () => 'p2' } }]) });
 
     const result = await trainingService.getDeletedTrainings('u1', { page: 2, limit: 20 });
 
     const query = {
       deletedAt: { $ne: null },
-      $or: [{ projectId: { $in: ['p1'] } }, { projectId: null, ownerId: 'u1' }],
+      $or: [{ projectId: { $in: ['p1'] }, ownerId: 'u1' }, { projectId: { $in: ['p2'] } }],
     };
     expect(mockedTraining.find).toHaveBeenCalledWith(query);
     expect(mockedTraining.countDocuments).toHaveBeenCalledWith(query);
     expect(chain.sort).toHaveBeenCalledWith({ deletedAt: -1 });
     expect(chain.skip).toHaveBeenCalledWith(20);
     expect(result.pagination).toEqual({ page: 2, limit: 20, total: 41, pages: 3 });
-  });
-
-  it('never offers a project credential standalone runs', async () => {
-    mockFindChain([]);
-    mockedTraining.countDocuments.mockResolvedValue(0);
-
-    await projectTokenContext.run({ projectId: 'p1', userId: 'u1' }, () =>
-      trainingService.getDeletedTrainings('u1', {})
-    );
-
-    expect(mockedTraining.find).toHaveBeenCalledWith({
-      deletedAt: { $ne: null },
-      $or: [{ projectId: { $in: ['p1'] } }],
-    });
   });
 });
 
@@ -779,7 +776,7 @@ describe('getTrainingStats', () => {
         deletedAt: null,
         status: 'completed',
         tags: { $all: ['a', 'b'] },
-        $or: [{ projectId: { $in: ['p1'] } }, { projectId: { $exists: false } }, { projectId: null }],
+        projectId: { $in: ['p1'] },
       })
     );
     expect(stats.totalTrainings).toBe(3);

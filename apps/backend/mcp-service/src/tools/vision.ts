@@ -281,7 +281,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
 
         const { shown, note } = capped(projects, 50, 'projects');
         const lines = shown.map((project) => {
-          const visibility = project.isPublic ? 'public' : 'private';
+          const visibility = project.visibility;
           const description = project.description ? ` — ${project.description}` : '';
           return `- ${project.name} (${visibility})${description}  [${project.slug ?? project._id}]`;
         });
@@ -313,7 +313,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
         ]);
 
         const lines = [
-          `${details.name} (${details.isPublic ? 'public' : 'private'})`,
+          `${details.name} (${details.visibility})`,
           details.description ?? '',
           '',
           `${count(stats.trainingStats.totalTrainings)} training runs, ` +
@@ -662,18 +662,31 @@ function registerWriteTools(server: McpServer, caller: Caller): void {
         isPublic: z
           .boolean()
           .optional()
-          .describe('Whether anyone can see it. Defaults to private; only set true if the user said so.')
+          .describe('Whether anyone can see it. Defaults to private; only set true if the user said so.'),
+        groupId: z
+          .string()
+          .regex(/^[0-9a-fA-F]{24}$/)
+          .optional()
+          .describe(
+            'A group the user is in, to own the project instead of the user: its members can then add ' +
+              'runs, and its admins manage it. Only when the user asked for it and gave the group id.'
+          )
       },
       // Adds a project; touches nothing that already exists. The two update
       // tools below leave the hint alone, because overwriting a name or
       // replacing a run's tags does lose what was there.
       annotations: { destructiveHint: false }
     },
-    async ({ name, description, isPublic }) => {
+    async ({ name, description, isPublic, groupId }) => {
       try {
-        const project = await vision.createProject(key, { name, description, isPublic });
+        const project = await vision.createProject(key, {
+          name,
+          description,
+          ...(isPublic === undefined ? {} : { visibility: isPublic ? 'public' : 'private' }),
+          ...(groupId ? { owner: { kind: 'group', id: groupId } } : {})
+        });
         return ok(
-          `Created "${project.name}" (${project.isPublic ? 'public' : 'private'}), ` +
+          `Created "${project.name}" (${project.visibility}), ` +
             `slug ${project.slug ?? project._id}.`
         );
       } catch (error) {
@@ -698,8 +711,12 @@ function registerWriteTools(server: McpServer, caller: Caller): void {
     },
     async ({ project, name, description, isPublic }) => {
       try {
-        const updated = await vision.updateProject(key, project, { name, description, isPublic });
-        return ok(`Updated "${updated.name}" (${updated.isPublic ? 'public' : 'private'}).`);
+        const updated = await vision.updateProject(key, project, {
+          name,
+          description,
+          ...(isPublic === undefined ? {} : { visibility: isPublic ? 'public' : 'private' })
+        });
+        return ok(`Updated "${updated.name}" (${updated.visibility}).`);
       } catch (error) {
         return explain(error);
       }

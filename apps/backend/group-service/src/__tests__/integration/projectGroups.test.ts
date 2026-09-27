@@ -48,7 +48,7 @@ describe('project membership assertions with in-memory MongoDB', () => {
     const response = await request(assertion());
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(await response.json()).toEqual({ success: true, data: [{ id: live._id.toString(), name: 'Research' }] });
+    expect(await response.json()).toEqual({ success: true, data: [{ id: live._id.toString(), name: 'Research', role: 'member' }] });
     await Group.updateOne({ _id: live._id }, { $set: { members: [] } });
     expect(await (await request(assertion())).json()).toEqual({ success: true, data: [] });
   });

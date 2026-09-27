@@ -5,7 +5,8 @@ import { Group, GroupRole } from '../types/group';
 
 export const groupKeys = {
   mine: ['groups', 'mine'] as const,
-  deleted: ['groups', 'deleted'] as const
+  deleted: ['groups', 'deleted'] as const,
+  invitations: ['groups', 'invitations'] as const
 };
 
 export const useMyGroups = () => {
@@ -62,3 +63,28 @@ export const useRemoveMember = () =>
   );
 
 export type { Group };
+
+/** Invitations addressed to the signed-in account. */
+export const useMyInvitations = () => {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: [...groupKeys.invitations, user?.id],
+    queryFn: groupService.listMyInvitations,
+    enabled: !!user?.id
+  });
+};
+
+/** Accepting joins a group, so the groups list changes as well as the invitations. */
+export const useAnswerInvitation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, accept }: { id: string; accept: boolean }): Promise<void> => {
+      if (accept) await groupService.acceptMyInvitation(id);
+      else await groupService.declineMyInvitation(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.invitations });
+      queryClient.invalidateQueries({ queryKey: groupKeys.mine });
+    }
+  });
+};

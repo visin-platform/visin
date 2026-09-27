@@ -49,7 +49,8 @@ const createImport = async (entries: { path: string; data: Buffer }[], mapping: 
   const importId = new mongoose.Types.ObjectId().toString();
   const dataset = await Dataset.create({
     _id,
-    ownerId: 'owner',
+    owner: { kind: 'user', id: 'owner' },
+    createdBy: 'owner',
     name: 'VLM',
     storagePrefix: `datasets/${_id}/`,
     archive: { fileId: archiveFileId, filename: 'a.zip', size: 1, uploadedAt: new Date() },

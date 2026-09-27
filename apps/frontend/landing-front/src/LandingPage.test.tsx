@@ -324,7 +324,7 @@ describe('LandingPage claims', () => {
 });
 
 describe('From your training loop', () => {
-  it('shows the real endpoint the loop posts to, with a project token', () => {
+  it('shows the real endpoint the loop posts to, with a pipeline key', () => {
     render(<LandingPage />);
 
     const code = screen.getByLabelText(/post each epoch/i);

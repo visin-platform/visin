@@ -50,14 +50,11 @@ export const getBenchmarks = async (
     }
     query.training_uuid = training_uuid;
   }
-  // No filter given: scope to trainings the caller can actually see, plus
-  // benchmarks with no training at all (standalone hardware benchmarks) —
-  // otherwise this returns every project's benchmarks regardless of privacy.
+  // Every benchmark inherits a live training’s project; legacy orphans are hidden.
   else {
     const visibleTrainingIds = await getVisibleTrainingIds(userId);
     query.$or = [
-      { training_id: { $in: visibleTrainingIds } },
-      { training_id: null, training_uuid: null, epoch_uuid: null }
+      { training_id: { $in: visibleTrainingIds } }
     ];
   }
 
@@ -241,13 +238,10 @@ export const getBenchmarkStats = async (
     }
     query.training_uuid = training_uuid;
   } else {
-    // No filter given: scope to trainings the caller can actually see, plus
-    // benchmarks with no training at all — otherwise these aggregate stats
-    // are computed across every project's benchmarks regardless of privacy.
+    // Aggregate only benchmarks belonging to visible trainings.
     const visibleTrainingIds = await getVisibleTrainingIds(userId);
     query.$or = [
-      { training_id: { $in: visibleTrainingIds } },
-      { training_id: null, training_uuid: null, epoch_uuid: null }
+      { training_id: { $in: visibleTrainingIds } }
     ];
   }
 

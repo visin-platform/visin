@@ -1,5 +1,3 @@
-import mongoose from 'mongoose';
-import ApiToken from '../../models/ApiToken';
 import Benchmark from '../../models/Benchmark';
 import Comparison from '../../models/Comparison';
 import Config from '../../models/Config';
@@ -11,7 +9,6 @@ import Training from '../../models/Training';
 
 describe('model registration', () => {
   it('registers every model under its collection-stable name', () => {
-    expect(ApiToken.modelName).toBe('ApiToken');
     expect(Benchmark.modelName).toBe('Benchmark');
     expect(Comparison.modelName).toBe('comparison');
     expect(Config.modelName).toBe('training_config');
@@ -24,17 +21,20 @@ describe('model registration', () => {
 });
 
 describe('Project', () => {
-  it('defaults to private and requires name + ownerId', () => {
-    const project = new Project({ name: 'P', ownerId: 'u1' });
-    expect(project.isPublic).toBe(false);
+  it('defaults to private and requires a name, an owner and its creator', () => {
+    const project = new Project({ name: 'P', owner: { kind: 'user', id: 'u1' }, createdBy: 'u1' });
+    expect(project.visibility).toBe('private');
+    expect(project.validateSync()).toBeUndefined();
 
     const error = new Project({}).validateSync();
     expect(error?.errors.name).toBeDefined();
-    expect(error?.errors.ownerId).toBeDefined();
+    expect(error?.errors.owner).toBeDefined();
+    expect(error?.errors.createdBy).toBeDefined();
+    expect(new Project({ name: 'P', owner: { kind: 'team', id: 'x' }, createdBy: 'u1' }).validateSync()?.errors['owner.kind']).toBeDefined();
   });
 
   it('lowercases slugs', () => {
-    const project = new Project({ name: 'P', ownerId: 'u1', slug: 'My-Slug' });
+    const project = new Project({ name: 'P', owner: { kind: 'user', id: 'u1' }, createdBy: 'u1', slug: 'My-Slug' });
     expect(project.slug).toBe('my-slug');
   });
 });
@@ -52,25 +52,6 @@ describe('Training', () => {
   it('rejects unknown statuses', () => {
     const training = new Training({ uuid: 'u-1', name: 'T', status: 'exploded' });
     expect(training.validateSync()?.errors.status).toBeDefined();
-  });
-});
-
-describe('ApiToken', () => {
-  it('defaults isActive to true and requires core fields', () => {
-    const token = new ApiToken({
-      name: 't',
-      tokenHash: 'h',
-      prefix: 'vsn_abc',
-      projectId: new mongoose.Types.ObjectId(),
-      createdBy: 'u1',
-    });
-    expect(token.isActive).toBe(true);
-    expect(token.validateSync()).toBeUndefined();
-
-    const error = new ApiToken({}).validateSync();
-    expect(error?.errors.name).toBeDefined();
-    expect(error?.errors.tokenHash).toBeDefined();
-    expect(error?.errors.projectId).toBeDefined();
   });
 });
 

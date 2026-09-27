@@ -1,4 +1,5 @@
-jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(async () => ({ member: true, role: 'member' })) }));
+// Reads go through the job's dataset; this caller contributes to it.
+jest.mock('../../clients/datasetServiceClient', () => ({ getPermission: jest.fn(async () => 'contribute') }));
 jest.mock('../../models/LabelTask', () => ({
   LabelTask: {
     findOneAndUpdate: jest.fn(),
@@ -37,6 +38,7 @@ const user = { id: 'u1', email: 'Worker@X.com', name: 'Worker' };
 const activeJob = (overrides: Record<string, unknown> = {}): ILabelJob =>
   ({
     _id: 'j1',
+    datasetId: 'd1',
     status: 'active',
     isPublic: true,
     redundancy: 2,

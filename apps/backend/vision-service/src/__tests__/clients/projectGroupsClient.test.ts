@@ -1,13 +1,13 @@
 import type { Request } from 'express';
 import { createHmac } from 'crypto';
-import { fetchWithTimeout } from '@visin/backend-core';
+import { fetchWithTimeout, GatewayTimeoutError } from '@visin/backend-core';
 import { getUserGroups } from '../../clients/projectGroupsClient';
 import { identityContextMiddleware, requestIdentityContext } from '../../middleware/requestIdentityContext';
 
 jest.mock('@visin/backend-core', () => ({ ...jest.requireActual('@visin/backend-core'), fetchWithTimeout: jest.fn() }));
 const fetchMock = jest.mocked(fetchWithTimeout);
 const user = { id: 'u1', email: 'user@example.test' };
-const group = { id: 'a'.repeat(24), name: 'Research' };
+const group = { id: 'a'.repeat(24), name: 'Research', role: 'admin' };
 const response = (body: unknown, ok = true) => ({ ok, json: async () => body }) as Response;
 const inRequest = <T>(callback: () => T, identity = user) => requestIdentityContext.run({ request: { user: identity } as Request }, callback);
 const previous = { secret: process.env.JWT_SECRET, nodeEnv: process.env.NODE_ENV };
@@ -51,13 +51,31 @@ it('calls the configured group-service', async () => {
   await inRequest(() => getUserGroups('u1'));
   expect(fetchMock.mock.calls[0][0]).toBe('http://group-service:5006/api/internal/project-groups');
 });
-it.each([null, 'invalid', {}, { data: null }, { data: [null] }, { data: [{ id: 'invalid', name: 'Group' }] }, { data: [{ id: group.id, name: 2 }] }])('fails closed on malformed responses (%j)', async body => {
+it.each([null, 'invalid', {}, { data: null }, { data: [null] }, { data: [{ id: 'invalid', name: 'Group' }] }, { data: [{ id: group.id, name: 2 }] }, { data: [{ id: group.id, name: 'Group', role: 'boss' }] }])('fails closed on malformed responses (%j)', async body => {
   fetchMock.mockResolvedValue(response(body));
-  await expect(inRequest(() => getUserGroups('u1'))).rejects.toThrow('Invalid group membership response');
+  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({ statusCode: 502, message: 'Invalid group membership response' });
+});
+// A group-service from before roles were sent: the least a member can be.
+it('reads a group without a role as a plain member', async () => {
+  fetchMock.mockResolvedValue(response({ data: [{ id: group.id, name: 'Research' }] }));
+  expect(await inRequest(() => getUserGroups('u1'))).toEqual([{ id: group.id, name: 'Research', role: 'member' }]);
 });
 it('fails closed on rejected membership requests', async () => {
   fetchMock.mockResolvedValue(response({}, false));
-  await expect(inRequest(() => getUserGroups('u1'))).rejects.toThrow('Could not verify');
+  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('Could not verify') });
+});
+// Reported as group-service's failure, which API clients retry, rather than a 500 here.
+it('reports an unreachable group-service as a 502, not a 500', async () => {
+  fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('unreachable') });
+});
+it('reports unparseable JSON as a 502', async () => {
+  fetchMock.mockResolvedValue({ ok: true, json: async () => { throw new SyntaxError('Unexpected token'); } } as unknown as Response);
+  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({ statusCode: 502 });
+});
+it('keeps a group-service timeout a 504', async () => {
+  fetchMock.mockRejectedValue(new GatewayTimeoutError('group-service did not respond within 3000ms'));
+  await expect(inRequest(() => getUserGroups('u1'))).rejects.toMatchObject({ statusCode: 504 });
 });
 it('holds the request until downstream authentication populates its identity', async () => {
   const request = {} as Request;

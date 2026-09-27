@@ -1,13 +1,7 @@
 import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  Box,
-  Container,
-  CircularProgress,
-  Alert,
-  Button
-} from '@mui/material';
+import { Box, Container, CircularProgress, Alert, Button } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -122,7 +116,11 @@ const ProjectDashboardPage: React.FC = () => {
   const updateProjectMutation = useMutation({
     mutationFn: () => {
       if (!id) throw new Error('No project id');
-      return projectService.updateProject(id, editFormData);
+      return projectService.updateProject(id, {
+        name: editFormData.name,
+        description: editFormData.description,
+        ...(project?.permissions.own ? { visibility: editFormData.isPublic ? 'public' : 'private' } : {})
+      });
     },
     onSuccess: () => {
       setEditDialogOpen(false);
@@ -155,7 +153,7 @@ const ProjectDashboardPage: React.FC = () => {
       setEditFormData({
         name: project.name,
         description: project.description || '',
-        isPublic: project.isPublic
+        isPublic: project.visibility === 'public'
       });
       setEditDialogOpen(true);
     }
@@ -192,80 +190,76 @@ const ProjectDashboardPage: React.FC = () => {
     );
   }
 
-  const isOwner = user?.id === project.ownerId;
-
   return (
     <TaxonomyProvider taxonomy={project.taxonomy}>
-    <CostingProvider costing={project.costing}>
-    <Container maxWidth="xl" sx={{ mt: 0, mb: 8 }}>
-      {/* Breadcrumbs */}
-      <PageBreadcrumbs
-        items={[
-          { label: 'Projects', href: '/projects' },
-          { label: project.name, current: true }
-        ]}
-      />
+      <CostingProvider costing={project.costing}>
+        <Container maxWidth="xl" sx={{ mt: 0, mb: 8 }}>
+          {/* Breadcrumbs */}
+          <PageBreadcrumbs
+            items={[
+              { label: 'Projects', href: '/projects' },
+              { label: project.name, current: true }
+            ]}
+          />
 
-      <ProjectHeader
-        project={project}
-        isOwner={isOwner}
-        onEdit={handleEditProject}
-        onDelete={() => setDeleteDialogOpen(true)}
-      />
+          <ProjectHeader project={project} onEdit={handleEditProject} onDelete={() => setDeleteDialogOpen(true)} />
 
-      <ProjectTabs
-        tabValue={tabValue}
-        onTabChange={handleTabChange}
-        isOwner={isOwner}
-        projectId={id!}
-        stats={stats}
-        dashboardStats={dashboardStats}
-        isAuthenticated={isAuthenticated}
-        user={user}
-        trainings={fullTrainings?.trainings || []}
-        isFullTrainingsLoading={isFullTrainingsLoading}
-        page={page}
-        rowsPerPage={rowsPerPage}
-        total={fullTrainings?.pagination.total || 0}
-        onPageChange={handlePageChange}
-        onRowsPerPageChange={handleRowsPerPageChange}
-        sortBy={sortBy}
-        sortOrder={sortOrder}
-        onSort={handleSort}
-        testResultsResponse={testResults}
-        isTestResultsLoading={isTestResultsLoading}
-        testsPage={testsPage}
-        testsRowsPerPage={testsRowsPerPage}
-        onTestsPageChange={handleTestsPageChange}
-        onTestsRowsPerPageChange={handleTestsRowsPerPageChange}
-        visualizationsResponse={visualizations as VisualizationsGroupedResult | undefined}
-        isVisualizationsLoading={isVisualizationsLoading}
-        benchmarksResponse={benchmarks}
-        isBenchmarksLoading={isBenchmarksLoading}
-        benchmarksPage={benchmarksPage}
-        benchmarksRowsPerPage={benchmarksRowsPerPage}
-        onBenchmarksPageChange={handleBenchmarksPageChange}
-        onBenchmarksRowsPerPageChange={handleBenchmarksRowsPerPageChange}
-        project={project}
-      />
+          <ProjectTabs
+            tabValue={tabValue}
+            onTabChange={handleTabChange}
+            canManage={project.permissions.manage}
+            projectId={id!}
+            stats={stats}
+            dashboardStats={dashboardStats}
+            isAuthenticated={isAuthenticated}
+            user={user}
+            trainings={fullTrainings?.trainings || []}
+            isFullTrainingsLoading={isFullTrainingsLoading}
+            page={page}
+            rowsPerPage={rowsPerPage}
+            total={fullTrainings?.pagination.total || 0}
+            onPageChange={handlePageChange}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSort={handleSort}
+            testResultsResponse={testResults}
+            isTestResultsLoading={isTestResultsLoading}
+            testsPage={testsPage}
+            testsRowsPerPage={testsRowsPerPage}
+            onTestsPageChange={handleTestsPageChange}
+            onTestsRowsPerPageChange={handleTestsRowsPerPageChange}
+            visualizationsResponse={visualizations as VisualizationsGroupedResult | undefined}
+            isVisualizationsLoading={isVisualizationsLoading}
+            benchmarksResponse={benchmarks}
+            isBenchmarksLoading={isBenchmarksLoading}
+            benchmarksPage={benchmarksPage}
+            benchmarksRowsPerPage={benchmarksRowsPerPage}
+            onBenchmarksPageChange={handleBenchmarksPageChange}
+            onBenchmarksRowsPerPageChange={handleBenchmarksRowsPerPageChange}
+            project={project}
+          />
 
-      <EditProjectDialog
-        open={editDialogOpen}
-        onClose={() => setEditDialogOpen(false)}
-        formData={editFormData}
-        onFormDataChange={setEditFormData}
-        onSubmit={handleUpdateProject}
-        isUpdating={updateProjectMutation.isPending}
-      />
+          <EditProjectDialog
+            open={editDialogOpen}
+            onClose={() => setEditDialogOpen(false)}
+            formData={editFormData}
+            onFormDataChange={setEditFormData}
+            onSubmit={handleUpdateProject}
+            isUpdating={updateProjectMutation.isPending}
+            canShare={project.permissions.own}
+            error={updateProjectMutation.error?.message}
+          />
 
-      <DeleteProjectDialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        onConfirm={handleDeleteProject}
-        isDeleting={deleteProjectMutation.isPending}
-      />
-    </Container>
-    </CostingProvider>
+          <DeleteProjectDialog
+            open={deleteDialogOpen}
+            onClose={() => setDeleteDialogOpen(false)}
+            onConfirm={handleDeleteProject}
+            isDeleting={deleteProjectMutation.isPending}
+            error={deleteProjectMutation.error?.message}
+          />
+        </Container>
+      </CostingProvider>
     </TaxonomyProvider>
   );
 };

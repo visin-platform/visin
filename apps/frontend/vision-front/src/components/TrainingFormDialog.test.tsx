@@ -6,10 +6,27 @@ import type { Config, Training } from '../types';
 import type { Project } from '../types/Project';
 
 const configs: Config[] = [
-  { _id: 'c1', config_uuid: 'cu1', summary: 'A summary', config_data: {}, config_name: 'Config One', createdAt: '', updatedAt: '' }
+  {
+    _id: 'c1',
+    config_uuid: 'cu1',
+    summary: 'A summary',
+    config_data: {},
+    config_name: 'Config One',
+    createdAt: '',
+    updatedAt: ''
+  }
 ];
 const projects: Project[] = [
-  { _id: 'p1', name: 'Project One', isPublic: true, ownerId: 'u1', createdAt: '', updatedAt: '' }
+  {
+    _id: 'p1',
+    name: 'Project One',
+    visibility: 'public' as const,
+    owner: { kind: 'user' as const, id: 'u1' },
+    createdBy: 'u1',
+    permissions: { read: true, contribute: true, manage: true, own: true },
+    createdAt: '',
+    updatedAt: ''
+  }
 ];
 
 const baseProps = {
@@ -71,7 +88,7 @@ describe('TrainingFormDialog', () => {
 
   it('enables the submit button once a name is provided, and submits on click', async () => {
     const onSubmit = vi.fn(async () => {});
-    render(<TrainingFormDialog {...baseProps} trainingName="My Training" onSubmit={onSubmit} />);
+    render(<TrainingFormDialog {...baseProps} trainingName="My Training" selectedProjectId="p1" onSubmit={onSubmit} />);
     const submitButton = screen.getByRole('button', { name: /Create/i });
     expect(submitButton).not.toBeDisabled();
     await userEvent.click(submitButton);

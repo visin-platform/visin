@@ -11,6 +11,9 @@ function getVisionApiUrl(): string {
   }
 }
 
+/** Where this deployment's vision API answers: the `VISIN_URL` a training script is given. */
+export const visionApiOrigin = (): string => getVisionApiUrl();
+
 const client = createApiClient({
   baseUrl: () => `${getVisionApiUrl()}/api`
 });
@@ -36,7 +39,9 @@ function buildQueryString(params?: Record<string, unknown>): string {
 function toLegacyError(error: unknown): Error {
   if (error instanceof ApiError) {
     console.error('API Error:', error.status, error.message);
-    return new Error(error.message);
+    // Still a plain Error for every existing caller; the status rides along for
+    // the few that must tell one refusal from another (a 409 "already stored").
+    return Object.assign(new Error(error.message), { status: error.status });
   }
   return error instanceof Error ? error : new Error('API Error');
 }

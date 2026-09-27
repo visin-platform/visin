@@ -20,7 +20,6 @@ export const getJob = async (jobId: string): Promise<LabelJob> =>
 export interface CreateJobInput {
   name: string;
   description?: string;
-  groupId: string;
   datasetId: string;
   framesGroup: string;
   taskType: 'single_choice' | 'mask_toggle';

@@ -13,18 +13,20 @@ jest.mock('../../services/taskService', () => ({
 }));
 jest.mock('../../services/groupAccessService', () => ({
   requireUser: jest.fn((req: Request) => req.user),
-  assertMember: jest.fn(),
+}));
+jest.mock('../../services/jobAccessService', () => ({
+  assertCanWork: jest.fn(),
 }));
 
 import * as ctrl from '../../controllers/taskController';
 import * as jobs from '../../services/jobService';
 import * as tasks from '../../services/taskService';
-import { assertMember } from '../../services/groupAccessService';
+import { assertCanWork } from '../../services/jobAccessService';
 import { ConflictError } from '@visin/backend-core';
 
 const mockedJobs = jobs as unknown as Record<string, jest.Mock>;
 const mockedTasks = tasks as unknown as Record<string, jest.Mock>;
-const mockedMember = assertMember as jest.Mock;
+const mockedCanWork = assertCanWork as jest.Mock;
 
 type MockRes = Response & { json: jest.Mock; status: jest.Mock };
 
@@ -37,7 +39,7 @@ const makeRes = (): MockRes => {
 const makeReq = (overrides: Record<string, unknown> = {}): Request =>
   ({ body: {}, query: {}, params: {}, user: { id: 'u1', email: 'w@x.com' }, ...overrides } as unknown as Request);
 
-const activeJob = { _id: 'j1', groupId: 'g1', status: 'active' };
+const activeJob = { _id: 'j1', datasetId: 'd1', status: 'active' };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -66,7 +68,7 @@ describe('getTask', () => {
     await ctrl.getTask(makeReq({ params: { id: 't1' }, user: undefined }), makeRes());
 
     expect(mockedTasks.getTaskItem).toHaveBeenCalledWith('t1', undefined);
-    expect(mockedMember).not.toHaveBeenCalled();
+    expect(mockedCanWork).not.toHaveBeenCalled();
   });
 
   // A shared link is a look, not a claim: leasing here would take the frame out
@@ -103,7 +105,7 @@ describe('getTaskAtIndex', () => {
 });
 
 describe('nextTask', () => {
-  it('leases the next task for a member of an active job', async () => {
+  it('leases the next task for someone who may work an active job', async () => {
     mockedJobs.getJob.mockResolvedValue(activeJob);
     mockedTasks.nextTask.mockResolvedValue({ task: { _id: 't1' }, images: {} });
     const req = makeReq({ params: { id: 'j1' } });
@@ -111,7 +113,7 @@ describe('nextTask', () => {
 
     await ctrl.nextTask(req, res);
 
-    expect(mockedMember).toHaveBeenCalledWith(req, 'g1');
+    expect(mockedCanWork).toHaveBeenCalledWith(activeJob, 'u1');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: { task: { _id: 't1' }, images: {} } });
   });
 
@@ -134,7 +136,7 @@ describe('nextTask', () => {
 });
 
 describe('submitAnswer', () => {
-  it('checks membership via the task’s job, then submits', async () => {
+  it('checks access through the task’s job, then submits', async () => {
     const pair = { task: { _id: 't1' }, job: activeJob };
     mockedTasks.getTaskWithJob.mockResolvedValue(pair);
     mockedTasks.submitAnswer.mockResolvedValue({ _id: 'a1' });
@@ -143,7 +145,7 @@ describe('submitAnswer', () => {
 
     await ctrl.submitAnswer(req, res);
 
-    expect(mockedMember).toHaveBeenCalledWith(req, 'g1');
+    expect(mockedCanWork).toHaveBeenCalledWith(activeJob, 'u1');
     expect(mockedTasks.submitAnswer).toHaveBeenCalledWith(pair.task, pair.job, req.user, { rejectedMaskIds: [] });
     expect(res.status).toHaveBeenCalledWith(201);
   });

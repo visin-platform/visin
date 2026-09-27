@@ -110,11 +110,8 @@ export const parseKey = (token: unknown): ParsedKey | null => {
 /**
  * True when a token even looks like one of ours.
  *
- * Lets a caller skip a JWT parse — and, in vision-service, lets
- * `apiTokenMiddleware` skip a database lookup for a credential that is
- * definitively not one of its project tokens. Both of those credentials are
- * dot-free hex-ish strings, so without an explicit prefix test the only thing
- * telling them apart is which lookup happens to miss first.
+ * Lets a caller skip a JWT parse, and skip a key lookup for a credential that
+ * is definitively not a key.
  */
 export const looksLikeApiKey = (token: unknown): boolean =>
   typeof token === 'string' && token.startsWith(`${KEY_PREFIX}_`);

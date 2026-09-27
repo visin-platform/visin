@@ -15,15 +15,12 @@ jest.mock('../../models/Benchmark', () => ({
   __esModule: true,
   default: { countDocuments: jest.fn() },
 }));
+jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn().mockResolvedValue([]) }));
 
 import {
-  listProjects,
-  getProjectBySlug,
-  getProjectById,
   getProjectByIdOrSlug,
   createProject,
   updateProject,
-  deleteProject,
   getProjectDashboardStats,
 } from '../../services/projectService';
 import Project from '../../models/Project';
@@ -51,85 +48,39 @@ const trainingIdsAre = (ids: string[]) =>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDoc = Record<string, any>;
 
-const projectDoc = (overrides: AnyDoc = {}): AnyDoc => ({
-  _id: { toString: () => 'p1' },
-  name: 'P',
-  slug: 'p-slug',
-  isPublic: true,
-  ownerId: 'owner-1',
-  save: jest.fn().mockImplementation(function (this: unknown) {
-    return Promise.resolve(this);
-  }),
-  deleteOne: jest.fn().mockResolvedValue({}),
-  ...overrides,
-});
+// Ownership, the trash and transfers are tested end to end in integration/projectOwnership.
+const ID = 'a'.repeat(24);
+
+const projectDoc = (overrides: AnyDoc = {}): AnyDoc => {
+  const doc: AnyDoc = {
+    _id: { toString: () => ID },
+    name: 'P',
+    slug: 'p-slug',
+    owner: { kind: 'user', id: 'owner-1' },
+    createdBy: 'owner-1',
+    visibility: 'public',
+    save: jest.fn().mockImplementation(function (this: unknown) {
+      return Promise.resolve(this);
+    }),
+    ...overrides,
+  };
+  doc.toObject = () => ({ ...doc });
+  return doc;
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('listProjects', () => {
-  it('includes owned private projects for a logged-in user', async () => {
-    const sort = jest.fn().mockResolvedValue([]);
-    mockedProject.find.mockReturnValue({ sort });
-
-    await listProjects('u1', { sortBy: 'createdAt', sortOrder: -1 });
-
-    expect(mockedProject.find).toHaveBeenCalledWith({
-      $or: [{ isPublic: true }, { ownerId: 'u1' }],
-    });
-    expect(sort).toHaveBeenCalledWith({ createdAt: -1 });
-  });
-
-  it('anonymous users see public projects only, with text search applied', async () => {
-    const sort = jest.fn().mockResolvedValue([]);
-    mockedProject.find.mockReturnValue({ sort });
-
-    await listProjects(undefined, { search: 'seg', sortBy: 'name', sortOrder: 1 });
-
-    expect(mockedProject.find).toHaveBeenCalledWith({
-      $or: [{ isPublic: true }],
-      $text: { $search: 'seg' },
-    });
-  });
-});
-
 describe('project lookups', () => {
-  it('404s consistently across all three lookups', async () => {
+  it('getProjectByIdOrSlug falls back from slug to id, and says what the caller may do', async () => {
     mockedProject.findOne.mockResolvedValue(null);
-    mockedProject.findById.mockResolvedValue(null);
+    mockedProject.findById.mockResolvedValue(projectDoc());
 
-    await expect(getProjectBySlug('ghost', 'u1')).rejects.toThrow('Project not found');
-    await expect(getProjectById('ghost', 'u1')).rejects.toThrow('Project not found');
-    await expect(getProjectByIdOrSlug('ghost', 'u1')).rejects.toThrow('Project not found');
-  });
-
-  it('403s on private projects for non-owners (and anonymous)', async () => {
-    const privateProject = projectDoc({ isPublic: false });
-    mockedProject.findOne.mockResolvedValue(privateProject);
-    mockedProject.findById.mockResolvedValue(privateProject);
-
-    await expect(getProjectBySlug('p-slug', 'stranger')).rejects.toThrow();
-    await expect(getProjectById('p1', undefined)).rejects.toThrow();
-    await expect(getProjectByIdOrSlug('p1', 'stranger')).rejects.toThrow();
-  });
-
-  it('lets the owner read a private project and everyone read public ones', async () => {
-    const privateProject = projectDoc({ isPublic: false });
-    mockedProject.findOne.mockResolvedValue(privateProject);
-
-    await expect(getProjectBySlug('p-slug', 'owner-1')).resolves.toBe(privateProject);
-
-    mockedProject.findOne.mockResolvedValue(projectDoc());
-    await expect(getProjectBySlug('p-slug', undefined)).resolves.toBeDefined();
-  });
-
-  it('getProjectByIdOrSlug falls back from slug to id', async () => {
-    const doc = projectDoc();
-    mockedProject.findOne.mockResolvedValue(null);
-    mockedProject.findById.mockResolvedValue(doc);
-
-    await expect(getProjectByIdOrSlug('p1', 'u1')).resolves.toBe(doc);
+    await expect(getProjectByIdOrSlug('p1', 'u1')).resolves.toMatchObject({
+      name: 'P',
+      permissions: { read: true, contribute: false, manage: false, own: false },
+    });
     expect(mockedProject.findOne).toHaveBeenCalledWith({ slug: 'p1' });
     expect(mockedProject.findById).toHaveBeenCalledWith('p1');
   });
@@ -139,24 +90,25 @@ describe('createProject', () => {
   it('stamps the creator as owner', async () => {
     mockedProject.mockImplementation((data: AnyDoc) => ({
       ...data,
-      save: jest.fn().mockResolvedValue({ ...data, _id: 'new' }),
+      save: jest.fn().mockResolvedValue(projectDoc({ ...data, _id: 'new' })),
     }));
 
-    const result = (await createProject('u1', { name: 'New', isPublic: true })) as AnyDoc;
+    const result = (await createProject('u1', { name: 'New', visibility: 'public' })) as AnyDoc;
 
     expect(mockedProject).toHaveBeenCalledWith({
       name: 'New',
-      isPublic: true,
+      visibility: 'public',
+      owner: { kind: 'user', id: 'u1' },
+      createdBy: 'u1',
       taxonomy: undefined,
-      ownerId: 'u1',
     });
-    expect(result._id).toBe('new');
+    expect(result).toMatchObject({ _id: 'new', permissions: { own: true } });
   });
 
   it('seeds metric definitions from the chosen task type', async () => {
     mockedProject.mockImplementation((data: AnyDoc) => ({
       ...data,
-      save: jest.fn().mockResolvedValue(data),
+      save: jest.fn().mockResolvedValue(projectDoc(data)),
     }));
 
     await createProject('u1', { name: 'New', taxonomy: { taskType: 'detection' } });
@@ -169,7 +121,7 @@ describe('createProject', () => {
   it('never overwrites metrics the caller spelled out', async () => {
     mockedProject.mockImplementation((data: AnyDoc) => ({
       ...data,
-      save: jest.fn().mockResolvedValue(data),
+      save: jest.fn().mockResolvedValue(projectDoc(data)),
     }));
 
     await createProject('u1', {
@@ -184,7 +136,7 @@ describe('createProject', () => {
   it('leaves a project with no task type on pure discovery', async () => {
     mockedProject.mockImplementation((data: AnyDoc) => ({
       ...data,
-      save: jest.fn().mockResolvedValue(data),
+      save: jest.fn().mockResolvedValue(projectDoc(data)),
     }));
 
     await createProject('u1', { name: 'New', taxonomy: { conditionLabel: 'Site' } });
@@ -195,23 +147,23 @@ describe('createProject', () => {
 });
 
 describe('updateProject', () => {
-  it('404s when missing and 403s for non-owners', async () => {
+  it('404s when missing and 403s for a reader', async () => {
     mockedProject.findById.mockResolvedValue(null);
-    await expect(updateProject('p1', 'u1', {})).rejects.toThrow('Project not found');
+    await expect(updateProject(ID, 'u1', {})).rejects.toThrow('Project not found');
 
     mockedProject.findById.mockResolvedValue(projectDoc());
-    await expect(updateProject('p1', 'stranger', {})).rejects.toThrow();
+    await expect(updateProject(ID, 'stranger', {})).rejects.toThrow('This needs manage permission on the project');
   });
 
   it('applies partial updates', async () => {
     const doc = projectDoc();
     mockedProject.findById.mockResolvedValue(doc);
 
-    await updateProject('p1', 'owner-1', { name: 'Renamed', description: '', isPublic: false });
+    await updateProject(ID, 'owner-1', { name: 'Renamed', description: '', visibility: 'private' });
 
     expect(doc.name).toBe('Renamed');
     expect(doc.description).toBe('');
-    expect(doc.isPublic).toBe(false);
+    expect(doc.visibility).toBe('private');
     expect(doc.save).toHaveBeenCalled();
   });
 
@@ -220,7 +172,7 @@ describe('updateProject', () => {
     mockedProject.findById.mockResolvedValue(doc);
     mockedProject.findOne.mockResolvedValue(projectDoc({ _id: { toString: () => 'other' } }));
 
-    await expect(updateProject('p1', 'owner-1', { slug: 'taken' })).rejects.toThrow(
+    await expect(updateProject(ID, 'owner-1', { slug: 'taken' })).rejects.toThrow(
       'Slug already exists'
     );
   });
@@ -230,7 +182,7 @@ describe('updateProject', () => {
     mockedProject.findById.mockResolvedValue(doc);
     mockedProject.findOne.mockResolvedValue(null);
 
-    await expect(updateProject('p1', 'owner-1', { slug: 'ABCDEF0123456789abcdef01' })).rejects.toThrow(
+    await expect(updateProject(ID, 'owner-1', { slug: 'ABCDEF0123456789abcdef01' })).rejects.toThrow(
       'Slug cannot look like a project id'
     );
     expect(doc.save).not.toHaveBeenCalled();
@@ -240,11 +192,11 @@ describe('updateProject', () => {
     const doc = projectDoc();
     mockedProject.findById.mockResolvedValue(doc);
 
-    await updateProject('p1', 'owner-1', { taxonomy: { conditionLabel: 'Site' } });
+    await updateProject(ID, 'owner-1', { taxonomy: { conditionLabel: 'Site' } });
     expect(doc.taxonomy).toEqual({ conditionLabel: 'Site' });
 
     // null returns the project to pure discovery, which undefined cannot express
-    await updateProject('p1', 'owner-1', { taxonomy: null });
+    await updateProject(ID, 'owner-1', { taxonomy: null });
     expect(doc.taxonomy).toBeUndefined();
   });
 
@@ -252,7 +204,7 @@ describe('updateProject', () => {
     const doc = projectDoc({ taxonomy: { conditionLabel: 'Weather' } });
     mockedProject.findById.mockResolvedValue(doc);
 
-    await updateProject('p1', 'owner-1', { name: 'Renamed' });
+    await updateProject(ID, 'owner-1', { name: 'Renamed' });
     expect(doc.taxonomy).toEqual({ conditionLabel: 'Weather' });
   });
 
@@ -261,30 +213,11 @@ describe('updateProject', () => {
     mockedProject.findById.mockResolvedValue(doc);
     mockedProject.findOne.mockResolvedValue(null);
 
-    await updateProject('p1', 'owner-1', { slug: ' fresh ' });
+    await updateProject(ID, 'owner-1', { slug: ' fresh ' });
     expect(doc.slug).toBe('fresh');
 
-    await updateProject('p1', 'owner-1', { slug: '  ' });
+    await updateProject(ID, 'owner-1', { slug: '  ' });
     expect(doc.slug).toBeUndefined();
-  });
-});
-
-describe('deleteProject', () => {
-  it('404s when missing and 403s for non-owners', async () => {
-    mockedProject.findById.mockResolvedValue(null);
-    await expect(deleteProject('p1', 'u1')).rejects.toThrow('Project not found');
-
-    mockedProject.findById.mockResolvedValue(projectDoc());
-    await expect(deleteProject('p1', 'stranger')).rejects.toThrow();
-  });
-
-  it('deletes when the owner asks', async () => {
-    const doc = projectDoc();
-    mockedProject.findById.mockResolvedValue(doc);
-
-    await deleteProject('p1', 'owner-1');
-
-    expect(doc.deleteOne).toHaveBeenCalled();
   });
 });
 
@@ -294,7 +227,7 @@ describe('getProjectDashboardStats', () => {
     mockedProject.findById.mockResolvedValue(null);
     await expect(getProjectDashboardStats('ghost', 'u1')).rejects.toThrow('Project not found');
 
-    mockedProject.findOne.mockResolvedValue(projectDoc({ isPublic: false }));
+    mockedProject.findOne.mockResolvedValue(projectDoc({ visibility: 'private' }));
     await expect(getProjectDashboardStats('p-slug', 'stranger')).rejects.toThrow();
   });
 

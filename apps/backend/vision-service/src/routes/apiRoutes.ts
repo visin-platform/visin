@@ -1,5 +1,5 @@
 import type { RequestHandler, Router } from 'express';
-import { apiKeyAuth } from '@visin/backend-core';
+import { projectKeyAuth } from '../middleware/projectKeyAuth';
 import writeCapabilitiesRoutes from './writeCapabilitiesRoutes';
 import trainingRoutes from './trainingRoutes';
 import epochRoutes from './epochRoutes';
@@ -9,7 +9,6 @@ import visualizationRoutes from './visualizationRoutes';
 import benchmarkRoutes from './benchmarkRoutes';
 import comparisonRoutes from './comparisonRoutes';
 import projectRoutes from './projectRoutes';
-import apiTokenRoutes from './apiTokenRoutes';
 import findingRoutes from './findingRoutes';
 
 export interface ApiRouteGroup {
@@ -29,7 +28,8 @@ export interface ApiRouteGroup {
  * later fails *closed*: keys simply don't authenticate there and the JWT
  * middleware answers 401, rather than the group silently accepting any key.
  *
- * `apiKeyAuth` runs ahead of each route's own authMiddleware/optionalAuthMiddleware
+ * `projectKeyAuth` (backend-core's `apiKeyAuth` plus the project limit a key may
+ * carry) runs ahead of each route's own authMiddleware/optionalAuthMiddleware
  * and cooperates with them through the `if (req.user) return next()` guard both
  * begin with. Read vs. write is derived from the HTTP method; the `readPaths`
  * entries are the comparison endpoints, which are POSTs that read two runs and
@@ -44,21 +44,16 @@ const COMPARE_IS_A_READ = { readPaths: [/^\/compare(\/|$)/] };
  */
 export const API_ROUTE_GROUPS: ApiRouteGroup[] = [
   { path: '/api/write-capabilities', guards: [], router: writeCapabilitiesRoutes },
-  { path: '/api/trainings', guards: [apiKeyAuth('vision', COMPARE_IS_A_READ)], router: trainingRoutes },
-  { path: '/api/epochs', guards: [apiKeyAuth('vision')], router: epochRoutes },
-  { path: '/api/configs', guards: [apiKeyAuth('vision')], router: configRoutes },
-  { path: '/api/test-results', guards: [apiKeyAuth('vision', COMPARE_IS_A_READ)], router: testResultRoutes },
-  { path: '/api/visualizations', guards: [apiKeyAuth('vision')], router: visualizationRoutes },
-  { path: '/api/benchmarks', guards: [apiKeyAuth('vision')], router: benchmarkRoutes },
-  { path: '/api/comparisons', guards: [apiKeyAuth('vision')], router: comparisonRoutes },
-  { path: '/api/projects', guards: [apiKeyAuth('vision')], router: projectRoutes },
-  // Deliberately no apiKeyAuth: this route group mints and revokes the
-  // project-scoped tokens the training pipeline authenticates with. Issuing a
-  // credential is a thing a person does while signed in, never something one
-  // credential should be able to do on behalf of another.
-  { path: '/api/api-tokens', guards: [], router: apiTokenRoutes },
+  { path: '/api/trainings', guards: [projectKeyAuth('vision', COMPARE_IS_A_READ)], router: trainingRoutes },
+  { path: '/api/epochs', guards: [projectKeyAuth('vision')], router: epochRoutes },
+  { path: '/api/configs', guards: [projectKeyAuth('vision')], router: configRoutes },
+  { path: '/api/test-results', guards: [projectKeyAuth('vision', COMPARE_IS_A_READ)], router: testResultRoutes },
+  { path: '/api/visualizations', guards: [projectKeyAuth('vision')], router: visualizationRoutes },
+  { path: '/api/benchmarks', guards: [projectKeyAuth('vision')], router: benchmarkRoutes },
+  { path: '/api/comparisons', guards: [projectKeyAuth('vision')], router: comparisonRoutes },
+  { path: '/api/projects', guards: [projectKeyAuth('vision')], router: projectRoutes },
   // Written conclusions. Its own scope domain, so an assistant can be granted
   // "read my experiments and record what you conclude" without also being able to
   // rename projects or retag runs.
-  { path: '/api/findings', guards: [apiKeyAuth('analysis')], router: findingRoutes }
+  { path: '/api/findings', guards: [projectKeyAuth('analysis')], router: findingRoutes }
 ];

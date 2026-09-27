@@ -96,7 +96,7 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
           placeholder="e.g., Waymo Dataset Training"
           disabled={isCreating || isLoadingData}
           onKeyPress={(e) => {
-            if (e.key === 'Enter' && !isCreating && trainingName.trim()) {
+            if (e.key === 'Enter' && !isCreating && !isLoadingData && selectedProjectId && trainingName.trim()) {
               onSubmit();
             }
           }}
@@ -115,26 +115,21 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
           disabled={isCreating || isLoadingData}
           sx={{ mb: 2 }}
         />
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Select Project (Optional)</InputLabel>
+        <FormControl fullWidth required sx={{ mb: 2 }}>
+          <InputLabel>Select Project</InputLabel>
           <Select
             value={selectedProjectId}
             onChange={(e: SelectChangeEvent<string>) => onProjectChange(e.target.value)}
-            label="Select Project (Optional)"
+            label="Select Project"
             disabled={isEditing || isCreating || isLoadingData || loadingProjects}
           >
-            <MenuItem value="">
-              <em>None</em>
-            </MenuItem>
             {projects.map((project: Project) => (
               <MenuItem key={project._id} value={project._id}>
                 {project.name}
               </MenuItem>
             ))}
           </Select>
-          {isEditing && (
-            <FormHelperText>Project cannot be changed after creation.</FormHelperText>
-          )}
+          {isEditing && <FormHelperText>Project cannot be changed after creation.</FormHelperText>}
         </FormControl>
         {/* Read-only: the dataset is whatever the pipeline reported with the
             run, so the form shows it rather than offering to reassign it. */}
@@ -175,7 +170,9 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
           />
         </Box>
         <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 2 }}>
-          A unique UUID will be automatically generated for this training. After creating, you can upload epoch JSON files to track training progress. The training&apos;s dataset and config are set by the pipeline that reports it and are shown read-only — the config on the Config tab.
+          A unique UUID will be automatically generated for this training. After creating, you can upload epoch JSON
+          files to track training progress. The training&apos;s dataset and config are set by the pipeline that reports
+          it and are shown read-only — the config on the Config tab.
         </Typography>
       </DialogContent>
       <DialogActions>
@@ -185,9 +182,9 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
         <Button
           onClick={onSubmit}
           variant="contained"
-          disabled={isCreating || isLoadingData || !trainingName.trim()}
+          disabled={isCreating || isLoadingData || !trainingName.trim() || !selectedProjectId}
         >
-          {isCreating ? <CircularProgress size={24} /> : (isEditing ? 'Update' : 'Create')}
+          {isCreating ? <CircularProgress size={24} /> : isEditing ? 'Update' : 'Create'}
         </Button>
       </DialogActions>
     </Dialog>

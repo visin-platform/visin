@@ -37,7 +37,8 @@ beforeEach(() => {
     {
       _id: 'b1',
       name: 'Paper set',
-      visibility: 'public',
+      owner: { kind: 'group', id: 'g1' },
+      visibility: 'private',
       imageCount: 300,
       groups: [
         { name: 'frames', images: 100, jsons: 0 },
@@ -45,20 +46,20 @@ beforeEach(() => {
         { name: 'qwen', images: 100, jsons: 100 },
       ],
     },
-    { _id: 'b2', name: 'Another group', visibility: 'group', groupId: 'g2', imageCount: 10, groups: [{ name: 'frames', images: 10, jsons: 0 }] },
-    { _id: 'b3', name: 'Empty', visibility: 'public', imageCount: 0, groups: [] },
+    { _id: 'b2', name: 'Mine', owner: { kind: 'user', id: 'u1' }, visibility: 'public', imageCount: 10, groups: [{ name: 'frames', images: 10, jsons: 0 }] },
+    { _id: 'b3', name: 'Empty', owner: { kind: 'user', id: 'u1' }, visibility: 'private', imageCount: 0, groups: [] },
   ]);
 });
 
 const fillBasics = async () => {
   fireEvent.change(screen.getByLabelText('Job name'), { target: { value: 'Verify masks' } });
-  fireEvent.mouseDown(screen.getByLabelText('Group'));
-  fireEvent.click(await screen.findByRole('option', { name: 'Team' }));
+  // The server lists the datasets I manage; one with no images is not offered.
+  await waitFor(() => expect(mockedDatasets).toHaveBeenCalled());
   fireEvent.mouseDown(screen.getByLabelText('Dataset'));
-  // Another group's dataset, and one with no images, are not offered.
-  expect(screen.queryByRole('option', { name: /Another group/ })).not.toBeInTheDocument();
+  expect(await screen.findByRole('option', { name: 'Mine (10 images, you)' })).toBeInTheDocument();
   expect(screen.queryByRole('option', { name: /Empty/ })).not.toBeInTheDocument();
-  fireEvent.click(await screen.findByRole('option', { name: /Paper set/ }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Paper set (300 images, Team)' }));
+  expect(screen.getByText(/Belongs to Team: its members label/)).toBeInTheDocument();
 };
 
 describe('NewJobPage wizard', () => {
@@ -84,7 +85,6 @@ describe('NewJobPage wizard', () => {
       expect(mockedCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Verify masks',
-          groupId: 'g1',
           datasetId: 'b1',
           framesGroup: 'frames',
           taskType: 'mask_toggle',
@@ -120,11 +120,23 @@ describe('NewJobPage wizard', () => {
     expect(screen.getByTestId('set-chip-llava')).not.toHaveClass('MuiChip-colorPrimary');
   });
 
-  it('points at Vision when the group has no dataset to build on', async () => {
+  it("says who runs a job on my own dataset, and names a group I am not in as 'a group'", async () => {
+    mockedDatasets.mockResolvedValue([
+      { _id: 'b2', name: 'Mine', owner: { kind: 'user', id: 'u1' }, visibility: 'public', imageCount: 10, groups: [{ name: 'frames', images: 10, jsons: 0 }] },
+      { _id: 'b4', name: 'Theirs', owner: { kind: 'group', id: 'g9' }, visibility: 'public', imageCount: 3, groups: [{ name: 'frames', images: 3, jsons: 0 }] },
+    ]);
+    renderWithProviders(<NewJobPage />);
+    expect(screen.getByText(/whoever may change the dataset runs the job/)).toBeInTheDocument();
+    await waitFor(() => expect(mockedDatasets).toHaveBeenCalled());
+    fireEvent.mouseDown(screen.getByLabelText('Dataset'));
+    expect(await screen.findByRole('option', { name: 'Theirs (3 images, a group)' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: 'Mine (10 images, you)' }));
+    expect(await screen.findByText(/Yours: you run the job/)).toBeInTheDocument();
+  });
+
+  it('points at Vision when there is no dataset I manage to build on', async () => {
     mockedDatasets.mockResolvedValue([]);
     renderWithProviders(<NewJobPage />);
-    fireEvent.mouseDown(screen.getByLabelText('Group'));
-    fireEvent.click(await screen.findByRole('option', { name: 'Team' }));
 
     // With no configured Vision address the link stays relative, which is what
     // resolves inside shell-front, where /datasets is the Vision section.

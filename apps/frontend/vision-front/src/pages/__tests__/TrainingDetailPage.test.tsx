@@ -96,6 +96,10 @@ vi.mock('../../components/training/TrainingDetailTabs', () => ({
   )
 }));
 
+vi.mock('../../components/guide/SampleTour', () => ({
+  default: (props: { onDeleteSample: () => void }) => <button onClick={props.onDeleteSample}>tour-delete-sample</button>
+}));
+
 vi.mock('../../components/common/PageBreadcrumbs', () => ({
   default: (props: any) => <div data-testid="breadcrumbs">{props.items.map((i: any) => i.label).join('>')}</div>
 }));
@@ -177,6 +181,8 @@ const renderPage = (path = '/trainings/tr1') => {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/trainings/:id" element={<TrainingDetailPage />} />
+          <Route path="/trainings" element={<div>trainings-list</div>} />
+          <Route path="/projects/:id" element={<div>project-page</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -191,6 +197,35 @@ describe('TrainingDetailPage', () => {
     useTrainingEditMock.mockReturnValue(baseTrainingEdit());
     useTrainingActionsMock.mockReturnValue(baseTrainingActions());
     getProjectByIdMock.mockResolvedValue({ data: null });
+  });
+
+  describe('after the training is deleted', () => {
+    const sample = () => {
+      useTrainingDetailMock.mockReturnValue(baseTrainingDetail({ training: { _id: 'tr1', uuid: 'u', name: 'Sample run', projectId: 'p1' } }));
+      getProjectByIdMock.mockResolvedValue({ data: { _id: 'p1', slug: 'road-seg', name: 'Road scenes' } });
+    };
+    const deleted = () => (useTrainingActionsMock.mock.calls.at(-1)![0] as { onTrainingDeleted: () => void }).onTrainingDeleted();
+
+    it('goes back to the project when the sample was deleted from its tour', async () => {
+      sample();
+      const actions = baseTrainingActions();
+      useTrainingActionsMock.mockReturnValue(actions);
+      renderPage('/trainings/tr1?guide=sample');
+      await waitFor(() => expect(screen.getByTestId('breadcrumbs')).toHaveTextContent('Road scenes'));
+
+      fireEvent.click(screen.getByText('tour-delete-sample'));
+      expect(actions.setTrainingDeleteOpen).toHaveBeenCalledWith(true);
+      deleted();
+      expect(await screen.findByText('project-page')).toBeInTheDocument();
+    });
+
+    it('goes to Trainings otherwise', async () => {
+      sample();
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId('breadcrumbs')).toHaveTextContent('Road scenes'));
+      deleted();
+      expect(await screen.findByText('trainings-list')).toBeInTheDocument();
+    });
   });
 
   it('shows a spinner while loading', () => {

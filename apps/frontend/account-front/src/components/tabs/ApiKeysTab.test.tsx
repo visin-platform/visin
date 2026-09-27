@@ -82,6 +82,17 @@ describe('list states', () => {
     expect(screen.getByText('vision:read')).toBeInTheDocument();
   });
 
+  it('marks a key limited to a project, and only that one', async () => {
+    mockedService.list.mockResolvedValue([
+      makeKey({ id: 'k2', name: 'nightly training', scopes: ['vision:write'], project: { id: 'p1', name: 'Road scenes' } }),
+      makeKey()
+    ]);
+    renderTab();
+
+    expect(await screen.findByText('Project: Road scenes')).toBeInTheDocument();
+    expect(screen.getAllByText(/^Project: /)).toHaveLength(1);
+  });
+
   it('answers "is anything still using this?" for a key that never was', async () => {
     renderTab();
 

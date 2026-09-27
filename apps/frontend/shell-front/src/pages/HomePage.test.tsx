@@ -8,7 +8,7 @@ const { config } = vi.hoisted(() => ({ config: {} as Record<string, string | und
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalConfig: () => config }));
 vi.mock('../services/homeApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/homeApi')>()),
-  homeApi: { trainings: vi.fn(), projects: vi.fn(), jobs: vi.fn(), findings: vi.fn() },
+  homeApi: { trainings: vi.fn(), projects: vi.fn(), jobs: vi.fn(), findings: vi.fn(), myProjects: vi.fn(), myGroups: vi.fn(), invitations: vi.fn(), answerInvitation: vi.fn() },
 }));
 
 import { HomePage } from './HomePage';
@@ -23,8 +23,8 @@ const trainings = [
   { _id: 't2', name: 'Segmenter', status: 'failed' as const, updatedAt: hoursAgo(24) },
 ];
 const projects = [
-  { _id: 'p1', name: 'Harbour cameras', slug: 'harbour-cameras', isPublic: false, updatedAt: hoursAgo(5) },
-  { _id: 'p2', name: 'Orchard drones', isPublic: true, updatedAt: hoursAgo(48) },
+  { _id: 'p1', name: 'Harbour cameras', slug: 'harbour-cameras', visibility: 'private' as const, updatedAt: hoursAgo(5) },
+  { _id: 'p2', name: 'Orchard drones', visibility: 'public' as const, updatedAt: hoursAgo(48) },
 ];
 const jobs = [
   { _id: 'j1', name: 'Crate outlines', tasksCount: 100, progress: { tasks: 100, completed: 40 }, updatedAt: hoursAgo(1) },
@@ -50,10 +50,10 @@ const findings = [
   },
 ];
 
-const renderHome = (userName: string | undefined = 'Jane Doe') =>
+const renderHome = (userName: string | undefined = 'Jane Doe', path = '/') =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>
         <HomePage userName={userName} now={now} />
       </MemoryRouter>
     </QueryClientProvider>
@@ -75,6 +75,86 @@ beforeEach(() => {
   api.projects.mockResolvedValue(projects);
   api.jobs.mockResolvedValue(jobs);
   api.findings.mockResolvedValue(findings);
+  api.myProjects.mockResolvedValue([projects[0]]);
+  api.myGroups.mockResolvedValue([]);
+  api.invitations.mockResolvedValue([]);
+  api.answerInvitation.mockResolvedValue(undefined);
+});
+
+describe('Invitations', () => {
+  const invitation = { id: 'i1', groupId: 'g1', groupName: 'Road team', role: 'admin' as const, invitedBy: 'owner@example.test', expiresAt: hoursAgo(-24) };
+
+  it('shows invitations first, and joins one from the home page', async () => {
+    config.GROUP_SERVICE_URL = 'https://group-api.test';
+    api.invitations.mockResolvedValue([invitation]);
+    renderHome();
+
+    const card = within(await screen.findByRole('region', { name: 'You are invited to a group' }));
+    expect(card.getByText('Invited by owner@example.test')).toBeInTheDocument();
+    fireEvent.click(card.getByRole('button', { name: 'Join Road team' }));
+
+    await waitFor(() => expect(api.answerInvitation).toHaveBeenCalledWith('i1', true));
+    // Joining changes the viewer's groups and projects: the page asks again.
+    await waitFor(() => expect(api.invitations).toHaveBeenCalledTimes(2));
+  });
+
+  it('declines, and says so when an answer fails', async () => {
+    config.GROUP_SERVICE_URL = 'https://group-api.test';
+    api.invitations.mockResolvedValue([invitation, { ...invitation, id: 'i2', groupName: 'Night team' }]);
+    api.answerInvitation.mockRejectedValue(new Error('Invitation is invalid or expired'));
+    renderHome();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Decline Night team' }));
+    expect(await screen.findByText('Invitation is invalid or expired')).toBeInTheDocument();
+    expect(api.answerInvitation).toHaveBeenCalledWith('i2', false);
+    expect(screen.getByRole('region', { name: 'You are invited to groups' })).toBeInTheDocument();
+  });
+
+  it('is left out without group-service, or with nothing waiting', async () => {
+    delete config.GROUP_SERVICE_URL;
+    renderHome();
+    await screen.findByRole('region', { name: 'Recent trainings' });
+    expect(api.invitations).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: /You are invited/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('Get started', () => {
+  const newcomer = () => {
+    api.myProjects.mockResolvedValue([]);
+    api.myGroups.mockResolvedValue([]);
+  };
+
+  it('greets someone with no project and no group, in place of the tiles and with no way to hide it', async () => {
+    newcomer();
+    config.ACCOUNT_FRONT_URL = 'https://account.test';
+    renderHome();
+
+    const card = within(await screen.findByRole('region', { name: 'Get started' }));
+    expect(card.getByRole('link', { name: 'Create a project' })).toHaveAttribute('href', '/projects?new=1');
+    expect(card.getByRole('link', { name: 'Account → Groups' })).toHaveAttribute('href', '/account/groups');
+    expect(card.queryByRole('button', { name: 'Close getting started' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Getting started' })).not.toBeInTheDocument();
+  });
+
+  it('leaves the groups link out without account-front', async () => {
+    newcomer();
+    delete config.ACCOUNT_FRONT_URL;
+    renderHome();
+    const card = within(await screen.findByRole('region', { name: 'Get started' }));
+    expect(card.queryByRole('link', { name: 'Account → Groups' })).not.toBeInTheDocument();
+  });
+
+  it('is not shown to someone with a project, or in a group, but comes back on request', async () => {
+    api.myProjects.mockResolvedValue([]);
+    api.myGroups.mockResolvedValue([{ id: 'g1', name: 'Team' }]);
+    renderHome();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Getting started' }));
+    expect(await screen.findByRole('region', { name: 'Get started' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close getting started' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Get started' })).not.toBeInTheDocument());
+  });
 });
 
 describe('HomePage', () => {

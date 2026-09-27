@@ -4,11 +4,10 @@ import crypto from 'crypto';
 import express from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { apiKeyAuth, errorHandler } from '@visin/backend-core';
-import { apiTokenMiddleware } from '../../middleware/apiTokenMiddleware';
+import { createApiKey, errorHandler, resetEncryptionKeyCache } from '@visin/backend-core';
+import { projectKeyAuth } from '../../middleware/projectKeyAuth';
 import projectRoutes from '../../routes/projectRoutes';
 import trainingRoutes from '../../routes/trainingRoutes';
-import apiTokenRoutes from '../../routes/apiTokenRoutes';
 import epochRoutes from '../../routes/epochRoutes';
 import testResultRoutes from '../../routes/testResultRoutes';
 import benchmarkRoutes from '../../routes/benchmarkRoutes';
@@ -16,7 +15,6 @@ import visualizationRoutes from '../../routes/visualizationRoutes';
 import comparisonRoutes from '../../routes/comparisonRoutes';
 import findingRoutes from '../../routes/findingRoutes';
 import configRoutes from '../../routes/configRoutes';
-import ApiToken from '../../models/ApiToken';
 import Project from '../../models/Project';
 import Training from '../../models/Training';
 import Epoch from '../../models/Epoch';
@@ -33,7 +31,8 @@ jest.mock('../../clients/fileServiceClient', () => ({
   getFileMetadata: jest.fn(async () => ({ size: 1 })),
 }));
 
-describe('project token isolation through HTTP and in-memory MongoDB', () => {
+/** A key limited to one project, confined to it on every route. */
+describe('project-limited key isolation through HTTP and in-memory MongoDB', () => {
   let mongo: MongoMemoryServer;
   let server: Server;
   let url: string;
@@ -41,12 +40,17 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
   let b: string;
   let trainingB: string;
   let trainingA: string;
-  let tokenId: string;
   let fixtures: Record<string, { project?: string; training: string; epoch: string; test: string; benchmark: string; comparison: string; finding?: string }>;
   const owner = '000000000000000000000001';
-  const rawToken = 'a'.repeat(64);
+  let rawToken: string;
   const secret = 'project-token-integration-secret';
   const oldSecret = process.env.JWT_SECRET;
+  const oldEncryption = process.env.API_KEY_ENCRYPTION_SECRET;
+  const keyFor = async (project: string) =>
+    (await createApiKey({
+      userId: owner, userEmail: 'owner@example.test', userName: 'Owner', name: 'ingestion',
+      scopes: ['vision:read', 'vision:write', 'analysis:read', 'analysis:write'], project: { id: project, name: 'limited' }
+    })).token;
   const sessionToken = () => {
     const unsigned = [ { alg: 'HS256', typ: 'JWT' }, { id: owner, email: 'owner@example.test', tokenVersion: 1, sid: owner, typ: 'session', iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 60 } ]
       .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.');
@@ -55,16 +59,18 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
 
   beforeAll(async () => {
     process.env.JWT_SECRET = secret;
+    process.env.API_KEY_ENCRYPTION_SECRET = 'project-key-scope-secret';
+    resetEncryptionKeyCache();
     mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     const app = express();
-    app.use(express.json(), apiTokenMiddleware);
-    app.use('/api/projects', apiKeyAuth('vision'), projectRoutes);
-    app.use('/api/trainings', apiKeyAuth('vision'), trainingRoutes);
-    app.use('/api/api-tokens', apiTokenRoutes);
+    app.use(express.json());
+    app.use('/api/projects', projectKeyAuth('vision'), projectRoutes);
+    app.use('/api/trainings', projectKeyAuth('vision'), trainingRoutes);
+    app.use('/api/findings', projectKeyAuth('analysis'), findingRoutes);
     for (const [path, router] of Object.entries({ epochs: epochRoutes, 'test-results': testResultRoutes,
       benchmarks: benchmarkRoutes, visualizations: visualizationRoutes, comparisons: comparisonRoutes,
-      findings: findingRoutes, configs: configRoutes })) app.use(`/api/${path}`, apiKeyAuth('vision'), router);
+      configs: configRoutes })) app.use(`/api/${path}`, projectKeyAuth('vision'), router);
     app.use(errorHandler);
     server = createServer(app);
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -76,12 +82,12 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
     // Each test token names a session whose id is its user's.
     await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
     const projects = await Project.create([
-      { name: 'A', slug: 'a', ownerId: owner },
-      { name: 'B', slug: 'b', ownerId: owner },
+      { name: 'A', slug: 'a', owner: { kind: 'user', id: owner }, createdBy: owner },
+      { name: 'B', slug: 'b', owner: { kind: 'user', id: owner }, createdBy: owner },
     ]);
     [a, b] = projects.map(project => String(project._id));
-    const other = await Project.create({ name: 'Other owner', slug: 'other', ownerId: 'other' });
-    const publicProject = await Project.create({ name: 'Public', slug: 'public', ownerId: 'other', isPublic: true });
+    const other = await Project.create({ name: 'Other owner', slug: 'other', owner: { kind: 'user', id: 'other' }, createdBy: 'other' });
+    const publicProject = await Project.create({ name: 'Public', slug: 'public', owner: { kind: 'user', id: 'other' }, createdBy: 'other', visibility: 'public' });
     fixtures = {};
     for (const [key, project] of Object.entries({ a, b, other: String(other._id), public: String(publicProject._id), orphan: undefined })) {
       const training = await Training.create({ name: `${key} training`, uuid: `training-${key}`, projectId: project });
@@ -96,8 +102,7 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
     }
     trainingA = fixtures.a.training;
     trainingB = fixtures.b.training;
-    tokenId = String((await ApiToken.create({ name: 'A ingestion', projectId: a, createdBy: owner, prefix: rawToken.slice(0, 7),
-      tokenHash: crypto.createHash('sha256').update(rawToken).digest('hex') }))._id);
+    rawToken = await keyFor(a);
   });
 
   afterEach(async () => {
@@ -107,6 +112,8 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
   afterAll(async () => {
     if (oldSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = oldSecret;
+    if (oldEncryption === undefined) delete process.env.API_KEY_ENCRYPTION_SECRET;
+    else process.env.API_KEY_ENCRYPTION_SECRET = oldEncryption;
     if (server) await new Promise<void>(resolve => server.close(() => resolve()));
     try { await mongoose.disconnect(); } finally { await mongo?.stop(); }
   });
@@ -123,13 +130,6 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
   it('denies reading another private project owned by the same token creator', async () => {
     expect((await request(`trainings/${trainingB}`)).status).toBe(403);
     expect((await request('projects/b')).status).toBe(403);
-  });
-
-  it('cannot mint credentials, including for its own project', async () => {
-    for (const projectId of [a, b]) {
-      expect((await request('api-tokens', 'POST', { name: 'escalation', projectId })).status).toBe(403);
-    }
-    expect(await ApiToken.countDocuments()).toBe(1);
   });
 
   it('preserves own-project ingestion and session access to both owned projects', async () => {
@@ -187,17 +187,12 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
     expect((await request('visualizations/training?includeUrls=false')).body.data).toMatchObject({ total: 1 });
   });
 
-  it('rejects project administration and credential listing/revocation', async () => {
+  it('rejects project administration', async () => {
     for (const project of [a, b]) {
-      expect((await request(`projects/${project}`, 'PUT', { isPublic: true })).status).toBe(403);
+      expect((await request(`projects/${project}`, 'PUT', { visibility: 'public' })).status).toBe(403);
       expect((await request(`projects/${project}`, 'DELETE')).status).toBe(403);
-      expect((await request(`api-tokens/project/${project}`)).status).toBe(403);
     }
     expect((await request('projects', 'POST', { name: 'New project' })).status).toBe(403);
-    expect((await request(`api-tokens/${tokenId}`, 'DELETE')).status).toBe(403);
-    expect((await ApiToken.findById(tokenId))?.isActive).toBe(true);
-    const session = sessionToken();
-    expect((await request('api-tokens', 'POST', { name: 'User-created', projectId: b }, session)).status).toBe(201);
   });
 
   it('authorizes replacement parents and rejects missing parents', async () => {
@@ -248,8 +243,8 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
     expect((await request('findings', 'POST', { ...body, trainingIds: [trainingB] })).status).toBe(403);
   });
 
-  it('preserves shared configs and own-project child ingestion', async () => {
-    const config = await Config.create({ config_uuid: 'shared', summary: 'Shared config', config_data: {} });
+  it("reads its own project's configs and ingests into its own project", async () => {
+    const config = await Config.create({ config_uuid: 'shared', summary: 'Project config', config_data: {}, projectId: a });
     await Training.updateMany({}, { configId: String(config._id) });
     expect((await request(`configs/${config._id}`)).status).toBe(200);
     expect((await request(`trainings/${trainingA}/configs`)).status).toBe(200);
@@ -290,9 +285,7 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
   });
 
   it('isolates concurrent A/B token and session requests', async () => {
-    const otherToken = 'b'.repeat(64);
-    await ApiToken.create({ name: 'B ingestion', projectId: b, createdBy: owner, prefix: otherToken.slice(0, 7),
-      tokenHash: crypto.createHash('sha256').update(otherToken).digest('hex') });
+    const otherToken = await keyFor(b);
     const session = sessionToken();
     const results = await Promise.all(Array.from({ length: 12 }, async (_, i) => {
       const credential = [rawToken, otherToken, session][i % 3];
@@ -301,10 +294,6 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
     }));
     expect(results).toEqual(Array.from({ length: 12 }, (_, i) => i % 3 === 0 ? 403 : 200));
     expect((await request('projects/public', 'GET', undefined, 'invalid-token')).status).toBe(200);
-    await ApiToken.updateOne({ _id: tokenId }, { expiresAt: new Date(0) });
-    expect((await request('projects/a')).status).toBe(401);
-    await ApiToken.updateOne({ _id: tokenId }, { isActive: false });
-    expect((await request('projects/a')).status).toBe(403);
   });
 
   it('does not reinterpret a stored B project ID as an A slug', async () => {
@@ -316,7 +305,7 @@ describe('project token isolation through HTTP and in-memory MongoDB', () => {
     expect((await request(`findings/${fixtures.b.finding}`)).status).toBe(403);
     expect((await request(`comparisons/${fixtures.b.comparison}`)).status).toBe(403);
     expect((await request(`trainings/${trainingA}`)).status).toBe(200);
-    await Project.updateOne({ _id: a }, { isPublic: true });
+    await Project.updateOne({ _id: a }, { visibility: 'public' });
     expect((await request(`trainings/${trainingB}`, 'GET', undefined, 'invalid-token')).status).toBe(403);
   });
 

@@ -9,7 +9,8 @@ import {
   fileServiceAuthHeaders,
   HttpError,
   BadGatewayError,
-  NotFoundError
+  NotFoundError,
+  TRANSFER_FETCH_TIMEOUT_MS
 } from '@visin/backend-core';
 
 export interface SignedUrlData {
@@ -143,6 +144,24 @@ export const deleteFile = async (fileId: string): Promise<boolean> => {
   } catch (error) {
     logger.error('Failed to delete file', { fileId, error: (error as Error).message });
     return false;
+  }
+};
+
+/**
+ * Delete stored files for good, in batches of file-service's limit. Throws on
+ * failure, so a purge that could not remove the files keeps the records that
+ * name them and tries again next time. A file already gone counts as deleted.
+ */
+export const deleteFiles = async (fileIds: string[]): Promise<void> => {
+  for (let start = 0; start < fileIds.length; start += 1000) {
+    const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/delete-files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...fileServiceAuthHeaders() },
+      body: JSON.stringify({ fileIds: fileIds.slice(start, start + 1000) }),
+      timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
+      serviceName: 'file-service'
+    });
+    if (!response.ok) throw new BadGatewayError(`file-service delete-files failed (${response.status})`);
   }
 };
 

@@ -15,6 +15,7 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('../services/projectService', () => ({
   projectService: {
+    getGroups: vi.fn(async () => []),
     getProjects: vi.fn(),
     createProject: vi.fn(),
     updateProject: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('../components/ProjectFormDialog', () => ({
         <span>name:{props.name}</span>
         {props.error && <span>form-error:{props.error}</span>}
         {props.success && <span>form-success:{props.success}</span>}
+        <button onClick={() => props.onNameChange('Road scenes')}>type-name</button>
         <button onClick={props.onSubmit}>submit-form</button>
         <button onClick={props.onClose}>close-form</button>
       </div>
@@ -59,11 +61,11 @@ const projectServiceMock = projectService as unknown as {
   deleteProject: ReturnType<typeof vi.fn>;
 };
 
-function renderPage() {
+function renderPage(path = '/projects') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>
         <ProjectsPage />
       </MemoryRouter>
     </QueryClientProvider>
@@ -74,16 +76,20 @@ const project1 = {
   _id: 'p1',
   name: 'Project One',
   description: 'A description',
-  isPublic: true,
-  ownerId: 'u1',
+  visibility: 'public' as const,
+  owner: { kind: 'user' as const, id: 'u1' },
+  createdBy: 'u1',
+  permissions: { read: true, contribute: true, manage: true, own: true },
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z'
 };
 const project2 = {
   _id: 'p2',
   name: 'Project Two',
-  isPublic: false,
-  ownerId: 'other-user',
+  visibility: 'private' as const,
+  owner: { kind: 'user' as const, id: 'other-user' },
+  createdBy: 'other-user',
+  permissions: { read: true, contribute: false, manage: false, own: false },
   createdAt: '2024-02-01T00:00:00.000Z',
   updatedAt: '2024-02-01T00:00:00.000Z'
 };
@@ -110,8 +116,10 @@ describe('ProjectsPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('No projects found')).toBeInTheDocument();
+      expect(screen.getByText('No projects yet')).toBeInTheDocument();
     });
+    // The empty list offers the first project itself.
+    expect(screen.getAllByRole('button', { name: /New project/ }).length).toBeGreaterThan(1);
   });
 
   it('renders a list of projects with visibility chips', async () => {
@@ -148,7 +156,7 @@ describe('ProjectsPage', () => {
     expect(screen.queryByTestId('DeleteOutlinedIcon')).not.toBeInTheDocument();
   });
 
-  it('keeps the Actions column when at least one project is the viewer\'s own', async () => {
+  it("keeps the Actions column when at least one project is the viewer's own", async () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [project1, project2] });
 
     renderPage();
@@ -168,6 +176,20 @@ describe('ProjectsPage', () => {
     expect(navigateMock).toHaveBeenCalledWith('/projects/p1');
   });
 
+  it('opens the form from "Get started" (?new=1) and goes to the new project', async () => {
+    projectServiceMock.getProjects.mockResolvedValue({ data: [] });
+    projectServiceMock.createProject.mockResolvedValue({ data: { ...project1, _id: 'p9' } });
+
+    renderPage('/projects?new=1');
+
+    const dialog = await screen.findByTestId('project-form-dialog');
+    expect(dialog).toHaveTextContent('editing:false');
+    fireEvent.click(screen.getByText('type-name'));
+    fireEvent.click(screen.getByText('submit-form'));
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/projects/p9'));
+  });
+
   it('opens the create dialog, submits, and refetches projects', async () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [project1] });
     projectServiceMock.createProject.mockResolvedValue({ data: project1 });
@@ -185,6 +207,42 @@ describe('ProjectsPage', () => {
       expect(screen.getByText('form-error:Project name is required')).toBeInTheDocument();
     });
     expect(projectServiceMock.createProject).not.toHaveBeenCalled();
+  });
+
+  it('defaults onboarding creation to the user’s group and keeps it private', async () => {
+    vi.mocked(projectService.getGroups).mockResolvedValueOnce([{ id: 'g1', name: 'Team', role: 'member' }]);
+    projectServiceMock.getProjects.mockResolvedValue({ data: [] });
+    projectServiceMock.createProject.mockResolvedValue({ data: project1 });
+    renderPage('/projects?new=1');
+    await screen.findByTestId('project-form-dialog');
+    fireEvent.click(screen.getByText('type-name'));
+    fireEvent.click(screen.getByText('submit-form'));
+    await waitFor(() =>
+      expect(projectServiceMock.createProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: { kind: 'group', id: 'g1' },
+          visibility: 'private'
+        })
+      )
+    );
+  });
+
+  it('lets a group admin edit without sending an ownership-only visibility change', async () => {
+    projectServiceMock.getProjects.mockResolvedValue({
+      data: [
+        {
+          ...project1,
+          owner: { kind: 'group', id: 'g1' },
+          permissions: { read: true, contribute: true, manage: true, own: false }
+        }
+      ]
+    });
+    projectServiceMock.updateProject.mockResolvedValue({ data: project1 });
+    renderPage();
+    fireEvent.click((await screen.findByTestId('EditIcon')).closest('button')!);
+    fireEvent.click(screen.getByText('submit-form'));
+    await waitFor(() => expect(projectServiceMock.updateProject).toHaveBeenCalled());
+    expect(projectServiceMock.updateProject.mock.calls[0][1]).not.toHaveProperty('visibility');
   });
 
   it('opens the edit dialog pre-filled with the project values', async () => {
@@ -264,7 +322,7 @@ describe('ProjectsPage on a phone', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('offers edit and delete from a row menu, on the viewer\'s own projects only', async () => {
+  it("offers edit and delete from a row menu, on the viewer's own projects only", async () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [project1, project2] });
     renderPage();
 
@@ -284,7 +342,9 @@ describe('ProjectsPage on a phone', () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [] });
     renderPage();
 
-    expect(await screen.findByText('No projects found')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /New project/ })).toHaveClass('MuiFab-root');
+    expect(await screen.findByText('No projects yet')).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: /New project/ }).some((button) => button.classList.contains('MuiFab-root'))
+    ).toBe(true);
   });
 });

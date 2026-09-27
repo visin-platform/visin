@@ -1,6 +1,11 @@
 vi.mock('./useWriteCapabilities', async () => {
   const { useAuth } = await import('../contexts/AuthContext');
-  return { useWriteCapabilities: () => { const { isAuthenticated } = useAuth(); return (id?: string) => !!id && id !== 'read-only' && isAuthenticated; } };
+  return {
+    useWriteCapabilities: () => {
+      const { isAuthenticated } = useAuth();
+      return (id?: string) => !!id && id !== 'read-only' && isAuthenticated;
+    }
+  };
 });
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
@@ -16,7 +21,7 @@ vi.mock('react-router-dom', async () => {
 
 let authState: { isAuthenticated: boolean } = { isAuthenticated: true };
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => authState,
+  useAuth: () => authState
 }));
 
 vi.mock('../services/trainingService', () => ({
@@ -25,17 +30,17 @@ vi.mock('../services/trainingService', () => ({
     getTrainingTags: vi.fn(),
     createTraining: vi.fn(),
     updateTraining: vi.fn(),
-    deleteTraining: vi.fn(),
-  },
+    deleteTraining: vi.fn()
+  }
 }));
 vi.mock('../services/configService', () => ({
-  configService: { getAllConfigs: vi.fn() },
+  configService: { getAllConfigs: vi.fn() }
 }));
 vi.mock('../services/projectService', () => ({
-  projectService: { getProjects: vi.fn() },
+  projectService: { getProjects: vi.fn() }
 }));
 vi.mock('../utils/csvExport', () => ({
-  exportTrainingsToCSV: vi.fn(),
+  exportTrainingsToCSV: vi.fn()
 }));
 
 import { trainingService } from '../services/trainingService';
@@ -59,8 +64,8 @@ const makeTraining = (overrides: Partial<Training> = {}): Training =>
     tags: ['a', 'b'],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-02T00:00:00.000Z',
-    ...overrides,
-  } as unknown as Training);
+    ...overrides
+  }) as unknown as Training;
 
 const makeWrapper = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -76,7 +81,7 @@ beforeEach(() => {
   authState = { isAuthenticated: true };
   mockedTraining.getTrainings.mockResolvedValue({
     success: true,
-    data: { trainings: [makeTraining()], pagination: { page: 1, limit: 100, total: 1, pages: 1 } },
+    data: { trainings: [makeTraining()], pagination: { page: 1, limit: 100, total: 1, pages: 1 } }
   } as never);
   mockedConfig.getAllConfigs.mockResolvedValue({ success: true, data: { configs: [] } } as never);
   mockedTraining.getTrainingTags.mockResolvedValue({ success: true, data: ['a', 'b'] } as never);
@@ -134,9 +139,9 @@ describe('useTrainingsPage', () => {
       vi.advanceTimersByTime(500);
     });
 
-    await vi.waitFor(() => expect(mockedTraining.getTrainings).toHaveBeenCalledWith(
-      expect.objectContaining({ search: 'resnet' })
-    ));
+    await vi.waitFor(() =>
+      expect(mockedTraining.getTrainings).toHaveBeenCalledWith(expect.objectContaining({ search: 'resnet' }))
+    );
     vi.useRealTimers();
   });
 
@@ -187,14 +192,15 @@ describe('useTrainingsPage', () => {
     const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    act(() => result.current.setTrainingName('New Training'));
+    act(() => {
+      result.current.setTrainingName('New Training');
+      result.current.setSelectedProjectId('p1');
+    });
     await act(async () => {
       await result.current.handleCreateTraining();
     });
 
-    expect(mockedTraining.createTraining).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'New Training' })
-    );
+    expect(mockedTraining.createTraining).toHaveBeenCalledWith(expect.objectContaining({ name: 'New Training' }));
     expect(result.current.createSuccess).toContain('created successfully');
     expect(result.current.createModalOpen).toBe(false);
   });
@@ -221,7 +227,10 @@ describe('useTrainingsPage', () => {
     const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    act(() => result.current.setTrainingName('Dup'));
+    act(() => {
+      result.current.setTrainingName('Dup');
+      result.current.setSelectedProjectId('p1');
+    });
     await act(async () => {
       await result.current.handleCreateTraining();
     });
@@ -351,7 +360,10 @@ describe('useTrainingsPage', () => {
   it('asks the server to leave out excluded tags, one page at a time', async () => {
     mockedTraining.getTrainings.mockResolvedValue({
       success: true,
-      data: { trainings: [makeTraining({ _id: 't1', tags: ['keep'] })], pagination: { page: 1, limit: 100, total: 1, pages: 1 } },
+      data: {
+        trainings: [makeTraining({ _id: 't1', tags: ['keep'] })],
+        pagination: { page: 1, limit: 100, total: 1, pages: 1 }
+      }
     } as never);
 
     const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
@@ -368,5 +380,14 @@ describe('useTrainingsPage', () => {
     for (const [params] of mockedTraining.getTrainings.mock.calls) {
       expect((params as { limit: number }).limit).toBeLessThanOrEqual(100);
     }
+  });
+  it('refuses a training without a project before sending a request', async () => {
+    const { result } = renderHook(() => useTrainingsPage(), { wrapper: makeWrapper() });
+    act(() => result.current.setTrainingName('Needs a project'));
+    await act(async () => {
+      await result.current.handleCreateTraining();
+    });
+    expect(result.current.createError).toBe('Choose a project for this training');
+    expect(mockedTraining.createTraining).not.toHaveBeenCalled();
   });
 });

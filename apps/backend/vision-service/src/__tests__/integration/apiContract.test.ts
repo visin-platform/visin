@@ -4,8 +4,7 @@ import crypto from 'crypto';
 import express from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { errorHandler } from '@visin/backend-core';
-import { apiTokenMiddleware } from '../../middleware/apiTokenMiddleware';
+import { createApiKey, errorHandler, resetEncryptionKeyCache } from '@visin/backend-core';
 import { identityContextMiddleware } from '../../middleware/requestIdentityContext';
 import { API_ROUTE_GROUPS } from '../../routes/apiRoutes';
 import EpochVisualization from '../../models/EpochVisualization';
@@ -26,7 +25,7 @@ jest.mock('../../clients/fileServiceClient', () => ({
 /**
  * The integrator's path through the API, against the real routes and an
  * in-memory MongoDB, with every response checked against docs/openapi.yml:
- * a person sets up a project and a token, a training script sends a run and
+ * a person sets up a project and a key limited to it, a training script sends a run and
  * its results, and reads them back. Errors are part of the path too, since
  * a script meets them.
  */
@@ -37,6 +36,7 @@ describe('vision-service responses match docs/openapi.yml', () => {
   const owner = '000000000000000000000001';
   const secret = 'api-contract-secret';
   const previousSecret = process.env.JWT_SECRET;
+  const previousEncryption = process.env.API_KEY_ENCRYPTION_SECRET;
   const seen = new Set<string>();
   /** Every mismatch in a test, reported together at its end rather than one at a time. */
   const problems: string[] = [];
@@ -81,10 +81,12 @@ describe('vision-service responses match docs/openapi.yml', () => {
 
   beforeAll(async () => {
     process.env.JWT_SECRET = secret;
+    process.env.API_KEY_ENCRYPTION_SECRET = 'api-contract-encryption-secret';
+    resetEncryptionKeyCache();
     mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
     await mongoose.connect(mongo.getUri());
     const app = express();
-    app.use(express.json(), identityContextMiddleware, apiTokenMiddleware);
+    app.use(express.json(), identityContextMiddleware);
     for (const { path, guards, router } of API_ROUTE_GROUPS) app.use(path, ...guards, router);
     app.use(errorHandler);
     server = createServer(app);
@@ -105,30 +107,35 @@ describe('vision-service responses match docs/openapi.yml', () => {
   afterAll(async () => {
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;
+    if (previousEncryption === undefined) delete process.env.API_KEY_ENCRYPTION_SECRET;
+    else process.env.API_KEY_ENCRYPTION_SECRET = previousEncryption;
+    resetEncryptionKeyCache();
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
     await mongoose.disconnect();
     await mongo?.stop();
   });
 
-  it('sets up a project and a token, signed in', async () => {
+  it('sets up a project and a key limited to it, signed in', async () => {
     const project = await call('POST', '/api/projects', {
       auth: session(),
-      body: { name: 'Contract', isPublic: false }
+      body: { name: 'Contract', visibility: 'private' }
     });
     expect(project.status).toBe(201);
     projectId = project.body.data._id;
 
-    const created = await call('POST', '/api/api-tokens', { auth: session(), body: { name: 'pipeline', projectId } });
-    expect(created.status).toBe(201);
-    token = created.body.data.token;
+    // The pipeline's key comes from auth-service, limited to this project.
+    token = (
+      await createApiKey({
+        userId: owner, userEmail: 'owner@example.test', userName: 'Owner', name: 'pipeline',
+        scopes: ['vision:read', 'vision:write'], project: { id: projectId, name: 'Contract' }
+      })
+    ).token;
 
-    const listed = await call('GET', `/api/api-tokens/project/${projectId}`, { auth: session() });
-    expect(listed.body.data).toHaveLength(1);
     await call('GET', `/api/projects/${projectId}`, { auth: session() });
     await call('GET', '/api/projects', { auth: session() });
   });
 
-  it('starts a run and sends its epochs, with the token', async () => {
+  it('starts a run and sends its epochs, with the key', async () => {
     const created = await call('POST', '/api/trainings', {
       auth: token,
       body: { uuid: runUuid, name: 'contract run', status: 'running', tags: ['contract'] }
@@ -256,8 +263,6 @@ describe('vision-service responses match docs/openapi.yml', () => {
   });
 
   it('cleans up, signed in', async () => {
-    const tokens = await call('GET', `/api/api-tokens/project/${projectId}`, { auth: session() });
-    await call('DELETE', `/api/api-tokens/${tokens.body.data[0]._id}`, { auth: session() });
     await call('DELETE', `/api/trainings/${trainingId}`, { auth: session() });
   });
 
@@ -272,9 +277,7 @@ describe('vision-service responses match docs/openapi.yml', () => {
       'GET /epochs/training/{trainingId}',
       'POST /test-results/upload',
       'POST /benchmarks/upload',
-      'GET /visualizations/training/{training_uuid}',
-      'POST /api-tokens',
-      'DELETE /api-tokens/{id}'
+      'GET /visualizations/training/{training_uuid}'
     ];
     expect(path.filter((operation) => !seen.has(operation))).toEqual([]);
   });

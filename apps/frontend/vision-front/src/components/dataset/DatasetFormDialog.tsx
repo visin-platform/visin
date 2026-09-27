@@ -8,17 +8,15 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
-  MenuItem,
-  Radio,
-  RadioGroup,
   Stack,
   TextField,
   Typography
 } from '@mui/material';
 import { UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
+import { OwnerPicker, VisibilitySwitch, type OwnerGroup, type OwnerRef, type OwnerRole } from '@visin/frontend-core';
 import { DatasetFields, DatasetVisibility, listMyGroups } from '../../services/datasetService';
+import { useAuth } from '../../contexts/AuthContext';
 import { formatBytes } from '../../utils/datasetMapping';
 
 export interface DatasetFormValues extends DatasetFields {
@@ -33,6 +31,8 @@ interface DatasetFormDialogProps {
   error?: string | null;
   /** replace mode, for an interrupted upload: the file to choose again to continue it */
   resume?: { filename: string; size?: number };
+  /** edit mode: false when the caller may edit the dataset but not change who sees it */
+  canShare?: boolean;
   onCancel: () => void;
   onSubmit: (values: DatasetFormValues) => void;
 }
@@ -45,11 +45,13 @@ const SUBMIT = { create: 'Create and upload', edit: 'Save', replace: 'Upload' } 
  * dialog because the three share their fields. It only collects the choice: the
  * upload itself runs in the corner (UploadPanel), so the dialog closes at once.
  */
-const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initial, busy, error, resume, onCancel, onSubmit }) => {
+const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initial, busy, error, resume, canShare = true, onCancel, onSubmit }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [visibility, setVisibility] = useState<DatasetVisibility>('public');
-  const [groupId, setGroupId] = useState('');
+  const { user } = useAuth();
+  const me: OwnerRef = { kind: 'user', id: user?.id ?? '' };
+  const [visibility, setVisibility] = useState<DatasetVisibility>('private');
+  const [owner, setOwner] = useState<OwnerRef>(me);
   const [file, setFile] = useState<File | null>(null);
   const [validation, setValidation] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
@@ -61,14 +63,20 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
     if (open) {
       setName(initial?.name ?? '');
       setDescription(initial?.description ?? '');
-      setVisibility(initial?.visibility ?? 'public');
-      setGroupId(initial?.groupId ?? '');
+      setVisibility(initial?.visibility ?? 'private');
+      setOwner(initial?.owner ?? { kind: 'user', id: user?.id ?? '' });
       setFile(null);
       setValidation('');
     }
-  }, [open, initial]);
+  }, [open, initial, user?.id]);
 
-  const groups = useQuery({ queryKey: ['dataset-groups'], queryFn: listMyGroups, enabled: open && showDetails });
+  const groups = useQuery({ queryKey: ['dataset-groups'], queryFn: listMyGroups, enabled: open && mode === 'create' });
+  const ownerGroups: OwnerGroup[] = (groups.data ?? []).map((group) => ({ id: group.id, name: group.name, role: group.role as OwnerRole }));
+  // Making it public takes owning it: yours, or a group's whose owner you are.
+  const canMakePublic =
+    mode === 'create'
+      ? owner.kind === 'user' || ownerGroups.find((group) => group.id === owner.id)?.role === 'owner'
+      : canShare;
 
   const chooseFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
@@ -83,17 +91,16 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
     if (needsFile && !file) return setValidation('Choose a .zip file');
     if (file && !/\.zip$/i.test(file.name)) return setValidation('Datasets are uploaded as .zip archives');
     if (showDetails && !name.trim()) return setValidation('A name is required');
-    if (showDetails && visibility === 'group' && !groupId) return setValidation('Choose the group to share with');
     setValidation('');
     onSubmit({
       name: name.trim(),
       description: description.trim(),
-      visibility,
-      groupId: visibility === 'group' ? groupId : undefined,
+      // Someone who may edit but not share leaves it as it was, public or not.
+      visibility: mode === 'edit' && !canShare ? (initial?.visibility ?? 'private') : canMakePublic ? visibility : 'private',
+      ...(mode === 'create' ? { owner } : {}),
       file: file ?? undefined
     });
   };
-
 
   return (
     <Dialog open={open} onClose={busy ? undefined : onCancel} maxWidth="sm" fullWidth>
@@ -113,31 +120,25 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
                   minRows={3}
                   helperText="Where the data comes from, how it was captured, what it is for"
                 />
-                <Box>
-                  <Typography variant="subtitle2">Who can see it</Typography>
-                  <RadioGroup row value={visibility} onChange={(e) => setVisibility(e.target.value as DatasetVisibility)}>
-                    <FormControlLabel value="public" control={<Radio />} label="Everyone" disabled={busy} />
-                    <FormControlLabel value="group" control={<Radio />} label="A group" disabled={busy} />
-                  </RadioGroup>
-                  {visibility === 'group' && (
-                    <TextField
-                      select
-                      fullWidth
-                      label="Group"
-                      value={groupId}
-                      onChange={(e) => setGroupId(e.target.value)}
-                      disabled={busy || groups.isLoading}
-                      helperText={groups.isError ? 'Could not load your groups' : 'Group owners and admins can also manage it'}
-                      error={groups.isError}
-                    >
-                      {(groups.data ?? []).map((group) => (
-                        <MenuItem key={group.id} value={group.id}>
-                          {group.name}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                </Box>
+                {mode === 'create' && user && (
+                  <OwnerPicker
+                    value={owner}
+                    onChange={(next) => {
+                      setOwner(next);
+                      setVisibility('private');
+                    }}
+                    userId={user.id}
+                    groups={ownerGroups}
+                    disabled={busy || groups.isLoading}
+                    helperText={groups.isError ? 'Could not load your groups' : undefined}
+                  />
+                )}
+                <VisibilitySwitch
+                  value={visibility}
+                  onChange={setVisibility}
+                  canMakePublic={canMakePublic}
+                  disabled={busy || (mode === 'edit' && !canShare)}
+                />
               </>
             )}
             {mode === 'replace' && resume && !busy && (

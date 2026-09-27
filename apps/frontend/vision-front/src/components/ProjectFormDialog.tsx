@@ -1,4 +1,5 @@
 import React from 'react';
+import { OwnerPicker, VisibilitySwitch, type OwnerRef, type OwnerGroup } from '@visin/frontend-core';
 import {
   Dialog,
   DialogTitle,
@@ -6,8 +7,6 @@ import {
   DialogActions,
   Button,
   TextField,
-  FormControlLabel,
-  Switch,
   Alert,
   CircularProgress,
   Accordion,
@@ -32,6 +31,13 @@ interface ProjectFormDialogProps {
   onDescriptionChange: (value: string) => void;
   isPublic: boolean;
   onIsPublicChange: (value: boolean) => void;
+  owner: OwnerRef;
+  onOwnerChange: (value: OwnerRef) => void;
+  userId: string;
+  groups: OwnerGroup[];
+  groupsLoading?: boolean;
+  groupsError?: boolean;
+  canShare: boolean;
   taxonomy: ProjectTaxonomy;
   onTaxonomyChange: (taxonomy: ProjectTaxonomy) => void;
   costing: ProjectCosting;
@@ -52,6 +58,13 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
   onDescriptionChange,
   isPublic,
   onIsPublicChange,
+  owner,
+  onOwnerChange,
+  userId,
+  groups,
+  groupsLoading,
+  groupsError,
+  canShare,
   taxonomy,
   onTaxonomyChange,
   costing,
@@ -103,18 +116,24 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
           disabled={isCreating}
           sx={{ mb: 2 }}
         />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={isPublic}
-              onChange={(e) => onIsPublicChange(e.target.checked)}
-              disabled={isCreating}
-            />
-          }
-          label="Public Project (Visible to everyone)"
+        {!isEditing && (
+          <OwnerPicker
+            value={owner}
+            onChange={onOwnerChange}
+            userId={userId}
+            groups={groups}
+            disabled={isCreating || groupsLoading}
+            helperText={groupsError ? 'Could not load your groups' : undefined}
+          />
+        )}
+        <VisibilitySwitch
+          value={isPublic ? 'public' : 'private'}
+          onChange={(value) => onIsPublicChange(value === 'public')}
+          canMakePublic={canShare}
+          disabled={isCreating || !canShare}
         />
         <Typography variant="body2" color="text.secondary">
-          Configs, dataset analyses, and dataset files remain publicly shared, even in a private project.
+          Trainings, results and configs follow this project's visibility.
         </Typography>
         <Accordion sx={{ mt: 2 }} disableGutters elevation={0} variant="outlined">
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -123,12 +142,7 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
             </Typography>
           </AccordionSummary>
           <AccordionDetails>
-            <TaxonomyEditor
-              value={taxonomy}
-              onChange={onTaxonomyChange}
-              disabled={isCreating}
-              compact
-            />
+            <TaxonomyEditor value={taxonomy} onChange={onTaxonomyChange} disabled={isCreating} compact />
           </AccordionDetails>
         </Accordion>
         <Accordion sx={{ mt: 1 }} disableGutters elevation={0} variant="outlined">
@@ -146,12 +160,8 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
         <Button onClick={onClose} disabled={isCreating}>
           Cancel
         </Button>
-        <Button
-          onClick={onSubmit}
-          variant="contained"
-          disabled={isCreating || !name.trim()}
-        >
-          {isCreating ? <CircularProgress size={24} /> : (isEditing ? 'Update' : 'Create')}
+        <Button onClick={onSubmit} variant="contained" disabled={isCreating || !name.trim()}>
+          {isCreating ? <CircularProgress size={24} /> : isEditing ? 'Update' : 'Create'}
         </Button>
       </DialogActions>
     </Dialog>

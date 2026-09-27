@@ -6,32 +6,93 @@ jest.mock('../../models/Training', () => ({
   __esModule: true,
   default: { find: jest.fn() },
 }));
+jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn() }));
+const checkMembership = jest.fn();
+jest.mock('@visin/backend-core', () => ({
+  ...jest.requireActual('@visin/backend-core'),
+  createGroupServiceClient: () => ({ checkMembership, getMyGroups: jest.fn() }),
+}));
 
+import type { Request } from 'express';
 import {
+  callerGroups,
+  canEditProject,
   checkProjectAccess,
   createProjectAccessChecker,
-  isProjectOwner,
+  getEditableProjectIds,
   getVisibleProjectIds,
   getVisibleTrainingIds,
   isWithinTokenScope,
+  membershipOf,
+  projectFilter,
+  projectPermission,
 } from '../../services/projectAccessService';
-import Project from '../../models/Project';
+import Project, { type IProject } from '../../models/Project';
 import Training from '../../models/Training';
+import { getUserGroups } from '../../clients/projectGroupsClient';
+import { projectTokenContext } from '../../middleware/projectTokenContext';
+import { requestIdentityContext } from '../../middleware/requestIdentityContext';
 
 const mockedProject = Project as unknown as Record<string, jest.Mock>;
 const mockedTraining = Training as unknown as Record<string, jest.Mock>;
+const groups = jest.mocked(getUserGroups);
 
-const publicProject = { _id: 'p1', isPublic: true, ownerId: 'owner-1' };
-const privateProject = { _id: 'p2', isPublic: false, ownerId: 'owner-1' };
+const GROUP = 'a'.repeat(24);
+const EDITORS = 'e'.repeat(24);
+const project = (fields: Record<string, unknown> = {}) =>
+  ({ _id: 'p1', owner: { kind: 'user', id: 'owner-1' }, visibility: 'private', editorGroupIds: [], ...fields }) as unknown as IProject;
+const publicProject = project({ visibility: 'public' });
+const privateProject = project({ _id: 'p2' });
+const teamProject = project({ _id: 'p3', owner: { kind: 'group', id: GROUP } });
+
+const asProjectKey = <T>(callback: () => Promise<T>) =>
+  projectTokenContext.run({ projectId: 'p3', userId: 'u1' }, callback);
 
 beforeEach(() => {
   jest.clearAllMocks();
+  groups.mockResolvedValue([]);
+});
+
+describe('projectPermission', () => {
+  it("gives a group-owned project's members their role's permission, and outsiders nothing", async () => {
+    groups.mockResolvedValue([{ id: GROUP, name: 'Team', role: 'admin' }]);
+    await expect(projectPermission(teamProject, 'u1')).resolves.toBe('manage');
+    groups.mockResolvedValue([{ id: GROUP, name: 'Team', role: 'owner' }]);
+    await expect(projectPermission(teamProject, 'u1')).resolves.toBe('own');
+    groups.mockResolvedValue([]);
+    await expect(projectPermission(teamProject, 'u1')).resolves.toBe('none');
+  });
+
+  it('gives an editor group contribute, never more than the owner gives', async () => {
+    const shared = project({ editorGroupIds: [EDITORS] });
+    groups.mockResolvedValue([{ id: EDITORS, name: 'Editors', role: 'member' }]);
+    await expect(projectPermission(shared, 'u1')).resolves.toBe('contribute');
+    await expect(projectPermission(shared, 'owner-1')).resolves.toBe('own');
+    groups.mockResolvedValue([]);
+    await expect(projectPermission(shared, 'u1')).resolves.toBe('none');
+  });
+
+  it('gives nothing for a trashed project, unless asked about the trash', async () => {
+    const trashed = project({ trashedAt: new Date() });
+    await expect(projectPermission(trashed, 'owner-1')).resolves.toBe('none');
+    await expect(projectPermission(trashed, 'owner-1', { trashed: true })).resolves.toBe('own');
+    await expect(projectPermission(null, 'owner-1')).resolves.toBe('none');
+  });
+
+  it('keeps a project key’s group role in its own project', async () => {
+    groups.mockResolvedValue([{ id: GROUP, name: 'Team', role: 'admin' }]);
+    await expect(asProjectKey(() => projectPermission(teamProject, 'u1'))).resolves.toBe('manage');
+  });
+
+  it('confines a project credential to its own project', async () => {
+    await expect(asProjectKey(() => projectPermission(publicProject, 'owner-1'))).resolves.toBe('none');
+  });
 });
 
 describe('checkProjectAccess', () => {
-  it('allows anything not scoped to a project', async () => {
-    await expect(checkProjectAccess('u1', undefined)).resolves.toBe(true);
-    await expect(checkProjectAccess('u1', null)).resolves.toBe(true);
+  it('denies anything without a project: every run has one', async () => {
+    await expect(checkProjectAccess('u1', undefined)).resolves.toBe(false);
+    await expect(checkProjectAccess('u1', null)).resolves.toBe(false);
     expect(mockedProject.findOne).not.toHaveBeenCalled();
   });
 
@@ -50,9 +111,14 @@ describe('checkProjectAccess', () => {
     expect(mockedProject.findById).not.toHaveBeenCalled();
   });
 
+  it('looks an ObjectId-shaped reference up by id only', async () => {
+    mockedProject.findById.mockResolvedValue(publicProject);
+    await expect(checkProjectAccess(undefined, 'b'.repeat(24))).resolves.toBe(true);
+    expect(mockedProject.findOne).not.toHaveBeenCalled();
+  });
+
   it('falls back to ObjectId lookup, swallowing cast errors', async () => {
     mockedProject.findOne.mockResolvedValue(null);
-    mockedProject.findById.mockReturnValue({ catch: () => Promise.resolve(null) } as never);
     mockedProject.findById.mockImplementation(() => Promise.reject(new Error('CastError')) as never);
 
     await expect(checkProjectAccess('u1', 'not-an-object-id')).resolves.toBe(false);
@@ -71,6 +137,14 @@ describe('checkProjectAccess', () => {
     await expect(checkProjectAccess('owner-1', 'p2')).resolves.toBe(true);
     await expect(checkProjectAccess('stranger', 'p2')).resolves.toBe(false);
     await expect(checkProjectAccess(undefined, 'p2')).resolves.toBe(false);
+  });
+});
+
+describe('canEditProject', () => {
+  it('needs contribute: a reader of a public project cannot add to it', async () => {
+    await expect(canEditProject(publicProject, 'stranger')).resolves.toBe(false);
+    await expect(canEditProject(publicProject, 'owner-1')).resolves.toBe(true);
+    await expect(canEditProject(publicProject, undefined)).resolves.toBe(false);
   });
 });
 
@@ -106,23 +180,12 @@ describe('createProjectAccessChecker', () => {
     expect(mockedProject.findOne).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps the unscoped-resource shortcut, without a lookup', async () => {
+  it('denies a row without a project, without a lookup', async () => {
     const hasAccess = createProjectAccessChecker('u1');
 
-    await expect(hasAccess(undefined)).resolves.toBe(true);
-    await expect(hasAccess(null)).resolves.toBe(true);
+    await expect(hasAccess(undefined)).resolves.toBe(false);
+    await expect(hasAccess(null)).resolves.toBe(false);
     expect(mockedProject.findOne).not.toHaveBeenCalled();
-  });
-
-  it('gives the same answer as a bare checkProjectAccess for the same user', async () => {
-    mockedProject.findOne.mockResolvedValue(privateProject);
-
-    await expect(createProjectAccessChecker('owner-1')('p2')).resolves.toBe(
-      await checkProjectAccess('owner-1', 'p2')
-    );
-    await expect(createProjectAccessChecker('someone-else')('p2')).resolves.toBe(
-      await checkProjectAccess('someone-else', 'p2')
-    );
   });
 
   it('does not share its memo between two checkers', async () => {
@@ -133,61 +196,86 @@ describe('createProjectAccessChecker', () => {
   });
 });
 
-describe('isProjectOwner', () => {
-  it('is false without a user or project', async () => {
-    await expect(isProjectOwner(undefined, 'p1')).resolves.toBe(false);
-    await expect(isProjectOwner('u1', undefined)).resolves.toBe(false);
+describe('projectFilter', () => {
+  it('keeps public projects, mine, my groups’ and those shared with my groups, live ones only', async () => {
+    groups.mockResolvedValue([{ id: GROUP, name: 'Team', role: 'member' }]);
+    await expect(projectFilter('u1')).resolves.toEqual({
+      $and: [
+        { trashedAt: null },
+        {
+          $or: [
+            { visibility: 'public' },
+            { 'owner.kind': 'user', 'owner.id': 'u1' },
+            { 'owner.kind': 'group', 'owner.id': { $in: [GROUP] } },
+            { editorGroupIds: { $in: [GROUP] } },
+          ],
+        },
+      ],
+    });
   });
 
-  it('ignores public visibility — only ownership counts', async () => {
-    mockedProject.findOne.mockResolvedValue(publicProject);
-
-    await expect(isProjectOwner('owner-1', 'p1')).resolves.toBe(true);
-    await expect(isProjectOwner('stranger', 'p1')).resolves.toBe(false);
+  it('asks for the role a level needs, and leaves editor groups out of manage', async () => {
+    groups.mockResolvedValue([{ id: GROUP, name: 'Team', role: 'member' }]);
+    await expect(projectFilter('u1', 'manage', { trashed: true })).resolves.toEqual({
+      $and: [{ trashedAt: { $ne: null } }, { $or: [{ 'owner.kind': 'user', 'owner.id': 'u1' }] }],
+    });
   });
 
-  it('is false when the project cannot be resolved', async () => {
-    mockedProject.findOne.mockResolvedValue(null);
-    mockedProject.findById.mockImplementation(() => Promise.reject(new Error('CastError')) as never);
+  it('matches nothing for a level nobody signed out holds', async () => {
+    await expect(projectFilter(undefined, 'contribute')).resolves.toEqual({ $and: [{ trashedAt: null }, { _id: { $in: [] } }] });
+  });
 
-    await expect(isProjectOwner('u1', 'ghost')).resolves.toBe(false);
+  it('confines a project key to its project', async () => {
+    const filter = await asProjectKey(() => projectFilter('u1'));
+    expect(filter).toEqual({
+      $and: [{ trashedAt: null }, { $or: [{ visibility: 'public' }, { 'owner.kind': 'user', 'owner.id': 'u1' }] }, { _id: 'p3' }],
+    });
   });
 });
 
-describe('getVisibleProjectIds', () => {
+describe('getVisibleProjectIds and getEditableProjectIds', () => {
   const projectDocs = [{ _id: { toString: () => 'p1' } }, { _id: { toString: () => 'p2' } }];
 
-  it('returns public + owned for a logged-in user', async () => {
+  it('returns the ids the filter finds', async () => {
     const select = jest.fn().mockResolvedValue(projectDocs);
     mockedProject.find.mockReturnValue({ select });
 
     await expect(getVisibleProjectIds('u1')).resolves.toEqual(['p1', 'p2']);
-    expect(mockedProject.find).toHaveBeenCalledWith({
-      $or: [{ isPublic: true }, { ownerId: 'u1' }],
-    });
-  });
-
-  it('returns only public projects for anonymous callers', async () => {
-    const select = jest.fn().mockResolvedValue([]);
-    mockedProject.find.mockReturnValue({ select });
-
-    await expect(getVisibleProjectIds(undefined)).resolves.toEqual([]);
-    expect(mockedProject.find).toHaveBeenCalledWith({ isPublic: true });
+    await expect(getEditableProjectIds('u1')).resolves.toEqual(['p1', 'p2']);
+    await expect(getEditableProjectIds(undefined)).resolves.toEqual([]);
+    expect(mockedProject.find).toHaveBeenCalledTimes(2);
   });
 });
 
 describe('getVisibleTrainingIds', () => {
-  it('includes trainings in visible projects plus unscoped ones', async () => {
+  it('includes live trainings in visible projects only', async () => {
     const projectSelect = jest.fn().mockResolvedValue([{ _id: { toString: () => 'p1' } }]);
     mockedProject.find.mockReturnValue({ select: projectSelect });
     const trainingSelect = jest.fn().mockResolvedValue([{ _id: { toString: () => 't1' } }]);
     mockedTraining.find.mockReturnValue({ select: trainingSelect });
 
     await expect(getVisibleTrainingIds('u1')).resolves.toEqual(['t1']);
-    expect(mockedTraining.find).toHaveBeenCalledWith({
-      deletedAt: null,
-      $or: [{ projectId: { $in: ['p1'] } }, { projectId: { $exists: false } }, { projectId: null }],
-    });
+    expect(mockedTraining.find).toHaveBeenCalledWith({ deletedAt: null, projectId: { $in: ['p1'] } });
+  });
+});
+
+describe('callerGroups and membershipOf', () => {
+  const inRequest = <T>(callback: () => Promise<T>) =>
+    requestIdentityContext.run({ request: { user: { id: 'u1' } } as Request }, callback);
+
+  it("reads the caller's groups, a missing role as a plain member", async () => {
+    groups.mockResolvedValue([{ id: GROUP, name: 'Team' } as never]);
+    await expect(callerGroups.getMyGroups('u1')).resolves.toEqual([{ groupId: GROUP, name: 'Team', role: 'member' }]);
+    await expect(callerGroups.checkMembership(GROUP, 'u1')).resolves.toEqual({ member: true, role: 'member' });
+    await expect(callerGroups.checkMembership('other', 'u1')).resolves.toEqual({ member: false, role: null });
+  });
+
+  it("asks group-service about anyone else's membership", async () => {
+    groups.mockResolvedValue([{ id: GROUP, name: 'Team', role: 'owner' }]);
+    checkMembership.mockResolvedValue({ member: true, role: 'member' });
+    await expect(inRequest(() => membershipOf(GROUP, 'u1'))).resolves.toEqual({ member: true, role: 'owner' });
+    await expect(inRequest(() => membershipOf(GROUP, 'u2'))).resolves.toEqual({ member: true, role: 'member' });
+    expect(checkMembership).toHaveBeenCalledWith(GROUP, 'u2');
   });
 });
 

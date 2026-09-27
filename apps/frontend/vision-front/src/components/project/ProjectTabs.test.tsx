@@ -11,11 +11,12 @@ vi.mock('./ProjectBenchmarksTab', () => ({ default: () => <div>benchmarks-tab</d
 vi.mock('./ProjectComparisonsTab', () => ({ default: () => <div>comparisons-tab</div> }));
 vi.mock('../analysis/FindingsPanel', () => ({ default: () => <div>analysis-tab</div> }));
 vi.mock('../ProjectSettings', () => ({ default: () => <div>settings-tab</div> }));
+vi.mock('./FirstRunPanel', () => ({ default: () => <div>first-run-panel</div> }));
 
 const baseProps = {
   tabValue: 0,
   onTabChange: vi.fn(),
-  isOwner: false,
+  canManage: false,
   projectId: 'p1',
   stats: { totalTrainings: 0, totalTime: 0, totalCost: 0, avgEpochTime: 0 },
   dashboardStats: { testResultsCount: 0, visualizationsCount: 0, benchmarksCount: 0 },
@@ -31,7 +32,10 @@ const baseProps = {
   sortBy: 'updatedAt' as const,
   sortOrder: 'desc' as const,
   onSort: vi.fn(),
-  testResultsResponse: { success: true, data: { testResults: [], pagination: { page: 0, limit: 25, total: 0, pages: 0 } } },
+  testResultsResponse: {
+    success: true,
+    data: { testResults: [], pagination: { page: 0, limit: 25, total: 0, pages: 0 } }
+  },
   isTestResultsLoading: false,
   testsPage: 0,
   testsRowsPerPage: 25,
@@ -39,7 +43,10 @@ const baseProps = {
   onTestsRowsPerPageChange: vi.fn(),
   visualizationsResponse: { success: true, data: { trainings: [] } },
   isVisualizationsLoading: false,
-  benchmarksResponse: { success: true, data: { benchmarks: [], pagination: { page: 0, limit: 25, total: 0, pages: 0 } } },
+  benchmarksResponse: {
+    success: true,
+    data: { benchmarks: [], pagination: { page: 0, limit: 25, total: 0, pages: 0 } }
+  },
   isBenchmarksLoading: false,
   benchmarksPage: 0,
   benchmarksRowsPerPage: 25,
@@ -48,11 +55,13 @@ const baseProps = {
   project: {
     _id: 'p1',
     name: 'Project 1',
-    isPublic: false,
-    ownerId: 'u1',
+    visibility: 'private' as const,
+    owner: { kind: 'user' as const, id: 'u1' },
+    createdBy: 'u1',
+    permissions: { read: true, contribute: true, manage: true, own: true },
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z'
-  },
+  }
 };
 
 describe('ProjectTabs', () => {
@@ -80,7 +89,7 @@ describe('ProjectTabs', () => {
   });
 
   it('hides the Settings tab when the caller is not the owner', () => {
-    render(<ProjectTabs {...baseProps} isOwner={false} />);
+    render(<ProjectTabs {...baseProps} canManage={false} />);
 
     expect(screen.queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument();
   });
@@ -94,7 +103,7 @@ describe('ProjectTabs', () => {
 
   it('shows the Settings tab and its content when the caller is the owner', () => {
     // Settings sits after Analysis, so it is index 7.
-    render(<ProjectTabs {...baseProps} isOwner tabValue={7} />);
+    render(<ProjectTabs {...baseProps} canManage tabValue={7} />);
 
     expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.getByText('settings-tab')).toBeInTheDocument();
@@ -109,3 +118,5 @@ describe('ProjectTabs', () => {
     expect(onTabChange).toHaveBeenCalledWith(expect.anything(), 1);
   });
 });
+
+vi.mock('./PipelineKeys', () => ({ default: () => <div>pipeline-keys</div> }));

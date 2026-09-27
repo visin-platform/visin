@@ -26,7 +26,7 @@ vi.mock('../../components/project/ProjectHeader', () => ({
   default: (props: any) => (
     <div data-testid="project-header">
       <span>{props.project.name}</span>
-      <span data-testid="is-owner">{String(props.isOwner)}</span>
+      <span data-testid="is-owner">{String(props.project.permissions.manage)}</span>
       <button onClick={() => props.onEdit()}>open-edit</button>
       <button onClick={() => props.onDelete()}>open-delete</button>
     </div>
@@ -71,7 +71,15 @@ vi.mock('../../components/common/PageBreadcrumbs', () => ({
 import ProjectDashboardPage from '../ProjectDashboardPage';
 
 const baseHookReturn = (overrides: Record<string, unknown> = {}) => ({
-  project: { _id: 'p1', name: 'My Project', description: 'desc', isPublic: true, ownerId: 'u1' },
+  project: {
+    _id: 'p1',
+    name: 'My Project',
+    description: 'desc',
+    visibility: 'public' as const,
+    owner: { kind: 'user' as const, id: 'u1' },
+    createdBy: 'u1',
+    permissions: { read: true, contribute: true, manage: true, own: true }
+  },
   stats: {},
   dashboardStats: {},
   fullTrainings: { trainings: [], pagination: { total: 0 } },
@@ -148,10 +156,10 @@ describe('ProjectDashboardPage', () => {
     expect(screen.getByTestId('project-tabs')).toBeInTheDocument();
   });
 
-  it('marks the user as a non-owner when ids differ', () => {
+  it('uses server permissions even when the current user did not create the project', () => {
     useAuthMock.mockReturnValue({ user: { id: 'someone-else' }, isAuthenticated: true });
     renderPage();
-    expect(screen.getByTestId('is-owner').textContent).toBe('false');
+    expect(screen.getByTestId('is-owner').textContent).toBe('true');
   });
 
   it('opens the edit dialog from the header and submits an update', async () => {
@@ -164,11 +172,13 @@ describe('ProjectDashboardPage', () => {
     expect(screen.getByTestId('edit-project-dialog')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('submit-edit'));
-    await waitFor(() => expect(updateProjectMock).toHaveBeenCalledWith('p1', {
-      name: 'My Project',
-      description: 'desc',
-      isPublic: true
-    }));
+    await waitFor(() =>
+      expect(updateProjectMock).toHaveBeenCalledWith('p1', {
+        name: 'My Project',
+        description: 'desc',
+        visibility: 'public' as const
+      })
+    );
     await waitFor(() => expect(hookReturn.invalidateProjectQueries).toHaveBeenCalled());
   });
 
@@ -194,9 +204,7 @@ describe('ProjectDashboardPage', () => {
     fireEvent.click(screen.getByText('confirm-delete-project'));
 
     await waitFor(() => expect(qc.getQueryData(['project', 'p1'])).toBeUndefined());
-    await waitFor(() =>
-      expect(qc.getQueryState(['projects', 'u1', 'createdAt', 'desc'])?.isInvalidated).toBe(true)
-    );
+    await waitFor(() => expect(qc.getQueryState(['projects', 'u1', 'createdAt', 'desc'])?.isInvalidated).toBe(true));
   });
 
   it('changes tabs and updates the tab value passed to ProjectTabs', () => {

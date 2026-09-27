@@ -1,6 +1,8 @@
 import {
   API_KEY_SCOPES,
+  PROJECT_KEY_SCOPES,
   isApiKeyScope,
+  isProjectKeyScope,
   readScope,
   writeScope,
   type ApiKeyDomain
@@ -40,5 +42,14 @@ describe('readScope / writeScope', () => {
   it('build the scope names the middleware gates on', () => {
     expect(readScope('vision')).toBe('vision:read');
     expect(writeScope('label')).toBe('label:write');
+  });
+});
+
+describe('PROJECT_KEY_SCOPES', () => {
+  it('holds only the domains that live inside a project', () => {
+    expect(PROJECT_KEY_SCOPES).toEqual(['vision:read', 'vision:write', 'analysis:read', 'analysis:write']);
+    expect(isProjectKeyScope('vision:write')).toBe(true);
+    expect(isProjectKeyScope('dataset:read')).toBe(false);
+    expect(isProjectKeyScope('label:write')).toBe(false);
   });
 });
