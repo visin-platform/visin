@@ -1,4 +1,17 @@
 # Visin Changelog
+## [1.24.0](https://github.com/visin-platform/visin/compare/v1.23.0...v1.24.0) (2026-09-27)
+
+
+### Features
+
+* add project and dataset ownership, trash, and group activity ([da68f1a](https://github.com/visin-platform/visin/commit/da68f1a89f6b9bde98e4513cf9e1b619751139bb))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.8.0 ([b2a541f](https://github.com/visin-platform/visin/commit/b2a541f7c37e1e1e75f8a840d2f34aeb2ccd11d0))
+* **release:** @visin/frontend-core 1.12.0 ([04f5be2](https://github.com/visin-platform/visin/commit/04f5be297764fc6c257b7208d0d4ffa03463a63b))
+
 ## [1.23.0](https://github.com/visin-platform/visin/compare/v1.22.1...v1.23.0) (2026-09-25)
 
 
