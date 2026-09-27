@@ -156,6 +156,7 @@ export const removeHold = async (id: string, service: string, ref: string) => {
 export const ownedByGroup = async (groupId: string) => {
   const datasets = await Dataset.find({ 'owner.kind': 'group', 'owner.id': groupId, deletingAt: { $exists: false } })
     .select('name')
+    .sort({ name: 1 })
     .limit(1000);
   return { count: datasets.length, names: datasets.slice(0, 5).map((dataset) => dataset.name) };
 };

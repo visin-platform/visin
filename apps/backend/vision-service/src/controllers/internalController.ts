@@ -29,6 +29,9 @@ export const getKeyAccess = async (req: Request, res: Response): Promise<void> =
  * still owns, trashed ones included, since nobody could restore those after.
  */
 export const getOwnedByGroup = async (req: Request, res: Response): Promise<void> => {
-  const projects = await Project.find({ 'owner.kind': 'group', 'owner.id': req.params.groupId as string }).select('name').limit(1000);
+  const projects = await Project.find({ 'owner.kind': 'group', 'owner.id': req.params.groupId as string })
+    .select('name')
+    .sort({ name: 1 })
+    .limit(1000);
   res.json({ success: true, data: { count: projects.length, names: projects.slice(0, 5).map(project => project.name) } });
 };
