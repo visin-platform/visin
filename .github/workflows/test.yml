@@ -141,6 +141,11 @@ jobs:
       - name: Check local documentation links
         run: npm run docs:check
 
+      # The SVGs are drawn by a script; one edited by hand, or a script change
+      # that was never run, would put diagrams in the docs that it no longer draws.
+      - name: Check the architecture diagrams are current
+        run: npm run diagrams:check
+
       - name: Lint the API specs
         run: npm run openapi:lint
 

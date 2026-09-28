@@ -113,6 +113,15 @@ import queue. The root `compose.yml` runs both.
 
 </details>
 
+## How it fits together
+
+Six web apps in the browser, seven small services behind them, MongoDB and Redis for storage. The
+[architecture page](apps/frontend/landing-front/src/docs/content/architecture.mdx) (`/docs/architecture` on a running
+Visin) walks through it, and each diagram is an SVG in
+[`public/architecture/`](apps/frontend/landing-front/public/architecture), drawn by `npm run diagrams`.
+
+<img src="apps/frontend/landing-front/public/architecture/containers.svg" alt="Six web apps call seven backend services, which store data in MongoDB, Redis and a file-storage volume. Training scripts call the vision service and AI assistants call the MCP service." width="100%" />
+
 ## Develop on it
 
 <details>
@@ -147,6 +156,8 @@ npm run format          # Prettier
 Shared libraries are consumed from npm, not from the workspace, because a service's Docker build never sees the
 monorepo. After changing one, publish it and let `npm run sync:libs` re-pin consumers; `npm run lockfiles` then
 refreshes the per-service lockfiles. CI fails on drift in either. Architecture notes are in [CLAUDE.md](CLAUDE.md).
+After adding a service or a call between services, update `scripts/architecture-diagrams.mjs` and run
+`npm run diagrams`.
 
 </details>
 

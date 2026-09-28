@@ -3,6 +3,7 @@ import CodeBlock from './components/CodeBlock';
 import CodeTabs from './components/CodeTabs';
 import InlineCode from './components/InlineCode';
 import Callout from './components/Callout';
+import Diagram from './components/Diagram';
 import McpEndpoint from './components/McpEndpoint';
 import DocLink from './components/DocLink';
 import DocTable from './components/DocTable';
@@ -18,5 +19,6 @@ export const mdxComponents: MDXComponents = {
   table: DocTable,
   CodeTabs,
   Callout,
+  Diagram,
   McpEndpoint
 };

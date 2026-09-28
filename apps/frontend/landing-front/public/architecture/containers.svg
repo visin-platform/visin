@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 950" width="800" height="950" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Visin: containers</title>
+  <desc id="desc">Six web apps run in the browser and call seven backend services over HTTPS. Training scripts report to the Vision service and AI assistants call the MCP service. The services store data in MongoDB, Redis and a file-storage volume.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-brand" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect width="800" height="950" fill="#ffffff"/>
+  <g><!-- person: Researcher -->
+    <rect x="170" y="20" width="240" height="64" rx="14" fill="#0f172a"/>
+    <circle cx="194" cy="45" r="6" fill="none" stroke="#dbeafe" stroke-width="1.6"/>
+    <path d="M184,63 a10,9 0 0 1 20,0" fill="none" stroke="#dbeafe" stroke-width="1.6"/>
+    <text x="214" y="50.5" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Researcher</text>
+    <text x="214" y="68.5" font-size="12" fill="#cbd5e1" text-anchor="start">in the browser</text>
+  </g>
+  <g><!-- person: Training script -->
+    <rect x="590" y="20" width="190" height="64" rx="14" fill="#0f172a"/>
+    <circle cx="614" cy="45" r="6" fill="none" stroke="#dbeafe" stroke-width="1.6"/>
+    <path d="M604,63 a10,9 0 0 1 20,0" fill="none" stroke="#dbeafe" stroke-width="1.6"/>
+    <text x="634" y="50.5" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Training script</text>
+    <text x="634" y="68.5" font-size="12" fill="#cbd5e1" text-anchor="start">visin-py, pipeline key</text>
+  </g>
+  <g><!-- person: AI assistant -->
+    <rect x="620" y="170" width="160" height="64" rx="14" fill="#0f172a"/>
+    <circle cx="644" cy="195" r="6" fill="none" stroke="#dbeafe" stroke-width="1.6"/>
+    <path d="M634,213 a10,9 0 0 1 20,0" fill="none" stroke="#dbeafe" stroke-width="1.6"/>
+    <text x="664" y="200.5" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">AI assistant</text>
+    <text x="664" y="218.5" font-size="12" fill="#cbd5e1" text-anchor="start">MCP client</text>
+  </g>
+  <g><!-- group: Web apps -->
+    <rect x="20" y="130" width="540" height="250" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="6 4"/>
+    <text x="34" y="150" font-size="11" font-weight="700" letter-spacing="1" fill="#64748b">WEB APPS<tspan font-weight="400" letter-spacing="0">  ·  React, in the browser</tspan></text>
+  </g>
+  <g><!-- web app: App shell -->
+    <rect x="34" y="160" width="160" height="94" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M34,176 h160" stroke="#2563eb" stroke-width="1" opacity="0.5"/>
+    <circle cx="44" cy="168" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="52" cy="168" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="60" cy="168" r="2.5" fill="#2563eb" opacity="0.6"/>
+    <text x="46" y="196" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">App shell</text>
+    <text x="46" y="214" font-size="12" fill="#475569" text-anchor="start">The app people open,</text>
+    <text x="46" y="229" font-size="12" fill="#475569" text-anchor="start">with the next three inside</text>
+    
+  </g>
+  <g><!-- web app: Vision -->
+    <rect x="210" y="160" width="160" height="94" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M210,176 h160" stroke="#2563eb" stroke-width="1" opacity="0.5"/>
+    <circle cx="220" cy="168" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="228" cy="168" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="236" cy="168" r="2.5" fill="#2563eb" opacity="0.6"/>
+    <text x="222" y="196" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Vision</text>
+    <text x="222" y="214" font-size="12" fill="#475569" text-anchor="start">Projects, runs, metrics,</text>
+    <text x="222" y="229" font-size="12" fill="#475569" text-anchor="start">frames and datasets</text>
+    
+  </g>
+  <g><!-- web app: Labeling -->
+    <rect x="386" y="160" width="160" height="94" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M386,176 h160" stroke="#2563eb" stroke-width="1" opacity="0.5"/>
+    <circle cx="396" cy="168" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="404" cy="168" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="412" cy="168" r="2.5" fill="#2563eb" opacity="0.6"/>
+    <text x="398" y="196" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Labeling</text>
+    <text x="398" y="214" font-size="12" fill="#475569" text-anchor="start">Labeling jobs and</text>
+    <text x="398" y="229" font-size="12" fill="#475569" text-anchor="start">annotation tools</text>
+    
+  </g>
+  <g><!-- web app: Account -->
+    <rect x="34" y="264" width="160" height="94" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M34,280 h160" stroke="#2563eb" stroke-width="1" opacity="0.5"/>
+    <circle cx="44" cy="272" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="52" cy="272" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="60" cy="272" r="2.5" fill="#2563eb" opacity="0.6"/>
+    <text x="46" y="300" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Account</text>
+    <text x="46" y="318" font-size="12" fill="#475569" text-anchor="start">Profile, groups, API keys,</text>
+    <text x="46" y="333" font-size="12" fill="#475569" text-anchor="start">assistant connections</text>
+    
+  </g>
+  <g><!-- web app: Sign-in -->
+    <rect x="210" y="264" width="160" height="94" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M210,280 h160" stroke="#2563eb" stroke-width="1" opacity="0.5"/>
+    <circle cx="220" cy="272" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="228" cy="272" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="236" cy="272" r="2.5" fill="#2563eb" opacity="0.6"/>
+    <text x="222" y="300" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Sign-in</text>
+    <text x="222" y="318" font-size="12" fill="#475569" text-anchor="start">Sign-in and the consent</text>
+    <text x="222" y="333" font-size="12" fill="#475569" text-anchor="start">page for assistants</text>
+    
+  </g>
+  <g><!-- web app: Landing -->
+    <rect x="386" y="264" width="160" height="94" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <path d="M386,280 h160" stroke="#2563eb" stroke-width="1" opacity="0.5"/>
+    <circle cx="396" cy="272" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="404" cy="272" r="2.5" fill="#2563eb" opacity="0.6"/><circle cx="412" cy="272" r="2.5" fill="#2563eb" opacity="0.6"/>
+    <text x="398" y="300" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Landing</text>
+    <text x="398" y="318" font-size="12" fill="#475569" text-anchor="start">Public site, docs and</text>
+    <text x="398" y="333" font-size="12" fill="#475569" text-anchor="start">API reference</text>
+    
+  </g>
+  <g><!-- group: Backend services -->
+    <rect x="20" y="440" width="760" height="240" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="6 4"/>
+    <text x="34" y="460" font-size="11" font-weight="700" letter-spacing="1" fill="#64748b">BACKEND SERVICES<tspan font-weight="400" letter-spacing="0">  ·  Node.js, Express, one per concern</tspan></text>
+  </g>
+  <g><!-- service: Auth service -->
+    <rect x="33" y="470" width="170" height="88" rx="10" fill="#2563eb"/>
+    <text x="45" y="498" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Auth service</text>
+    <text x="45" y="516" font-size="12" fill="#dbeafe" text-anchor="start">Users, sessions, API keys;</text>
+    <text x="45" y="531" font-size="12" fill="#dbeafe" text-anchor="start">OAuth server for assistants</text>
+  </g>
+  <g><!-- service: Group service -->
+    <rect x="221" y="470" width="170" height="88" rx="10" fill="#2563eb"/>
+    <text x="233" y="498" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Group service</text>
+    <text x="233" y="516" font-size="12" fill="#dbeafe" text-anchor="start">Groups and memberships:</text>
+    <text x="233" y="531" font-size="12" fill="#dbeafe" text-anchor="start">who may use what</text>
+  </g>
+  <g><!-- service: Vision service -->
+    <rect x="409" y="470" width="170" height="88" rx="10" fill="#2563eb"/>
+    <text x="421" y="498" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Vision service</text>
+    <text x="421" y="516" font-size="12" fill="#dbeafe" text-anchor="start">Projects, training runs,</text>
+    <text x="421" y="531" font-size="12" fill="#dbeafe" text-anchor="start">results and benchmarks</text>
+  </g>
+  <g><!-- service: Dataset service -->
+    <rect x="597" y="470" width="170" height="88" rx="10" fill="#2563eb"/>
+    <text x="609" y="498" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Dataset service</text>
+    <text x="609" y="516" font-size="12" fill="#dbeafe" text-anchor="start">Dataset upload, queued</text>
+    <text x="609" y="531" font-size="12" fill="#dbeafe" text-anchor="start">import, serving images</text>
+  </g>
+  <g><!-- service: Label service -->
+    <rect x="33" y="572" width="170" height="88" rx="10" fill="#2563eb"/>
+    <text x="45" y="600" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Label service</text>
+    <text x="45" y="618" font-size="12" fill="#dbeafe" text-anchor="start">Labeling jobs and their</text>
+    <text x="45" y="633" font-size="12" fill="#dbeafe" text-anchor="start">tasks over a dataset</text>
+  </g>
+  <g><!-- service: File service -->
+    <rect x="221" y="572" width="170" height="88" rx="10" fill="#2563eb"/>
+    <text x="233" y="600" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">File service</text>
+    <text x="233" y="618" font-size="12" fill="#dbeafe" text-anchor="start">Stores and streams files,</text>
+    <text x="233" y="633" font-size="12" fill="#dbeafe" text-anchor="start">signed URLs, chunked</text>
+  </g>
+  <g><!-- service: MCP service -->
+    <rect x="409" y="572" width="170" height="88" rx="10" fill="#2563eb"/>
+    <text x="421" y="600" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">MCP service</text>
+    <text x="421" y="618" font-size="12" fill="#dbeafe" text-anchor="start">Model Context Protocol</text>
+    <text x="421" y="633" font-size="12" fill="#dbeafe" text-anchor="start">server for assistants</text>
+  </g>
+  <g><!-- group: Data -->
+    <rect x="20" y="750" width="540" height="138" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="6 4"/>
+    <text x="34" y="770" font-size="11" font-weight="700" letter-spacing="1" fill="#64748b">DATA</text>
+  </g>
+  <g><!-- data store: MongoDB -->
+    <path d="M34,792 v74 a80,8 0 0 0 160,0 v-74" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <ellipse cx="114" cy="792" rx="80" ry="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="46" y="820" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">MongoDB</text>
+    <text x="46" y="838" font-size="12" fill="#475569" text-anchor="start">Every service's</text>
+    <text x="46" y="853" font-size="12" fill="#475569" text-anchor="start">collections</text>
+  </g>
+  <g><!-- data store: Redis -->
+    <path d="M210,792 v74 a80,8 0 0 0 160,0 v-74" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <ellipse cx="290" cy="792" rx="80" ry="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="222" y="820" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Redis</text>
+    <text x="222" y="838" font-size="12" fill="#475569" text-anchor="start">Dataset import</text>
+    <text x="222" y="853" font-size="12" fill="#475569" text-anchor="start">queue (BullMQ)</text>
+  </g>
+  <g><!-- data store: File storage -->
+    <path d="M386,792 v74 a80,8 0 0 0 160,0 v-74" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <ellipse cx="466" cy="792" rx="80" ry="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="398" y="820" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">File storage</text>
+    <text x="398" y="838" font-size="12" fill="#475569" text-anchor="start">A disk volume the</text>
+    <text x="398" y="853" font-size="12" fill="#475569" text-anchor="start">file service owns</text>
+  </g>
+  <g><!-- external: Google -->
+    <rect x="590" y="784" width="190" height="90" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" stroke-dasharray="5 4"/>
+    <text x="602" y="810" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">Google</text>
+    <text x="602" y="826" font-size="11" fill="#475569" text-anchor="start">[OpenID Connect]</text>
+    <text x="602" y="843" font-size="12" fill="#475569" text-anchor="start">Sign in with Google,</text>
+    <text x="602" y="858" font-size="12" fill="#475569" text-anchor="start">when configured</text>
+  </g>
+  <g><path d="M290,84 L290,130" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="257.9" y="97" width="64.3" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="290.0" y="112" font-size="11.5" fill="#0f172a" text-anchor="middle">works in</text></g>
+  <g><path d="M290,380 L290,440" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="208.0" y="393" width="163.9" height="34" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="290.0" y="408" font-size="11.5" fill="#0f172a" text-anchor="middle">call the APIs</text><text x="290.0" y="422" font-size="10.5" fill="#64748b" text-anchor="middle">HTTPS, JSON, session cookie</text></g>
+  <g><path d="M600,84 L600,440" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="469.3" y="393" width="122.7" height="34" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="530.7" y="408" font-size="11.5" fill="#0f172a" text-anchor="middle">reports runs</text><text x="530.7" y="422" font-size="10.5" fill="#64748b" text-anchor="middle">to the Vision service</text></g>
+  <g><path d="M700,234 L700,440" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="708.0" y="393" width="79.7" height="34" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="747.9" y="408" font-size="11.5" fill="#0f172a" text-anchor="middle">calls tools</text><text x="747.9" y="422" font-size="10.5" fill="#64748b" text-anchor="middle">MCP service</text></g>
+  <g><path d="M290,680 L290,750" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="240.3" y="705" width="99.4" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="290.0" y="720" font-size="11.5" fill="#0f172a" text-anchor="middle">read and write</text></g>
+  <g><path d="M685,680 L685,784" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="633.6" y="713" width="102.8" height="34" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="685.0" y="728" font-size="11.5" fill="#0f172a" text-anchor="middle">verifies sign-in</text><text x="685.0" y="742" font-size="10.5" fill="#64748b" text-anchor="middle">Auth service</text></g>
+  <g><!-- legend --><rect x="20" y="916" width="22" height="14" rx="4" fill="#0f172a"/><text x="50" y="927" font-size="12" fill="#475569">Person or script</text><rect x="175.92" y="916" width="22" height="14" rx="3" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/><text x="205.92" y="927" font-size="12" fill="#475569">Web app</text><rect x="280.71999999999997" y="916" width="22" height="14" rx="3" fill="#2563eb"/><text x="310.71999999999997" y="927" font-size="12" fill="#475569">Backend service</text><rect x="433.03999999999996" y="916" width="22" height="14" rx="6" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.2"/><text x="463.03999999999996" y="927" font-size="12" fill="#475569">Data store</text><rect x="555.3599999999999" y="916" width="22" height="14" rx="3" fill="#f1f5f9" stroke="#64748b" stroke-dasharray="3 2"/><text x="585.3599999999999" y="927" font-size="12" fill="#475569">External system</text></g>
+</svg>

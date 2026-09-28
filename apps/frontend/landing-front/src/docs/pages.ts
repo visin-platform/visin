@@ -7,6 +7,7 @@ import TestResultsAndBenchmarks from './content/test-results-and-benchmarks.mdx'
 import PredictionFrames from './content/prediction-frames.mdx';
 import ErrorsAndLimits from './content/errors-and-limits.mdx';
 import Assistants from './content/assistants.mdx';
+import Architecture from './content/architecture.mdx';
 
 export interface DocPage {
   /** The path under /docs; empty for the docs home. */
@@ -79,6 +80,18 @@ export const DOC_SECTIONS: DocSection[] = [
         title: 'Connecting an assistant',
         description: 'Let Claude or another MCP client read your runs, with only the access you choose.',
         Content: Assistants
+      }
+    ]
+  },
+  {
+    title: 'Platform',
+    pages: [
+      {
+        slug: 'architecture',
+        title: 'Architecture',
+        description:
+          'How Visin is put together: the web apps, the services behind them, and how they talk to each other.',
+        Content: Architecture
       }
     ]
   }

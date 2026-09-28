@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 754" width="800" height="754" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" role="img" aria-labelledby="title desc">
+  <title id="title">Visin: service to service</title>
+  <desc id="desc">Calls between the backend services. The auth, vision, dataset and label services check access with the group service, which in turn searches users and lists what a group owns. The vision, dataset and label services store files through the file service. The MCP service calls the vision and dataset services.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-brand" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect width="800" height="754" fill="#ffffff"/>
+  <g><!-- service: Group service -->
+    <rect x="20" y="20" width="140" height="604" rx="10" fill="#2563eb"/>
+    <text x="32" y="286" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Group service</text>
+    <text x="32" y="304" font-size="12" fill="#dbeafe" text-anchor="start">Groups and</text>
+    <text x="32" y="319" font-size="12" fill="#dbeafe" text-anchor="start">memberships:</text>
+    <text x="32" y="334" font-size="12" fill="#dbeafe" text-anchor="start">who may use</text>
+    <text x="32" y="349" font-size="12" fill="#dbeafe" text-anchor="start">which project</text>
+    <text x="32" y="364" font-size="12" fill="#dbeafe" text-anchor="start">or dataset</text>
+  </g>
+  <g><!-- service: File service -->
+    <rect x="640" y="152" width="140" height="472" rx="10" fill="#2563eb"/>
+    <text x="652" y="360" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">File service</text>
+    <text x="652" y="378" font-size="12" fill="#dbeafe" text-anchor="start">Stores and</text>
+    <text x="652" y="393" font-size="12" fill="#dbeafe" text-anchor="start">streams files;</text>
+    <text x="652" y="408" font-size="12" fill="#dbeafe" text-anchor="start">hands browsers</text>
+    <text x="652" y="423" font-size="12" fill="#dbeafe" text-anchor="start">signed URLs</text>
+  </g>
+  <g><!-- service: Auth service -->
+    <rect x="300" y="20" width="200" height="76" rx="10" fill="#2563eb"/>
+    <text x="312" y="50" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Auth service</text>
+    <text x="312" y="68" font-size="12" fill="#dbeafe" text-anchor="start">Users, sessions, API keys</text>
+  </g>
+  <g><!-- service: Vision service -->
+    <rect x="300" y="152" width="200" height="76" rx="10" fill="#2563eb"/>
+    <text x="312" y="182" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Vision service</text>
+    <text x="312" y="200" font-size="12" fill="#dbeafe" text-anchor="start">Projects, runs, results</text>
+  </g>
+  <g><!-- service: MCP service -->
+    <rect x="300" y="284" width="200" height="76" rx="10" fill="#2563eb"/>
+    <text x="312" y="314" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">MCP service</text>
+    <text x="312" y="332" font-size="12" fill="#dbeafe" text-anchor="start">Tools for AI assistants</text>
+  </g>
+  <g><!-- service: Dataset service -->
+    <rect x="300" y="416" width="200" height="76" rx="10" fill="#2563eb"/>
+    <text x="312" y="438" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Dataset service</text>
+    <text x="312" y="454" font-size="11" fill="#dbeafe" text-anchor="start">[BullMQ on Redis]</text>
+    <text x="312" y="471" font-size="12" fill="#dbeafe" text-anchor="start">Upload, import, images</text>
+  </g>
+  <g><!-- service: Label service -->
+    <rect x="300" y="548" width="200" height="76" rx="10" fill="#2563eb"/>
+    <text x="312" y="578" font-size="15" font-weight="700" fill="#ffffff" text-anchor="start">Label service</text>
+    <text x="312" y="596" font-size="12" fill="#dbeafe" text-anchor="start">Labeling jobs and tasks</text>
+  </g>
+  <g><path d="M300,48 L160,48" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="190.1" y="22" width="79.8" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="230.0" y="37" font-size="11.5" fill="#0f172a" text-anchor="middle">group roles</text></g>
+  <g><path d="M160,68 L300,68" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="188.7" y="74" width="82.7" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="230.0" y="89" font-size="11.5" fill="#0f172a" text-anchor="middle">user search</text></g>
+  <g><path d="M300,180 L160,180" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="183.8" y="154" width="92.5" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="230.0" y="169" font-size="11.5" fill="#0f172a" text-anchor="middle">editor groups</text></g>
+  <g><path d="M160,200 L300,200" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="177.4" y="206" width="105.1" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="230.0" y="221" font-size="11.5" fill="#0f172a" text-anchor="middle">owned projects</text></g>
+  <g><path d="M300,444 L160,444" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="185.5" y="418" width="89.0" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="230.0" y="433" font-size="11.5" fill="#0f172a" text-anchor="middle">group access</text></g>
+  <g><path d="M160,464 L300,464" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="177.4" y="470" width="105.1" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="230.0" y="485" font-size="11.5" fill="#0f172a" text-anchor="middle">owned datasets</text></g>
+  <g><path d="M300,586 L160,586" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="185.5" y="560" width="89.0" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="230.0" y="575" font-size="11.5" fill="#0f172a" text-anchor="middle">group access</text></g>
+  <g><path d="M500,190 L640,190" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="523.5" y="164" width="93.0" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="570.0" y="179" font-size="11.5" fill="#0f172a" text-anchor="middle">visualizations</text></g>
+  <g><path d="M500,454 L640,454" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="518.6" y="428" width="102.8" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="570.0" y="443" font-size="11.5" fill="#0f172a" text-anchor="middle">zips and images</text></g>
+  <g><path d="M500,586 L640,586" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="526.6" y="560" width="86.7" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="570.0" y="575" font-size="11.5" fill="#0f172a" text-anchor="middle">label bundles</text></g>
+  <g><path d="M400,96 L400,152" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="326.2" y="114" width="147.7" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="400.0" y="129" font-size="11.5" fill="#0f172a" text-anchor="middle">a pipeline key's project</text></g>
+  <g><path d="M400,284 L400,228" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="366.1" y="246" width="67.8" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="400.0" y="261" font-size="11.5" fill="#0f172a" text-anchor="middle">tool calls</text></g>
+  <g><path d="M400,360 L400,416" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="353.8" y="378" width="92.5" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="400.0" y="393" font-size="11.5" fill="#0f172a" text-anchor="middle">dataset tools</text></g>
+  <g><path d="M400,548 L400,492" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="361.5" y="510" width="76.9" height="20" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="400.0" y="525" font-size="11.5" fill="#0f172a" text-anchor="middle">job images</text></g>
+  <g><!-- data store: MongoDB -->
+    <path d="M20,672 v54 a300,8 0 0 0 600,0 v-54" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <ellipse cx="320" cy="672" rx="300" ry="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="32" y="700" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">MongoDB</text>
+    <text x="32" y="718" font-size="12" fill="#475569" text-anchor="start">Every service reads and writes its own collections</text>
+  </g>
+  <g><!-- data store: File storage -->
+    <path d="M640,672 v54 a70,8 0 0 0 140,0 v-54" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <ellipse cx="710" cy="672" rx="70" ry="8" fill="#eef2ff" stroke="#4f46e5" stroke-width="1.5"/>
+    <text x="652" y="700" font-size="15" font-weight="700" fill="#0f172a" text-anchor="start">File storage</text>
+    <text x="652" y="718" font-size="12" fill="#475569" text-anchor="start">disk volume</text>
+  </g>
+  <g><path d="M710,624 L710,664" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/></g>
+</svg>

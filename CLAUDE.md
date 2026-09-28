@@ -64,6 +64,9 @@ including any failures.
   Then run `npm run docs:generate --workspace=<service>` (request schemas from Zod) and `npm run openapi:bundle`
   (the copies landing-front publishes at `/docs/api`). The service's tests and CI's `api-docs` job fail on drift.
   Operations only Visin's own pages use are marked `x-internal`, which keeps them out of the public reference.
+- **Architecture diagrams** (`/docs/architecture`) are drawn by `scripts/architecture-diagrams.mjs` into
+  landing-front's `public/architecture/`. A new service, web app or call between services updates that script in the
+  same change; run `npm run diagrams` and look at the SVGs. CI fails if they differ from what the script draws.
 
 ## Architecture
 

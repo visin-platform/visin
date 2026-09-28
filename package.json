@@ -33,7 +33,9 @@
     "openapi:lint": "node scripts/openapi.mjs lint",
     "openapi:bundle": "node scripts/openapi.mjs bundle",
     "openapi:bundle:check": "node scripts/openapi.mjs bundle --check",
-    "docs:check": "node scripts/check-docs.mjs"
+    "docs:check": "node scripts/check-docs.mjs",
+    "diagrams": "node scripts/architecture-diagrams.mjs",
+    "diagrams:check": "node scripts/architecture-diagrams.mjs --check"
   },
   "devDependencies": {
     "@redocly/openapi-core": "^2.54.2",

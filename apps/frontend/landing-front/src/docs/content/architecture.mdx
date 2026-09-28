@@ -1,0 +1,81 @@
+Visin is a set of small web apps and backend services, each in its own container, that one `docker compose up`
+starts together. This page shows how they fit, from the outside in. Every diagram opens at full size, and each is
+a plain SVG at a stable address, ready for slides.
+
+## Who uses it
+
+Three kinds of client reach Visin, each with its own credential: a person in the browser with a session, a training
+script with a [pipeline key](/docs/authentication#pipeline-keys), and an AI assistant signed in through
+[OAuth](/docs/assistants). Signing in with Google is optional; without it, people sign in with an email and
+password.
+
+<Diagram
+  name="context.svg"
+  alt="A researcher, a training script and an AI assistant all use Visin. Visin can use Google for sign-in."
+  caption="System context"
+/>
+
+## Inside Visin
+
+In the browser, six web apps. Behind them, seven backend services, one per concern, each with its own API. The
+services keep their data in MongoDB, queue dataset imports in Redis, and store files on a disk volume that only the
+file service writes to.
+
+<Diagram
+  name="containers.svg"
+  alt="Six web apps call seven backend services, which store data in MongoDB, Redis and a file-storage volume. Training scripts call the vision service and AI assistants call the MCP service."
+  caption="Containers, by layer"
+/>
+
+| Service | Owns                                                                                   |
+| ------- | -------------------------------------------------------------------------------------- |
+| Auth    | Users, sessions and API keys; the OAuth server assistants sign in through              |
+| Group   | Groups and their members, and so who may use which project or dataset                  |
+| Vision  | Projects, training runs, epochs, test results, benchmarks and prediction frames        |
+| Dataset | Datasets: the upload, the queued import, and serving the images                        |
+| Label   | Labeling jobs and their tasks, over a dataset's images                                 |
+| File    | Stored files, streamed and handed to browsers through short-lived signed URLs          |
+| MCP     | The [Model Context Protocol](/docs/assistants) server: the tools an assistant can call |
+
+Two shared libraries are compiled into the apps at build time, not called at runtime: `@visin/backend-core` (sign-in
+checks, errors, logging and startup for every service) and `@visin/frontend-core` (sign-in, the API client and the
+theme for every web app).
+
+## The web apps
+
+People open the app shell. It owns the address bar and the layout, and loads Vision, Labeling and Account into the
+same page at runtime with Module Federation, so one sign-in and one menu cover all three. Each of the three also runs
+on its own address. Sign-in and Landing are separate pages.
+
+<Diagram
+  name="web-apps.svg"
+  alt="The app shell loads Vision, Labeling and Account at runtime. Sign-in and Landing run on their own. Each app lists the APIs it calls."
+  caption="Web apps and the APIs each one calls"
+/>
+
+The browser never holds a token. Sign-in sets an httpOnly session cookie that every app sends with its API calls,
+and every service checks the session on every request.
+
+## Service to service
+
+Most requests stay inside one service. The ones that don't, go over the internal network with a service token.
+Deciding who may use a project or dataset needs the group service, so four services call it; storing a file goes
+through the file service.
+
+<Diagram
+  name="services.svg"
+  alt="The auth, vision, dataset and label services call the group service, which searches users and lists what a group owns. The vision, dataset and label services store files through the file service. The MCP service calls the vision and dataset services. Every service uses MongoDB."
+  caption="Calls between backend services"
+/>
+
+## Uploading a dataset
+
+A dataset arrives as one zip, often several gigabytes. The browser sends it straight to the file service in 64 MiB
+chunks, through a signed URL, so no other service carries the bytes. Scanning the zip and importing it are jobs on a
+queue, so a large import survives a restart and never holds up a request.
+
+<Diagram
+  name="dataset-upload.svg"
+  alt="Thirteen steps: the browser gets a signed URL from the dataset service and uploads the zip to the file service in chunks; the dataset service queues a scan; the person maps the contents; an import worker reads the zip, stores each image in the file service and the items in MongoDB."
+  caption="Uploading and importing a dataset"
+/>

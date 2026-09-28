@@ -9,6 +9,7 @@ import InlineCode from './InlineCode';
 import CodeLanguageProvider from './CodeLanguageProvider';
 import DocLink from './DocLink';
 import Callout from './Callout';
+import Diagram from './Diagram';
 import DocTable from './DocTable';
 import DocsSidebar from './DocsSidebar';
 import Outline from './Outline';
@@ -256,6 +257,25 @@ describe('Callout and DocTable', () => {
     );
 
     expect(screen.getByRole('table')).toHaveTextContent('cell');
+  });
+});
+
+describe('Diagram', () => {
+  it('shows the published diagram, captioned, linking to it at full size', () => {
+    render(<Diagram name="services.svg" alt="Calls between the services" caption="Service to service" />);
+
+    const figure = screen.getByRole('figure');
+    expect(within(figure).getByRole('img', { name: 'Calls between the services' })).toHaveAttribute(
+      'src',
+      '/architecture/services.svg'
+    );
+    expect(figure).toHaveTextContent('Service to service');
+    const links = within(figure).getAllByRole('link');
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', '/architecture/services.svg');
+      expect(link).toHaveAttribute('target', '_blank');
+    }
   });
 });
 
