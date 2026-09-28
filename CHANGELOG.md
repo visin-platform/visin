@@ -1,4 +1,12 @@
 # Visin Changelog
+## [1.25.0](https://github.com/visin-platform/visin/compare/v1.24.0...v1.25.0) (2026-09-28)
+
+
+### Features
+
+* add architecture diagrams to documentation ([f992381](https://github.com/visin-platform/visin/commit/f992381e270e38ff19123fbad676e542b6a991a0))
+* sort projects and datasets in ascending order ([40c3be2](https://github.com/visin-platform/visin/commit/40c3be27e1c9fdc3b86914c7d3708d2eb52cf68c))
+
 ## [1.24.0](https://github.com/visin-platform/visin/compare/v1.23.0...v1.24.0) (2026-09-27)
 
 
