@@ -5,6 +5,7 @@ dist
 .env.local
 certs
 coverage
+.vitest/
 paper
 
 # Playwright output — anchored to each frontend app's own root so these
