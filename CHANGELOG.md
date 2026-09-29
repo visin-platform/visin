@@ -1,4 +1,22 @@
 # Visin Changelog
+## [1.26.0](https://github.com/visin-platform/visin/compare/v1.25.0...v1.26.0) (2026-09-29)
+
+
+### Features
+
+* upgrade dependencies and remove vulnerabilities ([9f60fa3](https://github.com/visin-platform/visin/commit/9f60fa36d09f352c2d849602d5f56b2d877085b5))
+
+
+### Bug Fixes
+
+* set correct vitest coverage report location for sharded test results ([499fcd8](https://github.com/visin-platform/visin/commit/499fcd88e001035ba518825fd9fd8eb7ee78ff66))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.9.0 ([ef6ec71](https://github.com/visin-platform/visin/commit/ef6ec71e33e8b345d67a6577d9d23692620229d4))
+* **release:** @visin/frontend-core 1.13.0 ([8391021](https://github.com/visin-platform/visin/commit/8391021346d5763a70129c42a8afd563963cca20))
+
 ## [1.25.0](https://github.com/visin-platform/visin/compare/v1.24.0...v1.25.0) (2026-09-28)
 
 
