@@ -178,7 +178,7 @@ export const invalidateUserTokens = async (req: Request, res: Response): Promise
   const user = await User.findOneAndUpdate(
     { email: email.toLowerCase() },
     { $inc: { tokenVersion: 1 } },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!user) {

@@ -165,7 +165,7 @@ describe('redeemAuthorizationCode', () => {
     expect(code.findOneAndUpdate).toHaveBeenCalledWith(
       { code: 'the-code', usedAt: { $exists: false } },
       { $set: { usedAt: expect.any(Date) } },
-      { new: true }
+      { returnDocument: 'after' }
     );
   });
 

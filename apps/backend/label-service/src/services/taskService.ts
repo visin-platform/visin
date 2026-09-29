@@ -173,7 +173,7 @@ export const nextTask = async (
       $or: [{ leaseExpiresAt: null }, { leaseExpiresAt: { $lt: now } }, { leasedBy: user.id }]
     },
     { $set: { leasedBy: user.id, leaseExpiresAt: new Date(now.getTime() + LEASE_MINUTES * 60 * 1000) } },
-    { sort: { order: 1 }, new: true }
+    { sort: { order: 1 }, returnDocument: 'after' }
   );
 
   if (!task) {

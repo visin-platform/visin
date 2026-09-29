@@ -263,7 +263,7 @@ describe('invalidateUserTokens', () => {
     expect(mockedUser.findOneAndUpdate).toHaveBeenCalledWith(
       { email: 'test@example.com' },
       { $inc: { tokenVersion: 1 } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ success: true, newTokenVersion: 4 })

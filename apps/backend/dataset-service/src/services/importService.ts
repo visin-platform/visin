@@ -292,7 +292,7 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
           'import.heartbeatAt': new Date()
         }
       },
-      { returnDocument: 'after', projection: { 'import.status': 1 } }
+      { returnDocument: 'after', projection: 'import.status' }
     );
     if (!updated) throw new NonRetryableImportError('Import no longer belongs to its dataset (deleted or superseded)');
     if (updated.import?.status === 'cancelled') throw new ImportStopped();

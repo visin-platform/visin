@@ -254,7 +254,7 @@ describe('optionalAuth', () => {
     expect(mockedUser.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: 'db-id-1', email: 'test@example.com', tokenVersion: 3 },
       { $set: { lastLoginAt: expect.any(Date) } },
-      { new: true, upsert: false }
+      { returnDocument: 'after', upsert: false }
     );
     expect(next).toHaveBeenCalledTimes(1);
   });

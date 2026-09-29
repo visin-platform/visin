@@ -85,7 +85,7 @@ describe('nextTask', () => {
     expect(filter).toMatchObject({ jobId: 'j1', answersCount: { $lt: 2 }, answeredBy: { $ne: 'u1' } });
     expect(filter.$or).toHaveLength(3);
     expect(update.$set.leasedBy).toBe('u1');
-    expect(options).toMatchObject({ sort: { order: 1 }, new: true });
+    expect(options).toMatchObject({ sort: { order: 1 }, returnDocument: 'after' });
 
     expect(result?.images.frame).toEqual({ url: 'signed:f-frame', width: 100, height: 50, stem: 'frame_000012' });
     expect(result?.images.layers).toEqual([{ set: 'setA', url: 'signed:f-layer' }]);

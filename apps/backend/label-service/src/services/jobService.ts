@@ -125,7 +125,7 @@ export const jobDataset = async (job: ILabelJob): Promise<Pick<datasets.DatasetS
 };
 
 export const setJobVisibility = async (jobId: string, isPublic: boolean): Promise<ILabelJob> => {
-  const job = await LabelJob.findByIdAndUpdate(jobId, { $set: { isPublic } }, { new: true });
+  const job = await LabelJob.findByIdAndUpdate(jobId, { $set: { isPublic } }, { returnDocument: 'after' });
   if (!job) throw new NotFoundError('Job not found');
   return job;
 };

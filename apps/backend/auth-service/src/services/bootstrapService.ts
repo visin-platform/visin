@@ -44,7 +44,7 @@ export const createFirstUser = async ({ email, password, firstName, lastName }: 
 /** Local operator recovery only; this function has no public HTTP route. */
 export const recoverAdministrator = async (userId: string): Promise<IUser> => {
   if (!/^[a-f\d]{24}$/i.test(userId)) throw new BadRequestError('A valid existing user ID is required');
-  const user = await User.findByIdAndUpdate(userId, { $addToSet: { roles: 'admin' } }, { new: true });
+  const user = await User.findByIdAndUpdate(userId, { $addToSet: { roles: 'admin' } }, { returnDocument: 'after' });
   if (!user) throw new NotFoundError('User not found; recovery does not create accounts');
   return user;
 };

@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
 
 // Node's own experimental global `localStorage` shadows jsdom's in this
 // environment and errors without --localstorage-file, so the docs' remembered

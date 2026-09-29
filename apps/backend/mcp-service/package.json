@@ -13,29 +13,29 @@
     "start": "node --env-file-if-exists=.env dist/index.js",
     "dev": "nodemon --exec \"node --env-file-if-exists=.env -r ts-node/register\" src/index.ts",
     "build": "tsc",
-    "test": "jest",
-    "test:coverage": "jest --coverage",
+    "test": "NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest",
+    "test:coverage": "NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest --coverage",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "@visin/backend-core": "1.8.0",
     "express": "^5.2.1",
-    "mongoose": "~9.9.5",
-    "zod": "^4.6.4"
+    "mongoose": "~9.10.2",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.5.1",
-    "eslint": "^10.10.0",
-    "jest": "^30.5.1",
+    "@types/node": "^26.6.3",
+    "eslint": "^10.11.0",
+    "jest": "^30.5.2",
     "nodemon": "^3.1.14",
-    "ts-jest": "^29.4.12",
+    "ts-jest": "^29.4.14",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.0"
+    "typescript-eslint": "^8.71.0"
   }
 }

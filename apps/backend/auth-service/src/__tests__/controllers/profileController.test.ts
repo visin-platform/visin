@@ -120,7 +120,7 @@ describe('updateProfile', () => {
     expect(mockedUser.findByIdAndUpdate).toHaveBeenCalledWith(
       'db-id-1',
       { $set: { firstName: 'New', lastName: 'Name' } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     expect(res.json).toHaveBeenCalledWith({
       success: true,
@@ -143,7 +143,7 @@ describe('updateProfile', () => {
     expect(mockedUser.findByIdAndUpdate).toHaveBeenCalledWith(
       'db-id-1',
       { $set: { firstName: null } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });

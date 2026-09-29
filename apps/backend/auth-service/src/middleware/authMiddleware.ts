@@ -118,7 +118,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
         const dbUser = await User.findOneAndUpdate(
           { _id: decoded.id, email: decoded.email.toLowerCase(), tokenVersion: decoded.tokenVersion },
           { $set: { lastLoginAt: new Date() } },
-          { new: true, upsert: false }
+          { returnDocument: 'after', upsert: false }
         );
         if (dbUser) {
           req.user = decoded;

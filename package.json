@@ -38,11 +38,16 @@
     "diagrams:check": "node scripts/architecture-diagrams.mjs --check"
   },
   "devDependencies": {
-    "@redocly/openapi-core": "^2.54.2",
+    "@redocly/openapi-core": "^2.55.0",
+    "ajv": "^8.20.0",
     "concurrently": "^10.0.5",
-    "prettier": "^3.9.6"
+    "prettier": "^3.9.9"
   },
   "overrides": {
-    "adm-zip": "0.6.1"
+    "@module-federation/dts-plugin": "2.9.2",
+    "@scalar/json-magic": {
+      "undici": "7.29.1"
+    },
+    "@ai-sdk/provider-utils": "4.0.33"
   }
 }

@@ -53,7 +53,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   const updatedUser = await User.findByIdAndUpdate(
     req.user.id,
     { $set: updateData },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!updatedUser) {
@@ -111,7 +111,7 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
   const updated = await User.findByIdAndUpdate(
     req.user.id,
     { $set: { passwordHash: await hashPassword(newPassword) }, $inc: { tokenVersion: 1 } },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!updated) {

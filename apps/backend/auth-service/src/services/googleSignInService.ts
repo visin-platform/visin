@@ -32,7 +32,7 @@ export async function signInWithGoogle(identity: TokenPayload): Promise<IUser> {
     const legacy = await User.findOneAndUpdate(
       { email, signupMethod: 'google', googleSubject: { $exists: false }, passwordHash: { $exists: false } },
       { $set: { googleSubject: sub } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (legacy) return legacy;
     if (await User.exists({ email })) return await concurrentWinner(sub);

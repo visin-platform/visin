@@ -39,7 +39,7 @@ export async function claimUpload(fileId: string, kind: UploadKind, parentId: st
       { resourceId: { $exists: false }, expiresAt: { $gt: new Date() } },
       { resourceId: target, resourceKind }
     ]
-  }, { $set: { resourceId: target, resourceKind } }, { new: true });
+  }, { $set: { resourceId: target, resourceKind } }, { returnDocument: 'after' });
   if (!claimed) throw new ForbiddenError('Upload reservation is no longer available');
   return { resourceId: target, size };
 }
@@ -48,6 +48,6 @@ export async function claimUpload(fileId: string, kind: UploadKind, parentId: st
  * operator reconciliation; ownership of a wrapper is not ownership of a file. */
 export async function deleteReservedFile(fileId: string, resourceKind: ResourceKind, resourceId: string) {
   const reservation = await UploadReservation.findOneAndUpdate({ fileId, resourceKind, resourceId },
-    { $set: { retired: true } }, { new: true });
+    { $set: { retired: true } }, { returnDocument: 'after' });
   if (reservation) await deleteFile(fileId);
 }

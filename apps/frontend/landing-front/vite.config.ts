@@ -53,7 +53,7 @@ export default defineConfig(() => ({
   build: {
     modulePreload: false,
     target: 'esnext',
-    minify: false,
+    minify: true,
     // Split, unlike the federated fronts: the API reference brings 300 KB of
     // CSS with global rules, which must load with its page and not the landing page.
     cssCodeSplit: true

@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
 import { act } from '@testing-library/react';
 import { notifyManager } from '@tanstack/react-query';
 

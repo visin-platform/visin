@@ -21,7 +21,7 @@ export async function linkGoogleAccount(userId: string, tokenVersion: number | u
     const linked = await User.findOneAndUpdate(
       { _id: userId, tokenVersion, passwordHash: user.passwordHash, googleSubject: { $exists: false } },
       { $set: { googleSubject: identity.sub }, $inc: { tokenVersion: 1 } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!linked) throw new ConflictError('Account changed or Google is already linked. Sign in again.');
     return linked;

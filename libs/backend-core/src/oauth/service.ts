@@ -130,7 +130,7 @@ export const redeemAuthorizationCode = async (
   const record = await AuthorizationCode.findOneAndUpdate(
     { code, usedAt: { $exists: false } },
     { $set: { usedAt: new Date() } },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!record) {
