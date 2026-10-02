@@ -1,4 +1,16 @@
 # Visin Changelog
+### [1.26.1](https://github.com/visin-platform/visin/compare/v1.26.0...v1.26.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* resolve experiment reporting and dataset download bugs ([e7c2d73](https://github.com/visin-platform/visin/commit/e7c2d73be785c9745590711b73ff456abb67202c))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.9.1 ([a2fbdf8](https://github.com/visin-platform/visin/commit/a2fbdf8b3e2bcb6ae76d15306ae53f042ca71c16))
+
 ## [1.26.0](https://github.com/visin-platform/visin/compare/v1.25.0...v1.26.0) (2026-09-29)
 
 
