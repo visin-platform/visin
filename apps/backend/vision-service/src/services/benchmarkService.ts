@@ -179,6 +179,7 @@ async function saveBenchmark(
 
   const benchmark = new Benchmark({
     ownerId,
+    benchmark_uuid: data.benchmark_uuid,
     training_uuid: training?.uuid,
     training_id,
     epoch_uuid: data.epoch_uuid,
@@ -315,7 +316,7 @@ export const updateBenchmark = async (
     benchmark.timestamp = new Date(updateData.timestamp);
   }
   if (updateData.system_info) {
-    benchmark.system_info = { ...benchmark.system_info, ...updateData.system_info };
+    benchmark.system_info = { ...benchmark.toObject().system_info, ...updateData.system_info };
   }
   if (updateData.results) {
     benchmark.results = updateData.results as IBenchmark['results'];

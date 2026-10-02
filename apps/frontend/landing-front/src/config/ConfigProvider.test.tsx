@@ -20,6 +20,7 @@ const renderProvider = async () => {
         <span data-testid="mcp-url">{config.MCP_PUBLIC_URL ?? 'no-mcp'}</span>
         <span data-testid="shell-url">{config.SHELL_FRONT_URL ?? 'no-shell'}</span>
         <span data-testid="api-url">{config.VISION_API_URL ?? 'no-api'}</span>
+        <span data-testid="dataset-url">{config.DATASET_API_URL}</span>
         <span data-testid="auth-url">{config.AUTH_SERVICE_URL ?? 'no-auth'}</span>
       </div>
     );
@@ -33,7 +34,8 @@ const renderProvider = async () => {
     mcpUrl: await screen.findByTestId('mcp-url'),
     shellUrl: screen.getByTestId('shell-url'),
     apiUrl: screen.getByTestId('api-url'),
-    authUrl: screen.getByTestId('auth-url')
+    authUrl: screen.getByTestId('auth-url'),
+    datasetUrl: screen.getByTestId('dataset-url')
   };
 };
 
@@ -53,13 +55,15 @@ describe('ConfigProvider', () => {
     vi.stubEnv('VITE_MCP_PUBLIC_URL', 'http://configured-mcp.test');
     vi.stubEnv('VITE_VISION_API_URL', 'http://configured-api.test');
     vi.stubEnv('VITE_AUTH_SERVICE_URL', 'http://configured-auth.test');
+    vi.stubEnv('VITE_DATASET_API_URL', 'http://configured-dataset.test');
 
-    const { mcpUrl, shellUrl, apiUrl, authUrl } = await renderProvider();
+    const { mcpUrl, shellUrl, apiUrl, authUrl, datasetUrl } = await renderProvider();
 
     expect(mcpUrl).toHaveTextContent('http://configured-mcp.test');
     expect(shellUrl).toHaveTextContent('http://configured-shell.test');
     expect(apiUrl).toHaveTextContent('http://configured-api.test');
     expect(authUrl).toHaveTextContent('http://configured-auth.test');
+    expect(datasetUrl).toHaveTextContent('http://configured-dataset.test');
   });
 
   it('falls back to the localhost defaults when the env vars are empty', async () => {
@@ -69,13 +73,15 @@ describe('ConfigProvider', () => {
     vi.stubEnv('VITE_MCP_PUBLIC_URL', '');
     vi.stubEnv('VITE_VISION_API_URL', '');
     vi.stubEnv('VITE_AUTH_SERVICE_URL', '');
+    vi.stubEnv('VITE_DATASET_API_URL', '');
 
-    const { mcpUrl, shellUrl, apiUrl, authUrl } = await renderProvider();
+    const { mcpUrl, shellUrl, apiUrl, authUrl, datasetUrl } = await renderProvider();
 
     expect(mcpUrl).toHaveTextContent('http://localhost:5009');
     // The app people open is shell-front, not vision-front's own port.
     expect(shellUrl).toHaveTextContent('http://localhost:3010');
     expect(apiUrl).toHaveTextContent('http://localhost:4010');
     expect(authUrl).toHaveTextContent('http://localhost:5001');
+    expect(datasetUrl).toHaveTextContent('http://localhost:5010');
   });
 });

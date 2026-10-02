@@ -10,8 +10,18 @@ type ResourceKind = 'visualization';
 
 export async function reserveUpload(fileId: string, kind: UploadKind, parentId: string, mimetype: string, userId?: string, allocationId = new Types.ObjectId().toString()) {
   const policy = getUploadPolicy(fileId, mimetype, kind);
-  return UploadReservation.create({ fileId, kind, parentId, mimetype, maxBytes: policy.maxBytes,
+  try { return await UploadReservation.create({ fileId, kind, parentId, mimetype, maxBytes: policy.maxBytes,
     ownerId: requireActor(userId), allocationId, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
+  } catch (error) {
+    if ((error as { code?: number }).code !== 11000) throw error;
+    const existing = await UploadReservation.findOneAndUpdate({
+      fileId, kind, parentId, ownerId: requireActor(userId), allocationId, mimetype, retired: false,
+      $or: [{ resourceId: { $exists: false } }, { resourceId: allocationId, resourceKind: kind }]
+    }, { $set: { expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), maxBytes: policy.maxBytes } },
+    { returnDocument: 'after' });
+    if (!existing) throw new ForbiddenError('Upload reservation belongs to another resource or is retired');
+    return existing;
+  }
 }
 
 export async function claimUpload(fileId: string, kind: UploadKind, parentId: string, resourceKind: ResourceKind,

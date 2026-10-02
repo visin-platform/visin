@@ -2,6 +2,7 @@ import { PaginatedResponse } from './api';
 import { SystemInfo } from './systemInfo';
 
 export interface BenchmarkResult {
+  [field: string]: unknown;
   config_path?: string;
   modality?: string;
   total_parameters?: number;

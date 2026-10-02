@@ -1,5 +1,12 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
+export interface DatasetReference {
+  source: 'visin' | 'hf' | 'other';
+  id?: string;
+  name: string;
+  revision?: string;
+}
+
 export interface ITraining extends Document {
   /** Absent on legacy records; never inferred from the first editor. */
   ownerId?: string;
@@ -8,10 +15,12 @@ export interface ITraining extends Document {
   name: string;
   description?: string;
   datasetId?: string;
+  dataset?: DatasetReference;
   configId?: string;
   projectId?: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'stalled';
   tags?: string[];
+  lastSeenAt?: Date;
   startTime?: Date;
   endTime?: Date;
   metadata?: Record<string, unknown>;
@@ -40,6 +49,10 @@ const TrainingSchema: Schema = new Schema(
       trim: true,
       maxlength: 1000
     },
+    dataset: { type: new Schema({
+      source: { type: String, enum: ['visin', 'hf', 'other'], required: true },
+      id: String, name: { type: String, required: true }, revision: String
+    }, { _id: false }) },
     datasetId: {
       type: String,
       index: true
@@ -54,7 +67,7 @@ const TrainingSchema: Schema = new Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'running', 'completed', 'failed'],
+      enum: ['pending', 'running', 'completed', 'failed', 'stalled'],
       default: 'pending',
       index: true
     },
@@ -63,6 +76,7 @@ const TrainingSchema: Schema = new Schema(
       trim: true,
       maxlength: 50
     }],
+    lastSeenAt: { type: Date, index: true },
     startTime: {
       type: Date
     },

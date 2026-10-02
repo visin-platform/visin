@@ -1,10 +1,13 @@
+jest.mock('../../clients/projectServiceClient', () => ({ projectDatasetOwner: jest.fn(async () => ({ kind: 'user', id: '000000000000000000000001' })) }));
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { createHmac } from 'crypto';
 import express from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { BadGatewayError, errorHandler, optionalAuth } from '@visin/backend-core';
+import { BadGatewayError, createApiKey, errorHandler, resetEncryptionKeyCache } from '@visin/backend-core';
+import { projectDatasetOwner } from '../../clients/projectServiceClient';
+import { datasetApiGuards } from '../../apiGuards';
 import { checkMembership, getMyGroups, type GroupRole } from '../../clients/groupServiceClient';
 import { enqueueDelete, enqueueImport, enqueueRemoveGroup, enqueueScan, removeQueuedImport } from '../../queue/importQueue';
 import { resumeDeletions, runDelete, runRemoveGroup } from '../../services/deleteService';
@@ -39,18 +42,20 @@ const internalToken = 'internal-test-token';
 let mongo: MongoMemoryServer;
 let server: Server;
 let baseUrl: string;
-const saved = { jwt: process.env.JWT_SECRET, internal: process.env.INTERNAL_SERVICE_TOKEN };
+const saved = { jwt: process.env.JWT_SECRET, internal: process.env.INTERNAL_SERVICE_TOKEN, encryption: process.env.API_KEY_ENCRYPTION_SECRET };
 
 beforeAll(async () => {
   process.env.JWT_SECRET = secret;
   process.env.INTERNAL_SERVICE_TOKEN = internalToken;
+  process.env.API_KEY_ENCRYPTION_SECRET = 'dataset-service-key-test-secret';
+  resetEncryptionKeyCache();
   mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
   await mongoose.connect(mongo.getUri());
   await DatasetItem.syncIndexes();
   const app = express();
   app.use(express.json());
   app.use('/internal', internalRoutes);
-  app.use('/api/datasets', optionalAuth, datasetRoutes);
+  app.use('/api/datasets', ...datasetApiGuards, datasetRoutes);
   app.use(errorHandler);
   server = createServer(app);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -58,6 +63,7 @@ beforeAll(async () => {
 }, 120_000);
 
 beforeEach(async () => {
+  jest.mocked(projectDatasetOwner).mockResolvedValue({ kind: 'user', id: OWNER });
   roles = { [MEMBER]: 'member', [ADMIN]: 'admin', [GROUP_OWNER]: 'owner' };
   await mongoose.connection.collection('users').insertMany(
     [OWNER, MEMBER, ADMIN, STRANGER, GROUP_OWNER].map((id) => ({ _id: new mongoose.Types.ObjectId(id), email: `${id}@example.test`, tokenVersion: 1 }))
@@ -86,6 +92,9 @@ afterEach(async () => {
 afterAll(async () => {
   process.env.JWT_SECRET = saved.jwt;
   process.env.INTERNAL_SERVICE_TOKEN = saved.internal;
+  if (saved.encryption === undefined) delete process.env.API_KEY_ENCRYPTION_SECRET;
+  else process.env.API_KEY_ENCRYPTION_SECRET = saved.encryption;
+  resetEncryptionKeyCache();
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await mongoose.disconnect();
   await mongo.stop();
@@ -190,6 +199,51 @@ describe('who can see a dataset', () => {
   it('lists the groups a dataset can belong to', async () => {
     expect((await call('/api/datasets/groups')).status).toBe(401);
     expect((await call('/api/datasets/groups', { user: MEMBER })).body.data).toEqual([{ id: GROUP, name: 'Team', role: 'member' }]);
+  });
+});
+
+describe('a pipeline key limited to one project', () => {
+  const pipelineKey = async (scopes: ('vision:read' | 'vision:write' | 'dataset:read')[]) =>
+    (await createApiKey({
+      userId: OWNER, userEmail: `${OWNER}@example.test`, userName: 'Owner', name: 'pipeline', scopes,
+      project: { id: '0000000000000000000000cc', name: 'road-seg' }
+    })).token;
+  const withKey = (path: string, token: string, method = 'GET') =>
+    fetch(`${baseUrl}${path}`, { method, headers: { Authorization: `Bearer ${token}` } }).then(async (response) => ({ status: response.status, body: (await response.json()) as Body }));
+
+  it('reads public datasets and its project owner’s private datasets', async () => {
+    const publicId = await createDataset({ name: 'Public set', visibility: 'public' });
+    const privateId = await createDataset({ name: 'Private set' });
+    const token = await pipelineKey(['vision:read', 'vision:write']);
+
+    expect((await withKey(`/api/datasets/${publicId}`, token)).status).toBe(200);
+    const listed = await withKey('/api/datasets', token);
+    expect(listed.status).toBe(200);
+    expect(JSON.stringify(listed.body)).toContain('Public set');
+    expect(JSON.stringify(listed.body)).toContain('Private set');
+    expect((await withKey(`/api/datasets/${privateId}`, token)).status).toBe(200);
+    const otherId = await createDataset({ name: 'Other private' }, STRANGER);
+    expect((await withKey(`/api/datasets/${otherId}`, token)).status).toBe(403);
+  });
+
+  it('downloads its group owner’s archive but cannot discover unrelated groups or trash', async () => {
+    const id = await groupDataset();
+    await Dataset.updateOne({ _id: id }, { $set: { archive: { fileId: 'archive', filename: 'set.zip', size: 42, uploadedAt: new Date() } } });
+    jest.mocked(projectDatasetOwner).mockResolvedValue({ kind: 'group', id: GROUP });
+    const token = await pipelineKey(['vision:write']);
+    expect((await withKey(`/api/datasets/${id}/download`, token)).body.data).toMatchObject({ downloadUrl: 'signed:archive' });
+    expect((await withKey('/api/datasets/groups', token)).status).toBe(403);
+    expect((await withKey('/api/datasets/trash', token)).status).toBe(403);
+    const ownId = await createDataset({ name: 'Personal private' });
+    expect((await withKey(`/api/datasets/${ownId}`, token)).status).toBe(403);
+    jest.mocked(projectDatasetOwner).mockRejectedValueOnce(new (jest.requireActual('@visin/backend-core').ForbiddenError)('No live contribution'));
+    expect((await withKey(`/api/datasets/${id}/download`, token)).status).toBe(403);
+  });
+
+  it('cannot change a dataset, even its owner’s' , async () => {
+    const id = await createDataset({ name: 'Public set', visibility: 'public' });
+
+    expect((await withKey(`/api/datasets/${id}`, await pipelineKey(['vision:write']), 'DELETE')).status).toBe(403);
   });
 });
 
@@ -357,7 +411,10 @@ describe('archive upload, download and import', () => {
     const second = await uploadZip(id, [{ path: 'a.png', data: Buffer.from('y') }]);
     expect(second.completed.status).toBe(200);
     expect(fileStore.stored.has(first.fileId)).toBe(false);
-    expect((await call(`/api/datasets/${id}/download`)).body.data.downloadUrl).toBe(`signed:${second.fileId}`);
+    expect((await call(`/api/datasets/${id}/download`)).body.data).toMatchObject({
+      downloadUrl: `signed:${second.fileId}`, size: second.completed.body.data.archive.size,
+      revision: second.completed.body.data.archive.uploadedAt
+    });
   });
 
   it('scans a zip that is already stored — what a migrated dataset starts with', async () => {
@@ -732,5 +789,35 @@ describe('items', () => {
     });
     const fields = await call(`/internal/datasets/${id}/json-fields?group=wide`, { internal: true });
     expect(fields.body.data).toEqual([{ field: 'kind', values: [{ value: 'x', count: 45 }] }]);
+  });
+});
+
+
+describe('resolving the dataset actually used by a training', () => {
+  const resolve = (reference: string, userId = OWNER, projectOwner?: { kind: 'user' | 'group'; id: string }) =>
+    call('/internal/datasets/resolve', { internal: true, method: 'POST', body: { reference, userId, projectOwner } });
+
+  it('pins the id and archive version, and treats name characters literally', async () => {
+    const id = await createDataset({ name: 'ZOD.v1' });
+    const version = new Date('2026-10-01T12:00:00.000Z');
+    await Dataset.updateOne({ _id: id }, { $set: { archive: { fileId: 'archive', filename: 'set.zip', size: 42, uploadedAt: version } } });
+    expect((await resolve('zod.v1')).body.data).toEqual({ source: 'visin', id, name: 'ZOD.v1', revision: version.toISOString() });
+    expect((await resolve(id)).status).toBe(200);
+    expect((await resolve('ZOD.*')).status).toBe(404);
+    expect((await resolve(id, STRANGER)).status).toBe(404);
+    const bare = await createDataset({ name: 'No archive' });
+    expect((await resolve(bare)).body.data).toEqual({ source: 'visin', id: bare, name: 'No archive' });
+  });
+
+  it('requires an id for ambiguous names and rejects trash and unrelated ownership', async () => {
+    await createDataset({ name: 'ZOD', visibility: 'public' });
+    const id = await createDataset({ name: 'zod' });
+    expect((await resolve('ZOD')).status).toBe(400);
+    expect((await resolve(id, OWNER, { kind: 'group', id: GROUP })).status).toBe(404);
+    expect((await resolve(id, STRANGER, { kind: 'user', id: OWNER })).status).toBe(200);
+    await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER });
+    expect((await resolve(id)).status).toBe(404);
+    expect((await call('/internal/datasets/resolve', { method: 'POST', body: { reference: id, userId: OWNER } })).status).toBe(401);
+    expect((await call('/internal/datasets/resolve', { method: 'POST', internal: true, body: {} })).status).toBe(400);
   });
 });

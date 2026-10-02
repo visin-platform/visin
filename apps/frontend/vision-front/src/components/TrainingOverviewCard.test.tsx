@@ -61,8 +61,14 @@ describe('TrainingOverviewCard', () => {
     expect(screen.getByText('Not specified')).toBeInTheDocument();
   });
 
-  it.each(['running', 'failed', 'pending'] as const)('renders %s status chip', (status) => {
+  it.each(['running', 'failed', 'pending', 'stalled'] as const)('renders %s status chip', (status) => {
     render(<TrainingOverviewCard training={{ ...baseTraining, status }} epochs={[]} />);
     expect(screen.getByText(status)).toBeInTheDocument();
   });
 });
+
+ it('links the downloaded Visin dataset and shows its pinned revision', () => {
+    render(<TrainingOverviewCard training={{ ...baseTraining, dataset: { source: 'visin', id: 'd1', name: 'ZOD', revision: 'archive-version' } }} epochs={[]} />);
+    expect(screen.getByRole('link', { name: 'ZOD' })).toHaveAttribute('href', '/datasets/d1');
+    expect(screen.getByText('Revision: archive-version')).toBeInTheDocument();
+  });

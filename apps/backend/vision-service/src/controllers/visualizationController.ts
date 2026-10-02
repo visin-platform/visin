@@ -10,10 +10,10 @@ import type {
  * Get upload signed URL for visualization image
  */
 export const getVisualizationUploadUrl = async (req: Request, res: Response): Promise<void> => {
-  const { epoch_uuid, filename, type, mimetype } = req.body;
+  const { epoch_uuid, filename, type, mimetype, visualization_uuid } = req.body;
 
   const data = await visualizationService.getVisualizationUploadUrl(
-    { epoch_uuid, filename, type, mimetype },
+    { epoch_uuid, filename, type, mimetype, visualization_uuid },
     req.user?.id,
     req.projectId
   );

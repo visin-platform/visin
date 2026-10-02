@@ -1,7 +1,8 @@
+import { touchTraining } from './trainingHeartbeatService';
 import { assertResourceWrite } from './writeAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@visin/backend-core';
-import Epoch from '../models/Epoch';
+import Epoch, { IEpoch } from '../models/Epoch';
 import Training, { ITraining } from '../models/Training';
 import TestResult from '../models/TestResult';
 import { checkProjectAccess, isWithinTokenScope } from './projectAccessService';
@@ -162,6 +163,7 @@ export const createEpoch = async (
   const savedEpoch = await epochData.save();
   await Training.findByIdAndUpdate(data.trainingId, { updatedAt: new Date() });
 
+  await touchTraining(savedEpoch.trainingId);
   return savedEpoch;
 };
 
@@ -182,7 +184,9 @@ export const updateEpoch = async (
   if (updateData.epoch_time !== undefined) epoch.epoch_time = updateData.epoch_time;
   if (updateData.metadata !== undefined) epoch.metadata = updateData.metadata;
 
-  return epoch.save();
+  const saved = await epoch.save();
+  await touchTraining(saved.trainingId);
+  return saved;
 };
 
 /**
@@ -260,6 +264,7 @@ export const createEpochFromJson = async (
   const savedEpoch = await epochData.save();
   await Training.findByIdAndUpdate(trainId, { updatedAt: new Date() });
 
+  await touchTraining(savedEpoch.trainingId);
   return savedEpoch;
 };
 
@@ -280,20 +285,30 @@ export const createEpochsBatch = async (
 
   for (const trainingId of uniqueTrainingIds) {
     const training = trainingById.get(trainingId);
-    if (!training || !(await checkProjectAccess(userId, training.projectId)) || !isWithinTokenScope(tokenProjectId, training.projectId)) {
+    if (!training || training.deletedAt || !(await checkProjectAccess(userId, training.projectId)) || !isWithinTokenScope(tokenProjectId, training.projectId)) {
       throw new ForbiddenError();
     }
     await assertResourceWrite(training, userId);
   }
 
-  const savedEpochs = await Epoch.insertMany(preparedEpochs.map(epoch => ({
-    ...epoch, training_uuid: trainingById.get(epoch.trainingId)!.uuid
-  })));
+  let savedEpochs: IEpoch[];
+  let existing: string[] = [];
+  try {
+    savedEpochs = await Epoch.insertMany(preparedEpochs.map(epoch => ({
+      ...epoch, training_uuid: trainingById.get(epoch.trainingId)!.uuid
+    })), { ordered: false, throwOnValidationError: true });
+  } catch (error) {
+    const failure = error as { writeErrors?: { code?: number; err?: { code?: number }; index: number }[]; insertedDocs?: IEpoch[] };
+    if (!failure.writeErrors?.length || failure.writeErrors.some(row => (row.code ?? row.err?.code) !== 11000)) throw error;
+    savedEpochs = failure.insertedDocs ?? [];
+    existing = failure.writeErrors.map(row => preparedEpochs[row.index].epoch_uuid);
+  }
 
   await Training.updateMany(
     { _id: { $in: uniqueTrainingIds } },
     { updatedAt: new Date() }
   );
 
-  return savedEpochs;
+  await Promise.all(uniqueTrainingIds.map(touchTraining));
+  return { epochs: savedEpochs, existing };
 };

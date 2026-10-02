@@ -1,3 +1,4 @@
+import { trainingStatusLabel } from '../utils/trainingStatus';
 import React from 'react';
 import {
   Table,
@@ -57,13 +58,14 @@ interface TrainingsTableProps {
   canWrite?: (id: string) => boolean;
 }
 
-const StatusChip: React.FC<{ status: Training['status'] }> = ({ status }) => {
+const StatusChip: React.FC<{ training: Training }> = ({ training }) => {
+  const { status } = training;
   const theme = useTheme();
   
   let color = livePalette(theme).text.secondary;
   let bgcolor = livePalette(theme).action.hover;
   let icon = <PendingIcon style={{ fontSize: 16 }} />;
-  const label = status;
+  const label = trainingStatusLabel(training);
 
   switch (status) {
     case 'completed':
@@ -81,6 +83,7 @@ const StatusChip: React.FC<{ status: Training['status'] }> = ({ status }) => {
       bgcolor = tint(livePalette(theme).error.main, 0.1);
       icon = <ErrorIcon style={{ fontSize: 16 }} />;
       break;
+    case 'stalled':
     case 'pending':
       color = livePalette(theme).warning.main;
       bgcolor = tint(livePalette(theme).warning.main, 0.1);
@@ -253,7 +256,7 @@ const TrainingList: React.FC<Omit<TrainingsTableProps, 'isLoading' | 'searchTerm
             selectLabel={`Select ${training.name}`}
             meta={
               <>
-                <StatusChip status={training.status} />
+                <StatusChip training={training} />
                 {details.length > 0 && <span>{details.join(' · ')}</span>}
               </>
             }
@@ -483,7 +486,7 @@ export const TrainingsTable: React.FC<TrainingsTableProps> = ({
                     </Typography>
                   </TableCell>
                   <TableCell align="center">
-                    <StatusChip status={training.status} />
+                    <StatusChip training={training} />
                   </TableCell>
                   <TableCell align="center">
                     <Typography variant="body2" sx={{

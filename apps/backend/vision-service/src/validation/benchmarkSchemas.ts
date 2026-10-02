@@ -17,11 +17,10 @@ export const getBenchmarkStatsQuerySchema = z.object({
 });
 export type GetBenchmarkStatsQuery = z.infer<typeof getBenchmarkStatsQuerySchema>;
 
-// `results` items aren't validated field-by-field: the Benchmark model's own
-// sub-schema already strips anything it doesn't recognize at save time, and
-// the original handler only ever checked "is this an array" — matching that
-// leniency here avoids rejecting legitimate payloads with fields this schema
-// doesn't happen to enumerate.
+// `results` items aren't validated field-by-field: results are open blobs, so a
+// pipeline's own measurements (`batch_size`, `latency_p95_ms`) are kept as sent.
+// The Benchmark model names the fields the benchmark page reads and stores the
+// rest alongside them.
 const systemInfoSchema = z
   .object({
     cpu_count: z.number(),
@@ -31,6 +30,7 @@ const systemInfoSchema = z
   .catchall(z.unknown());
 
 export const createBenchmarkBodySchema = z.object({
+  benchmark_uuid: z.string().min(1).optional(),
   timestamp: z.coerce.date(),
   system_info: systemInfoSchema,
   results: z.array(z.record(z.string(), z.unknown())),

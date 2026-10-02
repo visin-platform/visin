@@ -36,7 +36,7 @@ describe('vision-service routers', () => {
     ['epochRoutes', epochRoutes, 9],
     ['projectRoutes', projectRoutes, 10],
     ['testResultRoutes', testResultRoutes, 10],
-    ['trainingRoutes', trainingRoutes, 13],
+    ['trainingRoutes', trainingRoutes, 14],
     ['visualizationRoutes', visualizationRoutes, 9],
   ];
 

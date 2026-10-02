@@ -1,3 +1,4 @@
+import { stallSilentTrainings } from './services/trainingHeartbeatService';
 import express from 'express';
 import { identityContextMiddleware } from './middleware/requestIdentityContext';
 import path from 'path';
@@ -54,7 +55,8 @@ connectDb({ serviceName: 'vision-service' })
   .then(() => {
     // Projects and trainings trashed more than 30 days ago are deleted: hourly, and once now.
     const trashSweeper = startSweeper({ name: 'vision-trash-purge', run: async () => void (await purgeExpiredTrash()) });
-    serve(app, { port: PORT, serviceName: 'vision-service', onShutdown: () => trashSweeper.stop() });
+    const runSweeper = startSweeper({ name: 'vision-stalled-runs', everyMs: 60_000, run: async () => void (await stallSilentTrainings()) });
+    serve(app, { port: PORT, serviceName: 'vision-service', onShutdown: async () => { await trashSweeper.stop(); await runSweeper.stop(); } });
   })
   .catch((err: Error) => {
     logger.error('Failed to start vision-service', { error: err.message, stack: err.stack });

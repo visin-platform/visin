@@ -1,5 +1,12 @@
 import { resourceOwnerSchema, visibilitySchema, z } from '@visin/backend-core';
 
+export const resolveDatasetBodySchema = z.object({
+  reference: z.string().min(1).max(200),
+  userId: z.string().min(1),
+  projectOwner: resourceOwnerSchema.optional()
+});
+export type ResolveDatasetBody = z.infer<typeof resolveDatasetBodySchema>;
+
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Must be a 24-character id');
 
 /** A new dataset belongs to its creator unless `owner` names one of their groups; private unless made public. */

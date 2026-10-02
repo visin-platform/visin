@@ -4,6 +4,7 @@ import { MAX_PAGE_SIZE } from './common';
 const UPLOAD_URL_REQUIRED_MSG = 'epoch_uuid, filename, type, and mimetype are required';
 
 export const getVisualizationUploadUrlBodySchema = z.object({
+  visualization_uuid: z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/).optional(),
   epoch_uuid: z.string().min(1, UPLOAD_URL_REQUIRED_MSG),
   filename: z.string().min(1, UPLOAD_URL_REQUIRED_MSG),
   type: z.string().min(1, UPLOAD_URL_REQUIRED_MSG),

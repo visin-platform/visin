@@ -1,3 +1,4 @@
+jest.mock('../../services/trainingHeartbeatService', () => ({ touchTraining: jest.fn() }));
 // These workflow tests stub the write-policy boundary. HTTP/Mongo integration
 // tests exercise the real owner/group policy, parent resolution, and denial effects.
 jest.mock('../../services/writeAccessService', () => ({

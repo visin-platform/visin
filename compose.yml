@@ -189,6 +189,7 @@ services:
     environment:
       <<: [*app-env, *file-creds]
       PORT: 5010
+      VISION_SERVICE_URL: http://vision-service:4010
       GROUP_SERVICE_URL: http://group-service:5006
       FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       # The MCP server OAuth access tokens must be minted for; unset, they are refused.
@@ -226,6 +227,7 @@ services:
       SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
       VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
+      DATASET_API_URL: ${PUBLIC_HOST:-http://localhost}:5010
       AUTH_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5001
       # This page's own address, for its canonical link, Open Graph tags and sitemap.
       LANDING_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3000

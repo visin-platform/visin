@@ -26,7 +26,7 @@ const PRIVATE = {
   documentDownloadType: 'json'
 } as const;
 
-/** Every public endpoint of vision-service and auth-service, rendered by Scalar from the published specs. */
+/** Every public endpoint of the vision, dataset and auth services, rendered by Scalar from the published specs. */
 export default function ApiReferencePage() {
   const config = useConfig();
 

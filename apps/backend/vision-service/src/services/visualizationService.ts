@@ -21,6 +21,7 @@ function withSignedUrl(viz: IEpochVisualization, signedUrlData: SignedUrlData | 
 }
 
 interface UploadUrlData {
+  visualization_uuid?: string;
   epoch_uuid: string;
   filename: string;
   type: string;
@@ -44,7 +45,10 @@ export const getVisualizationUploadUrl = async (
     throw new ForbiddenError();
   }
 
-  const visualization_uuid = uuidv4();
+  const visualization_uuid = data.visualization_uuid || uuidv4();
+  if (await EpochVisualization.findOne({ visualization_uuid })) {
+    throw new ConflictError('Visualization with this UUID already exists');
+  }
   const extension =
     filename
       .split('.')

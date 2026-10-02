@@ -118,6 +118,21 @@ describe('BenchmarksPage', () => {
     expect(screen.getByText('RTX 3090')).toBeInTheDocument();
   });
 
+  it('discovers custom numeric columns and shows zero and missing values accurately', async () => {
+    benchmarkServiceMock.getBenchmarks.mockResolvedValue({ data: { benchmarks: [{ ...benchmark1,
+      results: [{ ...benchmark1.results[0], batch_size: 4, energy_j: 0, latency_p95_ms: 12.5 }, { fps: 10 }]
+    }] } });
+    renderPage();
+    await screen.findByText('Training One');
+    fireEvent.click(screen.getByTestId('KeyboardArrowDownIcon').closest('button')!);
+    expect(screen.getByText('latency_p95_ms')).toBeInTheDocument();
+    expect(screen.getByText('batch_size')).toBeInTheDocument();
+    expect(screen.getByText('energy_j')).toBeInTheDocument();
+    expect(screen.getByText('12.5')).toBeInTheDocument();
+    expect(screen.getByText('0')).toBeInTheDocument();
+    expect(screen.getAllByText('—')).toHaveLength(4);
+  });
+
   it('navigates to the training page when a row with a linked training is clicked', async () => {
     benchmarkServiceMock.getBenchmarks.mockResolvedValue({ data: { benchmarks: [benchmark1] } });
 

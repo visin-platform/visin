@@ -7,6 +7,7 @@ export interface IBenchmark extends Document {
   training_id?: mongoose.Types.ObjectId | null;
   epoch_uuid?: string;
   epoch?: number;
+  benchmark_uuid?: string;
   timestamp: Date;
   system_info: {
     cpu_count: number;
@@ -15,6 +16,8 @@ export interface IBenchmark extends Document {
     gpu_name?: string;
     gpu_memory_total_gb?: number;
     gpu_driver?: string;
+    /** whatever else the machine report carries: `os`, `torch_version`, `gpu_count`… */
+    [field: string]: unknown;
   };
   results: Array<{
     config_path?: string;
@@ -48,6 +51,8 @@ export interface IBenchmark extends Document {
     gpu_memory_max_mb?: number;
     device?: string;
     device_type?: string;
+    /** custom measurements are kept as sent: `batch_size`, `latency_p95_ms`, `energy_j`… */
+    [field: string]: unknown;
   }>;
   createdAt: Date;
   updatedAt: Date;
@@ -56,6 +61,7 @@ export interface IBenchmark extends Document {
 
 const BenchmarkSchema: Schema = new Schema(
   {
+    benchmark_uuid: { type: String, unique: true, sparse: true },
     ownerId: { type: String, immutable: true, index: true },
     training_uuid: {
       type: String,
@@ -78,47 +84,8 @@ const BenchmarkSchema: Schema = new Schema(
       type: Date,
       required: true
     },
-    system_info: {
-      cpu_count: { type: Number, required: true },
-      cpu_count_logical: { type: Number, required: true },
-      memory_total_gb: { type: Number, required: true },
-      gpu_name: String,
-      gpu_memory_total_gb: Number,
-      gpu_driver: String
-    },
-    results: [{
-      config_path: String,
-      modality: String,
-      total_parameters: Number,
-      trainable_parameters: Number,
-      total_parameters_m: Number,
-      trainable_parameters_m: Number,
-      model_name: String,
-      backbone: String,
-      dataset: String,
-      image_size: Number,
-      pretrained: Boolean,
-      flops_available: Boolean,
-      total_flops: Number,
-      flops_giga: Number,
-      flops_method: String,
-      mean_time_ms: Number,
-      std_time_ms: Number,
-      min_time_ms: Number,
-      max_time_ms: Number,
-      fps: Number,
-      num_runs: Number,
-      baseline_gpu_memory_mb: Number,
-      baseline_ram_memory_mb: Number,
-      ram_memory_mean_mb: Number,
-      ram_memory_std_mb: Number,
-      ram_memory_max_mb: Number,
-      gpu_memory_mean_mb: Number,
-      gpu_memory_std_mb: Number,
-      gpu_memory_max_mb: Number,
-      device: String,
-      device_type: String
-    }],
+    system_info: { type: Schema.Types.Mixed, required: true },
+    results: { type: [Schema.Types.Mixed], default: [] },
     deletedAt: {
       type: Date
     }
@@ -139,6 +106,15 @@ BenchmarkSchema.methods.softDelete = function () {
 BenchmarkSchema.statics.findActive = function (query: mongoose.QueryFilter<IBenchmark> = {}) {
   return this.find({ ...query, deletedAt: null });
 };
+
+BenchmarkSchema.pre('validate', function () {
+  const info = this.system_info as Record<string, unknown> | undefined;
+  for (const field of ['cpu_count', 'cpu_count_logical', 'memory_total_gb']) {
+    if (typeof info?.[field] !== 'number' || !Number.isFinite(info[field])) {
+      this.invalidate(`system_info.${field}`, `${field} must be a number`);
+    }
+  }
+});
 
 const Benchmark = mongoose.model<IBenchmark>('Benchmark', BenchmarkSchema);
 

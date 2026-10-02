@@ -10,7 +10,8 @@ import {
   Grid,
   Stack,
   useTheme,
-  Tooltip
+  Tooltip,
+  Link
 } from '@mui/material';
 import {
   AccessTime as AccessTimeIcon,
@@ -26,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { livePalette, tint } from '@visin/frontend-core';
 import { Training, Epoch } from '../types';
+import { trainingStatusLabel } from '../utils/trainingStatus';
 import { costOf } from '../costing/costing';
 import { useCosting, useFormatCost } from '../costing/useCosting';
 
@@ -84,6 +86,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
         return 'info';
       case 'failed':
         return 'error';
+      case 'stalled':
       case 'pending':
         return 'warning';
       default:
@@ -94,7 +97,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
   const costData = calculateTrainingCost();
   const lastEpoch = epochs.length > 0 ? epochs[epochs.length - 1] : null;
 
-  const InfoItem = ({ icon, label, value, copyable = false }: { icon: React.ReactNode, label: string, value: string, copyable?: boolean }) => (
+  const InfoItem = ({ icon, label, value, copyable = false }: { icon: React.ReactNode, label: string, value: React.ReactNode, copyable?: boolean }) => (
     <Box
       sx={{
         display: "flex",
@@ -116,7 +119,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
           <Typography
             variant="body2"
             onClick={() => {
-              if (copyable) navigator.clipboard.writeText(value);
+              if (copyable) navigator.clipboard.writeText(String(value));
             }}
             sx={{
               fontWeight: 500,
@@ -205,7 +208,7 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                     {training.name}
                   </Typography>
                   <Chip
-                    label={training.status}
+                    label={trainingStatusLabel(training)}
                     color={getStatusColor(training.status)}
                     size="small"
                     sx={{ fontWeight: 600, textTransform: 'capitalize', height: 24 }}
@@ -231,9 +234,13 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                 />
                 <InfoItem 
                   icon={<StorageIcon fontSize="small" />} 
-                  label="Dataset ID" 
-                  value={training.datasetId || 'Not specified'} 
-                  copyable
+                  label="Dataset"
+                  value={training.dataset ? <>
+                    {training.dataset.source === 'visin' && training.dataset.id
+                      ? <Link href={`/datasets/${training.dataset.id}`}>{training.dataset.name}</Link>
+                      : training.dataset.name}
+                    {training.dataset.revision && <Typography variant="caption" component="span" sx={{ display: 'block' }}>Revision: {training.dataset.revision}</Typography>}
+                  </> : training.datasetId || 'Not specified'}
                 />
                 <InfoItem 
                   icon={<CalendarIcon fontSize="small" />} 

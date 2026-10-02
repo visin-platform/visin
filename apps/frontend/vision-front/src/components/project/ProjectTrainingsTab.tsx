@@ -64,7 +64,7 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
   const [trainingDescription, setTrainingDescription] = useState('');
   const [selectedDatasetId, setSelectedDatasetId] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<'pending' | 'running' | 'completed' | 'failed'>('pending');
+  const [selectedStatus, setSelectedStatus] = useState<'pending' | 'running' | 'completed' | 'failed' | 'stalled'>('pending');
   const [trainingTags, setTrainingTags] = useState<string[]>([]);
   
   // The dialog's project picker and tag suggestions, loaded once it is open:

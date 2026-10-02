@@ -20,7 +20,7 @@ export const getKeyAccess = async (req: Request, res: Response): Promise<void> =
   req.user = { id: userId };
   res.json({
     success: true,
-    data: { id: project._id.toString(), name: project.name, canWrite: await canEditProject(project, userId) }
+    data: { id: project._id.toString(), name: project.name, canWrite: await canEditProject(project, userId), owner: project.owner }
   });
 };
 

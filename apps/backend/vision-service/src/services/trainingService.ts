@@ -1,3 +1,4 @@
+import { resolveDatasetReference } from './datasetReferenceService';
 import Config from '../models/Config';
 import { assertResourceWrite, requireActor } from './writeAccessService';
 import { getEditableProjectIds, projectFilter, resolveProject } from './projectAccessService';
@@ -137,6 +138,7 @@ interface CreateTrainingData {
   name: string;
   description?: string;
   datasetId?: string;
+  dataset?: ITraining['dataset'];
   configId?: string;
   projectId?: string;
   status?: string;
@@ -151,6 +153,7 @@ interface UpdateTrainingData {
   name?: string;
   description?: string;
   datasetId?: string;
+  dataset?: ITraining['dataset'];
   configId?: string;
   status?: string;
   tags?: string | string[];
@@ -487,16 +490,19 @@ export const trainingService = {
       uuid,
       name: name.trim(),
       description: description?.trim(),
+      dataset: await resolveDatasetReference(data.dataset, datasetId, userId, tokenProjectId() ? project.owner : undefined),
       datasetId,
       configId,
       projectId: resolvedProjectId,
       status,
+      lastSeenAt: new Date(),
       tags: tags ? (Array.isArray(tags) ? tags : [tags]) : [],
       startTime,
       endTime,
       metadata
     });
 
+    if (training.dataset?.source === 'visin') training.datasetId = training.dataset.id;
     const savedTraining = await training.save();
     return savedTraining;
   },
@@ -537,9 +543,16 @@ export const trainingService = {
 
     if (name !== undefined) training.name = name.trim();
     if (description !== undefined) training.description = description?.trim();
-    if (datasetId !== undefined) training.datasetId = datasetId;
+    if (data.dataset !== undefined || datasetId !== undefined) {
+      const project = tokenProjectId() && training.projectId ? await resolveProject(training.projectId) : undefined;
+      training.dataset = await resolveDatasetReference(data.dataset, datasetId, userId, project?.owner);
+      training.datasetId = training.dataset?.source === 'visin' ? training.dataset.id : datasetId;
+    }
     if (configId !== undefined) training.configId = configId;
-    if (status !== undefined) training.status = status as ITraining['status'];
+    if (status !== undefined) {
+      training.status = status as ITraining['status'];
+      if (status === 'running') training.lastSeenAt = new Date();
+    }
     if (tags !== undefined) training.tags = tags ? (Array.isArray(tags) ? tags : [tags]) : [];
     if (startTime !== undefined) training.startTime = startTime;
     if (endTime !== undefined) training.endTime = endTime;

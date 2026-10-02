@@ -55,12 +55,13 @@ script needs, `VISIN_URL` and `VISIN_TOKEN`, ready to copy.
 
 - Create runs in its project, and post their epochs, test results, benchmarks and visualizations.
 - Read its own project's runs and results. A list it asks for includes that project only.
+- Read public datasets and private datasets belonging to its project's owner, while its account still has contribution access to that project.
 
 **What it can't do:**
 
 - Reach any other project, even another of yours, or a public one.
 - Create, change or delete projects, or manage keys. These answer `403`. Do them signed in to the app.
-- Reach datasets or labeling, which belong to no project.
+- Change datasets, read unrelated private datasets, or reach labeling.
 
 **Revoke one** from the project's **Pipeline keys** list, or from **Account**, then **API keys**. It stops working at
 once.

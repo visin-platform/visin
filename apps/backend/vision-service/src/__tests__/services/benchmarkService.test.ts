@@ -79,7 +79,7 @@ const benchmarkDoc = (overrides: AnyDoc = {}): AnyDoc => ({
   system_info: { cpu_count: 8 },
   results: [],
   toObject() {
-    return { _id: this._id, training_id: this.training_id };
+    return { _id: this._id, training_id: this.training_id, system_info: this.system_info };
   },
   save: jest.fn().mockImplementation(function (this: unknown) {
     return Promise.resolve(this);

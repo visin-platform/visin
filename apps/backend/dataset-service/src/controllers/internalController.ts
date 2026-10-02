@@ -49,3 +49,7 @@ export const removeHold = async (req: Request, res: Response): Promise<void> => 
 export const getOwnedByGroup = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await internal.ownedByGroup(req.params.groupId as string) });
 };
+
+export const resolveDataset = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await internal.resolveDatasetReference(req.body) });
+};

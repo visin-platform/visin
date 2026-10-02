@@ -17,6 +17,7 @@ export const getTestResultsQuerySchema = z.object({
     .optional()
     .transform(v => (v ? v.split(',').map(uuid => uuid.trim()) : undefined)),
   training_uuid: z.string().optional(),
+  trainingId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
   projectId: z.string().optional()
 });
 export type GetTestResultsQuery = z.infer<typeof getTestResultsQuerySchema>;

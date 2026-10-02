@@ -476,7 +476,9 @@ export const getArchiveDownload = async (access: DatasetAccess, id: string) => {
   const dataset = await readableDataset(access, id);
   if (!dataset.archive) throw new BadRequestError('This dataset has no zip yet');
   const { urls, expiresMs } = await files.getDownloadUrls([dataset.archive.fileId], DOWNLOAD_URL_MINUTES);
-  return { downloadUrl: urls[dataset.archive.fileId], filename: dataset.archive.filename, expiresAt: new Date(expiresMs).toISOString() };
+  return { downloadUrl: urls[dataset.archive.fileId], filename: dataset.archive.filename,
+    size: dataset.archive.size, revision: dataset.archive.uploadedAt.toISOString(),
+    expiresAt: new Date(expiresMs).toISOString() };
 };
 
 export const startImport = async (access: DatasetAccess, id: string, mapping: ImportMapping) => {

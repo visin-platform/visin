@@ -11,6 +11,7 @@ export const getAllConfigsQuerySchema = z.object({
 export type GetAllConfigsQuery = z.infer<typeof getAllConfigsQuerySchema>;
 
 export const createConfigBodySchema = z.object({
+  config_uuid: z.string().min(1).optional(),
   summary: z.unknown().refine(v => v !== undefined && v !== null, 'Summary is required'),
   config_data: z.unknown().refine(v => v !== undefined && v !== null, 'Config data is required'),
   config_name: z.string().optional(),
@@ -24,6 +25,7 @@ export const createConfigBodySchema = z.object({
 // via transform rather than requiring callers to normalize the casing.
 export const createConfigFromJsonBodySchema = z
   .object({
+    config_uuid: z.string().min(1).optional(),
     config_data: z.unknown().refine(v => v !== undefined && v !== null, 'Config data is required'),
     Summary: z.string().optional(),
     summary: z.string().optional(),

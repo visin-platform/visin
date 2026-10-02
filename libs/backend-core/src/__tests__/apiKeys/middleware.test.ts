@@ -141,6 +141,37 @@ describe('apiKeyAuth — a key limited to a project', () => {
   });
 });
 
+describe('apiKeyAuth — a limited key on a service that serves public data', () => {
+  beforeEach(() => {
+    verify.mockResolvedValue({ ...VALID, scopes: ['vision:read'], projectId: 'p1' });
+  });
+
+  it.each(['GET', 'HEAD'])('lets %s through as an anonymous caller, never as the key owner', async (method) => {
+    const req = makeReq({ method });
+
+    await apiKeyAuth('dataset', { anonymousReadsWhenProjectLimited: true })(req, makeRes(), next);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(req.user).toBeUndefined();
+    expect(req.apiKey).toBeUndefined();
+  });
+
+  it('still refuses a write', async () => {
+    await apiKeyAuth('dataset', { anonymousReadsWhenProjectLimited: true })(makeReq({ method: 'POST' }), makeRes(), next);
+
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+  });
+
+  it('does not change a key that is not limited to a project', async () => {
+    verify.mockResolvedValue({ ...VALID, scopes: ['dataset:read'] });
+    const req = makeReq();
+
+    await apiKeyAuth('dataset', { anonymousReadsWhenProjectLimited: true })(req, makeRes(), next);
+
+    expect(req.user?.id).toBe(VALID.userId);
+  });
+});
+
 describe('apiKeyAuth — scope gating', () => {
   it.each([
     ['GET', 'vision:read'],
@@ -340,5 +371,43 @@ describe('apiKeyAuth — OAuth access tokens', () => {
     );
 
     expect(verify).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('project-limited dataset reads', () => {
+  it.each(['GET', 'HEAD'])('authenticates %s with the pipeline read scope', async (method) => {
+    verify.mockResolvedValue({ ...VALID, projectId: 'p1' });
+    const req = makeReq({ method });
+    await apiKeyAuth('dataset', { projectLimitedDatasetReads: true })(req, makeRes(), next);
+    expect(next).toHaveBeenCalledWith();
+    expect(req.user?.id).toBe('u1');
+    expect(req.apiKey).toMatchObject({ projectId: 'p1', required: 'vision:read' });
+  });
+
+  it('accepts a write-only pipeline key for a dataset read', async () => {
+    verify.mockResolvedValue({ ...VALID, scopes: ['vision:write'], projectId: 'p1' });
+    const req = makeReq();
+    await apiKeyAuth('dataset', { projectLimitedDatasetReads: true })(req, makeRes(), next);
+    expect(next).toHaveBeenCalledWith();
+    expect(req.apiKey?.required).toBe('vision:write');
+  });
+
+  it('requires a vision scope even when the key holds dataset:read', async () => {
+    verify.mockResolvedValue({ ...VALID, scopes: ['dataset:read'], projectId: 'p1' });
+    await apiKeyAuth('dataset', { projectLimitedDatasetReads: true })(makeReq(), makeRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+  });
+
+  it.each(['POST', 'PUT', 'DELETE', 'OPTIONS'])('refuses %s outside the project', async (method) => {
+    verify.mockResolvedValue({ ...VALID, scopes: ['vision:write'], projectId: 'p1' });
+    await apiKeyAuth('dataset', { projectLimitedDatasetReads: true })(makeReq({ method }), makeRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
+  });
+
+  it('does not allow another domain through the dataset option', async () => {
+    verify.mockResolvedValue({ ...VALID, projectId: 'p1' });
+    await apiKeyAuth('label', { projectLimitedDatasetReads: true })(makeReq(), makeRes(), next);
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
   });
 });

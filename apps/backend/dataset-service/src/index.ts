@@ -1,5 +1,7 @@
 import express from 'express';
-import { apiKeyAuth, assertRequiredEnv, connectDb, createBaseApp, createHealthCheckHandler, errorHandler, logger, optionalAuth, STANDARD_CORS_ALLOWED_HEADERS, serve, startSweeper } from '@visin/backend-core';
+import path from 'path';
+import { assertRequiredEnv, connectDb, createBaseApp, createHealthCheckHandler, errorHandler, logger, STANDARD_CORS_ALLOWED_HEADERS, serve, startSweeper } from '@visin/backend-core';
+import { datasetApiGuards } from './apiGuards';
 import datasetRoutes from './routes/datasetRoutes';
 import internalRoutes from './routes/internalRoutes';
 import { createImportWorker } from './queue/importWorker';
@@ -24,10 +26,8 @@ app.use(express.json({ limit: '1mb' }));
 app.get('/health', createHealthCheckHandler({ serviceName: 'dataset-service', description: 'Datasets: zip upload, import, images', checkMongo: true }));
 
 app.use('/internal', internalRoutes);
-// `apiKeyAuth` lets a user API key (an MCP server) act with the `dataset`
-// scope; `optionalAuth` attaches a session user when there is one. Reads are
-// then gated per dataset by visibility, writes by `authenticateToken` per route.
-app.use('/api/datasets', apiKeyAuth('dataset'), optionalAuth, datasetRoutes);
+app.use('/api/docs', express.static(path.join(__dirname, '../docs')));
+app.use('/api/datasets', ...datasetApiGuards, datasetRoutes);
 
 // Must be mounted last, after all routes
 app.use(errorHandler);

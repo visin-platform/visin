@@ -1,0 +1,3465 @@
+openapi: 3.1.0
+info:
+  title: Dataset Service API
+  version: 1.0.0
+  description: Dataset archives, imports and images. Public datasets allow
+    anonymous reads. User API keys use dataset scopes; pipeline keys read public
+    datasets and datasets belonging to their project owner.
+  contact:
+    name: Visin Team
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:5010/api
+tags:
+  - name: Datasets
+    description: Dataset ownership, archives and imported items
+security:
+  - BearerCredential: []
+  - SessionCookie: []
+components:
+  securitySchemes:
+    BearerCredential:
+      type: http
+      scheme: bearer
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: access_token
+  schemas:
+    Dataset:
+      type: object
+      required:
+        - _id
+        - name
+        - owner
+        - visibility
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        owner:
+          type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - user
+                - group
+            id:
+              type: string
+              pattern: ^[0-9a-fA-F]{24}$
+          required:
+            - kind
+            - id
+        visibility:
+          type: string
+          enum:
+            - private
+            - public
+        archive:
+          type: object
+          properties:
+            filename:
+              type: string
+            size:
+              type: integer
+            uploadedAt:
+              type: string
+              format: date-time
+        imageCount:
+          type: integer
+        permissions:
+          type: object
+        groups:
+          type: array
+          items:
+            type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+paths:
+  /datasets:
+    get:
+      tags:
+        - Datasets
+      summary: List Datasets
+      operationId: listDatasets
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            $ref: ./generated/request-schemas.json#/ListDatasetsQuery/properties/search
+        - name: owner
+          in: query
+          required: false
+          schema:
+            $ref: ./generated/request-schemas.json#/ListDatasetsQuery/properties/owner
+        - name: page
+          in: query
+          required: false
+          schema:
+            $ref: ./generated/request-schemas.json#/ListDatasetsQuery/properties/page
+        - name: limit
+          in: query
+          required: false
+          schema:
+            $ref: ./generated/request-schemas.json#/ListDatasetsQuery/properties/limit
+      responses:
+        "200":
+          description: Dataset page
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required:
+                      - datasets
+                      - pagination
+                    properties:
+                      datasets:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Dataset"
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                          limit:
+                            type: integer
+                          total:
+                            type: integer
+                          pages:
+                            type: integer
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
+    post:
+      tags:
+        - Datasets
+      summary: Create Dataset
+      operationId: createDataset
+      responses:
+        "201":
+          description: Dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    $ref: "#/components/schemas/Dataset"
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/CreateDatasetBody
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/groups:
+    get:
+      tags:
+        - Datasets
+      summary: List My Groups
+      operationId: listMyGroups
+      responses:
+        "200":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/trash:
+    get:
+      tags:
+        - Datasets
+      summary: List Trash
+      operationId: listTrash
+      responses:
+        "200":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}:
+    get:
+      tags:
+        - Datasets
+      summary: Get Dataset
+      operationId: getDataset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    $ref: "#/components/schemas/Dataset"
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
+    patch:
+      tags:
+        - Datasets
+      summary: Update Dataset
+      operationId: updateDataset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    $ref: "#/components/schemas/Dataset"
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/UpdateDatasetBody
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+    delete:
+      tags:
+        - Datasets
+      summary: Trash Dataset
+      operationId: trashDataset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/restore:
+    post:
+      tags:
+        - Datasets
+      summary: Restore Dataset
+      operationId: restoreDataset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    $ref: "#/components/schemas/Dataset"
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/permanent:
+    delete:
+      tags:
+        - Datasets
+      summary: Delete Permanently
+      operationId: deletePermanently
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/owner:
+    put:
+      tags:
+        - Datasets
+      summary: Transfer Dataset
+      operationId: transferDataset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    $ref: "#/components/schemas/Dataset"
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/TransferDatasetBody
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/groups/{group}:
+    delete:
+      tags:
+        - Datasets
+      summary: Remove Group
+      operationId: removeGroup
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/cover:
+    put:
+      tags:
+        - Datasets
+      summary: Set Cover
+      operationId: setCover
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    $ref: "#/components/schemas/Dataset"
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/SetCoverBody
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/archive/upload-url:
+    post:
+      tags:
+        - Datasets
+      summary: Create Archive Upload
+      operationId: createArchiveUpload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/ArchiveUploadBody
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/archive/complete:
+    post:
+      tags:
+        - Datasets
+      summary: Complete Archive Upload
+      operationId: completeArchiveUpload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/archive/upload:
+    delete:
+      tags:
+        - Datasets
+      summary: Discard Archive Upload
+      operationId: discardArchiveUpload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/archive/scan:
+    post:
+      tags:
+        - Datasets
+      summary: Rescan Archive
+      operationId: rescanArchive
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/download:
+    get:
+      tags:
+        - Datasets
+      summary: Download Archive
+      operationId: downloadArchive
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Signed archive download
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required:
+                      - downloadUrl
+                      - filename
+                      - revision
+                      - expiresAt
+                    properties:
+                      downloadUrl:
+                        type: string
+                        format: uri
+                      filename:
+                        type: string
+                      size:
+                        type: integer
+                      revision:
+                        type: string
+                        format: date-time
+                        description: Version of the archive addressed by this download URL.
+                      expiresAt:
+                        type: string
+                        format: date-time
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
+  /datasets/{id}/import:
+    post:
+      tags:
+        - Datasets
+      summary: Start Import
+      operationId: startImport
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/StartImportBody
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+    delete:
+      tags:
+        - Datasets
+      summary: Cancel Import
+      operationId: cancelImport
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/import/resume:
+    post:
+      tags:
+        - Datasets
+      summary: Resume Import
+      operationId: resumeImport
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+  /datasets/{id}/items:
+    get:
+      tags:
+        - Datasets
+      summary: List Items
+      operationId: listItems
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: group
+          in: query
+          required: false
+          schema:
+            $ref: ./generated/request-schemas.json#/ListItemsQuery/properties/group
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: ./generated/request-schemas.json#/ListItemsQuery/properties/kind
+        - name: stem
+          in: query
+          required: false
+          schema:
+            $ref: ./generated/request-schemas.json#/ListItemsQuery/properties/stem
+        - name: search
+          in: query
+          required: false
+          schema:
+            $ref: ./generated/request-schemas.json#/ListItemsQuery/properties/search
+        - name: page
+          in: query
+          required: false
+          schema:
+            $ref: ./generated/request-schemas.json#/ListItemsQuery/properties/page
+        - name: limit
+          in: query
+          required: false
+          schema:
+            $ref: ./generated/request-schemas.json#/ListItemsQuery/properties/limit
+      responses:
+        "200":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
+  /datasets/{id}/items/{itemId}:
+    get:
+      tags:
+        - Datasets
+      summary: Get Item
+      operationId: getItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data: {}
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "401":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "409":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "503":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}

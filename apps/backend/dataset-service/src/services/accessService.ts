@@ -7,6 +7,7 @@ import {
   UnauthorizedError,
   type MyGroup,
   type OwnershipAccess,
+  type ResourceOwner,
   type Permission
 } from '@visin/backend-core';
 import { Dataset, IDataset } from '../models/Dataset';
@@ -49,7 +50,21 @@ export interface DatasetAccess {
 // `owner`: one the old service made after the owner migration ran stays out of sight until `--apply` gives it one.
 export const LIVE = { trashedAt: { $exists: false }, deletingAt: { $exists: false }, owner: { $exists: true } } as const;
 
-export const createDatasetAccess = (userId?: string): DatasetAccess => {
+export const createDatasetAccess = (userId?: string, pipelineOwner?: ResourceOwner): DatasetAccess => {
+  if (pipelineOwner) {
+    const readable = (dataset: Pick<IDataset, 'owner' | 'visibility'>) => dataset.owner &&
+      (dataset.visibility === 'public' || (dataset.owner.kind === pipelineOwner.kind && dataset.owner.id === pipelineOwner.id));
+    return {
+      userId,
+      ownership: createOwnershipAccess(undefined, groups),
+      requireUser() { throw new ForbiddenError('Pipeline keys cannot change datasets'); },
+      permission: async dataset => readable(dataset) ? 'read' : 'none',
+      myGroups: async () => [],
+      filter: async (min = 'read') => ({ ...LIVE, ...(min === 'read' ? {
+        $or: [{ visibility: 'public' }, { 'owner.kind': pipelineOwner.kind, 'owner.id': pipelineOwner.id }]
+      } : { _id: { $in: [] } }) }) as QueryFilter<IDataset>
+    };
+  }
   const ownership = createOwnershipAccess(userId, groups);
   return {
     userId,

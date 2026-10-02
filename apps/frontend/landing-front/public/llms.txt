@@ -19,4 +19,5 @@ Every deployment is its own: addresses below are this deployment's. Examples in 
 ## API reference
 
 - [Runs and results](__LANDING_FRONT_URL__/openapi/vision.json): OpenAPI 3.1 spec of vision-service: runs, epochs, test results, benchmarks, visualizations, comparisons, findings, projects and project tokens.
+- [Datasets](__LANDING_FRONT_URL__/openapi/dataset.json): OpenAPI 3.1 spec of dataset-service: ownership, archives, downloads, imports and images.
 - [API keys and OAuth](__LANDING_FRONT_URL__/openapi/auth.json): OpenAPI 3.1 spec of auth-service's public API: user API keys, OAuth for assistants, connected apps and assistant activity.

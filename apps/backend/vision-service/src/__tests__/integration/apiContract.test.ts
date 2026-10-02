@@ -203,7 +203,8 @@ describe('vision-service responses match docs/openapi.yml', () => {
     expect(benchmark.status).toBe(201);
     benchmarkId = benchmark.body.data._id;
     await call('GET', '/api/benchmarks', { auth: token });
-    await call('GET', `/api/benchmarks/${benchmarkId}`, { auth: token });
+    const read = await call('GET', `/api/benchmarks/${benchmarkId}`, { auth: token });
+    expect(read.body.data.results[0]).toMatchObject({ batch_size: 1, latency_ms: 12.3 });
   });
 
   it('lists visualizations', async () => {

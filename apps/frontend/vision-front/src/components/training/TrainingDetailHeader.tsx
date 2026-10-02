@@ -1,3 +1,4 @@
+import { trainingStatusLabel } from '../../utils/trainingStatus';
 import React from 'react';
 import { Box, Chip, Stack, Typography } from '@mui/material';
 import { ResponsiveActions } from '@visin/frontend-core';
@@ -60,6 +61,7 @@ const TrainingDetailHeader: React.FC<TrainingDetailHeaderProps> = ({
           {training.description || 'No description provided'}
         </Typography>
 
+        {training.status === 'stalled' && <Typography color="warning.main" sx={{ mb: 1 }}>{trainingStatusLabel(training)}</Typography>}
         {training.tags && training.tags.length > 0 && (
           <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap" }}>
             {training.tags.map((tag) => (

@@ -1,3 +1,4 @@
+import { heartbeatTraining as recordHeartbeat } from '../services/trainingHeartbeatService';
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { trainingService } from '../services/trainingService';
@@ -166,4 +167,8 @@ export const compareTrainings = async (req: Request, res: Response): Promise<voi
     success: true,
     data: result
   });
+};
+
+export const heartbeatTraining = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await recordHeartbeat(String(req.params.id), req.user?.id) });
 };

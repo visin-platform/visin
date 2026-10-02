@@ -19,6 +19,7 @@ export interface IProject extends Document {
   trashedAt?: Date;
   taxonomy?: IProjectTaxonomy;
   costing?: IProjectCosting;
+  stallAfterMinutes?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,6 +62,7 @@ const ProjectSchema: Schema = new Schema(
       type: TaxonomySchema,
       required: false
     },
+    stallAfterMinutes: { type: Number, default: 30, min: 1, max: 10080 },
     costing: {
       type: CostingSchema,
       required: false

@@ -92,7 +92,7 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
     for (const [key, project] of Object.entries({ a, b, other: String(other._id), public: String(publicProject._id), orphan: undefined })) {
       const training = await Training.create({ name: `${key} training`, uuid: `training-${key}`, projectId: project });
       const epoch = await Epoch.create({ trainingId: String(training._id), training_uuid: training.uuid, epoch_uuid: `epoch-${key}`, epoch: key === 'a' ? 1 : 99, results: { loss: 1 }, timestamp: new Date() });
-      const test = await TestResult.create({ epoch_uuid: epoch.epoch_uuid, test_uuid: `test-${key}`, epoch: epoch.epoch, timestamp: new Date(), test_results: { clear: { overall: { pixel_accuracy: 0.9 } } } });
+      const test = await TestResult.create({ epoch_uuid: epoch.epoch_uuid, trainingId: String(training._id), projectId: String(training.projectId), test_uuid: `test-${key}`, epoch: epoch.epoch, timestamp: new Date(), test_results: { clear: { overall: { pixel_accuracy: 0.9 } } } });
       const benchmark = await Benchmark.create({ training_id: key === 'orphan' ? null : training._id, training_uuid: training.uuid,
         timestamp: new Date(), system_info: { cpu_count: 1, cpu_count_logical: 1, memory_total_gb: 1 }, results: [] });
       await EpochVisualization.create({ epoch_uuid: epoch.epoch_uuid, visualization_uuid: `viz-${key}`, filename: `${key}.png`, type: key, fileId: `file-${key}`, uploadedAt: new Date() });

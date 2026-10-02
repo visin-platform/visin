@@ -154,7 +154,8 @@
               "pending",
               "running",
               "completed",
-              "failed"
+              "failed",
+              "stalled"
             ]
           },
           "tags": {
@@ -205,6 +206,32 @@
               },
               "totalCost": {
                 "type": "number"
+              }
+            }
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dataset": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "visin",
+                  "hf",
+                  "other"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "string"
               }
             }
           }
@@ -304,6 +331,12 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "trainingId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
           }
         }
       },
@@ -366,6 +399,9 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "benchmark_uuid": {
+            "type": "string"
           }
         }
       },
@@ -478,6 +514,12 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "stallAfterMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10080,
+            "default": 30
           }
         }
       },
@@ -649,6 +691,35 @@
           "datasetId": {
             "type": "string"
           },
+          "dataset": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "visin",
+                  "hf",
+                  "other"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "revision": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "source",
+              "name"
+            ]
+          },
           "configId": {
             "type": "string"
           },
@@ -714,6 +785,35 @@
           },
           "datasetId": {
             "type": "string"
+          },
+          "dataset": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "visin",
+                  "hf",
+                  "other"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "revision": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "source",
+              "name"
+            ]
           },
           "configId": {
             "type": "string"
@@ -885,6 +985,10 @@
       "CreateConfigBody": {
         "type": "object",
         "properties": {
+          "config_uuid": {
+            "type": "string",
+            "minLength": 1
+          },
           "summary": {},
           "config_data": {},
           "config_name": {
@@ -903,6 +1007,10 @@
       "CreateConfigFromJsonBody": {
         "type": "object",
         "properties": {
+          "config_uuid": {
+            "type": "string",
+            "minLength": 1
+          },
           "config_data": {},
           "Summary": {
             "type": "string"
@@ -1040,6 +1148,12 @@
       "GetVisualizationUploadUrlBody": {
         "type": "object",
         "properties": {
+          "visualization_uuid": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
           "epoch_uuid": {
             "type": "string",
             "minLength": 1
@@ -1067,6 +1181,10 @@
       "CreateBenchmarkBody": {
         "type": "object",
         "properties": {
+          "benchmark_uuid": {
+            "type": "string",
+            "minLength": 1
+          },
           "timestamp": {
             "type": "string",
             "format": "date-time"
@@ -1383,6 +1501,11 @@
               }
             }
           },
+          "stallAfterMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10080
+          },
           "costing": {
             "type": "object",
             "properties": {
@@ -1563,6 +1686,11 @@
                 "type": "null"
               }
             ]
+          },
+          "stallAfterMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10080
           },
           "costing": {
             "anyOf": [
@@ -3317,6 +3445,12 @@
                       "items": {
                         "$ref": "#/components/schemas/Epoch"
                       }
+                    },
+                    "existing": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -3338,7 +3472,8 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "description": "Unordered insertion saves every new epoch even if another UUID already exists. The data array contains inserted epochs; existing contains repeated UUIDs. Other database or validation errors still fail the request."
       }
     },
     "/epochs/upload": {
@@ -4284,6 +4419,14 @@
             "in": "query",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "trainingId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
             }
           },
           {
@@ -6990,6 +7133,79 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/trainings/{id}/heartbeat": {
+      "post": {
+        "tags": [
+          "Trainings"
+        ],
+        "summary": "Report that a training is alive",
+        "description": "Refreshes server receipt time. A stalled run resumes; completed and failed runs remain terminal.",
+        "operationId": "heartbeatTraining",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Heartbeat received",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "lastSeenAt"
+                      ],
+                      "properties": {
+                        "lastSeenAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "default": {
             "$ref": "#/components/responses/Error"

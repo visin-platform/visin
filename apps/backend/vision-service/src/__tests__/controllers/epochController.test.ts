@@ -1,3 +1,4 @@
+jest.mock('../../services/trainingHeartbeatService', () => ({ touchTraining: jest.fn() }));
 import type { Request, Response } from 'express';
 import { NotFoundError, ForbiddenError } from '@visin/backend-core';
 import { getEpochById, getEpochByUuid, createEpoch, deleteEpoch } from '../../controllers/epochController';

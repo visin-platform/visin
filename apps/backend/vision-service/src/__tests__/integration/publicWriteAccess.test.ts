@@ -314,7 +314,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
       const project = await Project.create({ name: 'Secret', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'private', editorGroupIds: ['a'.repeat(24)] });
       const training = await Training.create({ name: 'Secret run', uuid: 'secret-run', projectId: String(project._id) });
       await Epoch.create({ timestamp: new Date(), trainingId: String(training._id), training_uuid: training.uuid, epoch_uuid: 'secret-epoch', epoch: 73, results: {} });
-      const result = await TestResult.create({ epoch: 73, epoch_uuid: 'secret-epoch', test_uuid: 'secret-test', timestamp: new Date(), test_results: { secret: { object: { iou: 1 } } } });
+      const result = await TestResult.create({ epoch: 73, epoch_uuid: 'secret-epoch', trainingId: String(training._id), projectId: String(project._id), test_uuid: 'secret-test', timestamp: new Date(), test_results: { secret: { object: { iou: 1 } } } });
       await EpochVisualization.create({ epoch_uuid: 'secret-epoch', visualization_uuid: 'secret-viz', filename: 'secret.png', type: 'secret-type', fileId: 'secret-file' });
       const benchmark = await Benchmark.create({ ...benchmarkBody, training_id: training._id, training_uuid: training.uuid });
       return { training, result, benchmark };
@@ -333,7 +333,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     });
     it('serves the frontend epoch-results route for public and authorized private epochs', async () => {
       await privateResults();
-      await TestResult.create({ epoch: 1, epoch_uuid: 'public-epoch', test_uuid: 'public-test', timestamp: new Date(), test_results: {} });
+      await TestResult.create({ epoch: 1, epoch_uuid: 'public-epoch', trainingId, projectId, test_uuid: 'public-test', timestamp: new Date(), test_results: {} });
       for (const actor of ['', OWNER, STRANGER]) {
         const response = await request('epochs/uuid/public-epoch/test-results', 'GET', undefined, actor);
         expect(response.status).toBe(200);
@@ -350,7 +350,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     });
     it('intersects filters and counts all matching authorized results across pages', async () => {
       await privateResults();
-      await TestResult.create([1, 2, 3].map(i => ({ epoch: 1, epoch_uuid: 'public-epoch', test_uuid: `public-test-${i}`, timestamp: new Date(), test_results: {} })));
+      await TestResult.create([1, 2, 3].map(i => ({ epoch: 1, epoch_uuid: 'public-epoch', trainingId, projectId, test_uuid: `public-test-${i}`, timestamp: new Date(), test_results: {} })));
       const response = await request('test-results?epoch=1&page=2&limit=1');
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({ data: { pagination: { total: 3, pages: 3 } } });

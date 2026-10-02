@@ -9,6 +9,7 @@ export interface AppConfig {
   VISION_API_URL?: string;
   /** auth-service's public address; the API reference sends its "try it" requests there. */
   AUTH_SERVICE_URL?: string;
+  DATASET_API_URL?: string;
 }
 
 function createDevConfig(): AppConfig {
@@ -16,6 +17,7 @@ function createDevConfig(): AppConfig {
     SHELL_FRONT_URL: import.meta.env.VITE_SHELL_FRONT_URL || 'http://localhost:3010',
     MCP_PUBLIC_URL: import.meta.env.VITE_MCP_PUBLIC_URL || 'http://localhost:5009',
     VISION_API_URL: import.meta.env.VITE_VISION_API_URL || 'http://localhost:4010',
+    DATASET_API_URL: import.meta.env.VITE_DATASET_API_URL || 'http://localhost:5010',
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL || 'http://localhost:5001',
   };
 }

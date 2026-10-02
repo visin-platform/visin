@@ -50,6 +50,10 @@
   "CreateBenchmarkBody": {
     "type": "object",
     "properties": {
+      "benchmark_uuid": {
+        "type": "string",
+        "minLength": 1
+      },
       "timestamp": {
         "type": "string",
         "format": "date-time"
@@ -144,6 +148,10 @@
   "CreateConfigBody": {
     "type": "object",
     "properties": {
+      "config_uuid": {
+        "type": "string",
+        "minLength": 1
+      },
       "summary": {},
       "config_data": {},
       "config_name": {
@@ -162,6 +170,10 @@
   "CreateConfigFromJsonBody": {
     "type": "object",
     "properties": {
+      "config_uuid": {
+        "type": "string",
+        "minLength": 1
+      },
       "config_data": {},
       "Summary": {
         "type": "string"
@@ -509,6 +521,11 @@
           }
         }
       },
+      "stallAfterMinutes": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10080
+      },
       "costing": {
         "type": "object",
         "properties": {
@@ -571,6 +588,35 @@
       },
       "datasetId": {
         "type": "string"
+      },
+      "dataset": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "visin",
+              "hf",
+              "other"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "source",
+          "name"
+        ]
       },
       "configId": {
         "type": "string"
@@ -977,6 +1023,10 @@
       "training_uuid": {
         "type": "string"
       },
+      "trainingId": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{24}$"
+      },
       "projectId": {
         "type": "string"
       }
@@ -1179,6 +1229,12 @@
   "GetVisualizationUploadUrlBody": {
     "type": "object",
     "properties": {
+      "visualization_uuid": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "pattern": "^[A-Za-z0-9_-]+$"
+      },
       "epoch_uuid": {
         "type": "string",
         "minLength": 1
@@ -1483,6 +1539,11 @@
           }
         ]
       },
+      "stallAfterMinutes": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10080
+      },
       "costing": {
         "anyOf": [
           {
@@ -1537,6 +1598,35 @@
       },
       "datasetId": {
         "type": "string"
+      },
+      "dataset": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "visin",
+              "hf",
+              "other"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "source",
+          "name"
+        ]
       },
       "configId": {
         "type": "string"

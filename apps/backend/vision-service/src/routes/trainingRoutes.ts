@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+  heartbeatTraining,
   getTrainings,
   getTrainingById,
   getTrainingByUuid,
@@ -47,6 +48,7 @@ router.get('/:id', optionalAuthMiddleware, getTrainingById);
 router.post('/', authMiddleware, validateRequest({ body: createTrainingBodySchema }), createTraining);
 router.put('/:id', authMiddleware, validateRequest({ body: updateTrainingBodySchema }), updateTraining);
 router.delete('/:id', authMiddleware, deleteTraining);
+router.post('/:id/heartbeat', authMiddleware, heartbeatTraining);
 router.post('/:id/restore', authMiddleware, restoreTraining);
 router.post('/compare', optionalAuthMiddleware, validateRequest({ body: compareTrainingsBodySchema }), compareTrainings);
 

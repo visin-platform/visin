@@ -4,12 +4,12 @@ import type { GetTestResultsQuery, GetTestResultsByEpochUuidQuery } from '../val
 
 // Get all test results
 export const getTestResults = async (req: Request, res: Response): Promise<void> => {
-  const { page, limit, sortBy, order, epoch, epoch_uuids, training_uuid, projectId } =
+  const { page, limit, sortBy, order, epoch, epoch_uuids, training_uuid, trainingId, projectId } =
     req.query as unknown as GetTestResultsQuery;
 
   const result = await testResultService.getTestResults(
     req.user?.id,
-    { epoch, epoch_uuids, training_uuid, projectId },
+    { epoch, epoch_uuids, training_uuid, trainingId, projectId },
     { page, limit, sortBy, order }
   );
 

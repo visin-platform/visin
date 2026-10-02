@@ -567,6 +567,11 @@ files['context.svg'] = doc(
     )
   );
 
+  b.push(edge([[mx + mw, cy(1) + 20], [545, cy(1) + 20], [545, cy(3) - 20], [mx + mw, cy(3) - 20]],
+    { label: 'dataset refs', at: [575, cy(2) - 14] }));
+  b.push(edge([[mx + mw, cy(3) + 20], [605, cy(3) + 20], [605, cy(1) - 20], [mx + mw, cy(1) - 20]],
+    { label: 'project owner', at: [575, cy(2) + 14] }));
+
   // Stores
   const sy = bottom + 40;
   b.push(
@@ -591,7 +596,7 @@ files['context.svg'] = doc(
     800,
     sy + 90,
     'Visin: service to service',
-    'Calls between the backend services. The auth, vision, dataset and label services check access with the group service, which in turn searches users and lists what a group owns. The vision, dataset and label services store files through the file service. The MCP service calls the vision and dataset services.',
+    'Calls between the backend services. The auth, vision, dataset and label services check access with the group service, which in turn searches users and lists what a group owns. The vision, dataset and label services store files through the file service. The MCP service calls the vision and dataset services. Vision resolves dataset references through Dataset; Dataset verifies a pipeline key’s project owner and current permissions through Vision.',
     b
   );
 }

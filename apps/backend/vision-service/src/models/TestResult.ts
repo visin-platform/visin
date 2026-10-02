@@ -1,6 +1,8 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ITestResult extends Document {
+  trainingId?: string;
+  projectId?: string;
   timestamp: Date;
   epoch: number;
   epoch_uuid: string;
@@ -23,6 +25,8 @@ export interface ITestResult extends Document {
 
 const TestResultSchema: Schema = new Schema(
   {
+    trainingId: { type: String, index: true },
+    projectId: { type: String, index: true },
     timestamp: {
       type: Date,
       required: true,
@@ -56,6 +60,8 @@ const TestResultSchema: Schema = new Schema(
     timestamps: true
   }
 );
+
+TestResultSchema.index({ projectId: 1, trainingId: 1, deletedAt: 1, timestamp: -1 });
 
 // Compound index for querying by epoch
 TestResultSchema.index({ epoch: 1, epoch_uuid: 1 });

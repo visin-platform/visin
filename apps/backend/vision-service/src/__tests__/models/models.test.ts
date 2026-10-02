@@ -66,6 +66,23 @@ describe('Benchmark', () => {
     expect(new Benchmark(valid).validateSync()).toBeUndefined();
   });
 
+  it('keeps measurements and machine details the schema does not name', () => {
+    const doc = new Benchmark({
+      ...valid,
+      system_info: { ...valid.system_info, torch_version: '2.5.1', os: 'linux' },
+      results: [{ fps: 30, batch_size: 4, latency_p95_ms: 12.5 }],
+    }).toObject();
+
+    expect(doc.system_info).toMatchObject({ torch_version: '2.5.1', os: 'linux' });
+    expect(doc.results[0]).toMatchObject({ fps: 30, batch_size: 4, latency_p95_ms: 12.5 });
+  });
+
+  it('still requires the machine details the benchmark page reads', async () => {
+    await expect(new Benchmark({ ...valid, system_info: { cpu_count: 8 } }).validate()).rejects.toMatchObject({
+      errors: { 'system_info.cpu_count_logical': expect.anything(), 'system_info.memory_total_gb': expect.anything() }
+    });
+  });
+
   it('requires timestamp and system info', () => {
     const error = new Benchmark({}).validateSync();
     expect(error?.errors.timestamp).toBeDefined();

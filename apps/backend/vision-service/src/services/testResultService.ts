@@ -1,6 +1,6 @@
 import { assertEpochWrite } from './writeAccessService';
 import { randomUUID as uuidv4 } from 'crypto';
-import { QueryFilter } from 'mongoose';
+import { QueryFilter, type PipelineStage } from 'mongoose';
 import { checkEpochAccess } from './epochAccessService';
 import { ConflictError, ForbiddenError, NotFoundError, logger } from '@visin/backend-core';
 import TestResult, { ITestResult } from '../models/TestResult';
@@ -9,7 +9,7 @@ import Training, { ITraining } from '../models/Training';
 import {
   checkProjectAccess,
   createProjectAccessChecker,
-  getVisibleTrainingIds,
+  getVisibleProjectIds,
   isWithinTokenScope,
   resolveProject
 } from './projectAccessService';
@@ -44,10 +44,29 @@ interface PaginationOptions {
 }
 
 interface TestResultFilters {
+  trainingId?: string;
   epoch?: number;
   epoch_uuids?: string[];
   training_uuid?: string;
   projectId?: string;
+}
+
+/** Keep results whose training and epoch are still live, without enumerating parent UUIDs. */
+function liveTestResultParents(): PipelineStage[] {
+  return [
+    { $set: { _trainingId: { $convert: { input: '$trainingId', to: 'objectId', onError: null, onNull: null } } } },
+    { $lookup: {
+      from: Training.collection.name, localField: '_trainingId', foreignField: '_id',
+      pipeline: [{ $match: { deletedAt: null } }, { $project: { name: 1, uuid: 1, status: 1 } }], as: 'training'
+    } },
+    { $unwind: '$training' },
+    { $lookup: {
+      from: Epoch.collection.name, localField: 'epoch_uuid', foreignField: 'epoch_uuid',
+      pipeline: [{ $match: { deletedAt: null } }, { $project: { _id: 0, epoch: 1, epoch_time: 1 } }], as: 'epoch_info'
+    } },
+    { $unwind: '$epoch_info' },
+    { $unset: '_trainingId' }
+  ];
 }
 
 export const testResultService = {
@@ -55,109 +74,46 @@ export const testResultService = {
     const { page, limit, sortBy, order } = pagination;
     const { epoch, epoch_uuids, training_uuid, projectId } = filters;
 
-    // Visibility and caller filters are independent AND predicates. No caller
-    // filter may replace the authorized live-parent set, including in counts.
-    const ids = await getVisibleTrainingIds(userId);
-    const epochsInScope = await Epoch.find({ trainingId: { $in: ids }, deletedAt: null }, 'epoch_uuid');
     const predicates: QueryFilter<ITestResult>[] = [
-      { epoch_uuid: { $in: epochsInScope.map((row) => row.epoch_uuid) } }
+      { projectId: { $in: await getVisibleProjectIds(userId) } }
     ];
     if (projectId) {
       if (!(await checkProjectAccess(userId, projectId))) throw new ForbiddenError('Access denied to project');
-      // The filter may name a slug; trainings store the canonical id.
       const project = await resolveProject(projectId);
       if (!project) throw new NotFoundError('Project not found');
-      const trainings = await Training.find({ projectId: project._id.toString(), deletedAt: null });
-      const epochs = await Epoch.find(
-        { trainingId: { $in: trainings.map((row) => row._id.toString()) }, deletedAt: null },
-        'epoch_uuid'
-      );
-      predicates.push({ epoch_uuid: { $in: epochs.map((row) => row.epoch_uuid) } });
+      predicates.push({ projectId: project._id.toString() });
     }
-    if (training_uuid) {
-      const training = await Training.findOne({ uuid: training_uuid, deletedAt: null });
+    if (training_uuid || filters.trainingId) {
+      const training = await Training.findOne({
+        ...(training_uuid ? { uuid: training_uuid } : { _id: filters.trainingId }), deletedAt: null
+      });
       if (!training) throw new NotFoundError('Training not found');
       if (!(await checkProjectAccess(userId, training.projectId))) throw new ForbiddenError('Access denied to project');
-      const epochs = await Epoch.find({ trainingId: training._id.toString(), deletedAt: null }, 'epoch_uuid');
-      predicates.push({ epoch_uuid: { $in: epochs.map((row) => row.epoch_uuid) } });
+      predicates.push({ trainingId: training._id.toString() });
+      if (filters.trainingId) predicates.push({ trainingId: filters.trainingId.toLowerCase() });
     }
     if (epoch !== undefined) predicates.push({ epoch });
     if (epoch_uuids?.length) predicates.push({ epoch_uuid: { $in: epoch_uuids } });
-    const filter: QueryFilter<ITestResult> = { deletedAt: null, $and: predicates };
-    const query = TestResult.find(filter).sort({ [sortBy]: order });
-    const [testResults, total] =
-      page && limit
-        ? await Promise.all([query.skip((page - 1) * limit).limit(limit), TestResult.countDocuments(filter)])
-        : await Promise.all([query.limit(MAX_PAGE_SIZE), Promise.resolve(0)]);
-
-    // Enrich with training info
-    const epochUuids = testResults.map((tr) => tr.epoch_uuid);
-    const epochs = await Epoch.find({ epoch_uuid: { $in: epochUuids }, deletedAt: null });
-    const trainingIds = epochs.map((e) => e.trainingId);
-    const trainings = await Training.find({ _id: { $in: trainingIds }, deletedAt: null });
-
-    const epochMap = epochs.reduce(
-      (acc, epoch) => {
-        acc[epoch.epoch_uuid] = epoch;
-        return acc;
-      },
-      {} as Record<string, IEpoch>
-    );
-
-    const trainingMap = trainings.reduce(
-      (acc, training) => {
-        acc[training._id.toString()] = training;
-        return acc;
-      },
-      {} as Record<string, ITraining>
-    );
-
-    const filteredTestResults = testResults.filter((testResult) => {
-      const epoch = epochMap[testResult.epoch_uuid];
-      if (!epoch) return false;
-      const training = trainingMap[epoch.trainingId.toString()];
-      return training !== undefined;
-    });
-
-    const testResultsWithTraining = filteredTestResults.map((testResult) => {
-      const epoch = epochMap[testResult.epoch_uuid];
-      const training = epoch ? trainingMap[epoch.trainingId.toString()] : null;
-
-      return {
-        ...testResult.toObject(),
-        training: training
-          ? {
-              _id: training._id,
-              name: training.name,
-              uuid: training.uuid,
-              status: training.status
-            }
-          : null,
-        epoch_info: epoch
-          ? {
-              epoch: epoch.epoch,
-              epoch_time: epoch.epoch_time
-            }
-          : null
-      };
-    });
-
+    const match = { deletedAt: null, $and: predicates };
+    const liveParents = liveTestResultParents();
+    const testResults = await TestResult.aggregate<Record<string, unknown>>([
+      { $match: match },
+      { $sort: { [sortBy]: order, _id: order } },
+      ...liveParents,
+      ...(page && limit ? [{ $skip: (page - 1) * limit }] : []),
+      { $limit: limit && page ? limit : MAX_PAGE_SIZE }
+    ]);
     if (page && limit) {
-      return {
-        testResults: testResultsWithTraining,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      };
+      const [count] = await TestResult.aggregate<{ total: number }>([
+        { $match: match },
+        { $project: { trainingId: 1, epoch_uuid: 1 } },
+        ...liveParents,
+        { $count: 'total' }
+      ]);
+      const total = count?.total ?? 0;
+      return { testResults, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
     }
-
-    return {
-      testResults: testResultsWithTraining,
-      total: filteredTestResults.length
-    };
+    return { testResults, total: testResults.length };
   },
 
   async getTestResultById(id: string, userId: string | undefined) {
@@ -286,8 +242,8 @@ export const testResultService = {
 
     const epochDoc = await assertEpochWrite(epoch_uuid, userId, reqProjectId);
     if (!epochDoc && !isWithinTokenScope(reqProjectId, undefined)) throw new ForbiddenError();
+    const training = epochDoc ? await Training.findById(epochDoc.trainingId) : null;
     if (epochDoc) {
-      const training = await Training.findById(epochDoc.trainingId);
       if (
         !(await checkProjectAccess(userId, training?.projectId)) ||
         !isWithinTokenScope(reqProjectId, training?.projectId)
@@ -297,6 +253,8 @@ export const testResultService = {
     }
 
     const testResultData = new TestResult({
+      trainingId: epochDoc?.trainingId.toString(),
+      projectId: training?.projectId,
       timestamp: timestamp ? new Date(timestamp) : new Date(),
       epoch,
       epoch_uuid,
@@ -340,7 +298,14 @@ export const testResultService = {
 
     if (timestamp !== undefined) testResult.timestamp = new Date(timestamp);
     if (epoch !== undefined) testResult.epoch = epoch;
-    if (epoch_uuid !== undefined) testResult.epoch_uuid = epoch_uuid;
+    if (epoch_uuid !== undefined) {
+      const parentEpoch = await Epoch.findOne({ epoch_uuid, deletedAt: null });
+      const parentTraining = parentEpoch ? await Training.findById(parentEpoch.trainingId) : null;
+      if (!parentTraining) throw new NotFoundError('Training not found');
+      testResult.epoch_uuid = epoch_uuid;
+      testResult.trainingId = parentEpoch!.trainingId.toString();
+      testResult.projectId = parentTraining.projectId;
+    }
     if (test_results !== undefined) testResult.test_results = test_results as ITestResult['test_results'];
 
     const updatedTestResult = await testResult.save();
@@ -373,12 +338,14 @@ export const testResultService = {
   },
 
   async getTestResultEpochs(userId?: string) {
-    const ids = await getVisibleTrainingIds(userId);
-    const epochs = await Epoch.find({ trainingId: { $in: ids }, deletedAt: null }, 'epoch_uuid');
-    return TestResult.distinct('epoch', {
-      epoch_uuid: { $in: epochs.map((row) => row.epoch_uuid) },
-      deletedAt: null
-    }).sort();
+    const epochs = await TestResult.aggregate<{ _id: number }>([
+      { $match: { deletedAt: null, projectId: { $in: await getVisibleProjectIds(userId) } } },
+      { $project: { trainingId: 1, epoch_uuid: 1, epoch: 1 } },
+      ...liveTestResultParents(),
+      { $group: { _id: '$epoch' } },
+      { $sort: { _id: 1 } }
+    ]);
+    return epochs.map(row => row._id);
   },
 
   async compareTestResults(userId: string | undefined, testResultIds: string[]) {

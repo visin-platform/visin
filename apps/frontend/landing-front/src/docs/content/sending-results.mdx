@@ -102,8 +102,21 @@ requests.post(
 ).raise_for_status()
 ```
 
-A request may be up to 50 MB, which is thousands of epochs.
+A request may be up to 50 MB, which is thousands of epochs. Supply an `epoch_uuid` for each row to make retries safe. The response contains the newly inserted epochs in `data` and repeated UUIDs in `existing`; duplicates do not stop later rows.
 
 <Callout kind="tip" title="Numbers, not strings">
   Send metrics as JSON numbers. `"0.58"` in quotes is stored as a string, not a number.
 </Callout>
+
+
+## Run liveness and dataset references
+
+Send `POST /api/trainings/{id}/heartbeat` during long epochs. Each accepted epoch also refreshes `lastSeenAt`.
+After the project's silence timeout (30 minutes by default, adjustable in Settings), a running job becomes `stalled`.
+A fresh heartbeat or epoch resumes it; completed and failed jobs keep their terminal status. The Python client sends
+heartbeats every 30 seconds for active online training.
+
+A run can carry `dataset: { source: 'visin' | 'hf' | 'other', id?, name, revision? }`. Visin references resolve to a
+readable dataset's canonical id at write time; `revision` records the archive version actually downloaded.
+Legacy free-text `datasetId` values remain supported as labels. `visin-fusion` reads the downloaded dataset's marker
+to record its id and pinned archive version automatically.

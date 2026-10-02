@@ -1,5 +1,6 @@
+import type { ResolveDatasetBody } from '../validation/datasetSchemas';
 import { QueryFilter } from 'mongoose';
-import { NotFoundError, type Permission } from '@visin/backend-core';
+import { BadRequestError, NotFoundError, type Permission } from '@visin/backend-core';
 import { Dataset } from '../models/Dataset';
 import { DatasetItem, IDatasetItem } from '../models/DatasetItem';
 import { createDatasetAccess, findDataset } from './accessService';
@@ -160,3 +161,18 @@ export const ownedByGroup = async (groupId: string) => {
     .limit(1000);
   return { count: datasets.length, names: datasets.slice(0, 5).map((dataset) => dataset.name) };
 };
+
+/** A training's pinned dataset reference; an ambiguous name must be replaced with its id. */
+export async function resolveDatasetReference({ reference, userId, projectOwner }: ResolveDatasetBody) {
+  const access = createDatasetAccess(userId, projectOwner);
+  const filter = await access.filter('read');
+  const candidates = await Dataset.find({ $and: [filter,
+    /^[0-9a-fA-F]{24}$/.test(reference) ? { _id: reference } :
+      { name: { $regex: `^${reference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } }
+  ] }).limit(2);
+  if (!candidates.length) throw new NotFoundError('Dataset not found or not readable');
+  if (candidates.length > 1) throw new BadRequestError('Dataset name is ambiguous; use its id');
+  const dataset = candidates[0];
+  return { source: 'visin', id: dataset._id.toString(), name: dataset.name,
+    revision: dataset.archive?.uploadedAt.toISOString() };
+}

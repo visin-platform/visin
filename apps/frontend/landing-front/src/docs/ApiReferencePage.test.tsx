@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import ApiReferencePage from './ApiReferencePage';
 import { API_SPECS } from './pages';
 
-const config: { VISION_API_URL?: string; AUTH_SERVICE_URL?: string } = {};
+const config: { VISION_API_URL?: string; AUTH_SERVICE_URL?: string; DATASET_API_URL?: string } = {};
 
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config }));
 
@@ -20,6 +20,7 @@ const configurations = (): Configuration[] => JSON.parse(screen.getByTestId('sca
 beforeEach(() => {
   config.VISION_API_URL = 'https://vision-api.example.test';
   config.AUTH_SERVICE_URL = 'https://auth-api.example.test';
+  config.DATASET_API_URL = 'https://dataset-api.example.test';
 });
 
 describe('ApiReferencePage', () => {
@@ -28,6 +29,7 @@ describe('ApiReferencePage', () => {
 
     expect(configurations().map(({ slug, url }) => ({ slug, url }))).toEqual([
       { slug: 'vision', url: '/openapi/vision.json' },
+      { slug: 'dataset', url: '/openapi/dataset.json' },
       { slug: 'auth', url: '/openapi/auth.json' }
     ]);
     expect(configurations()).toHaveLength(API_SPECS.length);
@@ -55,6 +57,7 @@ describe('ApiReferencePage', () => {
 
     expect(configurations().map(({ servers }) => servers?.[0].url)).toEqual([
       'https://vision-api.example.test/api',
+      'https://dataset-api.example.test/api',
       'https://auth-api.example.test'
     ]);
   });
@@ -63,7 +66,7 @@ describe('ApiReferencePage', () => {
     config.AUTH_SERVICE_URL = undefined;
     render(<ApiReferencePage />);
 
-    const [vision, auth] = configurations();
+    const [vision, , auth] = configurations();
     expect(vision.servers).toHaveLength(1);
     expect(auth.servers).toBeUndefined();
   });

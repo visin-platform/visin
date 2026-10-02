@@ -1,0 +1,237 @@
+{
+  "ArchiveUploadBody": {
+    "type": "object",
+    "properties": {
+      "filename": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 255
+      },
+      "size": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "lastModified": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "filename"
+    ]
+  },
+  "CreateDatasetBody": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "description": {
+        "type": "string",
+        "maxLength": 10000
+      },
+      "owner": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
+      },
+      "visibility": {
+        "type": "string",
+        "enum": [
+          "private",
+          "public"
+        ]
+      }
+    },
+    "required": [
+      "name"
+    ]
+  },
+  "ListDatasetsQuery": {
+    "type": "object",
+    "properties": {
+      "search": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "owner": {
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "me"
+          },
+          {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
+          }
+        ]
+      },
+      "page": {
+        "default": 1,
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "limit": {
+        "default": 30,
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 100
+      }
+    }
+  },
+  "ListItemsQuery": {
+    "type": "object",
+    "properties": {
+      "group": {
+        "type": "string",
+        "maxLength": 100
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "image",
+          "json"
+        ]
+      },
+      "stem": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "search": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "page": {
+        "default": 1,
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "limit": {
+        "default": 60,
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 200
+      }
+    }
+  },
+  "SetCoverBody": {
+    "type": "object",
+    "properties": {
+      "itemId": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "itemId"
+    ]
+  },
+  "StartImportBody": {
+    "type": "object",
+    "properties": {
+      "groups": {
+        "minItems": 1,
+        "maxItems": 500,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "group": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "required": [
+            "folder",
+            "group"
+          ]
+        }
+      },
+      "manifest": {
+        "type": "string",
+        "maxLength": 1000
+      }
+    },
+    "required": [
+      "groups"
+    ]
+  },
+  "TransferDatasetBody": {
+    "type": "object",
+    "properties": {
+      "owner": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
+      }
+    },
+    "required": [
+      "owner"
+    ]
+  },
+  "UpdateDatasetBody": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "description": {
+        "type": "string",
+        "maxLength": 10000
+      },
+      "visibility": {
+        "type": "string",
+        "enum": [
+          "private",
+          "public"
+        ]
+      }
+    }
+  }
+}

@@ -57,8 +57,8 @@ describe('internal key-access check for auth-service', () => {
   };
 
   it('answers with the project name and whether the user may write there, groups included', async () => {
-    expect((await check(project, owner)).body.data).toEqual({ id: project, name: 'Road scenes', canWrite: true });
-    expect((await check('road', editor)).body.data).toEqual({ id: project, name: 'Road scenes', canWrite: true });
+    expect((await check(project, owner)).body.data).toEqual({ id: project, name: 'Road scenes', canWrite: true, owner: { kind: 'user', id: owner } });
+    expect((await check('road', editor)).body.data).toEqual({ id: project, name: 'Road scenes', canWrite: true, owner: { kind: 'user', id: owner } });
     expect((await check(project, stranger)).body.data?.canWrite).toBe(false);
   });
 

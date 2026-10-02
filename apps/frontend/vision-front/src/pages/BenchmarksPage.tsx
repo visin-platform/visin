@@ -256,6 +256,13 @@ const BenchmarksPage: React.FC = () => {
           <TableBody>
             {benchmarks.map((benchmark) => {
               const isExpanded = expandedRows.has(benchmark._id);
+              const displayed = new Set(['fps', 'mean_time_ms', 'std_time_ms', 'gpu_memory_mean_mb',
+                'gpu_memory_max_mb', 'baseline_gpu_memory_mb', 'ram_memory_mean_mb', 'ram_memory_max_mb',
+                'baseline_ram_memory_mb', 'image_size', 'flops_giga']);
+              const extraFields = [...new Set(benchmark.results.flatMap(result =>
+                Object.entries(result).filter(([key, value]) => !displayed.has(key) &&
+                  typeof value === 'number' && Number.isFinite(value)).map(([key]) => key)
+              ))].sort();
               
               const { avgFps, totalParamsM, avgFlopsG, meanTimeGpu, meanTimeCpu, stdTimeGpu, stdTimeCpu } = summarizeBenchmark(benchmark);
 
@@ -309,7 +316,7 @@ const BenchmarksPage: React.FC = () => {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
+                    <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={9}>
                       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                         <Box sx={{ margin: 1 }}>
                           <Typography variant="h6" gutterBottom component="div">
@@ -326,6 +333,7 @@ const BenchmarksPage: React.FC = () => {
                                 <TableCell>CPU Memory (GB)</TableCell>
                                 <TableCell>Image Size</TableCell>
                                 <TableCell>FLOPs (G)</TableCell>
+                                {extraFields.map(field => <TableCell key={field}>{field}</TableCell>)}
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -350,6 +358,9 @@ const BenchmarksPage: React.FC = () => {
                                     <TableCell>{cpuMemory.toFixed(2)}</TableCell>
                                     <TableCell>{imageSize}</TableCell>
                                     <TableCell>{flopsG}</TableCell>
+                                    {extraFields.map(field => <TableCell key={field}>
+                                      {typeof result[field] === 'number' ? String(result[field]) : '—'}
+                                    </TableCell>)}
                                   </TableRow>
                                 );
                               })}

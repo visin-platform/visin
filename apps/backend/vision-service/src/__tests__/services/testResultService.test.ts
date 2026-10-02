@@ -15,6 +15,7 @@ jest.mock('../../services/writeAccessService', () => ({
 }));
 jest.mock('../../models/TestResult', () => {
   const ctor = Object.assign(jest.fn(), {
+    aggregate: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
     countDocuments: jest.fn(),
@@ -24,11 +25,11 @@ jest.mock('../../models/TestResult', () => {
 });
 jest.mock('../../models/Epoch', () => ({
   __esModule: true,
-  default: { find: jest.fn(), findOne: jest.fn(), findByIdAndUpdate: jest.fn() },
+  default: { collection: { name: 'training_epochs' }, find: jest.fn(), findOne: jest.fn(), findByIdAndUpdate: jest.fn() },
 }));
 jest.mock('../../models/Training', () => ({
   __esModule: true,
-  default: { find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), findByIdAndUpdate: jest.fn() },
+  default: { collection: { name: 'trainings' }, find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), findByIdAndUpdate: jest.fn() },
 }));
 jest.mock('../../services/projectAccessService', () => {
   const checkProjectAccess = jest.fn();
@@ -40,6 +41,7 @@ jest.mock('../../services/projectAccessService', () => {
     createProjectAccessChecker: (userId?: string) => (projectId?: string | null) =>
       checkProjectAccess(userId, projectId),
     getVisibleTrainingIds: jest.fn(),
+    getVisibleProjectIds: jest.fn(async () => ['p1']),
     isWithinTokenScope: jest.fn(),
     resolveProject: jest.fn(),
   };
@@ -137,149 +139,41 @@ beforeEach(() => {
 });
 
 describe('getTestResults', () => {
-  it('scopes unfiltered queries to visible trainings and enriches results', async () => {
-    const result1 = trDoc('e1');
-    const query = makeQuery([result1]);
-    mockedTestResult.find.mockReturnValue(query);
-    mockedVisibleTrainings.mockResolvedValue(['t1']);
-    // 1st Epoch.find: visible epochs for scoping; 2nd: enrichment
-    mockedEpoch.find
-      .mockResolvedValueOnce([{ epoch_uuid: 'e1' }])
-      .mockResolvedValueOnce([epochDoc('e1', 't1')]);
-    mockedTraining.find.mockResolvedValue([trainingDoc('t1')]);
+  beforeEach(() => mockedTestResult.aggregate.mockResolvedValue([]));
 
-    const result = (await testResultService.getTestResults('u1', {}, pagination)) as AnyDoc;
-
-    expect(mockedTestResult.find).toHaveBeenCalledWith({ deletedAt: null, $and: [{ epoch_uuid: { $in: ['e1'] } }] });
-    expect(result.testResults).toHaveLength(1);
-    expect(result.testResults[0].training.name).toBe('Training t1');
-    expect(result.testResults[0].epoch_info).toEqual({ epoch: 3, epoch_time: 60 });
-    expect(result.total).toBe(1);
+  it('does not enumerate epochs before listing and retains mandatory visibility alongside filters', async () => {
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
+    mockedTestResult.aggregate.mockResolvedValueOnce([{ epoch_uuid: 'e1', training: { name: 'Training t1' } }])
+      .mockResolvedValueOnce([{ total: 12 }]);
+    const result = await testResultService.getTestResults('u1', { epoch: 5, epoch_uuids: ['e1'], training_uuid: 'uuid-t1', trainingId: 't1', projectId: 'slug' }, { ...pagination, page: 2, limit: 5 });
+    expect(mockedEpoch.find).not.toHaveBeenCalled();
+    const pipeline = mockedTestResult.aggregate.mock.calls[0][0];
+    expect(pipeline[0]).toEqual({ $match: { deletedAt: null, $and: [
+      { projectId: { $in: ['p1'] } }, { projectId: 'p1' }, { trainingId: 't1' }, { trainingId: 't1' },
+      { epoch: 5 }, { epoch_uuid: { $in: ['e1'] } }
+    ] } });
+    expect(pipeline).toContainEqual({ $skip: 5 });
+    expect(result).toMatchObject({ pagination: { total: 12, pages: 3 } });
   });
 
-  it('drops results whose training is gone', async () => {
-    const query = makeQuery([trDoc('e1'), trDoc('e-orphan')]);
-    mockedTestResult.find.mockReturnValue(query);
-    mockedVisibleTrainings.mockResolvedValue(['t1']);
-    mockedEpoch.find
-      .mockResolvedValueOnce([{ epoch_uuid: 'e1' }, { epoch_uuid: 'e-orphan' }])
-      .mockResolvedValueOnce([epochDoc('e1', 't1'), epochDoc('e-orphan', 't-gone')]);
-    mockedTraining.find.mockResolvedValue([trainingDoc('t1')]);
-
-    const result = (await testResultService.getTestResults('u1', {}, pagination)) as AnyDoc;
-
-    expect(result.testResults).toHaveLength(1);
+  it('returns empty pages and unpaginated lists', async () => {
+    expect(await testResultService.getTestResults('u1', {}, pagination)).toEqual({ testResults: [], total: 0 });
+    mockedTestResult.aggregate.mockResolvedValue([]);
+    expect(await testResultService.getTestResults('u1', {}, { ...pagination, page: 1, limit: 5 })).toMatchObject({ testResults: [], pagination: { total: 0 } });
   });
 
-  it('403s when a projectId filter is not accessible', async () => {
-    mockedTestResult.find.mockReturnValue(makeQuery([]));
+  it('denies inaccessible project and training filters', async () => {
     mockedCheckAccess.mockResolvedValue(false);
-
-    await expect(
-      testResultService.getTestResults('u1', { projectId: 'p-private' }, pagination)
-    ).rejects.toThrow('Access denied to project');
+    await expect(testResultService.getTestResults('u1', { projectId: 'private' }, pagination)).rejects.toThrow('Access denied');
+    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
+    await expect(testResultService.getTestResults('u1', { trainingId: 't1' }, pagination)).rejects.toThrow('Access denied');
   });
 
-  it('resolves a slug filter to the project id trainings are stored under', async () => {
-    mockedTestResult.find.mockReturnValue(makeQuery([]));
-    mockedResolveProject.mockResolvedValue({ _id: { toString: () => 'p-canonical' } });
-
-    await testResultService.getTestResults('u1', { projectId: 'my-slug' }, pagination);
-
-    expect(mockedResolveProject).toHaveBeenCalledWith('my-slug');
-    expect(mockedTraining.find).toHaveBeenCalledWith({ projectId: 'p-canonical', deletedAt: null });
-  });
-
-  it('returns empty for a project with no trainings', async () => {
-    mockedTestResult.find.mockReturnValue(makeQuery([]));
-    mockedTraining.find.mockResolvedValue([]);
-
-    const result = (await testResultService.getTestResults(
-      'u1',
-      { projectId: 'p1' },
-      pagination
-    )) as AnyDoc;
-
-    expect(result.testResults).toEqual([]);
-    expect(result.total).toBe(0);
-  });
-
-  it('returns empty for a project whose trainings have no epochs', async () => {
-    mockedTestResult.find.mockReturnValue(makeQuery([]));
-    mockedTraining.find.mockResolvedValue([trainingDoc('t1')]);
-    mockedEpoch.find.mockResolvedValueOnce([]);
-
-    const result = (await testResultService.getTestResults(
-      'u1',
-      { projectId: 'p1' },
-      pagination
-    )) as AnyDoc;
-
-    expect(result.testResults).toEqual([]);
-  });
-
-  it('404s for an unknown training_uuid filter', async () => {
-    mockedTestResult.find.mockReturnValue(makeQuery([]));
+  it('rejects missing project and training parents', async () => {
+    mockedResolveProject.mockResolvedValue(null);
+    await expect(testResultService.getTestResults('u1', { projectId: 'missing' }, pagination)).rejects.toThrow('Project not found');
     mockedTraining.findOne.mockResolvedValue(null);
-
-    await expect(
-      testResultService.getTestResults('u1', { training_uuid: 'ghost' }, pagination)
-    ).rejects.toThrow('Training not found');
-  });
-
-  it('403s for a training in an inaccessible project', async () => {
-    mockedTestResult.find.mockReturnValue(makeQuery([]));
-    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
-    mockedCheckAccess.mockResolvedValue(false);
-
-    await expect(
-      testResultService.getTestResults('u1', { training_uuid: 'uuid-t1' }, pagination)
-    ).rejects.toThrow('Access denied to project');
-  });
-
-  it('returns empty when the training has no epochs yet', async () => {
-    mockedTestResult.find.mockReturnValue(makeQuery([]));
-    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
-    mockedEpoch.find.mockResolvedValueOnce([]);
-
-    await expect(
-      testResultService.getTestResults('u1', { training_uuid: 'uuid-t1' }, pagination)
-    ).resolves.toEqual({ testResults: [], total: 0 });
-  });
-
-  it('intersects epoch filters with mandatory visibility', async () => {
-    const query = makeQuery([trDoc('e1')]);
-    mockedTestResult.find.mockReturnValue(query);
-    mockedEpoch.find.mockResolvedValueOnce([epochDoc('e1', 't1')]);
-    mockedTraining.find.mockResolvedValue([trainingDoc('t1')]);
-
-    await testResultService.getTestResults('u1', { epoch: 5, epoch_uuids: ['e1'] }, pagination);
-
-    expect(mockedTestResult.find).toHaveBeenCalledWith({ deletedAt: null, $and: [{ epoch_uuid: { $in: ['e1'] } }, { epoch: 5 }, { epoch_uuid: { $in: ['e1'] } }] });
-    expect(mockedVisibleTrainings).toHaveBeenCalledWith('u1');
-  });
-
-  it('paginates with a parallel count query', async () => {
-    const query = makeQuery([trDoc('e1')]);
-    mockedTestResult.find.mockReturnValue(query);
-    mockedTestResult.countDocuments.mockResolvedValue(12);
-    mockedEpoch.find
-      .mockResolvedValue([epochDoc('e1', 't1')]);
-    mockedTraining.find.mockResolvedValue([trainingDoc('t1')]);
-
-    const result = (await testResultService.getTestResults(
-      'u1',
-      { epoch_uuids: ['e1'] },
-      { page: 2, limit: 5, ...pagination }
-    )) as AnyDoc;
-
-    expect(query.skip).toHaveBeenCalledWith(5);
-    expect(query.limit).toHaveBeenCalledWith(5);
-    expect(mockedTestResult.countDocuments).toHaveBeenCalledWith({
-      deletedAt: null,
-      $and: [{ epoch_uuid: { $in: ['e1'] } }, { epoch_uuid: { $in: ['e1'] } }],
-    });
-    expect(result.pagination).toEqual({ page: 2, limit: 5, total: 12, pages: 3 });
+    await expect(testResultService.getTestResults('u1', { training_uuid: 'missing' }, pagination)).rejects.toThrow('Training not found');
   });
 });
 
@@ -511,12 +405,14 @@ describe('updateTestResult / deleteTestResult', () => {
 });
 
 describe('getTestResultEpochs', () => {
-  it('returns distinct epochs sorted', async () => {
-    const sort = jest.fn().mockResolvedValue([1, 2, 3]);
-    mockedTestResult.distinct.mockReturnValue({ sort });
-
-    await expect(testResultService.getTestResultEpochs()).resolves.toEqual([1, 2, 3]);
-    expect(mockedTestResult.distinct).toHaveBeenCalledWith('epoch', { deletedAt: null, epoch_uuid: { $in: [] } });
+  it('returns visible epoch numbers without enumerating training or epoch UUIDs', async () => {
+    mockedTestResult.aggregate.mockResolvedValue([{ _id: 1 }, { _id: 2 }, { _id: 10 }]);
+    await expect(testResultService.getTestResultEpochs()).resolves.toEqual([1, 2, 10]);
+    expect(mockedEpoch.find).not.toHaveBeenCalled();
+    expect(mockedVisibleTrainings).not.toHaveBeenCalled();
+    expect(mockedTestResult.aggregate.mock.calls[0][0][0]).toEqual({
+      $match: { deletedAt: null, projectId: { $in: ['p1'] } }
+    });
   });
 });
 

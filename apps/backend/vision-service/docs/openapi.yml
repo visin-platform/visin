@@ -122,7 +122,12 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, running, completed, failed]
+          enum:
+            - pending
+            - running
+            - completed
+            - failed
+            - stalled
         tags:
           type: array
           items:
@@ -158,6 +163,24 @@ components:
               type: number
             totalCost:
               type: number
+        lastSeenAt:
+          type: string
+          format: date-time
+        dataset:
+          type: object
+          properties:
+            source:
+              type: string
+              enum:
+                - visin
+                - hf
+                - other
+            id:
+              type: string
+            name:
+              type: string
+            revision:
+              type: string
 
     Epoch:
       type: object
@@ -227,6 +250,10 @@ components:
         createdAt:
           type: string
           format: date-time
+        trainingId:
+          type: string
+        projectId:
+          type: string
 
     Visualization:
       type: object
@@ -271,6 +298,8 @@ components:
         createdAt:
           type: string
           format: date-time
+        benchmark_uuid:
+          type: string
 
     Comparison:
       type: object
@@ -320,21 +349,25 @@ components:
         description:
           type: string
         owner:
-          $ref: '#/components/schemas/ResourceOwner'
+          $ref: "#/components/schemas/ResourceOwner"
         createdBy:
           type: string
           description: The account that created it. Attribution only; it grants nothing.
         visibility:
           type: string
-          enum: [private, public]
-          description: '`public`: anyone can read it, signed in or not. `private`: its owner, the owning group''s members, and editor groups.'
+          enum:
+            - private
+            - public
+          description: "`public`: anyone can read it, signed in or not. `private`: its owner, the owning group's
+            members, and editor groups."
         editorGroupIds:
           type: array
           maxItems: 100
-          description: Groups the project is shared with. Their current members get `contribute`. Changing the list takes `manage`.
+          description: Groups the project is shared with. Their current members get `contribute`. Changing the list
+            takes `manage`.
           items:
             type: string
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: ^[0-9a-fA-F]{24}$
         trashedAt:
           type: string
           format: date-time
@@ -344,13 +377,18 @@ components:
           format: date-time
           description: In the trash listing, when it will be deleted for good.
         permissions:
-          $ref: '#/components/schemas/ProjectPermissions'
+          $ref: "#/components/schemas/ProjectPermissions"
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+        stallAfterMinutes:
+          type: integer
+          minimum: 1
+          maximum: 10080
+          default: 30
 
     ResourceOwner:
       type: object
@@ -1388,12 +1426,13 @@ paths:
 
   /epochs/batch:
     post:
-      tags: [Epochs]
+      tags:
+        - Epochs
       summary: Create multiple epochs
       operationId: createEpochsBatch
       security:
-        - { BearerCredential: [] }
-        - { SessionCookie: [] }
+        - BearerCredential: []
+        - SessionCookie: []
       requestBody:
         required: true
         content:
@@ -1401,7 +1440,7 @@ paths:
             schema:
               $ref: ./generated/request-schemas.json#/CreateEpochsBatchBody
       responses:
-        '201':
+        "201":
           description: Epochs created successfully
           content:
             application/json:
@@ -1414,17 +1453,24 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Epoch'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                      $ref: "#/components/schemas/Epoch"
+                  existing:
+                    type: array
+                    items:
+                      type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         default:
-          $ref: '#/components/responses/Error'
+          $ref: "#/components/responses/Error"
+      description: Unordered insertion saves every new epoch even if another UUID already exists. The data array
+        contains inserted epochs; existing contains repeated UUIDs. Other database or validation errors still
+        fail the request.
 
   /epochs/upload:
     post:
@@ -1946,6 +1992,10 @@ paths:
         - name: training_uuid
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/training_uuid }
+        - name: trainingId
+          in: query
+          schema:
+            $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/trainingId
         - name: projectId
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetTestResultsQuery/properties/projectId }
@@ -3545,3 +3595,49 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /trainings/{id}/heartbeat:
+    post:
+      tags:
+        - Trainings
+      summary: Report that a training is alive
+      description: Refreshes server receipt time. A stalled run resumes; completed and failed runs remain terminal.
+      operationId: heartbeatTraining
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Heartbeat received
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required:
+                      - lastSeenAt
+                    properties:
+                      lastSeenAt:
+                        type: string
+                        format: date-time
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        default:
+          $ref: "#/components/responses/Error"

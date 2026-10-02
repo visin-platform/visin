@@ -2,6 +2,11 @@ import { z } from '@visin/backend-core';
 import { accessFilterSchema } from './projectSchemas';
 import { MAX_PAGE_SIZE, sortOrderSchema } from './common';
 
+export const datasetReferenceSchema = z.object({
+  source: z.enum(['visin', 'hf', 'other']), id: z.string().min(1).optional(),
+  name: z.string().min(1), revision: z.string().min(1).optional()
+});
+
 const EPOCH_SORT_FIELDS = ['epoch', 'createdAt', 'updatedAt', 'timestamp'] as const;
 
 // Accepts either a comma-separated string or a repeated query param
@@ -89,6 +94,7 @@ export const createTrainingBodySchema = z.object({
   name: z.string().trim().min(1, 'Training name is required'),
   description: z.string().trim().optional(),
   datasetId: z.string().optional(),
+  dataset: datasetReferenceSchema.optional(),
   configId: z.string().optional(),
   projectId: z.string().optional(),
   status: z.string().default('pending'),
@@ -102,6 +108,7 @@ export const updateTrainingBodySchema = z.object({
   name: z.string().trim().min(1).optional(),
   description: z.string().trim().optional(),
   datasetId: z.string().optional(),
+  dataset: datasetReferenceSchema.optional(),
   configId: z.string().optional(),
   status: z.string().optional(),
   tags: z.union([z.string(), z.array(z.string())]).optional(),

@@ -44,6 +44,18 @@ export interface ApiKeyAuthOptions {
    * `POST /api/trainings/compare`, which reads two runs and writes nothing.
    */
   readPaths?: RegExp[];
+  /**
+   * What a project-limited key gets outside the domains a project holds.
+   *
+   * By default it is refused. A service that serves public data to anyone sets
+   * this, and the key's reads then go on as an anonymous caller's would: public
+   * data, never the key owner's private data. A pipeline key that trains on a
+   * public dataset needs that, and nothing else of the owner's is reachable.
+   * Writes are refused either way.
+   */
+  anonymousReadsWhenProjectLimited?: boolean;
+  /** Dataset reads use the pipeline scope; the service confines them to its project owner. */
+  projectLimitedDatasetReads?: boolean;
 }
 
 /** What both verifiers answer with, so the handler treats them identically. */
@@ -166,14 +178,22 @@ export function apiKeyAuth(domain: ApiKeyDomain, options: ApiKeyAuthOptions = {}
 
     // Its scopes already keep a limited key out of other domains; saying so
     // plainly tells its owner that the limit, not a missing scope, is the reason.
-    if (verification.projectId && !PROJECT_DOMAINS.has(domain)) {
+    const datasetRead = Boolean(verification.projectId && domain === 'dataset' &&
+      options.projectLimitedDatasetReads && (req.method === 'GET' || req.method === 'HEAD'));
+    if (verification.projectId && !PROJECT_DOMAINS.has(domain) && !datasetRead) {
+      if (options.anonymousReadsWhenProjectLimited && READ_METHODS.has(req.method)) {
+        next();
+        return;
+      }
       next(new ForbiddenError('This key is limited to one project and cannot reach this API.'));
       return;
     }
 
     const isRead =
       READ_METHODS.has(req.method) || readPaths.some((pattern) => pattern.test(req.path));
-    const required = isRead ? readScope(domain) : writeScope(domain);
+    const required = datasetRead
+      ? (verification.scopes?.includes('vision:read') ? 'vision:read' : 'vision:write')
+      : (isRead ? readScope(domain) : writeScope(domain));
 
     const scopes = verification.scopes ?? [];
     if (!scopes.includes(required)) {

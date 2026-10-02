@@ -29,6 +29,7 @@ export const createProjectBodySchema = z.object({
   /** the caller (the default), or one of their groups */
   owner: resourceOwnerSchema.optional(),
   taxonomy: taxonomySchema.optional(),
+  stallAfterMinutes: z.number().int().min(1).max(10080).optional(),
   costing: costingSchema.optional()
 });
 
@@ -41,6 +42,7 @@ export const updateProjectBodySchema = z.object({
   // null clears either one — what the settings screens send when the editor is
   // empty. Rejecting it failed the whole save, not just the cleared field.
   taxonomy: taxonomySchema.nullable().optional(),
+  stallAfterMinutes: z.number().int().min(1).max(10080).optional(),
   costing: costingSchema.nullable().optional()
 });
 

@@ -113,6 +113,7 @@ export const API_SPECS = [
     apiUrl: 'VISION_API_URL',
     basePath: '/api'
   },
+  { slug: 'dataset', title: 'Datasets', url: '/openapi/dataset.json', apiUrl: 'DATASET_API_URL', basePath: '/api' },
   { slug: 'auth', title: 'API keys and OAuth', url: '/openapi/auth.json', apiUrl: 'AUTH_SERVICE_URL', basePath: '' }
 ] as const;
 

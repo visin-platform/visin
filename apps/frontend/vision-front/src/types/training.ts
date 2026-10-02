@@ -7,10 +7,12 @@ export interface Training {
   name: string;
   description?: string;
   datasetId?: string;
+  dataset?: { source: 'visin' | 'hf' | 'other'; id?: string; name: string; revision?: string };
   configId?: string;
   projectId?: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'stalled';
   tags?: string[];
+  lastSeenAt?: string;
   startTime?: string;
   endTime?: string;
   metadata?: Record<string, unknown>;
@@ -36,10 +38,12 @@ export interface CreateTrainingData {
   name: string;
   description?: string;
   datasetId?: string;
+  dataset?: { source: 'visin' | 'hf' | 'other'; id?: string; name: string; revision?: string };
   configId?: string;
   projectId?: string;
-  status?: 'pending' | 'running' | 'completed' | 'failed';
+  status?: 'pending' | 'running' | 'completed' | 'failed' | 'stalled';
   tags?: string[];
+  lastSeenAt?: string;
   startTime?: string;
   endTime?: string;
   metadata?: Record<string, unknown>;

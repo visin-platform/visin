@@ -89,7 +89,7 @@ export const createEpochFromJson = async (req: Request, res: Response): Promise<
 
 // Batch create epochs
 export const createEpochsBatch = async (req: Request, res: Response): Promise<void> => {
-  const savedEpochs = await epochService.createEpochsBatch(
+  const result = await epochService.createEpochsBatch(
     req.body as CreateEpochsBatchData,
     req.user?.id,
     req.projectId
@@ -97,7 +97,8 @@ export const createEpochsBatch = async (req: Request, res: Response): Promise<vo
 
   res.status(201).json({
     success: true,
-    message: `${savedEpochs.length} epochs created successfully`,
-    data: savedEpochs
+    message: `${result.epochs.length} epochs created successfully`,
+    data: result.epochs,
+    existing: result.existing
   });
 };

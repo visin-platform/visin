@@ -54,6 +54,8 @@ A retry can repeat a request that did arrive, whose answer was lost. Send your o
 with a `uuid` on the run and an `epoch_uuid` on each epoch, the second copy answers `409` instead of being stored
 twice. Without an `epoch_uuid`, a repeated epoch is stored again.
 
+Configs accept `config_uuid`; benchmarks accept `benchmark_uuid`. Generate these once per report and keep them through every retry. Visualization reservations accept `visualization_uuid`: a repeat renews the same pending allocation, and returns `409` once the visualization is recorded.
+
 ## Limits
 
 | Limit                                                  | Default                                | Set by                                                             |

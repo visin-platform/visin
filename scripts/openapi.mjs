@@ -42,6 +42,12 @@ const SPECS = {
       }
     }
   },
+  dataset: {
+    path: 'apps/backend/dataset-service/docs/openapi.yml',
+    publish: true,
+    server: { url: '{datasetUrl}/api', description: "Your deployment's dataset-service",
+      variables: { datasetUrl: { default: 'http://localhost:5010', description: 'Your dataset-service address' } } }
+  },
   auth: {
     path: 'apps/backend/auth-service/docs/openapi.yml',
     publish: true,

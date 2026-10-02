@@ -16,6 +16,7 @@ export interface Project {
   taxonomy?: ProjectTaxonomy;
   /** hourly rates for this project's hardware; absent means costs are not shown */
   costing?: ProjectCosting;
+  stallAfterMinutes?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,6 +29,7 @@ export interface CreateProjectData {
   editorGroupIds?: string[];
   taxonomy?: ProjectTaxonomy;
   costing?: ProjectCosting;
+  stallAfterMinutes?: number;
 }
 
 export interface UpdateProjectData {
@@ -40,4 +42,5 @@ export interface UpdateProjectData {
   taxonomy?: ProjectTaxonomy | null;
   /** null clears the rates, so the project stops reporting costs */
   costing?: ProjectCosting | null;
+  stallAfterMinutes?: number;
 }

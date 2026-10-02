@@ -61,6 +61,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
   const groupOptions = [...new Set([...groups.map((group) => group.id), ...editorGroupIds])];
   const [editIsPublic, setEditIsPublic] = useState(project.visibility === 'public');
   const [editTaxonomy, setEditTaxonomy] = useState<ProjectTaxonomy>(project.taxonomy ?? {});
+  const [stallAfterMinutes, setStallAfterMinutes] = useState(project.stallAfterMinutes ?? 30);
   const [editCosting, setEditCosting] = useState<ProjectCosting>(project.costing ?? {});
   const [projectUpdateError, setProjectUpdateError] = useState<string | null>(null);
 
@@ -96,6 +97,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
   const handleSaveProject = () => {
     const updateData: UpdateProjectData = {
       name: editName,
+      stallAfterMinutes,
       description: editDescription,
       ...(project.permissions.own ? { visibility: editIsPublic ? ('public' as const) : ('private' as const) } : {}),
       editorGroupIds,
@@ -267,6 +269,20 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
             onChange={setEditTaxonomy}
             disabled={updateProjectMutation.isPending}
             discovered={discovered}
+          />
+        </CardContent>
+      </Card>
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 2 }}>Run monitoring</Typography>
+          <TextField
+            label="Mark runs stalled after (minutes)"
+            type="number"
+            value={stallAfterMinutes}
+            onChange={event => setStallAfterMinutes(Number(event.target.value))}
+            slotProps={{ htmlInput: { min: 1, max: 10080 } }}
+            helperText="A silent running job is marked stalled after this interval. Save with the button at the top."
+            sx={{ mb: 2 }}
           />
         </CardContent>
       </Card>

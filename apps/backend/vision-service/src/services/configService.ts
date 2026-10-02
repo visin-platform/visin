@@ -10,6 +10,7 @@ import type { GetAllConfigsQuery } from '../validation/configSchemas';
 import { MAX_PAGE_SIZE } from '../validation/common';
 
 interface ConfigData {
+  config_uuid?: string;
   summary: string;
   config_data: unknown;
   config_name?: string;
@@ -106,7 +107,7 @@ export const getConfigByUuid = async (uuid: string, userId?: string) => {
   return config;
 };
 
-export const createConfig = async ({ summary, config_data, config_name, metadata, projectId }: ConfigData, userId?: string) => {
+export const createConfig = async ({ summary, config_data, config_name, metadata, projectId, config_uuid }: ConfigData, userId?: string) => {
   const ownerId = requireActor(userId);
   const reference = tokenProjectId() || projectId;
   if (!reference) throw new BadRequestError("A config needs a project: pass projectId, the project's id or slug");
@@ -118,7 +119,7 @@ export const createConfig = async ({ summary, config_data, config_name, metadata
   const configData = new Config({
     ownerId,
     projectId: project._id.toString(),
-    config_uuid: uuidv4(),
+    config_uuid: config_uuid || uuidv4(),
     summary,
     config_data,
     config_name,

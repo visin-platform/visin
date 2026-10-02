@@ -156,6 +156,7 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
             <MenuItem value="running">Running</MenuItem>
             <MenuItem value="completed">Completed</MenuItem>
             <MenuItem value="failed">Failed</MenuItem>
+            <MenuItem value="stalled">Stalled</MenuItem>
           </Select>
         </FormControl>
 

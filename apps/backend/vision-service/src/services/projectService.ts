@@ -111,6 +111,7 @@ interface CreateProjectData {
   editorGroupIds?: string[];
   taxonomy?: IProjectTaxonomy;
   costing?: IProjectCosting;
+  stallAfterMinutes?: number;
 }
 
 /**
@@ -168,6 +169,7 @@ interface UpdateProjectData {
   slug?: string;
   taxonomy?: IProjectTaxonomy | null;
   costing?: IProjectCosting | null;
+  stallAfterMinutes?: number;
 }
 
 /** Settings need `manage`; who can see it needs `own`. */
@@ -213,6 +215,7 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
     project.taxonomy = taxonomy === null ? undefined : applyTaskTypePresets(taxonomy);
   }
   // null clears the rates: there are no defaults, so the project reports no cost
+  if (data.stallAfterMinutes !== undefined) project.stallAfterMinutes = data.stallAfterMinutes;
   if (costing !== undefined) {
     project.costing = costing === null ? undefined : costing;
   }
