@@ -26,6 +26,8 @@ export interface TaxonomyTerm {
 export interface TaxonomyMetric {
   key: string;
   label?: string;
+  /** one plain sentence on what the number means, shown as a tooltip wherever the metric is */
+  description?: string;
   direction?: MetricDirection;
   decimals?: number;
   format?: MetricFormat;
@@ -37,6 +39,8 @@ export interface IProjectTaxonomy {
   conditions?: TaxonomyTerm[];
   classes?: TaxonomyTerm[];
   metrics?: TaxonomyMetric[];
+  /** the result that says how good a run is, as a path in an epoch's results ("val.mean_iou"); the best-run badge ranks by it */
+  primaryMetric?: string;
   /** which keys of a condition's `overall` block make up the summary row */
   overallMetrics?: string[];
   /** seeds the metric presets at creation time; nothing branches on it afterwards */
@@ -59,6 +63,7 @@ const MetricSchema = new Schema<TaxonomyMetric>(
   {
     key: { type: String, required: true, trim: true, maxlength: 100 },
     label: { type: String, trim: true, maxlength: 100 },
+    description: { type: String, trim: true, maxlength: 300 },
     direction: { type: String, enum: ['higher', 'lower'] },
     decimals: { type: Number, min: 0, max: 10 },
     format: { type: String, enum: ['number', 'percent', 'ms', 'fps'] }
@@ -72,6 +77,7 @@ export const TaxonomySchema = new Schema<IProjectTaxonomy>(
     conditions: { type: [TermSchema], default: undefined },
     classes: { type: [TermSchema], default: undefined },
     metrics: { type: [MetricSchema], default: undefined },
+    primaryMetric: { type: String, trim: true, maxlength: 100 },
     overallMetrics: { type: [String], default: undefined },
     taskType: { type: String, enum: ['segmentation', 'detection', 'classification', 'other'] },
     exportPathPrefix: { type: String, trim: true, maxlength: 200 }

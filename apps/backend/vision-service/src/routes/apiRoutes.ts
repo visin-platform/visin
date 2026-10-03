@@ -10,6 +10,8 @@ import benchmarkRoutes from './benchmarkRoutes';
 import comparisonRoutes from './comparisonRoutes';
 import projectRoutes from './projectRoutes';
 import findingRoutes from './findingRoutes';
+import modelRoutes from './modelRoutes';
+import discoveryRoutes from './discoveryRoutes';
 
 export interface ApiRouteGroup {
   path: string;
@@ -44,6 +46,7 @@ const COMPARE_IS_A_READ = { readPaths: [/^\/compare(\/|$)/] };
  */
 export const API_ROUTE_GROUPS: ApiRouteGroup[] = [
   { path: '/api/write-capabilities', guards: [], router: writeCapabilitiesRoutes },
+  { path: '/api/.well-known', guards: [projectKeyAuth('vision')], router: discoveryRoutes },
   { path: '/api/trainings', guards: [projectKeyAuth('vision', COMPARE_IS_A_READ)], router: trainingRoutes },
   { path: '/api/epochs', guards: [projectKeyAuth('vision')], router: epochRoutes },
   { path: '/api/configs', guards: [projectKeyAuth('vision')], router: configRoutes },
@@ -51,6 +54,7 @@ export const API_ROUTE_GROUPS: ApiRouteGroup[] = [
   { path: '/api/visualizations', guards: [projectKeyAuth('vision')], router: visualizationRoutes },
   { path: '/api/benchmarks', guards: [projectKeyAuth('vision')], router: benchmarkRoutes },
   { path: '/api/comparisons', guards: [projectKeyAuth('vision')], router: comparisonRoutes },
+  { path: '/api/models', guards: [projectKeyAuth('vision')], router: modelRoutes },
   { path: '/api/projects', guards: [projectKeyAuth('vision')], router: projectRoutes },
   // Written conclusions. Its own scope domain, so an assistant can be granted
   // "read my experiments and record what you conclude" without also being able to

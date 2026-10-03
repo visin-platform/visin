@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -19,6 +19,7 @@ import {
   Fingerprint as FingerprintIcon,
   CalendarToday as CalendarIcon,
   Update as UpdateIcon,
+  Memory as ModelIcon,
   Speed as SpeedIcon,
   AttachMoney as MoneyIcon,
   TrendingUp as TrendingUpIcon,
@@ -28,6 +29,9 @@ import {
 import { livePalette, tint } from '@visin/frontend-core';
 import { Training, Epoch } from '../types';
 import { trainingStatusLabel } from '../utils/trainingStatus';
+import ModelCardDialog from './models/ModelCardDialog';
+import ModelTryDialog from './models/ModelTryDialog';
+import { hubModelUrl, hubSpaceUrl, shortRevision } from '../utils/hubLinks';
 import { costOf } from '../costing/costing';
 import { useCosting, useFormatCost } from '../costing/useCosting';
 
@@ -41,6 +45,8 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
   epochs,
 }) => {
   const theme = useTheme();
+  const [cardFor, setCardFor] = useState<NonNullable<Training['models']>[number] | null>(null);
+  const [tryFor, setTryFor] = useState<NonNullable<Training['models']>[number] | null>(null);
   const costing = useCosting();
   const formatCost = useFormatCost();
 
@@ -242,6 +248,35 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                     {training.dataset.revision && <Typography variant="caption" component="span" sx={{ display: 'block' }}>Revision: {training.dataset.revision}</Typography>}
                   </> : training.datasetId || 'Not specified'}
                 />
+                {training.models && training.models.length > 0 && (
+                  <InfoItem
+                    icon={<ModelIcon fontSize="small" />}
+                    label={training.models.length > 1 ? 'Models' : 'Model'}
+                    value={training.models.map(model => (
+                      <Box key={model._id} component="span" sx={{ display: 'block' }}>
+                        <Link href={hubModelUrl(model)} target="_blank" rel="noopener noreferrer">
+                          {model.repo} @ {shortRevision(model.revision)}
+                        </Link>
+                        {model.space ? (
+                          <Link href={hubSpaceUrl(model.space)} target="_blank" rel="noopener noreferrer" variant="caption" sx={{ ml: 1 }}>
+                            Open demo
+                          </Link>
+                        ) : null}
+                        <Link component="button" type="button" variant="caption" onClick={() => setTryFor(model)} sx={{ ml: 1 }}>
+                          Try it
+                        </Link>
+                        <Link component="button" type="button" variant="caption" onClick={() => setCardFor(model)} sx={{ ml: 1 }}>
+                          Model card
+                        </Link>
+                        {(model.path || model.epoch !== undefined) && (
+                          <Typography variant="caption" component="span" sx={{ display: 'block' }}>
+                            {[model.path, model.epoch !== undefined ? `epoch ${model.epoch}` : undefined].filter(Boolean).join(' · ')}
+                          </Typography>
+                        )}
+                      </Box>
+                    ))}
+                  />
+                )}
                 <InfoItem 
                   icon={<CalendarIcon fontSize="small" />} 
                   label="Created At" 
@@ -357,6 +392,8 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
           </Grid>
         </Grid>
       </CardContent>
+      {tryFor && <ModelTryDialog trainingId={training._id} model={tryFor} onClose={() => setTryFor(null)} />}
+      {cardFor && <ModelCardDialog trainingId={training._id} model={cardFor} onClose={() => setCardFor(null)} />}
     </Card>
   );
 };

@@ -1,4 +1,51 @@
 {
+  "ArtifactRef": {
+    "type": "object",
+    "properties": {
+      "provider": {
+        "default": "hf",
+        "type": "string",
+        "const": "hf"
+      },
+      "kind": {
+        "default": "model",
+        "type": "string",
+        "const": "model"
+      },
+      "repo": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+      },
+      "revision": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "epoch": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "repo",
+      "revision"
+    ]
+  },
+  "BestRunQuery": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "datasetId": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
   "CompareAggregatedTestResultsBody": {
     "type": "object",
     "properties": {
@@ -472,6 +519,10 @@
                   "type": "string",
                   "maxLength": 100
                 },
+                "description": {
+                  "type": "string",
+                  "maxLength": 300
+                },
                 "direction": {
                   "type": "string",
                   "enum": [
@@ -498,6 +549,10 @@
                 "key"
               ]
             }
+          },
+          "primaryMetric": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
           },
           "overallMetrics": {
             "type": "array",
@@ -542,6 +597,25 @@
             "pattern": "^[A-Z]{3}$"
           }
         }
+      },
+      "storage": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "visin",
+              "hf"
+            ]
+          },
+          "hfNamespace": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          }
+        },
+        "required": [
+          "provider"
+        ]
       }
     },
     "required": [
@@ -624,6 +698,75 @@
       "projectId": {
         "type": "string"
       },
+      "notes": {
+        "type": "string",
+        "maxLength": 5000
+      },
+      "provenance": {
+        "type": "object",
+        "properties": {
+          "git": {
+            "type": "object",
+            "properties": {
+              "commit": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{7,64}$"
+              },
+              "branch": {
+                "type": "string",
+                "maxLength": 250
+              },
+              "dirty": {
+                "type": "boolean"
+              },
+              "remote": {
+                "type": "string",
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "commit"
+            ]
+          },
+          "command": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "packages": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          "host": {
+            "type": "object",
+            "properties": {
+              "hostname": {
+                "type": "string",
+                "maxLength": 255
+              },
+              "platform": {
+                "type": "string",
+                "maxLength": 255
+              },
+              "python": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "cuda": {
+                "type": "string",
+                "maxLength": 100
+              }
+            }
+          }
+        }
+      },
       "status": {
         "default": "pending",
         "type": "string"
@@ -696,6 +839,19 @@
       "mimetype",
       "size"
     ]
+  },
+  "ExportComparisonQuery": {
+    "type": "object",
+    "properties": {
+      "format": {
+        "default": "xlsx",
+        "type": "string",
+        "enum": [
+          "csv",
+          "xlsx"
+        ]
+      }
+    }
   },
   "ExportFindingQuery": {
     "type": "object",
@@ -1280,6 +1436,94 @@
       }
     }
   },
+  "ListModelsQuery": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "datasetId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "search": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "metric": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+      },
+      "direction": {
+        "default": "max",
+        "type": "string",
+        "enum": [
+          "max",
+          "min"
+        ]
+      },
+      "sortBy": {
+        "default": "addedAt",
+        "type": "string",
+        "enum": [
+          "addedAt",
+          "best"
+        ]
+      },
+      "order": {
+        "default": "desc",
+        "type": "string",
+        "enum": [
+          "asc",
+          "desc"
+        ]
+      },
+      "page": {
+        "default": 1,
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "limit": {
+        "default": 30,
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 100
+      }
+    }
+  },
+  "ModelCardQuery": {
+    "type": "object",
+    "properties": {
+      "repo": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+      },
+      "epoch": {
+        "type": "integer",
+        "minimum": 0
+      }
+    }
+  },
+  "ModelDemoBody": {
+    "type": "object",
+    "properties": {
+      "space": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "space"
+    ]
+  },
   "TransferProjectBody": {
     "type": "object",
     "properties": {
@@ -1485,6 +1729,10 @@
                       "type": "string",
                       "maxLength": 100
                     },
+                    "description": {
+                      "type": "string",
+                      "maxLength": 300
+                    },
                     "direction": {
                       "type": "string",
                       "enum": [
@@ -1511,6 +1759,10 @@
                     "key"
                   ]
                 }
+              },
+              "primaryMetric": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
               },
               "overallMetrics": {
                 "type": "array",
@@ -1566,6 +1818,25 @@
           {
             "type": "null"
           }
+        ]
+      },
+      "storage": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "visin",
+              "hf"
+            ]
+          },
+          "hfNamespace": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          }
+        },
+        "required": [
+          "provider"
         ]
       }
     }
@@ -1630,6 +1901,75 @@
       },
       "configId": {
         "type": "string"
+      },
+      "notes": {
+        "type": "string",
+        "maxLength": 5000
+      },
+      "provenance": {
+        "type": "object",
+        "properties": {
+          "git": {
+            "type": "object",
+            "properties": {
+              "commit": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{7,64}$"
+              },
+              "branch": {
+                "type": "string",
+                "maxLength": 250
+              },
+              "dirty": {
+                "type": "boolean"
+              },
+              "remote": {
+                "type": "string",
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "commit"
+            ]
+          },
+          "command": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "packages": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          "host": {
+            "type": "object",
+            "properties": {
+              "hostname": {
+                "type": "string",
+                "maxLength": 255
+              },
+              "platform": {
+                "type": "string",
+                "maxLength": 255
+              },
+              "python": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "cuda": {
+                "type": "string",
+                "maxLength": 100
+              }
+            }
+          }
+        }
       },
       "status": {
         "type": "string"

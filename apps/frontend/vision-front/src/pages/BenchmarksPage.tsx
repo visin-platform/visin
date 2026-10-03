@@ -387,7 +387,7 @@ const BenchmarksPage: React.FC = () => {
             No benchmarks found
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Benchmarks will appear here when available
+            Benchmarks are speed and memory measurements that a run reports from its benchmark stage. None match here yet.
           </Typography>
         </Box>
       )}

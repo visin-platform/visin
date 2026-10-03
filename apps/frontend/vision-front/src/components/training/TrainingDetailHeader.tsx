@@ -2,7 +2,7 @@ import { trainingStatusLabel } from '../../utils/trainingStatus';
 import React from 'react';
 import { Box, Chip, Stack, Typography } from '@mui/material';
 import { ResponsiveActions } from '@visin/frontend-core';
-import { Refresh as RefreshIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Refresh as RefreshIcon, Edit as EditIcon, Delete as DeleteIcon, Code as CodeIcon } from '@mui/icons-material';
 import { Training } from '../../types';
 
 interface TrainingDetailHeaderProps {
@@ -10,6 +10,8 @@ interface TrainingDetailHeaderProps {
   isAuthenticated: boolean;
   isLoading: boolean;
   onRefresh: () => void;
+  /** open the snippets that read this run in a script or notebook */
+  onUse?: () => void;
   onEdit: () => void;
   onDeleteClick: () => void;
 }
@@ -19,6 +21,7 @@ const TrainingDetailHeader: React.FC<TrainingDetailHeaderProps> = ({
   isAuthenticated,
   isLoading,
   onRefresh,
+  onUse,
   onEdit,
   onDeleteClick
 }) => (
@@ -76,6 +79,7 @@ const TrainingDetailHeader: React.FC<TrainingDetailHeaderProps> = ({
           menuLabel={`More actions for ${training.name}`}
         actions={[
           { label: 'Refresh', icon: <RefreshIcon />, onClick: onRefresh, disabled: isLoading },
+          ...(onUse ? [{ label: 'Use this', icon: <CodeIcon />, onClick: onUse }] : []),
           ...(isAuthenticated
             ? [
                 { label: 'Edit', icon: <EditIcon />, onClick: onEdit, disabled: isLoading },

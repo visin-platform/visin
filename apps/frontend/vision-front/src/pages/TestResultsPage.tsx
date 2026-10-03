@@ -36,6 +36,7 @@ import { TestResult, TestResultData } from '../types';
 import { isRecord, readMetric } from '../taxonomy/discover';
 import { RESERVED_CLASS_KEYS, RESERVED_CONDITION_KEYS } from '../taxonomy/reserved';
 import { useTaxonomyFor } from '../taxonomy/useTaxonomy';
+import MetricName from '../components/common/MetricName';
 
 /** Per-class metrics this listing averages into one column each. */
 const AVERAGED_METRICS = ['iou', 'precision', 'recall', 'f1_score'];
@@ -237,7 +238,7 @@ export const TestResultsPage: React.FC = () => {
         </Box>
       ) : testResults.length === 0 ? (
         <Typography color="textSecondary">
-          No test results found
+          No test results found. Either nothing matches your filters, or the runs have not reported any yet: a run reports them from its test stage, after training.
         </Typography>
       ) : compact ? (
           <Paper elevation={0} sx={{ border: `1px solid ${livePalette(theme).divider}`, overflow: 'hidden' }}>
@@ -312,12 +313,12 @@ export const TestResultsPage: React.FC = () => {
                     </TableCell>
                     {AVERAGED_METRICS.map(metric => (
                       <TableCell key={metric} align="right" sx={{ fontWeight: 600 }}>
-                        Avg {taxonomy.metric(metric).label}
+                        <MetricName label={`Avg ${taxonomy.metric(metric).label}`} description={taxonomy.metric(metric).description} />
                       </TableCell>
                     ))}
                     {taxonomy.overallMetrics.map(metric => (
                       <TableCell key={metric.key} align="right" sx={{ fontWeight: 600 }}>
-                        {metric.label}
+                        <MetricName label={metric.label} description={metric.description} />
                       </TableCell>
                     ))}
                     <TableCell align="center" sx={{ fontWeight: 600 }}>

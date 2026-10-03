@@ -181,6 +181,97 @@ components:
               type: string
             revision:
               type: string
+        models:
+          type: array
+          description: Hugging Face Hub models linked to this run. Visin keeps the pointer, never the bytes.
+          items:
+            $ref: "#/components/schemas/ModelReference"
+        notes:
+          type: string
+          maxLength: 5000
+          description: The researcher's own commentary on the run ("this one used the relabelled night set"), apart
+            from `description`, which says what the run is. Anyone who may write to the run may change it; an
+            empty string removes it.
+        provenance:
+          $ref: "#/components/schemas/Provenance"
+
+    Provenance:
+      type: object
+      description: What the run was started from, so it can be reproduced. Filled in by the pipeline's client; a
+        credential in a remote URL is removed on receipt.
+      properties:
+        git:
+          type: object
+          required: [commit]
+          properties:
+            commit: { type: string, pattern: '^[0-9a-fA-F]{7,64}$' }
+            branch: { type: string }
+            dirty:
+              type: boolean
+              description: Uncommitted changes were present, so the commit alone does not name the code that ran.
+            remote: { type: string }
+        command:
+          type: string
+          description: The command line, with secrets redacted by the client.
+        packages:
+          type: object
+          description: Installed package versions, by name.
+          additionalProperties: { type: string }
+        host:
+          type: object
+          properties:
+            hostname: { type: string }
+            platform: { type: string }
+            python: { type: string }
+            cuda: { type: string }
+
+    ModelList:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelReference"
+
+    ModelReference:
+      type: object
+      required: [_id, provider, kind, repo, revision, addedAt]
+      properties:
+        _id:
+          type: string
+        provider:
+          type: string
+          enum: [hf]
+        kind:
+          type: string
+          enum: [model]
+        repo:
+          type: string
+          description: The Hub repo id, `org/name`.
+          example: acme/clftv2-zod
+        revision:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          description: The full commit hash the run produced. Never a branch or tag, so the link keeps naming the
+            same bytes.
+        path:
+          type: string
+          description: A file or folder inside the repo, when the model is not all of it.
+        epoch:
+          type: integer
+          minimum: 0
+          description: The epoch the checkpoint came from.
+        space:
+          type: string
+          description: A demo Space on the Hub where anyone can try the model, `org/name`. Set with
+            `PATCH /trainings/{id}/models/{modelId}`.
+        addedAt:
+          type: string
+          format: date-time
 
     Epoch:
       type: object
@@ -389,6 +480,19 @@ components:
           minimum: 1
           maximum: 10080
           default: 30
+        storage:
+          type: object
+          required: [provider]
+          description: Where the project keeps its big files. Absent means `visin`. Changing it takes `manage`.
+          properties:
+            provider:
+              type: string
+              enum: [visin, hf]
+              description: "`visin`: everything stays on this deployment, and links to Hub models are refused.
+                `hf`: runs may link Hugging Face Hub models."
+            hfNamespace:
+              type: string
+              description: The Hub user or organisation a pipeline should create repos under by default.
 
     ResourceOwner:
       type: object
@@ -480,6 +584,12 @@ components:
             $ref: '#/components/schemas/Error'
     Forbidden:
       description: The credential is valid but may not do this
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: The request conflicts with the current state, for example a project whose storage does not allow it
       content:
         application/json:
           schema:
@@ -892,6 +1002,88 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         default:
+          $ref: '#/components/responses/Error'
+
+  /trainings/best:
+    get:
+      tags: [Trainings]
+      summary: The best run of a project or a dataset
+      operationId: getBestRun
+      description: |
+        Names the run that did best, and says by what: a run is only the best at something, so the answer carries the
+        `metric` it was judged on and the direction. Pass a `projectId` for one project, or a `datasetId` for every run
+        trained on that dataset in the projects the caller can see.
+
+        The result a project is judged on is its taxonomy's `primaryMetric` (`metric.source: project`). Without one
+        it is guessed: a quality score such as `val.mean_iou` from the validation block, else the validation loss
+        (`metric.source: guessed`). A project whose runs report nothing that reads as a score has no best run, and
+        `best` is `null`. Direction follows the taxonomy as in the training summary. Across projects whose results
+        differ, the result used by most of the dataset's runs decides, since a loss and an IoU cannot be compared.
+
+        Runs still training count, at the best epoch they have reached so far.
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - name: projectId
+          in: query
+          description: A project’s id or slug
+          schema: { $ref: ./generated/request-schemas.json#/BestRunQuery/properties/projectId }
+        - name: datasetId
+          in: query
+          description: A Visin dataset id the runs were trained on
+          schema: { $ref: ./generated/request-schemas.json#/BestRunQuery/properties/datasetId }
+      responses:
+        '200':
+          description: The best run, or `null` when none can be named
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required: [runs, best]
+                    properties:
+                      runs:
+                        type: integer
+                        description: Runs considered
+                      best:
+                        type: [object, 'null']
+                        properties:
+                          training:
+                            type: object
+                            properties:
+                              _id: { type: string }
+                              uuid: { type: string }
+                              name: { type: string }
+                              status: { type: string }
+                              projectId: { type: string }
+                          project:
+                            type: object
+                            properties:
+                              _id: { type: string }
+                              name: { type: string }
+                              slug: { type: string }
+                          metric:
+                            type: object
+                            properties:
+                              path: { type: string, example: val.mean_iou }
+                              direction: { type: string, enum: [higher, lower] }
+                              directionFrom: { type: string, enum: [taxonomy, default] }
+                              source: { type: string, enum: [project, guessed] }
+                          value: { type: number }
+                          epoch: { type: integer }
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
           $ref: '#/components/responses/Error'
 
   /trainings/stats:
@@ -3641,3 +3833,514 @@ paths:
           $ref: "#/components/responses/Forbidden"
         default:
           $ref: "#/components/responses/Error"
+
+  /trainings/{id}/models:
+    post:
+      tags:
+        - Trainings
+      summary: Link a Hugging Face model to a training
+      description: |
+        Records a pointer to a model on the Hub, pinned to the commit a run produced. Visin stores the reference,
+        not the checkpoint: upload it where it was trained, with your own Hugging Face token, then report it here.
+
+        Repeating the same repo, commit and path is a no-op that returns `200`, so a pipeline can retry freely.
+        The project's storage must be set to `hf` (project settings); a `visin` project answers `409`. A run links
+        at most 50 models. Needs write access to the run.
+      operationId: addTrainingModel
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/ArtifactRef
+      responses:
+        "200":
+          description: Already linked; nothing changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+        "201":
+          description: Linked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /trainings/{id}/models/{modelId}:
+    patch:
+      tags:
+        - Trainings
+      summary: Link a demo Space to a model
+      description: Records, or clears with `null`, the Hugging Face Space where anyone can try this model. Visin does not
+        check that the Space exists. Needs write access to the run.
+      operationId: setTrainingModelDemo
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          description: The `_id` of the link, from the training's `models`.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/ModelDemoBody
+      responses:
+        "200":
+          description: The training's models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      tags:
+        - Trainings
+      summary: Unlink a model from a training
+      description: Removes the pointer only; nothing on the Hub is touched. Allowed whatever the project's storage is now.
+      operationId: removeTrainingModel
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          description: The `_id` of the link, from the training's `models`.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Unlinked; the remaining models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /models:
+    get:
+      tags: [Trainings]
+      summary: Model registry
+      operationId: getModels
+      description: |
+        Every Hugging Face Hub model linked to a run the caller may see, one row per link. This is what to open to
+        answer "which model should I use": filter by project or dataset, and rank by how well each run did on a
+        result of your choice.
+
+        Visin does not know whether a result is better high or low, so `direction` is yours to give. A project-limited
+        key sees only its own project.
+      security:
+        - { BearerCredential: [] }
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          description: A project id or slug.
+          schema: { $ref: ./generated/request-schemas.json#/ListModelsQuery/properties/projectId }
+        - name: datasetId
+          in: query
+          required: false
+          description: A Visin dataset id the run was trained on.
+          schema: { $ref: ./generated/request-schemas.json#/ListModelsQuery/properties/datasetId }
+        - name: search
+          in: query
+          required: false
+          description: Matches a run name or a model repo, ignoring case.
+          schema: { $ref: ./generated/request-schemas.json#/ListModelsQuery/properties/search }
+        - name: metric
+          in: query
+          required: false
+          description: Rank by the best value each run reached for this result, e.g. `val.mean_iou`. Adds `best` to each row.
+          schema: { $ref: ./generated/request-schemas.json#/ListModelsQuery/properties/metric }
+        - name: direction
+          in: query
+          required: false
+          description: Whether larger is better for `metric`. Use `min` for a loss or a latency.
+          schema: { $ref: ./generated/request-schemas.json#/ListModelsQuery/properties/direction }
+        - name: sortBy
+          in: query
+          required: false
+          description: "`addedAt` (default) or `best`, which needs `metric`. A run with no value for the metric is listed last."
+          schema: { $ref: ./generated/request-schemas.json#/ListModelsQuery/properties/sortBy }
+        - name: order
+          in: query
+          required: false
+          schema: { $ref: ./generated/request-schemas.json#/ListModelsQuery/properties/order }
+        - name: page
+          in: query
+          required: false
+          schema: { $ref: ./generated/request-schemas.json#/ListModelsQuery/properties/page }
+        - name: limit
+          in: query
+          required: false
+          schema: { $ref: ./generated/request-schemas.json#/ListModelsQuery/properties/limit }
+      responses:
+        '200':
+          description: One page of linked models
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required: [models, pagination]
+                    properties:
+                      models:
+                        type: array
+                        items:
+                          type: object
+                          required: [model, training]
+                          properties:
+                            model:
+                              $ref: '#/components/schemas/ModelReference'
+                            training:
+                              type: object
+                              properties:
+                                _id: { type: string }
+                                uuid: { type: string }
+                                name: { type: string }
+                                status: { type: string }
+                                projectId: { type: string }
+                                datasetId: { type: string }
+                                dataset:
+                                  type: object
+                                createdAt: { type: string, format: date-time }
+                            project:
+                              type: object
+                              properties:
+                                _id: { type: string }
+                                name: { type: string }
+                                slug: { type: string }
+                            best:
+                              type: object
+                              description: Present when `metric` was given and the run reported it.
+                              required: [metric, direction, value, epoch]
+                              properties:
+                                metric: { type: string }
+                                direction: { type: string, enum: [max, min] }
+                                value: { type: number }
+                                epoch: { type: integer }
+                      pagination:
+                        $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /trainings/{id}/model-card:
+    get:
+      tags: [Trainings]
+      summary: Model card for a run
+      operationId: getModelCard
+      description: |
+        The README a Hugging Face model repo should carry, written from what Visin recorded for the run: its dataset
+        and commit, the epoch reached, headline results, per-condition test results and speed. The front matter is the
+        Hub's `model-index`, so the scores show on the model page; it is left out when the project's task type does
+        not name a Hub task. No config values are included, since a config can hold anything.
+
+        `visin.Run.log_model` fetches this and uploads it as `README.md` when the repo has none.
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: repo
+          in: query
+          required: false
+          description: The Hub repo the card will sit in; names the card.
+          schema: { $ref: ./generated/request-schemas.json#/ModelCardQuery/properties/repo }
+        - name: epoch
+          in: query
+          required: false
+          description: The epoch the checkpoint came from. The latest reported epoch when absent.
+          schema: { $ref: ./generated/request-schemas.json#/ModelCardQuery/properties/epoch }
+      responses:
+        '200':
+          description: The card, as Markdown with YAML front matter
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required: [readme]
+                    properties:
+                      readme:
+                        type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /trainings/{id}/summary:
+    get:
+      tags: [Trainings]
+      summary: How a run did, in one call
+      operationId: getTrainingSummary
+      description: |
+        The run's state, dataset, config, linked models and provenance, and for every result it reported (the
+        shallowest numeric entries of an epoch, such as `val.mean_iou`) the best epoch beside the last. A run's last
+        epoch is not its result, so both are given.
+
+        "Best" follows the project's taxonomy: a metric the project marked `higher` or `lower` is read that way
+        (`directionFrom: taxonomy`). Any other is guessed from its name, so a loss or a latency is lower-is-better
+        and the rest higher (`directionFrom: default`); check `directionFrom` before trusting a guess. At most 60
+        results are listed.
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required: [training, epochCount, lastEpoch, metrics, models]
+                    properties:
+                      training:
+                        type: object
+                        properties:
+                          _id: { type: string }
+                          uuid: { type: string }
+                          name: { type: string }
+                          status: { type: string }
+                          projectId: { type: string }
+                          datasetId: { type: string }
+                          dataset: { type: object }
+                          configId: { type: string }
+                          tags: { type: array, items: { type: string } }
+                          startTime: { type: string, format: date-time }
+                          endTime: { type: string, format: date-time }
+                          lastSeenAt: { type: string, format: date-time }
+                          createdAt: { type: string, format: date-time }
+                      epochCount: { type: integer }
+                      lastEpoch:
+                        type: [integer, "null"]
+                      metrics:
+                        type: array
+                        items:
+                          type: object
+                          required: [path, direction, directionFrom, best, last]
+                          properties:
+                            path: { type: string }
+                            direction: { type: string, enum: [higher, lower] }
+                            directionFrom: { type: string, enum: [taxonomy, default] }
+                            best:
+                              type: object
+                              properties:
+                                value: { type: number }
+                                epoch: { type: integer }
+                            last:
+                              type: object
+                              properties:
+                                value: { type: number }
+                                epoch: { type: integer }
+                      models:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ModelReference'
+                      provenance:
+                        $ref: '#/components/schemas/Provenance'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /.well-known/visin:
+    get:
+      tags: [Discovery]
+      summary: Where the rest of this deployment is, and what your credential is
+      operationId: getDiscovery
+      description: |
+        What a client needs to set itself up from this one address: the dataset service's and the web app's public
+        addresses (each left out when the deployment has not configured it), and, for the credential sent, what
+        kind it is and what it can do. `visin login` uses it, so a researcher enters one address and one key.
+
+        Open to anyone. With no credential the kind is `anonymous`; a browser session is `session`; a user API key is
+        `api-key`; an API key limited to one project is `pipeline-key`, with that project. An API key's `scopes` say
+        what it may do.
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
+      responses:
+        '200':
+          description: The deployment and the caller's credential
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required: [credential]
+                    properties:
+                      datasetApiUrl: { type: string, format: uri }
+                      appUrl: { type: string, format: uri }
+                      credential:
+                        type: object
+                        required: [kind]
+                        properties:
+                          kind: { type: string, enum: [anonymous, session, api-key, pipeline-key] }
+                          scopes: { type: array, items: { type: string } }
+                          label: { type: string }
+                          project:
+                            type: object
+                            properties:
+                              id: { type: string }
+                              name: { type: string }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /comparisons/{id}/export:
+    get:
+      tags: [Comparisons]
+      summary: Export a comparison of trainings as a spreadsheet
+      operationId: exportComparison
+      description: |
+        One row per run: its name, status, dataset, epochs and linked models, then for every result any of them
+        reported (the shallowest numeric entries of an epoch, such as `val.mean_iou`) its best value, the epoch
+        that was reached at, the last value, and which way better was read. "(assumed)" after the direction marks
+        one guessed from the result's name rather than set in the project's taxonomy.
+
+        `csv` is UTF-8 with a byte-order mark, so Excel reads accents correctly; text that a spreadsheet would
+        run as a formula is made inert. `xlsx` keeps numbers as numbers. A run the caller may not read, or that has
+        been deleted, is left out. Only a comparison of trainings can be exported: any other kind answers `400`.
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          description: "`xlsx` (the default) or `csv`."
+          schema: { $ref: ./generated/request-schemas.json#/ExportComparisonQuery/properties/format }
+      responses:
+        '200':
+          description: The file, as an attachment
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'

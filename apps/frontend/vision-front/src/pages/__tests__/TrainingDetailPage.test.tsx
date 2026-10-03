@@ -34,7 +34,19 @@ vi.mock('../../services/projectService', () => ({
   }
 }));
 
-vi.mock('../../components/TrainingOverviewTab', () => ({ default: () => <div data-testid="overview-tab" /> }));
+const updateTrainingMock = vi.fn();
+vi.mock('../../services/trainingService', () => ({
+  trainingService: { updateTraining: (...args: unknown[]) => updateTrainingMock(...args) }
+}));
+
+vi.mock('../../components/TrainingOverviewTab', () => ({
+  default: (props: any) => (
+    <div data-testid="overview-tab">
+      <span data-testid="can-edit">{String(props.canEdit)}</span>
+      <button onClick={() => props.onSaveNotes('seed 2')}>save-notes</button>
+    </div>
+  )
+}));
 vi.mock('../../components/TrainingEpochsTab', () => ({
   default: (props: any) => (
     <div data-testid="epochs-tab">
@@ -81,6 +93,7 @@ vi.mock('../../components/training/TrainingDetailHeader', () => ({
       <button onClick={() => props.onEdit()}>open-edit</button>
       <button onClick={() => props.onDeleteClick()}>open-delete-training</button>
       <button onClick={() => props.onRefresh()}>refresh</button>
+      <button onClick={() => props.onUse()}>open-use</button>
     </div>
   )
 }));
@@ -197,6 +210,36 @@ describe('TrainingDetailPage', () => {
     useTrainingEditMock.mockReturnValue(baseTrainingEdit());
     useTrainingActionsMock.mockReturnValue(baseTrainingActions());
     getProjectByIdMock.mockResolvedValue({ data: null });
+  });
+
+  describe('use this run', () => {
+    it('shows the snippets for this run and closes', async () => {
+      renderPage();
+      fireEvent.click(screen.getByText('open-use'));
+      expect(await screen.findByRole('dialog', { name: 'Use this run' })).toBeInTheDocument();
+      expect(screen.getByText(/api\.training\("uuid-1"\)/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Use this run' })).not.toBeInTheDocument());
+    });
+  });
+
+  describe('run notes', () => {
+    it('are saved on the run, then the run is read again', async () => {
+      const detail = baseTrainingDetail();
+      useTrainingDetailMock.mockReturnValue(detail);
+      updateTrainingMock.mockResolvedValue({ data: {} });
+      renderPage();
+      expect(screen.getByTestId('can-edit')).toHaveTextContent('true');
+      fireEvent.click(screen.getByText('save-notes'));
+      await waitFor(() => expect(updateTrainingMock).toHaveBeenCalledWith('tr1', { notes: 'seed 2' }));
+      await waitFor(() => expect(detail.refetch).toHaveBeenCalled());
+    });
+
+    it('cannot be edited by someone who may not write to the run', () => {
+      useAuthMock.mockReturnValue({ isAuthenticated: false });
+      renderPage();
+      expect(screen.getByTestId('can-edit')).toHaveTextContent('false');
+    });
   });
 
   describe('after the training is deleted', () => {

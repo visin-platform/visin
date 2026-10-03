@@ -85,6 +85,45 @@ describe('visionApi', () => {
     await expect(visionApi.put('/projects/1', {})).rejects.toThrow('Invalid update');
   });
 
+  it('PATCH sends a JSON body and returns { data }, and surfaces a server error message', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([{ _id: 'm1' }]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await visionApi.patch('/trainings/t1/models/m1', { space: 'acme/demo' })).toEqual({ data: [{ _id: 'm1' }] });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body)).toEqual({ space: 'acme/demo' });
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ message: 'Expected a Space id' }), { status: 400 }));
+    await expect(visionApi.patch('/trainings/t1/models/m1', {})).rejects.toThrow('Expected a Space id');
+  });
+
+  it('download returns the file and the name the server gave, and sends the cookie', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('a,b', { status: 200, headers: { 'content-disposition': 'attachment; filename="ZOD.csv"' } })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { blob, filename } = await visionApi.download('/comparisons/c1/export?format=csv');
+
+    expect(filename).toBe('ZOD.csv');
+    expect(await blob.text()).toBe('a,b');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://vision-api.test/api/comparisons/c1/export?format=csv');
+    expect(init.credentials).toBe('include');
+  });
+
+  it('download has no name when the server sent none, and throws the server’s message on a refusal', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('x', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect((await visionApi.download('/x')).filename).toBeNull();
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ message: 'Only a comparison of trainings can be exported' }), { status: 400 }));
+    await expect(visionApi.download('/x')).rejects.toThrow('Only a comparison of trainings can be exported');
+    fetchMock.mockResolvedValue(new Response('not json', { status: 500 }));
+    await expect(visionApi.download('/x')).rejects.toThrow('Download failed (500)');
+  });
+
   it('DELETE surfaces a server error message on failure', async () => {
     vi.stubGlobal(
       'fetch',

@@ -15,8 +15,9 @@ assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'FILE_SERVICE_API_KEY', 'INTERNA
 const PORT = process.env.PORT || 4010;
 
 const app = createBaseApp({
-  corsMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  corsMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   corsAllowedHeaders: STANDARD_CORS_ALLOWED_HEADERS,
+  corsExposedHeaders: ['Content-Disposition'],
   json: false
 });
 

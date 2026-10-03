@@ -11,6 +11,7 @@ import {
   projectsResponseSchema,
   testResultsResponseSchema,
   trainingSchema,
+  trainingSummarySchema,
   trainingWithEpochsSchema,
   trainingsResponseSchema,
   type Benchmark,
@@ -20,6 +21,7 @@ import {
   type Project,
   type TestResult,
   type Training,
+  type TrainingSummary,
   type Visualization,
   type Finding,
   findingSchema,
@@ -129,6 +131,10 @@ export const vision = {
       order: 'asc',
       sample
     }),
+
+  /** How a run did in one call: best epoch beside last per result, with the direction that made it best. */
+  getTrainingSummary: (apiKey: string, id: string): Promise<TrainingSummary> =>
+    get(trainingSummarySchema, apiKey, `/trainings/${encodeURIComponent(id)}/summary`),
 
   updateTraining: async (
     apiKey: string,

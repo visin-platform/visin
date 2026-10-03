@@ -15,6 +15,15 @@ const baseProps = {
 };
 
 describe('TrainingDetailHeader', () => {
+  it('offers "Use this" to anyone, when the page can show it', () => {
+    const onUse = vi.fn();
+    const { rerender } = render(<TrainingDetailHeader {...baseProps} isAuthenticated={false} onUse={onUse} />);
+    fireEvent.click(screen.getByRole('button', { name: /Use this/ }));
+    expect(onUse).toHaveBeenCalled();
+    rerender(<TrainingDetailHeader {...baseProps} />);
+    expect(screen.queryByRole('button', { name: /Use this/ })).not.toBeInTheDocument();
+  });
+
   it('renders the name, description, and tags', () => {
     render(<TrainingDetailHeader {...baseProps} />);
 

@@ -6,6 +6,7 @@ import { Box, Paper, Tabs, Tab } from '@mui/material';
 import type { AuthUser } from '@visin/frontend-core';
 
 // New Tab Components
+import BestRunCard from '../common/BestRunCard';
 import ProjectOverviewTab, {
   type ProjectOverviewStats,
   type ProjectOverviewDashboardStats
@@ -15,6 +16,7 @@ import ProjectTestsTab from './ProjectTestsTab';
 import ProjectVisualizationsTab, { type VisualizationsGroupedResult } from './ProjectVisualizationsTab';
 import ProjectBenchmarksTab from './ProjectBenchmarksTab';
 import ProjectComparisonsTab from './ProjectComparisonsTab';
+import ModelRegistry from '../models/ModelRegistry';
 import FindingsPanel from '../analysis/FindingsPanel';
 import ProjectSettings from '../ProjectSettings';
 import { discoverClasses, discoverConditions } from '../../taxonomy/discover';
@@ -165,6 +167,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
           <Tab label="Benchmarks" />
           <Tab label="Comparisons" />
           <Tab label="Analysis" />
+          <Tab label="Models" />
           {canManage && <Tab label="Settings" />}
         </Tabs>
       </Box>
@@ -173,6 +176,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       <TabPanel value={tabValue} index={0}>
         {canWrite(project._id) && <FirstRunPanel project={project} />}
         {project.permissions.contribute && !canManage && <PipelineKeys projectId={project._id} />}
+        <BestRunCard projectId={project._id} />
         <ProjectOverviewTab
           stats={stats}
           dashboardStats={dashboardStats}
@@ -244,9 +248,16 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
         <FindingsPanel projectId={project._id} isOwner={canWrite(project._id)} />
       </TabPanel>
 
+      {/* Models Tab */}
+      <TabPanel value={tabValue} index={7}>
+        <Box sx={{ px: { xs: 0, sm: 3 } }}>
+          <ModelRegistry projectId={project._id} title="Models" />
+        </Box>
+      </TabPanel>
+
       {/* Settings Tab */}
       {canManage && (
-        <TabPanel value={tabValue} index={7}>
+        <TabPanel value={tabValue} index={8}>
           <Box sx={{ px: { xs: 0, sm: 3 } }}>
             <ProjectSettings project={project} discovered={discoveredVocabulary} />
           </Box>

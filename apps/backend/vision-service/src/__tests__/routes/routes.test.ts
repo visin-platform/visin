@@ -31,12 +31,12 @@ const describeRouter = (router: Router) => {
 describe('vision-service routers', () => {
   const routers: Array<[string, Router, number]> = [
     ['benchmarkRoutes', benchmarkRoutes, 7],
-    ['comparisonRoutes', comparisonRoutes, 7],
+    ['comparisonRoutes', comparisonRoutes, 8],
     ['configRoutes', configRoutes, 5],
     ['epochRoutes', epochRoutes, 9],
     ['projectRoutes', projectRoutes, 10],
     ['testResultRoutes', testResultRoutes, 10],
-    ['trainingRoutes', trainingRoutes, 14],
+    ['trainingRoutes', trainingRoutes, 20],
     ['visualizationRoutes', visualizationRoutes, 9],
   ];
 

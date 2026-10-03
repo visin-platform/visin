@@ -1,5 +1,11 @@
 import { heartbeatTraining as recordHeartbeat } from '../services/trainingHeartbeatService';
 import { Request, Response } from 'express';
+import { addModelReference, removeModelReference, setModelDemo } from '../services/trainingModelService';
+import { getBestRun } from '../services/bestRunService';
+import type { BestRunQuery } from '../validation/bestRunSchemas';
+import { getTrainingSummary } from '../services/trainingSummaryService';
+import { buildModelCard } from '../services/modelCardService';
+import type { ModelCardQuery } from '../validation/artifactSchemas';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { trainingService } from '../services/trainingService';
 import type {
@@ -171,4 +177,36 @@ export const compareTrainings = async (req: Request, res: Response): Promise<voi
 
 export const heartbeatTraining = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await recordHeartbeat(String(req.params.id), req.user?.id) });
+};
+
+// Link a Hub model to a run
+export const addTrainingModel = async (req: Request, res: Response): Promise<void> => {
+  const { created, models } = await addModelReference(String(req.params.id), req.user?.id, req.body);
+  res.status(created ? 201 : 200).json({ success: true, data: models });
+};
+
+// Unlink a model from a run
+export const removeTrainingModel = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await removeModelReference(String(req.params.id), req.user?.id, String(req.params.modelId)) });
+};
+
+// The README for a Hub model repo, written from what this run recorded
+export const getModelCard = async (req: Request, res: Response): Promise<void> => {
+  const readme = await buildModelCard(String(req.params.id), req.user?.id, req.query as unknown as ModelCardQuery);
+  res.json({ success: true, data: { readme } });
+};
+
+// Link, or unlink, a model's demo Space
+export const setTrainingModelDemo = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await setModelDemo(String(req.params.id), req.user?.id, String(req.params.modelId), req.body.space) });
+};
+
+// How a run did, in one call
+export const getSummary = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await getTrainingSummary(String(req.params.id), req.user?.id) });
+};
+
+// The run that did best on a project or a dataset
+export const getBest = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await getBestRun(req.user?.id, req.query as unknown as BestRunQuery) });
 };

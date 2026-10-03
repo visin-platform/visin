@@ -59,7 +59,7 @@ describe('ProjectTestsTab', () => {
   it('shows an empty state', () => {
     renderTab();
 
-    expect(screen.getByText('No test results found for this project.')).toBeInTheDocument();
+    expect(screen.getByText(/^No test results yet\./)).toBeInTheDocument();
   });
 
   it('lists test results with training name, epoch, and timestamp', () => {

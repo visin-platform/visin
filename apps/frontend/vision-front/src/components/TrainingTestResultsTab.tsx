@@ -9,6 +9,7 @@ import UploadResultsDialog from './training/UploadResultsDialog';
 import LatexExportDialog from './training/LatexExportDialog';
 import TestResultsHeader from './training/TestResultsHeader';
 import TestResultsList from './training/TestResultsList';
+import type { Training } from '../types/training';
 
 interface TrainingTestResultsTabProps {
   allTestResults: TestResult[];
@@ -30,6 +31,8 @@ interface TrainingTestResultsTabProps {
   onSetLatexModalOpen: (open: boolean) => void;
   onDeleteTestResult?: (testResultId: string) => void;
   isAuthenticated: boolean;
+  /** the run these belong to, so an empty tab can say why */
+  run?: Pick<Training, 'status' | 'lastSeenAt'>;
 }
 
 const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
@@ -48,7 +51,8 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
   onSetUploadResultsOpen,
   onSetLatexModalOpen,
   onDeleteTestResult,
-  isAuthenticated
+  isAuthenticated,
+  run
 }) => {
 
   return (
@@ -95,6 +99,7 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
         onLatexExport={onLatexExport}
         onDeleteTestResult={onDeleteTestResult}
         isAuthenticated={isAuthenticated}
+        run={run}
       />
 
       {/* Upload Results Modal */}

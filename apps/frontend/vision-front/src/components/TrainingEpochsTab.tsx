@@ -24,6 +24,10 @@ import { livePalette, tint } from '@visin/frontend-core';
 import { Epoch } from '../types';
 import DeleteConfirmationDialog from './training/DeleteConfirmationDialog';
 import UploadResultsDialog from './training/UploadResultsDialog';
+import MetricName from './common/MetricName';
+import { useTaxonomy } from '../taxonomy/useTaxonomy';
+import type { Training } from '../types/training';
+import { describeEmpty } from '../utils/trainingStatus';
 
 interface TrainingEpochsTabProps {
   epochs: Epoch[];
@@ -43,6 +47,8 @@ interface TrainingEpochsTabProps {
   onSetDeleteOpen: (open: boolean) => void;
   onSetUploadResultsOpen: (open: boolean) => void;
   isAuthenticated: boolean;
+  /** the run these belong to, so an empty tab can say why */
+  run?: Pick<Training, 'status' | 'lastSeenAt'>;
 }
 
 const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
@@ -59,10 +65,13 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
   onConfirmDelete,
   onSetDeleteOpen,
   onSetUploadResultsOpen,
-  isAuthenticated
+  isAuthenticated,
+  run
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const theme = useTheme();
+  const taxonomy = useTaxonomy();
+  const empty = describeEmpty('epochs', run);
 
   const handleFileClick = () => {
     fileInputRef.current?.click();
@@ -162,7 +171,7 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
             <Typography variant="h6" gutterBottom sx={{
               color: "text.secondary"
             }}>
-              No epochs uploaded yet
+              {empty.title}
             </Typography>
             <Typography
               variant="body2"
@@ -170,7 +179,7 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
                 color: "text.secondary",
                 mb: 3
               }}>
-              Upload epoch JSON files to visualize training progress and metrics.
+              {empty.body}{isAuthenticated && ' Or upload epoch JSON files yourself.'}
             </Typography>
             <Button
               variant="outlined"
@@ -186,10 +195,10 @@ const TrainingEpochsTab: React.FC<TrainingEpochsTabProps> = ({
               <TableHead sx={{ bgcolor: tint(livePalette(theme).primary.main, 0.04) }}>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 600 }}>Epoch</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>Train Loss</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>Val Loss</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>Train mIoU</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>Val mIoU</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600 }}><MetricName label="Train Loss" description={taxonomy.metric('train_loss').description} /></TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600 }}><MetricName label="Val Loss" description={taxonomy.metric('val_loss').description} /></TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600 }}><MetricName label="Train mIoU" description={taxonomy.metric('miou').description} /></TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600 }}><MetricName label="Val mIoU" description={taxonomy.metric('miou').description} /></TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600 }}>Learning Rate</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600 }}>Time (s)</TableCell>
                   <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>

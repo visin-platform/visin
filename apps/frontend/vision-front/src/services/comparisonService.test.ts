@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../config/visionApi', () => ({
-  visionApi: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() }
+  visionApi: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(), download: vi.fn() }
 }));
 
 import { visionApi } from '../config/visionApi';
@@ -55,5 +55,31 @@ describe('comparisonService', () => {
     mockedApi.delete.mockResolvedValue({ data: { success: true } });
     await comparisonService.deleteComparison('c1');
     expect(mockedApi.delete).toHaveBeenCalledWith('/comparisons/c1');
+  });
+
+  it('exportTable saves the file the server built, under the name it gave', async () => {
+    const blob = new Blob(['x']);
+    vi.mocked(visionApi.download).mockResolvedValue({ blob, filename: 'ZOD_baselines.xlsx' });
+    URL.createObjectURL = vi.fn(() => 'blob:file');
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toBe('ZOD_baselines.xlsx');
+      expect(this.href).toBe('blob:file');
+    });
+    await comparisonService.exportTable('c1', 'xlsx');
+    expect(visionApi.download).toHaveBeenCalledWith('/comparisons/c1/export?format=xlsx');
+    expect(click).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:file');
+  });
+
+  it('exportTable names the file itself when the server did not', async () => {
+    vi.mocked(visionApi.download).mockResolvedValue({ blob: new Blob(['x']), filename: null });
+    URL.createObjectURL = vi.fn(() => 'blob:file');
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toBe('comparison.csv');
+    });
+    await comparisonService.exportTable('c1', 'csv');
+    expect(click).toHaveBeenCalled();
   });
 });

@@ -15,6 +15,7 @@ import { Dataset, IDataset, ImportMapping } from '../models/Dataset';
 import { DatasetItem } from '../models/DatasetItem';
 import * as files from '../clients/fileServiceClient';
 import { summarizeItems } from './importService';
+import { hubSummary } from './hubService';
 import { enqueueDelete, enqueueImport, enqueueRemoveGroup, enqueueScan, removeQueuedImport } from '../queue/importQueue';
 import { expectedImportFiles } from '../utils/contents';
 import { normalizeFolder } from '../utils/zipPaths';
@@ -68,6 +69,7 @@ export const toDatasetView = (dataset: IDataset, permissions: DatasetPermissions
   createdBy: dataset.createdBy,
   visibility: dataset.visibility,
   trashedAt: dataset.trashedAt,
+  source: dataset.source ? { provider: dataset.source.provider, repo: dataset.source.repo, revision: dataset.source.revision } : undefined,
   archive: dataset.archive ? { filename: dataset.archive.filename, size: dataset.archive.size, uploadedAt: dataset.archive.uploadedAt } : undefined,
   uploading: dataset.pendingUpload ? { filename: dataset.pendingUpload.filename, size: dataset.pendingUpload.size } : undefined,
   contents: dataset.contents,
@@ -174,6 +176,7 @@ export const createDataset = async (access: DatasetAccess, body: CreateDatasetBo
     name: body.name,
     description: body.description || undefined,
     visibility: body.visibility ?? 'private',
+    source: body.source,
     storagePrefix: datasetStoragePrefix(_id)
   });
   logger.info('Dataset created', { datasetId: _id.toString(), owner, createdBy: userId });
@@ -190,6 +193,7 @@ export const updateDataset = async (access: DatasetAccess, id: string, body: Upd
   }
   if (body.name !== undefined) dataset.name = body.name;
   if (body.description !== undefined) dataset.description = body.description || undefined;
+  if (body.source !== undefined) dataset.source = body.source ?? undefined;
   await dataset.save();
   return viewFor(access, dataset);
 };
@@ -472,13 +476,29 @@ export const rescanArchive = async (access: DatasetAccess, id: string) => {
   return viewFor(access, dataset);
 };
 
+/**
+ * How to fetch the dataset. A Hub source is listed first: the client downloads it
+ * from the Hub when it can, and falls back to the zip kept here (`downloadUrl`)
+ * when there is one. A dataset on the Hub alone has no `downloadUrl`.
+ */
+/** What the Hub says about a dataset's repo; anyone who may read the dataset may see it. */
+export const getHubInfo = async (access: DatasetAccess, id: string) => {
+  const dataset = await readableDataset(access, id);
+  if (!dataset.source) throw new BadRequestError('This dataset is not kept on the Hugging Face Hub');
+  return hubSummary(dataset.source);
+};
+
 export const getArchiveDownload = async (access: DatasetAccess, id: string) => {
   const dataset = await readableDataset(access, id);
-  if (!dataset.archive) throw new BadRequestError('This dataset has no zip yet');
+  const source = dataset.source ? { provider: dataset.source.provider, repo: dataset.source.repo, revision: dataset.source.revision } : undefined;
+  if (!dataset.archive) {
+    if (!source) throw new BadRequestError('This dataset has no zip yet');
+    return { source, revision: source.revision };
+  }
   const { urls, expiresMs } = await files.getDownloadUrls([dataset.archive.fileId], DOWNLOAD_URL_MINUTES);
-  return { downloadUrl: urls[dataset.archive.fileId], filename: dataset.archive.filename,
-    size: dataset.archive.size, revision: dataset.archive.uploadedAt.toISOString(),
-    expiresAt: new Date(expiresMs).toISOString() };
+  return { ...(source ? { source } : {}), downloadUrl: urls[dataset.archive.fileId], filename: dataset.archive.filename,
+    size: dataset.archive.size, revision: source?.revision ?? dataset.archive.uploadedAt.toISOString(),
+    archiveRevision: dataset.archive.uploadedAt.toISOString(), expiresAt: new Date(expiresMs).toISOString() };
 };
 
 export const startImport = async (access: DatasetAccess, id: string, mapping: ImportMapping) => {

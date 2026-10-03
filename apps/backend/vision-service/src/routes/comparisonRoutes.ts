@@ -6,7 +6,8 @@ import {
   createComparison,
   getComparisonStats,
   updateComparison,
-  deleteComparison
+  deleteComparison,
+  exportComparison
 } from '../controllers/comparisonController';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '@visin/backend-core';
@@ -14,7 +15,8 @@ import {
   getComparisonsQuerySchema,
   getComparisonStatsQuerySchema,
   createComparisonBodySchema,
-  updateComparisonBodySchema
+  updateComparisonBodySchema,
+  exportComparisonQuerySchema
 } from '../validation/comparisonSchemas';
 
 const router = express.Router();
@@ -24,6 +26,7 @@ const router = express.Router();
 router.get('/uuid/:uuid', optionalAuthMiddleware, getComparisonByUuid);
 router.get('/stats', optionalAuthMiddleware, validateRequest({ query: getComparisonStatsQuerySchema }), getComparisonStats);
 router.get('/', optionalAuthMiddleware, validateRequest({ query: getComparisonsQuerySchema }), getComparisons);
+router.get('/:id/export', optionalAuthMiddleware, validateRequest({ query: exportComparisonQuerySchema }), exportComparison);
 router.get('/:id', optionalAuthMiddleware, getComparisonById);
 router.post('/', authMiddleware, validateRequest({ body: createComparisonBodySchema }), createComparison);
 router.put('/:id', authMiddleware, validateRequest({ body: updateComparisonBodySchema }), updateComparison);

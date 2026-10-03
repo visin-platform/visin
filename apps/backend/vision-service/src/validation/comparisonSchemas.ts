@@ -41,3 +41,9 @@ export const updateComparisonBodySchema = z.object({
   itemIds: z.array(z.string()).max(50, 'Maximum 50 items can be compared at once').optional(),
   metadata: z.unknown().optional()
 });
+
+export const exportComparisonQuerySchema = z.object({
+  /** `csv` opens in any spreadsheet; `xlsx` keeps numbers as numbers and needs no import step */
+  format: z.enum(['csv', 'xlsx']).default('xlsx')
+});
+export type ExportComparisonQuery = z.infer<typeof exportComparisonQuerySchema>;

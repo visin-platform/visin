@@ -10,6 +10,7 @@ describe('appForPath', () => {
     ['/datasets/d1', 'vision'],
     ['/visualizations/compare-trainings', 'vision'],
     ['/benchmarks', 'vision'],
+    ['/models', 'vision'],
     ['/jobs', 'label'],
     ['/jobs/new', 'label'],
     ['/jobs/j1/work', 'label'],

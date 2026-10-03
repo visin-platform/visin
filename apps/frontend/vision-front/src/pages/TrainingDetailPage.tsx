@@ -19,6 +19,8 @@ import DeleteConfirmationDialog from '../components/training/DeleteConfirmationD
 import TrainingDetailHeader from '../components/training/TrainingDetailHeader';
 import TrainingDetailTabs from '../components/training/TrainingDetailTabs';
 import SampleTour from '../components/guide/SampleTour';
+import UseThisDialog from '../components/common/UseThisDialog';
+import { runSnippets } from '../utils/useSnippets';
 
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useTrainingDetail } from '../hooks/useTrainingDetail';
@@ -28,6 +30,7 @@ import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
 import { CostingProvider } from '../costing/CostingProvider';
 import { projectService } from '../services/projectService';
+import { trainingService } from '../services/trainingService';
 
 const TrainingDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -67,6 +70,7 @@ const TrainingDetailPage: React.FC = () => {
 
   const project = projectResponse?.data;
   const [returnToProject, setReturnToProject] = useState(false);
+  const [useOpen, setUseOpen] = useState(false);
 
   const {
     editDialogOpen,
@@ -174,9 +178,11 @@ const TrainingDetailPage: React.FC = () => {
         isAuthenticated={canWrite(id)}
         isLoading={isLoading}
         onRefresh={() => refetch()}
+        onUse={() => setUseOpen(true)}
         onEdit={handleEditTraining}
         onDeleteClick={() => setTrainingDeleteOpen(true)}
       />
+      {useOpen && <UseThisDialog title="Use this run" snippets={runSnippets(training)} onClose={() => setUseOpen(false)} />}
       <TrainingDetailTabs value={detailTab} onChange={handleTabChange} />
       <SampleTour
         onDeleteSample={() => {
@@ -189,6 +195,11 @@ const TrainingDetailPage: React.FC = () => {
         <TrainingOverviewTab
           training={training}
           epochs={epochs}
+          canEdit={canWrite(training._id)}
+          onSaveNotes={async (notes) => {
+            await trainingService.updateTraining(training._id, { notes });
+            await refetch();
+          }}
         />
       )}
       {/* Epochs Tab */}
@@ -202,6 +213,7 @@ const TrainingDetailPage: React.FC = () => {
           deleteTarget={deleteTarget}
           uploadResultsOpen={uploadResultsOpen}
           uploadResults={uploadResults}
+          run={training}
           onFileUpload={(files) => handleFileUpload(files, 'epoch')}
           onDeleteClick={handleDeleteClick}
           onConfirmDelete={handleConfirmDelete}
@@ -229,6 +241,7 @@ const TrainingDetailPage: React.FC = () => {
           onSetLatexModalOpen={setLatexModalOpen}
           onDeleteTestResult={handleDeleteTestResult}
           isAuthenticated={canWrite(id)}
+          run={training}
         />
       )}
       {/* Visualizations Tab */}
@@ -237,6 +250,7 @@ const TrainingDetailPage: React.FC = () => {
           training_uuid={training.uuid}
           epochs={epochs}
           isAuthenticated={canWrite(id)}
+          run={training}
         />
       )}
       {/* System Info Tab */}
@@ -258,6 +272,7 @@ const TrainingDetailPage: React.FC = () => {
         <TrainingBenchmarksTab
           training_uuid={training.uuid}
           isAuthenticated={canWrite(id)}
+          run={training}
         />
       )}
       {/* Conclusions about this run, and comparative ones that cite it. Needs

@@ -24,3 +24,12 @@ function getDatasetApiUrl(): string {
 export const datasetApi = createApiClient({
   baseUrl: () => `${getDatasetApiUrl()}/api/datasets`
 });
+
+/** Where this deployment's dataset service answers, or `undefined` when none is configured; for showing, never for calling. */
+export const datasetApiOrigin = (): string | undefined => {
+  try {
+    return getDatasetApiUrl();
+  } catch {
+    return undefined;
+  }
+};

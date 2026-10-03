@@ -111,6 +111,7 @@ interface CreateProjectData {
   editorGroupIds?: string[];
   taxonomy?: IProjectTaxonomy;
   costing?: IProjectCosting;
+  storage?: IProject['storage'];
   stallAfterMinutes?: number;
 }
 
@@ -169,6 +170,7 @@ interface UpdateProjectData {
   slug?: string;
   taxonomy?: IProjectTaxonomy | null;
   costing?: IProjectCosting | null;
+  storage?: IProject['storage'];
   stallAfterMinutes?: number;
 }
 
@@ -219,6 +221,7 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
   if (costing !== undefined) {
     project.costing = costing === null ? undefined : costing;
   }
+  if (data.storage !== undefined) project.storage = data.storage;
 
   await project.save();
   return toProjectView(project, userId);

@@ -59,7 +59,7 @@ describe('TrainingBenchmarksTab', () => {
     renderComponent({ training_uuid: 'training-uuid-1', isAuthenticated: false });
 
     await waitFor(() => {
-      expect(screen.getByText('No benchmarks found for this training')).toBeInTheDocument();
+      expect(screen.getByText('No benchmarks yet')).toBeInTheDocument();
     });
   });
 

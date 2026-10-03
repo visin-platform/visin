@@ -12,11 +12,19 @@ import {
   getDeletedTrainings,
   restoreTraining,
   getTrainingStats,
-  compareTrainings
+  compareTrainings,
+  addTrainingModel,
+  removeTrainingModel,
+  setTrainingModelDemo,
+  getModelCard,
+  getSummary,
+  getBest
 } from '../controllers/trainingController';
 import { getConfigsByTraining } from '../controllers/configController';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '@visin/backend-core';
+import { bestRunQuerySchema } from '../validation/bestRunSchemas';
+import { artifactRefSchema, modelCardQuerySchema, modelDemoBodySchema } from '../validation/artifactSchemas';
 import {
   getDeletedTrainingsQuerySchema,
   getTrainingsQuerySchema,
@@ -37,7 +45,10 @@ router.get(
   validateRequest({ query: getTrainingWithEpochsQuerySchema }),
   getTrainingWithEpochs
 );
+router.get('/:id/summary', optionalAuthMiddleware, getSummary);
+router.get('/:id/model-card', optionalAuthMiddleware, validateRequest({ query: modelCardQuerySchema }), getModelCard);
 router.get('/:id/configs', optionalAuthMiddleware, getConfigsByTraining);
+router.get('/best', optionalAuthMiddleware, validateRequest({ query: bestRunQuerySchema }), getBest);
 router.get('/stats', optionalAuthMiddleware, validateRequest({ query: getTrainingStatsQuerySchema }), getTrainingStats);
 // Before '/:id', or 'tags' reads as a training id.
 router.get('/tags', optionalAuthMiddleware, getTrainingTags);
@@ -49,6 +60,9 @@ router.post('/', authMiddleware, validateRequest({ body: createTrainingBodySchem
 router.put('/:id', authMiddleware, validateRequest({ body: updateTrainingBodySchema }), updateTraining);
 router.delete('/:id', authMiddleware, deleteTraining);
 router.post('/:id/heartbeat', authMiddleware, heartbeatTraining);
+router.post('/:id/models', authMiddleware, validateRequest({ body: artifactRefSchema }), addTrainingModel);
+router.patch('/:id/models/:modelId', authMiddleware, validateRequest({ body: modelDemoBodySchema }), setTrainingModelDemo);
+router.delete('/:id/models/:modelId', authMiddleware, removeTrainingModel);
 router.post('/:id/restore', authMiddleware, restoreTraining);
 router.post('/compare', optionalAuthMiddleware, validateRequest({ body: compareTrainingsBodySchema }), compareTrainings);
 

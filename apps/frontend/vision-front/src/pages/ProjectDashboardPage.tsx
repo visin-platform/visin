@@ -32,7 +32,8 @@ const tabNameToIndex: Record<string, number> = {
   benchmarks: 4,
   comparisons: 5,
   analysis: 6,
-  settings: 7
+  models: 7,
+  settings: 8
 };
 
 const indexToTabName: Record<number, string> = {
@@ -43,7 +44,8 @@ const indexToTabName: Record<number, string> = {
   4: 'benchmarks',
   5: 'comparisons',
   6: 'analysis',
-  7: 'settings'
+  7: 'models',
+  8: 'settings'
 };
 
 const ProjectDashboardPage: React.FC = () => {

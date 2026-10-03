@@ -9,9 +9,11 @@ import {
   Tab,
   Button,
   IconButton,
+  Menu,
+  MenuItem,
   Tooltip
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Code as CodeIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon, Code as CodeIcon, TableView as TableIcon } from '@mui/icons-material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { comparisonService } from '../services/comparisonService';
@@ -67,6 +69,8 @@ const ComparisonDetailPage: React.FC = () => {
 
   // State for export all LaTeX dialog
   const [exportLatexOpen, setExportLatexOpen] = useState(false);
+  const [exportMenu, setExportMenu] = useState<HTMLElement | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [exportLatexTab, setExportLatexTab] = useState(0);
   const [copiedSection, setCopiedSection] = useState<number | null>(null);
 
@@ -337,6 +341,33 @@ const ComparisonDetailPage: React.FC = () => {
                 </Button>
               </span>
             </Tooltip>
+            {comparison.type === 'trainings' && (
+              <>
+                <Tooltip title="Export table">
+                  <Button variant="outlined" size="small" startIcon={<TableIcon />} onClick={(event) => setExportMenu(event.currentTarget)}>
+                    Export table
+                  </Button>
+                </Tooltip>
+                <Menu anchorEl={exportMenu} open={Boolean(exportMenu)} onClose={() => setExportMenu(null)}>
+                  {(['xlsx', 'csv'] as const).map((format) => (
+                    <MenuItem
+                      key={format}
+                      onClick={async () => {
+                        setExportMenu(null);
+                        setExportError(null);
+                        try {
+                          await comparisonService.exportTable(comparison._id, format);
+                        } catch (err) {
+                          setExportError(err instanceof Error ? err.message : 'Export failed');
+                        }
+                      }}
+                    >
+                      {format === 'xlsx' ? 'Excel (.xlsx)' : 'CSV (.csv)'}
+                    </MenuItem>
+                  ))}
+                </Menu>
+              </>
+            )}
             <Tooltip title="Edit Comparison">
               <IconButton
                 onClick={handleEditComparison}
@@ -368,6 +399,7 @@ const ComparisonDetailPage: React.FC = () => {
           </Box>
         </Box>
 
+        {exportError && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setExportError(null)}>{exportError}</Alert>}
         <Typography variant="body2" sx={{
           color: "text.secondary"
         }}>
@@ -466,7 +498,7 @@ const ComparisonDetailPage: React.FC = () => {
               </Box>
             </>
           ) : (
-            <Alert severity="info">No test results available for comparison.</Alert>
+            <Alert severity="info">None of these runs has test results to compare. A run reports them from its test stage, after training.</Alert>
           )}
         </Box>
       )}

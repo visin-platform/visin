@@ -17,6 +17,7 @@ import {
   TaxonomyMetric,
   TaxonomyTerm
 } from '../../types/taxonomy';
+import { glossaryFor } from '../../taxonomy/glossary';
 import { humanize } from '../../taxonomy/humanize';
 import { PALETTE } from '../../taxonomy/resolveTaxonomy';
 
@@ -166,54 +167,66 @@ const MetricRows: React.FC<{
         gets highlighted the wrong way round.
       </Typography>
       {metrics.map((metric, index) => (
-        <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+        <Box key={index} sx={{ mb: 1.5 }}>
+          <Box sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+            <TextField
+              size="small"
+              label="Key (as reported)"
+              value={metric.key}
+              onChange={e => update(index, { key: e.target.value })}
+              disabled={disabled}
+              sx={{ flex: 1 }}
+            />
+            <TextField
+              size="small"
+              label="Display name"
+              value={metric.label ?? ''}
+              placeholder={metric.key ? humanize(metric.key) : ''}
+              onChange={e => update(index, { label: e.target.value || undefined })}
+              disabled={disabled}
+              sx={{ flex: 1 }}
+            />
+            <TextField
+              select
+              size="small"
+              label="Direction"
+              value={metric.direction ?? 'higher'}
+              onChange={e => update(index, { direction: e.target.value as MetricDirection })}
+              disabled={disabled}
+              sx={{ minWidth: 160 }}
+            >
+              {DIRECTIONS.map(d => (
+                <MenuItem key={d.value} value={d.value}>{d.label}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              size="small"
+              type="number"
+              label="Decimals"
+              value={metric.decimals ?? 4}
+              onChange={e => update(index, { decimals: Number(e.target.value) })}
+              disabled={disabled}
+              sx={{ width: 100 }}
+            />
+            <IconButton
+              size="small"
+              onClick={() => onChange(metrics.filter((_, i) => i !== index))}
+              disabled={disabled}
+              aria-label={`Remove ${metric.key || 'metric'}`}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Box>
           <TextField
+            fullWidth
             size="small"
-            label="Key (as reported)"
-            value={metric.key}
-            onChange={e => update(index, { key: e.target.value })}
+            label="What it means"
+            value={metric.description ?? ''}
+            placeholder={glossaryFor(metric.key) ?? 'One sentence, shown when someone hovers the name'}
+            onChange={e => update(index, { description: e.target.value || undefined })}
             disabled={disabled}
-            sx={{ flex: 1 }}
+            slotProps={{ htmlInput: { maxLength: 300 } }}
           />
-          <TextField
-            size="small"
-            label="Display name"
-            value={metric.label ?? ''}
-            placeholder={metric.key ? humanize(metric.key) : ''}
-            onChange={e => update(index, { label: e.target.value || undefined })}
-            disabled={disabled}
-            sx={{ flex: 1 }}
-          />
-          <TextField
-            select
-            size="small"
-            label="Direction"
-            value={metric.direction ?? 'higher'}
-            onChange={e => update(index, { direction: e.target.value as MetricDirection })}
-            disabled={disabled}
-            sx={{ minWidth: 160 }}
-          >
-            {DIRECTIONS.map(d => (
-              <MenuItem key={d.value} value={d.value}>{d.label}</MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            size="small"
-            type="number"
-            label="Decimals"
-            value={metric.decimals ?? 4}
-            onChange={e => update(index, { decimals: Number(e.target.value) })}
-            disabled={disabled}
-            sx={{ width: 100 }}
-          />
-          <IconButton
-            size="small"
-            onClick={() => onChange(metrics.filter((_, i) => i !== index))}
-            disabled={disabled}
-            aria-label={`Remove ${metric.key || 'metric'}`}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
         </Box>
       ))}
     </Box>
@@ -235,6 +248,18 @@ export const TaxonomyEditor: React.FC<TaxonomyEditorProps> = ({
         All optional. Anything you leave blank is read from your results, so a project
         fed entirely through the API works without filling in any of this.
       </Typography>
+
+      <TextField
+        fullWidth
+        size="small"
+        label="Result to rank runs on"
+        value={value.primaryMetric ?? ''}
+        onChange={e => patch({ primaryMetric: e.target.value.trim() || undefined })}
+        disabled={disabled}
+        placeholder="val.mean_iou"
+        helperText="Decides which run is shown as the best. Leave blank and Visin picks a validation score from what your runs report."
+        sx={{ mb: 2 }}
+      />
 
       <TextField
         select

@@ -121,6 +121,40 @@ export const epochSchema = z
   })
   .loose();
 
+/**
+ * `GET /trainings/{id}/summary`: how a run did, in one call. Each result carries its best
+ * epoch beside its last, in the direction the project set (`directionFrom: 'taxonomy'`) or
+ * guessed from the result's name (`'default'`), so a caller can say which it is relying on.
+ */
+export const trainingSummarySchema = z
+  .object({
+    epochCount: z.number(),
+    lastEpoch: z.number().nullable(),
+    metrics: z
+      .array(
+        z
+          .object({
+            path: z.string(),
+            direction: z.enum(['higher', 'lower']),
+            directionFrom: z.enum(['taxonomy', 'default']),
+            best: z.object({ value: z.number(), epoch: z.number() }),
+            last: z.object({ value: z.number(), epoch: z.number() })
+          })
+          .loose()
+      )
+      .catch([]),
+    models: z.array(z.object({ repo: z.string(), revision: z.string(), space: z.string().optional() }).loose()).catch([]),
+    provenance: z
+      .object({
+        git: z.object({ commit: z.string(), branch: z.string().optional(), dirty: z.boolean().optional() }).loose().optional(),
+        command: z.string().optional()
+      })
+      .loose()
+      .optional()
+  })
+  .loose();
+export type TrainingSummary = z.infer<typeof trainingSummarySchema>;
+
 export const trainingWithEpochsSchema = z
   .object({
     training: trainingSchema,

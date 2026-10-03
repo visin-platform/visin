@@ -63,8 +63,23 @@ describe('TrainingVisualizationsTab', () => {
   it('shows an empty state with an upload button when authenticated', () => {
     render(<TrainingVisualizationsTab {...baseProps} />);
 
-    expect(screen.getByText('No visualizations found')).toBeInTheDocument();
+    expect(screen.getByText('No visualizations yet')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /upload visualization/i })).toBeInTheDocument();
+  });
+
+  it('blames the filters, not the run, when a filter is set', () => {
+    mockHook.mockReturnValue({ ...defaultHookReturn, selectedType: 'prediction' });
+    render(<TrainingVisualizationsTab {...baseProps} run={{ status: 'completed' }} />);
+
+    expect(screen.getByText('No visualizations match these filters')).toBeInTheDocument();
+    expect(screen.queryByText(/finished without reporting any/)).not.toBeInTheDocument();
+  });
+
+  it('says why a finished run has none when nothing is filtered', () => {
+    render(<TrainingVisualizationsTab {...baseProps} run={{ status: 'completed' }} />);
+
+    expect(screen.getByText('No visualizations')).toBeInTheDocument();
+    expect(screen.getByText(/The visualize stage may have been skipped/)).toBeInTheDocument();
   });
 
   it('hides upload actions when not authenticated', () => {

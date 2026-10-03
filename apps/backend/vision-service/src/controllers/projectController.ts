@@ -31,9 +31,9 @@ export const getProjectByIdOrSlug = async (req: AuthRequest, res: Response): Pro
 // Create project
 export const createProject = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user!.id;
-  const { name, description, visibility, owner, taxonomy, costing, editorGroupIds } = req.body;
+  const { name, description, visibility, owner, taxonomy, costing, storage, stallAfterMinutes, editorGroupIds } = req.body;
 
-  const savedProject = await projectService.createProject(userId, { name, description, visibility, owner, taxonomy, costing, editorGroupIds });
+  const savedProject = await projectService.createProject(userId, { name, description, visibility, owner, taxonomy, costing, storage, stallAfterMinutes, editorGroupIds });
 
   res.status(201).json({
     success: true,
@@ -46,9 +46,9 @@ export const createProject = async (req: AuthRequest, res: Response): Promise<vo
 export const updateProject = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
   const userId = req.user!.id;
-  const { name, description, visibility, slug, taxonomy, costing, editorGroupIds } = req.body;
+  const { name, description, visibility, slug, taxonomy, costing, storage, stallAfterMinutes, editorGroupIds } = req.body;
 
-  const updatedProject = await projectService.updateProject(id, userId, { name, description, visibility, slug, taxonomy, costing, editorGroupIds });
+  const updatedProject = await projectService.updateProject(id, userId, { name, description, visibility, slug, taxonomy, costing, storage, stallAfterMinutes, editorGroupIds });
 
   res.json({
     success: true,

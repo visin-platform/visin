@@ -74,6 +74,29 @@ export const visionApi = {
     }
   },
 
+  /**
+   * A file the API answers with, fetched with the shared cookie. Throws the server's message on
+   * a refusal, which for these endpoints is JSON, not the file.
+   */
+  async download(endpoint: string): Promise<{ blob: Blob; filename: string | null }> {
+    const response = await fetch(`${getVisionApiUrl()}/api${endpoint}`, { credentials: 'include' });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(body?.message || `Download failed (${response.status})`);
+    }
+    const disposition = response.headers.get('content-disposition') ?? '';
+    return { blob: await response.blob(), filename: /filename="([^"]+)"/.exec(disposition)?.[1] ?? null };
+  },
+
+  async patch(endpoint: string, body?: unknown): Promise<{ data: unknown }> {
+    try {
+      const data = await client.patch(endpoint, body);
+      return { data };
+    } catch (error) {
+      throw toLegacyError(error);
+    }
+  },
+
   async delete(endpoint: string): Promise<{ data: unknown }> {
     try {
       const data = await client.delete(endpoint);

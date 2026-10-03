@@ -197,7 +197,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({
         <Typography variant="body2" sx={{
           color: "text.secondary"
         }}>
-          No test results found for this project.
+          No test results yet. A run reports them from its test stage, after training, so runs that are still going or skipped it have none.
         </Typography>
       )}
     </Box>

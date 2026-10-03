@@ -211,7 +211,7 @@ const ProjectBenchmarksTab: React.FC<ProjectBenchmarksTabProps> = ({
         <Typography variant="body2" sx={{
           color: "text.secondary"
         }}>
-          No benchmarks found for this project.
+          No benchmarks yet. They are speed and memory measurements that a run reports from its benchmark stage.
         </Typography>
       )}
       {/* Delete Confirmation Dialog */}

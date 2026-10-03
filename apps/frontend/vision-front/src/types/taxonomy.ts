@@ -12,6 +12,7 @@ export interface TaxonomyTerm {
 export interface TaxonomyMetric {
   key: string;
   label?: string;
+  description?: string;
   direction?: MetricDirection;
   decimals?: number;
   format?: MetricFormat;
@@ -23,6 +24,8 @@ export interface ProjectTaxonomy {
   conditions?: TaxonomyTerm[];
   classes?: TaxonomyTerm[];
   metrics?: TaxonomyMetric[];
+  /** the result runs are ranked on, as a path in an epoch's results, e.g. val.mean_iou */
+  primaryMetric?: string;
   overallMetrics?: string[];
   taskType?: TaskType;
   exportPathPrefix?: string;
@@ -38,6 +41,8 @@ export interface ResolvedTerm {
 export interface ResolvedMetric {
   key: string;
   label: string;
+  /** what the number means, in a sentence; undefined when neither the project nor the glossary says */
+  description?: string;
   direction: MetricDirection;
   decimals: number;
   format: MetricFormat;

@@ -6,6 +6,8 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createApiKey, errorHandler, resetEncryptionKeyCache } from '@visin/backend-core';
 import { identityContextMiddleware } from '../../middleware/requestIdentityContext';
 import { projectKeyAuth } from '../../middleware/projectKeyAuth';
+import discoveryRoutes from '../../routes/discoveryRoutes';
+import modelRoutes from '../../routes/modelRoutes';
 import projectRoutes from '../../routes/projectRoutes';
 import trainingRoutes from '../../routes/trainingRoutes';
 import Project from '../../models/Project';
@@ -46,6 +48,8 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
     app.use(express.json(), identityContextMiddleware);
     app.use('/api/projects', projectKeyAuth('vision'), projectRoutes);
     app.use('/api/trainings', projectKeyAuth('vision'), trainingRoutes);
+    app.use('/api/models', projectKeyAuth('vision'), modelRoutes);
+    app.use('/api/.well-known', projectKeyAuth('vision'), discoveryRoutes);
     app.use(errorHandler);
     server = createServer(app);
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -101,6 +105,47 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
     expect((await call(key, `projects/${publicProject}`)).status).toBe(403);
     const listed = (await call(key, 'projects')).body.data as unknown as { _id: string }[];
     expect(listed.map(project => String(project._id))).toEqual([own]);
+  });
+
+  it("lists only its own project's models, and is refused another project it names", async () => {
+    const key = await keyFor(own);
+    const model = (repo: string) => [{ provider: 'hf', kind: 'model', repo, revision: 'a'.repeat(40) }];
+    await Training.create([
+      { uuid: 'own-run', name: 'own', ownerId: owner, projectId: own, models: model('acme/own') },
+      { uuid: 'other-run', name: 'other', ownerId: owner, projectId: otherOwn, models: model('acme/other') },
+      { uuid: 'public-run', name: 'public', ownerId: 'someone-else', projectId: publicProject, models: model('acme/public') }
+    ]);
+    const listed = (await call(key, 'models')).body.data as unknown as { models: { model: { repo: string } }[] };
+    expect(listed.models.map(row => row.model.repo)).toEqual(['acme/own']);
+    expect((await call(key, `models?projectId=${otherOwn}`)).status).toBe(403);
+    expect((await call(key, `models?projectId=${publicProject}`)).status).toBe(403);
+  });
+
+  it('tells a client what kind of key it is, its scopes and its project, and where the other services are', async () => {
+    process.env.PUBLIC_DATASET_API_URL = 'https://datasets.example.test/';
+    process.env.PUBLIC_APP_URL = 'https://app.example.test';
+    try {
+      const pipeline = (await call(await keyFor(own, ['vision:read']), '.well-known/visin')).body.data as unknown as Record<string, unknown>;
+      expect(pipeline).toEqual({
+        datasetApiUrl: 'https://datasets.example.test',
+        appUrl: 'https://app.example.test',
+        credential: { kind: 'pipeline-key', scopes: ['vision:read'], label: 'pipeline', project: { id: own, name: 'Own' } }
+      });
+      const user = (await call(await keyFor(null), '.well-known/visin')).body.data as unknown as { credential: Record<string, unknown> };
+      expect(user.credential).toEqual({ kind: 'api-key', scopes: ['vision:read', 'vision:write'], label: 'pipeline' });
+    } finally {
+      delete process.env.PUBLIC_DATASET_API_URL;
+      delete process.env.PUBLIC_APP_URL;
+    }
+  });
+
+  it('leaves out an address the deployment has not configured, and names no project when its key outlived it', async () => {
+    const key = await keyFor(own);
+    await Project.deleteOne({ _id: own });
+    const body = (await call(key, '.well-known/visin')).body.data as unknown as Record<string, unknown>;
+    expect(body).not.toHaveProperty('datasetApiUrl');
+    expect(body).not.toHaveProperty('appUrl');
+    expect(body.credential).toMatchObject({ kind: 'pipeline-key', project: { id: own, name: '' } });
   });
 
   it('cannot manage projects, even its own', async () => {

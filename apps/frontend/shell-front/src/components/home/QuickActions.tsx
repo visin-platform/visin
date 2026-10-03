@@ -1,7 +1,7 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, ButtonBase, Typography } from '@mui/material';
 import { glassInteractive, tint, useChartColors } from '@visin/frontend-core';
-import { AddTask, ModelTraining, PhotoLibrary } from '@mui/icons-material';
+import { AddTask, Memory, ModelTraining, PhotoLibrary } from '@mui/icons-material';
 import type { SvgIconComponent } from '@mui/icons-material';
 import { LABELING_SLOT } from './accents';
 
@@ -16,6 +16,7 @@ interface Shortcut {
 
 const SHORTCUTS: Shortcut[] = [
   { label: 'Trainings', to: '/trainings', Icon: ModelTraining, slot: 0, app: 'vision' },
+  { label: 'Models', to: '/models', Icon: Memory, slot: 2, app: 'vision' },
   { label: 'Datasets', to: '/datasets', Icon: PhotoLibrary, slot: 5, app: 'vision' },
   // Labeling's colour, the same as the Labeling section's rows.
   { label: 'New job', to: '/jobs/new', Icon: AddTask, slot: LABELING_SLOT, app: 'label' }

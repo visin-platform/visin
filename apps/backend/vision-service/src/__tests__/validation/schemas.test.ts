@@ -233,6 +233,18 @@ describe('projectSchemas', () => {
     ).toBe(false);
   });
 
+  it('a taxonomy carries a metric description and a headline result, and keeps both safe', () => {
+    const ok = createProjectBodySchema.parse({
+      name: 'P',
+      taxonomy: { primaryMetric: ' val.mean_iou ', metrics: [{ key: 'mean_iou', description: '  How well it overlaps.  ' }] }
+    });
+    expect(ok.taxonomy?.primaryMetric).toBe('val.mean_iou');
+    expect(ok.taxonomy?.metrics?.[0].description).toBe('How well it overlaps.');
+    // The headline is used as a field path in a query, so it cannot hold an operator.
+    expect(createProjectBodySchema.safeParse({ name: 'P', taxonomy: { primaryMetric: '$where' } }).success).toBe(false);
+    expect(createProjectBodySchema.safeParse({ name: 'P', taxonomy: { metrics: [{ key: 'a', description: 'x'.repeat(301) }] } }).success).toBe(false);
+  });
+
   it('a taxonomy never constrains which conditions or classes may be reported', () => {
     // the point of the design: it decorates discovered keys, it does not gate them
     const parsed = createProjectBodySchema.parse({

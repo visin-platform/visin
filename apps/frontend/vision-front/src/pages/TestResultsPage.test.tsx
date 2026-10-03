@@ -92,7 +92,7 @@ describe('TestResultsPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('No test results found')).toBeInTheDocument();
+      expect(screen.getByText(/^No test results found\. Either nothing matches your filters/)).toBeInTheDocument();
     });
   });
 

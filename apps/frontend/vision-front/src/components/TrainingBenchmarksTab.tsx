@@ -30,16 +30,21 @@ import {
 } from '@mui/icons-material';
 import { Benchmark } from '../types';
 import { benchmarkService } from '../services/benchmarkService';
+import type { Training } from '../types/training';
+import { describeEmpty } from '../utils/trainingStatus';
 
 interface TrainingBenchmarksTabProps {
   training_uuid: string;
   isAuthenticated: boolean;
+  /** the run these belong to, so an empty tab can say why */
+  run?: Pick<Training, 'status' | 'lastSeenAt'>;
 }
 
-const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_uuid, isAuthenticated }) => {
+const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_uuid, isAuthenticated, run }) => {
   const [actionError, setActionError] = useState<string | null>(null);
   const [benchmarkToDelete, setBenchmarkToDelete] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const empty = describeEmpty('benchmarks', run);
 
   const {
     data,
@@ -131,10 +136,10 @@ const TrainingBenchmarksTab: React.FC<TrainingBenchmarksTabProps> = ({ training_
       {benchmarks.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
           <Typography variant="h6" color="textSecondary" gutterBottom>
-            No benchmarks found for this training
+            {empty.title}
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Upload benchmark data to track model performance metrics
+            {empty.body} Benchmarks are speed and memory measurements of the model.
           </Typography>
         </Paper>
       ) : (

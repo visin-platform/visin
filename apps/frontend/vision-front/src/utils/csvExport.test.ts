@@ -81,6 +81,49 @@ describe('exportTrainingsToCSV', () => {
     expect(csv).toMatch(/""/);
   });
 
+  it('writes costs as plain numbers beside the project’s own currency, never assuming euros', () => {
+    const blobParts = captureBlobContent();
+
+    exportTrainingsToCSV([
+      makeTraining({ metrics: { totalTime: 60, cpuCost: 1.234, gpuCost: 5.678, totalCost: 6.912, currency: 'USD', epochCount: 1, maxEpoch: 1 } as never }),
+      makeTraining({ name: 'No rates' }),
+    ]);
+
+    const [header, usd, none] = blobParts[0].split('\n');
+    expect(header).toContain('"Total Cost","Currency"');
+    expect(usd).toContain('"1.234","5.678","6.912","USD"');
+    expect(none).toContain('"1.234","5.678","6.912",""');
+    expect(blobParts[0]).not.toContain('EUR');
+  });
+
+  it('doubles a quote inside a field, so one run name cannot shift the columns after it', () => {
+    const blobParts = captureBlobContent();
+
+    exportTrainingsToCSV([makeTraining({ name: 'My "best" run', description: 'say "hi", then go' })]);
+
+    const row = blobParts[0].split('\n')[1];
+    expect(row.startsWith('"My ""best"" run","say ""hi"", then go","completed"')).toBe(true);
+  });
+
+  it('makes a name a spreadsheet would run as a formula plain text', () => {
+    const blobParts = captureBlobContent();
+
+    exportTrainingsToCSV([
+      makeTraining({ name: '=HYPERLINK("http://x.test")' }),
+      makeTraining({ name: '+1' }),
+      makeTraining({ name: '-cmd' }),
+      makeTraining({ name: '@SUM(A1)' }),
+      makeTraining({ name: 'fine=1' }),
+    ]);
+
+    const rows = blobParts[0].split('\n').slice(1);
+    expect(rows[0].startsWith('"\'=HYPERLINK(""http://x.test"")"')).toBe(true);
+    expect(rows[1].startsWith('"\'+1"')).toBe(true);
+    expect(rows[2].startsWith('"\'-cmd"')).toBe(true);
+    expect(rows[3].startsWith('"\'@SUM(A1)"')).toBe(true);
+    expect(rows[4].startsWith('"fine=1"')).toBe(true);
+  });
+
   it('handles an empty trainings array', () => {
     exportTrainingsToCSV([]);
 

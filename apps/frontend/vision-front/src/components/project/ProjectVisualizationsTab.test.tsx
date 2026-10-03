@@ -47,7 +47,7 @@ describe('ProjectVisualizationsTab', () => {
 
   it('shows an empty state', () => {
     renderTab();
-    expect(screen.getByText('No visualizations found for this project.')).toBeInTheDocument();
+    expect(screen.getByText(/^No visualizations yet\./)).toBeInTheDocument();
   });
 
   it('renders a training card with visualization type counts', () => {

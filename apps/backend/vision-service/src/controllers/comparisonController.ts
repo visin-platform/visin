@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import * as comparisonExport from '../services/comparisonExportService';
+import type { ExportComparisonQuery } from '../validation/comparisonSchemas';
 import * as comparisonService from '../services/comparisonService';
 import type { GetComparisonsQuery, GetComparisonStatsQuery } from '../validation/comparisonSchemas';
 
@@ -79,4 +81,13 @@ export const deleteComparison = async (req: Request, res: Response): Promise<voi
     success: true,
     message: 'Comparison deleted successfully'
   });
+};
+
+// A comparison of trainings as a spreadsheet file
+export const exportComparison = async (req: Request, res: Response): Promise<void> => {
+  const { format } = req.query as unknown as ExportComparisonQuery;
+  const file = await comparisonExport.exportComparison(String(req.params.id), req.user?.id, format);
+  res.setHeader('Content-Type', file.contentType);
+  res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+  res.send(file.body);
 };

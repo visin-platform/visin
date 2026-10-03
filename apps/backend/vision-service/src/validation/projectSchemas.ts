@@ -1,5 +1,6 @@
 import { resourceOwnerSchema, visibilitySchema, z } from '@visin/backend-core';
 import { sortOrderSchema } from './common';
+import { projectStorageSchema } from './artifactSchemas';
 import { costingSchema, taxonomySchema } from './taxonomySchemas';
 
 const PROJECT_SORT_FIELDS = ['name', 'createdAt', 'updatedAt'] as const;
@@ -30,7 +31,8 @@ export const createProjectBodySchema = z.object({
   owner: resourceOwnerSchema.optional(),
   taxonomy: taxonomySchema.optional(),
   stallAfterMinutes: z.number().int().min(1).max(10080).optional(),
-  costing: costingSchema.optional()
+  costing: costingSchema.optional(),
+  storage: projectStorageSchema.optional()
 });
 
 export const updateProjectBodySchema = z.object({
@@ -43,7 +45,9 @@ export const updateProjectBodySchema = z.object({
   // empty. Rejecting it failed the whole save, not just the cleared field.
   taxonomy: taxonomySchema.nullable().optional(),
   stallAfterMinutes: z.number().int().min(1).max(10080).optional(),
-  costing: costingSchema.nullable().optional()
+  costing: costingSchema.nullable().optional(),
+  // Replaces the whole setting: leaving hfNamespace out clears it.
+  storage: projectStorageSchema.optional()
 });
 
 export const transferProjectBodySchema = z.object({ owner: resourceOwnerSchema });

@@ -61,6 +61,22 @@ components:
           enum:
             - private
             - public
+        source:
+          type: object
+          description: Set when the dataset lives on the Hugging Face Hub. Visin keeps only this pointer; the zip
+            below, if any, is the local copy. Absent means the zip kept here is the dataset.
+          required: [provider, repo, revision]
+          properties:
+            provider:
+              type: string
+              enum: [hf]
+            repo:
+              type: string
+              description: The Hub repo id, `org/name`.
+            revision:
+              type: string
+              pattern: ^[0-9a-f]{40}$
+              description: The full commit hash, never a branch or tag.
         archive:
           type: object
           properties:
@@ -2539,11 +2555,24 @@ paths:
                   data:
                     type: object
                     required:
-                      - downloadUrl
-                      - filename
                       - revision
-                      - expiresAt
+                    description: |
+                      How to fetch the dataset. With a Hub `source`, download it from the Hub at `source.revision`
+                      and use the zip (`downloadUrl`) only as the fallback. A dataset on the Hub alone has no
+                      `downloadUrl`, `filename`, `size` or `expiresAt`.
                     properties:
+                      source:
+                        type: object
+                        required: [provider, repo, revision]
+                        properties:
+                          provider:
+                            type: string
+                            enum: [hf]
+                          repo:
+                            type: string
+                          revision:
+                            type: string
+                            pattern: ^[0-9a-f]{40}$
                       downloadUrl:
                         type: string
                         format: uri
@@ -2553,8 +2582,13 @@ paths:
                         type: integer
                       revision:
                         type: string
+                        description: What a client that follows `source` records as the version it used - the Hub
+                          commit - or, without a source, the archive's upload time.
+                      archiveRevision:
+                        type: string
                         format: date-time
-                        description: Version of the archive addressed by this download URL.
+                        description: Version of the archive addressed by `downloadUrl`. Record this one when
+                          falling back to the zip.
                       expiresAt:
                         type: string
                         format: date-time
@@ -2681,6 +2715,138 @@ paths:
         - BearerCredential: []
         - SessionCookie: []
         - {}
+  /datasets/{id}/hub:
+    get:
+      tags:
+        - Datasets
+      summary: What the Hub says about a dataset's repo
+      operationId: getDatasetHubInfo
+      description: |
+        For a dataset with a Hugging Face `source`: the repo's card fields, size, top-level folders (where the splits
+        usually are) and first files, read from the Hub's API at the pinned commit. Nothing is copied. Only public
+        repos can be read: a private or missing one answers `404`. Answers are kept for an hour. A dataset with no
+        `source` answers `400`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The repo as the Hub describes it
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required: [repo, revision, tags, fileCount, totalBytes, folders, files, truncated]
+                    properties:
+                      repo: { type: string }
+                      revision: { type: string }
+                      license: { type: string }
+                      prettyName: { type: string }
+                      tags: { type: array, items: { type: string } }
+                      taskCategories: { type: array, items: { type: string } }
+                      languages: { type: array, items: { type: string } }
+                      sizeCategories: { type: array, items: { type: string } }
+                      gated: { type: boolean }
+                      fileCount: { type: integer }
+                      totalBytes: { type: integer }
+                      folders:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            path: { type: string }
+                            files: { type: integer }
+                            bytes: { type: integer }
+                      files:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            path: { type: string }
+                            size: { type: integer }
+                      truncated:
+                        type: boolean
+                        description: More files than the first hundred listed.
+        "400":
+          description: The dataset is not kept on the Hub
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "403":
+          description: The caller may not read the dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "404":
+          description: The repo or commit is missing or private
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        "502":
+          description: The Hub failed
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
   /datasets/{id}/import:
     post:
       tags:

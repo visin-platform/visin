@@ -146,6 +146,18 @@ describe('routing', () => {
       { method: 'GET', path: '/trainings/t1/configs' }
     ],
     [
+      'getTrainingSummary',
+      () => vision.getTrainingSummary('k', 't/1'),
+      {
+        epochCount: 3,
+        lastEpoch: 3,
+        metrics: [{ path: 'val.loss', direction: 'lower', directionFrom: 'default', best: { value: 0.2, epoch: 3 }, last: { value: 0.2, epoch: 3 } }],
+        models: [{ repo: 'acme/m', revision: 'a'.repeat(40) }]
+      },
+      // One call for what get_training used to compute from every epoch.
+      { method: 'GET', path: '/trainings/t%2F1/summary' }
+    ],
+    [
       'exportFinding',
       () => vision.exportFinding('k', 'f1', { selectBy: 'val.loss', direction: 'min' }),
       { filename: 'f.tex', tex: '\\subsection{x}' },

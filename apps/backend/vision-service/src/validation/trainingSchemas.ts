@@ -7,6 +7,44 @@ export const datasetReferenceSchema = z.object({
   name: z.string().min(1), revision: z.string().min(1).optional()
 });
 
+/** The longest note on a run: a researcher's own running commentary, not a document. */
+export const NOTES_MAX = 5000;
+
+/** Credentials a remote URL can carry (`https://token@host/…`) must never be stored, whoever sent them. */
+const withoutCredentials = (url: string): string => url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/i, '$1');
+
+/**
+ * What a run was started from, so it can be reproduced without anyone remembering to write it down:
+ * the code (git), the exact command, the packages, the machine. Filled in by the pipeline's client.
+ * Unknown fields are dropped. A command line can hold secrets, so the client redacts it first; the
+ * remote URL is cleaned here as well.
+ */
+export const provenanceSchema = z.object({
+  git: z
+    .object({
+      commit: z.string().regex(/^[0-9a-fA-F]{7,64}$/, 'Expected a commit hash'),
+      branch: z.string().max(250).optional(),
+      /** uncommitted changes were present: the commit alone does not name the code that ran */
+      dirty: z.boolean().optional(),
+      remote: z.string().max(500).transform(withoutCredentials).optional()
+    })
+    .optional(),
+  command: z.string().max(4000).optional(),
+  packages: z
+    .record(z.string().min(1).max(100), z.string().max(100))
+    .refine(packages => Object.keys(packages).length <= 300, 'At most 300 packages')
+    .optional(),
+  host: z
+    .object({
+      hostname: z.string().max(255).optional(),
+      platform: z.string().max(255).optional(),
+      python: z.string().max(100).optional(),
+      cuda: z.string().max(100).optional()
+    })
+    .optional()
+});
+export type Provenance = z.infer<typeof provenanceSchema>;
+
 const EPOCH_SORT_FIELDS = ['epoch', 'createdAt', 'updatedAt', 'timestamp'] as const;
 
 // Accepts either a comma-separated string or a repeated query param
@@ -97,6 +135,8 @@ export const createTrainingBodySchema = z.object({
   dataset: datasetReferenceSchema.optional(),
   configId: z.string().optional(),
   projectId: z.string().optional(),
+  notes: z.string().max(NOTES_MAX).optional(),
+  provenance: provenanceSchema.optional(),
   status: z.string().default('pending'),
   tags: z.union([z.string(), z.array(z.string())]).optional(),
   startTime: z.coerce.date().optional(),
@@ -110,6 +150,8 @@ export const updateTrainingBodySchema = z.object({
   datasetId: z.string().optional(),
   dataset: datasetReferenceSchema.optional(),
   configId: z.string().optional(),
+  notes: z.string().max(NOTES_MAX).optional(),
+  provenance: provenanceSchema.optional(),
   status: z.string().optional(),
   tags: z.union([z.string(), z.array(z.string())]).optional(),
   startTime: z.coerce.date().optional(),

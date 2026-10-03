@@ -19,6 +19,7 @@ const VisualizationsPage = lazy(() => import('../pages/VisualizationsPage'));
 const VisualizationsComparisonPage = lazy(() => import('../pages/VisualizationsComparisonPage'));
 const TrainingVisualizationsComparisonPage = lazy(() => import('../pages/TrainingVisualizationsComparisonPage'));
 const BenchmarksPage = lazy(() => import('../pages/BenchmarksPage'));
+const ModelsPage = lazy(() => import('../pages/ModelsPage'));
 const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
 const ProjectDashboardPage = lazy(() => import('../pages/ProjectDashboardPage'));
 
@@ -44,6 +45,7 @@ function AppRoutes() {
         <Route path="/visualizations/compare" element={<VisualizationsComparisonPage />} />
         <Route path="/visualizations/compare-trainings" element={<TrainingVisualizationsComparisonPage />} />
         <Route path="/benchmarks" element={<BenchmarksPage />} />
+        <Route path="/models" element={<ModelsPage />} />
       </Routes>
     </Suspense>
   );

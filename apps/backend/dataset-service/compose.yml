@@ -25,6 +25,8 @@ services:
       # Import queue. Redis is a shared service, not owned by dataset-service,
       # deployed separately, and reached over visinnet — not a sidecar here.
       - REDIS_URL=${REDIS_URL}
+      # Where Hugging Face dataset repos are read for their card and file list; the default is the public Hub.
+      - HF_ENDPOINT=${HF_ENDPOINT:-https://huggingface.co}
     # Import copies the uploaded zip to a temporary file before extracting it,
     # so the container's temp space must fit the largest dataset zip.
     init: true

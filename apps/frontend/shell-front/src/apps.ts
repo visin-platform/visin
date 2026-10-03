@@ -45,7 +45,8 @@ export const APPS: Record<ShellApp, ShellAppDefinition> = {
       '/datasets',
       '/test-results',
       '/visualizations',
-      '/benchmarks'
+      '/benchmarks',
+      '/models'
     ],
     // Vision's pages render their own titles alongside per-page actions.
     layout: () => ({ maxContentWidth: 1600, showPageHeader: false })

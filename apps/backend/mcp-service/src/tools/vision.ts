@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { vision } from '../vision';
-import type { Benchmark, ComparisonEntry, Epoch, TestResult, Training } from '../schemas';
+import type { Benchmark, ComparisonEntry, Epoch, TestResult, Training, TrainingSummary } from '../schemas';
 import {
   Caller,
   ToolModule,
@@ -114,6 +114,23 @@ const describeRanges = (epochs: Epoch[]): string[] =>
       `- ${range.key}: lowest ${metric(range.low)} at epoch ${range.lowEpoch}, ` +
       `highest ${metric(range.high)} at epoch ${range.highEpoch}`
   );
+
+/**
+ * Each result's best epoch beside its last, in the direction that makes it best.
+ *
+ * The direction is the project's own where it set one, and a guess from the result's
+ * name where it did not; the line says which, because a guess is worth stating when it
+ * decides which epoch is called best.
+ */
+const describePeaks = (metrics: TrainingSummary['metrics']): string[] => [
+  'Best epoch per result, with the direction that makes it best (the project\'s setting, or assumed from the name where it has none):',
+  ...metrics.map(
+    (entry) =>
+      `- ${entry.path}: best ${metric(entry.best.value)} at epoch ${entry.best.epoch} ` +
+      `(${entry.direction} is better${entry.directionFrom === 'taxonomy' ? '' : ', assumed'}), ` +
+      `last ${metric(entry.last.value)} at epoch ${entry.last.epoch}`
+  )
+];
 
 /** The five named scores, when a class records them. */
 const SCORE_FIELDS: Array<[string, string]> = [
@@ -401,9 +418,11 @@ function registerReadTools(server: McpServer, caller: Caller): void {
         // run's metrics with it: the settings are context for the numbers, not
         // the answer. A run whose config was deleted still has results worth
         // reading.
-        const [{ training: details, epochs }, configs] = await Promise.all([
+        const [{ training: details, epochs }, configs, summary] = await Promise.all([
           vision.getTrainingWithEpochs(key, training),
-          vision.getTrainingConfigs(key, training).catch(() => [])
+          vision.getTrainingConfigs(key, training).catch(() => []),
+          // Like the configs: context that sharpens the answer, never a reason to lose it.
+          vision.getTrainingSummary(key, training).catch(() => null)
         ]);
 
         const lines = [
@@ -455,13 +474,27 @@ function registerReadTools(server: McpServer, caller: Caller): void {
         const last = epochs[epochs.length - 1];
         lines.push('', 'Final epoch:', describeEpoch(last));
 
-        const best = describeRanges(epochs);
-        if (best.length > 0) {
+        const peaks = summary?.metrics.length ? describePeaks(summary.metrics) : [];
+        const best = peaks.length > 0 ? [] : describeRanges(epochs);
+        if (peaks.length > 0) lines.push('', ...peaks);
+        else if (best.length > 0) {
           lines.push(
             '',
-            'Across every epoch — this server does not know which direction is better for a',
-            'given metric, so both ends are given:',
+            'Across every epoch — which direction is better for a metric is not known here,',
+            'so both ends are given:',
             ...best
+          );
+        }
+
+        for (const model of summary?.models ?? []) {
+          lines.push('', `Model on Hugging Face: ${model.repo} @ ${model.revision.slice(0, 7)}${model.space ? `, demo space ${model.space}` : ''}.`);
+        }
+        const git = summary?.provenance?.git;
+        if (git) {
+          lines.push(
+            '',
+            `Started from commit ${git.commit.slice(0, 7)}${git.branch ? ` on ${git.branch}` : ''}` +
+              `${git.dirty ? ', with uncommitted changes (so the commit alone does not give back the code)' : ''}.`
           );
         }
 

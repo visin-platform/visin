@@ -32,6 +32,7 @@ import {
   formatMetricNumber,
   generateConditionLatex
 } from './performanceMetricsUtils';
+import MetricName from '../common/MetricName';
 
 interface PerformanceMetricsTableProps {
   comparisonData: ComparisonData[];
@@ -217,14 +218,14 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                             condition={condition.key}
                             column={`${className.key}_${metric.key}`}
                           >
-                            {metric.label}
+                            <MetricName label={metric.label} description={metric.description} />
                           </SortableTableCell>
                         ))}
                       </React.Fragment>
                     ))}
                     {summaryMetric && (
                       <SortableTableCell condition={condition.key} column={`overall_${summaryMetric.key}`}>
-                        {summaryMetric.label}
+                        <MetricName label={summaryMetric.label} description={summaryMetric.description} />
                       </SortableTableCell>
                     )}
                   </TableRow>

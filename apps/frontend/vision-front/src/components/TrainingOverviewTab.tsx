@@ -18,6 +18,8 @@ import MeanAccuracyChart from '../components/MeanAccuracyChart';
 import DiceScoreChart from '../components/DiceScoreChart';
 import TrainingTimeMetrics from '../components/TrainingTimeMetrics';
 import TrainingOverviewCard from '../components/TrainingOverviewCard';
+import ProvenanceCard from '../components/training/ProvenanceCard';
+import RunNotes from '../components/training/RunNotes';
 import ClassPrecisionChart from '../components/ClassPrecisionChart';
 import ClassRecallChart from '../components/ClassRecallChart';
 import ClassF1Chart from '../components/ClassF1Chart';
@@ -30,11 +32,16 @@ import {
 interface TrainingOverviewTabProps {
   training: Training;
   epochs: Epoch[];
+  /** whoever may write to the run may edit its notes */
+  canEdit?: boolean;
+  onSaveNotes?: (notes: string) => Promise<unknown>;
 }
 
 const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
   training,
-  epochs
+  epochs,
+  canEdit = false,
+  onSaveNotes
 }) => {
   const colors = useChartColors();
   // Calculate chart data
@@ -49,6 +56,8 @@ const TrainingOverviewTab: React.FC<TrainingOverviewTabProps> = ({
       <Stack spacing={3}>
         {/* Training Overview Card */}
         <TrainingOverviewCard training={training} epochs={epochs} />
+        <RunNotes notes={training.notes} canEdit={canEdit && Boolean(onSaveNotes)} onSave={onSaveNotes ?? (async () => undefined)} />
+        {training.provenance && <ProvenanceCard provenance={training.provenance} />}
 
         <Grid container spacing={3}>
           {/* Training Metrics Charts */}

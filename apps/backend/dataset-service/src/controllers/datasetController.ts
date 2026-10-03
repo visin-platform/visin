@@ -97,6 +97,10 @@ export const rescanArchive = async (req: Request, res: Response): Promise<void> 
   res.json({ success: true, data: await datasets.rescanArchive(accessFor(req, res), idOf(req)) });
 };
 
+export const hubInfo = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await datasets.getHubInfo(accessFor(req, res), idOf(req)) });
+};
+
 export const downloadArchive = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await datasets.getArchiveDownload(accessFor(req, res), idOf(req)) });
 };

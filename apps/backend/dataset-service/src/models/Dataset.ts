@@ -93,6 +93,14 @@ export interface DatasetHold {
   createdAt: Date;
 }
 
+/** Where the bytes are when they are not (only) in file-service: a pointer, never a copy. */
+export interface DatasetSource {
+  provider: 'hf';
+  repo: string;
+  /** a full commit hash, never a branch */
+  revision: string;
+}
+
 export interface IDataset extends Document {
   _id: Types.ObjectId;
   /** who controls it: a person, or a group whose current roles decide who may do what */
@@ -104,6 +112,8 @@ export interface IDataset extends Document {
   visibility: DatasetVisibility;
   /** every file of this dataset lives under this file-service prefix */
   storagePrefix: string;
+  /** set when the dataset lives on the Hugging Face Hub; the zip below, if any, is the local copy */
+  source?: DatasetSource;
   /** `size` and `contents` are absent until the zip has been scanned (a migrated dataset starts that way) */
   archive?: { fileId: string; filename: string; size?: number; uploadedAt: Date };
   /** `size`/`lastModified` identify the browser's file, so choosing it again resumes the upload */
@@ -146,6 +156,15 @@ const DatasetSchema = new Schema<IDataset>(
     description: { type: String, trim: true, maxlength: 10000 },
     visibility: { type: String, enum: VISIBILITIES, default: 'private' },
     storagePrefix: { type: String, required: true },
+    source: {
+      type: {
+        _id: false,
+        provider: { type: String, enum: ['hf'], required: true },
+        repo: { type: String, required: true },
+        revision: { type: String, required: true }
+      },
+      default: undefined
+    },
     archive: {
       type: {
         _id: false,

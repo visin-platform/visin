@@ -1,4 +1,5 @@
 import { z } from '@visin/backend-core';
+import { METRIC_PATH } from './modelRegistrySchemas';
 
 /**
  * Presentation metadata only — never a gate on incoming results. A pipeline posting
@@ -18,6 +19,7 @@ export const taxonomyTermSchema = z.object({
 export const taxonomyMetricSchema = z.object({
   key: z.string().trim().min(1, 'Key is required').max(100),
   label: z.string().trim().max(100).optional(),
+  description: z.string().trim().max(300).optional(),
   direction: z.enum(['higher', 'lower']).optional(),
   decimals: z.number().int().min(0).max(10).optional(),
   format: z.enum(['number', 'percent', 'ms', 'fps']).optional()
@@ -28,6 +30,7 @@ export const taxonomySchema = z.object({
   conditions: z.array(taxonomyTermSchema).optional(),
   classes: z.array(taxonomyTermSchema).optional(),
   metrics: z.array(taxonomyMetricSchema).optional(),
+  primaryMetric: z.string().trim().regex(METRIC_PATH, 'Not a result name like "val.mean_iou"').optional(),
   overallMetrics: z.array(z.string().trim().min(1)).optional(),
   taskType: z.enum(['segmentation', 'detection', 'classification', 'other']).optional(),
   exportPathPrefix: z.string().trim().max(200).optional()

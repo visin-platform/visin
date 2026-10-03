@@ -18,7 +18,8 @@ vi.mock('../services/comparisonService', () => ({
   comparisonService: {
     getComparisonByUuid: vi.fn(),
     updateComparison: vi.fn(),
-    deleteComparison: vi.fn()
+    deleteComparison: vi.fn(),
+    exportTable: vi.fn()
   }
 }));
 
@@ -104,6 +105,7 @@ const comparisonServiceMock = comparisonService as unknown as {
   getComparisonByUuid: ReturnType<typeof vi.fn>;
   updateComparison: ReturnType<typeof vi.fn>;
   deleteComparison: ReturnType<typeof vi.fn>;
+  exportTable: ReturnType<typeof vi.fn>;
 };
 const trainingServiceMock = trainingService as unknown as {
   getTrainings: ReturnType<typeof vi.fn>;
@@ -247,6 +249,34 @@ describe('ComparisonDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByText('No training data available for comparison.')).toBeInTheDocument();
     });
+  });
+
+  it('downloads a comparison of trainings as Excel or CSV, and says why when it cannot', async () => {
+    comparisonServiceMock.getComparisonByUuid.mockResolvedValue({ data: { ...baseComparison, type: 'trainings' } });
+    trainingServiceMock.compareTrainings.mockResolvedValue({ data: { comparison: [] } });
+    comparisonServiceMock.exportTable.mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('Access denied'));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('My Comparison')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export table' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Excel (.xlsx)' }));
+    await waitFor(() => expect(comparisonServiceMock.exportTable).toHaveBeenLastCalledWith('c1', 'xlsx'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export table' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'CSV (.csv)' }));
+    await waitFor(() => expect(comparisonServiceMock.exportTable).toHaveBeenLastCalledWith('c1', 'csv'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export table' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'CSV (.csv)' }));
+    expect(await screen.findByText('Access denied')).toBeInTheDocument();
+  });
+
+  it('offers no table export for a comparison of anything but trainings', async () => {
+    comparisonServiceMock.getComparisonByUuid.mockResolvedValue({ data: { ...baseComparison, type: 'tests' } });
+    trainingServiceMock.compareTrainings.mockResolvedValue({ data: { comparison: [] } });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('My Comparison')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Export table' })).not.toBeInTheDocument();
   });
 
   it('opens the edit dialog with the comparison values when the edit icon is clicked', async () => {

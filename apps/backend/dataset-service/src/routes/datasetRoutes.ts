@@ -38,6 +38,7 @@ router.post('/:id/archive/complete', authenticateToken, ctrl.completeArchiveUplo
 router.delete('/:id/archive/upload', authenticateToken, ctrl.discardArchiveUpload);
 router.post('/:id/archive/scan', authenticateToken, ctrl.rescanArchive);
 router.get('/:id/download', ctrl.downloadArchive);
+router.get('/:id/hub', ctrl.hubInfo);
 
 router.post('/:id/import', authenticateToken, validateRequest({ body: startImportBodySchema }), ctrl.startImport);
 router.delete('/:id/import', authenticateToken, ctrl.cancelImport);

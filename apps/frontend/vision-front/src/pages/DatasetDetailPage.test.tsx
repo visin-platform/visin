@@ -10,6 +10,7 @@ const service = vi.hoisted(() => ({
   startImport: vi.fn(),
   cancelImport: vi.fn(),
   getDownloadUrl: vi.fn(),
+  getHubInfo: vi.fn(),
   listItems: vi.fn(),
   listMyGroups: vi.fn(),
   scanArchive: vi.fn(),
@@ -76,6 +77,36 @@ describe('DatasetDetailPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await screen.findByRole('heading', { name: 'VLM v2' })).toBeInTheDocument();
     expect(service.updateDataset).toHaveBeenLastCalledWith('d1', { name: 'VLM v2', description: 'Mask review set', visibility: 'public' });
+  });
+
+  it('shows where a Hub dataset lives and lets a manager point it elsewhere or back to the zip', async () => {
+    const COMMIT = '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433';
+    const source = { provider: 'hf', repo: 'acme/zod-png', revision: COMMIT };
+    service.getHubInfo.mockResolvedValue({ repo: 'acme/zod-png', revision: COMMIT, license: 'mit', tags: [], fileCount: 3, totalBytes: 2048, folders: [], files: [], truncated: false });
+    service.getDataset.mockResolvedValue(dataset({ source, archive: undefined, contents: undefined, groups: [], imageCount: 0 }));
+    renderPage();
+    const chip = await screen.findByRole('link', { name: 'acme/zod-png @ 3f2a1c9' });
+    expect(chip).toHaveAttribute('href', `https://huggingface.co/datasets/acme/zod-png/tree/${COMMIT}`);
+    expect(screen.getByText(/On Hugging Face · 0 images/)).toBeInTheDocument();
+    expect(await screen.findByText('Licence: mit')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Download zip' })).not.toBeInTheDocument();
+
+    service.updateDataset.mockResolvedValueOnce(dataset({ archive: undefined, contents: undefined }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hugging Face source' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Dataset repo')).toHaveValue('acme/zod-png');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove source' }));
+    await waitFor(() => expect(service.updateDataset).toHaveBeenCalledWith('d1', { source: null }));
+  });
+
+  it('shows how to download the dataset, to a reader too', async () => {
+    service.getDataset.mockResolvedValue(dataset({ permissions: READ }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Use this' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Use this dataset' });
+    expect(within(dialog).getByText('visin download d1')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Use this dataset' })).not.toBeInTheDocument());
   });
 
   it('replaces the zip, then goes on to choosing image groups and importing', async () => {

@@ -20,17 +20,22 @@ import VisualizationGrid from './visualizations/VisualizationGrid';
 import UploadVisualizationDialog from './visualizations/UploadVisualizationDialog';
 import CompareVisualizationsDialog from './visualizations/CompareVisualizationsDialog';
 import ImageViewDialog from './visualizations/ImageViewDialog';
+import type { Training } from '../types/training';
+import { describeEmpty } from '../utils/trainingStatus';
 
 interface TrainingVisualizationsTabProps {
   training_uuid: string;
   epochs: Epoch[];
   isAuthenticated: boolean;
+  /** the run these belong to, so an empty tab can say why */
+  run?: Pick<Training, 'status' | 'lastSeenAt'>;
 }
 
 const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
   training_uuid,
   epochs,
-  isAuthenticated
+  isAuthenticated,
+  run
 }) => {
   const {
     visualizations,
@@ -49,6 +54,9 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
     handleDelete
   } = useTrainingVisualizations({ training_uuid });
 
+  const isSet = (filter: string) => filter !== '' && filter !== 'all';
+  const filtered = [selectedType, selectedEpochFilter, selectedImageName].some(isSet);
+  const empty = describeEmpty('visualizations', run);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [selectedForCompare, setSelectedForCompare] = useState<Visualization[]>([]);
@@ -157,7 +165,7 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
           <Typography variant="h6" gutterBottom sx={{
             color: "text.secondary"
           }}>
-            No visualizations found
+            {filtered ? 'No visualizations match these filters' : empty.title}
           </Typography>
           <Typography
             variant="body2"
@@ -165,7 +173,7 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
               color: "text.secondary",
               mb: 3
             }}>
-            Try adjusting your filters or upload a new visualization.
+            {filtered ? 'Try adjusting your filters.' : empty.body}{isAuthenticated && ' You can also upload a visualization yourself.'}
           </Typography>
           {isAuthenticated && (
             <Button

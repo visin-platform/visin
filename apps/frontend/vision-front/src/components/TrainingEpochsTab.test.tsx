@@ -39,8 +39,14 @@ const baseProps = {
 describe('TrainingEpochsTab', () => {
   it('shows the empty state and an "Upload First Epoch" action when there are no epochs', () => {
     render(<TrainingEpochsTab {...baseProps} />);
-    expect(screen.getByText('No epochs uploaded yet')).toBeInTheDocument();
+    expect(screen.getByText('No epochs yet')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Upload First Epoch/i })).toBeInTheDocument();
+  });
+
+  it('says a failed run never finished an epoch', () => {
+    render(<TrainingEpochsTab {...baseProps} run={{ status: 'failed' }} />);
+    expect(screen.getByText('No epochs')).toBeInTheDocument();
+    expect(screen.getByText(/failed before it finished an epoch/)).toBeInTheDocument();
   });
 
   it('renders a table row per epoch with formatted metrics', () => {

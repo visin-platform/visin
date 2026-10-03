@@ -9,6 +9,7 @@ import {
   TaxonomyMetric,
   TaxonomyTerm
 } from '../types/taxonomy';
+import { glossaryFor } from './glossary';
 import { humanize } from './humanize';
 
 /**
@@ -81,6 +82,7 @@ const defaultDirection = (key: string): MetricDirection =>
 const resolveMetric = (key: string, configured?: TaxonomyMetric): ResolvedMetric => ({
   key,
   label: configured?.label?.trim() || humanize(key),
+  description: configured?.description?.trim() || glossaryFor(key),
   direction: configured?.direction ?? defaultDirection(key),
   decimals: configured?.decimals ?? DEFAULT_DECIMAL_OVERRIDES[key] ?? DEFAULT_DECIMALS,
   format: configured?.format ?? DEFAULT_FORMATS[key] ?? 'number'

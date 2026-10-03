@@ -13,6 +13,8 @@ import { enqueueDelete, enqueueImport, enqueueRemoveGroup, enqueueScan, removeQu
 import { resumeDeletions, runDelete, runRemoveGroup } from '../../services/deleteService';
 import { markScanFailed, runScan } from '../../services/scanService';
 import { NonRetryableImportError } from '../../utils/boundedZip';
+import { fetchDatasetInfo } from '../../clients/hubClient';
+import { clearHubCache } from '../../services/hubService';
 import { Dataset } from '../../models/Dataset';
 import { purgeExpiredTrash } from '../../services/datasetService';
 import { DatasetItem } from '../../models/DatasetItem';
@@ -22,6 +24,7 @@ import { fileStore } from '../fixtures/fileStore';
 import { zip } from '../fixtures/zip';
 
 jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
+jest.mock('../../clients/hubClient', () => ({ fetchDatasetInfo: jest.fn() }));
 jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(), getMyGroups: jest.fn() }));
 jest.mock('../../queue/importQueue', () => ({ enqueueImport: jest.fn(), enqueueScan: jest.fn(), enqueueDelete: jest.fn(), enqueueRemoveGroup: jest.fn(), removeQueuedImport: jest.fn() }));
 
@@ -819,5 +822,70 @@ describe('resolving the dataset actually used by a training', () => {
     expect((await resolve(id)).status).toBe(404);
     expect((await call('/internal/datasets/resolve', { method: 'POST', body: { reference: id, userId: OWNER } })).status).toBe(401);
     expect((await call('/internal/datasets/resolve', { method: 'POST', internal: true, body: {} })).status).toBe(400);
+  });
+});
+
+describe('datasets kept on the Hugging Face Hub', () => {
+  const COMMIT = '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433';
+  const source = { provider: 'hf', repo: 'acme/zod-png', revision: COMMIT };
+  const resolve = (reference: string) => call('/internal/datasets/resolve', { internal: true, method: 'POST', body: { reference, userId: OWNER } });
+
+  it('is created on the Hub alone and downloads by pointer, with no zip', async () => {
+    const id = await createDataset({ name: 'Hub set', visibility: 'public', source: { repo: 'acme/zod-png', revision: COMMIT.toUpperCase() } });
+    expect((await call(`/api/datasets/${id}`)).body.data.source).toEqual(source);
+    const download = (await call(`/api/datasets/${id}/download`)).body.data;
+    expect(download).toEqual({ source, revision: COMMIT });
+    expect(download).not.toHaveProperty('downloadUrl');
+    expect((await resolve(id)).body.data).toMatchObject({ id, revision: COMMIT });
+  });
+
+  it('keeps the zip as the local fallback and reports both revisions', async () => {
+    const id = await createDataset();
+    const { completed } = await uploadZip(id, [{ path: 'a.png', data: Buffer.from('y') }]);
+    expect((await call(`/api/datasets/${id}`, { method: 'PATCH', user: OWNER, body: { source } })).body.data.source).toEqual(source);
+    const download = (await call(`/api/datasets/${id}/download`)).body.data;
+    expect(download).toMatchObject({ source, revision: COMMIT, archiveRevision: completed.body.data.archive.uploadedAt });
+    expect(download.downloadUrl).toMatch(/^signed:/);
+  });
+
+  it('goes back to the local zip when the source is cleared, and needs manage to change', async () => {
+    const id = await createDataset();
+    await uploadZip(id, [{ path: 'a.png', data: Buffer.from('y') }]);
+    await call(`/api/datasets/${id}`, { method: 'PATCH', user: OWNER, body: { source } });
+    expect((await call(`/api/datasets/${id}`, { method: 'PATCH', user: STRANGER, body: { source: null } })).status).toBe(403);
+    const cleared = await call(`/api/datasets/${id}`, { method: 'PATCH', user: OWNER, body: { source: null } });
+    expect(cleared.body.data).not.toHaveProperty('source');
+    const download = (await call(`/api/datasets/${id}/download`)).body.data;
+    expect(download).not.toHaveProperty('source');
+    expect(download.revision).toBe(download.archiveRevision);
+  });
+
+  it('refuses anything but a repo id pinned to a commit', async () => {
+    const id = await createDataset();
+    for (const bad of [
+      { repo: 'acme/zod-png', revision: 'main' },
+      { repo: 'acme/zod-png', revision: COMMIT.slice(0, 7) },
+      { repo: 'zod-png', revision: COMMIT },
+      { repo: 'acme/zod-png', revision: COMMIT, provider: 's3' }
+    ]) expect((await call(`/api/datasets/${id}`, { method: 'PATCH', user: OWNER, body: { source: bad } })).status).toBe(400);
+    expect((await call('/api/datasets', { method: 'POST', user: OWNER, body: { name: 'Bad', source: { repo: 'x', revision: 'main' } } })).status).toBe(400);
+  });
+
+  it('shows what the Hub says about the repo to anyone who may read the dataset, and nothing for a private one', async () => {
+    clearHubCache();
+    jest.mocked(fetchDatasetInfo).mockResolvedValue({ cardData: { license: 'mit' }, siblings: [{ rfilename: 'train/a.png', size: 7 }] });
+    const id = await createDataset({ name: 'Hub set', visibility: 'public', source });
+    const info = (await call(`/api/datasets/${id}/hub`)).body.data;
+    expect(info).toMatchObject({ repo: 'acme/zod-png', revision: COMMIT, license: 'mit', fileCount: 1, totalBytes: 7, folders: [{ path: 'train', files: 1, bytes: 7 }] });
+    expect(fetchDatasetInfo).toHaveBeenCalledWith('acme/zod-png', COMMIT);
+    const privateId = await createDataset({ name: 'Mine', source }, OWNER);
+    expect((await call(`/api/datasets/${privateId}/hub`, { user: STRANGER })).status).toBe(403);
+    expect((await call(`/api/datasets/${privateId}/hub`, { user: OWNER })).status).toBe(200);
+  });
+
+  it('has nothing to show for a dataset that is only a zip', async () => {
+    const id = await createDataset();
+    expect((await call(`/api/datasets/${id}/hub`)).status).toBe(400);
+    expect(fetchDatasetInfo).not.toHaveBeenCalled();
   });
 });

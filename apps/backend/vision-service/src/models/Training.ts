@@ -7,6 +7,21 @@ export interface DatasetReference {
   revision?: string;
 }
 
+/** A model checkpoint kept elsewhere, pinned to the commit the run produced. */
+export interface ModelReference {
+  _id: Types.ObjectId;
+  provider: 'hf';
+  kind: 'model';
+  repo: string;
+  /** a full commit hash, never a branch: a run from last year must still name the same bytes */
+  revision: string;
+  path?: string;
+  epoch?: number;
+  /** a demo Space on the Hub where anyone can try the model: `org/name` */
+  space?: string;
+  addedAt: Date;
+}
+
 export interface ITraining extends Document {
   /** Absent on legacy records; never inferred from the first editor. */
   ownerId?: string;
@@ -14,8 +29,13 @@ export interface ITraining extends Document {
   uuid: string;
   name: string;
   description?: string;
+  /** the researcher's own commentary on the run, apart from what the run is */
+  notes?: string;
   datasetId?: string;
   dataset?: DatasetReference;
+  models?: Types.DocumentArray<ModelReference>;
+  /** what the run was started from: code, command, packages, machine */
+  provenance?: Record<string, unknown>;
   configId?: string;
   projectId?: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'stalled';
@@ -49,10 +69,22 @@ const TrainingSchema: Schema = new Schema(
       trim: true,
       maxlength: 1000
     },
+    notes: { type: String, maxlength: 5000 },
     dataset: { type: new Schema({
       source: { type: String, enum: ['visin', 'hf', 'other'], required: true },
       id: String, name: { type: String, required: true }, revision: String
     }, { _id: false }) },
+    models: { type: [new Schema({
+      provider: { type: String, enum: ['hf'], required: true },
+      kind: { type: String, enum: ['model'], required: true },
+      repo: { type: String, required: true },
+      revision: { type: String, required: true },
+      path: String,
+      epoch: Number,
+      space: String,
+      addedAt: { type: Date, default: Date.now }
+    })], default: undefined },
+    provenance: { type: Schema.Types.Mixed },
     datasetId: {
       type: String,
       index: true

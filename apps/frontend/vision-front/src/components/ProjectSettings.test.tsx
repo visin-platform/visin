@@ -148,6 +148,40 @@ describe('ProjectSettings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Transfer' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
+
+  describe('storage', () => {
+    const chooseHub = async () => {
+      fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Storage' }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Hugging Face Hub' }));
+    };
+
+    it('leaves the setting out of a save that did not touch it', async () => {
+      mockedProjectService.updateProject.mockResolvedValue({ data: project } as any);
+      renderComponent();
+      fireEvent.click(screen.getByRole('button', { name: /save/i }));
+      await waitFor(() => expect(mockedProjectService.updateProject).toHaveBeenCalled());
+      expect(mockedProjectService.updateProject.mock.calls[0][1]).not.toHaveProperty('storage');
+    });
+
+    it('saves a switch to the Hub with its namespace', async () => {
+      mockedProjectService.updateProject.mockResolvedValue({ data: project } as any);
+      renderComponent();
+      await chooseHub();
+      fireEvent.change(screen.getByLabelText('Hub user or organisation'), { target: { value: 'acme' } });
+      fireEvent.click(screen.getByRole('button', { name: /save/i }));
+      await waitFor(() =>
+        expect(mockedProjectService.updateProject).toHaveBeenCalledWith(
+          'p1',
+          expect.objectContaining({ storage: { provider: 'hf', hfNamespace: 'acme' } })
+        )
+      );
+    });
+
+    it('starts from the project’s saved storage', () => {
+      renderComponent({ ...project, storage: { provider: 'hf', hfNamespace: 'acme' } });
+      expect(screen.getByLabelText('Hub user or organisation')).toHaveValue('acme');
+    });
+  });
 });
 
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));

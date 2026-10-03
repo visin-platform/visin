@@ -33,7 +33,17 @@ describe('TestResultsList', () => {
   it('shows an empty state when there are no results', () => {
     render(<TestResultsList {...baseProps} />);
 
-    expect(screen.getByText('No test results found')).toBeInTheDocument();
+    expect(screen.getByText('No test results yet')).toBeInTheDocument();
+  });
+
+  it('says why a finished or running run has no results', () => {
+    const { rerender } = render(<TestResultsList {...baseProps} run={{ status: 'completed' }} />);
+    expect(screen.getByText('No test results')).toBeInTheDocument();
+    expect(screen.getByText(/finished without reporting any\. The test stage may have been skipped/)).toBeInTheDocument();
+
+    rerender(<TestResultsList {...baseProps} run={{ status: 'running' }} />);
+    expect(screen.getByText('No test results yet')).toBeInTheDocument();
+    expect(screen.getByText(/still training\. The test stage usually comes after it/)).toBeInTheDocument();
   });
 
   it('groups results by epoch, sorted ascending', () => {

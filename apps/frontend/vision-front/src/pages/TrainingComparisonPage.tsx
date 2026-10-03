@@ -233,7 +233,7 @@ const TrainingComparisonPage: React.FC = () => {
               <Typography variant="body1" sx={{
                 color: "text.secondary"
               }}>
-                No test results available for comparison
+                None of the selected runs has test results to compare. A run reports them from its test stage, after training.
               </Typography>
             </Box>
           )}

@@ -21,7 +21,25 @@ export interface ComparisonStats {
   };
 }
 
+/** Hand a file to the browser to save. */
+const saveFile = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
 export const comparisonService = {
+  /** A comparison of trainings as a spreadsheet, built by the server so the file is the same as the API's. */
+  async exportTable(id: string, format: 'csv' | 'xlsx'): Promise<void> {
+    const { blob, filename } = await visionApi.download(`/comparisons/${id}/export?format=${format}`);
+    saveFile(blob, filename ?? `comparison.${format}`);
+  },
+
   // Get all comparisons
   async getComparisons(params?: {
     page?: number;

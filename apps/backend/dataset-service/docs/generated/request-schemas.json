@@ -58,6 +58,27 @@
           "private",
           "public"
         ]
+      },
+      "source": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "default": "hf",
+            "type": "string",
+            "const": "hf"
+          },
+          "repo": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "revision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "revision"
+        ]
       }
     },
     "required": [
@@ -230,6 +251,34 @@
         "enum": [
           "private",
           "public"
+        ]
+      },
+      "source": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "default": "hf",
+                "type": "string",
+                "const": "hf"
+              },
+              "repo": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+              },
+              "revision": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repo",
+              "revision"
+            ]
+          },
+          {
+            "type": "null"
+          }
         ]
       }
     }

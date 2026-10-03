@@ -17,6 +17,7 @@ vi.mock('../pages/VisualizationsPage', () => ({ default: () => <div>Visualizatio
 vi.mock('../pages/VisualizationsComparisonPage', () => ({ default: () => <div>VisualizationsComparisonPage</div> }));
 vi.mock('../pages/TrainingVisualizationsComparisonPage', () => ({ default: () => <div>TrainingVisualizationsComparisonPage</div> }));
 vi.mock('../pages/BenchmarksPage', () => ({ default: () => <div>BenchmarksPage</div> }));
+vi.mock('../pages/ModelsPage', () => ({ default: () => <div>ModelsPage</div> }));
 vi.mock('../pages/ProjectsPage', () => ({ default: () => <div>ProjectsPage</div> }));
 vi.mock('../pages/ProjectDashboardPage', () => ({ default: () => <div>ProjectDashboardPage</div> }));
 
@@ -51,6 +52,7 @@ describe('AppRoutes', () => {
     ['/visualizations/compare', 'VisualizationsComparisonPage'],
     ['/visualizations/compare-trainings', 'TrainingVisualizationsComparisonPage'],
     ['/benchmarks', 'BenchmarksPage'],
+    ['/models', 'ModelsPage'],
   ])('renders %s at %s', async (path, expectedText) => {
     renderAt(path);
     expect(await screen.findByText(expectedText)).toBeInTheDocument();

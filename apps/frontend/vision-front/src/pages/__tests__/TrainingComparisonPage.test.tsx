@@ -131,7 +131,7 @@ describe('TrainingComparisonPage', () => {
       data: { comparison: [{ training: { name: 'Run A' }, aggregatedTestResults: null, testResultsCount: 0, benchmarks: [] }] }
     });
     renderWithProviders('/trainings/compare?ids=t1&tab=tests');
-    expect(await screen.findByText('No test results available for comparison')).toBeInTheDocument();
+    expect(await screen.findByText(/^None of the selected runs has test results to compare/)).toBeInTheDocument();
   });
 
   it('opens directly on the benchmarks tab via the ?tab=benchmarks query param', async () => {

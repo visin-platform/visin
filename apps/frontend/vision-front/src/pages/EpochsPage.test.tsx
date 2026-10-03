@@ -117,7 +117,7 @@ describe('EpochsPage', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'Training One' }));
 
     await waitFor(() => {
-      expect(screen.getByText('No epochs found for this training')).toBeInTheDocument();
+      expect(screen.getByText(/^No epochs reported yet/)).toBeInTheDocument();
     });
   });
 
@@ -167,7 +167,7 @@ describe('EpochsPage', () => {
     await waitFor(() => expect(screen.getByRole('combobox')).not.toHaveAttribute('aria-disabled', 'true'));
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(await screen.findByRole('option', { name: 'Training One' }));
-    await waitFor(() => expect(screen.getByText('No epochs found for this training')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/^No epochs reported yet/)).toBeInTheDocument());
 
     const file = new File([JSON.stringify({ epoch: 1 })], 'epoch.json', { type: 'application/json' });
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -185,7 +185,7 @@ describe('EpochsPage', () => {
     await waitFor(() => expect(screen.getByRole('combobox')).not.toHaveAttribute('aria-disabled', 'true'));
     fireEvent.mouseDown(screen.getByRole('combobox'));
     fireEvent.click(await screen.findByRole('option', { name: 'Training One' }));
-    await waitFor(() => expect(screen.getByText('No epochs found for this training')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/^No epochs reported yet/)).toBeInTheDocument());
 
     const file = new File(['not json'], 'epoch.txt', { type: 'text/plain' });
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;

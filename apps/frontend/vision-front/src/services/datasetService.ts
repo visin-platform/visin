@@ -62,6 +62,33 @@ export interface DatasetImport {
   stale: boolean;
 }
 
+/** What the Hub says about a dataset's repo at its pinned commit. */
+export interface HubDatasetInfo {
+  repo: string;
+  revision: string;
+  license?: string;
+  prettyName?: string;
+  tags: string[];
+  taskCategories?: string[];
+  languages?: string[];
+  sizeCategories?: string[];
+  gated?: boolean;
+  fileCount: number;
+  totalBytes: number;
+  /** top-level folders, which is where a dataset's splits usually are */
+  folders: { path: string; files: number; bytes: number }[];
+  files: { path: string; size?: number }[];
+  truncated: boolean;
+}
+
+/** A dataset kept on the Hugging Face Hub: Visin stores only this pointer. */
+export interface DatasetSource {
+  provider: 'hf';
+  repo: string;
+  /** the full commit hash */
+  revision: string;
+}
+
 export interface Dataset {
   _id: string;
   name: string;
@@ -72,6 +99,8 @@ export interface Dataset {
   visibility: DatasetVisibility;
   /** set while it is in the trash */
   trashedAt?: string;
+  /** set when the dataset lives on the Hub; the zip, if any, is the local copy */
+  source?: DatasetSource;
   /** `size` is absent until the zip has been scanned (a dataset migrated from labeling starts that way) */
   archive?: { filename: string; size?: number; uploadedAt: string };
   /** an upload that stopped before it finished: choosing the same file again resumes it */
@@ -150,6 +179,8 @@ export interface DatasetFields {
   visibility: DatasetVisibility;
   /** who it belongs to at creation; afterwards it moves by transfer */
   owner?: OwnerRef;
+  /** null goes back to the zip kept on Visin */
+  source?: Pick<DatasetSource, 'repo' | 'revision'> | null;
 }
 
 export const createDataset = async (fields: DatasetFields) => (await datasetApi.post<Envelope<Dataset>>('', fields)).data;
@@ -219,6 +250,9 @@ export const discardUpload = async (id: string) => (await datasetApi.delete<Enve
 
 /** Measure and index a zip that is already stored, in the background like after an upload. */
 export const scanArchive = async (id: string) => (await datasetApi.post<Envelope<Dataset>>(`/${id}/archive/scan`)).data;
+
+/** Read from the Hub itself, for public repos only; a private or missing repo is a 404. */
+export const getHubInfo = async (id: string) => (await datasetApi.get<Envelope<HubDatasetInfo>>(`/${id}/hub`)).data;
 
 export const getDownloadUrl = async (id: string) =>
   (await datasetApi.get<Envelope<{ downloadUrl: string; filename: string }>>(`/${id}/download`)).data;

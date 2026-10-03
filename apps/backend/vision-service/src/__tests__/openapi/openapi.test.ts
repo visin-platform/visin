@@ -9,11 +9,14 @@ import {
   specProblems
 } from '@visin/backend-core/openapi-testing';
 import { API_ROUTE_GROUPS } from '../../routes/apiRoutes';
+import * as artifactSchemas from '../../validation/artifactSchemas';
+import * as bestRunSchemas from '../../validation/bestRunSchemas';
 import * as benchmarkSchemas from '../../validation/benchmarkSchemas';
 import * as comparisonSchemas from '../../validation/comparisonSchemas';
 import * as configSchemas from '../../validation/configSchemas';
 import * as epochSchemas from '../../validation/epochSchemas';
 import * as findingSchemas from '../../validation/findingSchemas';
+import * as modelRegistrySchemas from '../../validation/modelRegistrySchemas';
 import * as projectSchemas from '../../validation/projectSchemas';
 import * as testResultSchemas from '../../validation/testResultSchemas';
 import * as trainingSchemas from '../../validation/trainingSchemas';
@@ -32,11 +35,14 @@ import * as writeCapabilitiesSchemas from '../../validation/writeCapabilitiesSch
 const DOCS_DIR = path.join(__dirname, '../../../docs');
 const routes = collectRoutes(API_ROUTE_GROUPS, { specBase: '/api' });
 const nameOf = schemaNamer([
+  artifactSchemas,
   benchmarkSchemas,
+  bestRunSchemas,
   comparisonSchemas,
   configSchemas,
   epochSchemas,
   findingSchemas,
+  modelRegistrySchemas,
   projectSchemas,
   testResultSchemas,
   trainingSchemas,

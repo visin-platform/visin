@@ -19,6 +19,8 @@ export interface IProject extends Document {
   trashedAt?: Date;
   taxonomy?: IProjectTaxonomy;
   costing?: IProjectCosting;
+  /** where its big files live; absent means `visin` (this deployment's own storage) */
+  storage?: { provider: 'visin' | 'hf'; hfNamespace?: string };
   stallAfterMinutes?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -60,6 +62,13 @@ const ProjectSchema: Schema = new Schema(
     trashedAt: { type: Date },
     taxonomy: {
       type: TaxonomySchema,
+      required: false
+    },
+    storage: {
+      type: new Schema({
+        provider: { type: String, enum: ['visin', 'hf'], required: true },
+        hfNamespace: { type: String, trim: true, maxlength: 96 }
+      }, { _id: false }),
       required: false
     },
     stallAfterMinutes: { type: Number, default: 30, min: 1, max: 10080 },

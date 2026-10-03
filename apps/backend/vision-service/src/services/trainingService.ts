@@ -137,10 +137,12 @@ interface TrainingFilters {
 interface CreateTrainingData {
   name: string;
   description?: string;
+  notes?: string;
   datasetId?: string;
   dataset?: ITraining['dataset'];
   configId?: string;
   projectId?: string;
+  provenance?: Record<string, unknown>;
   status?: string;
   tags?: string | string[];
   startTime?: Date;
@@ -152,9 +154,11 @@ interface CreateTrainingData {
 interface UpdateTrainingData {
   name?: string;
   description?: string;
+  notes?: string;
   datasetId?: string;
   dataset?: ITraining['dataset'];
   configId?: string;
+  provenance?: Record<string, unknown>;
   status?: string;
   tags?: string | string[];
   startTime?: Date;
@@ -490,10 +494,12 @@ export const trainingService = {
       uuid,
       name: name.trim(),
       description: description?.trim(),
+      notes: data.notes?.trim() || undefined,
       dataset: await resolveDatasetReference(data.dataset, datasetId, userId, tokenProjectId() ? project.owner : undefined),
       datasetId,
       configId,
       projectId: resolvedProjectId,
+      provenance: data.provenance,
       status,
       lastSeenAt: new Date(),
       tags: tags ? (Array.isArray(tags) ? tags : [tags]) : [],
@@ -543,12 +549,15 @@ export const trainingService = {
 
     if (name !== undefined) training.name = name.trim();
     if (description !== undefined) training.description = description?.trim();
+    // An emptied note is a removed one.
+    if (data.notes !== undefined) training.notes = data.notes.trim() || undefined;
     if (data.dataset !== undefined || datasetId !== undefined) {
       const project = tokenProjectId() && training.projectId ? await resolveProject(training.projectId) : undefined;
       training.dataset = await resolveDatasetReference(data.dataset, datasetId, userId, project?.owner);
       training.datasetId = training.dataset?.source === 'visin' ? training.dataset.id : datasetId;
     }
     if (configId !== undefined) training.configId = configId;
+    if (data.provenance !== undefined) training.provenance = data.provenance;
     if (status !== undefined) {
       training.status = status as ITraining['status'];
       if (status === 'running') training.lastSeenAt = new Date();

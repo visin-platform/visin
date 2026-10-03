@@ -142,7 +142,7 @@ const ProjectVisualizationsTab: React.FC<ProjectVisualizationsTabProps> = ({
         <Typography variant="body2" sx={{
           color: "text.secondary"
         }}>
-          No visualizations found for this project.
+          No visualizations yet. They are images a run renders, such as predictions or ground truth, in its visualize stage.
         </Typography>
       )}
     </Box>

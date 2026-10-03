@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import TrainingOverviewTab from './TrainingOverviewTab';
 import { Training, Epoch } from '../types';
 
@@ -41,6 +41,30 @@ const makeEpoch = (epoch: number, overrides: Partial<Epoch> = {}): Epoch => ({
 });
 
 describe('TrainingOverviewTab', () => {
+  it('lets a writer add a note, which is saved through the page', async () => {
+    const onSaveNotes = vi.fn().mockResolvedValue(undefined);
+    render(<TrainingOverviewTab training={training} epochs={[makeEpoch(1)]} canEdit onSaveNotes={onSaveNotes} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add a note' }));
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: 'seed 2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onSaveNotes).toHaveBeenCalledWith('seed 2'));
+  });
+
+  it('shows no notes card to a reader of a run without one, and the note to a reader of one with', () => {
+    const { rerender } = render(<TrainingOverviewTab training={training} epochs={[makeEpoch(1)]} />);
+    expect(screen.queryByText('Notes')).not.toBeInTheDocument();
+    rerender(<TrainingOverviewTab training={{ ...training, notes: 'night set' }} epochs={[makeEpoch(1)]} />);
+    expect(screen.getByText('night set')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  });
+
+  it('shows what the run was started from only when the client recorded it', () => {
+    const { rerender } = render(<TrainingOverviewTab training={training} epochs={[makeEpoch(1)]} />);
+    expect(screen.queryByText('Reproducibility')).not.toBeInTheDocument();
+    rerender(<TrainingOverviewTab training={{ ...training, provenance: { git: { commit: 'a1b2c3d4e5f6' } } }} epochs={[makeEpoch(1)]} />);
+    expect(screen.getByText('Reproducibility')).toBeInTheDocument();
+  });
+
   it('renders the core metric charts and overview card', () => {
     render(<TrainingOverviewTab training={training} epochs={[makeEpoch(1)]} />);
     expect(screen.getByTestId('training-overview-card')).toBeInTheDocument();

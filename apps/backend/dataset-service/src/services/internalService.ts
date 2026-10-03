@@ -174,5 +174,5 @@ export async function resolveDatasetReference({ reference, userId, projectOwner 
   if (candidates.length > 1) throw new BadRequestError('Dataset name is ambiguous; use its id');
   const dataset = candidates[0];
   return { source: 'visin', id: dataset._id.toString(), name: dataset.name,
-    revision: dataset.archive?.uploadedAt.toISOString() };
+    revision: dataset.source?.revision ?? dataset.archive?.uploadedAt.toISOString() };
 }

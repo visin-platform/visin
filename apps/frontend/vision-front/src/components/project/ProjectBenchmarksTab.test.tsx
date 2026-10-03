@@ -59,7 +59,7 @@ describe('ProjectBenchmarksTab', () => {
 
   it('shows an empty state', () => {
     renderTab();
-    expect(screen.getByText('No benchmarks found for this project.')).toBeInTheDocument();
+    expect(screen.getByText(/^No benchmarks yet\./)).toBeInTheDocument();
   });
 
   it('renders a linked training name, FPS, and parameters (M-scaled from total_parameters_m)', () => {

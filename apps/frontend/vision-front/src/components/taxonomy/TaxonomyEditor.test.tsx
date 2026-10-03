@@ -92,4 +92,24 @@ describe('TaxonomyEditor', () => {
 
     expect(onChange).toHaveBeenCalledWith({ overallMetrics: ['a'] });
   });
+
+  it('suggests the built-in definition and stores the wording a user types', async () => {
+    const onChange = renderEditor({ metrics: [{ key: 'miou' }] });
+    const field = screen.getByLabelText('What it means');
+    expect(field).toHaveAttribute('placeholder', expect.stringContaining('Mean IoU'));
+
+    await userEvent.type(field, 'x');
+
+    expect(onChange).toHaveBeenCalledWith({ metrics: [{ key: 'miou', description: 'x' }] });
+  });
+
+  it('stores the result to rank runs on, and clears it when emptied', async () => {
+    const onChange = renderEditor({ primaryMetric: 'val.mean_iou' });
+    const field = screen.getByLabelText('Result to rank runs on');
+    expect(field).toHaveValue('val.mean_iou');
+
+    await userEvent.clear(field);
+
+    expect(onChange).toHaveBeenLastCalledWith({ primaryMetric: undefined });
+  });
 });

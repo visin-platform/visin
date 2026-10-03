@@ -26,7 +26,7 @@ describe('TrainingTestResultsTab', () => {
     render(<TrainingTestResultsTab {...baseProps} />);
 
     expect(screen.getByText('Test Results')).toBeInTheDocument();
-    expect(screen.getByText('No test results found')).toBeInTheDocument();
+    expect(screen.getByText('No test results yet')).toBeInTheDocument();
   });
 
   it('shows an upload error alert that opens the results dialog', () => {

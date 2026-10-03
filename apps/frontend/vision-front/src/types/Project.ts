@@ -1,6 +1,13 @@
 import type { OwnerRef, Visibility } from '@visin/frontend-core';
 import { ProjectCosting, ProjectTaxonomy } from './taxonomy';
 
+/** Where a project keeps its big files. `visin`: on this deployment only. `hf`: runs may link Hugging Face models. */
+export interface ProjectStorage {
+  provider: 'visin' | 'hf';
+  /** the Hub user or organisation a pipeline creates repos under by default */
+  hfNamespace?: string;
+}
+
 export interface Project {
   _id: string;
   name: string;
@@ -16,6 +23,8 @@ export interface Project {
   taxonomy?: ProjectTaxonomy;
   /** hourly rates for this project's hardware; absent means costs are not shown */
   costing?: ProjectCosting;
+  /** absent means `visin` */
+  storage?: ProjectStorage;
   stallAfterMinutes?: number;
   createdAt: string;
   updatedAt: string;
@@ -42,5 +51,7 @@ export interface UpdateProjectData {
   taxonomy?: ProjectTaxonomy | null;
   /** null clears the rates, so the project stops reporting costs */
   costing?: ProjectCosting | null;
+  /** replaces the whole setting: leave hfNamespace out to clear it */
+  storage?: ProjectStorage;
   stallAfterMinutes?: number;
 }

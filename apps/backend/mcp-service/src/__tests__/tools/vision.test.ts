@@ -9,6 +9,7 @@ jest.mock('../../vision', () => ({
     listTrainings: jest.fn(),
     getTrainingWithEpochs: jest.fn(),
     getTrainingConfigs: jest.fn(),
+    getTrainingSummary: jest.fn(),
     updateTraining: jest.fn(),
     compareTrainings: jest.fn(),
     listTestResults: jest.fn(),
@@ -72,6 +73,8 @@ beforeEach(() => {
   // get_training reads a run's settings alongside its epochs; most runs here
   // have none recorded, which is a real state and the quieter default.
   mocked.getTrainingConfigs.mockResolvedValue([]);
+  // No summary is the quiet default too: get_training then falls back to both ends of each range.
+  mocked.getTrainingSummary.mockRejectedValue(new Error('no summary'));
 });
 
 describe('list_projects', () => {
@@ -206,6 +209,58 @@ describe('list_trainings', () => {
   });
 });
 
+describe('get_training with a summary', () => {
+  const summary = (over: Record<string, unknown> = {}) => ({
+    epochCount: 10,
+    lastEpoch: 10,
+    metrics: [
+      { path: 'val.loss', direction: 'lower', directionFrom: 'default', best: { value: 0.2, epoch: 9 }, last: { value: 0.25, epoch: 10 } },
+      { path: 'val.mean_iou', direction: 'higher', directionFrom: 'taxonomy', best: { value: 0.7, epoch: 4 }, last: { value: 0.6, epoch: 10 } }
+    ],
+    models: [],
+    ...over
+  });
+
+  beforeEach(() => {
+    mocked.getTrainingWithEpochs.mockResolvedValue({ training: training(), epochs: epochs(10) });
+  });
+
+  it('names each result’s best epoch in the direction that makes it best, and says when that was assumed', async () => {
+    mocked.getTrainingSummary.mockResolvedValue(summary());
+    const { text } = await call('get_training', { training: 't1' });
+    expect(mocked.getTrainingSummary).toHaveBeenCalledWith('vsn_live_abc', 't1');
+    expect(text).toContain('Best epoch per result');
+    expect(text).toContain('- val.loss: best 0.2 at epoch 9 (lower is better, assumed), last 0.25 at epoch 10');
+    expect(text).toContain('- val.mean_iou: best 0.7 at epoch 4 (higher is better), last 0.6 at epoch 10');
+    expect(text).not.toContain('is not known here');
+    expect(text).not.toContain('lowest');
+  });
+
+  it('adds the model on the Hub, its demo, and what the run started from', async () => {
+    mocked.getTrainingSummary.mockResolvedValue(
+      summary({
+        models: [{ repo: 'acme/clft', revision: 'a1b2c3d4e5f6a7b8', space: 'acme/clft-demo' }, { repo: 'acme/other', revision: '1234567890abcdef' }],
+        provenance: { git: { commit: 'abcdef0123456789', branch: 'main', dirty: true } }
+      })
+    );
+    const { text } = await call('get_training', { training: 't1' });
+    expect(text).toContain('Model on Hugging Face: acme/clft @ a1b2c3d, demo space acme/clft-demo.');
+    expect(text).toContain('Model on Hugging Face: acme/other @ 1234567.');
+    expect(text).toContain('Started from commit abcdef0 on main, with uncommitted changes');
+  });
+
+  it('states a clean commit without a warning, and a run with no branch', async () => {
+    mocked.getTrainingSummary.mockResolvedValue(summary({ provenance: { git: { commit: 'abcdef0123456789', dirty: false } } }));
+    const { text } = await call('get_training', { training: 't1' });
+    expect(text).toContain('Started from commit abcdef0.');
+  });
+
+  it('falls back to both ends of each range when the summary has no metrics', async () => {
+    mocked.getTrainingSummary.mockResolvedValue(summary({ metrics: [] }));
+    expect((await call('get_training', { training: 't1' })).text).toContain('loss: lowest 0.55 at epoch 10, highest 1 at epoch 1');
+  });
+});
+
 describe('get_training', () => {
   it('reports the run, its totals, its final epoch and both ends of every metric', async () => {
     mocked.getTrainingWithEpochs.mockResolvedValue({
@@ -219,9 +274,8 @@ describe('get_training', () => {
     expect(text).toContain('10 epochs over 20m');
     expect(text).toContain('Final epoch:');
     expect(text).toContain('epoch 10: loss 0.55, mAP 0.45');
-    // Direction is deliberately not guessed — this server cannot know whether a
-    // custom metric is better high or low.
-    expect(text).toContain('does not know which direction is better');
+    // Without a summary the direction is not guessed: both ends are given.
+    expect(text).toContain('which direction is better for a metric is not known here');
     expect(text).toContain('loss: lowest 0.55 at epoch 10, highest 1 at epoch 1');
   });
 

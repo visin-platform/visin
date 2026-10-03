@@ -22,6 +22,7 @@ import ConfusionMatrix from './ConfusionMatrix';
 import { isRecord, readMetric } from '../../taxonomy/discover';
 import { useTaxonomyFor } from '../../taxonomy/useTaxonomy';
 import { humanize } from '../../taxonomy/humanize';
+import MetricName from '../common/MetricName';
 
 /** Per-class metric columns, grouped one block per metric. */
 const CLASS_METRICS = ['iou', 'precision', 'recall', 'ap'];
@@ -140,7 +141,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
                   align="center"
                   sx={{ borderRight: `1px solid ${livePalette(theme).divider}`, fontWeight: 600 }}
                 >
-                  {taxonomy.metric(metric).label}
+                  <MetricName label={taxonomy.metric(metric).label} description={taxonomy.metric(metric).description} />
                 </TableCell>
               ))}
               {overallMetrics.length > 0 && (
@@ -168,7 +169,7 @@ const TestResultTable: React.FC<TestResultTableProps> = ({
               )}
               {overallMetrics.map(metric => (
                 <TableCell key={metric.key} align="center" sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
-                  {metric.label}
+                  <MetricName label={metric.label} description={metric.description} />
                 </TableCell>
               ))}
             </TableRow>

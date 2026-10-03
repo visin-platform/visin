@@ -24,11 +24,12 @@ import {
   type OwnerRef
 } from '@visin/frontend-core';
 import { projectService } from '../services/projectService';
-import { Project, UpdateProjectData } from '../types/Project';
+import { Project, ProjectStorage, UpdateProjectData } from '../types/Project';
 import { useAuth } from '../contexts/AuthContext';
 import TaxonomyEditor from './taxonomy/TaxonomyEditor';
 import PipelineKeys from './project/PipelineKeys';
 import CostingEditor from './taxonomy/CostingEditor';
+import StorageEditor from './project/StorageEditor';
 import { ProjectCosting, ProjectTaxonomy } from '../types/taxonomy';
 
 interface ProjectSettingsProps {
@@ -63,6 +64,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
   const [editTaxonomy, setEditTaxonomy] = useState<ProjectTaxonomy>(project.taxonomy ?? {});
   const [stallAfterMinutes, setStallAfterMinutes] = useState(project.stallAfterMinutes ?? 30);
   const [editCosting, setEditCosting] = useState<ProjectCosting>(project.costing ?? {});
+  const [editStorage, setEditStorage] = useState<ProjectStorage>(project.storage ?? { provider: 'visin' });
   const [projectUpdateError, setProjectUpdateError] = useState<string | null>(null);
 
   const updateProjectMutation = useMutation({
@@ -103,7 +105,11 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
       editorGroupIds,
       // null clears it: an emptied form puts the project back on pure discovery
       taxonomy: Object.keys(editTaxonomy).length > 0 ? editTaxonomy : null,
-      costing: Object.keys(editCosting).length > 0 ? editCosting : null
+      costing: Object.keys(editCosting).length > 0 ? editCosting : null,
+      // Only when changed: an untouched project keeps no setting, which reads as Visin.
+      ...(editStorage.provider !== (project.storage?.provider ?? 'visin') || editStorage.hfNamespace !== project.storage?.hfNamespace
+        ? { storage: editStorage }
+        : {})
     };
 
     if (editSlug.trim()) {
@@ -303,6 +309,16 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
             What an hour on this project's hardware costs. Save with the button at the top of the page.
           </Typography>
           <CostingEditor value={editCosting} onChange={setEditCosting} disabled={updateProjectMutation.isPending} />
+        </CardContent>
+      </Card>
+      {/* Where big files live */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 1 }}>Storage</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+            Where this project keeps its models and other large files. Save with the button at the top of the page.
+          </Typography>
+          <StorageEditor value={editStorage} onChange={setEditStorage} disabled={updateProjectMutation.isPending} />
         </CardContent>
       </Card>
       {project.permissions.contribute && <PipelineKeys projectId={project._id} />}

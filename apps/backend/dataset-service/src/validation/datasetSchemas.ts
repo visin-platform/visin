@@ -9,19 +9,39 @@ export type ResolveDatasetBody = z.infer<typeof resolveDatasetBodySchema>;
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Must be a 24-character id');
 
+/**
+ * A dataset kept on the Hugging Face Hub instead of (or as well as) a zip here.
+ * Visin stores only the pointer, pinned to a full commit hash so a run from last
+ * year still names the same bytes. The Hub's id rules are repeated from
+ * vision-service rather than shared: a lib change would need its own release.
+ */
+export const datasetSourceSchema = z.object({
+  provider: z.literal('hf').default('hf'),
+  repo: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$/, 'Expected a repo id like "org/name"'),
+  revision: z
+    .string()
+    .trim()
+    .transform((value) => value.toLowerCase())
+    .refine((value) => /^[0-9a-f]{40}$/.test(value), 'Expected the full 40-character commit hash, not a branch or tag')
+});
+export type DatasetSource = z.infer<typeof datasetSourceSchema>;
+
 /** A new dataset belongs to its creator unless `owner` names one of their groups; private unless made public. */
 export const createDatasetBodySchema = z.object({
   name: z.string().trim().min(1, 'A name is required').max(200),
   description: z.string().trim().max(10000).optional(),
   owner: resourceOwnerSchema.optional(),
-  visibility: visibilitySchema.optional()
+  visibility: visibilitySchema.optional(),
+  source: datasetSourceSchema.optional()
 });
 export type CreateDatasetBody = z.infer<typeof createDatasetBodySchema>;
 
 export const updateDatasetBodySchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(10000).optional(),
-  visibility: visibilitySchema.optional()
+  visibility: visibilitySchema.optional(),
+  /** null goes back to the zip kept here */
+  source: datasetSourceSchema.nullable().optional()
 });
 export type UpdateDatasetBody = z.infer<typeof updateDatasetBodySchema>;
 

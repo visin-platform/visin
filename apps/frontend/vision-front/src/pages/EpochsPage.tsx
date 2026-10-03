@@ -238,7 +238,7 @@ export const EpochsPage: React.FC = () => {
                 <CircularProgress />
               </Box>
             ) : epochs.length === 0 ? (
-              <Typography color="textSecondary">No epochs found for this training</Typography>
+              <Typography color="textSecondary">No epochs reported yet. A run reports one after each epoch of training.</Typography>
             ) : (
               <TableContainer component={Paper}>
                 <Table>

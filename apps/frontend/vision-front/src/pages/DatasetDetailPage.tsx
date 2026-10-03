@@ -19,6 +19,8 @@ import {
   AccountTree as MappingIcon,
   Delete as DeleteIcon,
   Download as DownloadIcon,
+  Cloud as HubIcon,
+  Code as CodeIcon,
   Edit as EditIcon,
   SwapHoriz as TransferIcon,
   UploadFile as UploadIcon
@@ -38,6 +40,10 @@ import DatasetContentsCard from '../components/dataset/DatasetContentsCard';
 import DatasetFormDialog, { DatasetFormValues } from '../components/dataset/DatasetFormDialog';
 import DatasetImageGrid from '../components/dataset/DatasetImageGrid';
 import DatasetItemDialog from '../components/dataset/DatasetItemDialog';
+import UseThisDialog from '../components/common/UseThisDialog';
+import BestRunCard from '../components/common/BestRunCard';
+import HubDatasetCard from '../components/dataset/HubDatasetCard';
+import HubSourceDialog from '../components/dataset/HubSourceDialog';
 import ImportMappingDialog from '../components/dataset/ImportMappingDialog';
 import ImportStatusPanel from '../components/dataset/ImportStatusPanel';
 import RemoveGroupDialog from '../components/dataset/RemoveGroupDialog';
@@ -63,9 +69,11 @@ import {
 } from '../services/datasetService';
 import { isActive, startUpload, useDatasetUpload } from '../services/datasetUploads';
 import { formatBytes } from '../utils/datasetMapping';
+import { hubDatasetUrl, shortRevision } from '../utils/hubLinks';
+import { datasetSnippets } from '../utils/useSnippets';
 import { formatDateTime } from '../utils';
 
-type DialogName = 'edit' | 'replace' | 'mapping' | 'delete' | 'removeGroup' | 'transfer' | null;
+type DialogName = 'use' | 'edit' | 'source' | 'replace' | 'mapping' | 'delete' | 'removeGroup' | 'transfer' | null;
 
 const isImporting = (dataset?: Dataset): boolean =>
   dataset?.import?.status === 'queued' || dataset?.import?.status === 'running';
@@ -205,6 +213,9 @@ const DatasetDetailPage: React.FC = () => {
     }
   };
 
+  const handleSource = (source: Parameters<typeof updateDataset>[1]['source']) =>
+    run(async () => refresh(await updateDataset(id, { source })), 'Failed to save the source');
+
   const handleEdit = ({ name, description, visibility }: DatasetFormValues) =>
     run(async () => refresh(await updateDataset(id, { name, description, visibility })), 'Failed to save');
 
@@ -303,7 +314,7 @@ const DatasetDetailPage: React.FC = () => {
             {[
               dataset.archive
                 ? `${dataset.archive.filename}${dataset.archive.size ? ` · ${formatBytes(dataset.archive.size)}` : ''}`
-                : 'No zip uploaded',
+                : dataset.source ? 'On Hugging Face' : 'No zip uploaded',
               `${dataset.imageCount.toLocaleString()} images`,
               `updated ${formatDateTime(dataset.updatedAt)}`
             ].join(' · ')}
@@ -311,6 +322,18 @@ const DatasetDetailPage: React.FC = () => {
           <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
             <OwnerChip owner={dataset.owner} userId={user?.id} groups={ownerGroups} ownerName={dataset.owner.name} />
             <Chip size="small" label={dataset.visibility === 'public' ? 'Visible to everyone' : 'Private'} />
+            {dataset.source && (
+              <Chip
+                size="small"
+                icon={<HubIcon />}
+                component="a"
+                href={hubDatasetUrl(dataset.source)}
+                target="_blank"
+                rel="noopener noreferrer"
+                clickable
+                label={`${dataset.source.repo} @ ${shortRevision(dataset.source.revision)}`}
+              />
+            )}
             {held && <Chip size="small" color="secondary" label={heldReason} />}
           </Stack>
         </Box>
@@ -330,6 +353,7 @@ const DatasetDetailPage: React.FC = () => {
                     }
                   ]
                 : []),
+              { label: 'Use this', icon: <CodeIcon />, onClick: () => openDialog('use') },
               ...(dataset.permissions.contribute
                 ? [
                     {
@@ -347,7 +371,10 @@ const DatasetDetailPage: React.FC = () => {
                   ]
                 : []),
               ...(dataset.permissions.manage
-                ? [{ label: 'Edit', icon: <EditIcon />, onClick: () => openDialog('edit') }]
+                ? [
+                    { label: 'Edit', icon: <EditIcon />, onClick: () => openDialog('edit') },
+                    { label: 'Hugging Face source', icon: <HubIcon />, onClick: () => openDialog('source') }
+                  ]
                 : []),
               ...(dataset.permissions.own
                 ? [
@@ -506,6 +533,9 @@ const DatasetDetailPage: React.FC = () => {
         )
       )}
 
+      <BestRunCard datasetId={dataset._id} showProject />
+      {dataset.source && <HubDatasetCard datasetId={dataset._id} source={dataset.source} />}
+
       {dataset.contents && <DatasetContentsCard contents={dataset.contents} />}
 
       <DatasetFormDialog
@@ -518,6 +548,17 @@ const DatasetDetailPage: React.FC = () => {
         canShare={dataset.permissions.own}
         onCancel={() => setDialog(null)}
         onSubmit={dialog === 'replace' ? handleReplace : handleEdit}
+      />
+      {dialog === 'use' && <UseThisDialog title="Use this dataset" snippets={datasetSnippets(dataset)} onClose={() => setDialog(null)} />}
+      <HubSourceDialog
+        open={dialog === 'source'}
+        current={dataset.source}
+        datasetId={dataset._id}
+        hasZip={Boolean(dataset.archive)}
+        busy={busy}
+        error={actionError}
+        onCancel={() => setDialog(null)}
+        onSave={handleSource}
       />
       <ImportMappingDialog
         open={dialog === 'mapping'}

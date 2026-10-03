@@ -7,6 +7,8 @@ import {
   Paper
 } from '@mui/material';
 import { TestResult } from '../../types';
+import type { Training } from '../../types/training';
+import { describeEmpty } from '../../utils/trainingStatus';
 import TestResultTable from './TestResultTable';
 import DeleteConfirmationDialog from './DeleteConfirmationDialog';
 
@@ -18,6 +20,8 @@ interface TestResultsListProps {
   onLatexExport: (testResult: TestResult) => void;
   onDeleteTestResult?: (testResultId: string) => void;
   isAuthenticated: boolean;
+  /** the run these belong to, so an empty list can say why */
+  run?: Pick<Training, 'status' | 'lastSeenAt'>;
 }
 
 const TestResultsList: React.FC<TestResultsListProps> = ({
@@ -27,7 +31,8 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
   uploading,
   onLatexExport,
   onDeleteTestResult,
-  isAuthenticated
+  isAuthenticated,
+  run
 }) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TestResult | null>(null);
@@ -59,6 +64,7 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
   }
 
   if (allTestResults.length === 0) {
+    const empty = describeEmpty('tests', run);
     return (
       <Paper
         elevation={0}
@@ -73,7 +79,7 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
         <Typography variant="h6" gutterBottom sx={{
           color: "text.secondary"
         }}>
-          No test results found
+          {empty.title}
         </Typography>
         <Typography
           variant="body2"
@@ -81,7 +87,7 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
             color: "text.secondary",
             mb: 3
           }}>
-          Upload test result JSON files to see performance metrics.
+          {empty.body}{isAuthenticated && ' You can also upload test result JSON files here.'}
         </Typography>
       </Paper>
     );
