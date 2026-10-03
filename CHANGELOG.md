@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.27.0](https://github.com/visin-platform/visin/compare/v1.26.1...v1.27.0) (2026-10-03)
+
+
+### Features
+
+* add Hugging Face storage, model registry, best run and comparison export ([cbdc754](https://github.com/visin-platform/visin/commit/cbdc754ce83bbfbcb0c135273b915ac4d1d336ca))
+
 ### [1.26.1](https://github.com/visin-platform/visin/compare/v1.26.0...v1.26.1) (2026-10-02)
 
 
