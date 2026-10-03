@@ -1,4 +1,11 @@
 # Visin Changelog
+### [1.27.1](https://github.com/visin-platform/visin/compare/v1.27.0...v1.27.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* resolve metric discovery, model card and Hub reference bugs ([fb0c28b](https://github.com/visin-platform/visin/commit/fb0c28b8f20923ba0c7428e7fdd6d5604e096025))
+
 ## [1.27.0](https://github.com/visin-platform/visin/compare/v1.26.1...v1.27.0) (2026-10-03)
 
 
