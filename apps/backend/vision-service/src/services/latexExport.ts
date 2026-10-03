@@ -1,4 +1,5 @@
 import type { IEpoch } from '../models/Epoch';
+import { metricLeaves } from './resultMetrics';
 
 /**
  * A finding, rendered as a section someone can paste into a paper.
@@ -128,49 +129,10 @@ export function markdownToLatex(markdown: string): string {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Metric subtrees that are machine telemetry rather than a result.
- *
- * Same exclusion mcp-service makes, and deliberately a second copy rather than
- * a shared one: putting it in backend-core would make this feature wait on a
- * lib release and a version bump in two services, for twenty lines that have
- * never changed.
- */
-const NOT_METRICS = new Set(['system_info']);
-
-interface Leaf {
-  path: string;
-  value: number;
-  depth: number;
-}
-
-function numericLeaves(results: Record<string, unknown>, prefix = '', depth = 1): Leaf[] {
-  return Object.entries(results).flatMap(([key, value]) => {
-    if (depth === 1 && NOT_METRICS.has(key)) return [];
-
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (typeof value === 'number' && Number.isFinite(value)) return [{ path, value, depth }];
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      return numericLeaves(value as Record<string, unknown>, path, depth + 1);
-    }
-    return [];
-  });
-}
-
-/**
- * An epoch's headline metrics.
- *
- * Only the shallowest leaves, which is what separates a summary from a
- * per-class breakdown without knowing either schema: `val.loss` sits above
- * `val.vehicle.iou`, and a results table wants the first.
+ * An epoch's headline metrics, by dotted path. See `metricLeaves` for what counts as one.
  */
 export function epochMetrics(results: Record<string, unknown>): Map<string, number> {
-  const leaves = numericLeaves(results);
-  if (leaves.length === 0) return new Map();
-
-  const shallowest = Math.min(...leaves.map((leaf) => leaf.depth));
-  return new Map(
-    leaves.filter((leaf) => leaf.depth === shallowest).map((leaf) => [leaf.path, leaf.value])
-  );
+  return new Map(metricLeaves(results).map(leaf => [leaf.path, leaf.value]));
 }
 
 /** More columns than this and the table runs off a two-column page. */

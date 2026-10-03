@@ -231,7 +231,12 @@
                 "type": "string"
               },
               "revision": {
-                "type": "string"
+                "type": "string",
+                "description": "The version the run used. A Hub commit for a dataset kept on the Hub, otherwise the zip's upload time."
+              },
+              "archiveRevision": {
+                "type": "string",
+                "description": "For a dataset that is on the Hub and also has a zip on Visin, the zip's upload time. Recorded beside the commit, so a replaced zip is visible on runs that trained on it."
               }
             }
           },
@@ -679,7 +684,7 @@
                   "visin",
                   "hf"
                 ],
-                "description": "`visin`: everything stays on this deployment, and links to Hub models are refused. `hf`: runs may link Hugging Face Hub models."
+                "description": "`visin`: everything stays on this deployment, and a run's links to Hub models and its references to Hub datasets (`dataset.source: hf`) are refused with `409`. `hf`: runs may link Hugging Face Hub models and train on Hub datasets. A Visin dataset that is itself kept on the Hub is governed by the dataset, not by this setting."
               },
               "hfNamespace": {
                 "type": "string",
@@ -879,6 +884,10 @@
               "revision": {
                 "type": "string",
                 "minLength": 1
+              },
+              "archiveRevision": {
+                "type": "string",
+                "minLength": 1
               }
             },
             "required": [
@@ -1041,6 +1050,10 @@
                 "minLength": 1
               },
               "revision": {
+                "type": "string",
+                "minLength": 1
+              },
+              "archiveRevision": {
                 "type": "string",
                 "minLength": 1
               }
@@ -1789,7 +1802,7 @@
               },
               "primaryMetric": {
                 "type": "string",
-                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.@()%+:,= /[\\]-]{0,99}$"
               },
               "overallMetrics": {
                 "type": "array",
@@ -1997,7 +2010,7 @@
                   },
                   "primaryMetric": {
                     "type": "string",
-                    "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+                    "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.@()%+:,= /[\\]-]{0,99}$"
                   },
                   "overallMetrics": {
                     "type": "array",
@@ -2857,7 +2870,7 @@
         ],
         "summary": "Create a new training",
         "operationId": "createTraining",
-        "description": "Start a run before posting its epochs. Send your own `uuid` to refer to the\nrun by an id your script already knows; one is generated otherwise.\n\nEvery run belongs to a project: `projectId` (its id or slug) is required, except\nwith a credential limited to a project, where the run goes into that project and\n`projectId` is ignored. A project that does not exist, or that you cannot see,\nanswers 404 with its name; create it under Projects first. Adding a run takes\n`contribute` on the project.\n",
+        "description": "Start a run before posting its epochs. Send your own `uuid` to refer to the\nrun by an id your script already knows; one is generated otherwise.\n\nEvery run belongs to a project: `projectId` (its id or slug) is required, except\nwith a credential limited to a project, where the run goes into that project and\n`projectId` is ignored. A project that does not exist, or that you cannot see,\nanswers 404 with its name; create it under Projects first. Adding a run takes\n`contribute` on the project.\n\nA `dataset` with `source: hf` answers 409 unless the project's storage is set to Hugging Face.\n",
         "security": [
           {
             "BearerCredential": []
@@ -2904,6 +2917,9 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           },
           "default": {
             "$ref": "#/components/responses/Error"
@@ -3405,6 +3421,7 @@
         ],
         "summary": "Update training",
         "operationId": "updateTraining",
+        "description": "A `dataset` with `source: hf` answers 409 unless the project's storage is set to Hugging Face.\n",
         "security": [
           {
             "BearerCredential": []
@@ -3464,6 +3481,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           },
           "default": {
             "$ref": "#/components/responses/Error"
@@ -8064,7 +8084,7 @@
             "description": "Rank by the best value each run reached for this result, e.g. `val.mean_iou`. Adds `best` to each row.",
             "schema": {
               "type": "string",
-              "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+              "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.@()%+:,= /[\\]-]{0,99}$"
             }
           },
           {
@@ -8366,7 +8386,7 @@
         ],
         "summary": "How a run did, in one call",
         "operationId": "getTrainingSummary",
-        "description": "The run's state, dataset, config, linked models and provenance, and for every result it reported (the\nshallowest numeric entries of an epoch, such as `val.mean_iou`) the best epoch beside the last. A run's last\nepoch is not its result, so both are given.\n\n\"Best\" follows the project's taxonomy: a metric the project marked `higher` or `lower` is read that way\n(`directionFrom: taxonomy`). Any other is guessed from its name, so a loss or a latency is lower-is-better\nand the rest higher (`directionFrom: default`); check `directionFrom` before trusting a guess. At most 60\nresults are listed.\n",
+        "description": "The run's state, dataset, config, linked models and provenance, and for every result it reported (the\nshallowest numeric entries of an epoch's blocks, such as `val.mean_iou`, plus any top-level result, leaving out\nper-class rows, telemetry nested below the summaries and bookkeeping like `lr`) the best epoch beside the last. A run's last\nepoch is not its result, so both are given.\n\n\"Best\" follows the project's taxonomy: a metric the project marked `higher` or `lower` is read that way\n(`directionFrom: taxonomy`). Any other is guessed from its name, so a loss or a latency is lower-is-better\nand the rest higher (`directionFrom: default`); check `directionFrom` before trusting a guess. At most 60\nresults are listed.\n",
         "security": [
           {
             "BearerCredential": []
@@ -8661,7 +8681,7 @@
         ],
         "summary": "Export a comparison of trainings as a spreadsheet",
         "operationId": "exportComparison",
-        "description": "One row per run: its name, status, dataset, epochs and linked models, then for every result any of them\nreported (the shallowest numeric entries of an epoch, such as `val.mean_iou`) its best value, the epoch\nthat was reached at, the last value, and which way better was read. \"(assumed)\" after the direction marks\none guessed from the result's name rather than set in the project's taxonomy.\n\n`csv` is UTF-8 with a byte-order mark, so Excel reads accents correctly; text that a spreadsheet would\nrun as a formula is made inert. `xlsx` keeps numbers as numbers. A run the caller may not read, or that has\nbeen deleted, is left out. Only a comparison of trainings can be exported: any other kind answers `400`.\n",
+        "description": "One row per run: its name, status, dataset, epochs and linked models, then for every result any of them\nreported (the shallowest numeric entries of an epoch's blocks, such as `val.mean_iou`, plus any top-level result, leaving out\nper-class rows, telemetry nested below the summaries and bookkeeping like `lr`) its best value, the epoch\nthat was reached at, the last value, and which way better was read. \"(assumed)\" after the direction marks\none guessed from the result's name rather than set in the project's taxonomy.\n\n`csv` is UTF-8 with a byte-order mark, so Excel reads accents correctly; text that a spreadsheet would\nrun as a formula is made inert. `xlsx` keeps numbers as numbers. A run the caller may not read, or that has\nbeen deleted, is left out. Only a comparison of trainings can be exported: any other kind answers `400`.\n",
         "security": [
           {
             "BearerCredential": []

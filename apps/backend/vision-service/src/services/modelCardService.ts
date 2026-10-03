@@ -4,10 +4,13 @@ import Config from '../models/Config';
 import Epoch from '../models/Epoch';
 import Project from '../models/Project';
 import TestResult from '../models/TestResult';
+import type { IProjectTaxonomy } from '../models/taxonomy';
 import Training from '../models/Training';
 import type { ModelCardQuery } from '../validation/artifactSchemas';
+import { headlineMetric } from './bestRunService';
 import { epochMetrics } from './latexExport';
 import { checkProjectAccess } from './projectAccessService';
+import { directionOf } from './trainingSummaryService';
 
 /** The Hub's task ids, for the project task types that name one. Anything else gets no model-index. */
 const HUB_TASKS: Record<string, string> = {
@@ -42,6 +45,41 @@ function overallRows(results: Record<string, unknown>): OverallRow[] {
   });
 }
 
+interface PickedEpoch<T> {
+  epoch: T | undefined;
+  /** why this epoch, in words a reader of the card can check */
+  basis: string;
+}
+
+/**
+ * The epoch a card describes. One the caller named wins. Otherwise it is the epoch where the run
+ * did best on the result its project ranks runs by (the same result the best-run badge uses), because a
+ * run's last epoch is not its result: a card scored on it would put a worse checkpoint's numbers
+ * on the model page. A run with nothing to rank on falls back to its last epoch and says so.
+ */
+function pickEpoch<T extends { epoch: number; results?: unknown }>(epochs: T[], taxonomy: IProjectTaxonomy | undefined, named: number | undefined): PickedEpoch<T> {
+  if (named !== undefined) {
+    const found = epochs.find(epoch => epoch.epoch === named);
+    if (!found) throw new NotFoundError(`Epoch ${named} was not reported for this run`);
+    return { epoch: found, basis: 'the epoch asked for' };
+  }
+  const last = epochs[epochs.length - 1];
+  if (!last) return { epoch: undefined, basis: '' };
+
+  const scored = epochs.map(epoch => ({ epoch, values: epochMetrics((epoch.results ?? {}) as Record<string, unknown>) }));
+  const headline = headlineMetric([...new Set(scored.flatMap(row => [...row.values.keys()]))], taxonomy?.primaryMetric);
+  const { direction } = headline ? directionOf(headline.path, taxonomy?.metrics) : { direction: 'higher' as const };
+  let best: { epoch: T; value: number } | undefined;
+  for (const { epoch, values } of scored) {
+    const value = headline ? values.get(headline.path) : undefined;
+    if (value === undefined) continue;
+    if (!best || (direction === 'higher' ? value > best.value : value < best.value)) best = { epoch, value };
+  }
+  return best
+    ? { epoch: best.epoch, basis: `best ${headline!.path}` }
+    : { epoch: last, basis: 'the last epoch, as the run reports no result to pick the best by' };
+}
+
 /**
  * The README a Hub model repo should carry, written from what Visin recorded for
  * the run: where the data came from, how far it trained, what it scored, how fast
@@ -55,12 +93,13 @@ export async function buildModelCard(trainingId: string, userId: string | undefi
   if (!(await checkProjectAccess(userId, training.projectId))) throw new ForbiddenError();
 
   const runId = training._id.toString();
-  const epochs = await Epoch.find({ trainingId: runId, deletedAt: null }).sort({ epoch: 1 }).select('epoch results epoch_time').lean();
-  const chosen = query.epoch === undefined ? epochs[epochs.length - 1] : epochs.find(epoch => epoch.epoch === query.epoch);
-  if (query.epoch !== undefined && !chosen) throw new NotFoundError(`Epoch ${query.epoch} was not reported for this run`);
+  const [epochs, project] = await Promise.all([
+    Epoch.find({ trainingId: runId, deletedAt: null }).sort({ epoch: 1 }).select('epoch results epoch_time').lean(),
+    training.projectId ? Project.findById(training.projectId).select('name taxonomy').lean() : null
+  ]);
+  const { epoch: chosen, basis } = pickEpoch(epochs, project?.taxonomy, query.epoch);
 
-  const [project, config, tests, benchmark] = await Promise.all([
-    training.projectId ? Project.findById(training.projectId).select('name taxonomy').lean() : null,
+  const [config, tests, benchmark] = await Promise.all([
     training.configId ? Config.findById(training.configId).select('summary').lean() : null,
     chosen ? TestResult.find({ trainingId: runId, epoch: chosen.epoch, deletedAt: null }).sort({ timestamp: -1 }).limit(1).lean() : [],
     Benchmark.findOne({ training_id: training._id, deletedAt: null, ...(chosen ? { $or: [{ epoch: chosen.epoch }, { epoch: { $exists: false } }] } : {}) }).sort({ timestamp: -1 }).lean()
@@ -93,7 +132,7 @@ export async function buildModelCard(trainingId: string, userId: string | undefi
     ...(project ? [['Project', project.name]] : []),
     ['Dataset', dataset ? `${dataset.name}${dataset.revision ? ` @ ${dataset.revision.slice(0, 40)}` : ''}` : training.datasetId ?? 'not recorded'],
     ['Epochs reported', epochs.length],
-    ...(chosen ? [['This checkpoint', `epoch ${chosen.epoch}`]] : []),
+    ...(chosen ? [['This checkpoint', `epoch ${chosen.epoch} (${basis})`]] : []),
     ...(config?.summary ? [['Configuration', config.summary]] : []),
     ['Run id', training.uuid]
   ];

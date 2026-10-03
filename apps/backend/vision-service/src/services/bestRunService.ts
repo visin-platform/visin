@@ -1,17 +1,13 @@
 import { isValidObjectId, Types, type QueryFilter } from 'mongoose';
-import Epoch from '../models/Epoch';
 import Project from '../models/Project';
 import Training, { type ITraining } from '../models/Training';
 import type { BestRunQuery } from '../validation/bestRunSchemas';
-import { epochMetrics } from './latexExport';
-import { bestByRun, scopedProjectIds } from './modelRegistryService';
+import { bestByRun, latestEpochs, scopedProjectIds } from './modelRegistryService';
+import { metricLeaves } from './resultMetrics';
 import { directionOf } from './trainingSummaryService';
 
 /** Runs looked at per request; a project past this is judged on its newest. */
 const MAX_RUNS = 2000;
-/** Runs whose epochs are read to find out which results a project reports. */
-const SAMPLE_RUNS = 20;
-
 /**
  * When a project has not named its headline result, these are tried in order, on the
  * validation block first. They are names a result commonly has, not a vocabulary a
@@ -51,17 +47,16 @@ interface Candidate {
 }
 
 async function candidateFor(projectId: string, runIds: string[], primary: string | undefined, taxonomyMetrics: { key: string; direction?: 'higher' | 'lower' }[] | undefined): Promise<Candidate | null> {
-  const sample = await Epoch.find({ trainingId: { $in: runIds.slice(0, SAMPLE_RUNS) }, deletedAt: null })
-    .sort({ epoch: -1 })
-    .limit(SAMPLE_RUNS)
-    .select('results')
-    .lean();
-  const paths = [...new Set(sample.flatMap(epoch => [...epochMetrics((epoch.results ?? {}) as Record<string, unknown>).keys()]))];
-  const headline = headlineMetric(paths, primary);
+  // The latest epoch of several runs, so the headline is what the runs report, not what one long run does.
+  const segmentsOf = new Map<string, string[]>();
+  for (const { results } of await latestEpochs(runIds)) {
+    for (const leaf of metricLeaves(results)) segmentsOf.set(leaf.path, leaf.segments);
+  }
+  const headline = headlineMetric([...segmentsOf.keys()], primary);
   if (!headline) return null;
 
   const { direction, directionFrom } = directionOf(headline.path, taxonomyMetrics);
-  const reached = await bestByRun(runIds, headline.path, direction === 'higher' ? 'max' : 'min');
+  const reached = await bestByRun(runIds, headline.path, direction === 'higher' ? 'max' : 'min', segmentsOf.get(headline.path));
   const winner = [...reached].sort(([, a], [, b]) => (direction === 'higher' ? b.value - a.value : a.value - b.value) || a.epoch - b.epoch)[0];
   return {
     projectId,

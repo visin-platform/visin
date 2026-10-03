@@ -6,6 +6,7 @@ import Training, { type ITraining } from '../models/Training';
 import { tokenProjectId } from '../middleware/projectTokenContext';
 import type { ListModelsQuery } from '../validation/modelRegistrySchemas';
 import { checkProjectAccess, getVisibleProjectIds, resolveProject } from './projectAccessService';
+import { metricLeaves } from './resultMetrics';
 
 /** Runs read per request. A registry past this is narrowed by project, not paged deeper. */
 const MAX_RUNS = 2000;
@@ -17,18 +18,59 @@ export interface Best {
   epoch: number;
 }
 
+/** Runs whose latest epoch is read to find out which results a set of runs reports. */
+const SAMPLE_RUNS = 20;
+
 /**
- * The best value each run reached for `metric`, and the epoch it reached it at.
+ * The latest epoch of each of up to `SAMPLE_RUNS` runs. One epoch per run, not the newest
+ * epochs overall: those usually all come from the single longest run, and that run's
+ * habits would stand for everyone's.
+ */
+export async function latestEpochs(trainingIds: string[]): Promise<{ results: Record<string, unknown> }[]> {
+  const rows = await Epoch.aggregate<{ results?: Record<string, unknown> }>([
+    { $match: { trainingId: { $in: trainingIds.slice(0, SAMPLE_RUNS) }, deletedAt: null } },
+    { $sort: { epoch: -1 } },
+    { $group: { _id: '$trainingId', results: { $first: '$results' } } }
+  ]);
+  return rows.map(row => ({ results: row.results ?? {} }));
+}
+
+/**
+ * The keys a result path stands for. A key can hold a dot (`val.map_0.5`), so the path
+ * alone is ambiguous; the runs' own results settle it, and a path none of them reports
+ * is read as plain dotted keys.
+ */
+export async function resolveSegments(trainingIds: string[], metric: string): Promise<string[]> {
+  for (const { results } of await latestEpochs(trainingIds)) {
+    const leaf = metricLeaves(results).find(candidate => candidate.path === metric);
+    if (leaf) return leaf.segments;
+  }
+  return metric.split('.');
+}
+
+/**
+ * The best value each run reached for a result, and the epoch it reached it at.
  * Results are open blobs, so this reads whatever number sits at the path; a run
  * that never reported it has no entry. Whether larger is better is the caller's
  * call: a registry spans projects, and each decides its own `direction`.
+ *
+ * `segments` are the result's keys, read one by one with `$getField`, so a key with a
+ * dot or a `$` in it is looked up as itself and never taken for a path or an operator.
+ * Without them, `metric` is split on its dots.
  */
-export async function bestByRun(trainingIds: string[], metric: string, direction: 'max' | 'min'): Promise<Map<string, Best>> {
-  const field = `results.${metric}`;
+export async function bestByRun(
+  trainingIds: string[],
+  metric: string,
+  direction: 'max' | 'min',
+  segments: string[] = metric.split('.')
+): Promise<Map<string, Best>> {
+  const value = segments.reduce<unknown>((input, key) => ({ $getField: { field: { $literal: key }, input } }), '$results');
   const rows = await Epoch.aggregate<{ _id: string; value: number; epoch: number }>([
-    { $match: { trainingId: { $in: trainingIds }, deletedAt: null, [field]: { $type: 'number' } } },
-    { $sort: { [field]: direction === 'max' ? -1 : 1, epoch: 1 } },
-    { $group: { _id: '$trainingId', value: { $first: `$${field}` }, epoch: { $first: '$epoch' } } }
+    { $match: { trainingId: { $in: trainingIds }, deletedAt: null } },
+    { $project: { trainingId: 1, epoch: 1, value } },
+    { $match: { value: { $type: 'number' } } },
+    { $sort: { value: direction === 'max' ? -1 : 1, epoch: 1 } },
+    { $group: { _id: '$trainingId', value: { $first: '$value' }, epoch: { $first: '$epoch' } } }
   ]);
   return new Map(rows.map(row => [row._id, { metric, direction, value: row.value, epoch: row.epoch }]));
 }
@@ -63,8 +105,9 @@ export async function listModels(userId: string | undefined, query: ListModelsQu
       .map(model => ({ training, model }))
   );
 
+  const runIds = [...new Set(rows.map(row => row.training._id.toString()))];
   const best = query.metric
-    ? await bestByRun([...new Set(rows.map(row => row.training._id.toString()))], query.metric, query.direction)
+    ? await bestByRun(runIds, query.metric, query.direction, await resolveSegments(runIds, query.metric))
     : new Map<string, Best>();
   const direction = query.order;
   const ranked = rows

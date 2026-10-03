@@ -32,7 +32,7 @@ describe('ModelRegistry', () => {
     service.list.mockResolvedValue(page([row('1', { model: { ...row('1').model, path: 'best.pt', epoch: 12 } })]));
     renderWithClient(<ModelRegistry />);
     const hub = await screen.findByRole('link', { name: 'acme/clft @ 3f2a1c9' });
-    expect(hub).toHaveAttribute('href', `https://huggingface.co/acme/clft/tree/${COMMIT}`);
+    expect(hub).toHaveAttribute('href', `https://huggingface.co/acme/clft/blob/${COMMIT}/best.pt`);
     expect(screen.getByText('best.pt · epoch 12')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Run 1' })).toHaveAttribute('href', '/trainings/t-1');
     expect(screen.getByRole('link', { name: 'Road' })).toHaveAttribute('href', '/projects/road');

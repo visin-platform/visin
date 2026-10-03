@@ -836,7 +836,9 @@ describe('datasets kept on the Hugging Face Hub', () => {
     const download = (await call(`/api/datasets/${id}/download`)).body.data;
     expect(download).toEqual({ source, revision: COMMIT });
     expect(download).not.toHaveProperty('downloadUrl');
-    expect((await resolve(id)).body.data).toMatchObject({ id, revision: COMMIT });
+    const resolved = (await resolve(id)).body.data;
+    expect(resolved).toMatchObject({ id, revision: COMMIT });
+    expect(resolved).not.toHaveProperty('archiveRevision');
   });
 
   it('keeps the zip as the local fallback and reports both revisions', async () => {
@@ -846,6 +848,8 @@ describe('datasets kept on the Hugging Face Hub', () => {
     const download = (await call(`/api/datasets/${id}/download`)).body.data;
     expect(download).toMatchObject({ source, revision: COMMIT, archiveRevision: completed.body.data.archive.uploadedAt });
     expect(download.downloadUrl).toMatch(/^signed:/);
+    // A run that resolves it records both, so a zip replaced under an unchanged commit still shows.
+    expect((await resolve(id)).body.data).toMatchObject({ id, revision: COMMIT, archiveRevision: completed.body.data.archive.uploadedAt });
   });
 
   it('goes back to the local zip when the source is cleared, and needs manage to change', async () => {

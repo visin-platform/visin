@@ -7,6 +7,8 @@ export interface AppConfig {
   AUTH_FRONT_URL?: string;
   ACCOUNT_FRONT_URL?: string;
   LABEL_FRONT_URL?: string;
+  /** The Hugging Face Hub that links point at; the public Hub when empty. */
+  HF_ENDPOINT?: string;
 }
 
 function createDevConfig(): AppConfig {
@@ -16,7 +18,8 @@ function createDevConfig(): AppConfig {
     AUTH_SERVICE_URL: import.meta.env.VITE_AUTH_SERVICE_URL,
     AUTH_FRONT_URL: import.meta.env.VITE_AUTH_FRONT_URL,
     ACCOUNT_FRONT_URL: import.meta.env.VITE_ACCOUNT_FRONT_URL,
-    LABEL_FRONT_URL: import.meta.env.VITE_LABEL_FRONT_URL
+    LABEL_FRONT_URL: import.meta.env.VITE_LABEL_FRONT_URL,
+    HF_ENDPOINT: import.meta.env.VITE_HF_ENDPOINT
   };
 }
 

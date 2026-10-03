@@ -21,5 +21,6 @@ export async function resolveDatasetReference(
   if (!response.ok) throw new BadGatewayError('Could not resolve the Visin dataset');
   const body = await response.json() as { data: DatasetReference };
   if (body.data?.source !== 'visin' || !body.data.id || !body.data.name) throw new BadGatewayError('Invalid dataset reference');
-  return { ...body.data, revision: ref.revision ?? body.data.revision };
+  const archiveRevision = ref.archiveRevision ?? body.data.archiveRevision;
+  return { ...body.data, revision: ref.revision ?? body.data.revision, ...(archiveRevision ? { archiveRevision } : {}) };
 }

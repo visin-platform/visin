@@ -12,7 +12,8 @@ export type StorageProvider = (typeof STORAGE_PROVIDERS)[number];
 
 /**
  * Where a project keeps what is too big for a database row. `visin` keeps every
- * byte on this deployment's own servers and refuses references to anywhere else;
+ * byte on this deployment's own servers and refuses a run's references to anywhere else
+ * (Hub models, and datasets named as `hf`);
  * `hf` lets runs point at Hugging Face Hub repos. `hfNamespace` is only the
  * default owner for repos a pipeline creates.
  */

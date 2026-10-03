@@ -4,7 +4,8 @@ import { MAX_PAGE_SIZE, sortOrderSchema } from './common';
 
 export const datasetReferenceSchema = z.object({
   source: z.enum(['visin', 'hf', 'other']), id: z.string().min(1).optional(),
-  name: z.string().min(1), revision: z.string().min(1).optional()
+  name: z.string().min(1), revision: z.string().min(1).optional(),
+  archiveRevision: z.string().min(1).optional()
 });
 
 /** The longest note on a run: a researcher's own running commentary, not a document. */

@@ -249,7 +249,7 @@ describe('Hub model references with in-memory MongoDB', () => {
       expect(readme).not.toContain('system_info');
       expect(readme).toContain('# clftv2-zod');
       expect(readme).toContain('Fusion of camera and lidar.');
-      expect(readme).toContain('| This checkpoint | epoch 2 |');
+      expect(readme).toContain('| This checkpoint | epoch 2 (the epoch asked for) |');
       expect(readme).toContain('| Epochs reported | 3 |');
       expect(readme).toContain('| Dataset | ZOD \\| frames @ rev-1 |');
       expect(readme).toContain('## Results at epoch 2');
@@ -260,14 +260,41 @@ describe('Hub model references with in-memory MongoDB', () => {
       expect(readme).toContain('| cuda | 119 | 8.4 | 4.5 |');
     });
 
-    it('takes the latest epoch when none is named, and leaves out the model-index without a known task', async () => {
+    it('takes the epoch where the run did best when none is named, says why, and leaves out the model-index without a known task', async () => {
       const trainingId = await seed();
       const readme: string = (await card(trainingId)).body.data.readme;
       expect(readme.startsWith('---\nlibrary_name: visin-trained\ntags:\n  - visin\n---')).toBe(true);
-      expect(readme).toContain('## Results at epoch 3');
-      expect(readme).toContain('| val.loss | 0.45 |');
-      expect(readme).not.toContain('## Test results');
+      // Epoch 3 is the last, but epoch 2 reached the highest validation mIoU.
+      expect(readme).toContain('| This checkpoint | epoch 2 (best val.mean_iou) |');
+      expect(readme).toContain('## Results at epoch 2');
+      expect(readme).toContain('| val.mean_iou | 0.6 |');
+      expect(readme).toContain('## Test results');
       expect(readme).toContain('# Run');
+    });
+
+    it('picks the best epoch by the project’s own result and direction, and the last epoch when nothing can be ranked', async () => {
+      const trainingId = await seed({ primaryMetric: 'val.loss', metrics: [{ key: 'loss', direction: 'lower' }] });
+      const byLoss: string = (await card(trainingId)).body.data.readme;
+      expect(byLoss).toContain('| This checkpoint | epoch 3 (best val.loss) |');
+
+      const projectId = await project({ provider: 'hf' });
+      const plain = await run(projectId);
+      for (const number of [1, 2]) {
+        await Epoch.create({ trainingId: plain, training_uuid: 'u', epoch_uuid: `p${number}`, epoch: number, timestamp: new Date(), results: { weld: { quality: number } } });
+      }
+      const unranked: string = (await card(plain)).body.data.readme;
+      expect(unranked).toContain('| This checkpoint | epoch 2 (the last epoch, as the run reports no result to pick the best by) |');
+      expect((await card(trainingId, '?epoch=1')).body.data.readme).toContain('| This checkpoint | epoch 1 (the epoch asked for) |');
+    });
+
+    it('does not publish the learning rate as a score when a pipeline logs it beside its blocks', async () => {
+      const projectId = await project({ provider: 'hf' });
+      await Project.updateOne({ _id: projectId }, { taxonomy: { taskType: 'segmentation' } });
+      const trainingId = await run(projectId);
+      await Epoch.create({ trainingId, training_uuid: 'u', epoch_uuid: 'e1', epoch: 1, timestamp: new Date(), results: { lr: 0.0001, val: { mean_iou: 0.7 } } });
+      const readme: string = (await card(trainingId)).body.data.readme;
+      expect(readme).toContain('- type: "val.mean_iou"');
+      expect(readme).not.toContain('"lr"');
     });
 
     it('is written for a run with nothing reported yet', async () => {
@@ -368,6 +395,15 @@ describe('Hub model references with in-memory MongoDB', () => {
         { path: 'val.mean_iou', direction: 'higher', directionFrom: 'default', best: { value: 0.7, epoch: 2 }, last: { value: 0.6, epoch: 3 } }
       ]);
       expect(body.data).not.toHaveProperty('provenance');
+    });
+
+    it('lists the validation results of a run that also logs a bare number beside its blocks', async () => {
+      const trainingId = await run(await project({ provider: 'hf' }));
+      await epoch(trainingId, 1, { lr: 0.001, epoch_time_s: 30, train: { loss: 0.9 }, val: { loss: 0.8, mean_iou: 0.4 } });
+      await epoch(trainingId, 2, { lr: 0.0005, epoch_time_s: 31, train: { loss: 0.5 }, val: { loss: 0.6, mean_iou: 0.6 } });
+      const { body } = await summary(trainingId);
+      expect(body.data.metrics.map((metric: { path: string }) => metric.path)).toEqual(['train.loss', 'val.loss', 'val.mean_iou']);
+      expect(body.data.metrics[2]).toMatchObject({ best: { value: 0.6, epoch: 2 } });
     });
 
     it('lets the project say which way a result is better, by leaf name or full path', async () => {
@@ -630,6 +666,26 @@ describe('the model registry with in-memory MongoDB', () => {
     expect(repos(reversed.data)).toEqual(['acme/low', 'acme/high', 'acme/silent']);
   });
 
+  it('ranks on a result named with a dot or punctuation, and on one that sits beside a bare number', async () => {
+    const id = await project();
+    const low = await run(id, 'low', [{ repo: 'acme/low' }]);
+    const high = await run(id, 'high', [{ repo: 'acme/high' }]);
+    await epoch(low, 1, { lr: 0.1, val: { 'map_0.5': 0.3 }, 'metrics/mAP50-95(B)': 0.2 });
+    await epoch(high, 1, { lr: 0.1, val: { 'map_0.5': 0.6 }, 'metrics/mAP50-95(B)': 0.5 });
+
+    const dotted = await list('?metric=val.map_0.5&sortBy=best');
+    expect(repos(dotted.data)).toEqual(['acme/high', 'acme/low']);
+    expect(dotted.data.models[0].best).toMatchObject({ metric: 'val.map_0.5', value: 0.6 });
+
+    const punctuated = await list(`?metric=${encodeURIComponent('metrics/mAP50-95(B)')}&sortBy=best`);
+    expect(punctuated.status).toBe(200);
+    expect(punctuated.data.models[0].best).toMatchObject({ value: 0.5 });
+
+    // A name that looks like a Mongo operator is only a key nobody reported.
+    const operator = await list(`?metric=${encodeURIComponent('$where')}&sortBy=best`);
+    expect(operator.status).toBe(400);
+  });
+
   it('shows a run once per model and pages the rows', async () => {
     const id = await project();
     await run(id, 'two', [{ repo: 'acme/a', revision: A, addedAt: new Date('2026-01-01') }, { repo: 'acme/a', revision: B, addedAt: new Date('2026-02-01') }]);
@@ -642,7 +698,7 @@ describe('the model registry with in-memory MongoDB', () => {
 
   it('refuses a metric that is not a result name and a ranking with nothing to rank by', async () => {
     expect((await list('?metric=%24where')).status).toBe(400);
-    expect((await list('?metric=a b')).status).toBe(400);
+    expect((await list('?metric=a%3Bb')).status).toBe(400);
     expect((await list('?sortBy=best')).status).toBe(400);
     expect((await list('?direction=up')).status).toBe(400);
     expect((await list('?limit=1000')).status).toBe(400);

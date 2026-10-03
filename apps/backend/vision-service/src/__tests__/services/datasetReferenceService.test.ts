@@ -28,6 +28,12 @@ it('resolves names to IDs and preserves the archive actually used even after rep
   expect(await resolveDatasetReference({ source: 'visin', id: 'id', name: 'zod', revision: 'old' }, undefined, 'u', { kind: 'group', id: 'g' })).toMatchObject({ id: 'id', revision: 'old' });
   expect(JSON.parse(fetcher.mock.calls[1][1]!.body as string)).toEqual({ reference: 'id', userId: 'u', projectOwner: { kind: 'group', id: 'g' } });
 });
+it('keeps the zip version beside the Hub commit, from the service or from the client', async () => {
+  reply(200, { source: 'visin', id: 'id', name: 'ZOD', revision: 'commit', archiveRevision: '2026-10-01T00:00:00.000Z' });
+  expect(await resolveDatasetReference(undefined, 'visin:zod', 'u')).toMatchObject({ revision: 'commit', archiveRevision: '2026-10-01T00:00:00.000Z' });
+  expect(await resolveDatasetReference({ source: 'visin', id: 'id', name: 'zod', archiveRevision: 'older' }, undefined, 'u'))
+    .toMatchObject({ revision: 'commit', archiveRevision: 'older' });
+});
 it.each([404, 400, 500])('reports a %s resolution failure as an HTTP error', async status => {
   reply(status);
   await expect(resolveDatasetReference({ source: 'visin', name: 'zod' }, undefined, 'u')).rejects.toMatchObject({ statusCode: status === 500 ? 502 : status });

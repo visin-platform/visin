@@ -185,7 +185,22 @@ it('honors custom project timeouts and legacy liveness without stalling fresh ru
   expect((await call('PUT', `/projects/${projectId}`, { stallAfterMinutes: 1 })).status).toBe(403);
 });
 
+it('refuses a Hub dataset on a project that keeps its files on Visin, on create and on update', async () => {
+  const hub = { source: 'hf', name: 'org/dataset', revision: 'commit' };
+  const refused = await call('PUT', `/trainings/${trainingId}`, { dataset: hub });
+  expect(refused.status).toBe(409);
+  expect(refused.body.message).toContain('Switch its storage to Hugging Face');
+  expect((await call('POST', '/trainings', { uuid: 'hub-run', name: 'Hub run', projectId, dataset: hub })).status).toBe(409);
+  expect(await Training.countDocuments({ uuid: 'hub-run' })).toBe(0);
+  // Other kinds of dataset are not the Hub's business.
+  expect((await call('PUT', `/trainings/${trainingId}`, { datasetId: 'local-set' })).status).toBe(200);
+
+  await Project.updateOne({ _id: projectId }, { storage: { provider: 'hf' } });
+  expect((await call('POST', '/trainings', { uuid: 'hub-run', name: 'Hub run', projectId, dataset: hub })).status).toBe(201);
+});
+
 it('updates dataset references and rejects inaccessible heartbeat parents', async () => {
+  await Project.updateOne({ _id: projectId }, { storage: { provider: 'hf' } });
   expect((await call('PUT', `/trainings/${trainingId}`, { dataset: { source: 'hf', name: 'org/dataset', revision: 'commit' } })).status).toBe(200);
   expect((await Training.findById(trainingId))?.dataset).toMatchObject({ source: 'hf', name: 'org/dataset' });
   expect((await call('PUT', `/trainings/${trainingId}`, { datasetId: 'local-set', status: 'running' })).status).toBe(200);
@@ -213,6 +228,14 @@ it('resolves a Visin dataset during run writes and pins the archive actually dow
     });
     expect(updated.status).toBe(200);
     expect(updated.body.data).toMatchObject({ datasetId, dataset: { revision: 'downloaded-archive' } });
+    expect(updated.body.data.dataset).not.toHaveProperty('archiveRevision');
+
+    // A dataset that is on the Hub and also has a zip here: both versions are recorded, so a replaced zip shows.
+    jest.mocked(fetchWithTimeout).mockResolvedValue({ status: 200, ok: true,
+      json: async () => ({ data: { source: 'visin', id: datasetId, name: 'ZOD', revision: 'c'.repeat(40), archiveRevision: '2026-10-01T00:00:00.000Z' } })
+    } as Response);
+    const both = await call('POST', '/trainings', { uuid: 'hub-zip-run', name: 'Hub and zip', datasetId: 'visin:zod' });
+    expect(both.body.data.dataset).toMatchObject({ revision: 'c'.repeat(40), archiveRevision: '2026-10-01T00:00:00.000Z' });
   } finally {
     delete process.env.DATASET_SERVICE_URL;
     delete process.env.INTERNAL_SERVICE_TOKEN;

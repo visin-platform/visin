@@ -181,6 +181,12 @@ components:
               type: string
             revision:
               type: string
+              description: The version the run used. A Hub commit for a dataset kept on the Hub, otherwise the
+                zip's upload time.
+            archiveRevision:
+              type: string
+              description: For a dataset that is on the Hub and also has a zip on Visin, the zip's upload time.
+                Recorded beside the commit, so a replaced zip is visible on runs that trained on it.
         models:
           type: array
           description: Hugging Face Hub models linked to this run. Visin keeps the pointer, never the bytes.
@@ -488,8 +494,10 @@ components:
             provider:
               type: string
               enum: [visin, hf]
-              description: "`visin`: everything stays on this deployment, and links to Hub models are refused.
-                `hf`: runs may link Hugging Face Hub models."
+              description: "`visin`: everything stays on this deployment, and a run's links to Hub models and its
+                references to Hub datasets (`dataset.source: hf`) are refused with `409`. `hf`: runs may link Hugging
+                Face Hub models and train on Hub datasets. A Visin dataset that is itself kept on the Hub is
+                governed by the dataset, not by this setting."
             hfNamespace:
               type: string
               description: The Hub user or organisation a pipeline should create repos under by default.
@@ -973,6 +981,8 @@ paths:
         `projectId` is ignored. A project that does not exist, or that you cannot see,
         answers 404 with its name; create it under Projects first. Adding a run takes
         `contribute` on the project.
+
+        A `dataset` with `source: hf` answers 409 unless the project's storage is set to Hugging Face.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -1001,6 +1011,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
         default:
           $ref: '#/components/responses/Error'
 
@@ -1278,6 +1290,8 @@ paths:
       tags: [Trainings]
       summary: Update training
       operationId: updateTraining
+      description: |
+        A `dataset` with `source: hf` answers 409 unless the project's storage is set to Hugging Face.
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -1314,6 +1328,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         default:
           $ref: '#/components/responses/Error'
     delete:
@@ -4160,7 +4176,8 @@ paths:
       operationId: getTrainingSummary
       description: |
         The run's state, dataset, config, linked models and provenance, and for every result it reported (the
-        shallowest numeric entries of an epoch, such as `val.mean_iou`) the best epoch beside the last. A run's last
+        shallowest numeric entries of an epoch's blocks, such as `val.mean_iou`, plus any top-level result, leaving out
+        per-class rows, telemetry nested below the summaries and bookkeeping like `lr`) the best epoch beside the last. A run's last
         epoch is not its result, so both are given.
 
         "Best" follows the project's taxonomy: a metric the project marked `higher` or `lower` is read that way
@@ -4303,7 +4320,8 @@ paths:
       operationId: exportComparison
       description: |
         One row per run: its name, status, dataset, epochs and linked models, then for every result any of them
-        reported (the shallowest numeric entries of an epoch, such as `val.mean_iou`) its best value, the epoch
+        reported (the shallowest numeric entries of an epoch's blocks, such as `val.mean_iou`, plus any top-level result, leaving out
+        per-class rows, telemetry nested below the summaries and bookkeeping like `lr`) its best value, the epoch
         that was reached at, the last value, and which way better was read. "(assumed)" after the direction marks
         one guessed from the result's name rather than set in the project's taxonomy.
 

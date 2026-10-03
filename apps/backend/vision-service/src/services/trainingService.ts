@@ -1,4 +1,5 @@
 import { resolveDatasetReference } from './datasetReferenceService';
+import { requireHubStorage } from './projectStorage';
 import Config from '../models/Config';
 import { assertResourceWrite, requireActor } from './writeAccessService';
 import { getEditableProjectIds, projectFilter, resolveProject } from './projectAccessService';
@@ -489,13 +490,16 @@ export const trainingService = {
     // Generate UUID if not provided
     const uuid = data.uuid || uuidv4();
 
+    const dataset = await resolveDatasetReference(data.dataset, datasetId, userId, tokenProjectId() ? project.owner : undefined);
+    if (dataset?.source === 'hf') requireHubStorage(project, 'train on datasets from the Hub');
+
     const training = new Training({
       ownerId,
       uuid,
       name: name.trim(),
       description: description?.trim(),
       notes: data.notes?.trim() || undefined,
-      dataset: await resolveDatasetReference(data.dataset, datasetId, userId, tokenProjectId() ? project.owner : undefined),
+      dataset,
       datasetId,
       configId,
       projectId: resolvedProjectId,
@@ -552,8 +556,10 @@ export const trainingService = {
     // An emptied note is a removed one.
     if (data.notes !== undefined) training.notes = data.notes.trim() || undefined;
     if (data.dataset !== undefined || datasetId !== undefined) {
-      const project = tokenProjectId() && training.projectId ? await resolveProject(training.projectId) : undefined;
-      training.dataset = await resolveDatasetReference(data.dataset, datasetId, userId, project?.owner);
+      const project = training.projectId ? await resolveProject(training.projectId) : undefined;
+      const dataset = await resolveDatasetReference(data.dataset, datasetId, userId, tokenProjectId() ? project?.owner : undefined);
+      if (dataset?.source === 'hf') requireHubStorage(project, 'train on datasets from the Hub');
+      training.dataset = dataset;
       training.datasetId = training.dataset?.source === 'visin' ? training.dataset.id : datasetId;
     }
     if (configId !== undefined) training.configId = configId;

@@ -33,7 +33,7 @@ export interface Training {
   name: string;
   description?: string;
   datasetId?: string;
-  dataset?: { source: 'visin' | 'hf' | 'other'; id?: string; name: string; revision?: string };
+  dataset?: { source: 'visin' | 'hf' | 'other'; id?: string; name: string; revision?: string; archiveRevision?: string };
   /** Hub models linked to this run; the bytes stay on the Hub */
   models?: ModelReference[];
   /** the researcher's own commentary on the run, apart from `description` */
@@ -71,7 +71,7 @@ export interface CreateTrainingData {
   /** an empty string removes the note */
   notes?: string;
   datasetId?: string;
-  dataset?: { source: 'visin' | 'hf' | 'other'; id?: string; name: string; revision?: string };
+  dataset?: { source: 'visin' | 'hf' | 'other'; id?: string; name: string; revision?: string; archiveRevision?: string };
   configId?: string;
   projectId?: string;
   status?: 'pending' | 'running' | 'completed' | 'failed' | 'stalled';

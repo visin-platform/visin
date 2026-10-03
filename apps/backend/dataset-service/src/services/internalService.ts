@@ -173,6 +173,9 @@ export async function resolveDatasetReference({ reference, userId, projectOwner 
   if (!candidates.length) throw new NotFoundError('Dataset not found or not readable');
   if (candidates.length > 1) throw new BadRequestError('Dataset name is ambiguous; use its id');
   const dataset = candidates[0];
+  // On the Hub, `revision` is the commit; the zip kept here is a second version of the same dataset, so a run
+  // that used it records that too and a replaced zip does not hide behind an unchanged commit.
   return { source: 'visin', id: dataset._id.toString(), name: dataset.name,
-    revision: dataset.source?.revision ?? dataset.archive?.uploadedAt.toISOString() };
+    revision: dataset.source?.revision ?? dataset.archive?.uploadedAt.toISOString(),
+    ...(dataset.source && dataset.archive ? { archiveRevision: dataset.archive.uploadedAt.toISOString() } : {}) };
 }

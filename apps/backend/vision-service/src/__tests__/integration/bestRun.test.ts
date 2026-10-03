@@ -126,6 +126,39 @@ describe('best run with in-memory MongoDB', () => {
     });
   });
 
+  it('ranks runs that log a bare number beside their blocks, instead of reporting no best run', async () => {
+    const projectId = await project();
+    await run(projectId, 'weak', [{ lr: 0.001, train: { loss: 0.5 }, val: { loss: 0.6, mean_iou: 0.4 } }]);
+    const winner = await run(projectId, 'strong', [{ lr: 0.001, train: { loss: 0.3 }, val: { loss: 0.3, mean_iou: 0.8 } }]);
+
+    const { body } = await get(`/trainings/best?projectId=${projectId}`);
+
+    expect(body.data.best).toMatchObject({ training: { _id: winner }, metric: { path: 'val.mean_iou', source: 'guessed' }, value: 0.8 });
+  });
+
+  it('ranks on a result whose name holds a dot or punctuation', async () => {
+    const projectId = await project({ taxonomy: { primaryMetric: 'val.map_0.5' } });
+    await run(projectId, 'weak', [{ val: { 'map_0.5': 0.3 } }]);
+    const winner = await run(projectId, 'strong', [{ val: { 'map_0.5': 0.6 } }, { val: { 'map_0.5': 0.5 } }]);
+    expect((await get(`/trainings/best?projectId=${projectId}`)).body.data.best).toMatchObject({ training: { _id: winner }, metric: { path: 'val.map_0.5' }, value: 0.6, epoch: 1 });
+
+    const punctuated = await project({ name: 'Punctuated', taxonomy: { primaryMetric: 'metrics/mAP50-95(B)' } });
+    await run(punctuated, 'a', [{ 'metrics/mAP50-95(B)': 0.2 }]);
+    const other = await run(punctuated, 'b', [{ 'metrics/mAP50-95(B)': 0.7 }]);
+    expect((await get(`/trainings/best?projectId=${punctuated}`)).body.data.best).toMatchObject({ training: { _id: other }, metric: { path: 'metrics/mAP50-95(B)' }, value: 0.7 });
+  });
+
+  it('picks the headline from what the runs report, not from the one run with the most epochs', async () => {
+    const projectId = await project();
+    // An evaluation-only run with a very long history, and many short runs that report a validation score.
+    await run(projectId, 'long', Array.from({ length: 30 }, (_, i) => ({ probe: { latency: i + 1 } })));
+    for (const [name, value] of [['a', 0.4], ['b', 0.9], ['c', 0.5]] as const) await run(projectId, name, scores(value));
+
+    const { body } = await get(`/trainings/best?projectId=${projectId}`);
+
+    expect(body.data.best).toMatchObject({ metric: { path: 'val.mean_iou' }, value: 0.9 });
+  });
+
   it('names nobody when the runs report nothing that reads as a score, or when there are none', async () => {
     const projectId = await project();
     await run(projectId, 'odd', [{ weld: { quality: 3 } }]);

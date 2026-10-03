@@ -4,7 +4,10 @@ export interface DatasetReference {
   source: 'visin' | 'hf' | 'other';
   id?: string;
   name: string;
+  /** a Hub commit for a dataset kept on the Hub, else the zip's upload time */
   revision?: string;
+  /** the zip kept on Visin, for a dataset that is also on the Hub: its upload time */
+  archiveRevision?: string;
 }
 
 /** A model checkpoint kept elsewhere, pinned to the commit the run produced. */
@@ -72,7 +75,7 @@ const TrainingSchema: Schema = new Schema(
     notes: { type: String, maxlength: 5000 },
     dataset: { type: new Schema({
       source: { type: String, enum: ['visin', 'hf', 'other'], required: true },
-      id: String, name: { type: String, required: true }, revision: String
+      id: String, name: { type: String, required: true }, revision: String, archiveRevision: String
     }, { _id: false }) },
     models: { type: [new Schema({
       provider: { type: String, enum: ['hf'], required: true },

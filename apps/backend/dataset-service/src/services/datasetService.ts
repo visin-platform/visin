@@ -476,11 +476,6 @@ export const rescanArchive = async (access: DatasetAccess, id: string) => {
   return viewFor(access, dataset);
 };
 
-/**
- * How to fetch the dataset. A Hub source is listed first: the client downloads it
- * from the Hub when it can, and falls back to the zip kept here (`downloadUrl`)
- * when there is one. A dataset on the Hub alone has no `downloadUrl`.
- */
 /** What the Hub says about a dataset's repo; anyone who may read the dataset may see it. */
 export const getHubInfo = async (access: DatasetAccess, id: string) => {
   const dataset = await readableDataset(access, id);
@@ -488,6 +483,11 @@ export const getHubInfo = async (access: DatasetAccess, id: string) => {
   return hubSummary(dataset.source);
 };
 
+/**
+ * How to fetch the dataset. A Hub source is listed first: the client downloads it
+ * from the Hub when it can, and falls back to the zip kept here (`downloadUrl`)
+ * when there is one. A dataset on the Hub alone has no `downloadUrl`.
+ */
 export const getArchiveDownload = async (access: DatasetAccess, id: string) => {
   const dataset = await readableDataset(access, id);
   const source = dataset.source ? { provider: dataset.source.provider, repo: dataset.source.repo, revision: dataset.source.revision } : undefined;

@@ -7,7 +7,7 @@ import type { ProjectStorage } from '../../types/Project';
  *
  * `visin` is the default and keeps everything on this deployment: the choice for
  * restricted datasets, images of people or institutes that need data to stay on
- * their own servers. `hf` lets runs link models on the Hugging Face Hub; Visin
+ * their own servers. `hf` lets runs link models and train on datasets on the Hugging Face Hub; Visin
  * stores only a pointer, so the checkpoint itself is uploaded where it was
  * trained, with the uploader's own Hub token.
  */
@@ -54,8 +54,8 @@ export const StorageEditor: React.FC<StorageEditorProps> = ({ value, onChange, d
     </Box>
     <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
       {value.provider === 'hf'
-        ? 'Runs can link models on the Hub. Visin keeps only a pointer to the exact commit; the checkpoint is uploaded from the training machine with your own Hub token.'
-        : 'Nothing leaves this server, and links to Hub models are refused.'}
+        ? 'Runs can link models and use datasets on the Hub. Visin keeps only a pointer to the exact commit; the checkpoint is uploaded from the training machine with your own Hub token.'
+        : 'Nothing leaves this server, and runs that link Hub models or use Hub datasets are refused.'}
     </Typography>
   </Box>
 );

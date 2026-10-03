@@ -2,11 +2,12 @@ import { z } from '@visin/backend-core';
 import { sortOrderSchema } from './common';
 
 /**
- * A path into `Epoch.results`, such as `val.mean_iou`. Results are open blobs, so
- * any name a pipeline reported is valid; the character set only keeps a request
- * from writing a Mongo operator (`$…`) into the field path it builds.
+ * A path into `Epoch.results`, such as `val.mean_iou`. Results are open blobs, so any
+ * name a pipeline reported is valid, including the ones other tools write
+ * (`metrics/mAP50-95(B)`). A path is read key by key and never as Mongo syntax, so a name
+ * cannot reach a query as an operator; the character set only keeps it printable and short.
  */
-export const METRIC_PATH = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$/;
+export const METRIC_PATH = /^[A-Za-z0-9_][A-Za-z0-9_.@()%+:,= /[\]-]{0,99}$/;
 
 export const listModelsQuerySchema = z
   .object({

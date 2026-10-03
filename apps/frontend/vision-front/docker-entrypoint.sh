@@ -7,7 +7,8 @@ cat > /usr/share/nginx/html/config.json << EOF
   "AUTH_SERVICE_URL": "${AUTH_SERVICE_URL}",
   "AUTH_FRONT_URL": "${AUTH_FRONT_URL}",
   "ACCOUNT_FRONT_URL": "${ACCOUNT_FRONT_URL}",
-  "LABEL_FRONT_URL": "${LABEL_FRONT_URL}"
+  "LABEL_FRONT_URL": "${LABEL_FRONT_URL}",
+  "HF_ENDPOINT": "${HF_ENDPOINT}"
 }
 EOF
 

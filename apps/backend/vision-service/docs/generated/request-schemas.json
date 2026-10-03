@@ -552,7 +552,7 @@
           },
           "primaryMetric": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.@()%+:,= /[\\]-]{0,99}$"
           },
           "overallMetrics": {
             "type": "array",
@@ -683,6 +683,10 @@
             "minLength": 1
           },
           "revision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "archiveRevision": {
             "type": "string",
             "minLength": 1
           }
@@ -1453,7 +1457,7 @@
       },
       "metric": {
         "type": "string",
-        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.@()%+:,= /[\\]-]{0,99}$"
       },
       "direction": {
         "default": "max",
@@ -1762,7 +1766,7 @@
               },
               "primaryMetric": {
                 "type": "string",
-                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,99}$"
+                "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.@()%+:,= /[\\]-]{0,99}$"
               },
               "overallMetrics": {
                 "type": "array",
@@ -1890,6 +1894,10 @@
             "minLength": 1
           },
           "revision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "archiveRevision": {
             "type": "string",
             "minLength": 1
           }

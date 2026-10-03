@@ -1,7 +1,8 @@
-import { BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
+import { BadRequestError, NotFoundError } from '@visin/backend-core';
 import Project from '../models/Project';
 import Training from '../models/Training';
 import type { ArtifactRefInput } from '../validation/artifactSchemas';
+import { requireHubStorage } from './projectStorage';
 import { assertResourceWrite } from './writeAccessService';
 
 const MAX_MODELS_PER_RUN = 50;
@@ -27,9 +28,7 @@ export async function addModelReference(trainingId: string, userId: string | und
   const training = await requireRun(trainingId, userId);
   // A run with no project fails the write check above, so it always has one here.
   const project = await Project.findById(training.projectId);
-  if (project?.storage?.provider !== 'hf') {
-    throw new ConflictError('This project keeps its files on Visin. Switch its storage to Hugging Face in the project settings to link Hub models.');
-  }
+  requireHubStorage(project, 'link Hub models');
 
   // One conditional update, so two retries cannot both pass a check and both push.
   // `path: null` matches a reference stored without one.
