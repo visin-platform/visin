@@ -111,7 +111,8 @@ export const listProjects = async (userId: string | undefined, filters: GetProje
       ...(search ? [{ $text: { $search: search } }] : [])
     ]
   };
-  const projects = await Project.find(query).sort({ [sortBy]: sortOrder });
+  // Without readmes: each can be 20,000 characters, and a list shows none of them.
+  const projects = await Project.find(query).select('-readme').sort({ [sortBy]: sortOrder });
   const owners = await lookupOwnerIdentities(projects.map(project => project.owner));
   return Promise.all(projects.map(project => toProjectView(project, userId, undefined, owners)));
 };
@@ -184,6 +185,7 @@ export const createProject = async (userId: string, data: CreateProjectData): Pr
 interface UpdateProjectData {
   name?: string;
   description?: string;
+  readme?: string;
   visibility?: Visibility;
   editorGroupIds?: string[];
   slug?: string;
@@ -198,7 +200,7 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
   requireUserCredential();
   const project = await requireProject(id, userId, 'manage');
 
-  const { name, description, visibility, slug, taxonomy, costing, editorGroupIds } = data;
+  const { name, description, readme, visibility, slug, taxonomy, costing, editorGroupIds } = data;
   if (visibility !== undefined && visibility !== project.visibility) {
     if ((await projectPermission(project, userId)) !== 'own') {
       throw new ForbiddenError('Only the project’s owner can change who can see it');
@@ -215,6 +217,8 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
 
   if (name) project.name = name;
   if (description !== undefined) project.description = description;
+  // An empty readme is none: there is nothing to show, and the page then offers to write one.
+  if (readme !== undefined) project.readme = readme.trim() ? readme : undefined;
   if (slug !== undefined) {
     if (slug.trim()) {
       // An id-shaped slug is ambiguous with the project that id names, and a

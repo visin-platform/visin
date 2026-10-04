@@ -159,6 +159,57 @@ describe('project ownership with in-memory MongoDB', () => {
     });
   });
 
+  describe('the readme', () => {
+    const readme = '# Window study\n\nResults are in **bold**.';
+    const put = (id: string, user: string, body: Record<string, unknown>) => call(`/projects/${id}`, { method: 'PUT', user, body });
+
+    it('is written by whoever manages the project, kept as typed, and shown when the project is opened', async () => {
+      const id = await teamProject({ visibility: 'public' });
+
+      expect((await put(id, MEMBER, { readme })).status).toBe(403);
+      expect((await put(id, ADMIN, { readme })).body.data.readme).toBe(readme);
+      // Indentation is Markdown: not trimmed.
+      expect((await put(id, ADMIN, { readme: '    indented code\n' })).body.data.readme).toBe('    indented code\n');
+      await put(id, ADMIN, { readme });
+      expect((await call(`/projects/${id}`, { user: STRANGER })).body.data.readme).toBe(readme);
+      expect((await call(`/projects/${id}`)).body.data.readme).toBe(readme);
+    });
+
+    it('is left out of lists, which show none of it and would carry up to 20,000 characters each', async () => {
+      const id = await teamProject({ visibility: 'public' });
+      await put(id, ADMIN, { readme });
+
+      const listed = (await call('/projects', { user: STRANGER })).body.data as { _id: string; readme?: string }[];
+
+      expect(listed.find((project) => project._id === id)).toBeDefined();
+      expect(listed.every((project) => !('readme' in project))).toBe(true);
+    });
+
+    it('is cleared by an empty one, and by one with nothing in it but whitespace', async () => {
+      const id = await teamProject();
+      await put(id, ADMIN, { readme });
+
+      expect((await put(id, ADMIN, { readme: '' })).body.data).not.toHaveProperty('readme');
+      await put(id, ADMIN, { readme });
+      expect((await put(id, ADMIN, { readme: '  \n ' })).body.data).not.toHaveProperty('readme');
+    });
+
+    it('stops at 20,000 characters, as the page does', async () => {
+      const id = await teamProject();
+
+      expect((await put(id, ADMIN, { readme: 'x'.repeat(20_000) })).status).toBe(200);
+      expect((await put(id, ADMIN, { readme: 'x'.repeat(20_001) })).status).toBe(400);
+    });
+
+    it('leaves a private project\'s readme to those who can read the project', async () => {
+      const id = await teamProject();
+      await put(id, ADMIN, { readme });
+
+      expect((await call(`/projects/${id}`, { user: STRANGER })).status).toBe(403);
+      expect((await call(`/projects/${id}`, { user: MEMBER })).body.data.readme).toBe(readme);
+    });
+  });
+
   describe('creating a project', () => {
     it("makes it private and the creator's unless told otherwise", async () => {
       const created = await call('/projects', { method: 'POST', body: { name: 'New' } });

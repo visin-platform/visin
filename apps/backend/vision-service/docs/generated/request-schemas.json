@@ -2873,6 +2873,10 @@
       "description": {
         "type": "string"
       },
+      "readme": {
+        "type": "string",
+        "maxLength": 20000
+      },
       "editorGroupIds": {
         "maxItems": 100,
         "type": "array",

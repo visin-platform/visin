@@ -46,9 +46,9 @@ export const createProject = async (req: AuthRequest, res: Response): Promise<vo
 export const updateProject = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
   const userId = req.user!.id;
-  const { name, description, visibility, slug, taxonomy, costing, storage, stallAfterMinutes, editorGroupIds } = req.body;
+  const { name, description, readme, visibility, slug, taxonomy, costing, storage, stallAfterMinutes, editorGroupIds } = req.body;
 
-  const updatedProject = await projectService.updateProject(id, userId, { name, description, visibility, slug, taxonomy, costing, storage, stallAfterMinutes, editorGroupIds });
+  const updatedProject = await projectService.updateProject(id, userId, { name, description, readme, visibility, slug, taxonomy, costing, storage, stallAfterMinutes, editorGroupIds });
 
   res.json({
     success: true,

@@ -1,6 +1,7 @@
 import { useWriteCapabilities } from '../../hooks/useWriteCapabilities';
 import PipelineKeys from './PipelineKeys';
 import FirstRunPanel from './FirstRunPanel';
+import ProjectReadme from './ProjectReadme';
 import React from 'react';
 import { Box, Paper, Tabs, Tab } from '@mui/material';
 import type { AuthUser } from '@visin/frontend-core';
@@ -178,6 +179,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       <TabPanel value={tabValue} index={0}>
         {canWrite(project._id) && <FirstRunPanel project={project} />}
         {project.permissions.contribute && !canManage && <PipelineKeys projectId={project._id} />}
+        <ProjectReadme project={project} />
         <BestRunCard projectId={project._id} />
         <ProjectOverviewTab
           stats={stats}

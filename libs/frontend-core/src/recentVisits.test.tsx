@@ -4,7 +4,6 @@ import {
   clearVisits,
   readVisits,
   recordVisit,
-  removeVisit,
   useRecentVisits,
   useTrackVisit,
   type Visit
@@ -60,12 +59,9 @@ describe('recording visits', () => {
     expect(held[9].name).toBe('P2');
   });
 
-  it('forgets one place, or all of them', () => {
+  it('forgets all of them', () => {
     recordVisit(visit(), 1000);
     recordVisit(visit({ id: 'p2', name: 'Two', path: '/projects/two' }), 2000);
-
-    removeVisit('project', 'p1');
-    expect(readVisits().map((held) => held.name)).toEqual(['Two']);
 
     clearVisits();
     expect(readVisits()).toEqual([]);
@@ -128,7 +124,6 @@ describe('where storage is not available', () => {
     window.addEventListener('visin:recent-visits', noted);
     try {
       expect(() => recordVisit(visit())).not.toThrow();
-      expect(() => removeVisit('project', 'p1')).not.toThrow();
       expect(() => clearVisits()).not.toThrow();
       expect(readVisits()).toEqual([]);
       // Whoever is showing the list is still told something changed, and finds it empty.

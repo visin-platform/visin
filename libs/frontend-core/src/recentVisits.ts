@@ -73,10 +73,6 @@ export function recordVisit(visit: Omit<Visit, 'visitedAt'>, now = Date.now()): 
   write([{ ...visit, visitedAt: now }, ...others].slice(0, MAX_VISITS));
 }
 
-export function removeVisit(kind: VisitKind, id: string): void {
-  write(readVisits().filter((held) => !(held.kind === kind && held.id === id)));
-}
-
 /** Forgets everything. Also what signing out does, so the next person at this browser does not read the last one's. */
 export function clearVisits(): void {
   write([]);

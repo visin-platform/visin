@@ -9,6 +9,11 @@ export interface IProject extends Document {
   name: string;
   slug?: string;
   description?: string;
+  /**
+   * The project's front page: Markdown, shown on its Overview tab and, for a public project, to anyone. Written by
+   * people who `manage` it and read by everyone who can see it, so it is only ever rendered as text and links.
+   */
+  readme?: string;
   /** who controls it: a person, or a group whose current roles decide who may do what */
   owner: ResourceOwner;
   /** attribution only: never changes and grants nothing */
@@ -61,6 +66,8 @@ const ProjectSchema: Schema = new Schema(
       trim: true,
       maxlength: 500
     },
+    // Not trimmed: indentation is meaning in Markdown. Capped at what the app renders (`MAX_MARKDOWN_LENGTH`).
+    readme: { type: String, maxlength: 20_000 },
     owner: { type: OwnerSchema, required: true },
     createdBy: { type: String, required: true },
     // No schema default: one would fill in every project older than the field, on read, as active just now.

@@ -1,7 +1,7 @@
 // @visin/frontend-core - Shared frontend auth/API-client logic for Visin frontends
 
 export { createApiClient, ApiError } from './apiClient';
-export { clearVisits, readVisits, recordVisit, removeVisit, useRecentVisits, useTrackVisit } from './recentVisits';
+export { clearVisits, readVisits, recordVisit, useRecentVisits, useTrackVisit } from './recentVisits';
 export type { Visit, VisitKind } from './recentVisits';
 export type { ApiClientOptions, ApiRequestOptions, ApiClient } from './apiClient';
 
@@ -10,6 +10,7 @@ export type { LoaderProps } from './components/Loader';
 export { ErrorPage } from './components/ErrorPage';
 export type { ErrorPageProps } from './components/ErrorPage';
 export { AppLayout } from './components/AppLayout';
+export { Markdown, MAX_MARKDOWN_LENGTH } from './components/Markdown';
 export type {
   AppLayoutProps,
   AppLayoutNavGroup,

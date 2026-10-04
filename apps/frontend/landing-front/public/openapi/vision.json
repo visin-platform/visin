@@ -2001,6 +2001,11 @@
           "description": {
             "type": "string"
           },
+          "readme": {
+            "type": "string",
+            "maxLength": 20000,
+            "description": "The project's front page, in Markdown. Left out of lists, and present when you open the project. Rendered as text and links only: no raw HTML, no images, no scripts."
+          },
           "owner": {
             "$ref": "#/components/schemas/ResourceOwner"
           },
@@ -3225,6 +3230,10 @@
           },
           "description": {
             "type": "string"
+          },
+          "readme": {
+            "type": "string",
+            "maxLength": 20000
           },
           "editorGroupIds": {
             "maxItems": 100,

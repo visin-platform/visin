@@ -40,6 +40,8 @@ export const createProjectBodySchema = z.object({
 export const updateProjectBodySchema = z.object({
   name: z.string().trim().min(1).optional(),
   description: z.string().optional(),
+  /** Markdown, at most 20,000 characters. An empty string clears it. */
+  readme: z.string().max(20_000).optional(),
   editorGroupIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/).transform(id => id.toLowerCase())).max(100).optional(),
   visibility: visibilitySchema.optional(),
   slug: z.string().optional(),

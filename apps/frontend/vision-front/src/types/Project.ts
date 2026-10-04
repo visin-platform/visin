@@ -16,6 +16,8 @@ export interface Project {
   name: string;
   slug?: string;
   description?: string;
+  /** Markdown; present when the project is opened, not in lists. */
+  readme?: string;
   visibility: Visibility;
   owner: OwnerRef & { name?: string };
   createdBy: string;
@@ -48,6 +50,8 @@ export interface UpdateProjectData {
   name?: string;
   slug?: string;
   description?: string;
+  /** Markdown, at most 20,000 characters; an empty one clears it */
+  readme?: string;
   visibility?: Visibility;
   editorGroupIds?: string[];
   /** null clears the taxonomy, returning the project to pure discovery */

@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import ProjectTabs from './ProjectTabs';
 
 vi.mock('./ProjectOverviewTab', () => ({ default: () => <div>overview-tab</div> }));
+vi.mock('./ProjectReadme', () => ({ default: ({ project }: { project: { _id: string } }) => <div>readme:{project._id}</div> }));
 vi.mock('./ProjectTrainingsTab', () => ({ default: () => <div>trainings-tab</div> }));
 vi.mock('./ProjectTestsTab', () => ({ default: () => <div>tests-tab</div> }));
 vi.mock('./ProjectVisualizationsTab', () => ({ default: () => <div>visualizations-tab</div> }));
@@ -73,6 +74,16 @@ describe('ProjectTabs', () => {
 
     expect(screen.getByText('overview-tab')).toBeInTheDocument();
     expect(screen.getByText(/^best-run:/)).toBeInTheDocument();
+  });
+
+  it('puts the project\'s readme on its overview, ahead of the numbers, and not on the other tabs', () => {
+    const { rerender } = render(<ProjectTabs {...baseProps} tabValue={0} />);
+
+    const readme = screen.getByText(/^readme:/);
+    expect(readme.compareDocumentPosition(screen.getByText('overview-tab')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    rerender(<ProjectTabs {...baseProps} tabValue={1} />);
+    expect(screen.queryByText(/^readme:/)).not.toBeInTheDocument();
   });
 
   it('renders the tab content matching each index', () => {
