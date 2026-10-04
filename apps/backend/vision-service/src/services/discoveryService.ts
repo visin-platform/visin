@@ -29,7 +29,7 @@ const configured = configuredUrl;
  */
 export async function describeDeployment(req: Request): Promise<Discovery> {
   const datasetApiUrl = configured('PUBLIC_DATASET_API_URL');
-  const appUrl = configured('PUBLIC_APP_URL');
+  const appUrl = configured('SHELL_FRONT_URL');
   const base = { ...(datasetApiUrl ? { datasetApiUrl } : {}), ...(appUrl ? { appUrl } : {}) };
   if (!req.user) return { ...base, credential: { kind: 'anonymous' } };
   if (!req.apiKey) return { ...base, credential: { kind: 'session' } };

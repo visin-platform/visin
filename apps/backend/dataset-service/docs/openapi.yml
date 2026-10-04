@@ -138,7 +138,7 @@ paths:
         - name: visibility
           in: query
           required: false
-          description: "`public` keeps only the datasets anyone can open, so your own private ones do not mix in. What Explore lists."
+          description: '`public` keeps only the datasets anyone can open, so your own private ones do not mix in. What Explore lists.'
           schema:
             $ref: ./generated/request-schemas.json#/ListDatasetsQuery/properties/visibility
         - name: page
@@ -152,7 +152,7 @@ paths:
           schema:
             $ref: ./generated/request-schemas.json#/ListDatasetsQuery/properties/limit
       responses:
-        "200":
+        '200':
           description: Dataset page
           content:
             application/json:
@@ -173,7 +173,7 @@ paths:
                       datasets:
                         type: array
                         items:
-                          $ref: "#/components/schemas/Dataset"
+                          $ref: '#/components/schemas/Dataset'
                       pagination:
                         type: object
                         properties:
@@ -185,7 +185,7 @@ paths:
                             type: integer
                           pages:
                             type: integer
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -202,7 +202,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -219,7 +219,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -236,7 +236,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -253,7 +253,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -270,7 +270,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -314,7 +314,7 @@ paths:
       summary: Create Dataset
       operationId: createDataset
       responses:
-        "201":
+        '201':
           description: Dataset
           content:
             application/json:
@@ -327,8 +327,8 @@ paths:
                     type: boolean
                     const: true
                   data:
-                    $ref: "#/components/schemas/Dataset"
-        "400":
+                    $ref: '#/components/schemas/Dataset'
+        '400':
           description: Request refused
           content:
             application/json:
@@ -345,7 +345,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -362,7 +362,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -379,7 +379,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -396,7 +396,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -413,7 +413,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -463,7 +463,7 @@ paths:
       summary: List My Groups
       operationId: listMyGroups
       responses:
-        "200":
+        '200':
           description: Request completed
           content:
             application/json:
@@ -476,7 +476,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -493,7 +493,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -510,7 +510,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -527,7 +527,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -544,7 +544,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -561,7 +561,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -605,7 +605,7 @@ paths:
       summary: List Trash
       operationId: listTrash
       responses:
-        "200":
+        '200':
           description: Request completed
           content:
             application/json:
@@ -618,7 +618,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -635,7 +635,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -652,7 +652,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -669,7 +669,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -686,7 +686,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -703,7 +703,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -740,6 +740,72 @@ paths:
       security:
         - BearerCredential: []
         - SessionCookie: []
+  /datasets/sitemap.xml:
+    get:
+      tags: [Datasets]
+      summary: Public live dataset addresses for search engines
+      operationId: getDatasetSitemap
+      x-internal: true
+      description: |
+        Up to 5,000 public datasets, excluding trash and datasets being deleted. No cache; 404 without SHELL_FRONT_URL.
+        The shell advertises this API endpoint in robots.txt.
+      security:
+        - {}
+      responses:
+        '200':
+          description: Dataset sitemap
+          content:
+            application/xml:
+              schema: { type: string }
+        '404':
+          description: No public app address configured
+        default:
+          description: Request failed
+
+  /datasets/share/{id}:
+    get:
+      tags:
+        - Datasets
+      summary: The preview page for a link to a public dataset
+      operationId: getDatasetSharePage
+      x-internal: true
+      description: |
+        A tiny HTML page with Open Graph tags that sends a person on to the dataset in the app, for a chat or a feed to unfurl.
+        What the app's Share button copies. A private, trashed, deleted or unknown dataset, and a deployment with no
+        `SHELL_FRONT_URL`, all answer the same 404. Never cached.
+      security:
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The preview page
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Nothing to share here
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+
   /datasets/activity:
     get:
       tags:
@@ -774,7 +840,7 @@ paths:
           schema:
             $ref: ./generated/request-schemas.json#/ActivityQuery/properties/limit
       responses:
-        "200":
+        '200':
           description: The activity, newest first
           content:
             application/json:
@@ -815,7 +881,7 @@ paths:
                               type: string
                             imageCount:
                               type: integer
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -846,7 +912,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Dataset
           content:
             application/json:
@@ -859,8 +925,8 @@ paths:
                     type: boolean
                     const: true
                   data:
-                    $ref: "#/components/schemas/Dataset"
-        "400":
+                    $ref: '#/components/schemas/Dataset'
+        '400':
           description: Request refused
           content:
             application/json:
@@ -877,7 +943,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -894,7 +960,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -911,7 +977,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -928,7 +994,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -945,7 +1011,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -995,7 +1061,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Dataset
           content:
             application/json:
@@ -1008,8 +1074,8 @@ paths:
                     type: boolean
                     const: true
                   data:
-                    $ref: "#/components/schemas/Dataset"
-        "400":
+                    $ref: '#/components/schemas/Dataset'
+        '400':
           description: Request refused
           content:
             application/json:
@@ -1026,7 +1092,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -1043,7 +1109,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -1060,7 +1126,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -1077,7 +1143,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -1094,7 +1160,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -1149,7 +1215,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Request completed
           content:
             application/json:
@@ -1162,7 +1228,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -1179,7 +1245,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -1196,7 +1262,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -1213,7 +1279,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -1230,7 +1296,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -1247,7 +1313,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -1297,7 +1363,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Dataset
           content:
             application/json:
@@ -1310,8 +1376,8 @@ paths:
                     type: boolean
                     const: true
                   data:
-                    $ref: "#/components/schemas/Dataset"
-        "400":
+                    $ref: '#/components/schemas/Dataset'
+        '400':
           description: Request refused
           content:
             application/json:
@@ -1328,7 +1394,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -1345,7 +1411,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -1362,7 +1428,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -1379,7 +1445,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -1396,7 +1462,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -1446,7 +1512,7 @@ paths:
           schema:
             type: string
       responses:
-        "202":
+        '202':
           description: Request completed
           content:
             application/json:
@@ -1459,7 +1525,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -1476,7 +1542,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -1493,7 +1559,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -1510,7 +1576,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -1527,7 +1593,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -1544,7 +1610,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -1594,7 +1660,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Dataset
           content:
             application/json:
@@ -1607,8 +1673,8 @@ paths:
                     type: boolean
                     const: true
                   data:
-                    $ref: "#/components/schemas/Dataset"
-        "400":
+                    $ref: '#/components/schemas/Dataset'
+        '400':
           description: Request refused
           content:
             application/json:
@@ -1625,7 +1691,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -1642,7 +1708,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -1659,7 +1725,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -1676,7 +1742,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -1693,7 +1759,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -1754,7 +1820,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Request completed
           content:
             application/json:
@@ -1767,7 +1833,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -1784,7 +1850,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -1801,7 +1867,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -1818,7 +1884,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -1835,7 +1901,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -1852,7 +1918,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -1902,7 +1968,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Dataset
           content:
             application/json:
@@ -1915,8 +1981,8 @@ paths:
                     type: boolean
                     const: true
                   data:
-                    $ref: "#/components/schemas/Dataset"
-        "400":
+                    $ref: '#/components/schemas/Dataset'
+        '400':
           description: Request refused
           content:
             application/json:
@@ -1933,7 +1999,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -1950,7 +2016,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -1967,7 +2033,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -1984,7 +2050,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -2001,7 +2067,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -2057,7 +2123,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Request completed
           content:
             application/json:
@@ -2070,7 +2136,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -2087,7 +2153,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -2104,7 +2170,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -2121,7 +2187,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -2138,7 +2204,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -2155,7 +2221,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -2211,7 +2277,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Request completed
           content:
             application/json:
@@ -2224,7 +2290,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -2241,7 +2307,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -2258,7 +2324,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -2275,7 +2341,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -2292,7 +2358,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -2309,7 +2375,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -2359,7 +2425,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Request completed
           content:
             application/json:
@@ -2372,7 +2438,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -2389,7 +2455,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -2406,7 +2472,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -2423,7 +2489,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -2440,7 +2506,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -2457,7 +2523,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -2507,7 +2573,7 @@ paths:
           schema:
             type: string
       responses:
-        "202":
+        '202':
           description: Request completed
           content:
             application/json:
@@ -2520,7 +2586,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -2537,7 +2603,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -2554,7 +2620,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -2571,7 +2637,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -2588,7 +2654,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -2605,7 +2671,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -2655,7 +2721,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Signed archive download
           content:
             application/json:
@@ -2707,7 +2773,7 @@ paths:
                       expiresAt:
                         type: string
                         format: date-time
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -2724,7 +2790,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -2741,7 +2807,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -2758,7 +2824,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -2775,7 +2841,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -2792,7 +2858,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -2848,7 +2914,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: The repo as the Hub describes it
           content:
             application/json:
@@ -2894,7 +2960,7 @@ paths:
                       truncated:
                         type: boolean
                         description: More files than the first hundred listed.
-        "400":
+        '400':
           description: The dataset is not kept on the Hub
           content:
             application/json:
@@ -2911,7 +2977,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: The caller may not read the dataset
           content:
             application/json:
@@ -2928,7 +2994,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: The repo or commit is missing or private
           content:
             application/json:
@@ -2945,7 +3011,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "502":
+        '502':
           description: The Hub failed
           content:
             application/json:
@@ -2975,7 +3041,7 @@ paths:
           schema:
             type: string
       responses:
-        "202":
+        '202':
           description: Request completed
           content:
             application/json:
@@ -2988,7 +3054,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -3005,7 +3071,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -3022,7 +3088,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -3039,7 +3105,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -3056,7 +3122,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -3073,7 +3139,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -3128,7 +3194,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Request completed
           content:
             application/json:
@@ -3141,7 +3207,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -3158,7 +3224,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -3175,7 +3241,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -3192,7 +3258,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -3209,7 +3275,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -3226,7 +3292,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -3276,7 +3342,7 @@ paths:
           schema:
             type: string
       responses:
-        "202":
+        '202':
           description: Request completed
           content:
             application/json:
@@ -3289,7 +3355,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -3306,7 +3372,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -3323,7 +3389,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -3340,7 +3406,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -3357,7 +3423,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -3374,7 +3440,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -3454,7 +3520,7 @@ paths:
           schema:
             $ref: ./generated/request-schemas.json#/ListItemsQuery/properties/limit
       responses:
-        "200":
+        '200':
           description: Request completed
           content:
             application/json:
@@ -3467,7 +3533,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -3484,7 +3550,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -3501,7 +3567,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -3518,7 +3584,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -3535,7 +3601,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -3552,7 +3618,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:
@@ -3608,7 +3674,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Request completed
           content:
             application/json:
@@ -3621,7 +3687,7 @@ paths:
                     type: boolean
                     const: true
                   data: {}
-        "400":
+        '400':
           description: Request refused
           content:
             application/json:
@@ -3638,7 +3704,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "401":
+        '401':
           description: Request refused
           content:
             application/json:
@@ -3655,7 +3721,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "403":
+        '403':
           description: Request refused
           content:
             application/json:
@@ -3672,7 +3738,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "404":
+        '404':
           description: Request refused
           content:
             application/json:
@@ -3689,7 +3755,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "409":
+        '409':
           description: Request refused
           content:
             application/json:
@@ -3706,7 +3772,7 @@ paths:
                     type: string
                   message:
                     type: string
-        "503":
+        '503':
           description: Request refused
           content:
             application/json:

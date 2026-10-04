@@ -179,6 +179,74 @@ describe('group public pages against in-memory MongoDB', () => {
     });
   });
 
+  describe('GET /api/public/share/groups/:handle', () => {
+    const savedApp = process.env.SHELL_FRONT_URL;
+    const share = async (handle: string) => {
+      const response = await fetch(`${base}/public/share/groups/${handle}`);
+      return { status: response.status, headers: response.headers, text: await response.text() };
+    };
+
+    beforeEach(() => {
+      process.env.SHELL_FRONT_URL = 'https://app.example.test';
+    });
+    afterAll(() => {
+      if (savedApp === undefined) delete process.env.SHELL_FRONT_URL;
+      else process.env.SHELL_FRONT_URL = savedApp;
+    });
+
+    it('tells an unfurler what a group is and sends people on to its page, naming no member', async () => {
+      const id = await team();
+      await publish(id);
+
+      const { status, text, headers } = await share('road-lab');
+
+      expect(status).toBe(200);
+      expect(text).toContain('<meta property="og:title" content="Road lab">');
+      expect(text).toContain('<meta property="og:description" content="Segmentation under bad weather">');
+      expect(text).toContain('<meta property="og:url" content="https://app.example.test/g/road-lab">');
+      expect(headers.get('cache-control')).toBe('no-store');
+      expect(text).not.toMatch(new RegExp(`${OWNER}|${ADMIN}|${MEMBER}`));
+    });
+
+    it('says it is a group on Visin where it wrote nothing about itself', async () => {
+      const id = await team();
+      await updateGroup(id, OWNER, { handle: 'plain', profilePublic: true });
+
+      expect((await share('plain')).text).toContain('content="A group on Visin"');
+    });
+
+    it('answers the same for a page that is off, a group that was deleted and one that never was', async () => {
+      const off = await team();
+      await updateGroup(off, OWNER, { handle: 'off-page' });
+      const gone = await createGroup(OWNER, 'Gone lab');
+      await updateGroup(gone._id.toString(), OWNER, { handle: 'gone-lab', profilePublic: true });
+      await deleteGroup(gone._id.toString(), OWNER);
+
+      const answers = await Promise.all([share('off-page'), share('gone-lab'), share('nobody')]);
+
+      expect(answers.map((answer) => answer.status)).toEqual([404, 404, 404]);
+      expect(new Set(answers.map((answer) => answer.text)).size).toBe(1);
+    });
+
+    it('is not there where the deployment has no address for the app', async () => {
+      const id = await team();
+      await publish(id);
+      delete process.env.SHELL_FRONT_URL;
+
+      expect((await share('road-lab')).status).toBe(404);
+    });
+
+    it('escapes what a group calls itself', async () => {
+      const id = (await createGroup(OWNER, '"><script>alert(1)</script>'))._id.toString();
+      await updateGroup(id, OWNER, { handle: 'evil', description: '<img src=x onerror=alert(1)>', profilePublic: true });
+
+      const { text } = await share('evil');
+
+      expect(text).not.toContain('<script>');
+      expect(text).not.toContain('<img');
+    });
+  });
+
   describe('GET /api/public/groups?q=', () => {
     const find = async (query: string) => {
       const response = await fetch(`${base}/public/groups?${query}`);

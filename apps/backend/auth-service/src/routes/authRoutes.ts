@@ -13,7 +13,7 @@ import {
   searchUsers
 } from '../controllers/authController';
 import { getProfile, updateProfile, changePassword } from '../controllers/profileController';
-import { getPublicUser, lookupPublicUsers, searchPublicUsers } from '../controllers/publicUserController';
+import { getPublicUser, getUserShare, lookupPublicUsers, searchPublicUsers } from '../controllers/publicUserController';
 import { linkGoogle } from '../controllers/googleLinkController';
 import { listSessions, revokeSession, revokeOtherSessions } from '../controllers/sessionController';
 import { createKey, listKeys, revealKey, revokeKey, removeKey } from '../controllers/apiKeyController';
@@ -123,6 +123,9 @@ router.delete('/api-keys/:id', authenticateToken, removeKey);
 
 // Finding people for the app's search. Public, like the pages it finds.
 router.get('/users', publicLimiter, validateRequest({ query: peopleSearchQuerySchema }), searchPublicUsers);
+
+// What a chat or a feed unfurls for a link to a person's page.
+router.get('/share/users/:handle', publicLimiter, validateRequest({ params: handleParamsSchema }), getUserShare);
 
 // A person's public page. No sign-in: it is what a visitor opens from a project's owner.
 router.get('/users/:handle', publicLimiter, validateRequest({ params: handleParamsSchema }), getPublicUser);

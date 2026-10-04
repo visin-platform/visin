@@ -3,7 +3,9 @@ import { createDatasetAccess } from '../services/accessService';
 import * as groups from '../clients/groupServiceClient';
 import * as datasets from '../services/datasetService';
 import * as items from '../services/itemService';
+import { sendSharePage } from '@visin/backend-core';
 import { listDatasetActivity } from '../services/activityService';
+import { datasetSharePage, datasetSitemap } from '../services/shareService';
 import type {
   ActivityQuery,
   ArchiveUploadBody,
@@ -24,6 +26,11 @@ const idOf = (req: Request): string => String(req.params.id);
 export const listDatasets = async (req: Request, res: Response): Promise<void> => {
   const data = await datasets.listDatasets(accessFor(req, res), req.query as unknown as ListDatasetsQuery);
   res.json({ success: true, data });
+};
+
+/** The page a link to a public dataset unfurls from, which sends people on to the app. */
+export const getShare = async (req: Request, res: Response): Promise<void> => {
+  sendSharePage(res, await datasetSharePage(idOf(req)));
 };
 
 /** What a person or a group has made in public, for a profile; the same for everyone who asks. */
@@ -48,7 +55,10 @@ export const getDataset = async (req: Request, res: Response): Promise<void> => 
 };
 
 export const updateDataset = async (req: Request, res: Response): Promise<void> => {
-  res.json({ success: true, data: await datasets.updateDataset(accessFor(req, res), idOf(req), req.body as UpdateDatasetBody) });
+  res.json({
+    success: true,
+    data: await datasets.updateDataset(accessFor(req, res), idOf(req), req.body as UpdateDatasetBody)
+  });
 };
 
 /** Into the trash, where its owner can restore it for 30 days. */
@@ -76,7 +86,12 @@ export const transferDataset = async (req: Request, res: Response): Promise<void
 };
 
 export const removeGroup = async (req: Request, res: Response): Promise<void> => {
-  res.status(202).json({ success: true, data: await datasets.removeGroup(accessFor(req, res), idOf(req), String(req.params.group)) });
+  res
+    .status(202)
+    .json({
+      success: true,
+      data: await datasets.removeGroup(accessFor(req, res), idOf(req), String(req.params.group))
+    });
 };
 
 export const resumeImport = async (req: Request, res: Response): Promise<void> => {
@@ -89,7 +104,12 @@ export const setCover = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const createArchiveUpload = async (req: Request, res: Response): Promise<void> => {
-  res.status(201).json({ success: true, data: await datasets.createArchiveUpload(accessFor(req, res), idOf(req), req.body as ArchiveUploadBody) });
+  res
+    .status(201)
+    .json({
+      success: true,
+      data: await datasets.createArchiveUpload(accessFor(req, res), idOf(req), req.body as ArchiveUploadBody)
+    });
 };
 
 export const completeArchiveUpload = async (req: Request, res: Response): Promise<void> => {
@@ -113,7 +133,12 @@ export const downloadArchive = async (req: Request, res: Response): Promise<void
 };
 
 export const startImport = async (req: Request, res: Response): Promise<void> => {
-  res.status(202).json({ success: true, data: await datasets.startImport(accessFor(req, res), idOf(req), req.body as StartImportBody) });
+  res
+    .status(202)
+    .json({
+      success: true,
+      data: await datasets.startImport(accessFor(req, res), idOf(req), req.body as StartImportBody)
+    });
 };
 
 export const cancelImport = async (req: Request, res: Response): Promise<void> => {
@@ -127,4 +152,11 @@ export const listItems = async (req: Request, res: Response): Promise<void> => {
 
 export const getItem = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await items.getItem(accessFor(req, res), idOf(req), String(req.params.itemId)) });
+};
+
+export const getSitemap = async (_req: Request, res: Response): Promise<void> => {
+  res
+    .status(200)
+    .set({ 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-store' })
+    .send(await datasetSitemap());
 };

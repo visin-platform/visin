@@ -22,6 +22,9 @@ router.get('/', validateRequest({ query: listDatasetsQuerySchema }), ctrl.listDa
 router.post('/', authenticateToken, validateRequest({ body: createDatasetBodySchema }), ctrl.createDataset);
 // Before `/:id`, which would otherwise read "groups" or "trash" as a dataset id.
 router.get('/activity', validateRequest({ query: activityQuerySchema }), ctrl.getActivity);
+// What a chat or a feed unfurls for a link to a public dataset.
+router.get('/share/:id', ctrl.getShare);
+router.get('/sitemap.xml', ctrl.getSitemap);
 router.get('/groups', authenticateToken, ctrl.listMyGroups);
 router.get('/trash', authenticateToken, ctrl.listTrash);
 router.get('/:id', ctrl.getDataset);

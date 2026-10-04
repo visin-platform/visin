@@ -250,9 +250,9 @@ describe('Hub model references with in-memory MongoDB', () => {
     };
 
     describe('the leaderboards section', () => {
-      const saved = { app: process.env.PUBLIC_APP_URL, api: process.env.VISION_API_URL };
+      const saved = { app: process.env.SHELL_FRONT_URL, api: process.env.VISION_API_URL };
       afterEach(() => {
-        for (const [name, value] of [['PUBLIC_APP_URL', saved.app], ['VISION_API_URL', saved.api]] as const) {
+        for (const [name, value] of [['SHELL_FRONT_URL', saved.app], ['VISION_API_URL', saved.api]] as const) {
           if (value === undefined) delete process.env[name];
           else process.env[name] = value;
         }
@@ -288,7 +288,7 @@ describe('Hub model references with in-memory MongoDB', () => {
       };
 
       it('lists where the checkpoint is published, linking the page and embedding the badge from configured addresses only', async () => {
-        process.env.PUBLIC_APP_URL = 'https://app.example.test/';
+        process.env.SHELL_FRONT_URL = 'https://app.example.test/';
         process.env.VISION_API_URL = 'https://api.example.test';
         const { key, evaluationId } = await publishCheckpoint('acme/clftv2-zod', COMMIT);
         const readme: string = (await cardFor()).body.data.readme;
@@ -299,7 +299,7 @@ describe('Hub model references with in-memory MongoDB', () => {
       });
 
       it('writes no badge for a project that has no slug to name it by', async () => {
-        process.env.PUBLIC_APP_URL = 'https://app.example.test';
+        process.env.SHELL_FRONT_URL = 'https://app.example.test';
         process.env.VISION_API_URL = 'https://api.example.test';
         await publishCheckpoint('acme/clftv2-zod', COMMIT);
         await Project.updateOne({ slug: 'public-home' }, { $unset: { slug: 1 } });
@@ -309,7 +309,7 @@ describe('Hub model references with in-memory MongoDB', () => {
       });
 
       it('lists every leaderboard the checkpoint is published to, in suite name order', async () => {
-        delete process.env.PUBLIC_APP_URL;
+        delete process.env.SHELL_FRONT_URL;
         delete process.env.VISION_API_URL;
         await publishCheckpoint('acme/clftv2-zod', COMMIT, { slug: 'zebra-test' });
         await publishCheckpoint('acme/clftv2-zod', COMMIT, { slug: 'apple-test' });
@@ -319,7 +319,7 @@ describe('Hub model references with in-memory MongoDB', () => {
       });
 
       it('still names the suite, rank and score when no address is configured, and writes no link or badge', async () => {
-        delete process.env.PUBLIC_APP_URL;
+        delete process.env.SHELL_FRONT_URL;
         delete process.env.VISION_API_URL;
         await publishCheckpoint('acme/clftv2-zod', COMMIT);
         const readme: string = (await cardFor()).body.data.readme;
@@ -328,7 +328,7 @@ describe('Hub model references with in-memory MongoDB', () => {
       });
 
       it('writes the link but no badge when only the app address is configured', async () => {
-        process.env.PUBLIC_APP_URL = 'https://app.example.test';
+        process.env.SHELL_FRONT_URL = 'https://app.example.test';
         delete process.env.VISION_API_URL;
         const { evaluationId } = await publishCheckpoint('acme/clftv2-zod', COMMIT);
         const readme: string = (await cardFor()).body.data.readme;
@@ -337,25 +337,25 @@ describe('Hub model references with in-memory MongoDB', () => {
       });
 
       it('says nothing of a result that is not published', async () => {
-        process.env.PUBLIC_APP_URL = 'https://app.example.test';
+        process.env.SHELL_FRONT_URL = 'https://app.example.test';
         await publishCheckpoint('acme/clftv2-zod', COMMIT, { published: false });
         expect((await cardFor()).body.data.readme).not.toContain('## Leaderboards');
       });
 
       it('says nothing of a result on a private suite', async () => {
-        process.env.PUBLIC_APP_URL = 'https://app.example.test';
+        process.env.SHELL_FRONT_URL = 'https://app.example.test';
         await publishCheckpoint('acme/clftv2-zod', COMMIT, { suiteVisibility: 'private' });
         expect((await cardFor()).body.data.readme).not.toContain('## Leaderboards');
       });
 
       it('says nothing of another commit of the repo', async () => {
-        process.env.PUBLIC_APP_URL = 'https://app.example.test';
+        process.env.SHELL_FRONT_URL = 'https://app.example.test';
         await publishCheckpoint('acme/clftv2-zod', 'b'.repeat(40));
         expect((await cardFor()).body.data.readme).not.toContain('## Leaderboards');
       });
 
       it('says nothing of another project\'s result of the same checkpoint', async () => {
-        process.env.PUBLIC_APP_URL = 'https://app.example.test';
+        process.env.SHELL_FRONT_URL = 'https://app.example.test';
         await publishCheckpoint('acme/clftv2-zod', COMMIT);
         const trainingId = await seed();
         await Training.updateOne({ _id: trainingId }, { models: [{ provider: 'hf', kind: 'model', repo: 'acme/clftv2-zod', revision: COMMIT }] });
@@ -363,7 +363,7 @@ describe('Hub model references with in-memory MongoDB', () => {
       });
 
       it('says nothing for a card that names no repo', async () => {
-        process.env.PUBLIC_APP_URL = 'https://app.example.test';
+        process.env.SHELL_FRONT_URL = 'https://app.example.test';
         await publishCheckpoint('acme/clftv2-zod', COMMIT);
         const trainingId = await seed();
         await Training.updateOne({ _id: trainingId }, { models: [{ provider: 'hf', kind: 'model', repo: 'acme/clftv2-zod', revision: COMMIT }] });

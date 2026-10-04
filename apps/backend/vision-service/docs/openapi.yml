@@ -412,7 +412,12 @@ components:
           type: string
           format: date-time
           description: Present when a manager put this result on its suite's public leaderboard.
-        verifiedAt: { type: string, format: date-time, description: When a manager or an automated job verified this result. Verification does not control visibility. }
+        verifiedAt:
+          {
+            type: string,
+            format: date-time,
+            description: When a manager or an automated job verified this result. Verification does not control visibility.
+          }
         verifiedBy: { type: string, description: The verifying account; omitted for public readers. }
         hidden:
           type: object
@@ -420,8 +425,13 @@ components:
           properties:
             at: { type: string, format: date-time }
             reason: { type: string }
-        supersedesId: { type: string, description: The evaluation this one corrects. It must be of the same suite and checkpoint. }
-        supersededById: { type: string, description: The live correction that replaces this result. It is never ranked or published again. }
+        supersedesId:
+          { type: string, description: The evaluation this one corrects. It must be of the same suite and checkpoint. }
+        supersededById:
+          {
+            type: string,
+            description: The live correction that replaces this result. It is never ranked or published again.
+          }
         createdAt: { type: string, format: date-time }
         results:
           type: object
@@ -528,9 +538,17 @@ components:
                   additionalProperties: { type: number },
                   description: The headline metric in each condition.
                 }
-              attempts: { type: integer, description: 'How many results this project recorded of this checkpoint on the suite, published or not.' }
+              attempts:
+                {
+                  type: integer,
+                  description: 'How many results this project recorded of this checkpoint on the suite, published or not.'
+                }
               evidenceLevel:
-                { type: string, enum: [observed, reported, attested, none], description: 'Whether the evaluator sent complete evidence (observed), less (reported), or a manager vouched for an old result (attested).' }
+                {
+                  type: string,
+                  enum: [observed, reported, attested, none],
+                  description: 'Whether the evaluator sent complete evidence (observed), less (reported), or a manager vouched for an old result (attested).'
+                }
               project: { type: object, properties: { name: { type: string }, slug: { type: string } } }
               executedAt: { type: string, format: date-time }
               publishedAt: { type: string, format: date-time }
@@ -558,7 +576,11 @@ components:
         project: { type: object, properties: { name: { type: string }, slug: { type: string } } }
         evidence: { type: string, const: submitter-reported }
         evidenceLevel:
-          { type: string, enum: [observed, reported, attested, none], description: 'Whether the evaluator sent complete evidence (observed), less (reported), or a manager vouched for an old result (attested).' }
+          {
+            type: string,
+            enum: [observed, reported, attested, none],
+            description: 'Whether the evaluator sent complete evidence (observed), less (reported), or a manager vouched for an old result (attested).'
+          }
         executedAt: { type: string, format: date-time }
         publishedAt: { type: string, format: date-time }
         verifiedAt: { type: string, format: date-time }
@@ -611,11 +633,15 @@ components:
               uuid: { type: string }
               rank: { type: integer }
               attempts:
-                { type: integer, description: "How many evaluations of this checkpoint were recorded, of any outcome." }
+                { type: integer, description: 'How many evaluations of this checkpoint were recorded, of any outcome.' }
               checkpointKey: { type: string }
               checkpoint: { $ref: '#/components/schemas/Checkpoint' }
               evidenceLevel:
-                { type: string, enum: [observed, reported, attested, none], description: How much the evaluator reported; see `validation.evidence`. }
+                {
+                  type: string,
+                  enum: [observed, reported, attested, none],
+                  description: How much the evaluator reported; see `validation.evidence`.
+                }
               project:
                 { type: object, properties: { _id: { type: string }, name: { type: string }, slug: { type: string } } }
               receivedAt: { type: string, format: date-time }
@@ -659,14 +685,28 @@ components:
 
     Suite:
       type: object
-      required: [_id, slug, version, name, projectId, visibility, submissions, createdBy, protocol, digest, createdAt, updatedAt]
+      required:
+        [
+          _id,
+          slug,
+          version,
+          name,
+          projectId,
+          visibility,
+          submissions,
+          createdBy,
+          protocol,
+          digest,
+          createdAt,
+          updatedAt
+        ]
       properties:
         _id: { type: string }
         slug: { type: string, example: clftv2-test }
         version: { type: integer, example: 1 }
         name: { type: string }
         description: { type: string }
-        projectId: { type: string, description: "The project that published it, and whose access rules apply." }
+        projectId: { type: string, description: 'The project that published it, and whose access rules apply.' }
         visibility:
           type: string
           enum: [private, public]
@@ -889,7 +929,12 @@ components:
         owner: { $ref: '#/components/schemas/ResourceOwner' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-        lastActivityAt: { type: string, format: date-time, description: When anything last happened in it; a project older than that field reads as its last edit }
+        lastActivityAt:
+          {
+            type: string,
+            format: date-time,
+            description: When anything last happened in it; a project older than that field reads as its last edit
+          }
         runs: { type: integer, minimum: 0, description: Runs in the project }
         lastRunAt: { type: string, format: date-time, description: When the latest run started; absent with no runs }
     ActivityProject:
@@ -4479,7 +4524,7 @@ paths:
         - name: include
           in: query
           required: false
-          description: '`results` carries each evaluation''s results, which a list leaves out. Use it with a small page.'
+          description: "`results` carries each evaluation's results, which a list leaves out. Use it with a small page."
           schema: { $ref: ./generated/request-schemas.json#/ListEvaluationsQuery/properties/include }
       responses:
         '200':
@@ -4778,6 +4823,84 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         default: { $ref: '#/components/responses/Error' }
 
+  /public/share/projects/{id}:
+    get:
+      tags: [Public catalogue]
+      summary: The preview page for a link to a public project
+      operationId: getProjectSharePage
+      x-internal: true
+      description: |
+        A tiny HTML page with Open Graph tags (title, description, picture) that sends a person on to the project in the
+        app. The app is client-rendered, so this is what a chat or a social feed reads when a link is pasted. It is what the
+        app's Share button copies. A private, trashed or unknown project, and a deployment with no `SHELL_FRONT_URL`, all
+        answer the same 404. Anonymous, never cached, and sent with a `default-src 'none'` policy.
+      security:
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The project's slug or id.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The preview page
+          content:
+            text/html:
+              schema: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/share/leaderboards/{slug}/{version}:
+    get:
+      tags: [Public catalogue]
+      summary: Preview page for a public leaderboard link
+      operationId: getLeaderboardSharePage
+      x-internal: true
+      security:
+        - {}
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { $ref: './generated/request-schemas.json#/PublicLeaderboardParams/properties/slug' }
+        - name: version
+          in: path
+          required: true
+          schema: { $ref: './generated/request-schemas.json#/PublicLeaderboardParams/properties/version' }
+      responses:
+        '200':
+          description: Open Graph HTML redirecting to the shell leaderboard page
+          content:
+            text/html:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/sitemap.xml:
+    get:
+      tags: [Public catalogue]
+      summary: Public project and leaderboard addresses for search engines
+      operationId: getPublicSitemap
+      x-internal: true
+      description: |
+        A sitemap of public projects and public leaderboards whose projects remain public and live, at most 5,000 per kind.
+        The shell advertises this API endpoint in robots.txt. 404 where this deployment has no `SHELL_FRONT_URL`.
+      security:
+        - {}
+      responses:
+        '200':
+          description: The sitemap
+          content:
+            application/xml:
+              schema: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
   /public/projects:
     get:
       tags: [Public catalogue]
@@ -4796,7 +4919,7 @@ paths:
           schema: { $ref: ./generated/request-schemas.json#/PublicProjectsQuery/properties/search }
         - name: sort
           in: query
-          description: "`updated` (default): the most recent activity first (a run or epoch, a finding, a result, a change of settings). `created`: newest first."
+          description: '`updated` (default): the most recent activity first (a run or epoch, a finding, a result, a change of settings). `created`: newest first.'
           schema: { $ref: ./generated/request-schemas.json#/PublicProjectsQuery/properties/sort }
         - name: page
           in: query
@@ -5394,7 +5517,8 @@ paths:
                     required: [digest, protocol]
                     properties:
                       digest: { type: string, description: SHA-256 of the normalized protocol. }
-                      protocol: { type: object, additionalProperties: true, description: The protocol with defaults filled in. }
+                      protocol:
+                        { type: object, additionalProperties: true, description: The protocol with defaults filled in. }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         default: { $ref: '#/components/responses/Error' }

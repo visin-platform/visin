@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { NotFoundError } from '@visin/backend-core';
+import { appLink, excerpt, NotFoundError, sendSharePage } from '@visin/backend-core';
 import { User, type IUser } from '../models/User';
 import { ensureHandle } from '../services/handleService';
 import { escapeRegex } from '../utils/escapeRegex';
@@ -77,5 +77,25 @@ export const searchPublicUsers = async (req: Request, res: Response): Promise<vo
       const { id, handle, name, picture } = toPublicUser(user);
       return { id, handle, name, ...(picture ? { picture } : {}) };
     })
+  });
+};
+
+/**
+ * The page a link to someone's public page unfurls from, which sends people on to the app. Someone who hid their page,
+ * who does not exist, and a deployment with no app address, all answer the same: nothing to share.
+ */
+export const getUserShare = async (req: Request, res: Response): Promise<void> => {
+  const handle = String(req.params.handle);
+  const user = await User.findOne({ handle }).select(PUBLIC_FIELDS);
+  const url = appLink(`/u/${encodeURIComponent(handle)}`);
+  if (!url || !user || user.profilePublic === false) {
+    throw new NotFoundError('Nothing to share here');
+  }
+  const { name, bio, picture } = toPublicUser(user);
+  sendSharePage(res, {
+    url,
+    title: name,
+    description: bio ? excerpt(bio) : `@${handle} on Visin`,
+    image: picture && /^https?:\/\//i.test(picture) ? picture : appLink('/og-image.jpg')
   });
 };

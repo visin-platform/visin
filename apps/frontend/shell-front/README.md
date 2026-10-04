@@ -41,3 +41,12 @@ The service worker caches no app code on purpose: vision, label and account are 
 at runtime, so a cached shell would pair stale host code with fresh remotes. It only serves `offline.html` when a
 navigation fails. nginx serves `sw.js` and the manifest uncached so an update is picked up on the next load. After
 changing `favicon.svg`, re-render the PNGs from it (e.g. with `sharp`, flattened on white).
+
+## Public sharing and crawlers
+
+The public project, dataset, profile, group and leaderboard pages have Share buttons that copy HTML preview links
+from the owning API. Each API needs `SHELL_FRONT_URL` pointing to this shell; without it a preview returns 404.
+The shell serves `/og-image.jpg` and a plain-text `/robots.txt`. At startup, the existing `VISION_API_URL` and
+`DATASET_API_URL` settings supply the sitemap links. The services check current public visibility on every request
+and never cache the response. Unconfigured services have no sitemap link. Local Vite development serves the static
+robots.txt without deployment sitemap links.

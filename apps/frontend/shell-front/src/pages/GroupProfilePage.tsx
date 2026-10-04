@@ -1,3 +1,4 @@
+import { useConfig } from '../config/ConfigProvider';
 import { useParams } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -6,7 +7,14 @@ import { exploreApi } from '../services/exploreApi';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { ProfileLists } from '../components/profile/ProfileLists';
 
-const shell = { width: '100%', maxWidth: 1000, mx: 'auto', display: 'flex', flexDirection: 'column', gap: { xs: 3, md: 4 } } as const;
+const shell = {
+  width: '100%',
+  maxWidth: 1000,
+  mx: 'auto',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: { xs: 3, md: 4 }
+} as const;
 
 /**
  * A group's public page, once its owner has turned it on: its name, what it says about itself, and the
@@ -14,6 +22,7 @@ const shell = { width: '100%', maxWidth: 1000, mx: 'auto', display: 'flex', flex
  */
 export function GroupProfilePage({ now }: { now?: Date }) {
   const { handle = '' } = useParams();
+  const config = useConfig();
   const group = useQuery({ queryKey: ['group-profile', handle], queryFn: () => exploreApi.group(handle) });
   const page = group.data ?? undefined;
   useTrackVisit(page ? { kind: 'group', id: page.id, name: page.name, path: `/g/${page.handle}` } : null);
@@ -50,7 +59,17 @@ export function GroupProfilePage({ now }: { now?: Date }) {
 
   return (
     <Box sx={shell}>
-      <ProfileHeader name={page.name} handle={page.handle} bio={page.description} meta={`Group since ${created}`} />
+      <ProfileHeader
+        shareUrl={
+          config.GROUP_SERVICE_URL
+            ? `${config.GROUP_SERVICE_URL.replace(/\/$/, '')}/api/public/share/groups/${encodeURIComponent(page.handle)}`
+            : undefined
+        }
+        name={page.name}
+        handle={page.handle}
+        bio={page.description}
+        meta={`Group since ${created}`}
+      />
       <ProfileLists owner={{ owner: page.id }} cacheKey={`group:${handle}`} now={now} />
     </Box>
   );

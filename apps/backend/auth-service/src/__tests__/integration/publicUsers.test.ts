@@ -201,6 +201,72 @@ describe('handles and public users with in-memory MongoDB', () => {
     });
   });
 
+  describe('GET /auth/share/users/:handle', () => {
+    const savedApp = process.env.SHELL_FRONT_URL;
+    const share = async (handle: string) => {
+      const response = await fetch(`${base}/share/users/${handle}`);
+      return { status: response.status, headers: response.headers, text: await response.text() };
+    };
+
+    beforeEach(() => {
+      process.env.SHELL_FRONT_URL = 'https://app.example.test';
+    });
+    afterAll(() => {
+      if (savedApp === undefined) delete process.env.SHELL_FRONT_URL;
+      else process.env.SHELL_FRONT_URL = savedApp;
+    });
+
+    it('tells an unfurler who someone is, by their bio and picture, and sends people on to their page', async () => {
+      await account('ann@example.test', { firstName: 'Ann', lastName: 'Lee', handle: 'ann-lee', bio: 'Segmentation under bad weather', picture: 'https://pics.example.test/ann.jpg' });
+
+      const { status, text, headers } = await share('ann-lee');
+
+      expect(status).toBe(200);
+      expect(text).toContain('<meta property="og:title" content="Ann Lee">');
+      expect(text).toContain('<meta property="og:description" content="Segmentation under bad weather">');
+      expect(text).toContain('<meta property="og:image" content="https://pics.example.test/ann.jpg">');
+      expect(text).toContain('<meta property="og:url" content="https://app.example.test/u/ann-lee">');
+      expect(headers.get('cache-control')).toBe('no-store');
+      expect(headers.get('content-security-policy')).toBe("default-src 'none'");
+      // Never the email.
+      expect(text).not.toContain('ann@example.test');
+    });
+
+    it('says who they are on Visin, and uses the app\'s own picture, when they wrote nothing and have none', async () => {
+      await account('quiet@example.test', { handle: 'quiet' });
+
+      const { text } = await share('quiet');
+
+      expect(text).toContain('content="@quiet on Visin"');
+      expect(text).toContain('content="https://app.example.test/og-image.jpg"');
+    });
+
+    it('answers the same for someone who hid their page as for someone who does not exist', async () => {
+      await account('hidden@example.test', { handle: 'hidden', profilePublic: false });
+
+      const answers = await Promise.all([share('hidden'), share('nobody')]);
+
+      expect(answers.map((answer) => answer.status)).toEqual([404, 404]);
+      expect(answers[0].text).toBe(answers[1].text);
+    });
+
+    it('is not there where the deployment has no address for the app', async () => {
+      await account('ann@example.test', { handle: 'ann' });
+      delete process.env.SHELL_FRONT_URL;
+
+      expect((await share('ann')).status).toBe(404);
+    });
+
+    it('escapes what a person writes about themselves', async () => {
+      await account('evil@example.test', { firstName: '"><script>alert(1)</script>', handle: 'evil', bio: '<img src=x onerror=alert(1)>' });
+
+      const { text } = await share('evil');
+
+      expect(text).not.toContain('<script>');
+      expect(text).not.toContain('<img');
+    });
+  });
+
   describe('GET /auth/users?q=', () => {
     const find = async (query: string) => {
       const response = await fetch(`${base}/users?${query}`);

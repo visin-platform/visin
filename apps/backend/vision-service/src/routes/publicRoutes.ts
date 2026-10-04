@@ -7,10 +7,17 @@ import {
   getPublicLeaderboards
 } from '../controllers/publicLeaderboardController';
 import { getPublicActivity } from '../controllers/publicActivityController';
+import { getLeaderboardShare, getProjectShare, getSitemap } from '../controllers/publicShareController';
 import { getPublicFindings, getPublicProjects } from '../controllers/publicExploreController';
 import { publicFindingsQuerySchema, publicProjectsQuerySchema } from '../validation/exploreSchemas';
 import { activityQuerySchema } from '../validation/activitySchemas';
-import { publicBadgeParamsSchema, publicBadgeQuerySchema, publicLeaderboardParamsSchema, leaderboardPageQuerySchema, leaderboardQuerySchema } from '../validation/evaluationSchemas';
+import {
+  publicBadgeParamsSchema,
+  publicBadgeQuerySchema,
+  publicLeaderboardParamsSchema,
+  leaderboardPageQuerySchema,
+  leaderboardQuerySchema
+} from '../validation/evaluationSchemas';
 
 const router = express.Router();
 
@@ -39,6 +46,15 @@ router.get(
   getPublicLeaderboard
 );
 router.get('/evaluations/:id', getPublicEvaluation);
+// What a chat or a feed unfurls for a link to a public project (and sends people on to the app), and the sitemap the
+// app's robots.txt points search engines at. Both are 404 where this deployment has no app address configured.
+router.get('/share/projects/:id', getProjectShare);
+router.get(
+  '/share/leaderboards/:slug/:version',
+  validateRequest({ params: publicLeaderboardParamsSchema }),
+  getLeaderboardShare
+);
+router.get('/sitemap.xml', getSitemap);
 // The public project catalogue behind Explore: paged, with owners and run counts, the same for everyone.
 router.get('/projects', validateRequest({ query: publicProjectsQuerySchema }), getPublicProjects);
 // The latest findings in public projects, for the same page's side panel.

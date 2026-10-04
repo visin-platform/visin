@@ -90,7 +90,7 @@ function pickEpoch<T extends { epoch: number; results?: unknown }>(epochs: T[], 
  * the run: where the data came from, how far it trained, what it scored, how fast
  * it runs. Front matter is the Hub's `model-index`, so the scores show on the model
  * page and the model can be found by them. It cites no config values (a config can
- * hold anything). A Visin address appears only when this deployment configures one (`PUBLIC_APP_URL`,
+ * hold anything). A Visin address appears only when this deployment configures one (`SHELL_FRONT_URL`,
  * `VISION_API_URL`), in the leaderboard section, and only for results a manager published.
  */
 export async function buildModelCard(trainingId: string, userId: string | undefined, query: ModelCardQuery): Promise<string> {
@@ -206,7 +206,7 @@ async function standingsOf(models: ModelLink[], repo: string | undefined, projec
  * score.
  */
 function leaderboardTable(standings: Array<PublicStanding & { key: string }>, projectSlug: string | undefined): string {
-  const app = configuredUrl('PUBLIC_APP_URL');
+  const app = configuredUrl('SHELL_FRONT_URL');
   const api = configuredUrl('VISION_API_URL');
   return table(
     ['Suite', 'Rank', 'Score', ''],

@@ -1,3 +1,4 @@
+import { datasetApiOrigin } from '../config/datasetApi';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -29,6 +30,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   OwnerChip,
+  ShareButton,
   ResponsiveActions,
   TransferOwnershipDialog,
   useTrackVisit,
@@ -133,7 +135,9 @@ const DatasetDetailPage: React.FC = () => {
         : false
   });
   usePageTitle(dataset ? `${dataset.name} - Datasets - Vision` : 'Dataset - Vision');
-  useTrackVisit(dataset ? { kind: 'dataset', id: dataset._id, name: dataset.name, path: `/datasets/${dataset._id}` } : null);
+  useTrackVisit(
+    dataset ? { kind: 'dataset', id: dataset._id, name: dataset.name, path: `/datasets/${dataset._id}` } : null
+  );
 
   // Forget the arrival state, so a reload does not reopen anything.
   useEffect(() => {
@@ -316,7 +320,9 @@ const DatasetDetailPage: React.FC = () => {
             {[
               dataset.archive
                 ? `${dataset.archive.filename}${dataset.archive.size ? ` · ${formatBytes(dataset.archive.size)}` : ''}`
-                : dataset.source ? 'On Hugging Face' : 'No zip uploaded',
+                : dataset.source
+                  ? 'On Hugging Face'
+                  : 'No zip uploaded',
               `${dataset.imageCount.toLocaleString()} images`,
               `updated ${formatDateTime(dataset.updatedAt)}`
             ].join(' · ')}
@@ -340,6 +346,9 @@ const DatasetDetailPage: React.FC = () => {
           </Stack>
         </Box>
         <Box sx={{ flexShrink: 0 }}>
+          {dataset.visibility === 'public' && datasetApiOrigin() && (
+            <ShareButton url={`${datasetApiOrigin()}/api/datasets/share/${dataset._id}`} />
+          )}
           <ResponsiveActions
             keepOnPhone={1}
             menuLabel={`More actions for ${dataset.name}`}
@@ -551,7 +560,9 @@ const DatasetDetailPage: React.FC = () => {
         onCancel={() => setDialog(null)}
         onSubmit={dialog === 'replace' ? handleReplace : handleEdit}
       />
-      {dialog === 'use' && <UseThisDialog title="Use this dataset" snippets={datasetSnippets(dataset)} onClose={() => setDialog(null)} />}
+      {dialog === 'use' && (
+        <UseThisDialog title="Use this dataset" snippets={datasetSnippets(dataset)} onClose={() => setDialog(null)} />
+      )}
       <HubSourceDialog
         open={dialog === 'source'}
         current={dataset.source}

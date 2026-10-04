@@ -130,7 +130,7 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
 
   it('tells a client what kind of key it is, its scopes and its project, and where the other services are', async () => {
     process.env.PUBLIC_DATASET_API_URL = 'https://datasets.example.test/';
-    process.env.PUBLIC_APP_URL = 'https://app.example.test';
+    process.env.SHELL_FRONT_URL = 'https://app.example.test';
     try {
       const pipeline = (await call(await keyFor(own, ['vision:read']), '.well-known/visin')).body.data as unknown as Record<string, unknown>;
       expect(pipeline).toEqual({
@@ -142,7 +142,7 @@ describe('API keys limited to a project, through HTTP and in-memory MongoDB', ()
       expect(user.credential).toEqual({ kind: 'api-key', scopes: ['vision:read', 'vision:write'], label: 'pipeline' });
     } finally {
       delete process.env.PUBLIC_DATASET_API_URL;
-      delete process.env.PUBLIC_APP_URL;
+      delete process.env.SHELL_FRONT_URL;
     }
   });
 

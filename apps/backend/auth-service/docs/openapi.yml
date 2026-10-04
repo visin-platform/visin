@@ -1131,6 +1131,35 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /auth/share/users/{handle}:
+    get:
+      tags: [People]
+      summary: The preview page for a link to a person's page
+      operationId: getUserSharePage
+      x-internal: true
+      description: |
+        A tiny HTML page with Open Graph tags that sends a person on to the profile in the app, for a chat or a feed to
+        unfurl. What the app's Share button copies. Someone who hid their page, someone who does not exist and a
+        deployment with no `SHELL_FRONT_URL` all answer the same 404. Never cached.
+      security: [{}]
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema: { $ref: ./generated/request-schemas.json#/HandleParams/properties/handle }
+      responses:
+        '200':
+          description: The preview page
+          content:
+            text/html:
+              schema: { type: string }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/Error'
+
   /auth/users/{handle}:
     get:
       tags: [People]

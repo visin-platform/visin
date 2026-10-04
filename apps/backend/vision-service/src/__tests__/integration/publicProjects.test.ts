@@ -6,6 +6,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { errorHandler } from '@visin/backend-core';
 import publicRoutes from '../../routes/publicRoutes';
 import Project from '../../models/Project';
+import Suite from '../../models/Suite';
 import Training from '../../models/Training';
 import { Finding } from '../../models/Finding';
 import { lookupOwnerIdentities } from '../../clients/ownerIdentityClient';
@@ -54,8 +55,14 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
   };
   const run = (name: string, when: string, extra: Record<string, unknown> = {}) =>
     Training.collection.insertOne({
-      uuid: `run-${new mongoose.Types.ObjectId()}`, name: 'run', ownerId: ANN, projectId: ids[name], status: 'completed',
-      createdAt: new Date(when), updatedAt: new Date(when), ...extra
+      uuid: `run-${new mongoose.Types.ObjectId()}`,
+      name: 'run',
+      ownerId: ANN,
+      projectId: ids[name],
+      status: 'completed',
+      createdAt: new Date(when),
+      updatedAt: new Date(when),
+      ...extra
     });
   const list = async (query = '') => {
     const response = await fetch(`${url}/public/projects${query ? `?${query}` : ''}`);
@@ -83,20 +90,38 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
   });
 
   beforeEach(async () => {
-    await Promise.all([Project, Training, Finding].map((model) => model.deleteMany({})));
+    await Promise.all([Project, Training, Finding, Suite].map((model) => model.deleteMany({})));
     jest.mocked(lookupOwnerIdentities).mockReset();
-    jest.mocked(lookupOwnerIdentities).mockImplementation(async (owners) =>
-      new Map(
-        [
-          { id: ANN, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' },
-          { id: HIDDEN },
-          { id: GROUP, handle: 'road-lab', name: 'Road lab' }
-        ].filter((identity) => owners.some((owner) => owner.id === identity.id)).map((identity) => [identity.id, identity])
-      )
-    );
-    await project('Window ablations', { description: 'Swin window size study', updatedAt: at('2026-09-05'), createdAt: at('2026-09-01') });
-    await project('Night driving', { owner: { kind: 'user', id: HIDDEN }, createdBy: HIDDEN, updatedAt: at('2026-09-03'), createdAt: at('2026-09-04') });
-    await project('Team harbour', { owner: { kind: 'group', id: GROUP }, updatedAt: at('2026-09-04'), createdAt: at('2026-09-02') });
+    jest
+      .mocked(lookupOwnerIdentities)
+      .mockImplementation(
+        async (owners) =>
+          new Map(
+            [
+              { id: ANN, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' },
+              { id: HIDDEN },
+              { id: GROUP, handle: 'road-lab', name: 'Road lab' }
+            ]
+              .filter((identity) => owners.some((owner) => owner.id === identity.id))
+              .map((identity) => [identity.id, identity])
+          )
+      );
+    await project('Window ablations', {
+      description: 'Swin window size study',
+      updatedAt: at('2026-09-05'),
+      createdAt: at('2026-09-01')
+    });
+    await project('Night driving', {
+      owner: { kind: 'user', id: HIDDEN },
+      createdBy: HIDDEN,
+      updatedAt: at('2026-09-03'),
+      createdAt: at('2026-09-04')
+    });
+    await project('Team harbour', {
+      owner: { kind: 'group', id: GROUP },
+      updatedAt: at('2026-09-04'),
+      createdAt: at('2026-09-02')
+    });
     await project('Private notes', { visibility: 'private', updatedAt: at('2026-09-09') });
     await project('Trashed one', { trashedAt: at('2026-09-08'), updatedAt: at('2026-09-08') });
     await run('Window ablations', '2026-09-02T08:00:00.000Z');
@@ -110,8 +135,14 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
   });
 
   it('puts the most recently active first, which a run can make a project that was edited long ago', async () => {
-    await Project.collection.updateOne({ _id: new mongoose.Types.ObjectId(ids['Night driving']) }, { $set: { lastActivityAt: at('2026-09-20') } });
-    await Project.collection.updateOne({ _id: new mongoose.Types.ObjectId(ids['Team harbour']) }, { $set: { lastActivityAt: at('2026-08-01') } });
+    await Project.collection.updateOne(
+      { _id: new mongoose.Types.ObjectId(ids['Night driving']) },
+      { $set: { lastActivityAt: at('2026-09-20') } }
+    );
+    await Project.collection.updateOne(
+      { _id: new mongoose.Types.ObjectId(ids['Team harbour']) },
+      { $set: { lastActivityAt: at('2026-08-01') } }
+    );
 
     const { projects } = (await list()).body.data;
 
@@ -161,9 +192,18 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
 
     expect(lookupOwnerIdentities).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(body)).not.toContain('createdBy');
-    expect(Object.keys(body.data.projects[0]).sort()).toEqual(
-      ['createdAt', 'description', 'id', 'lastActivityAt', 'lastRunAt', 'name', 'owner', 'runs', 'slug', 'updatedAt']
-    );
+    expect(Object.keys(body.data.projects[0]).sort()).toEqual([
+      'createdAt',
+      'description',
+      'id',
+      'lastActivityAt',
+      'lastRunAt',
+      'name',
+      'owner',
+      'runs',
+      'slug',
+      'updatedAt'
+    ]);
   });
 
   it('pages, and says how many there are', async () => {
@@ -200,17 +240,34 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
   describe('the latest findings', () => {
     const finding = (name: string, title: string, when: string, extra: Record<string, unknown> = {}) =>
       Finding.collection.insertOne({
-        projectId: ids[name], title, body: 'the whole body', authorKind: 'person', authorLabel: 'Ann', authorUserId: ANN,
-        trainingIds: [], deletedAt: null, createdAt: at(when), updatedAt: at(when), ...extra
+        projectId: ids[name],
+        title,
+        body: 'the whole body',
+        authorKind: 'person',
+        authorLabel: 'Ann',
+        authorUserId: ANN,
+        trainingIds: [],
+        deletedAt: null,
+        createdAt: at(when),
+        updatedAt: at(when),
+        ...extra
       });
     const latest = async (query = '') => {
       const response = await fetch(`${url}/public/findings${query ? `?${query}` : ''}`);
-      return { status: response.status, headers: response.headers, body: (await response.json()) as { data: Record<string, unknown>[] } };
+      return {
+        status: response.status,
+        headers: response.headers,
+        body: (await response.json()) as { data: Record<string, unknown>[] }
+      };
     };
 
     beforeEach(async () => {
       await finding('Window ablations', 'Older finding', '2026-09-02');
-      await finding('Window ablations', 'Newer finding', '2026-09-06', { authorKind: 'assistant', authorLabel: 'Claude', trainingId: 't1' });
+      await finding('Window ablations', 'Newer finding', '2026-09-06', {
+        authorKind: 'assistant',
+        authorLabel: 'Claude',
+        trainingId: 't1'
+      });
       await finding('Team harbour', 'Team finding', '2026-09-04');
       await finding('Private notes', 'A private conclusion', '2026-09-08');
       await finding('Trashed one', 'In the trash', '2026-09-08');
@@ -235,7 +292,9 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
         project: { id: ids['Window ablations'], name: 'Window ablations', slug: 'window-ablations' },
         trainingId: 't1'
       });
-      expect(JSON.stringify(await (await latest()).body)).not.toMatch(/whole body|authorUserId|000000000000000000000001/);
+      expect(JSON.stringify(await (await latest()).body)).not.toMatch(
+        /whole body|authorUserId|000000000000000000000001/
+      );
     });
 
     it('stops at the limit, reading past private findings to fill it', async () => {
@@ -247,6 +306,205 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
     it('is anonymous and never kept, and refuses a limit it cannot read', async () => {
       expect((await latest()).headers.get('cache-control')).toBe('no-store');
       for (const query of ['limit=0', 'limit=21', 'limit=x']) expect((await latest(query)).status).toBe(400);
+    });
+  });
+
+  describe('the preview page and the sitemap', () => {
+    const savedApp = process.env.SHELL_FRONT_URL;
+    const page = async (identifier: string) => {
+      const response = await fetch(`${url}/public/share/projects/${identifier}`);
+      return { status: response.status, headers: response.headers, text: await response.text() };
+    };
+
+    beforeEach(() => {
+      process.env.SHELL_FRONT_URL = 'https://app.example.test/';
+    });
+    afterAll(() => {
+      if (savedApp === undefined) delete process.env.SHELL_FRONT_URL;
+      else process.env.SHELL_FRONT_URL = savedApp;
+    });
+
+    it('tells an unfurler what a public project is, who made it, and where it lives in the app', async () => {
+      const { status, text, headers } = await page('window-ablations');
+
+      expect(status).toBe(200);
+      expect(headers.get('content-type')).toContain('text/html');
+      expect(text).toContain('<meta property="og:title" content="Window ablations">');
+      expect(text).toContain('<meta property="og:description" content="Swin window size study · by Ann Lee">');
+      expect(text).toContain('<meta property="og:url" content="https://app.example.test/projects/window-ablations">');
+      expect(text).toContain('<meta property="og:image" content="https://app.example.test/og-image.jpg">');
+      expect(text).toContain(
+        '<meta http-equiv="refresh" content="0; url=https://app.example.test/projects/window-ablations">'
+      );
+    });
+
+    it('is kept by nothing, and cannot load or run anything', async () => {
+      const { headers } = await page('window-ablations');
+
+      expect(headers.get('cache-control')).toBe('no-store');
+      expect(headers.get('content-security-policy')).toBe("default-src 'none'");
+    });
+
+    it('answers to the id too, and sends people to the address with the slug', async () => {
+      const { status, text } = await page(ids['Window ablations']);
+
+      expect(status).toBe(200);
+      expect(text).toContain('content="https://app.example.test/projects/window-ablations"');
+    });
+
+    it('never treats a canonical project id as another project’s legacy slug', async () => {
+      await project('Legacy alias', { slug: ids['Window ablations'] });
+      const actual = await page(ids['Window ablations']);
+      expect(actual.status).toBe(200);
+      expect(actual.text).toContain('<title>Window ablations</title>');
+      expect(actual.text).not.toContain('Legacy alias');
+
+      await Project.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(ids['Window ablations']) },
+        { $set: { visibility: 'private' } }
+      );
+      expect((await page(ids['Window ablations'])).status).toBe(404);
+    });
+
+    it('uses an id for the canonical URL when a legacy slug looks like an id', async () => {
+      const legacySlug = 'abcdefabcdefabcdefabcdef';
+      await Project.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(ids['Night driving']) },
+        { $set: { slug: legacySlug } }
+      );
+      const actual = await page(ids['Night driving']);
+      expect(actual.status).toBe(200);
+      expect(actual.text).toContain(`content="https://app.example.test/projects/${ids['Night driving']}"`);
+      const sitemap = await (await fetch(`${url}/public/sitemap.xml`)).text();
+      expect(sitemap).toContain(`/projects/${ids['Night driving']}</loc>`);
+      expect(sitemap).not.toContain(`/projects/${legacySlug}</loc>`);
+    });
+
+    it('describes a project that has no description by the start of its readme, without the marks that make it Markdown', async () => {
+      await Project.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(ids['Team harbour']) },
+        {
+          $set: {
+            readme:
+              '# Harbour study\n\nSome **bold** words with a [link](https://x.test) and `code`.\n\n```\nnot shown\n```\n'
+          }
+        }
+      );
+
+      const { text } = await page('team-harbour');
+
+      expect(text).toContain('content="Harbour study Some bold words with a link and code. · by Road lab"');
+      expect(text).not.toContain('not shown');
+    });
+
+    it('says only that it is a project where there is nothing else to say, and names no owner who is not shown', async () => {
+      const { text } = await page('night-driving');
+
+      expect(text).toContain('content="A project on Visin"');
+    });
+
+    it('handles a size-limit readme full of unclosed link and HTML markers safely', async () => {
+      for (const marker of ['[', '<']) {
+        await Project.collection.updateOne(
+          { _id: new mongoose.Types.ObjectId(ids['Night driving']) },
+          { $set: { readme: marker.repeat(20_000) } }
+        );
+        const result = await page(ids['Night driving']);
+        expect(result.status).toBe(200);
+        expect(result.text).toContain(`${(marker === '<' ? '&lt;' : marker).repeat(199)}…`);
+      }
+    });
+
+    it('answers the same for a private project, one in the trash and one that is not there', async () => {
+      const answers = await Promise.all([
+        page('private-notes'),
+        page('trashed-one'),
+        page('nobody'),
+        page(ids['Private notes'])
+      ]);
+
+      expect(answers.map((answer) => answer.status)).toEqual([404, 404, 404, 404]);
+      expect(new Set(answers.map((answer) => answer.text)).size).toBe(1);
+    });
+
+    it("is not there where the deployment has no address for the app, rather than pointing at someone else's", async () => {
+      delete process.env.SHELL_FRONT_URL;
+
+      expect((await page('window-ablations')).status).toBe(404);
+      expect(await (await fetch(`${url}/public/sitemap.xml`)).status).toBe(404);
+    });
+
+    it('escapes what a project calls itself', async () => {
+      await project('Evil', {
+        name: '"><script>alert(1)</script>',
+        slug: 'evil',
+        description: '<img src=x onerror=alert(1)>'
+      });
+
+      const { text } = await page('evil');
+
+      expect(text).not.toContain('<script>');
+      expect(text).not.toContain('<img');
+      expect(text).toContain('&lt;script&gt;');
+    });
+
+    it('lists the addresses of the public projects in a sitemap, and no private or trashed one', async () => {
+      const response = await fetch(`${url}/public/sitemap.xml`);
+      const text = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/xml');
+      expect(text).toContain('<loc>https://app.example.test/</loc>');
+      for (const slug of ['window-ablations', 'team-harbour', 'night-driving']) {
+        expect(text).toContain(`<loc>https://app.example.test/projects/${slug}</loc>`);
+      }
+      expect(text).not.toContain('private-notes');
+      expect(text).not.toContain('trashed-one');
+      expect(text).toContain('<lastmod>2026-09-05T12:00:00.000Z</lastmod>');
+    });
+
+    it('shares and lists only leaderboards whose suite and project are public', async () => {
+      const suiteId = new mongoose.Types.ObjectId();
+      await Suite.collection.insertOne({
+        _id: suiteId,
+        slug: 'harbour',
+        version: 1,
+        name: 'Harbour board',
+        visibility: 'public',
+        projectId: ids['Team harbour'],
+        updatedAt: at('2026-09-05')
+      });
+      const share = () => fetch(`${url}/public/share/leaderboards/harbour/1`);
+      expect(await (await share()).text()).toContain('content="Harbour board · v1"');
+      expect(await (await fetch(`${url}/public/sitemap.xml`)).text()).toContain('/leaderboards/harbour/1</loc>');
+      await Project.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(ids['Team harbour']) },
+        { $set: { visibility: 'private' } }
+      );
+      expect((await share()).status).toBe(404);
+      expect(await (await fetch(`${url}/public/sitemap.xml`)).text()).not.toContain('/leaderboards/harbour/1');
+      await Project.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(ids['Team harbour']) },
+        { $set: { visibility: 'public' } }
+      );
+      await Suite.collection.updateOne({ _id: suiteId }, { $set: { visibility: 'private' } });
+      expect((await share()).status).toBe(404);
+      expect(await (await fetch(`${url}/public/sitemap.xml`)).text()).not.toContain('/leaderboards/harbour/1');
+      expect((await fetch(`${url}/public/share/leaderboards/harbour/not-a-version`)).status).toBe(400);
+      await Suite.collection.deleteMany({});
+    });
+
+    it('uses the id for a project with no slug, and escapes what goes in an address', async () => {
+      await Project.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(ids['Night driving']) },
+        { $unset: { slug: '' } }
+      );
+      await project('Amp', { slug: 'a&b', name: 'Amp' });
+
+      const text = await (await fetch(`${url}/public/sitemap.xml`)).text();
+
+      expect(text).toContain(`/projects/${ids['Night driving']}</loc>`);
+      expect(text).toContain('/projects/a%26b</loc>');
     });
   });
 });

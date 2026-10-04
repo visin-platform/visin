@@ -1,3 +1,4 @@
+import { visionApiOrigin } from '../config/visionApi';
 import React from 'react';
 import {
   Alert,
@@ -15,7 +16,7 @@ import {
   TableRow,
   Typography
 } from '@mui/material';
-import { PageHeader, useCompactLayout } from '@visin/frontend-core';
+import { PageHeader, ShareButton, useCompactLayout } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { MobileListRow } from '../components/common/MobileList';
@@ -49,10 +50,16 @@ const PublicLeaderboardPage: React.FC = () => {
   const { page, observed, setPage, setObserved } = useLeaderboardPagination();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['public-leaderboard', slug, version, page, observed],
-    queryFn: () => publicLeaderboardService.get(slug, version, { page, ...(observed ? { evidence: 'observed' as const } : {}) })
+    queryFn: () =>
+      publicLeaderboardService.get(slug, version, { page, ...(observed ? { evidence: 'observed' as const } : {}) })
   });
 
-  if (isLoading) return <Container maxWidth="xl"><CircularProgress /></Container>;
+  if (isLoading)
+    return (
+      <Container maxWidth="xl">
+        <CircularProgress />
+      </Container>
+    );
   if (isError || !data) {
     return (
       <Container maxWidth="xl" sx={{ pb: 4 }}>
@@ -63,24 +70,43 @@ const PublicLeaderboardPage: React.FC = () => {
 
   const { suite, entries } = data;
   const who = (entry: (typeof entries)[number]) =>
-    [entry.project?.name, formatDate(entry.publishedAt), entry.evidenceLevel === 'attested' || entry.evidenceLevel === 'reported' ? entry.evidenceLevel : undefined].filter(Boolean).join(' · ');
+    [
+      entry.project?.name,
+      formatDate(entry.publishedAt),
+      entry.evidenceLevel === 'attested' || entry.evidenceLevel === 'reported' ? entry.evidenceLevel : undefined
+    ]
+      .filter(Boolean)
+      .join(' · ');
   const unit = suite.headline.unit ? ` (${suite.headline.unit})` : '';
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <PageBreadcrumbs items={[{ label: 'Leaderboards', href: '/leaderboards' }, { label: `${suite.slug}@${suite.version}`, current: true }]} />
+      <PageBreadcrumbs
+        items={[
+          { label: 'Leaderboards', href: '/leaderboards' },
+          { label: `${suite.slug}@${suite.version}`, current: true }
+        ]}
+      />
       <PageHeader
         title={suite.name}
         subtitle={suite.description ?? `${suite.task} · ${suite.slug}@${suite.version}`}
-        actions={suite.archived ? <Chip size="small" color="warning" label="Archived suite" /> : undefined}
+        actions={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ShareButton
+              url={`${visionApiOrigin().replace(/\/$/, '')}/api/public/share/leaderboards/${encodeURIComponent(suite.slug)}/${suite.version}`}
+            />
+            {suite.archived && <Chip size="small" color="warning" label="Archived suite" />}
+          </Box>
+        }
       />
       <Alert severity="info" sx={{ mb: 2 }}>
         These results were reported by whoever submitted them. Visin checks that each fits the protocol; it has not
         verified that the model or data were what they say.
       </Alert>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        {suite.headline.direction === 'max' ? 'Higher' : 'Lower'} {suite.headline.key} is better, formed as {AGGREGATION_TEXT[suite.aggregation]}.
-        One row per model, from its latest published result, never its best. Ties share a rank. Data: {publicDataText(suite.data)}, split {suite.split}.
-        {' '}Updated {formatDateTime(data.generatedAt)}.
+        {suite.headline.direction === 'max' ? 'Higher' : 'Lower'} {suite.headline.key} is better, formed as{' '}
+        {AGGREGATION_TEXT[suite.aggregation]}. One row per model, from its latest published result, never its best. Ties
+        share a rank. Data: {publicDataText(suite.data)}, split {suite.split}. Updated{' '}
+        {formatDateTime(data.generatedAt)}.
       </Typography>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
         <ObservedSwitch checked={observed} onChange={setObserved} />
@@ -96,12 +122,16 @@ const PublicLeaderboardPage: React.FC = () => {
         </Alert>
       ) : compact ? (
         <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-          {entries.map(entry => (
+          {entries.map((entry) => (
             <MobileListRow
               key={entry.evaluationId}
               to={`/leaderboards/${suite.slug}/${suite.version}/${entry.evaluationId}`}
               title={`${entry.rank}. ${checkpointLabel(entry.checkpoint)}`}
-              meta={<>{who(entry)} <VerificationMark verified={Boolean(entry.verifiedAt)} /></>}
+              meta={
+                <>
+                  {who(entry)} <VerificationMark verified={Boolean(entry.verifiedAt)} />
+                </>
+              }
               figures={[
                 { label: suite.headline.key, value: formatFixed(entry.headline) },
                 { label: 'Worst', value: `${entry.worst.condition} ${formatFixed(entry.worst.value)}` },
@@ -117,27 +147,48 @@ const PublicLeaderboardPage: React.FC = () => {
               <TableRow>
                 <TableCell>Rank</TableCell>
                 <TableCell>Model</TableCell>
-                <TableCell align="right" sx={{ textTransform: 'none' }}>{suite.headline.key}{unit}</TableCell>
-                {suite.conditions.map(condition => (
-                  <TableCell key={condition.name} align="right" sx={{ textTransform: 'none' }}>{condition.name}</TableCell>
+                <TableCell align="right" sx={{ textTransform: 'none' }}>
+                  {suite.headline.key}
+                  {unit}
+                </TableCell>
+                {suite.conditions.map((condition) => (
+                  <TableCell key={condition.name} align="right" sx={{ textTransform: 'none' }}>
+                    {condition.name}
+                  </TableCell>
                 ))}
                 <TableCell align="right">Worst</TableCell>
                 <TableCell align="right">Gap</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {entries.map(entry => (
+              {entries.map((entry) => (
                 <TableRow key={entry.evaluationId} hover>
                   <TableCell>{entry.rank}</TableCell>
                   <TableCell>
-                    <Link component={RouterLink} to={`/leaderboards/${suite.slug}/${suite.version}/${entry.evaluationId}`}>{checkpointLabel(entry.checkpoint)}</Link> <VerificationMark verified={Boolean(entry.verifiedAt)} />
-                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>{who(entry)}</Typography>
+                    <Link
+                      component={RouterLink}
+                      to={`/leaderboards/${suite.slug}/${suite.version}/${entry.evaluationId}`}
+                    >
+                      {checkpointLabel(entry.checkpoint)}
+                    </Link>{' '}
+                    <VerificationMark verified={Boolean(entry.verifiedAt)} />
+                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                      {who(entry)}
+                    </Typography>
                   </TableCell>
-                  <TableCell align="right"><strong>{formatFixed(entry.headline)}</strong></TableCell>
-                  {suite.conditions.map(condition => (
-                    <TableCell key={condition.name} align="right">{entry.conditions[condition.name] === undefined ? '-' : formatFixed(entry.conditions[condition.name])}</TableCell>
+                  <TableCell align="right">
+                    <strong>{formatFixed(entry.headline)}</strong>
+                  </TableCell>
+                  {suite.conditions.map((condition) => (
+                    <TableCell key={condition.name} align="right">
+                      {entry.conditions[condition.name] === undefined
+                        ? '-'
+                        : formatFixed(entry.conditions[condition.name])}
+                    </TableCell>
                   ))}
-                  <TableCell align="right">{entry.worst.condition}: {formatFixed(entry.worst.value)}</TableCell>
+                  <TableCell align="right">
+                    {entry.worst.condition}: {formatFixed(entry.worst.value)}
+                  </TableCell>
                   <TableCell align="right">{formatFixed(entry.gap)}</TableCell>
                 </TableRow>
               ))}
@@ -148,7 +199,8 @@ const PublicLeaderboardPage: React.FC = () => {
       <LeaderboardPagination pagination={data.pagination} onChange={setPage} label="Ranked model pages" />
       <Box sx={{ mt: 1 }}>
         <Typography variant="caption" color="text.secondary">
-          Protocol {suite.digest.slice(0, 12)} · evaluated with {suite.evaluator.package}{suite.evaluator.minVersion ? ` ≥ ${suite.evaluator.minVersion}` : ''}
+          Protocol {suite.digest.slice(0, 12)} · evaluated with {suite.evaluator.package}
+          {suite.evaluator.minVersion ? ` ≥ ${suite.evaluator.minVersion}` : ''}
         </Typography>
       </Box>
     </Container>

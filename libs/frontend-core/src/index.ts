@@ -106,3 +106,5 @@ export type { AuthContextValue } from './auth/AuthProvider';
 
 export { createConfigProvider } from './config/createConfigProvider';
 export type { CreateConfigProviderOptions } from './config/createConfigProvider';
+
+export { ShareButton } from './components/ShareButton';

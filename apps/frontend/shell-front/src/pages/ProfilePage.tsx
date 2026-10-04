@@ -1,3 +1,4 @@
+import { useConfig } from '../config/ConfigProvider';
 import { useParams } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -7,7 +8,14 @@ import { exploreApi } from '../services/exploreApi';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { ProfileLists } from '../components/profile/ProfileLists';
 
-const shell = { width: '100%', maxWidth: 1000, mx: 'auto', display: 'flex', flexDirection: 'column', gap: { xs: 3, md: 4 } } as const;
+const shell = {
+  width: '100%',
+  maxWidth: 1000,
+  mx: 'auto',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: { xs: 3, md: 4 }
+} as const;
 
 /**
  * A person's public page: who they are, and what they have made public. The same page for
@@ -16,6 +24,7 @@ const shell = { width: '100%', maxWidth: 1000, mx: 'auto', display: 'flex', flex
  */
 export function ProfilePage({ now }: { now?: Date }) {
   const { handle = '' } = useParams();
+  const config = useConfig();
   const { user: me } = useAuth();
   const profile = useQuery({ queryKey: ['profile', handle], queryFn: () => exploreApi.user(handle) });
   const person = profile.data ?? undefined;
@@ -54,6 +63,11 @@ export function ProfilePage({ now }: { now?: Date }) {
   return (
     <Box sx={shell}>
       <ProfileHeader
+        shareUrl={
+          config.AUTH_SERVICE_URL
+            ? `${config.AUTH_SERVICE_URL.replace(/\/$/, '')}/auth/share/users/${encodeURIComponent(person.handle)}`
+            : undefined
+        }
         name={person.name}
         handle={person.handle}
         picture={person.picture}
@@ -62,7 +76,12 @@ export function ProfilePage({ now }: { now?: Date }) {
         meta={`Joined ${joined}`}
         edit={me?.id === person.id ? { to: '/account/profile' } : undefined}
       />
-      <ProfileLists owner={{ user: person.id }} cacheKey={`user:${handle}`} showActivity={person.showActivity} now={now} />
+      <ProfileLists
+        owner={{ user: person.id }}
+        cacheKey={`user:${handle}`}
+        showActivity={person.showActivity}
+        now={now}
+      />
     </Box>
   );
 }

@@ -14,4 +14,10 @@ cat <<EOF > /usr/share/nginx/html/config.json
   "LANDING_FRONT_URL": "${LANDING_FRONT_URL}"
 }
 EOF
+# The APIs own the live sitemaps; omit links for services that are not configured.
+{
+  printf 'User-agent: *\nAllow: /\n'
+  [ -z "$VISION_API_URL" ] || printf 'Sitemap: %s/api/public/sitemap.xml\n' "${VISION_API_URL%/}"
+  [ -z "$DATASET_API_URL" ] || printf 'Sitemap: %s/api/datasets/sitemap.xml\n' "${DATASET_API_URL%/}"
+} > /usr/share/nginx/html/robots.txt
 exec "$@"

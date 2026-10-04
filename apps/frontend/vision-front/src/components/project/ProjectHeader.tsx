@@ -3,7 +3,8 @@ import { Box, Typography, IconButton } from '@mui/material';
 import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 
 import type { Project } from '../../types/Project';
-import { OwnerChip } from '@visin/frontend-core';
+import { visionApiOrigin } from '../../config/visionApi';
+import { OwnerChip, ShareButton } from '@visin/frontend-core';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface ProjectHeaderProps {
@@ -44,6 +45,11 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({ project, onEdit, onDelete
           <OwnerChip owner={project.owner} userId={user?.id} groups={[]} ownerName={project.owner.name} />
         </Box>
 
+        {project.visibility === 'public' && (
+          <ShareButton
+            url={`${visionApiOrigin().replace(/\/$/, '')}/api/public/share/projects/${encodeURIComponent(project._id)}`}
+          />
+        )}
         {project.permissions.manage && (
           <Box sx={{ display: 'flex', gap: 0.5, ml: 2 }}>
             <IconButton aria-label="Edit project" color="primary" onClick={onEdit} size="small">

@@ -118,6 +118,8 @@ services:
       AUTH_SERVICE_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5001
       AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
+      # The web app's address: where the preview pages for shared links send people on to.
+      SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
 
   file-service:
     build: ./apps/backend/file-service
@@ -145,6 +147,8 @@ services:
       AUTH_SERVICE_URL: http://auth-service:5001
       VISION_SERVICE_URL: http://vision-service:4010
       DATASET_SERVICE_URL: http://dataset-service:5010
+      # The web app's address: where the preview pages for shared links send people on to.
+      SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
 
   vision-service:
     build: ./apps/backend/vision-service
@@ -162,6 +166,8 @@ services:
       GROUP_SERVICE_URL: http://group-service:5006
       # Where the names and avatars of project owners come from.
       AUTH_SERVICE_URL: http://auth-service:5001
+      # The web app's address: where the preview pages for shared links send people on to.
+      SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
       # The MCP server OAuth access tokens must be minted for; unset, they are refused.
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
 
@@ -196,6 +202,8 @@ services:
       GROUP_SERVICE_URL: http://group-service:5006
       # Where the names and avatars of dataset owners come from.
       AUTH_SERVICE_URL: http://auth-service:5001
+      # The web app's address: where the preview pages for shared links send people on to.
+      SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
       FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       # The MCP server OAuth access tokens must be minted for; unset, they are refused.
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009

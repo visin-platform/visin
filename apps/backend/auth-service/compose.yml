@@ -31,6 +31,8 @@ services:
       # (RFC 8707) and will not work anywhere else.
       - AUTH_SERVICE_PUBLIC_URL=${AUTH_SERVICE_PUBLIC_URL}
       - AUTH_FRONT_URL=${AUTH_FRONT_URL}
+      # The web app's address: where the preview pages for shared links send people on to. Blank: no previews.
+      - SHELL_FRONT_URL=${SHELL_FRONT_URL:-}
       - MCP_PUBLIC_URL=${MCP_PUBLIC_URL}
     init: true
     networks:

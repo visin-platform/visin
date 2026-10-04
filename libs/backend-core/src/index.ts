@@ -29,6 +29,8 @@ export { sharedSecretMatches } from './auth/sharedSecret';
 // HTTP client
 export { fetchWithTimeout, DEFAULT_FETCH_TIMEOUT_MS, TRANSFER_FETCH_TIMEOUT_MS } from './http/fetchWithTimeout';
 export type { FetchWithTimeoutInit } from './http/fetchWithTimeout';
+export { appLink, escapeHtml, excerpt, shellFrontUrl, renderSharePage, sendSharePage } from './http/sharePage';
+export type { SharePage } from './http/sharePage';
 
 // Clients for other Visin services
 export { createGroupServiceClient, groupServiceUrl } from './clients/groupService';

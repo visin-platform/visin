@@ -38,6 +38,22 @@ describe('ProjectHeader', () => {
     expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
   });
 
+  it('shares the canonical id even if a legacy slug looks like another project id', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    render(
+      <ProjectHeader project={{ ...project, slug: 'abcdefabcdefabcdefabcdef' }} onEdit={vi.fn()} onDelete={vi.fn()} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    await screen.findByRole('button', { name: 'Link copied' });
+    expect(writeText).toHaveBeenCalledWith('https://vision.example.test/api/public/share/projects/p1');
+  });
+
+  it('offers no public share link for a private project', () => {
+    render(<ProjectHeader project={{ ...project, visibility: 'private' }} onEdit={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+  });
+
   it('calls onEdit and onDelete when the icons are clicked (owner only)', () => {
     const onEdit = vi.fn();
     const onDelete = vi.fn();
@@ -50,3 +66,5 @@ describe('ProjectHeader', () => {
 });
 
 vi.mock('../../contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
+
+vi.mock('../../config/visionApi', () => ({ visionApiOrigin: () => 'https://vision.example.test/' }));

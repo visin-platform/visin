@@ -408,6 +408,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/public/share/groups/{handle}:
+    get:
+      tags: [Public pages]
+      summary: The preview page for a link to a group's page
+      description: |
+        A tiny HTML page with Open Graph tags that sends a person on to the group's page in the app, for a chat or a feed to
+        unfurl. What the app's Share button copies. A group whose page is off, that was deleted or never existed, and a
+        deployment with no `SHELL_FRONT_URL`, all answer the same 404. Never cached.
+      security: []
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The preview page
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Nothing to share here
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/public/groups/{handle}:
     get:
       tags: [Public pages]
