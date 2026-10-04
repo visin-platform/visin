@@ -11,6 +11,11 @@ export interface GroupMember {
 export interface Group {
   _id: string;
   name: string;
+  /** The address of the group's public page, `/g/{handle}`. */
+  handle?: string;
+  description?: string;
+  /** Whether the group has a public page, and shows its name on what it owns to non-members. Off by default. */
+  profilePublic?: boolean;
   createdBy: string;
   members: GroupMember[];
   deletedAt?: string | null;
@@ -58,6 +63,8 @@ export interface GroupPermissions {
   canManageMembers: boolean;
   /** Owners only: soft-delete, restore, and permanent delete. */
   canDeleteGroup: boolean;
+  /** Owners only: the public page decides what strangers may know of the group. */
+  canEditPublicPage: boolean;
   /** Only an owner may promote to, demote, or remove another owner. */
   canManageOwners: boolean;
 }
@@ -66,6 +73,7 @@ export const permissionsFor = (role: GroupRole | undefined): GroupPermissions =>
   canRename: role === 'owner' || role === 'admin',
   canManageMembers: role === 'owner' || role === 'admin',
   canDeleteGroup: role === 'owner',
+  canEditPublicPage: role === 'owner',
   canManageOwners: role === 'owner'
 });
 

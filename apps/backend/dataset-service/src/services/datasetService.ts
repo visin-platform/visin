@@ -20,7 +20,7 @@ import { enqueueDelete, enqueueImport, enqueueRemoveGroup, enqueueScan, removeQu
 import { expectedImportFiles } from '../utils/contents';
 import { normalizeFolder } from '../utils/zipPaths';
 import * as groupService from '../clients/groupServiceClient';
-import { lookupOwners, type OwnerIdentity } from '../clients/authOwnersClient';
+import { lookupOwnerIdentities, type OwnerIdentity } from '../clients/ownerIdentityClient';
 import { DatasetAccess, DatasetPermissions, LIVE, permissionsOf, readableDataset, requireDataset } from './accessService';
 import type { ArchiveUploadBody, CreateDatasetBody, ListDatasetsQuery, UpdateDatasetBody } from '../validation/datasetSchemas';
 
@@ -116,14 +116,13 @@ const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g
 
 /** The caller's view of one dataset; group lookups are memoized by `access`. */
 const viewFor = async (access: DatasetAccess, dataset: IDataset, coverUrl?: string, owners?: Map<string, OwnerIdentity>) => {
-  let identity: Partial<OwnerIdentity> = {};
+  // `owners` is what a whole list asked for at once; a single dataset asks for itself. A group's members
+  // also see its name when it has no public page.
+  const { id: _id, ...shown } = (owners ?? (await lookupOwnerIdentities([dataset.owner]))).get(dataset.owner.id) ?? { id: '' };
+  let identity: Partial<OwnerIdentity> = shown;
   if (dataset.owner.kind === 'group') {
     const name = (await access.myGroups()).find((group) => group.groupId === dataset.owner.id)?.name;
-    if (name) identity = { name };
-  } else {
-    // `owners` is what a whole list asked for at once; a single dataset asks for itself.
-    const { id: _id, ...shown } = (owners ?? (await lookupOwners([dataset.owner.id]))).get(dataset.owner.id) ?? { id: '' };
-    identity = shown;
+    if (name) identity = { ...shown, name };
   }
   return toDatasetView(dataset, permissionsOf(await access.permission(dataset)), coverUrl, identity);
 };
@@ -138,7 +137,7 @@ const ownerFilter = (access: DatasetAccess, owner?: string, user?: string) => {
 
 const withCovers = async (access: DatasetAccess, datasets: IDataset[]) => {
   const { urls } = await signedUrls(datasets.map((dataset) => dataset.coverFileId));
-  const owners = await lookupOwners(datasets.filter((dataset) => dataset.owner.kind === 'user').map((dataset) => dataset.owner.id));
+  const owners = await lookupOwnerIdentities(datasets.map((dataset) => dataset.owner));
   return Promise.all(
     datasets.map((dataset) => viewFor(access, dataset, dataset.coverFileId ? urls[dataset.coverFileId] : undefined, owners))
   );

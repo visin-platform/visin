@@ -4,6 +4,8 @@ import path from 'path';
 import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
 import { authenticateToken } from './middleware/authMiddleware';
 import groupRoutes from './routes/groupRoutes';
+import publicGroupRoutes from './routes/publicGroupRoutes';
+import internalGroupRoutes from './routes/internalGroupRoutes';
 
 // Without INTERNAL_SERVICE_TOKEN every /api/groups route reachable by another
 // service 500s at request time instead of failing here.
@@ -24,6 +26,10 @@ app.get('/health', createHealthCheckHandler({
 app.use('/api/docs', express.static(path.join(__dirname, '../docs')));
 
 app.use('/api/internal/project-groups', projectGroupsRoutes);
+// Service callers only (names of the groups that own what vision- and dataset-service list).
+app.use('/api/internal/groups', internalGroupRoutes);
+// Anyone: a group's public page, once its owner turns it on. Before authentication on purpose.
+app.use('/api/public', publicGroupRoutes);
 app.use('/api', authenticateToken);
 app.use('/api/groups', groupRoutes);
 

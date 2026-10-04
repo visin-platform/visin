@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import { groupService } from '../services/groupService';
+import { groupService, type GroupPageUpdate } from '../services/groupService';
 import { useAuth } from '../contexts/AuthContext';
 import { Group, GroupRole } from '../types/group';
 
@@ -45,6 +45,11 @@ export const useCreateGroup = () => useGroupMutation((name: string) => groupServ
 
 export const useRenameGroup = () =>
   useGroupMutation(({ groupId, name }: { groupId: string; name: string }) => groupService.rename(groupId, name));
+
+export const useUpdateGroupPage = () =>
+  useGroupMutation(({ groupId, page }: { groupId: string; page: GroupPageUpdate }) =>
+    groupService.updatePage(groupId, page)
+  );
 
 export const useDeleteGroup = () => useGroupMutation((groupId: string) => groupService.remove(groupId));
 

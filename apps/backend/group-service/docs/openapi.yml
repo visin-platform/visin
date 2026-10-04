@@ -24,6 +24,8 @@ tags:
     description: Group member management and role operations
   - name: Group Membership
     description: Group membership status and checking operations
+  - name: Public pages
+    description: A group's public page, which its owner turns on
   - name: Health
     description: Health check and monitoring endpoints
 
@@ -51,6 +53,16 @@ components:
         name:
           type: string
           example: "Project Team Alpha"
+        handle:
+          type: string
+          description: The address of the group's public page, /g/{handle}. Absent until its owner picks one.
+          example: road-lab
+        description:
+          type: string
+          maxLength: 280
+        profilePublic:
+          type: boolean
+          description: Whether the group has a public page, and shows its name on what it owns to people who are not members. Off until the owner turns it on.
         createdBy:
           type: string
           description: Immutable creator account ID
@@ -245,12 +257,39 @@ components:
 
     UpdateGroupRequest:
       type: object
+      description: Anything to change. The name is for an owner or an admin; the public page (handle, description, profilePublic) is the owner's alone.
+      minProperties: 1
       properties:
         name:
           type: string
           example: "Updated Project Team Alpha"
-      required:
-        - name
+        handle:
+          type: string
+          description: 3 to 30 lowercase letters, digits or single hyphens, and not a reserved word. Unique.
+          example: road-lab
+        description:
+          type: string
+          maxLength: 280
+          description: An empty string clears it.
+        profilePublic:
+          type: boolean
+          description: Needs a handle.
+    PublicGroup:
+      type: object
+      description: What anyone may know of a group that turned its public page on. Never its members.
+      required: [id, handle, name, createdAt]
+      properties:
+        id:
+          type: string
+        handle:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 
     CreateInvitationRequest:
       type: object
@@ -314,6 +353,98 @@ components:
       description: Internal service token for inter-service communication
 
 paths:
+  /api/public/groups/{handle}:
+    get:
+      tags: [Public pages]
+      summary: A group's public page
+      description: |
+        No sign-in needed. A group whose page is off, that was deleted, or that never existed answers the same 404.
+      security: []
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The group
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/PublicGroup'
+        '404':
+          description: No public page at this address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/internal/groups/public:
+    post:
+      tags: [Public pages]
+      summary: Names and handles for the groups that own what a service lists
+      description: |
+        For vision-service and dataset-service, service callers only. Groups without a public page are left out, so
+        nothing is told about them, not even that they exist.
+      security:
+        - internalAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: The groups found
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, handle, name]
+                      properties:
+                        id:
+                          type: string
+                        handle:
+                          type: string
+                        name:
+                          type: string
+        '400':
+          description: Not a list of group ids
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong internal token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/internal/project-groups:
     post:
       tags: [Group Membership]
@@ -570,8 +701,8 @@ paths:
       tags: [Groups]
       summary: Update group
       description: |
-        Updates a group's information.
-        User must be an owner or admin of the group.
+        Updates a group's name and public page.
+        User must be an owner or admin of the group to rename it; only its owner can change the public page.
       parameters:
         - name: id
           in: path

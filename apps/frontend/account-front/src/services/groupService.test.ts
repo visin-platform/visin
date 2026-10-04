@@ -66,6 +66,16 @@ describe('groupService group mutations', () => {
     expect(init.body).toBe(JSON.stringify({ name: 'New' }));
   });
 
+  it("sets a group's public page with the same PATCH as a rename, and only the parts given", async () => {
+    const fetchMock = stubFetch();
+
+    await groupService.updatePage('g1', { handle: 'road-lab', description: '', profilePublic: true });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://group-api.test/api/groups/g1');
+    expect(init.method).toBe('PATCH');
+    expect(init.body).toBe(JSON.stringify({ handle: 'road-lab', description: '', profilePublic: true }));
+  });
+
   it('soft-deletes a group', async () => {
     const fetchMock = stubFetch(undefined, 204);
 

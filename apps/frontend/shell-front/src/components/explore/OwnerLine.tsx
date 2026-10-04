@@ -32,11 +32,12 @@ export function OwnerLine({ owner }: { owner: ExploreOwner }) {
   );
   const sx = { position: 'relative', zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: 0.75, minWidth: 0, maxWidth: '100%' } as const;
 
-  if (owner.kind === 'user' && owner.handle) {
+  // A person's page is /u/…, a group's /g/…; either has one only if its owner turned it on.
+  if (owner.handle) {
     return (
       <Link
         component={RouterLink}
-        to={`/u/${owner.handle}`}
+        to={`/${owner.kind === 'user' ? 'u' : 'g'}/${owner.handle}`}
         underline="hover"
         aria-label={`${owner.name}, profile`}
         sx={{ ...sx, color: 'text.secondary', alignSelf: 'flex-start', '&:hover': { color: 'primary.main' } }}

@@ -59,8 +59,7 @@ export const getOne = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const updateGroup = async (req: Request, res: Response): Promise<void> => {
-  const { name } = req.body as { name: string };
-  const group = await svc.updateGroup(req.params.id as string, actorId(req), { name });
+  const group = await svc.updateGroup(req.params.id as string, actorId(req), req.body as svc.GroupUpdates);
   res.json({ success: true, data: group });
 };
 

@@ -20,6 +20,7 @@ describe('permissionsFor', () => {
       canRename: true,
       canManageMembers: true,
       canDeleteGroup: true,
+      canEditPublicPage: true,
       canManageOwners: true
     });
   });
@@ -29,12 +30,19 @@ describe('permissionsFor', () => {
       canRename: true,
       canManageMembers: true,
       canDeleteGroup: false,
+      canEditPublicPage: false,
       canManageOwners: false
     });
   });
 
   it('gives a plain member and a non-member nothing', () => {
-    const none = { canRename: false, canManageMembers: false, canDeleteGroup: false, canManageOwners: false };
+    const none = {
+      canRename: false,
+      canManageMembers: false,
+      canDeleteGroup: false,
+      canEditPublicPage: false,
+      canManageOwners: false
+    };
     expect(permissionsFor('member')).toEqual(none);
     expect(permissionsFor(undefined)).toEqual(none);
   });

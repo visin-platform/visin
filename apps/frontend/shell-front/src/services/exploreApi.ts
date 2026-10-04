@@ -12,6 +12,18 @@ export interface ExploreOwner {
   picture?: string;
 }
 
+/** Whose work a list is of: a person's (by account id) or a group's (by group id). */
+export type OwnerFilter = { user: string; owner?: undefined } | { owner: string; user?: undefined };
+
+/** What anyone may know of a group that turned its public page on; never its members. */
+export interface PublicGroup {
+  id: string;
+  handle: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+}
+
 /** What anyone may see of an account (auth-service's public page); never the email. */
 export interface PublicUser {
   id: string;
@@ -81,6 +93,9 @@ const visionApi = createApiClient({
 const datasetApi = createApiClient({
   baseUrl: () => `${stripTrailingSlash(getGlobalConfig().DATASET_API_URL ?? '')}/api/datasets`
 });
+const groupApi = createApiClient({
+  baseUrl: () => `${stripTrailingSlash(getGlobalConfig().GROUP_SERVICE_URL ?? '')}/api`
+});
 const authApi = createApiClient({
   baseUrl: () => `${stripTrailingSlash(getGlobalConfig().AUTH_SERVICE_URL ?? '')}/auth`
 });
@@ -91,16 +106,18 @@ export const exploreApi = {
    * catalogue, so the viewer's own private projects (which the list also returns
    * to them) are left to the Projects page.
    */
-  async projects(options: { user?: string } = {}): Promise<ExploreProject[]> {
+  async projects(options: Partial<OwnerFilter> = {}): Promise<ExploreProject[]> {
     const query = new URLSearchParams({ sortBy: 'updatedAt', sortOrder: 'desc' });
     if (options.user) query.set('user', options.user);
+    if (options.owner) query.set('owner', options.owner);
     const { data } = await visionApi.get<Envelope<ExploreProject[]>>(`/projects?${query}`);
     return data.filter((project) => project.visibility === 'public');
   },
 
-  async datasets(limit: number, options: { user?: string } = {}): Promise<ExploreDataset[]> {
+  async datasets(limit: number, options: Partial<OwnerFilter> = {}): Promise<ExploreDataset[]> {
     const query = new URLSearchParams({ limit: String(limit) });
     if (options.user) query.set('user', options.user);
+    if (options.owner) query.set('owner', options.owner);
     const { data } = await datasetApi.get<Envelope<{ datasets: ExploreDataset[] }>>(`?${query}`);
     return data.datasets.filter((dataset) => dataset.visibility === 'public');
   },
@@ -110,6 +127,18 @@ export const exploreApi = {
     try {
       return (
         await authApi.get<Envelope<PublicUser>>(`/users/${encodeURIComponent(handle)}`, { skipAuthRedirect: true })
+      ).data;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  },
+
+  /** A group's public page, or null where there is none: no such handle, or the group's owner has not turned it on. */
+  async group(handle: string): Promise<PublicGroup | null> {
+    try {
+      return (
+        await groupApi.get<Envelope<PublicGroup>>(`/public/groups/${encodeURIComponent(handle)}`, { skipAuthRedirect: true })
       ).data;
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) return null;

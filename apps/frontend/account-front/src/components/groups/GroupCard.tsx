@@ -21,6 +21,7 @@ import GroupMembers from './GroupMembers';
 import GroupInvitations from './GroupInvitations';
 import AddMember from './AddMember';
 import GroupActivity from './GroupActivity';
+import GroupPublicPage from './GroupPublicPage';
 
 interface GroupCardProps {
   group: Group;
@@ -132,6 +133,8 @@ const GroupCard: React.FC<GroupCardProps> = ({
             )}
           </Box>
         )}
+
+        {permissions.canEditPublicPage && <GroupPublicPage group={group} />}
 
         <GroupMembers
           group={group}

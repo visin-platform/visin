@@ -6,6 +6,7 @@ const { get, config } = vi.hoisted(() => ({
     VISION_API_URL: 'https://vision-api.test/',
     DATASET_API_URL: 'https://dataset-api.test',
     AUTH_SERVICE_URL: 'https://auth.test/',
+    GROUP_SERVICE_URL: 'https://group.test',
   },
 }));
 
@@ -67,6 +68,28 @@ describe('exploreApi', () => {
     get.mockResolvedValue({ success: true, data: { datasets: [] } });
     await exploreApi.datasets(48, { user: 'u1' });
     expect(get).toHaveBeenLastCalledWith('https://dataset-api.test/api/datasets?limit=48&user=u1', undefined);
+  });
+
+  it("lists a group's public projects and datasets by the group's id", async () => {
+    get.mockResolvedValue({ success: true, data: [] });
+    await exploreApi.projects({ owner: 'g1' });
+    expect(get).toHaveBeenLastCalledWith('https://vision-api.test/api/projects?sortBy=updatedAt&sortOrder=desc&owner=g1', undefined);
+
+    get.mockResolvedValue({ success: true, data: { datasets: [] } });
+    await exploreApi.datasets(48, { owner: 'g1' });
+    expect(get).toHaveBeenLastCalledWith('https://dataset-api.test/api/datasets?limit=48&owner=g1', undefined);
+  });
+
+  it("reads a group's public page by handle, and reads none where the group has none", async () => {
+    const page = { id: 'g1', handle: 'road-lab', name: 'Road lab', createdAt: '2026-01-01T00:00:00Z' };
+    get.mockResolvedValue({ success: true, data: page });
+    await expect(exploreApi.group('road lab')).resolves.toEqual(page);
+    expect(get).toHaveBeenCalledWith('https://group.test/api/public/groups/road%20lab', { skipAuthRedirect: true });
+
+    get.mockRejectedValueOnce(new ApiError(404, 'No such group'));
+    await expect(exploreApi.group('nobody')).resolves.toBeNull();
+    get.mockRejectedValueOnce(new ApiError(500, 'boom'));
+    await expect(exploreApi.group('road-lab')).rejects.toThrow('boom');
   });
 
   it("reads a person's public page by handle, without treating a signed-out answer as a reason to sign in", async () => {

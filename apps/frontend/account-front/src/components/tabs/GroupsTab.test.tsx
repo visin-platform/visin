@@ -11,6 +11,7 @@ const mockedService = vi.hoisted(() => ({
   listDeleted: vi.fn(),
   create: vi.fn(),
   rename: vi.fn(),
+  updatePage: vi.fn(),
   remove: vi.fn(),
   restore: vi.fn(),
   deleteForever: vi.fn(),
@@ -64,6 +65,7 @@ beforeEach(() => {
   mockedService.listDeleted.mockResolvedValue([]);
   mockedService.create.mockResolvedValue(makeGroup());
   mockedService.rename.mockResolvedValue(makeGroup());
+  mockedService.updatePage.mockResolvedValue(makeGroup());
   mockedService.remove.mockResolvedValue(undefined);
   mockedService.restore.mockResolvedValue(makeGroup());
   mockedService.deleteForever.mockResolvedValue(undefined);
@@ -162,6 +164,29 @@ describe('GroupsTab group actions', () => {
     await waitFor(() =>
       expect(mockedService.rename).toHaveBeenCalledWith('g1', 'Renamed')
     );
+  });
+
+  it("lets the owner set the group's public page, and refreshes the list after", async () => {
+    renderTab();
+    await openGroup();
+
+    fireEvent.change(screen.getByLabelText('Handle'), { target: { value: 'team' } });
+    fireEvent.click(screen.getByRole('switch', { name: 'Show the public page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save public page' }));
+
+    await waitFor(() =>
+      expect(mockedService.updatePage).toHaveBeenCalledWith('g1', { handle: 'team', description: '', profilePublic: true })
+    );
+    await waitFor(() => expect(mockedService.listMine).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps the public page from an admin, who may rename the group but not decide what strangers see', async () => {
+    auth.user = { id: 'admin-ID', email: 'admin@x.com' };
+    renderTab();
+    await openGroup();
+
+    expect(screen.getByRole('button', { name: /rename group/i })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Public page' })).not.toBeInTheDocument();
   });
 
   it('skips the rename call when the name is unchanged', async () => {

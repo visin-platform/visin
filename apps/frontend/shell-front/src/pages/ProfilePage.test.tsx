@@ -190,6 +190,6 @@ describe('ProfilePage', () => {
 
     await screen.findByRole('heading', { level: 1, name: 'Ann Lee' });
     expect(api.projects).not.toHaveBeenCalled();
-    expect(screen.queryByRole('group', { name: 'Show' })).toBeEmptyDOMElement();
+    expect(screen.queryByRole('group', { name: 'Show' })).not.toBeInTheDocument();
   });
 });

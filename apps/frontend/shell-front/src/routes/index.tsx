@@ -7,6 +7,7 @@ import { RemoteBoundary } from '../components/RemoteBoundary';
 import { useAuth } from '../contexts/AuthContext';
 import { ExplorePage } from '../pages/ExplorePage';
 import { HomePage } from '../pages/HomePage';
+import { GroupProfilePage } from '../pages/GroupProfilePage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { APPS, appForPath } from '../apps';
 import { forgetRemote, remoteComponent } from '../remotes';
@@ -86,6 +87,7 @@ function ShellRoutes() {
       <Route path="/explore" element={<Explore />} />
       {/* A person's public page. Shell-owned, like Explore: it spans Vision's projects and the datasets. */}
       <Route path="/u/:handle" element={<ProfilePage />} />
+      <Route path="/g/:handle" element={<GroupProfilePage />} />
       <Route path="/login" element={<LoginRedirect />} />
       {/* vision-front keeps this old address alive by forwarding to label-front's
           domain; here Labeling is a route of the same page. */}

@@ -7,9 +7,9 @@ import { errorHandler } from '@visin/backend-core';
 import { identityContextMiddleware } from '../../middleware/requestIdentityContext';
 import projectRoutes from '../../routes/projectRoutes';
 import Project from '../../models/Project';
-import { lookupOwners } from '../../clients/authOwnersClient';
+import { lookupOwnerIdentities } from '../../clients/ownerIdentityClient';
 
-jest.mock('../../clients/authOwnersClient', () => ({ lookupOwners: jest.fn() }));
+jest.mock('../../clients/ownerIdentityClient', () => ({ lookupOwnerIdentities: jest.fn() }));
 jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn().mockResolvedValue([]) }));
 
 /**
@@ -23,7 +23,8 @@ describe('owners on project lists, with in-memory MongoDB', () => {
   const ann = '000000000000000000000001';
   const hidden = '000000000000000000000002';
   const group = '0000000000000000000000aa';
-  const lookup = lookupOwners as jest.Mock;
+  const quietGroup = '0000000000000000000000bb';
+  const lookup = lookupOwnerIdentities as jest.Mock;
   interface Listed {
     name: string;
     owner: Record<string, unknown>;
@@ -49,7 +50,8 @@ describe('owners on project lists, with in-memory MongoDB', () => {
       { name: 'Ann public', slug: 'ann-public', owner: { kind: 'user', id: ann }, createdBy: ann, visibility: 'public' },
       { name: 'Ann private', slug: 'ann-private', owner: { kind: 'user', id: ann }, createdBy: ann },
       { name: 'Hidden public', slug: 'hidden-public', owner: { kind: 'user', id: hidden }, createdBy: hidden, visibility: 'public' },
-      { name: 'Team public', slug: 'team-public', owner: { kind: 'group', id: group }, createdBy: ann, visibility: 'public' }
+      { name: 'Team public', slug: 'team-public', owner: { kind: 'group', id: group }, createdBy: ann, visibility: 'public' },
+      { name: 'Quiet team public', slug: 'quiet-team-public', owner: { kind: 'group', id: quietGroup }, createdBy: ann, visibility: 'public' }
     ]);
   }, 120_000);
 
@@ -61,12 +63,14 @@ describe('owners on project lists, with in-memory MongoDB', () => {
 
   beforeEach(() => {
     lookup.mockReset();
-    lookup.mockImplementation(async (ids: string[]) =>
+    lookup.mockImplementation(async (owners: { id: string }[]) =>
       new Map(
         [
           { id: ann, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' },
-          { id: hidden }
-        ].filter(owner => ids.includes(owner.id)).map(owner => [owner.id, owner])
+          { id: hidden },
+          // A group with a public page; quietGroup has none, so nothing comes back for it.
+          { id: group, handle: 'road-lab', name: 'Road lab' }
+        ].filter(identity => owners.some(owner => owner.id === identity.id)).map(identity => [identity.id, identity])
       )
     );
   });
@@ -77,15 +81,22 @@ describe('owners on project lists, with in-memory MongoDB', () => {
     const byName = Object.fromEntries(body.data.map((project) => [project.name, project.owner]));
     expect(byName['Ann public']).toEqual({ kind: 'user', id: ann, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' });
     expect(lookup).toHaveBeenCalledTimes(1);
-    expect([...lookup.mock.calls[0][0]].sort()).toEqual([ann, hidden]);
+    expect(lookup.mock.calls[0][0].map((owner: { id: string }) => owner.id).sort()).toEqual([ann, hidden, group, quietGroup].sort());
   });
 
-  it('shows an owner who hid their profile as no more than an id, and a group as itself without a name to a stranger', async () => {
+  it('shows an owner who hid their profile as no more than an id', async () => {
     const { body } = await get('/projects');
 
     const byName = Object.fromEntries(body.data.map((project) => [project.name, project.owner]));
     expect(byName['Hidden public']).toEqual({ kind: 'user', id: hidden });
-    expect(byName['Team public']).toEqual({ kind: 'group', id: group });
+  });
+
+  it('names a group with a public page to anyone, and shows a group without one as no more than an id', async () => {
+    const { body } = await get('/projects');
+
+    const byName = Object.fromEntries(body.data.map((project) => [project.name, project.owner]));
+    expect(byName['Team public']).toEqual({ kind: 'group', id: group, handle: 'road-lab', name: 'Road lab' });
+    expect(byName['Quiet team public']).toEqual({ kind: 'group', id: quietGroup });
   });
 
   it('lists the projects with their owners left out rather than failing when auth-service cannot answer', async () => {
@@ -101,7 +112,8 @@ describe('owners on project lists, with in-memory MongoDB', () => {
     const { body } = await get('/projects/ann-public');
 
     expect(body.data.owner).toMatchObject({ handle: 'ann-lee', name: 'Ann Lee' });
-    expect(lookup).toHaveBeenCalledWith([ann]);
+    expect(lookup.mock.calls[0][0]).toHaveLength(1);
+    expect(lookup.mock.calls[0][0][0]).toMatchObject({ kind: 'user', id: ann });
   });
 
   it('lists one person\'s projects for a profile, and only those a visitor may read', async () => {
@@ -109,6 +121,8 @@ describe('owners on project lists, with in-memory MongoDB', () => {
     expect(await names(`/projects?user=${hidden}`)).toEqual(['Hidden public']);
     // A group's projects are not a person's, even one that person created.
     expect(await names(`/projects?user=${group}`)).toEqual([]);
+    // They are listed by the group, which is what a group's page asks for.
+    expect(await names(`/projects?owner=${group}`)).toEqual(['Team public']);
   });
 
   it('wants a person\'s id, not any text', async () => {

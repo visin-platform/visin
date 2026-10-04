@@ -14,7 +14,7 @@ import { resumeDeletions, runDelete, runRemoveGroup } from '../../services/delet
 import { markScanFailed, runScan } from '../../services/scanService';
 import { NonRetryableImportError } from '../../utils/boundedZip';
 import { fetchDatasetInfo } from '../../clients/hubClient';
-import { lookupOwners } from '../../clients/authOwnersClient';
+import { lookupOwnerIdentities } from '../../clients/ownerIdentityClient';
 import { clearHubCache } from '../../services/hubService';
 import { Dataset } from '../../models/Dataset';
 import { purgeExpiredTrash } from '../../services/datasetService';
@@ -26,7 +26,7 @@ import { zip } from '../fixtures/zip';
 
 jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
 jest.mock('../../clients/hubClient', () => ({ fetchDatasetInfo: jest.fn() }));
-jest.mock('../../clients/authOwnersClient', () => ({ lookupOwners: jest.fn(async () => new Map()) }));
+jest.mock('../../clients/ownerIdentityClient', () => ({ lookupOwnerIdentities: jest.fn(async () => new Map()) }));
 jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(), getMyGroups: jest.fn() }));
 jest.mock('../../queue/importQueue', () => ({ enqueueImport: jest.fn(), enqueueScan: jest.fn(), enqueueDelete: jest.fn(), enqueueRemoveGroup: jest.fn(), removeQueuedImport: jest.fn() }));
 
@@ -900,35 +900,44 @@ describe('datasets kept on the Hugging Face Hub', () => {
 describe('who owns a dataset', () => {
   const identities = new Map([
     [OWNER, { id: OWNER, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' }],
-    [MEMBER, { id: MEMBER }]
+    [MEMBER, { id: MEMBER }],
+    // A group with a public page.
+    [GROUP, { id: GROUP, handle: 'team-page', name: 'Team page' }]
   ]);
   const owners = async (path: string, user?: string) =>
     Object.fromEntries(((await call(path, { user })).body.data.datasets as { name: string; owner: unknown }[]).map((row) => [row.name, row.owner]));
 
   beforeEach(() => {
-    jest.mocked(lookupOwners).mockReset();
-    jest.mocked(lookupOwners).mockImplementation(async (ids) => new Map([...identities].filter(([id]) => ids.includes(id))));
+    jest.mocked(lookupOwnerIdentities).mockReset();
+    jest.mocked(lookupOwnerIdentities).mockImplementation(async (owners) => new Map([...identities].filter(([id]) => owners.some((owner) => owner.id === id))));
   });
 
   it('names each person who owns a listed dataset, asking once for the list, and shows a hidden profile as an id', async () => {
     await createDataset({ name: 'Ann set', visibility: 'public' }, OWNER);
     await createDataset({ name: 'Quiet set', visibility: 'public' }, MEMBER);
     // Creating answers with the dataset too, which asks for its own owner.
-    jest.mocked(lookupOwners).mockClear();
+    jest.mocked(lookupOwnerIdentities).mockClear();
 
     const listed = await owners('/api/datasets');
 
     expect(listed['Ann set']).toEqual({ kind: 'user', id: OWNER, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' });
     expect(listed['Quiet set']).toEqual({ kind: 'user', id: MEMBER });
-    expect(lookupOwners).toHaveBeenCalledTimes(1);
+    expect(lookupOwnerIdentities).toHaveBeenCalledTimes(1);
   });
 
-  it('does not look up a group, which keeps showing its name only to its members', async () => {
-    await groupDataset('Team set', MEMBER);
-    await call(`/api/datasets?owner=${GROUP}`, { user: MEMBER });
+  it("names a group with a public page to anyone, and to its members by the name they know it by", async () => {
+    await createDataset({ name: 'Team public', owner: { kind: 'group', id: GROUP }, visibility: 'public' }, GROUP_OWNER);
+    const page = { kind: 'group', id: GROUP, handle: 'team-page', name: 'Team page' };
 
-    expect(jest.mocked(lookupOwners).mock.calls.every(([ids]) => ids.length === 0)).toBe(true);
-    expect((await owners(`/api/datasets?owner=${GROUP}`, MEMBER))['Team set']).toEqual({ kind: 'group', id: GROUP, name: 'Team' });
+    expect((await owners('/api/datasets'))['Team public']).toEqual(page);
+    expect((await owners('/api/datasets', STRANGER))['Team public']).toEqual(page);
+    expect((await owners('/api/datasets', MEMBER))['Team public']).toEqual({ ...page, name: 'Team' });
+  });
+
+  it('keeps a private group dataset to its members, named as they know the group', async () => {
+    await groupDataset('Team set', MEMBER);
+
+    expect((await owners(`/api/datasets?owner=${GROUP}`, MEMBER))['Team set']).toEqual({ kind: 'group', id: GROUP, handle: 'team-page', name: 'Team' });
     expect((await owners(`/api/datasets?owner=${GROUP}`, STRANGER))['Team set']).toBeUndefined();
   });
 
@@ -937,7 +946,7 @@ describe('who owns a dataset', () => {
 
     expect((await call(`/api/datasets/${id}`)).body.data.owner).toMatchObject({ handle: 'ann-lee', name: 'Ann Lee' });
 
-    jest.mocked(lookupOwners).mockResolvedValue(new Map());
+    jest.mocked(lookupOwnerIdentities).mockResolvedValue(new Map());
     expect((await owners('/api/datasets'))['Ann set']).toEqual({ kind: 'user', id: OWNER });
   });
 

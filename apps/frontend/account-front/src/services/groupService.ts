@@ -13,6 +13,13 @@ const groupApi = createApiClient({
   baseUrl: () => getGlobalConfig().GROUP_SERVICE_URL || ''
 });
 
+/** What an owner can set on a group's public page; each part optional. An empty description clears it. */
+export interface GroupPageUpdate {
+  handle?: string;
+  description?: string;
+  profilePublic?: boolean;
+}
+
 const unwrap = <T>(response: ApiResponse<T>): T => response.data;
 
 export const groupService = {
@@ -27,6 +34,10 @@ export const groupService = {
 
   rename: async (groupId: string, name: string): Promise<Group> =>
     unwrap(await groupApi.patch<ApiResponse<Group>>(`/api/groups/${groupId}`, { name })),
+
+  /** The public page: the owner's alone. */
+  updatePage: async (groupId: string, page: GroupPageUpdate): Promise<Group> =>
+    unwrap(await groupApi.patch<ApiResponse<Group>>(`/api/groups/${groupId}`, page)),
 
   remove: (groupId: string): Promise<void> => groupApi.delete<void>(`/api/groups/${groupId}`),
 

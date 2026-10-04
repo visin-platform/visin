@@ -160,6 +160,16 @@ describe('ExplorePage', () => {
     expect(within(card).queryByRole('link', { name: /profile/ })).not.toBeInTheDocument();
   });
 
+  it("links a group with a public page to it, at /g rather than /u", async () => {
+    explore.projects.mockResolvedValue([
+      { ...projects[0], owner: { kind: 'group' as const, id: 'g1', name: 'Road lab', handle: 'road-lab' } },
+    ]);
+    renderPage();
+
+    const link = await screen.findByRole('link', { name: 'Road lab, profile' });
+    expect(link).toHaveAttribute('href', '/g/road-lab');
+  });
+
   it('shows a dataset without a cover as an icon, and counts one image in the singular', async () => {
     explore.datasets.mockResolvedValue([
       { ...datasets[0], _id: 'd2', name: 'Single frame', coverUrl: undefined, imageCount: 1, groups: [] },

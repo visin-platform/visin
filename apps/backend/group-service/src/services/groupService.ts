@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from 'crypto';
-import { ConflictError, ForbiddenError, listResourceEvents, NotFoundError } from '@visin/backend-core';
+import { BadRequestError, ConflictError, ForbiddenError, listResourceEvents, NotFoundError } from '@visin/backend-core';
 import { isValidObjectId } from 'mongoose';
 import { Error as MongooseError } from 'mongoose';
 import { Group, IGroup, IGroupInvitation, GroupRole } from '../models/Group';
@@ -76,7 +76,14 @@ export async function getGroupIfMember(groupId: string, userId: string): Promise
   return group;
 }
 
-export async function updateGroup(groupId: string, actingId: string, updates: { name?: string }): Promise<IGroup> {
+export interface GroupUpdates {
+  name?: string;
+  handle?: string;
+  description?: string;
+  profilePublic?: boolean;
+}
+
+export async function updateGroup(groupId: string, actingId: string, updates: GroupUpdates): Promise<IGroup> {
   const group = await Group.findOne({ _id: groupId, ...NOT_DELETED });
   if (!group) throw new NotFoundError();
   const myRole = memberRole(group, actingId);
@@ -86,8 +93,58 @@ export async function updateGroup(groupId: string, actingId: string, updates: { 
     group.name = String(updates.name).trim();
   }
 
-  await saveGroup(group);
+  // The public page is the owner's: it decides what strangers may know about the group.
+  if (updates.handle !== undefined || updates.description !== undefined || updates.profilePublic !== undefined) {
+    if (myRole !== 'owner') throw new ForbiddenError("Only the group's owner can change its public page");
+    if (updates.handle !== undefined) group.handle = updates.handle;
+    if (updates.description !== undefined) group.description = updates.description || undefined;
+    if (updates.profilePublic !== undefined) group.profilePublic = updates.profilePublic;
+    if (group.profilePublic && !group.handle) throw new BadRequestError('Choose a handle before showing the public page');
+  }
+
+  try {
+    await saveGroup(group);
+  } catch (error) {
+    // The unique index decides who has a handle, however many ask at once.
+    if ((error as { code?: number }).code === 11000) throw new ConflictError('That handle is taken');
+    throw error;
+  }
   return group;
+}
+
+/** What anyone may know of a group that turned its public page on. Never its members. */
+export interface PublicGroup {
+  id: string;
+  handle: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+}
+
+const toPublicGroup = (group: IGroup): PublicGroup => ({
+  id: group._id.toString(),
+  handle: group.handle as string,
+  name: group.name,
+  ...(group.description ? { description: group.description } : {}),
+  createdAt: group.createdAt.toISOString()
+});
+
+const PUBLIC = { profilePublic: true, handle: { $type: 'string' as const }, ...NOT_DELETED };
+
+/** A group's public page by handle. A group that never had one, turned it off, or was deleted reads as not found. */
+export async function getPublicGroup(handle: string): Promise<PublicGroup> {
+  const group = await Group.findOne({ ...PUBLIC, handle });
+  if (!group) throw new NotFoundError('No such group');
+  return toPublicGroup(group);
+}
+
+/**
+ * The name and handle of the groups with a public page, for vision- and dataset-service to show beside what
+ * a group owns. A group without one is simply absent: not even its existence is told.
+ */
+export async function lookupPublicGroups(ids: string[]): Promise<Pick<PublicGroup, 'id' | 'handle' | 'name'>[]> {
+  const groups = await Group.find({ ...PUBLIC, _id: { $in: ids } });
+  return groups.map((group) => ({ id: group._id.toString(), handle: group.handle as string, name: group.name }));
 }
 
 export async function deleteGroup(groupId: string, actingId: string): Promise<void> {

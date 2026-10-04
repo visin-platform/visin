@@ -1,5 +1,5 @@
 import { getUserGroups } from '../clients/projectGroupsClient';
-import { lookupOwners, type OwnerIdentity } from '../clients/authOwnersClient';
+import { lookupOwnerIdentities, type OwnerIdentity } from '../clients/ownerIdentityClient';
 import { QueryFilter } from 'mongoose';
 import {
   atLeast,
@@ -60,7 +60,7 @@ export type ProjectView = Record<string, unknown> & {
   permissions: ProjectPermissions;
 };
 
-/** `owners` is what `lookupOwners` found for a whole list, so a list asks once rather than per row. */
+/** `owners` is what `lookupOwnerIdentities` found for a whole list, so a list asks once rather than per row. */
 export async function toProjectView(
   project: IProject,
   userId: string | undefined,
@@ -69,15 +69,12 @@ export async function toProjectView(
 ): Promise<ProjectView> {
   const held = permission ?? (await projectPermission(project, userId, { trashed: true }));
   const { ownerId: _ownerId, isPublic: _isPublic, __v: _v, ...fields } = project.toObject() as Record<string, unknown>;
-  let identity: Partial<OwnerIdentity> = {};
-  if (project.owner.kind === 'group') {
-    const name = userId
-      ? (await callerGroups.getMyGroups(userId)).find(group => group.groupId === project.owner.id)?.name
-      : undefined;
-    if (name) identity = { name };
-  } else {
-    const { id: _id, ...shown } = (owners ?? (await lookupOwners([project.owner.id]))).get(project.owner.id) ?? { id: '' };
-    identity = shown;
+  // What the owner agreed to show anyone; a group's members also see its name when it has no public page.
+  const { id: _id, ...shown } = (owners ?? (await lookupOwnerIdentities([project.owner]))).get(project.owner.id) ?? { id: '' };
+  let identity: Partial<OwnerIdentity> = shown;
+  if (project.owner.kind === 'group' && userId) {
+    const name = (await callerGroups.getMyGroups(userId)).find(group => group.groupId === project.owner.id)?.name;
+    if (name) identity = { ...shown, name };
   }
   return {
     ...fields,
@@ -115,7 +112,7 @@ export const listProjects = async (userId: string | undefined, filters: GetProje
     ]
   };
   const projects = await Project.find(query).sort({ [sortBy]: sortOrder });
-  const owners = await lookupOwners(projects.filter(project => project.owner.kind === 'user').map(project => project.owner.id));
+  const owners = await lookupOwnerIdentities(projects.map(project => project.owner));
   return Promise.all(projects.map(project => toProjectView(project, userId, undefined, owners)));
 };
 

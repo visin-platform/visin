@@ -1,4 +1,5 @@
 import { z } from '@visin/backend-core';
+import { isValidHandle } from '../services/handle';
 
 const GROUP_ROLES = ['owner', 'admin', 'member'] as const;
 
@@ -6,8 +7,32 @@ export const createGroupBodySchema = z.object({
   name: z.string().trim().min(1, 'name required')
 });
 
-export const updateGroupBodySchema = z.object({
-  name: z.string().trim().min(1, 'name required')
+const groupHandle = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .refine(isValidHandle, 'A handle is 3 to 30 lowercase letters, digits or single hyphens, and not a reserved word');
+
+/**
+ * Any of the group's name and its public page. The name is for an owner or admin; the page (handle,
+ * description, and whether it is shown) is the owner's alone, which the service enforces.
+ */
+export const updateGroupBodySchema = z
+  .object({
+    name: z.string().trim().min(1, 'name required').optional(),
+    handle: groupHandle.optional(),
+    description: z.string().trim().max(280).optional(),
+    profilePublic: z.boolean().optional()
+  })
+  .refine((body) => Object.values(body).some((value) => value !== undefined), 'Nothing to change');
+
+export const handleParamsSchema = z.object({
+  handle: z.string().trim().toLowerCase().min(1).max(60)
+});
+
+/** vision- and dataset-service ask who owns what they list, in one call. */
+export const publicGroupsBodySchema = z.object({
+  ids: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid group id')).min(1).max(100)
 });
 
 /** With `userId`, an invitation addressed to that account; without, a link anyone holding it can accept. */
