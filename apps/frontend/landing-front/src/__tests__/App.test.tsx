@@ -45,11 +45,11 @@ describe('App routes', () => {
   const pitch = () =>
     screen.queryByRole('heading', { level: 1, name: /a clear view of your computer vision work/i });
 
-  it('sends the front page to the app, where what people published is shown', () => {
+  it('shows the landing page at / even when the shell address is configured', () => {
     render(<App />);
 
-    expect(redirectTo).toHaveBeenCalledWith('http://shell.test');
-    expect(pitch()).not.toBeInTheDocument();
+    expect(redirectTo).not.toHaveBeenCalled();
+    expect(pitch()).toBeInTheDocument();
   });
 
   it('keeps the pitch at the front page of a deployment with no app to send anyone to', () => {
