@@ -1,4 +1,12 @@
 # Visin Changelog
+## [1.30.0](https://github.com/visin-platform/visin/compare/v1.29.0...v1.30.0) (2026-10-04)
+
+
+### Features
+
+* update readme ([03ee5dd](https://github.com/visin-platform/visin/commit/03ee5dd5624f6bd959b976f5da0ce73241508d2a))
+* use different landing page ([225b0dc](https://github.com/visin-platform/visin/commit/225b0dca3e80453f34cea14a5448cc37938707bf))
+
 ## [1.29.0](https://github.com/visin-platform/visin/compare/v1.28.0...v1.29.0) (2026-10-04)
 
 
