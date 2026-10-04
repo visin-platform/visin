@@ -127,6 +127,10 @@
         "type": "string",
         "pattern": "^[0-9a-fA-F]{24}$"
       },
+      "visibility": {
+        "type": "string",
+        "const": "public"
+      },
       "page": {
         "default": 1,
         "type": "integer",

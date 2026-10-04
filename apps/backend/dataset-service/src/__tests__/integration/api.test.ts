@@ -164,6 +164,10 @@ describe('who can see a dataset', () => {
     expect(await names(OWNER)).toEqual(['Mine only', 'Public set']);
     expect(await names(MEMBER)).toEqual(['Public set', 'Team set']);
     expect(await names(OWNER, '?owner=me')).toEqual(['Mine only', 'Public set']);
+    // Explore asks for public ones only, so a member's own private datasets do not mix in.
+    expect(await names(OWNER, '?visibility=public')).toEqual(['Public set']);
+    expect(await names(MEMBER, '?visibility=public')).toEqual(['Public set']);
+    expect((await call('/api/datasets?visibility=private', { user: OWNER })).status).toBe(400);
     // An anonymous visitor owns nothing, even among public datasets.
     expect(await names(undefined, '?owner=me')).toEqual([]);
     expect(await names(MEMBER, `?owner=${GROUP}`)).toEqual(['Team set']);

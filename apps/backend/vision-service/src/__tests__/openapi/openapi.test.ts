@@ -17,6 +17,7 @@ import * as comparisonSchemas from '../../validation/comparisonSchemas';
 import * as configSchemas from '../../validation/configSchemas';
 import * as epochSchemas from '../../validation/epochSchemas';
 import * as evaluationSchemas from '../../validation/evaluationSchemas';
+import * as exploreSchemas from '../../validation/exploreSchemas';
 import * as findingSchemas from '../../validation/findingSchemas';
 import * as modelRegistrySchemas from '../../validation/modelRegistrySchemas';
 import * as projectSchemas from '../../validation/projectSchemas';
@@ -45,6 +46,7 @@ const nameOf = schemaNamer([
   configSchemas,
   epochSchemas,
   evaluationSchemas,
+  exploreSchemas,
   findingSchemas,
   modelRegistrySchemas,
   projectSchemas,

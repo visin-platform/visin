@@ -148,6 +148,7 @@ export const listDatasets = async (access: DatasetAccess, query: ListDatasetsQue
     $and: [
       await access.filter('read'),
       ownerFilter(access, query.owner, query.user),
+      query.visibility ? { visibility: query.visibility } : {},
       query.search ? { name: { $regex: escapeRegex(query.search), $options: 'i' } } : {}
     ]
   } as QueryFilter<IDataset>;

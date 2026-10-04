@@ -44,7 +44,7 @@ const toProject = (project: { _id: unknown; name: string; slug?: string }): Acti
 });
 
 /** Of these ids, the public projects that are not in the trash, by id. Anything that is not an id is not one. */
-async function publicProjectsAmong(ids: string[]): Promise<Map<string, ActivityProject>> {
+export async function publicProjectsAmong(ids: string[]): Promise<Map<string, ActivityProject>> {
   const valid = [...new Set(ids)].filter((id) => isValidObjectId(id));
   const found = await Project.find({ _id: { $in: valid }, visibility: 'public', trashedAt: null }).select('name slug');
   return new Map(found.map((project) => [String(project._id), toProject(project)]));

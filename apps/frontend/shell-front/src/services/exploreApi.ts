@@ -70,6 +70,34 @@ export interface ExploreProject {
   visibility: 'private' | 'public';
   owner: ExploreOwner;
   updatedAt: string;
+  /** Runs in it and when the latest started: only the public catalogue says. */
+  runs?: number;
+  lastRunAt?: string;
+}
+
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+/** What the public catalogue can be asked: words, an order, a page. */
+export interface CatalogueQuery {
+  search?: string;
+  page: number;
+  limit: number;
+}
+
+/** A finding in a public project, as Explore's side panel lists it. */
+export interface PublicFinding {
+  id: string;
+  title: string;
+  authorKind: 'person' | 'assistant';
+  authorLabel: string;
+  createdAt: string;
+  project: { id: string; name: string; slug?: string };
+  trainingId?: string;
 }
 
 /** A dataset as Explore shows it. */
@@ -114,8 +142,8 @@ export const ACTIVITY_LIMIT = 30;
 
 const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
 
-// Everything here is readable without an account; the session cookie only widens it
-// to what the viewer's groups share, which Explore then filters back out.
+// Everything here is readable without an account. The profile lists ask the member-aware endpoints and keep
+// only what is public; Explore asks the public catalogue, which is the same for everyone.
 const visionApi = createApiClient({
   baseUrl: () => `${stripTrailingSlash(getGlobalConfig().VISION_API_URL ?? '')}/api`
 });
@@ -176,6 +204,36 @@ export const exploreApi = {
       .flatMap((outcome) => (outcome.status === 'fulfilled' ? outcome.value.data : []))
       .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
       .slice(0, limit);
+  },
+
+  /** The public projects, a page at a time, with owners, run counts and when the latest run started. */
+  async publicProjects(query: CatalogueQuery & { sort: 'updated' | 'created' }): Promise<{ projects: ExploreProject[]; pagination: Pagination }> {
+    const params = new URLSearchParams({ sort: query.sort, page: String(query.page), limit: String(query.limit) });
+    if (query.search) params.set('search', query.search);
+    const { data } = await visionApi.get<
+      Envelope<{
+        projects: (Omit<ExploreProject, '_id' | 'visibility'> & { id: string })[];
+        pagination: Pagination;
+      }>
+    >(`/public/projects?${params}`, { skipAuthRedirect: true });
+    return {
+      projects: data.projects.map(({ id, ...project }) => ({ ...project, _id: id, visibility: 'public' as const })),
+      pagination: data.pagination
+    };
+  },
+
+  /** The public datasets, a page at a time, newest change first. */
+  async publicDatasets(query: CatalogueQuery): Promise<{ datasets: ExploreDataset[]; pagination: Pagination }> {
+    const params = new URLSearchParams({ visibility: 'public', page: String(query.page), limit: String(query.limit) });
+    if (query.search) params.set('search', query.search);
+    return (
+      await datasetApi.get<Envelope<{ datasets: ExploreDataset[]; pagination: Pagination }>>(`?${params}`, { skipAuthRedirect: true })
+    ).data;
+  },
+
+  /** The latest findings in public projects. */
+  async publicFindings(limit: number): Promise<PublicFinding[]> {
+    return (await visionApi.get<Envelope<PublicFinding[]>>(`/public/findings?limit=${limit}`, { skipAuthRedirect: true })).data;
   },
 
   /** A person's public page, or null where there is none: no such handle, or the person hid theirs. */

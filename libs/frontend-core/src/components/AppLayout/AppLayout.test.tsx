@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { AppLayout, type AppLayoutNavGroup, type AppLayoutNavItem, type AppLayoutUser } from './AppLayout';
 import { VisinThemeProvider } from '../ColorMode';
@@ -271,29 +271,21 @@ describe('AppLayout', () => {
       expect(screen.getByRole('heading', { level: 1, name: 'Groups' })).toBeInTheDocument();
     });
 
-    it('steps through Auto, Light and Dark from the menu, and stays open to show it', async () => {
-      render(
-        <VisinThemeProvider>
-          <MemoryRouter initialEntries={['/projects']}>
-            <AppLayout appName="Visin App" navGroups={navGroups} user={null} onLogout={onLogout}>
-              <div />
-            </AppLayout>
-          </MemoryRouter>
-        </VisinThemeProvider>
-      );
+    it('has no appearance item: that moved to the top bar, where a visitor can reach it too', () => {
+      renderAt('/projects');
 
       openAccount();
-      const appearance = () => screen.getByRole('menuitem', { name: /^Appearance/ });
-      expect(appearance()).toHaveAccessibleName('Appearance: Auto. Switch to Light');
 
-      fireEvent.click(appearance());
-      expect(appearance()).toHaveAccessibleName('Appearance: Light. Switch to Dark');
-      fireEvent.click(appearance());
+      expect(screen.queryByRole('menuitem', { name: /Appearance/ })).not.toBeInTheDocument();
+    });
 
-      await waitFor(() => expect(document.documentElement).toHaveAttribute('data-color-scheme', 'dark'));
-      expect(screen.getByRole('menu', { name: 'Account' })).toBeInTheDocument();
-      fireEvent.click(appearance());
-      expect(appearance()).toHaveAccessibleName('Appearance: Auto. Switch to Light');
+    it('ends in Logout without a stray divider where Account has no sections', () => {
+      renderAt('/projects', undefined, { accountItems: [] });
+
+      openAccount();
+
+      expect(screen.getAllByRole('separator')).toHaveLength(1);
+      expect(screen.getByRole('menuitem', { name: 'Logout' })).toBeInTheDocument();
     });
 
     it('is in the top bar, leaving the rail to places', () => {
@@ -356,6 +348,49 @@ describe('AppLayout', () => {
 
       expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('appearance', () => {
+    const renderThemed = (extraProps: Partial<React.ComponentProps<typeof AppLayout>> = {}) =>
+      render(
+        <VisinThemeProvider>
+          <MemoryRouter initialEntries={['/projects']}>
+            <AppLayout appName="Visin App" navGroups={navGroups} user={null} onLogout={onLogout} {...extraProps}>
+              <div />
+            </AppLayout>
+          </MemoryRouter>
+        </VisinThemeProvider>
+      );
+    const appearance = () => screen.getByRole('button', { name: /^Appearance/ });
+
+    it('steps through Auto, Light and Dark from the top bar, and says what comes next', async () => {
+      renderThemed();
+      expect(appearance()).toHaveAccessibleName('Appearance: Auto. Switch to Light');
+
+      fireEvent.click(appearance());
+      expect(appearance()).toHaveAccessibleName('Appearance: Light. Switch to Dark');
+      fireEvent.click(appearance());
+
+      await waitFor(() => expect(document.documentElement).toHaveAttribute('data-color-scheme', 'dark'));
+      expect(appearance()).toHaveAccessibleName('Appearance: Dark. Switch to Auto');
+      fireEvent.click(appearance());
+      expect(appearance()).toHaveAccessibleName('Appearance: Auto. Switch to Light');
+    });
+
+    it('is there for a visitor, who has no account menu, and while the session is still being checked', () => {
+      renderThemed({ isAuthenticated: false });
+      expect(appearance()).toBeInTheDocument();
+      cleanup();
+
+      renderThemed({ authPending: true });
+      expect(appearance()).toBeInTheDocument();
+    });
+
+    it('is there for a signed-in member too', () => {
+      renderThemed({ user: { name: 'Test User' } });
+
+      expect(appearance()).toBeInTheDocument();
     });
   });
 

@@ -4,7 +4,7 @@ import { ColorModeSetting } from '@visin/frontend-core';
 
 /**
  * Light, dark, or whatever the device is set to. The same setting as the
- * Appearance item in the account menu, here where settings are looked for.
+ * appearance button in the top bar, here where settings are looked for.
  */
 const AppearanceCard: React.FC = () => (
   <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 4 }, borderRadius: '16px' }}>

@@ -437,6 +437,16 @@
             }
           },
           {
+            "name": "visibility",
+            "in": "query",
+            "required": false,
+            "description": "`public` keeps only the datasets anyone can open, so your own private ones do not mix in. What Explore lists.",
+            "schema": {
+              "type": "string",
+              "const": "public"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "required": false,

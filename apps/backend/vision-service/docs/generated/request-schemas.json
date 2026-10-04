@@ -2596,6 +2596,17 @@
       "project"
     ]
   },
+  "PublicFindingsQuery": {
+    "type": "object",
+    "properties": {
+      "limit": {
+        "default": 5,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20
+      }
+    }
+  },
   "PublicLeaderboardParams": {
     "type": "object",
     "properties": {
@@ -2612,6 +2623,34 @@
       "slug",
       "version"
     ]
+  },
+  "PublicProjectsQuery": {
+    "type": "object",
+    "properties": {
+      "search": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "sort": {
+        "default": "updated",
+        "type": "string",
+        "enum": [
+          "updated",
+          "created"
+        ]
+      },
+      "page": {
+        "default": 1,
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "limit": {
+        "default": 12,
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 50
+      }
+    }
   },
   "RecordedLeaderboardQuery": {
     "type": "object",

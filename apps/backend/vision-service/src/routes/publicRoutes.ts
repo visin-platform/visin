@@ -7,6 +7,8 @@ import {
   getPublicLeaderboards
 } from '../controllers/publicLeaderboardController';
 import { getPublicActivity } from '../controllers/publicActivityController';
+import { getPublicFindings, getPublicProjects } from '../controllers/publicExploreController';
+import { publicFindingsQuerySchema, publicProjectsQuerySchema } from '../validation/exploreSchemas';
 import { activityQuerySchema } from '../validation/activitySchemas';
 import { publicBadgeParamsSchema, publicBadgeQuerySchema, publicLeaderboardParamsSchema, leaderboardPageQuerySchema, leaderboardQuerySchema } from '../validation/evaluationSchemas';
 
@@ -37,6 +39,10 @@ router.get(
   getPublicLeaderboard
 );
 router.get('/evaluations/:id', getPublicEvaluation);
+// The public project catalogue behind Explore: paged, with owners and run counts, the same for everyone.
+router.get('/projects', validateRequest({ query: publicProjectsQuerySchema }), getPublicProjects);
+// The latest findings in public projects, for the same page's side panel.
+router.get('/findings', validateRequest({ query: publicFindingsQuerySchema }), getPublicFindings);
 // What a person or a group has been doing in public, derived on each request (so never stale, and a project made
 // private is gone from it at once). See the service.
 router.get('/activity', validateRequest({ query: activityQuerySchema }), getPublicActivity);

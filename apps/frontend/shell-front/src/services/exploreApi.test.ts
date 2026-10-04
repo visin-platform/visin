@@ -60,6 +60,55 @@ describe('exploreApi', () => {
     expect(get).toHaveBeenCalledWith('https://dataset-api.test/api/datasets?limit=24', undefined);
   });
 
+  describe('the public catalogue', () => {
+    const card = { id: 'p1', name: 'Window ablations', owner: { kind: 'user', id: 'u1' }, createdAt: 'c', updatedAt: 'u', runs: 2, lastRunAt: 'l' };
+
+    it('reads a page of public projects, with the id as _id and visibility stated, so the cards need only one shape', async () => {
+      get.mockResolvedValue({ success: true, data: { projects: [card], pagination: { page: 2, limit: 12, total: 13, pages: 2 } } });
+
+      const result = await exploreApi.publicProjects({ search: 'swin', sort: 'created', page: 2, limit: 12 });
+
+      expect(get).toHaveBeenCalledWith(
+        'https://vision-api.test/api/public/projects?sort=created&page=2&limit=12&search=swin',
+        { skipAuthRedirect: true }
+      );
+      expect(result.pagination).toEqual({ page: 2, limit: 12, total: 13, pages: 2 });
+      expect(result.projects).toEqual([
+        { _id: 'p1', name: 'Window ablations', owner: { kind: 'user', id: 'u1' }, createdAt: 'c', updatedAt: 'u', runs: 2, lastRunAt: 'l', visibility: 'public' },
+      ]);
+    });
+
+    it('leaves the search out when there is none', async () => {
+      get.mockResolvedValue({ success: true, data: { projects: [], pagination: { page: 1, limit: 12, total: 0, pages: 0 } } });
+
+      await exploreApi.publicProjects({ sort: 'updated', page: 1, limit: 12 });
+
+      expect(get).toHaveBeenCalledWith('https://vision-api.test/api/public/projects?sort=updated&page=1&limit=12', { skipAuthRedirect: true });
+    });
+
+    it('reads a page of public datasets by asking for public ones only', async () => {
+      const data = { datasets: [{ _id: 'd1' }], pagination: { page: 1, limit: 12, total: 1, pages: 1 } };
+      get.mockResolvedValue({ success: true, data });
+
+      await expect(exploreApi.publicDatasets({ search: 'harbour', page: 1, limit: 12 })).resolves.toEqual(data);
+      expect(get).toHaveBeenCalledWith(
+        'https://dataset-api.test/api/datasets?visibility=public&page=1&limit=12&search=harbour',
+        { skipAuthRedirect: true }
+      );
+
+      await exploreApi.publicDatasets({ page: 3, limit: 5 });
+      expect(get).toHaveBeenLastCalledWith('https://dataset-api.test/api/datasets?visibility=public&page=3&limit=5', { skipAuthRedirect: true });
+    });
+
+    it('reads the latest findings of public projects', async () => {
+      const rows = [{ id: 'f1', title: 'x' }];
+      get.mockResolvedValue({ success: true, data: rows });
+
+      await expect(exploreApi.publicFindings(4)).resolves.toEqual(rows);
+      expect(get).toHaveBeenCalledWith('https://vision-api.test/api/public/findings?limit=4', { skipAuthRedirect: true });
+    });
+  });
+
   describe('activity', () => {
     const project = { id: 'p1', name: 'Window ablations' };
     const lines = (at: string): ActivityItem[] => [{ kind: 'project.created', at, project }];

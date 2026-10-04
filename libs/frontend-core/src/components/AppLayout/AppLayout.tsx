@@ -137,7 +137,8 @@ const linkProps = (item: AppLayoutNavItem) =>
  * thumb; the shown group's sections sit in a bar above the content, or in a
  * dropdown on phones. The rail is for places; who you are and what you can do
  * sit at the end of that bar: search, Sign in / Sign up for a visitor, and for
- * a member a New menu and the account menu, the only place account actions live.
+ * a member a New menu and the account menu, the only place account actions live. The appearance
+ * button (Auto, Light, Dark) is there for everyone, signed in or not.
  *
  * Every entry carries a visible label. The sidebar this replaced hid its menu
  * behind a burger button on phones, and collapsed on desktop to an icon rail
@@ -263,24 +264,7 @@ export function AppLayout({
     </MenuItem>,
     <Divider key="who-divider" />,
     ...accountItems.map((item) => menuItem(item, closeAccount)),
-    ...(accountItems.length > 0 ? [<Divider key="appearance-divider" />] : []),
-    // One item that steps through Auto, Light and Dark, and leaves the menu open
-    // so the change can be seen. A toggle group here could not be reached from
-    // the keyboard: Tab closes a menu.
-    <MenuItem
-      key="appearance"
-      onClick={() => setMode(nextColorMode)}
-      aria-label={`Appearance: ${colorMode.label}. Switch to ${COLOR_MODE_OPTIONS.find((option) => option.value === nextColorMode)?.label}`}
-    >
-      <ListItemIcon>
-        <colorMode.Icon fontSize="small" />
-      </ListItemIcon>
-      <ListItemText>Appearance</ListItemText>
-      <Typography variant="body2" sx={{ color: 'text.secondary', ml: 2 }}>
-        {colorMode.label}
-      </Typography>
-    </MenuItem>,
-    <Divider key="logout-divider" />,
+    ...(accountItems.length > 0 ? [<Divider key="logout-divider" />] : []),
     <MenuItem
       key="logout"
       onClick={() => {
@@ -473,10 +457,25 @@ export function AppLayout({
     </>
   );
 
+  // One button that steps through Auto, Light and Dark, in the bar rather than a menu: a visitor has no
+  // account menu, and the page they are reading is the one they want to change.
+  const nextColorModeLabel = COLOR_MODE_OPTIONS.find((option) => option.value === nextColorMode)?.label;
+  const themeButton = (
+    <IconButton
+      onClick={() => setMode(nextColorMode)}
+      aria-label={`Appearance: ${colorMode.label}. Switch to ${nextColorModeLabel}`}
+      title={`Appearance: ${colorMode.label}`}
+      sx={{ color: chrome.inkMuted, '&:hover': { color: chrome.ink } }}
+    >
+      <colorMode.Icon />
+    </IconButton>
+  );
+
   // Who the viewer is and what they can do, at the end of the bar: the rail is for places.
   const headerActions = (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: mobile ? 0.5 : 1.5, flexShrink: 0, ml: 'auto' }}>
       {searchTrigger}
+      {themeButton}
       {!authPending && visitorActions}
       {!authPending && createMenu}
       {!authPending && isAuthenticated && avatarButton}

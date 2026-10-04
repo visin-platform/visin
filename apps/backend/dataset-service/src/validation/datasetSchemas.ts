@@ -57,6 +57,8 @@ export const listDatasetsQuerySchema = z.object({
   owner: z.union([z.literal('me'), objectId]).optional(),
   /** a person's id: only the datasets that person owns, of those the caller may read (a profile's list) */
   user: objectId.optional(),
+  /** `public`: only the datasets anyone can open, so the caller's own private ones do not mix in (Explore) */
+  visibility: z.literal('public').optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(30)
 });

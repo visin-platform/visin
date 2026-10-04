@@ -58,6 +58,8 @@ tags:
     description: Anonymous, read-only rankings of the results a manager chose to publish
   - name: Public activity
     description: Anonymous, read-only feed of what a person or a group has done in public projects
+  - name: Public catalogue
+    description: Anonymous, read-only list of the public projects, as the app's Explore page shows them
   - name: API Tokens
     description: API token management for programmatic access
 
@@ -876,6 +878,19 @@ components:
           type: string
           format: date-time
 
+    PublicProjectCard:
+      type: object
+      required: [id, name, owner, createdAt, updatedAt, runs]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        owner: { $ref: '#/components/schemas/ResourceOwner' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        runs: { type: integer, minimum: 0, description: Runs in the project }
+        lastRunAt: { type: string, format: date-time, description: When the latest run started; absent with no runs }
     ActivityProject:
       type: object
       required: [id, name]
@@ -4756,6 +4771,97 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/projects:
+    get:
+      tags: [Public catalogue]
+      summary: List the public projects
+      operationId: getPublicProjects
+      description: |
+        The projects anyone can open, a page at a time, as cards: owner (as far as the owner agreed to be shown), the number
+        of runs and when the latest started. The same for everyone who asks, so a signed-in member's own private projects
+        never mix in. Anonymous, never cached, and rate limited by client address.
+      security:
+        - {}
+      parameters:
+        - name: search
+          in: query
+          description: Words in the name or description.
+          schema: { $ref: ./generated/request-schemas.json#/PublicProjectsQuery/properties/search }
+        - name: sort
+          in: query
+          description: "`updated` (default): last edited first. `created`: newest first."
+          schema: { $ref: ./generated/request-schemas.json#/PublicProjectsQuery/properties/sort }
+        - name: page
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/PublicProjectsQuery/properties/page }
+        - name: limit
+          in: query
+          description: Projects per page (default 12, at most 50).
+          schema: { $ref: ./generated/request-schemas.json#/PublicProjectsQuery/properties/limit }
+      responses:
+        '200':
+          description: One page of public projects
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [projects, pagination]
+                    properties:
+                      projects:
+                        type: array
+                        items: { $ref: '#/components/schemas/PublicProjectCard' }
+                      pagination: { $ref: '#/components/schemas/Pagination' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/findings:
+    get:
+      tags: [Public catalogue]
+      summary: The latest findings in public projects
+      operationId: getPublicFindings
+      description: |
+        Written conclusions, newest first, from public projects only, the same for everyone who asks: a member's findings in
+        their own private projects are not here. Never the body, and never which account wrote one. Anonymous, never cached.
+      security:
+        - {}
+      parameters:
+        - name: limit
+          in: query
+          description: Findings to return (default 5, at most 20).
+          schema: { $ref: ./generated/request-schemas.json#/PublicFindingsQuery/properties/limit }
+      responses:
+        '200':
+          description: The findings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, title, authorKind, authorLabel, createdAt, project]
+                      properties:
+                        id: { type: string }
+                        title: { type: string }
+                        authorKind: { type: string, enum: [person, assistant] }
+                        authorLabel: { type: string }
+                        createdAt: { type: string, format: date-time }
+                        project: { $ref: '#/components/schemas/ActivityProject' }
+                        trainingId: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/Error' }
         default: { $ref: '#/components/responses/Error' }
 
   /public/activity:
