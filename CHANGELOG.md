@@ -1,4 +1,21 @@
 # Visin Changelog
+## [1.28.0](https://github.com/visin-platform/visin/compare/v1.27.1...v1.28.0) (2026-10-04)
+
+
+### Features
+
+* add evaluation leaderboards with unified verification and simplify public config ([adf396f](https://github.com/visin-platform/visin/commit/adf396fcc32aa29ad8d032f81b184b4c56e93c11))
+
+
+### Bug Fixes
+
+* correct OpenAPI descriptions and single-provider schemas ([4bdcd7b](https://github.com/visin-platform/visin/commit/4bdcd7b566835da2c2344ea0b1be9410bd6ea040))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.10.0 ([3c72ee2](https://github.com/visin-platform/visin/commit/3c72ee2015221bb51bbfaf1f7ee8de4c5e37fdb0))
+
 ### [1.27.1](https://github.com/visin-platform/visin/compare/v1.27.0...v1.27.1) (2026-10-03)
 
 
