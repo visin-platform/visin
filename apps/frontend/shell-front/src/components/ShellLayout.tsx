@@ -62,9 +62,8 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       onLogin={login}
       onSignup={signup}
       onLogout={logout}
-      // Projects are what the vision remote can search today; the box grows to the rest.
-      onSearch={config.VISION_FRONT_URL ? (query) => navigate(`/projects?search=${encodeURIComponent(query)}`) : undefined}
-      searchPlaceholder="Search projects…"
+      onSearch={(query) => navigate(`/search?q=${encodeURIComponent(query)}`)}
+      searchPlaceholder="Search Visin…"
       createItems={CREATE_ITEMS}
       visitorLinks={visitorLinks}
       maxContentWidth={layout.maxContentWidth}

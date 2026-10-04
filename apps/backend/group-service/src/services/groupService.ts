@@ -139,6 +139,26 @@ export async function getPublicGroup(handle: string): Promise<PublicGroup> {
 }
 
 /**
+ * Groups with a public page by the start of their handle or name, for the app's search. A group without one is not
+ * found, whatever it is called, and nothing about its members is ever in the answer.
+ */
+export async function searchPublicGroups(q: string, limit: number): Promise<Pick<PublicGroup, 'id' | 'handle' | 'name' | 'description'>[]> {
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const groups = await Group.find({
+    ...PUBLIC,
+    $or: [{ handle: new RegExp(`^${escaped.toLowerCase()}`) }, { name: new RegExp(`^${escaped}`, 'i') }]
+  })
+    .sort({ handle: 1 })
+    .limit(limit);
+  return groups.map((group) => ({
+    id: group._id.toString(),
+    handle: group.handle as string,
+    name: group.name,
+    ...(group.description ? { description: group.description } : {})
+  }));
+}
+
+/**
  * The name and handle of the groups with a public page, for vision- and dataset-service to show beside what
  * a group owns. A group without one is simply absent: not even its existence is told.
  */

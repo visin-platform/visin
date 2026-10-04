@@ -24,6 +24,22 @@ export interface PublicGroup {
   createdAt: string;
 }
 
+/** A person as the search lists them: enough to name and link them. */
+export interface PersonResult {
+  id: string;
+  handle: string;
+  name: string;
+  picture?: string;
+}
+
+/** A group with a public page, as the search lists it. */
+export interface GroupResult {
+  id: string;
+  handle: string;
+  name: string;
+  description?: string;
+}
+
 /** What anyone may see of an account (auth-service's public page); never the email. */
 export interface PublicUser {
   id: string;
@@ -231,6 +247,18 @@ export const exploreApi = {
     return (
       await datasetApi.get<Envelope<{ datasets: ExploreDataset[]; pagination: Pagination }>>(`?${params}`, { skipAuthRedirect: true })
     ).data;
+  },
+
+  /** People with a public page whose handle or name starts with `query`. */
+  async searchPeople(query: string, limit: number): Promise<PersonResult[]> {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    return (await authApi.get<Envelope<PersonResult[]>>(`/users?${params}`, { skipAuthRedirect: true })).data;
+  },
+
+  /** Groups with a public page whose handle or name starts with `query`. */
+  async searchGroups(query: string, limit: number): Promise<GroupResult[]> {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    return (await groupApi.get<Envelope<GroupResult[]>>(`/public/groups?${params}`, { skipAuthRedirect: true })).data;
   },
 
   /** The latest findings in public projects. */

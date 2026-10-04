@@ -1,4 +1,4 @@
-import { handle, handleParamsSchema, publicUsersBodySchema, updateProfileBodySchema } from '../../validation/authSchemas';
+import { handle, handleParamsSchema, peopleSearchQuerySchema, publicUsersBodySchema, updateProfileBodySchema } from '../../validation/authSchemas';
 
 describe('the public page a person edits', () => {
   it('trims and lowercases a handle, and refuses what is not one', () => {
@@ -46,5 +46,13 @@ describe('the public page a person edits', () => {
     expect(publicUsersBodySchema.safeParse({ ids: [] }).success).toBe(false);
     expect(publicUsersBodySchema.safeParse({ ids: ['x'] }).success).toBe(false);
     expect(publicUsersBodySchema.safeParse({ ids: Array(101).fill(id) }).success).toBe(false);
+  });
+
+  it('wants two to sixty characters to search for, and a limit of one to twenty', () => {
+    expect(peopleSearchQuerySchema.parse({ q: ' ann ' })).toEqual({ q: 'ann', limit: 8 });
+    expect(peopleSearchQuerySchema.parse({ q: 'ann', limit: '20' })).toEqual({ q: 'ann', limit: 20 });
+    for (const query of [{ q: 'a' }, { q: ' a ' }, { q: 'x'.repeat(61) }, {}, { q: 'ann', limit: 0 }, { q: 'ann', limit: 21 }]) {
+      expect(peopleSearchQuerySchema.safeParse(query).success).toBe(false);
+    }
   });
 });

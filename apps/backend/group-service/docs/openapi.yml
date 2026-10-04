@@ -353,6 +353,61 @@ components:
       description: Internal service token for inter-service communication
 
 paths:
+  /api/public/groups:
+    get:
+      tags: [Public pages]
+      summary: Find groups with a public page
+      description: |
+        By the start of a handle or name, in any case. A group whose page is off is not found, whatever it is called, and
+        nothing about its members is ever in the answer. Two characters at least. No sign-in needed.
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 60
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 8
+      responses:
+        '200':
+          description: The groups found, by handle
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, handle, name]
+                      properties:
+                        id:
+                          type: string
+                        handle:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+        '400':
+          description: A query that is too short or too long
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/public/groups/{handle}:
     get:
       tags: [Public pages]

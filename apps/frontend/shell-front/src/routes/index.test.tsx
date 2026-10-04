@@ -30,11 +30,20 @@ vi.mock('../pages/HomePage', () => ({
   HomePage: ({ userName }: { userName?: string }) => <div>home page for {userName}</div>,
 }));
 vi.mock('../pages/ExplorePage', () => ({ ExplorePage: () => <div>explore page</div> }));
+vi.mock('../pages/SearchPage', () => ({ SearchPage: () => <div>search page</div> }));
 
 import ShellRoutes from './index';
 import { forgetRemote } from '../remotes';
 
-const Path = () => <div data-testid="path">{useLocation().pathname}</div>;
+const Path = () => {
+  const { pathname, search } = useLocation();
+  return (
+    <>
+      <div data-testid="path">{pathname}</div>
+      <div data-testid="search">{search}</div>
+    </>
+  );
+};
 
 const renderAt = (path: string) =>
   render(
@@ -80,6 +89,29 @@ describe('ShellRoutes', () => {
 
     expect(screen.getByText('explore page')).toBeInTheDocument();
     expect(screen.getByTestId('path')).toHaveTextContent(/^\/$/);
+  });
+
+  it('takes what a visitor asked of Explore to its one address, rather than dropping it', () => {
+    authState.isAuthenticated = false;
+    renderAt('/explore?q=swin&type=datasets');
+
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/$/);
+    expect(screen.getByTestId('search')).toHaveTextContent('?q=swin&type=datasets');
+  });
+
+  it('keeps what a member asked of Explore where it was', () => {
+    renderAt('/explore?q=swin');
+
+    expect(screen.getByText('explore page')).toBeInTheDocument();
+    expect(screen.getByTestId('search')).toHaveTextContent('?q=swin');
+  });
+
+  it('gives everyone the search page', () => {
+    authState.isAuthenticated = false;
+    renderAt('/search?q=ann');
+
+    expect(screen.getByText('search page')).toBeInTheDocument();
+    expect(screen.getByTestId('path')).toHaveTextContent('/search');
   });
 
   it('waits for the session check before showing Explore too', () => {

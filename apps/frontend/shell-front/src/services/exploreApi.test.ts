@@ -60,6 +60,22 @@ describe('exploreApi', () => {
     expect(get).toHaveBeenCalledWith('https://dataset-api.test/api/datasets?limit=24', undefined);
   });
 
+  it('searches people with a public page, by the start of a handle or name', async () => {
+    const rows = [{ id: 'u1', handle: 'ann-lee', name: 'Ann Lee' }];
+    get.mockResolvedValue({ success: true, data: rows });
+
+    await expect(exploreApi.searchPeople('ann lee', 6)).resolves.toEqual(rows);
+    expect(get).toHaveBeenCalledWith('https://auth.test/auth/users?q=ann+lee&limit=6', { skipAuthRedirect: true });
+  });
+
+  it('searches groups with a public page the same way', async () => {
+    const rows = [{ id: 'g1', handle: 'road-lab', name: 'Road lab' }];
+    get.mockResolvedValue({ success: true, data: rows });
+
+    await expect(exploreApi.searchGroups('road', 6)).resolves.toEqual(rows);
+    expect(get).toHaveBeenCalledWith('https://group.test/api/public/groups?q=road&limit=6', { skipAuthRedirect: true });
+  });
+
   describe('the public catalogue', () => {
     const card = { id: 'p1', name: 'Window ablations', owner: { kind: 'user', id: 'u1' }, createdAt: 'c', updatedAt: 'u', runs: 2, lastRunAt: 'l' };
 

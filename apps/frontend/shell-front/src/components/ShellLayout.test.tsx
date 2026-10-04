@@ -204,21 +204,21 @@ describe('ShellLayout', () => {
       expect(screen.getByRole('menuitem', { name: 'API key' })).toHaveAttribute('href', '/account/api-keys');
     });
 
-    it('searches projects from the box, and from Ctrl+K', () => {
+    it('searches everything from the box, and from Ctrl+K, on the search page', () => {
       renderAt('/datasets');
 
       fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
       fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: 'night driving' } });
       fireEvent.submit(screen.getByRole('search'));
 
-      expect(screen.getByTestId('path')).toHaveTextContent('/projects');
+      expect(screen.getByTestId('path')).toHaveTextContent('/search');
     });
 
-    it('has no search where Vision is not configured to search', () => {
+    it('has the search box whichever services are configured, since people and groups are found elsewhere', () => {
       delete config.VISION_FRONT_URL;
       renderAt('/datasets');
 
-      expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
     });
   });
 });

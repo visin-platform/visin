@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { NotFoundError } from '@visin/backend-core';
 import { User, type IUser } from '../models/User';
 import { ensureHandle } from '../services/handleService';
+import { escapeRegex } from '../utils/escapeRegex';
 
 const PUBLIC_FIELDS = 'handle firstName lastName picture bio links profilePublic showActivity createdAt';
 
@@ -52,4 +53,29 @@ export const lookupPublicUsers = async (req: Request, res: Response): Promise<vo
     })
   );
   res.json({ success: true, data });
+};
+
+/**
+ * People by the start of their handle or of either part of their name, for the app's search. Only accounts with a
+ * public page are found, and only what a listing needs of them: never the email, a bio or links. Handles are stored
+ * in lowercase, so that half of the match can use the handle index.
+ */
+export const searchPublicUsers = async (req: Request, res: Response): Promise<void> => {
+  const { q, limit } = req.query as unknown as { q: string; limit: number };
+  const text = new RegExp(`^${escapeRegex(q)}`, 'i');
+  const users = await User.find({
+    profilePublic: { $ne: false },
+    handle: { $type: 'string' },
+    $or: [{ handle: new RegExp(`^${escapeRegex(q.toLowerCase())}`) }, { firstName: text }, { lastName: text }]
+  })
+    .select(PUBLIC_FIELDS)
+    .sort({ handle: 1 })
+    .limit(limit);
+  res.json({
+    success: true,
+    data: users.map((user) => {
+      const { id, handle, name, picture } = toPublicUser(user);
+      return { id, handle, name, ...(picture ? { picture } : {}) };
+    })
+  });
 };

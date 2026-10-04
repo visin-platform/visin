@@ -201,6 +201,60 @@ describe('handles and public users with in-memory MongoDB', () => {
     });
   });
 
+  describe('GET /auth/users?q=', () => {
+    const find = async (query: string) => {
+      const response = await fetch(`${base}/users?${query}`);
+      return { status: response.status, body: (await response.json()) as { data?: Record<string, unknown>[] } };
+    };
+    const handles = async (query: string) => ((await find(query)).body.data ?? []).map((user) => user.handle);
+
+    beforeEach(async () => {
+      await account('a@example.test', { firstName: 'Ann', lastName: 'Lee', handle: 'ann-lee', picture: 'https://p.test/a.jpg', bio: 'Never listed', links: ['https://ann.example.test'] });
+      await account('b@example.test', { firstName: 'Bob', lastName: 'Annan', handle: 'bob' });
+      await account('c@example.test', { firstName: 'Cara', handle: 'road-cara' });
+      await account('hidden@example.test', { firstName: 'Anna', handle: 'anna-hidden', profilePublic: false });
+      await account('nohandle@example.test', { firstName: 'Anders' });
+    });
+
+    it('finds people by the start of their handle or of either part of their name, in any case', async () => {
+      expect(await handles('q=ann')).toEqual(['ann-lee', 'bob']);
+      expect(await handles('q=ANN')).toEqual(['ann-lee', 'bob']);
+      expect(await handles('q=lee')).toEqual(['ann-lee']);
+      expect(await handles('q=road')).toEqual(['road-cara']);
+      // The start of a word, not a substring.
+      expect(await handles('q=nan')).toEqual([]);
+    });
+
+    it('never finds someone who hid their page, or has no handle to link to', async () => {
+      expect(await handles('q=anna')).toEqual(['bob']);
+      expect(await handles('q=anders')).toEqual([]);
+      expect(JSON.stringify(await find('q=an'))).not.toContain('anna-hidden');
+    });
+
+    it('lists only what a search needs: no email, bio or links', async () => {
+      const { body } = await find('q=ann-lee');
+
+      expect(body.data).toEqual([{ id: expect.any(String), handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/a.jpg' }]);
+      expect(JSON.stringify(body)).not.toMatch(/example\.test|Never listed/);
+    });
+
+    it('reads what was typed as text, not as a pattern', async () => {
+      expect(await handles('q=.%2A')).toEqual([]);
+      expect(await handles('q=a%2B')).toEqual([]);
+    });
+
+    it('stops at the limit, in handle order', async () => {
+      expect(await handles('q=an&limit=1')).toEqual(['ann-lee']);
+    });
+
+    it('wants two characters and a sensible limit, and needs no sign-in', async () => {
+      expect((await find('q=a')).status).toBe(400);
+      expect((await find('')).status).toBe(400);
+      expect((await find('q=ann&limit=21')).status).toBe(400);
+      expect((await find('q=ann')).status).toBe(200);
+    });
+  });
+
   describe('POST /auth/internal/users/public', () => {
     const lookup = async (body: unknown, token: string | null = 'internal-test-token') => {
       const response = await fetch(`${base}/internal/users/public`, {

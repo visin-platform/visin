@@ -2,6 +2,7 @@ import {
   createGroupBodySchema,
   updateGroupBodySchema,
   handleParamsSchema,
+  groupsSearchQuerySchema,
   publicGroupsBodySchema,
   createInvitationBodySchema,
   updateRoleBodySchema,
@@ -39,6 +40,13 @@ describe('groupSchemas', () => {
     expect(handleParamsSchema.parse({ handle: ' Lab ' })).toEqual({ handle: 'lab' });
     expect(handleParamsSchema.safeParse({ handle: '' }).success).toBe(false);
     expect(handleParamsSchema.safeParse({ handle: 'x'.repeat(61) }).success).toBe(false);
+  });
+
+  it('groupsSearchQuerySchema wants two to sixty characters and a limit of one to twenty', () => {
+    expect(groupsSearchQuerySchema.parse({ q: ' lab ' })).toEqual({ q: 'lab', limit: 8 });
+    for (const query of [{ q: 'a' }, { q: 'x'.repeat(61) }, {}, { q: 'lab', limit: 0 }, { q: 'lab', limit: 21 }]) {
+      expect(groupsSearchQuerySchema.safeParse(query).success).toBe(false);
+    }
   });
 
   it('publicGroupsBodySchema wants one to a hundred group ids', () => {

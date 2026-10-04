@@ -68,6 +68,12 @@ export const updateProfileBodySchema = z.object({
   showActivity: z.boolean().optional()
 });
 
+/** Finding a person by the start of their handle or name. Two characters at least, so it cannot page through everyone. */
+export const peopleSearchQuerySchema = z.object({
+  q: z.string().trim().min(2, 'Type at least 2 characters').max(60),
+  limit: z.coerce.number().int().min(1).max(20).default(8)
+});
+
 export const handleParamsSchema = z.object({
   handle: z.string().trim().toLowerCase().min(1).max(60)
 });

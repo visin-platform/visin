@@ -26,6 +26,12 @@ export const updateGroupBodySchema = z
   })
   .refine((body) => Object.values(body).some((value) => value !== undefined), 'Nothing to change');
 
+/** Finding groups by the start of their handle or name. Two characters at least. */
+export const groupsSearchQuerySchema = z.object({
+  q: z.string().trim().min(2, 'Type at least 2 characters').max(60),
+  limit: z.coerce.number().int().min(1).max(20).default(8)
+});
+
 export const handleParamsSchema = z.object({
   handle: z.string().trim().toLowerCase().min(1).max(60)
 });

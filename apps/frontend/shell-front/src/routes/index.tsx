@@ -9,6 +9,7 @@ import { ExplorePage } from '../pages/ExplorePage';
 import { HomePage } from '../pages/HomePage';
 import { GroupProfilePage } from '../pages/GroupProfilePage';
 import { ProfilePage } from '../pages/ProfilePage';
+import { SearchPage } from '../pages/SearchPage';
 import { APPS, appForPath } from '../apps';
 import { forgetRemote, remoteComponent } from '../remotes';
 
@@ -25,14 +26,18 @@ function Home() {
   return isAuthenticated ? <HomePage userName={user?.name} /> : <ExplorePage />;
 }
 
-/** A member's second tab. A visitor's Explore is the front page itself, so there is one address for it. */
+/**
+ * A member's second tab. A visitor's Explore is the front page itself, so there is one address for it; what was
+ * asked of it (search, kind, order) goes with them.
+ */
 function Explore() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { search } = useLocation();
 
   if (isLoading) {
     return <Loader fullHeight={false} />;
   }
-  return isAuthenticated ? <ExplorePage /> : <Navigate to="/" replace />;
+  return isAuthenticated ? <ExplorePage /> : <Navigate to={{ pathname: '/', search }} replace />;
 }
 
 const NotFound = () => (
@@ -85,6 +90,7 @@ function ShellRoutes() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/explore" element={<Explore />} />
+      <Route path="/search" element={<SearchPage />} />
       {/* A person's public page. Shell-owned, like Explore: it spans Vision's projects and the datasets. */}
       <Route path="/u/:handle" element={<ProfilePage />} />
       <Route path="/g/:handle" element={<GroupProfilePage />} />

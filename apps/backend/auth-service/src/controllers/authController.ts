@@ -18,6 +18,7 @@ import {
 } from '../services/sessionService';
 import { User } from '../models/User';
 import { ensureHandle } from '../services/handleService';
+import { escapeRegex } from '../utils/escapeRegex';
 import { assertRegistrationOpen, createFirstUser, needsSetup } from '../services/bootstrapService';
 
 /**
@@ -154,7 +155,6 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, message: 'Logged out successfully' });
 };
 
-const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Accounts whose email, first name or last name starts with `q`, for

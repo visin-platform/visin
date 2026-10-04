@@ -179,6 +179,64 @@ describe('group public pages against in-memory MongoDB', () => {
     });
   });
 
+  describe('GET /api/public/groups?q=', () => {
+    const find = async (query: string) => {
+      const response = await fetch(`${base}/public/groups?${query}`);
+      return { status: response.status, body: (await response.json()) as { data?: Record<string, unknown>[] } };
+    };
+    const handles = async (query: string) => ((await find(query)).body.data ?? []).map((group) => group.handle);
+    const page = async (name: string, handle: string, extra: { description?: string; profilePublic?: boolean } = {}) => {
+      const id = (await createGroup(OWNER, name))._id.toString();
+      await updateGroup(id, OWNER, { handle, ...(extra.description ? { description: extra.description } : {}), profilePublic: extra.profilePublic ?? true });
+      return id;
+    };
+
+    beforeEach(async () => {
+      await page('Road lab', 'road-lab', { description: 'Segmentation' });
+      await page('Harbour team', 'harbour');
+      await page('Quiet group', 'quiet-group', { profilePublic: false });
+      const gone = await page('Road gone', 'road-gone');
+      await deleteGroup(gone, OWNER);
+      await createGroup(OWNER, 'Road without a page');
+    });
+
+    it('finds groups by the start of their handle or name, in any case', async () => {
+      expect(await handles('q=road')).toEqual(['road-lab']);
+      expect(await handles('q=HARBOUR')).toEqual(['harbour']);
+      expect(await handles('q=team')).toEqual([]);
+      // The start of the name, which a handle does not carry.
+      expect(await handles('q=Harbour%20te')).toEqual(['harbour']);
+    });
+
+    it('does not find a group whose page is off, that was deleted, or that has no page, whatever it is called', async () => {
+      expect(await handles('q=quiet')).toEqual([]);
+      expect(await handles('q=road-gone')).toEqual([]);
+      expect(await handles('q=Road%20without')).toEqual([]);
+    });
+
+    it('lists a name, a handle and a description, and nothing about members', async () => {
+      const { body } = await find('q=road-lab');
+
+      expect(body.data).toEqual([{ id: expect.any(String), handle: 'road-lab', name: 'Road lab', description: 'Segmentation' }]);
+      expect(JSON.stringify(body)).not.toMatch(new RegExp(`${OWNER}|members`));
+    });
+
+    it('reads what was typed as text, and stops at the limit', async () => {
+      expect(await handles('q=.%2A')).toEqual([]);
+      expect(await handles('q=ha&limit=1')).toEqual(['harbour']);
+      await page('Hat club', 'hats');
+      expect(await handles('q=ha&limit=1')).toEqual(['harbour']);
+      expect(await handles('q=ha')).toEqual(['harbour', 'hats']);
+    });
+
+    it('wants two characters and a sensible limit, and needs no sign-in', async () => {
+      expect((await find('q=r')).status).toBe(400);
+      expect((await find('')).status).toBe(400);
+      expect((await find('q=road&limit=21')).status).toBe(400);
+      expect((await find('q=road')).status).toBe(200);
+    });
+  });
+
   describe('POST /api/internal/groups/public', () => {
     const lookup = async (body: unknown, token: string | null = 'internal-test-token') => {
       const response = await fetch(`${base}/internal/groups/public`, {
