@@ -1,4 +1,31 @@
 # Visin Changelog
+## [1.29.0](https://github.com/visin-platform/visin/compare/v1.28.0...v1.29.0) (2026-10-04)
+
+
+### Features
+
+* add browsable content to explore ([7d72ed5](https://github.com/visin-platform/visin/commit/7d72ed5472ce43b0f2c42ea15f368ffedc709d0d))
+* add project readmes ([ccac1db](https://github.com/visin-platform/visin/commit/ccac1db1a9bb03d0ea3c20683d77b7c03703475f))
+* add public group profile ([ee9ce8a](https://github.com/visin-platform/visin/commit/ee9ce8a65413a179b70dbf6a4f9d23d1a5318b17))
+* add public share previews and sitemaps ([fa3e2c1](https://github.com/visin-platform/visin/commit/fa3e2c17358ac7be5261b62198607a501a170e43))
+* add public user page ([2f58d00](https://github.com/visin-platform/visin/commit/2f58d000882bcd0008ca823892b7b4483fe7b35d))
+* add recently visited list ([902743d](https://github.com/visin-platform/visin/commit/902743d331bb1ddd79bf14529b6a2bb9f4c27bbc))
+* add user activity feed ([8bb3bcd](https://github.com/visin-platform/visin/commit/8bb3bcd5f641589b327e861368eb6e1b32c48972))
+* extend search to other domains ([8171e57](https://github.com/visin-platform/visin/commit/8171e574c5be850037d8f0c763b9b1d03d51c226))
+* rank projects by recent activity ([0b89723](https://github.com/visin-platform/visin/commit/0b89723d919286dfbceb97fd42fdc833b1dea021))
+* rework landing page ([23564ad](https://github.com/visin-platform/visin/commit/23564adff93b5e9ff01f872aba28343702895cbf))
+
+
+### Bug Fixes
+
+* standardize MongoDB setup and prevent download races ([a5c8878](https://github.com/visin-platform/visin/commit/a5c8878061b783fe9d661778eea86be09e9cc916))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.11.0 ([7b1e2f8](https://github.com/visin-platform/visin/commit/7b1e2f8de9554f459657e9e37b41b23b7efa366e))
+* **release:** @visin/frontend-core 1.14.0 ([8a146b0](https://github.com/visin-platform/visin/commit/8a146b082dd8c7b945fb16c066d8db5fcb299008))
+
 ## [1.28.0](https://github.com/visin-platform/visin/compare/v1.27.1...v1.28.0) (2026-10-04)
 
 
