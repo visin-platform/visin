@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@visin/backend-core": "1.9.1",
+    "@visin/backend-core": "1.10.0",
     "express": "^5.2.1",
     "mongoose": "~9.10.2"
   },
