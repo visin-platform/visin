@@ -30,6 +30,8 @@ describe('authRoutes', () => {
     expect(find('get', '/verify')).toBeDefined();
     expect(find('post', '/internal/invalidate-tokens')).toBeDefined();
     expect(find('get', '/internal/users/search')).toBeDefined();
+    expect(find('post', '/internal/users/public')).toBeDefined();
+    expect(find('get', '/users/:handle')).toBeDefined();
     expect(find('get', '/admin/users')).toBeDefined();
     expect(find('post', '/api-keys')).toBeDefined();
     expect(find('get', '/api-keys')).toBeDefined();
@@ -42,7 +44,7 @@ describe('authRoutes', () => {
     expect(find('get', '/sessions')!.handlerCount).toBe(2);
     expect(find('post', '/sessions/revoke-others')!.handlerCount).toBe(2);
     expect(find('delete', '/sessions/:id')!.handlerCount).toBe(3);
-    expect(routes).toHaveLength(25);
+    expect(routes).toHaveLength(27);
   });
 
   it('lets nobody reach an API key without a session', () => {

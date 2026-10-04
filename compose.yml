@@ -160,6 +160,8 @@ services:
       FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       # Project editor groups are read from group-service on every signed-in request.
       GROUP_SERVICE_URL: http://group-service:5006
+      # Where the names and avatars of project owners come from.
+      AUTH_SERVICE_URL: http://auth-service:5001
       # The MCP server OAuth access tokens must be minted for; unset, they are refused.
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009
 
@@ -192,6 +194,8 @@ services:
       PORT: 5010
       VISION_SERVICE_URL: http://vision-service:4010
       GROUP_SERVICE_URL: http://group-service:5006
+      # Where the names and avatars of dataset owners come from.
+      AUTH_SERVICE_URL: http://auth-service:5001
       FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       # The MCP server OAuth access tokens must be minted for; unset, they are refused.
       MCP_PUBLIC_URL: ${PUBLIC_HOST:-http://localhost}:5009

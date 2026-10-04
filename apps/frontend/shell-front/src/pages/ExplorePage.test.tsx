@@ -35,7 +35,7 @@ const projects = [
     slug: 'window-ablations',
     description: 'Swin window size study',
     visibility: 'public' as const,
-    owner: { kind: 'group' as const, id: 'g1', name: 'Road lab' },
+    owner: { kind: 'user' as const, id: 'u9', name: 'Ann Lee', handle: 'ann-lee', picture: 'https://p.test/ann.jpg' },
     updatedAt: hoursAgo(3),
   },
   {
@@ -126,15 +126,38 @@ describe('ExplorePage', () => {
   it('shows public projects and datasets as cards that open them', async () => {
     renderPage();
 
-    const project = await screen.findByRole('link', { name: /Window ablations.*Swin window size study/ });
-    expect(project).toHaveAttribute('href', '/projects/window-ablations');
-    expect(within(project).getByText('Road lab')).toBeInTheDocument();
-    expect(within(project).getByText(/Updated 3 hours ago/)).toBeInTheDocument();
+    const link = await screen.findByRole('link', { name: 'Window ablations' });
+    expect(link).toHaveAttribute('href', '/projects/window-ablations');
+    const project = within(link.closest('article')!);
+    expect(project.getByText('Swin window size study')).toBeInTheDocument();
+    expect(project.getByText(/Updated 3 hours ago/)).toBeInTheDocument();
     // No slug: the id opens it.
-    expect(screen.getByRole('link', { name: /Night driving/ })).toHaveAttribute('href', '/projects/p2');
-    const dataset = screen.getByRole('link', { name: /Harbour frames/ });
+    expect(screen.getByRole('link', { name: 'Night driving' })).toHaveAttribute('href', '/projects/p2');
+    const dataset = screen.getByRole('link', { name: 'Harbour frames' });
     expect(dataset).toHaveAttribute('href', '/datasets/d1');
-    expect(within(dataset).getByText(/4,110 images · 1 group/)).toBeInTheDocument();
+    expect(within(dataset.closest('article')!).getByText(/4,110 images · 1 group/)).toBeInTheDocument();
+  });
+
+  it('names a person who owns something, linking to their page; and nobody who is not shown', async () => {
+    renderPage();
+
+    const owner = await screen.findByRole('link', { name: 'Ann Lee, profile' });
+    expect(owner).toHaveAttribute('href', '/u/ann-lee');
+    // Its own link, not inside the card's: the card's link is the title.
+    expect(owner.closest('a')).toBe(owner);
+    expect(within(owner).queryByText('Ann Lee')).toBeInTheDocument();
+    const quiet = screen.getByRole('link', { name: 'Night driving' }).closest('article')!;
+    expect(within(quiet).queryByRole('link', { name: /profile/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /profile/ })).toHaveLength(1);
+  });
+
+  it('shows a group\'s name where the viewer is in it, as plain text', async () => {
+    explore.projects.mockResolvedValue([{ ...projects[0], owner: { kind: 'group' as const, id: 'g1', name: 'Road lab' } }]);
+    renderPage();
+
+    const card = (await screen.findByRole('link', { name: 'Window ablations' })).closest('article')!;
+    expect(within(card).getByText('Road lab')).toBeInTheDocument();
+    expect(within(card).queryByRole('link', { name: /profile/ })).not.toBeInTheDocument();
   });
 
   it('shows a dataset without a cover as an icon, and counts one image in the singular', async () => {
@@ -143,7 +166,7 @@ describe('ExplorePage', () => {
     ]);
     renderPage();
 
-    const card = await screen.findByRole('link', { name: /Single frame/ });
+    const card = (await screen.findByRole('link', { name: 'Single frame' })).closest('article')!;
     expect(card.querySelector('img')).toBeNull();
     expect(within(card).getByText(/^1 image · /)).toBeInTheDocument();
     expect(within(card).queryByText(/group/)).not.toBeInTheDocument();

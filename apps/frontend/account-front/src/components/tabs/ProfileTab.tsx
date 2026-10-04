@@ -12,22 +12,44 @@ import {
   Fade,
   useTheme
 } from '@mui/material';
-import { livePalette } from '@visin/frontend-core';
+import { ApiError, livePalette } from '@visin/frontend-core';
 import { Person, Save } from '@mui/icons-material';
 import { profileService } from '../../services/profileService';
 import { useQueryClient } from '@tanstack/react-query';
 import PasswordCard from './PasswordCard';
+import PublicProfileCard from './PublicProfileCard';
+import { MAX_LINKS, parseLinks, type PublicProfileValues } from './publicProfile';
 import SessionsCard from './SessionsCard';
 import AppearanceCard from './AppearanceCard';
 import { sessionKeys } from '../../hooks/useSessions';
 import { profileKeys, useProfile } from '../../hooks/useProfile';
 import { User } from '../../types';
 
+/** The public-page fields as the form shows them. */
+const publicValuesOf = (user: User): PublicProfileValues => ({
+  handle: user.handle ?? '',
+  bio: user.bio ?? '',
+  linksText: (user.links ?? []).join('\n'),
+  profilePublic: user.profilePublic !== false
+});
+
+const samePublicValues = (a: PublicProfileValues, b: PublicProfileValues): boolean =>
+  a.handle === b.handle &&
+  a.bio === b.bio &&
+  a.profilePublic === b.profilePublic &&
+  parseLinks(a.linksText).join('\n') === parseLinks(b.linksText).join('\n');
+
 const ProfileTab: React.FC = () => {
   const { data: user = null, isLoading: loading, error: loadError } = useProfile();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [publicProfile, setPublicProfile] = useState<PublicProfileValues>({
+    handle: '',
+    bio: '',
+    linksText: '',
+    profilePublic: true
+  });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -46,6 +68,7 @@ const ProfileTab: React.FC = () => {
     setEmail(user.email);
     setFirstName(user.firstName || '');
     setLastName(user.lastName || '');
+    setPublicProfile(publicValuesOf(user));
   }, [user]);
 
   useEffect(() => {
@@ -56,30 +79,47 @@ const ProfileTab: React.FC = () => {
     if (user) {
       const currentFirstName = user.firstName || '';
       const currentLastName = user.lastName || '';
-      setHasChanges(firstName !== currentFirstName || lastName !== currentLastName);
+      setHasChanges(
+        firstName !== currentFirstName ||
+          lastName !== currentLastName ||
+          !samePublicValues(publicProfile, publicValuesOf(user))
+      );
     }
-  }, [firstName, lastName, user]);
+  }, [firstName, lastName, publicProfile, user]);
 
   const handleSave = async () => {
     if (!user || !hasChanges) return;
+    const links = parseLinks(publicProfile.linksText);
+    if (links.length > MAX_LINKS) {
+      setMessage({ type: 'error', text: `At most ${MAX_LINKS} links.` });
+      return;
+    }
     setSaving(true);
     setMessage(null);
 
     try {
       const response = await profileService.updateProfile({
         firstName: firstName.trim(),
-        lastName: lastName.trim()
+        lastName: lastName.trim(),
+        // Only what changed: sending an unchanged handle would still ask the server to claim it.
+        ...(publicProfile.handle !== (user.handle ?? '') && publicProfile.handle ? { handle: publicProfile.handle } : {}),
+        bio: publicProfile.bio.trim(),
+        links,
+        profilePublic: publicProfile.profilePublic
       });
 
       if (response.success) {
-        updateCachedProfile(() => response.user);
+        updateCachedProfile((current) => ({ ...(current ?? response.user), ...response.user }));
+        setPublicProfile(publicValuesOf(response.user));
         setMessage({ type: 'success', text: 'Profile updated successfully' });
         setHasChanges(false);
       } else {
         setMessage({ type: 'error', text: response.message || 'Failed to update profile' });
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to update profile' });
+    } catch (error) {
+      // A refused handle or link says why (taken, reserved, not https); anything else is not the person's to fix.
+      const refused = error instanceof ApiError && (error.status === 400 || error.status === 409);
+      setMessage({ type: 'error', text: refused ? error.message : 'Failed to update profile' });
     } finally {
       setSaving(false);
     }
@@ -89,6 +129,7 @@ const ProfileTab: React.FC = () => {
     if (user) {
       setFirstName(user.firstName || '');
       setLastName(user.lastName || '');
+      setPublicProfile(publicValuesOf(user));
       setHasChanges(false);
     }
   };
@@ -200,6 +241,10 @@ const ProfileTab: React.FC = () => {
                 </Grid>
               </Grid>
             </Paper>
+          </Grid>
+
+          <Grid size={12}>
+            <PublicProfileCard values={publicProfile} savedHandle={user?.handle} onChange={setPublicProfile} />
           </Grid>
 
           <Grid size={12}>

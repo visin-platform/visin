@@ -17,6 +17,8 @@ export const getProjectsQuerySchema = z.object({
   access: accessFilterSchema,
   /** `me`, or a group id: only that owner's projects */
   owner: z.union([z.literal('me'), z.string().regex(/^[0-9a-fA-F]{24}$/)]).optional(),
+  /** a person's id: only the projects that person owns, of those the caller may read (a profile's list) */
+  user: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
   sortBy: z.enum(PROJECT_SORT_FIELDS).default('createdAt'),
   sortOrder: sortOrderSchema('desc')
 });

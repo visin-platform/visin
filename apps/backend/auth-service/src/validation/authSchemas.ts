@@ -1,5 +1,6 @@
 import { z, API_KEY_SCOPES } from '@visin/backend-core';
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '../services/passwordService';
+import { isValidHandle } from '../services/handleService';
 
 const email = z.string().trim().toLowerCase().email('A valid email is required');
 const password = z
@@ -40,9 +41,39 @@ export const invalidateUserTokensBodySchema = z.object({
   email: z.string().min(1, 'Email is required')
 });
 
+export const handle = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .refine(isValidHandle, 'A handle is 3 to 30 lowercase letters, digits or single hyphens, and not a reserved word');
+
 export const updateProfileBodySchema = z.object({
   firstName: z.string().optional(),
-  lastName: z.string().optional()
+  lastName: z.string().optional(),
+  handle: handle.optional(),
+  bio: z.string().trim().max(280).optional(),
+  // https only: a profile link is shown to strangers, so `javascript:` and its kin never get in.
+  links: z
+    .array(
+      z
+        .string()
+        .trim()
+        .max(300)
+        .url('Links must be web addresses')
+        .refine((link) => link.startsWith('https://'), 'Links must start with https://')
+    )
+    .max(5)
+    .optional(),
+  profilePublic: z.boolean().optional()
+});
+
+export const handleParamsSchema = z.object({
+  handle: z.string().trim().toLowerCase().min(1).max(60)
+});
+
+/** group-service, vision-service and dataset-service ask who owns what they show, in one call. */
+export const publicUsersBodySchema = z.object({
+  ids: z.array(z.string().regex(/^[a-f\d]{24}$/i, 'Invalid user id')).min(1).max(100)
 });
 
 /**

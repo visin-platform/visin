@@ -82,6 +82,19 @@
               "id": {
                 "type": "string",
                 "pattern": "^[0-9a-fA-F]{24}$"
+              },
+              "name": {
+                "type": "string",
+                "description": "A group's name, when you are in it; a person's name, as they agreed to show it."
+              },
+              "handle": {
+                "type": "string",
+                "description": "A person's handle, the address of their public page. Absent when they hid their profile."
+              },
+              "picture": {
+                "type": "string",
+                "format": "uri",
+                "description": "A person's avatar, when they have one and agreed to show it."
               }
             },
             "required": [
@@ -411,6 +424,16 @@
                   "pattern": "^[0-9a-fA-F]{24}$"
                 }
               ]
+            }
+          },
+          {
+            "name": "user",
+            "in": "query",
+            "required": false,
+            "description": "A person's id; only the datasets that person owns, of those you may read. What a public profile lists.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
             }
           },
           {

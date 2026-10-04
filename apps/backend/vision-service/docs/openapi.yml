@@ -960,7 +960,14 @@ components:
           pattern: '^[0-9a-fA-F]{24}$'
         name:
           type: string
-          description: The group's name, when you are in it.
+          description: A group's name, when you are in it; a person's name, as they agreed to show it.
+        handle:
+          type: string
+          description: "A person's handle, the address of their public page (/u/{handle}). Absent when they hid their profile."
+        picture:
+          type: string
+          format: uri
+          description: A person's avatar, when they have one and agreed to show it.
 
     ProjectPermissions:
       type: object
@@ -3470,6 +3477,10 @@ paths:
           in: query
           description: '`me`, or a group id: only the projects that owner has.'
           schema: { $ref: ./generated/request-schemas.json#/GetProjectsQuery/properties/owner }
+        - name: user
+          in: query
+          description: "A person's id: only the projects that person owns, of those you may read. What a public profile lists."
+          schema: { $ref: ./generated/request-schemas.json#/GetProjectsQuery/properties/user }
         - name: sortBy
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetProjectsQuery/properties/sortBy }

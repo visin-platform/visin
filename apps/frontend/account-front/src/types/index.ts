@@ -31,6 +31,12 @@ export interface User {
   username?: string;
   /** False for a Google-created account that has not set a password yet. */
   hasPassword?: boolean;
+  /** The address of the public page, `/u/{handle}`. */
+  handle?: string;
+  bio?: string;
+  links?: string[];
+  /** False hides the public page and the name shown on what the account owns. */
+  profilePublic?: boolean;
 }
 
 export interface AuthResponse {
@@ -41,6 +47,10 @@ export interface AuthResponse {
 export interface UpdateProfileRequest {
   firstName?: string;
   lastName?: string;
+  handle?: string;
+  bio?: string;
+  links?: string[];
+  profilePublic?: boolean;
 }
 
 export interface UpdateProfileResponse {

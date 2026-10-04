@@ -14,6 +14,7 @@ import { resumeDeletions, runDelete, runRemoveGroup } from '../../services/delet
 import { markScanFailed, runScan } from '../../services/scanService';
 import { NonRetryableImportError } from '../../utils/boundedZip';
 import { fetchDatasetInfo } from '../../clients/hubClient';
+import { lookupOwners } from '../../clients/authOwnersClient';
 import { clearHubCache } from '../../services/hubService';
 import { Dataset } from '../../models/Dataset';
 import { purgeExpiredTrash } from '../../services/datasetService';
@@ -25,6 +26,7 @@ import { zip } from '../fixtures/zip';
 
 jest.mock('../../clients/fileServiceClient', () => jest.requireActual('../fixtures/fileStore').fileStore.client);
 jest.mock('../../clients/hubClient', () => ({ fetchDatasetInfo: jest.fn() }));
+jest.mock('../../clients/authOwnersClient', () => ({ lookupOwners: jest.fn(async () => new Map()) }));
 jest.mock('../../clients/groupServiceClient', () => ({ checkMembership: jest.fn(), getMyGroups: jest.fn() }));
 jest.mock('../../queue/importQueue', () => ({ enqueueImport: jest.fn(), enqueueScan: jest.fn(), enqueueDelete: jest.fn(), enqueueRemoveGroup: jest.fn(), removeQueuedImport: jest.fn() }));
 
@@ -892,5 +894,61 @@ describe('datasets kept on the Hugging Face Hub', () => {
     const id = await createDataset();
     expect((await call(`/api/datasets/${id}/hub`)).status).toBe(400);
     expect(fetchDatasetInfo).not.toHaveBeenCalled();
+  });
+});
+
+describe('who owns a dataset', () => {
+  const identities = new Map([
+    [OWNER, { id: OWNER, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' }],
+    [MEMBER, { id: MEMBER }]
+  ]);
+  const owners = async (path: string, user?: string) =>
+    Object.fromEntries(((await call(path, { user })).body.data.datasets as { name: string; owner: unknown }[]).map((row) => [row.name, row.owner]));
+
+  beforeEach(() => {
+    jest.mocked(lookupOwners).mockReset();
+    jest.mocked(lookupOwners).mockImplementation(async (ids) => new Map([...identities].filter(([id]) => ids.includes(id))));
+  });
+
+  it('names each person who owns a listed dataset, asking once for the list, and shows a hidden profile as an id', async () => {
+    await createDataset({ name: 'Ann set', visibility: 'public' }, OWNER);
+    await createDataset({ name: 'Quiet set', visibility: 'public' }, MEMBER);
+    // Creating answers with the dataset too, which asks for its own owner.
+    jest.mocked(lookupOwners).mockClear();
+
+    const listed = await owners('/api/datasets');
+
+    expect(listed['Ann set']).toEqual({ kind: 'user', id: OWNER, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' });
+    expect(listed['Quiet set']).toEqual({ kind: 'user', id: MEMBER });
+    expect(lookupOwners).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not look up a group, which keeps showing its name only to its members', async () => {
+    await groupDataset('Team set', MEMBER);
+    await call(`/api/datasets?owner=${GROUP}`, { user: MEMBER });
+
+    expect(jest.mocked(lookupOwners).mock.calls.every(([ids]) => ids.length === 0)).toBe(true);
+    expect((await owners(`/api/datasets?owner=${GROUP}`, MEMBER))['Team set']).toEqual({ kind: 'group', id: GROUP, name: 'Team' });
+    expect((await owners(`/api/datasets?owner=${GROUP}`, STRANGER))['Team set']).toBeUndefined();
+  });
+
+  it('names the owner of a single dataset, and lists it without them when auth-service is silent', async () => {
+    const id = await createDataset({ name: 'Ann set', visibility: 'public' }, OWNER);
+
+    expect((await call(`/api/datasets/${id}`)).body.data.owner).toMatchObject({ handle: 'ann-lee', name: 'Ann Lee' });
+
+    jest.mocked(lookupOwners).mockResolvedValue(new Map());
+    expect((await owners('/api/datasets'))['Ann set']).toEqual({ kind: 'user', id: OWNER });
+  });
+
+  it("lists one person's datasets for a profile, only those a visitor may read", async () => {
+    await createDataset({ name: 'Ann public', visibility: 'public' }, OWNER);
+    await createDataset({ name: 'Ann private' }, OWNER);
+    await createDataset({ name: 'Other public', visibility: 'public' }, MEMBER);
+
+    expect(Object.keys(await owners(`/api/datasets?user=${OWNER}`))).toEqual(['Ann public']);
+    expect(Object.keys(await owners(`/api/datasets?user=${OWNER}`, OWNER)).sort()).toEqual(['Ann private', 'Ann public']);
+    expect(Object.keys(await owners(`/api/datasets?user=${MEMBER}`))).toEqual(['Other public']);
+    expect((await call('/api/datasets?user=ann-lee')).status).toBe(400);
   });
 });

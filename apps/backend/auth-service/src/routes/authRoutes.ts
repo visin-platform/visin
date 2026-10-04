@@ -13,6 +13,7 @@ import {
   searchUsers
 } from '../controllers/authController';
 import { getProfile, updateProfile, changePassword } from '../controllers/profileController';
+import { getPublicUser, lookupPublicUsers } from '../controllers/publicUserController';
 import { linkGoogle } from '../controllers/googleLinkController';
 import { listSessions, revokeSession, revokeOtherSessions } from '../controllers/sessionController';
 import { createKey, listKeys, revealKey, revokeKey, removeKey } from '../controllers/apiKeyController';
@@ -25,6 +26,8 @@ import {
   linkGoogleBodySchema,
   invalidateUserTokensBodySchema,
   searchUsersQuerySchema,
+  handleParamsSchema,
+  publicUsersBodySchema,
   updateProfileBodySchema,
   changePasswordBodySchema,
   setupBodySchema,
@@ -45,6 +48,9 @@ const router = Router();
  * two things have nothing to do with each other.
  */
 const keyLimiter = createRateLimiter({ max: 30 });
+
+/** Public pages are read by anyone, so a crawler gets a budget of its own rather than the shared one. */
+const publicLimiter = createRateLimiter({ max: 120 });
 
 // Login route (public) – must remain public so user can obtain token
 router.post('/validate', validateRequest({ body: validateTokenBodySchema }), validateToken);
@@ -113,6 +119,17 @@ router.get('/api-keys', authenticateToken, listKeys);
 router.post('/api-keys/:id/reveal', keyLimiter, authenticateToken, revealKey);
 router.post('/api-keys/:id/revoke', authenticateToken, revokeKey);
 router.delete('/api-keys/:id', authenticateToken, removeKey);
+
+// A person's public page. No sign-in: it is what a visitor opens from a project's owner.
+router.get('/users/:handle', publicLimiter, validateRequest({ params: handleParamsSchema }), getPublicUser);
+
+// Internal: names and avatars for the owners of what vision- and dataset-service list.
+router.post(
+  '/internal/users/public',
+  requireInternalServiceToken,
+  validateRequest({ body: publicUsersBodySchema }),
+  lookupPublicUsers
+);
 
 // Internal: group-service's "Add member" search.
 router.get('/internal/users/search', requireInternalServiceToken, validateRequest({ query: searchUsersQuerySchema }), searchUsers);

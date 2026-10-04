@@ -10,8 +10,9 @@ import { purgeExpiredTrash } from './services/purgeService';
 
 // JWT_SECRET verifies user sessions; FILE_SERVICE_API_KEY authenticates every
 // dataset-image/visualization storage call; INTERNAL_SERVICE_TOKEN gates
-// /internal/*, which auth-service calls when issuing a project-limited API key.
-assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'FILE_SERVICE_API_KEY', 'INTERNAL_SERVICE_TOKEN']);
+// /internal/*, which auth-service calls when issuing a project-limited API key; AUTH_SERVICE_URL is where
+// owners' names and avatars are asked for (best effort: a list is shown without them if it cannot answer).
+assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'FILE_SERVICE_API_KEY', 'INTERNAL_SERVICE_TOKEN', 'AUTH_SERVICE_URL']);
 
 const PORT = process.env.PORT || 4010;
 

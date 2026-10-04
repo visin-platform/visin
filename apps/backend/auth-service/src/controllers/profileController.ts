@@ -1,9 +1,18 @@
 import { Request, Response } from 'express';
 import { UpdateQuery } from 'mongoose';
-import { BadRequestError, NotFoundError, UnauthorizedError, logger } from '@visin/backend-core';
+import { BadRequestError, ConflictError, NotFoundError, UnauthorizedError, logger } from '@visin/backend-core';
 import { User, IUser } from '../models/User';
 import { hashPassword, verifyPassword } from '../services/passwordService';
 import { continueSessionAlone } from '../services/sessionService';
+import { ensureHandle } from '../services/handleService';
+
+/** The fields of an account's public page that its owner edits, as the settings screen shows them. */
+const profileFields = (user: IUser) => ({
+  handle: user.handle,
+  bio: user.bio,
+  links: user.links ?? [],
+  profilePublic: user.profilePublic !== false
+});
 
 export const getProfile = async (req: Request, res: Response): Promise<void> => {
   if (!req.user) {
@@ -16,6 +25,9 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
     throw new NotFoundError('User not found');
   }
 
+  // An account older than handles gets its first one here.
+  await ensureHandle(dbUser);
+
   // Combine JWT user data with database user data
   const userResponse = {
     id: req.user.id,
@@ -24,6 +36,7 @@ export const getProfile = async (req: Request, res: Response): Promise<void> => 
     lastName: dbUser.lastName,
     name: req.user.name,
     picture: req.user.picture,
+    ...profileFields(dbUser),
     // Drives whether the account settings offer "set" or "change" a password,
     // and whether the current password is required to do it.
     hasPassword: Boolean(dbUser.passwordHash)
@@ -37,7 +50,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     throw new UnauthorizedError('Not authenticated');
   }
 
-  const { firstName, lastName } = req.body;
+  const { firstName, lastName, handle, bio, links, profilePublic } = req.body;
 
   // Update the user in database - handle empty strings explicitly
   const updateData: UpdateQuery<IUser> = {};
@@ -50,11 +63,19 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     updateData.lastName = trimmedLastName === '' ? null : trimmedLastName;
   }
 
-  const updatedUser = await User.findByIdAndUpdate(
-    req.user.id,
-    { $set: updateData },
-    { returnDocument: 'after' }
-  );
+  if (handle !== undefined) updateData.handle = handle;
+  if (bio !== undefined) updateData.bio = bio === '' ? null : bio;
+  if (links !== undefined) updateData.links = links;
+  if (profilePublic !== undefined) updateData.profilePublic = profilePublic;
+
+  let updatedUser: IUser | null;
+  try {
+    updatedUser = await User.findByIdAndUpdate(req.user.id, { $set: updateData }, { returnDocument: 'after' });
+  } catch (error) {
+    // The unique index is what decides who has a handle, however many ask at once.
+    if ((error as { code?: number }).code === 11000) throw new ConflictError('That handle is taken');
+    throw error;
+  }
 
   if (!updatedUser) {
     throw new NotFoundError('User not found');
@@ -69,7 +90,8 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
       firstName: updatedUser.firstName,
       lastName: updatedUser.lastName,
       name: req.user.name, // Keep original name from JWT
-      picture: req.user.picture // Keep original picture from JWT
+      picture: req.user.picture, // Keep original picture from JWT
+      ...profileFields(updatedUser)
     }
   });
 };

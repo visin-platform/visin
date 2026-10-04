@@ -42,6 +42,8 @@ export const listDatasetsQuerySchema = z.object({
   search: z.string().trim().max(200).optional(),
   /** `me`, or a group id: only datasets that owner has */
   owner: z.union([z.literal('me'), objectId]).optional(),
+  /** a person's id: only the datasets that person owns, of those the caller may read (a profile's list) */
+  user: objectId.optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(30)
 });

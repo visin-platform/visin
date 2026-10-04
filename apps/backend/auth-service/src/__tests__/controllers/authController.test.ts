@@ -7,6 +7,7 @@ jest.mock('../../services/googleAuthService', () => ({
 jest.mock('../../services/googleSignInService', () => ({
   signInWithGoogle: jest.fn(),
 }));
+jest.mock('../../services/handleService', () => ({ ensureHandle: jest.fn() }));
 jest.mock('../../models/User', () => ({
   User: {
     findOne: jest.fn(),
@@ -127,7 +128,7 @@ describe('validateToken', () => {
 
     expect(mockedUser.updateOne).toHaveBeenCalledWith(
       { _id: dbUser._id },
-      { $set: { lastLoginAt: expect.any(Date) } }
+      { $set: { lastLoginAt: expect.any(Date), picture: 'pic.png' } }
     );
     expect(res.cookie).toHaveBeenCalledWith(
       'access_token',

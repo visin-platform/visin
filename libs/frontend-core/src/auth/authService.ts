@@ -27,6 +27,12 @@ export interface AuthUser {
    * reports it.
    */
   hasPassword?: boolean;
+  /** The address of the public page, `/u/{handle}`. Only `/auth/profile` reports it, with the next three. */
+  handle?: string;
+  bio?: string;
+  links?: string[];
+  /** False hides the public page and the name shown on what the account owns. */
+  profilePublic?: boolean;
 }
 
 export interface AuthCheckResult {

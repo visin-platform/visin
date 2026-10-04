@@ -90,7 +90,7 @@ export function ExplorePage({ now }: ExplorePageProps) {
   const requested = params.get('type');
   const kind: Kind = KINDS.some((option) => option.value === requested) ? (requested as Kind) : 'all';
 
-  const projects = useQuery({ queryKey: ['explore', 'projects'], queryFn: exploreApi.projects, enabled: vision });
+  const projects = useQuery({ queryKey: ['explore', 'projects'], queryFn: () => exploreApi.projects(), enabled: vision });
   const datasets = useQuery({
     queryKey: ['explore', 'datasets'],
     queryFn: () => exploreApi.datasets(DATASETS_FETCHED),

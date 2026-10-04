@@ -20,6 +20,7 @@ import { enqueueDelete, enqueueImport, enqueueRemoveGroup, enqueueScan, removeQu
 import { expectedImportFiles } from '../utils/contents';
 import { normalizeFolder } from '../utils/zipPaths';
 import * as groupService from '../clients/groupServiceClient';
+import { lookupOwners, type OwnerIdentity } from '../clients/authOwnersClient';
 import { DatasetAccess, DatasetPermissions, LIVE, permissionsOf, readableDataset, requireDataset } from './accessService';
 import type { ArchiveUploadBody, CreateDatasetBody, ListDatasetsQuery, UpdateDatasetBody } from '../validation/datasetSchemas';
 
@@ -60,12 +61,18 @@ const signedUrls = (fileIds: (string | undefined)[]) =>
   files.getDownloadUrls(fileIds.filter((fileId): fileId is string => Boolean(fileId)), DOWNLOAD_URL_MINUTES);
 
 /** What a client may see: no storage paths, holds reduced to a count. */
-export const toDatasetView = (dataset: IDataset, permissions: DatasetPermissions, coverUrl?: string, ownerName?: string) => ({
+export const toDatasetView = (
+  dataset: IDataset,
+  permissions: DatasetPermissions,
+  coverUrl?: string,
+  ownerIdentity: Partial<OwnerIdentity> = {}
+) => ({
   _id: dataset._id.toString(),
   name: dataset.name,
   description: dataset.description,
-  // `name` is the owning group's, when the caller is in it.
-  owner: { kind: dataset.owner.kind, id: dataset.owner.id, ...(ownerName ? { name: ownerName } : {}) },
+  // A group's `name` is shown when the caller is in it; a person's `name`, `handle` and `picture` are
+  // what they agreed to show (nothing when they hid their profile).
+  owner: { kind: dataset.owner.kind, id: dataset.owner.id, ...ownerIdentity },
   createdBy: dataset.createdBy,
   visibility: dataset.visibility,
   trashedAt: dataset.trashedAt,
@@ -108,14 +115,22 @@ export const toDatasetView = (dataset: IDataset, permissions: DatasetPermissions
 const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** The caller's view of one dataset; group lookups are memoized by `access`. */
-const viewFor = async (access: DatasetAccess, dataset: IDataset, coverUrl?: string) => {
-  const ownerName =
-    dataset.owner.kind === 'group' ? (await access.myGroups()).find((group) => group.groupId === dataset.owner.id)?.name : undefined;
-  return toDatasetView(dataset, permissionsOf(await access.permission(dataset)), coverUrl, ownerName);
+const viewFor = async (access: DatasetAccess, dataset: IDataset, coverUrl?: string, owners?: Map<string, OwnerIdentity>) => {
+  let identity: Partial<OwnerIdentity> = {};
+  if (dataset.owner.kind === 'group') {
+    const name = (await access.myGroups()).find((group) => group.groupId === dataset.owner.id)?.name;
+    if (name) identity = { name };
+  } else {
+    // `owners` is what a whole list asked for at once; a single dataset asks for itself.
+    const { id: _id, ...shown } = (owners ?? (await lookupOwners([dataset.owner.id]))).get(dataset.owner.id) ?? { id: '' };
+    identity = shown;
+  }
+  return toDatasetView(dataset, permissionsOf(await access.permission(dataset)), coverUrl, identity);
 };
 
-/** `owner=me` or `owner=<groupId>`: a list narrowed to one owner. */
-const ownerFilter = (access: DatasetAccess, owner?: string) => {
+/** `owner=me`, `owner=<groupId>` or `user=<userId>`: a list narrowed to one owner. */
+const ownerFilter = (access: DatasetAccess, owner?: string, user?: string) => {
+  if (user) return { 'owner.kind': 'user', 'owner.id': user };
   if (!owner) return {};
   if (owner === 'me') return { 'owner.kind': 'user', 'owner.id': access.userId ?? '' };
   return { 'owner.kind': 'group', 'owner.id': owner };
@@ -123,14 +138,17 @@ const ownerFilter = (access: DatasetAccess, owner?: string) => {
 
 const withCovers = async (access: DatasetAccess, datasets: IDataset[]) => {
   const { urls } = await signedUrls(datasets.map((dataset) => dataset.coverFileId));
-  return Promise.all(datasets.map((dataset) => viewFor(access, dataset, dataset.coverFileId ? urls[dataset.coverFileId] : undefined)));
+  const owners = await lookupOwners(datasets.filter((dataset) => dataset.owner.kind === 'user').map((dataset) => dataset.owner.id));
+  return Promise.all(
+    datasets.map((dataset) => viewFor(access, dataset, dataset.coverFileId ? urls[dataset.coverFileId] : undefined, owners))
+  );
 };
 
 export const listDatasets = async (access: DatasetAccess, query: ListDatasetsQuery) => {
   const filter = {
     $and: [
       await access.filter('read'),
-      ownerFilter(access, query.owner),
+      ownerFilter(access, query.owner, query.user),
       query.search ? { name: { $regex: escapeRegex(query.search), $options: 'i' } } : {}
     ]
   } as QueryFilter<IDataset>;

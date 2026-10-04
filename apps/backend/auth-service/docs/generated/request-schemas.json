@@ -56,6 +56,19 @@
       "scopes"
     ]
   },
+  "HandleParams": {
+    "type": "object",
+    "properties": {
+      "handle": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 60
+      }
+    },
+    "required": [
+      "handle"
+    ]
+  },
   "InvalidateUserTokensBody": {
     "type": "object",
     "properties": {
@@ -102,6 +115,23 @@
     "required": [
       "email",
       "password"
+    ]
+  },
+  "PublicUsersBody": {
+    "type": "object",
+    "properties": {
+      "ids": {
+        "minItems": 1,
+        "maxItems": 100,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-f\\d]{24}$"
+        }
+      }
+    },
+    "required": [
+      "ids"
     ]
   },
   "RegisterBody": {
@@ -197,6 +227,25 @@
       },
       "lastName": {
         "type": "string"
+      },
+      "handle": {
+        "type": "string"
+      },
+      "bio": {
+        "type": "string",
+        "maxLength": 280
+      },
+      "links": {
+        "maxItems": 5,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 300,
+          "format": "uri"
+        }
+      },
+      "profilePublic": {
+        "type": "boolean"
       }
     }
   },

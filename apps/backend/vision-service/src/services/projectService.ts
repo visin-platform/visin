@@ -1,4 +1,5 @@
 import { getUserGroups } from '../clients/projectGroupsClient';
+import { lookupOwners, type OwnerIdentity } from '../clients/authOwnersClient';
 import { QueryFilter } from 'mongoose';
 import {
   atLeast,
@@ -51,23 +52,36 @@ const permissionsOf = (permission: Permission): ProjectPermissions => ({
 /**
  * A project as the API returns it: its stored fields, less the legacy
  * `ownerId` and `isPublic` a migrated document still carries, plus what the
- * caller may do with it and, for a group owner the caller is in, its name.
+ * caller may do with it and who owns it: a group the caller is in by its name, a person by the
+ * handle, name and avatar they agreed to show (see `OwnerIdentity`).
  */
 export type ProjectView = Record<string, unknown> & {
-  owner: ResourceOwner & { name?: string };
+  owner: ResourceOwner & { name?: string; handle?: string; picture?: string };
   permissions: ProjectPermissions;
 };
 
-export async function toProjectView(project: IProject, userId: string | undefined, permission?: Permission): Promise<ProjectView> {
+/** `owners` is what `lookupOwners` found for a whole list, so a list asks once rather than per row. */
+export async function toProjectView(
+  project: IProject,
+  userId: string | undefined,
+  permission?: Permission,
+  owners?: Map<string, OwnerIdentity>
+): Promise<ProjectView> {
   const held = permission ?? (await projectPermission(project, userId, { trashed: true }));
   const { ownerId: _ownerId, isPublic: _isPublic, __v: _v, ...fields } = project.toObject() as Record<string, unknown>;
-  const ownerName =
-    project.owner.kind === 'group' && userId
+  let identity: Partial<OwnerIdentity> = {};
+  if (project.owner.kind === 'group') {
+    const name = userId
       ? (await callerGroups.getMyGroups(userId)).find(group => group.groupId === project.owner.id)?.name
       : undefined;
+    if (name) identity = { name };
+  } else {
+    const { id: _id, ...shown } = (owners ?? (await lookupOwners([project.owner.id]))).get(project.owner.id) ?? { id: '' };
+    identity = shown;
+  }
   return {
     ...fields,
-    owner: { kind: project.owner.kind, id: project.owner.id, ...(ownerName ? { name: ownerName } : {}) },
+    owner: { kind: project.owner.kind, id: project.owner.id, ...identity },
     permissions: permissionsOf(held)
   };
 }
@@ -83,24 +97,26 @@ export async function requireProject(identifier: string, userId: string | undefi
   return project;
 }
 
-/** `owner=me` or `owner=<groupId>`: a list narrowed to one owner. */
-const ownerFilter = (userId: string | undefined, owner?: string): QueryFilter<IProject> => {
+/** `owner=me`, `owner=<groupId>` or `user=<userId>`: a list narrowed to one owner. */
+const ownerFilter = (userId: string | undefined, owner?: string, user?: string): QueryFilter<IProject> => {
+  if (user) return { 'owner.kind': 'user', 'owner.id': user };
   if (!owner) return {};
   if (owner === 'me') return { 'owner.kind': 'user', 'owner.id': userId ?? '' };
   return { 'owner.kind': 'group', 'owner.id': owner };
 };
 
 export const listProjects = async (userId: string | undefined, filters: GetProjectsQuery): Promise<ProjectView[]> => {
-  const { search, sortBy, sortOrder, access, owner } = filters;
+  const { search, sortBy, sortOrder, access, owner, user } = filters;
   const query: QueryFilter<IProject> = {
     $and: [
       await projectFilter(userId, access === 'contribute' ? 'contribute' : 'read'),
-      ownerFilter(userId, owner),
+      ownerFilter(userId, owner, user),
       ...(search ? [{ $text: { $search: search } }] : [])
     ]
   };
   const projects = await Project.find(query).sort({ [sortBy]: sortOrder });
-  return Promise.all(projects.map(project => toProjectView(project, userId)));
+  const owners = await lookupOwners(projects.filter(project => project.owner.kind === 'user').map(project => project.owner.id));
+  return Promise.all(projects.map(project => toProjectView(project, userId, undefined, owners)));
 };
 
 export const getProjectByIdOrSlug = async (identifier: string, userId: string | undefined): Promise<ProjectView> =>

@@ -1,0 +1,247 @@
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import type { Server } from 'node:http';
+import mongoose from 'mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
+import { errorHandler } from '@visin/backend-core';
+import { User } from '../../models/User';
+import authRoutes from '../../routes/authRoutes';
+import { ensureHandle, isValidHandle, slugify, suggestHandle } from '../../services/handleService';
+
+/** Handles, the public page they address, and the lookup other services use for owners. */
+describe('handles and public users with in-memory MongoDB', () => {
+  let mongo: MongoMemoryServer;
+  let server: Server;
+  let base: string;
+  const saved = process.env.INTERNAL_SERVICE_TOKEN;
+
+  beforeAll(async () => {
+    process.env.INTERNAL_SERVICE_TOKEN = 'internal-test-token';
+    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    await mongoose.connect(mongo.getUri());
+    await User.createIndexes();
+    const app = express();
+    app.use(express.json(), cookieParser());
+    app.use('/auth', authRoutes);
+    app.use(errorHandler);
+    server = await new Promise<Server>(resolve => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
+    base = `http://127.0.0.1:${(server.address() as { port: number }).port}/auth`;
+  }, 120_000);
+
+  afterAll(async () => {
+    if (saved === undefined) delete process.env.INTERNAL_SERVICE_TOKEN;
+    else process.env.INTERNAL_SERVICE_TOKEN = saved;
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await mongoose.disconnect();
+    await mongo.stop();
+  });
+
+  beforeEach(async () => {
+    await User.deleteMany({});
+  });
+
+  const account = (email: string, extra: Record<string, unknown> = {}) =>
+    User.create({ email, signupMethod: 'password', roles: [], ...extra });
+
+  describe('choosing a handle', () => {
+    it('starts from the name, with accents and spacing made plain', async () => {
+      const user = await account('ann@example.test', { firstName: 'Änn', lastName: 'Example Smith' });
+
+      expect(await ensureHandle(user)).toBe('ann-example-smith');
+      expect((await User.findById(user._id))!.handle).toBe('ann-example-smith');
+    });
+
+    it('never makes the email public: with no name it is a plain word and a random tail', async () => {
+      const user = await account('secret.person@example.test');
+
+      const handle = await ensureHandle(user);
+
+      expect(handle).toMatch(/^user-[0-9a-f]{6}$/);
+      expect(handle).not.toContain('secret');
+    });
+
+    it('gives a second person of the same name a tail instead of the first one\'s handle', async () => {
+      const first = await account('a1@example.test', { firstName: 'Ann', lastName: 'Lee' });
+      const second = await account('a2@example.test', { firstName: 'Ann', lastName: 'Lee' });
+
+      expect(await ensureHandle(first)).toBe('ann-lee');
+      expect(await ensureHandle(second)).toMatch(/^ann-lee-[0-9a-f]{6}$/);
+    });
+
+    it('keeps the one it has, and reads the winner when a request raced it', async () => {
+      const user = await account('r@example.test', { firstName: 'Ray' });
+      const stale = await User.findById(user._id);
+      await ensureHandle(user);
+
+      expect(await ensureHandle(stale!)).toBe('ray');
+      expect(await ensureHandle(user)).toBe('ray');
+    });
+
+    it('does not take a reserved word, or one too short, as its first choice', async () => {
+      const admin = await account('adm@example.test', { firstName: 'Admin' });
+      const short = await account('s@example.test', { firstName: 'Al' });
+
+      expect(await ensureHandle(admin)).toMatch(/^admin-[0-9a-f]{6}$/);
+      expect(await ensureHandle(short)).toMatch(/^al-[0-9a-f]{6}$/);
+    });
+
+    it('gives up, saying so, when every candidate is taken', async () => {
+      const user = await account('x@example.test', { firstName: 'Xavier' });
+      const spy = jest.spyOn(User, 'findOneAndUpdate').mockRejectedValue(Object.assign(new Error('E11000'), { code: 11000 }));
+      try {
+        await expect(ensureHandle(user)).rejects.toMatchObject({ statusCode: 409 });
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('lets any other database failure through', async () => {
+      const user = await account('y@example.test', { firstName: 'Yan' });
+      const spy = jest.spyOn(User, 'findOneAndUpdate').mockRejectedValue(new Error('connection lost'));
+      try {
+        await expect(ensureHandle(user)).rejects.toThrow('connection lost');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('is unique in the database, whatever the code does', async () => {
+      await account('u1@example.test', { handle: 'same' });
+
+      await expect(account('u2@example.test', { handle: 'same' })).rejects.toMatchObject({ code: 11000 });
+      // Many accounts with none are fine: the index only covers handles that exist.
+      await account('n1@example.test');
+      await expect(account('n2@example.test')).resolves.toBeDefined();
+    });
+  });
+
+  describe('what a handle may be', () => {
+    it.each(['ann', 'ann-lee', 'a1b', 'x'.repeat(30)])('accepts %s', handle => {
+      expect(isValidHandle(handle)).toBe(true);
+    });
+
+    it.each(['ab', 'x'.repeat(31), '-ann', 'ann-', 'ann--lee', 'Ann', 'ann_lee', 'ann.lee', 'admin', 'explore', 'u'])(
+      'refuses %s',
+      handle => {
+        expect(isValidHandle(handle)).toBe(false);
+      }
+    );
+
+    it('slugifies any text to lowercase ASCII words', () => {
+      expect(slugify('  Zoë  O\'Neil-Ñuñez ')).toBe('zoe-o-neil-nunez');
+      expect(slugify('日本語')).toBe('');
+      expect(suggestHandle({ firstName: '日本語' })).toBe('user');
+      expect(suggestHandle({ firstName: 'A'.repeat(40) })).toBe('a'.repeat(23));
+    });
+  });
+
+  describe('GET /auth/users/:handle', () => {
+    const get = async (handle: string) => {
+      const response = await fetch(`${base}/users/${handle}`);
+      return { status: response.status, body: (await response.json()) as { data?: Record<string, unknown> } };
+    };
+
+    it('shows a person to anyone, and exactly the fields meant to be public', async () => {
+      await account('ann@example.test', {
+        firstName: 'Ann',
+        lastName: 'Lee',
+        handle: 'ann-lee',
+        bio: 'Segmentation under bad weather',
+        links: ['https://ann.example.test'],
+        picture: 'https://pics.example.test/ann.jpg',
+        passwordHash: 'must-never-appear',
+        googleSubject: 'sub-1',
+        roles: ['admin']
+      });
+
+      const { status, body } = await get('ann-lee');
+
+      expect(status).toBe(200);
+      expect(Object.keys(body.data!).sort()).toEqual(['bio', 'createdAt', 'handle', 'id', 'links', 'name', 'picture']);
+      expect(body.data).toMatchObject({
+        handle: 'ann-lee',
+        name: 'Ann Lee',
+        bio: 'Segmentation under bad weather',
+        links: ['https://ann.example.test']
+      });
+      expect(JSON.stringify(body)).not.toMatch(/ann@example|must-never|sub-1|admin/);
+    });
+
+    it('names a person by their handle when they gave no name, never by their email', async () => {
+      await account('nameless@example.test', { handle: 'nameless' });
+
+      const { body } = await get('nameless');
+
+      expect(body.data).toMatchObject({ name: 'nameless', links: [] });
+      expect(Object.keys(body.data!).sort()).toEqual(['createdAt', 'handle', 'id', 'links', 'name']);
+    });
+
+    it('finds a handle however it is cased', async () => {
+      await account('c@example.test', { handle: 'cased' });
+
+      expect((await get('CaSeD')).status).toBe(200);
+    });
+
+    it('answers the same 404 for someone who hid their page as for someone who does not exist', async () => {
+      await account('hidden@example.test', { handle: 'hidden', profilePublic: false });
+
+      const hidden = await get('hidden');
+      const missing = await get('nobody');
+
+      expect(hidden.status).toBe(404);
+      expect(missing.status).toBe(404);
+      expect(hidden.body).toEqual(missing.body);
+    });
+  });
+
+  describe('POST /auth/internal/users/public', () => {
+    const lookup = async (body: unknown, token: string | null = 'internal-test-token') => {
+      const response = await fetch(`${base}/internal/users/public`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(token ? { 'x-internal-token': token } : {}) },
+        body: JSON.stringify(body)
+      });
+      return { status: response.status, body: (await response.json()) as { data?: Record<string, unknown>[] } };
+    };
+
+    it('names the owners it is asked about, and leaves out the ones that do not exist', async () => {
+      const ann = await account('ann@example.test', { firstName: 'Ann', lastName: 'Lee', handle: 'ann-lee', picture: 'https://p.example.test/a.jpg' });
+
+      const { status, body } = await lookup({ ids: [ann.id, new mongoose.Types.ObjectId().toString()] });
+
+      expect(status).toBe(200);
+      expect(body.data).toEqual([
+        { id: ann.id, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.example.test/a.jpg' }
+      ]);
+    });
+
+    it('shows an owner who hid their page as a bare id, with no name or avatar', async () => {
+      const hidden = await account('h@example.test', {
+        firstName: 'Hidden',
+        handle: 'hidden',
+        picture: 'https://p.example.test/h.jpg',
+        profilePublic: false
+      });
+
+      const { body } = await lookup({ ids: [hidden.id] });
+
+      expect(body.data).toEqual([{ id: hidden.id }]);
+    });
+
+    it('gives an owner from before handles theirs, so their name can link to a page', async () => {
+      const legacy = await account('legacy@example.test', { firstName: 'Old', lastName: 'Timer' });
+
+      const { body } = await lookup({ ids: [legacy.id] });
+
+      expect(body.data).toEqual([{ id: legacy.id, handle: 'old-timer', name: 'Old Timer' }]);
+    });
+
+    it('is closed to anyone without the internal token, and wants a short list of ids', async () => {
+      expect((await lookup({ ids: ['a'.repeat(24)] }, null)).status).toBe(401);
+      expect((await lookup({ ids: ['a'.repeat(24)] }, 'wrong')).status).toBe(401);
+      expect((await lookup({ ids: [] })).status).toBe(400);
+      expect((await lookup({ ids: ['not-an-id'] })).status).toBe(400);
+      expect((await lookup({ ids: Array.from({ length: 101 }, () => 'a'.repeat(24)) })).status).toBe(400);
+    });
+  });
+});

@@ -17,6 +17,7 @@ import {
   startSession
 } from '../services/sessionService';
 import { User } from '../models/User';
+import { ensureHandle } from '../services/handleService';
 import { assertRegistrationOpen, createFirstUser, needsSetup } from '../services/bootstrapService';
 
 /**
@@ -40,6 +41,7 @@ export const getSetupStatus = async (_req: Request, res: Response): Promise<void
  */
 export const setupFirstUser = async (req: Request, res: Response): Promise<void> => {
   const dbUser = await createFirstUser(req.body);
+  await ensureHandle(dbUser);
 
   logger.info('First user created via setup', { email: dbUser.email });
 
@@ -76,6 +78,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     roles: [],
     lastLoginAt: new Date()
   });
+  await ensureHandle(dbUser);
 
   logger.info('User registered', { email: normalizedEmail });
 
@@ -126,8 +129,13 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
   // An email match alone never enters an existing account: see signInWithGoogle.
   const dbUser = await signInWithGoogle(googleUser);
 
-  // Update last login
-  await User.updateOne({ _id: dbUser._id }, { $set: { lastLoginAt: new Date() } });
+  // Update last login, and the picture Google last showed for this account (the one place
+  // it is kept, for the avatar on what the account owns).
+  await User.updateOne(
+    { _id: dbUser._id },
+    { $set: { lastLoginAt: new Date(), ...(googleUser.picture ? { picture: googleUser.picture } : {}) } }
+  );
+  await ensureHandle(dbUser);
 
   const { payload, token } = await startSession(req, res, dbUser, 'google', {
     name: googleUser.name || '',

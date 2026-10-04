@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 jest.mock('../../models/Session', () => jest.requireActual('../helpers/sessionModelMock').sessionModule());
+jest.mock('../../services/handleService', () => ({ ensureHandle: jest.fn() }));
 jest.mock('../../models/User', () => ({
   User: {
     findById: jest.fn(),
@@ -12,9 +13,11 @@ import { getProfile, updateProfile, changePassword } from '../../controllers/pro
 import { hashPassword, verifyPassword } from '../../services/passwordService';
 import { verifyJWT } from '../../services/jwtService';
 import { User } from '../../models/User';
+import { ensureHandle } from '../../services/handleService';
 import { makeSession } from '../helpers/sessionModelMock';
 
 const mockedUser = User as unknown as Record<string, jest.Mock>;
+const mockedEnsureHandle = ensureHandle as jest.Mock;
 
 /** getProfile and changePassword both do findById(...).select('+passwordHash'). */
 const findByIdReturns = (value: unknown) => {
@@ -79,7 +82,34 @@ describe('getProfile', () => {
         name: 'Test User',
         picture: 'pic.png',
         hasPassword: false,
+        handle: undefined,
+        bio: undefined,
+        links: [],
+        profilePublic: true,
       },
+    });
+  });
+
+  it('gives an account that predates handles its first one, and reports the public page it edits', async () => {
+    const legacy = { ...dbUser, bio: 'Segmentation', links: ['https://example.test'], profilePublic: false } as typeof dbUser & { handle?: string };
+    findByIdReturns(legacy);
+    mockedEnsureHandle.mockImplementation(async (user: { handle?: string }) => {
+      user.handle = 'test-user';
+      return 'test-user';
+    });
+    const res = makeRes();
+
+    await getProfile(makeReq({ user: jwtUser }), res);
+
+    expect(mockedEnsureHandle).toHaveBeenCalledWith(legacy);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      user: expect.objectContaining({
+        handle: 'test-user',
+        bio: 'Segmentation',
+        links: ['https://example.test'],
+        profilePublic: false,
+      }),
     });
   });
 
@@ -146,6 +176,59 @@ describe('updateProfile', () => {
       { returnDocument: 'after' }
     );
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+});
+
+describe('updateProfile public page', () => {
+  it('sets the handle, bio, links and visibility, and reads an emptied bio as none', async () => {
+    mockedUser.findByIdAndUpdate.mockResolvedValue({ ...dbUser, handle: 'ann', links: ['https://ann.example.test'] });
+    const res = makeRes();
+
+    await updateProfile(
+      makeReq({
+        user: jwtUser,
+        body: { handle: 'ann', bio: '', links: ['https://ann.example.test'], profilePublic: false },
+      }),
+      res
+    );
+
+    expect(mockedUser.findByIdAndUpdate).toHaveBeenCalledWith(
+      'db-id-1',
+      { $set: { handle: 'ann', bio: null, links: ['https://ann.example.test'], profilePublic: false } },
+      { returnDocument: 'after' }
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      user: expect.objectContaining({ handle: 'ann', links: ['https://ann.example.test'], profilePublic: true }),
+    });
+  });
+
+  it('keeps a bio as written', async () => {
+    mockedUser.findByIdAndUpdate.mockResolvedValue(dbUser);
+
+    await updateProfile(makeReq({ user: jwtUser, body: { bio: 'Road scenes' } }), makeRes());
+
+    expect(mockedUser.findByIdAndUpdate).toHaveBeenCalledWith(
+      'db-id-1',
+      { $set: { bio: 'Road scenes' } },
+      { returnDocument: 'after' }
+    );
+  });
+
+  it('answers 409 when the handle is taken, however many asked at once', async () => {
+    mockedUser.findByIdAndUpdate.mockRejectedValue(Object.assign(new Error('E11000'), { code: 11000 }));
+
+    await expect(
+      updateProfile(makeReq({ user: jwtUser, body: { handle: 'taken' } }), makeRes())
+    ).rejects.toMatchObject({ statusCode: 409, message: 'That handle is taken' });
+  });
+
+  it('does not hide other database failures as a taken handle', async () => {
+    mockedUser.findByIdAndUpdate.mockRejectedValue(new Error('connection lost'));
+
+    await expect(updateProfile(makeReq({ user: jwtUser, body: { handle: 'ann' } }), makeRes())).rejects.toThrow(
+      'connection lost'
+    );
   });
 });
 

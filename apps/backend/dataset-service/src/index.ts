@@ -11,8 +11,9 @@ import { purgeExpiredTrash } from './services/datasetService';
 
 // JWT_SECRET verifies sessions; INTERNAL_SERVICE_TOKEN gates /internal and the
 // group-service calls; FILE_SERVICE_API_KEY every storage call; REDIS_URL the
-// import queue. Missing any of them should fail boot, not the first request.
-assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'INTERNAL_SERVICE_TOKEN', 'FILE_SERVICE_API_KEY', 'REDIS_URL']);
+// import queue; AUTH_SERVICE_URL is where owners' names and avatars are asked for (best effort).
+// Missing any of them should fail boot, not the first request.
+assertRequiredEnv(['MONGODB_URI', 'JWT_SECRET', 'INTERNAL_SERVICE_TOKEN', 'FILE_SERVICE_API_KEY', 'REDIS_URL', 'AUTH_SERVICE_URL']);
 
 const PORT = process.env.PORT || 5010;
 

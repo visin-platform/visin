@@ -104,6 +104,10 @@
           }
         ]
       },
+      "user": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{24}$"
+      },
       "page": {
         "default": 1,
         "type": "integer",

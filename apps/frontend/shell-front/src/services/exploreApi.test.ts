@@ -2,16 +2,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { get, config } = vi.hoisted(() => ({
   get: vi.fn(),
-  config: { VISION_API_URL: 'https://vision-api.test/', DATASET_API_URL: 'https://dataset-api.test' },
+  config: {
+    VISION_API_URL: 'https://vision-api.test/',
+    DATASET_API_URL: 'https://dataset-api.test',
+    AUTH_SERVICE_URL: 'https://auth.test/',
+  },
 }));
 
 vi.mock('@visin/frontend-core', () => ({
+  ApiError: class ApiError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.status = status;
+    }
+  },
   createApiClient: (options: { baseUrl: () => string }) => ({
-    get: (endpoint: string) => get(`${options.baseUrl()}${endpoint}`),
+    get: (endpoint: string, init?: unknown) => get(`${options.baseUrl()}${endpoint}`, init),
   }),
 }));
 vi.mock('../config/ConfigProvider', () => ({ getGlobalConfig: () => config }));
 
+import { ApiError } from '@visin/frontend-core';
 import { entryName, exploreApi } from './exploreApi';
 
 beforeEach(() => {
@@ -29,7 +41,7 @@ describe('exploreApi', () => {
     });
 
     await expect(exploreApi.projects()).resolves.toEqual([{ _id: 'p1', visibility: 'public' }]);
-    expect(get).toHaveBeenCalledWith('https://vision-api.test/api/projects?sortBy=updatedAt&sortOrder=desc');
+    expect(get).toHaveBeenCalledWith('https://vision-api.test/api/projects?sortBy=updatedAt&sortOrder=desc', undefined);
   });
 
   it("drops a member's own private datasets from the public catalogue", async () => {
@@ -44,14 +56,42 @@ describe('exploreApi', () => {
     });
 
     await expect(exploreApi.datasets(24)).resolves.toEqual([{ _id: 'd2', visibility: 'public' }]);
-    expect(get).toHaveBeenCalledWith('https://dataset-api.test/api/datasets?limit=24');
+    expect(get).toHaveBeenCalledWith('https://dataset-api.test/api/datasets?limit=24', undefined);
+  });
+
+  it("lists one person's public projects and datasets for their profile", async () => {
+    get.mockResolvedValue({ success: true, data: [{ _id: 'p1', visibility: 'public' }] });
+    await exploreApi.projects({ user: 'u1' });
+    expect(get).toHaveBeenLastCalledWith('https://vision-api.test/api/projects?sortBy=updatedAt&sortOrder=desc&user=u1', undefined);
+
+    get.mockResolvedValue({ success: true, data: { datasets: [] } });
+    await exploreApi.datasets(48, { user: 'u1' });
+    expect(get).toHaveBeenLastCalledWith('https://dataset-api.test/api/datasets?limit=48&user=u1', undefined);
+  });
+
+  it("reads a person's public page by handle, without treating a signed-out answer as a reason to sign in", async () => {
+    const page = { id: 'u1', handle: 'ann-lee', name: 'Ann Lee', links: [], createdAt: '2026-01-01T00:00:00Z' };
+    get.mockResolvedValue({ success: true, data: page });
+
+    await expect(exploreApi.user('ann lee')).resolves.toEqual(page);
+    expect(get).toHaveBeenCalledWith('https://auth.test/auth/users/ann%20lee', { skipAuthRedirect: true });
+  });
+
+  it('reads no page for a handle that has none, and lets other failures through', async () => {
+    get.mockRejectedValueOnce(new ApiError(404, 'No such user'));
+    await expect(exploreApi.user('nobody')).resolves.toBeNull();
+
+    get.mockRejectedValueOnce(new ApiError(500, 'boom'));
+    await expect(exploreApi.user('ann')).rejects.toThrow('boom');
+    get.mockRejectedValueOnce(new Error('network'));
+    await expect(exploreApi.user('ann')).rejects.toThrow('network');
   });
 
   it('reads the top of the recorded leaderboard, verified or not', async () => {
     get.mockResolvedValue({ success: true, data: { direction: 'max', entries: [] } });
 
     await expect(exploreApi.leaderboard(5)).resolves.toEqual({ direction: 'max', entries: [] });
-    expect(get).toHaveBeenCalledWith('https://vision-api.test/api/evaluations/leaderboard?verification=all&limit=5');
+    expect(get).toHaveBeenCalledWith('https://vision-api.test/api/evaluations/leaderboard?verification=all&limit=5', undefined);
   });
 });
 
@@ -64,8 +104,8 @@ describe('exploreApi without configured services', () => {
     try {
       await exploreApi.datasets(1);
       await exploreApi.leaderboard(1);
-      expect(get).toHaveBeenNthCalledWith(1, '/api/datasets?limit=1');
-      expect(get).toHaveBeenNthCalledWith(2, '/api/evaluations/leaderboard?verification=all&limit=1');
+      expect(get).toHaveBeenNthCalledWith(1, '/api/datasets?limit=1', undefined);
+      expect(get).toHaveBeenNthCalledWith(2, '/api/evaluations/leaderboard?verification=all&limit=1', undefined);
     } finally {
       Object.assign(config, saved);
     }

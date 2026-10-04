@@ -1,12 +1,13 @@
 import { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, ButtonBase, Skeleton, Typography, useTheme } from '@mui/material';
+import { Box, Link, Skeleton, Typography, useTheme } from '@mui/material';
 import { Folder, PhotoLibrary } from '@mui/icons-material';
 import { livePalette, tint } from '@visin/frontend-core';
-import type { ExploreDataset, ExploreProject } from '../../services/exploreApi';
+import type { ExploreDataset, ExploreOwner, ExploreProject } from '../../services/exploreApi';
 import { formatCount, formatRelative } from '../home/formatting';
 import { panelSx } from '../home/panel';
 import { cardGridSx } from './cardGrid';
+import { OwnerLine } from './OwnerLine';
 
 const clamp = (lines: number) =>
   ({
@@ -23,38 +24,47 @@ interface CardProps {
   media: ReactNode;
   title: string;
   description?: string;
-  /** Who it belongs to, when the viewer is allowed to know. */
-  owner?: string;
+  /** Who it belongs to, as far as they agreed to be shown. */
+  owner: ExploreOwner;
   footer: string;
 }
 
+/**
+ * A card is one target, but not one link: the title's link is stretched over the whole card
+ * (`::after`), and the owner's name, being a link of its own, sits above it. A link inside a
+ * link would be invalid and unreachable by keyboard.
+ */
 function Card({ to, media, title, description, owner, footer }: CardProps) {
   return (
-    <ButtonBase
-      component={RouterLink}
-      to={to}
+    <Box
+      component="article"
       sx={{
         ...panelSx,
+        position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'stretch',
-        justifyContent: 'flex-start',
-        textAlign: 'left',
-        color: 'text.primary',
-        transition: 'border-color .15s ease, background-color .15s ease',
-        '&:hover': { borderColor: 'primary.main' },
-        '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 }
+        transition: 'border-color .15s ease',
+        '&:hover, &:focus-within': { borderColor: 'primary.main' },
+        '&:has(.card-link:focus-visible)': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 }
       }}
     >
       {media}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, p: 2, flex: 1, minWidth: 0 }}>
-        {owner && (
-          <Typography variant="caption" noWrap sx={{ color: 'text.secondary' }}>
-            {owner}
-          </Typography>
-        )}
+        <OwnerLine owner={owner} />
         <Typography component="h3" sx={{ ...clamp(2), fontSize: '1rem', fontWeight: 700, lineHeight: 1.35 }}>
-          {title}
+          <Link
+            component={RouterLink}
+            to={to}
+            className="card-link"
+            underline="none"
+            sx={{
+              color: 'text.primary',
+              '&:focus-visible': { outline: 'none' },
+              '&::after': { content: '""', position: 'absolute', inset: 0 }
+            }}
+          >
+            {title}
+          </Link>
         </Typography>
         {description && (
           <Typography variant="body2" sx={{ ...clamp(2), color: 'text.secondary' }}>
@@ -65,7 +75,7 @@ function Card({ to, media, title, description, owner, footer }: CardProps) {
           {footer}
         </Typography>
       </Box>
-    </ButtonBase>
+    </Box>
   );
 }
 
@@ -93,7 +103,7 @@ export function ProjectCard({ project, now }: { project: ExploreProject; now: Da
       }
       title={project.name}
       description={project.description}
-      owner={project.owner.name}
+      owner={project.owner}
       footer={`Updated ${formatRelative(project.updatedAt, now)}`}
     />
   );
@@ -121,7 +131,7 @@ export function DatasetCard({ dataset, now }: { dataset: ExploreDataset; now: Da
       }
       title={dataset.name}
       description={dataset.description}
-      owner={dataset.owner.name}
+      owner={dataset.owner}
       footer={[
         `${formatCount(dataset.imageCount)} ${dataset.imageCount === 1 ? 'image' : 'images'}`,
         groups > 0 ? `${groups} ${groups === 1 ? 'group' : 'groups'}` : null,

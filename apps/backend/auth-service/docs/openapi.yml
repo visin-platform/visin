@@ -37,6 +37,8 @@ tags:
     description: The devices a user is signed in on
   - name: Profile
     description: The signed-in user's own account
+  - name: People
+    description: What anyone may see of an account, by its handle
   - name: Admin
     description: Operations for administrators
   - name: Internal
@@ -156,6 +158,31 @@ components:
         name: { type: string }
         picture: { type: string }
         hasPassword: { type: boolean }
+        handle: { type: string, description: 'The address of the public page, /u/{handle}', example: ann-example }
+        bio: { type: string }
+        links: { type: array, items: { type: string, format: uri } }
+        profilePublic: { type: boolean, description: 'False hides the public page and the name shown on what the account owns' }
+    PublicUser:
+      type: object
+      description: What anyone may see of an account. Never the email.
+      required: [id, handle, name, links, createdAt]
+      properties:
+        id: { type: string }
+        handle: { type: string, example: ann-example }
+        name: { type: string, description: 'The name the person gave, else their handle' }
+        picture: { type: string, format: uri }
+        bio: { type: string }
+        links: { type: array, items: { type: string, format: uri } }
+        createdAt: { type: string, format: date-time }
+    PublicUserRef:
+      type: object
+      description: The owner of something, as far as the owner agreed to be shown. Only `id` when the account hides its profile.
+      required: [id]
+      properties:
+        id: { type: string }
+        handle: { type: string }
+        name: { type: string }
+        picture: { type: string, format: uri }
     Session:
       type: object
       required: [id, device, method, createdAt, lastSeenAt, expiresAt, current]
@@ -1027,7 +1054,7 @@ paths:
           $ref: '#/components/responses/Error'
     put:
       tags: [Profile]
-      summary: Update your name
+      summary: Update your name and public page
       operationId: updateProfile
       x-internal: true
       security: [{ SessionCookie: [] }, { BearerSession: [] }]
@@ -1054,6 +1081,38 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/users/{handle}:
+    get:
+      tags: [People]
+      summary: A person's public page
+      operationId: getPublicUser
+      description: |
+        No sign-in needed. An account that hid its profile answers 404, the same as one that does not exist.
+        The email is never part of it.
+      security: [{}]
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema: { $ref: ./generated/request-schemas.json#/HandleParams/properties/handle }
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data: { $ref: '#/components/schemas/PublicUser' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         default:
           $ref: '#/components/responses/Error'
 
@@ -1145,6 +1204,42 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/internal/users/public:
+    post:
+      tags: [Internal]
+      summary: Names and avatars for the owners of what a service lists
+      description: |
+        For vision-service and dataset-service, which show who owns a project or dataset. Accounts that hid
+        their profile come back as a bare `id`; ids that match no account are left out.
+      operationId: lookupPublicUsers
+      x-internal: true
+      security: [{ InternalToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/PublicUsersBody
+      responses:
+        '200':
+          description: The owners found
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PublicUserRef' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         default:
           $ref: '#/components/responses/Error'
 

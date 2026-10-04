@@ -28,6 +28,8 @@ services:
       - FILE_SERVICE_API_KEY=${FILE_SERVICE_API_KEY}
       # Gates /internal/*, which auth-service calls when issuing a project-limited API key.
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      # Where the names and avatars of project owners come from (auth-service, over the private network).
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - FILE_SERVICE_HMAC_SECRET=${FILE_SERVICE_HMAC_SECRET}
     init: true
     networks:
