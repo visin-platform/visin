@@ -83,7 +83,7 @@ describe('vision-service responses match docs/openapi.yml', () => {
     process.env.JWT_SECRET = secret;
     process.env.API_KEY_ENCRYPTION_SECRET = 'api-contract-encryption-secret';
     resetEncryptionKeyCache();
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json(), identityContextMiddleware);

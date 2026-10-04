@@ -72,7 +72,7 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
 
   beforeAll(async () => {
     process.env.JWT_SECRET = secret;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     await Promise.all([Suite.init(), Evaluation.init()]);
     const app = express();

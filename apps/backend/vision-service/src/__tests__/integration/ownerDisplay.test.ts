@@ -37,7 +37,7 @@ describe('owners on project lists, with in-memory MongoDB', () => {
   const names = async (path: string) => (await get(path)).body.data.map(project => project.name).sort();
 
   beforeAll(async () => {
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json(), identityContextMiddleware);

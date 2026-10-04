@@ -22,7 +22,7 @@ describe('project membership assertions with in-memory MongoDB', () => {
   const previousSecret = process.env.JWT_SECRET;
   beforeAll(async () => {
     process.env.JWT_SECRET = secret;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json());
@@ -32,7 +32,9 @@ describe('project membership assertions with in-memory MongoDB', () => {
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/internal/project-groups`;
   }, 120_000);
-  afterEach(async () => { await Group.deleteMany({}); });
+  afterEach(async () => {
+    if (mongoose.connection.readyState === 1) await Group.deleteMany({});
+  });
   afterAll(async () => {
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;

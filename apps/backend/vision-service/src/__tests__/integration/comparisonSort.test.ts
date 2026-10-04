@@ -11,7 +11,7 @@ describe('sorting comparisons by how many items they hold', () => {
   let mongo: MongoMemoryServer;
 
   beforeAll(async () => {
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
   }, 120_000);
 

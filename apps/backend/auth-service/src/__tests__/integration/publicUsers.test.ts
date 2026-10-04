@@ -17,7 +17,7 @@ describe('handles and public users with in-memory MongoDB', () => {
 
   beforeAll(async () => {
     process.env.INTERNAL_SERVICE_TOKEN = 'internal-test-token';
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     await User.createIndexes();
     const app = express();

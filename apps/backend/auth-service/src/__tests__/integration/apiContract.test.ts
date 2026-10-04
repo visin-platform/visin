@@ -67,7 +67,7 @@ describe('auth-service responses match docs/openapi.yml', () => {
       AUTH_FRONT_URL: 'https://auth.example.test'
     });
     delete process.env.GROUP_SERVICE_URL;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     await Promise.all(Object.values(mongoose.models).map((model) => model.init()));
     const app = express();

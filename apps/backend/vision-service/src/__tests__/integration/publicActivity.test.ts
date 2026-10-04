@@ -71,7 +71,7 @@ describe('the public activity feed, with in-memory MongoDB', () => {
   const summary = async (query: string) => (await feed(query)).body.data.map((item) => `${item.kind}:${item.project.name}`);
 
   beforeAll(async () => {
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json());

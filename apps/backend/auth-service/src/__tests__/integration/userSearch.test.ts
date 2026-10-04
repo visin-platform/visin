@@ -16,7 +16,7 @@ describe('internal user search with in-memory MongoDB', () => {
 
   beforeAll(async () => {
     process.env.INTERNAL_SERVICE_TOKEN = 'internal-test-token';
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json(), cookieParser());

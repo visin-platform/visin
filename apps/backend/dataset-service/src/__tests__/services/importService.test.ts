@@ -15,7 +15,7 @@ let png: Buffer;
 let idmap: Buffer;
 
 beforeAll(async () => {
-  mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+  mongo = await MongoMemoryServer.create();
   await mongoose.connect(mongo.getUri());
   await DatasetItem.syncIndexes();
   png = await sharp({ create: { width: 4, height: 2, channels: 3, background: 'white' } }).png().toBuffer();

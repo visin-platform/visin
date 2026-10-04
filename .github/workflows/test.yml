@@ -37,6 +37,8 @@ jobs:
               - 'package-lock.json'
               - '.github/workflows/test.yml'
               - 'libs/backend-core/**'
+              - 'scripts/jest-*.cjs'
+              - 'scripts/jest-*.mjs'
             frontend-shared: &frontend-shared
               - 'package.json'
               - 'package-lock.json'
@@ -215,6 +217,10 @@ jobs:
         run: |
           npm run build --workspace=@visin/backend-core
           npm run build --workspace=@visin/frontend-core
+
+      - name: Check shared MongoDB test setup
+        if: matrix.workspace == 'group-service'
+        run: node --test scripts/jest-mongo-setup.test.mjs
 
       - name: Run tests with coverage
         run: npm run test:coverage --workspace=${{ matrix.workspace }}

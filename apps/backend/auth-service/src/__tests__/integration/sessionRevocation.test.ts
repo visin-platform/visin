@@ -25,7 +25,7 @@ describe('browser sessions across auth-service and the shared middleware', () =>
     process.env.JWT_SECRET = 'revocation-test-secret';
     process.env.INTERNAL_SERVICE_TOKEN = 'revocation-internal-secret';
     delete process.env.GROUP_SERVICE_URL;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json(), cookieParser());

@@ -7,7 +7,7 @@ import { recordTests } from '../fixtures/recordedTest';
 describe('run evaluation lifecycle', () => {
   let mongo: MongoMemoryServer;
   beforeAll(async () => {
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
   }, 120_000);
   afterEach(async () => { await Evaluation.deleteMany({}); });

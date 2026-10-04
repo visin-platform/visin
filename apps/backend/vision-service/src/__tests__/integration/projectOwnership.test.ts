@@ -58,7 +58,7 @@ describe('project ownership with in-memory MongoDB', () => {
 
   beforeAll(async () => {
     process.env.JWT_SECRET = secret;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json(), identityContextMiddleware);

@@ -40,7 +40,7 @@ beforeAll(async () => {
   process.env.API_KEY_ENCRYPTION_SECRET = 'todo-bugs-encryption';
   process.env.JWT_SECRET = 'todo-bugs-jwt';
   resetEncryptionKeyCache();
-  mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+  mongo = await MongoMemoryServer.create();
   await mongoose.connect(mongo.getUri());
   await Promise.all([Epoch.syncIndexes(), Benchmark.syncIndexes(), Config.syncIndexes(), UploadReservation.syncIndexes()]);
   const app = express();

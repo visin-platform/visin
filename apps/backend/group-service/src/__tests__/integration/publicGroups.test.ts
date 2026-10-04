@@ -31,7 +31,7 @@ describe('group public pages against in-memory MongoDB', () => {
 
   beforeAll(async () => {
     process.env.INTERNAL_SERVICE_TOKEN = 'internal-test-token';
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri(), { serverSelectionTimeoutMS: 10_000 });
     await Group.init();
     const app = express();

@@ -71,7 +71,7 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
   const names = async (query = '') => (await list(query)).body.data.projects.map((card) => card.name);
 
   beforeAll(async () => {
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     await Project.syncIndexes();
     const app = express();

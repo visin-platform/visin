@@ -19,7 +19,7 @@ describe('account-bound invitations with in-memory MongoDB', () => {
   const previousSecret = process.env.JWT_SECRET;
   beforeAll(async () => {
     process.env.JWT_SECRET = secret;
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json());
@@ -34,7 +34,13 @@ describe('account-bound invitations with in-memory MongoDB', () => {
     // Each test token names a session whose id is its user's.
     await mongoose.connection.collection('user_sessions').insertMany((await mongoose.connection.collection('users').find({}, { projection: { _id: 1 } }).toArray()).map(({ _id }) => ({ _id, userId: _id, expiresAt: new Date(Date.now() + 3_600_000) })));
     id = String((await service.createGroup('000000000000000000000005', 'Research', 'shared@example.test'))._id); });
-  afterEach(async () => { jest.restoreAllMocks(); await Group.deleteMany({}); await mongoose.connection.collection('users').deleteMany({}); await mongoose.connection.collection('user_sessions').deleteMany({}); });
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    if (mongoose.connection.readyState !== 1) return;
+    await Group.deleteMany({});
+    await mongoose.connection.collection('users').deleteMany({});
+    await mongoose.connection.collection('user_sessions').deleteMany({});
+  });
   afterAll(async () => {
     if (previousSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = previousSecret;
     if (server) await new Promise<void>(resolve => server.close(() => resolve()));

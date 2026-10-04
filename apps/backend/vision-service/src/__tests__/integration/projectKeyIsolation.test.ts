@@ -62,7 +62,7 @@ describe('project-limited key isolation through HTTP and in-memory MongoDB', () 
     process.env.JWT_SECRET = secret;
     process.env.API_KEY_ENCRYPTION_SECRET = 'project-key-scope-secret';
     resetEncryptionKeyCache();
-    mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+    mongo = await MongoMemoryServer.create();
     await mongoose.connect(mongo.getUri());
     const app = express();
     app.use(express.json());

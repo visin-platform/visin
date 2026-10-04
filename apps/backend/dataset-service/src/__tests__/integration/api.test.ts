@@ -72,7 +72,7 @@ beforeAll(async () => {
   process.env.INTERNAL_SERVICE_TOKEN = internalToken;
   process.env.API_KEY_ENCRYPTION_SECRET = 'dataset-service-key-test-secret';
   resetEncryptionKeyCache();
-  mongo = await MongoMemoryServer.create({ binary: { version: '8.3.9' } });
+  mongo = await MongoMemoryServer.create();
   await mongoose.connect(mongo.getUri());
   await DatasetItem.syncIndexes();
   const app = express();
