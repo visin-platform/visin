@@ -362,20 +362,60 @@ describe('AppLayout', () => {
           </MemoryRouter>
         </VisinThemeProvider>
       );
-    const appearance = () => screen.getByRole('button', { name: /^Appearance/ });
+    const appearance = () => screen.getByRole('button', { name: /^Switch to (light|dark) mode$/ });
 
-    it('steps through Auto, Light and Dark from the top bar, and says what comes next', async () => {
+    // The choice is kept per device, so one test's would be the next one's starting point.
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    it('flips between light and dark, and says which a click gives', async () => {
       renderThemed();
-      expect(appearance()).toHaveAccessibleName('Appearance: Auto. Switch to Light');
+      expect(appearance()).toHaveAccessibleName('Switch to dark mode');
 
-      fireEvent.click(appearance());
-      expect(appearance()).toHaveAccessibleName('Appearance: Light. Switch to Dark');
       fireEvent.click(appearance());
 
       await waitFor(() => expect(document.documentElement).toHaveAttribute('data-color-scheme', 'dark'));
-      expect(appearance()).toHaveAccessibleName('Appearance: Dark. Switch to Auto');
+      expect(appearance()).toHaveAccessibleName('Switch to light mode');
       fireEvent.click(appearance());
-      expect(appearance()).toHaveAccessibleName('Appearance: Auto. Switch to Light');
+      await waitFor(() => expect(document.documentElement).toHaveAttribute('data-color-scheme', 'light'));
+      expect(appearance()).toHaveAccessibleName('Switch to dark mode');
+    });
+
+    it('offers no Auto: it is a plain switch, with the device’s choice left to the settings', () => {
+      renderThemed();
+
+      expect(screen.queryByRole('button', { name: /auto/i })).not.toBeInTheDocument();
+      expect(appearance()).toHaveAttribute('title', 'Switch to dark mode');
+    });
+
+    it('flips what is showing when the device decides, so the first click always changes the page', async () => {
+      Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        writable: true,
+        value: (query: string) => ({
+          matches: query.includes('prefers-color-scheme: dark'),
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn()
+        })
+      });
+      try {
+        renderThemed();
+        // The device is dark and nothing was chosen: dark is showing, so the click goes to light.
+        await waitFor(() => expect(appearance()).toHaveAccessibleName('Switch to light mode'));
+
+        fireEvent.click(appearance());
+
+        await waitFor(() => expect(document.documentElement).toHaveAttribute('data-color-scheme', 'light'));
+        expect(appearance()).toHaveAccessibleName('Switch to dark mode');
+      } finally {
+        delete (window as { matchMedia?: unknown }).matchMedia;
+      }
     });
 
     it('is there for a visitor, who has no account menu, and while the session is still being checked', () => {

@@ -880,7 +880,7 @@ components:
 
     PublicProjectCard:
       type: object
-      required: [id, name, owner, createdAt, updatedAt, runs]
+      required: [id, name, owner, createdAt, updatedAt, lastActivityAt, runs]
       properties:
         id: { type: string }
         name: { type: string }
@@ -889,6 +889,7 @@ components:
         owner: { $ref: '#/components/schemas/ResourceOwner' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        lastActivityAt: { type: string, format: date-time, description: When anything last happened in it; a project older than that field reads as its last edit }
         runs: { type: integer, minimum: 0, description: Runs in the project }
         lastRunAt: { type: string, format: date-time, description: When the latest run started; absent with no runs }
     ActivityProject:
@@ -4791,7 +4792,7 @@ paths:
           schema: { $ref: ./generated/request-schemas.json#/PublicProjectsQuery/properties/search }
         - name: sort
           in: query
-          description: "`updated` (default): last edited first. `created`: newest first."
+          description: "`updated` (default): the most recent activity first (a run or epoch, a finding, a result, a change of settings). `created`: newest first."
           schema: { $ref: ./generated/request-schemas.json#/PublicProjectsQuery/properties/sort }
         - name: page
           in: query

@@ -70,6 +70,8 @@ export interface ExploreProject {
   visibility: 'private' | 'public';
   owner: ExploreOwner;
   updatedAt: string;
+  /** When anything last happened in it (a run, a finding, a result, a change): only the public catalogue says. */
+  lastActivityAt?: string;
   /** Runs in it and when the latest started: only the public catalogue says. */
   runs?: number;
   lastRunAt?: string;

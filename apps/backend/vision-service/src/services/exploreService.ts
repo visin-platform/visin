@@ -1,4 +1,4 @@
-import type { QueryFilter } from 'mongoose';
+import type { QueryFilter, Types } from 'mongoose';
 import Project, { type IProject } from '../models/Project';
 import Training from '../models/Training';
 import { Finding } from '../models/Finding';
@@ -16,6 +16,8 @@ export interface PublicProjectCard {
   owner: { kind: 'user' | 'group'; id: string; name?: string; handle?: string; picture?: string };
   createdAt: string;
   updatedAt: string;
+  /** When anything last happened in it: a run, an epoch, a finding, a result, a change of settings. */
+  lastActivityAt: string;
   /** Runs in it, and when the latest started. */
   runs: number;
   lastRunAt?: string;
@@ -30,13 +32,25 @@ export interface PublicProjectCard {
  */
 export async function listPublicProjects({ search, sort, page, limit }: PublicProjectsQuery) {
   const filter: QueryFilter<IProject> = { visibility: 'public', trashedAt: null, ...(search ? { $text: { $search: search } } : {}) };
-  const [projects, total] = await Promise.all([
-    Project.find(filter)
-      .sort({ [sort === 'created' ? 'createdAt' : 'updatedAt']: -1, _id: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit),
+  const skip = (page - 1) * limit;
+
+  // `updated` is the latest activity, which a project older than that field reads as its last edit.
+  const [order, total] = await Promise.all([
+    sort === 'created'
+      ? Project.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).select('_id')
+      : Project.aggregate<{ _id: Types.ObjectId }>([
+          { $match: filter },
+          { $addFields: { activityAt: { $ifNull: ['$lastActivityAt', '$updatedAt'] } } },
+          { $sort: { activityAt: -1, _id: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+          { $project: { _id: 1 } }
+        ]),
     Project.countDocuments(filter)
   ]);
+  const found = await Project.find({ _id: { $in: order.map((row) => row._id) } });
+  const byId = new Map(found.map((project) => [String(project._id), project]));
+  const projects = order.flatMap((row) => byId.get(String(row._id)) ?? []);
 
   const ids = projects.map((project) => String(project._id));
   const [owners, runs] = await Promise.all([
@@ -59,6 +73,7 @@ export async function listPublicProjects({ search, sort, page, limit }: PublicPr
       owner: { kind: project.owner.kind, id: project.owner.id, ...shown },
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
+      lastActivityAt: (project.lastActivityAt ?? project.updatedAt).toISOString(),
       runs: counted?.runs ?? 0,
       ...(counted ? { lastRunAt: counted.lastRunAt.toISOString() } : {})
     };

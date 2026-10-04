@@ -31,6 +31,7 @@ import { invalidatePublic } from './publicCache';
 import { requireCheckpointStorage } from './sourceRegistry';
 import { readableSuite } from './suiteService';
 import { contentHashOf } from './evaluationContent';
+import { touchProjectActivity } from './projectActivity';
 import { DEFAULT_LEADERBOARD_PAGE, leaderboardPage, leaderboardPool, selectedAttemptId } from './leaderboardPoolService';
 
 import { MAX_PAGE_SIZE } from '../validation/common';
@@ -335,6 +336,7 @@ export async function createEvaluation(
     if (corrected?.wasPublished) recordVisibility(corrected.evaluation, project, actor, 'private');
     await withdrawSuperseded(created, project, actor);
     await touchRun(source);
+    await touchProjectActivity(projectId);
     invalidatePublic();
     return { evaluation: toView(created, true), created: true };
   } catch (error) {
@@ -467,6 +469,7 @@ export async function promoteEvaluation(
     return { evaluation: toView(replayOfPromotion(winner, body), true), created: false };
   }
   await withdrawSuperseded(created, project, actor);
+  await touchProjectActivity(projectId);
   invalidatePublic();
   return { evaluation: toView(created, true), created: true };
 }

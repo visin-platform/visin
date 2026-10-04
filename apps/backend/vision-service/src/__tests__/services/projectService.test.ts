@@ -105,6 +105,8 @@ describe('createProject', () => {
       owner: { kind: 'user', id: 'u1' },
       createdBy: 'u1',
       taxonomy: undefined,
+      // Making it is the first thing that happens in it.
+      lastActivityAt: expect.any(Date),
     });
     expect(result).toMatchObject({ _id: 'new', permissions: { own: true } });
   });

@@ -1765,6 +1765,7 @@
           "owner",
           "createdAt",
           "updatedAt",
+          "lastActivityAt",
           "runs"
         ],
         "properties": {
@@ -1790,6 +1791,11 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "lastActivityAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When anything last happened in it; a project older than that field reads as its last edit"
           },
           "runs": {
             "type": "integer",
@@ -11078,7 +11084,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "`updated` (default): last edited first. `created`: newest first.",
+            "description": "`updated` (default): the most recent activity first (a run or epoch, a finding, a result, a change of settings). `created`: newest first.",
             "schema": {
               "default": "updated",
               "type": "string",

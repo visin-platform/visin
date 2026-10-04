@@ -16,6 +16,7 @@ import Project from '../models/Project';
 import { latestResultsByRun, type RunResultSummary } from './resultAggregation';
 import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from './projectAccessService';
 import { costOf, costingByProject, costingFor } from './costingService';
+import { touchProjectActivity } from './projectActivity';
 import type { TrainingSortField } from '../validation/trainingSchemas';
 
 interface TrainingMetrics {
@@ -514,6 +515,7 @@ export const trainingService = {
 
     if (training.dataset?.source === 'visin') training.datasetId = training.dataset.id;
     const savedTraining = await training.save();
+    await touchProjectActivity(resolvedProjectId);
     return savedTraining;
   },
 

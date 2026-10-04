@@ -109,12 +109,12 @@ export function ProjectCard({ project, now }: { project: ExploreProject; now: Da
   );
 }
 
-/** What a card says of how alive a project is: its runs and the last one, else when it was last edited. */
+/** What a card says of how alive a project is: its runs and the last one, else when anything last happened in it. */
 function projectFooter(project: ExploreProject, now: Date): string {
   if (project.runs && project.lastRunAt) {
     return `${formatCount(project.runs)} ${project.runs === 1 ? 'run' : 'runs'} · last run ${formatRelative(project.lastRunAt, now)}`;
   }
-  return `Updated ${formatRelative(project.updatedAt, now)}`;
+  return `Updated ${formatRelative(project.lastActivityAt ?? project.updatedAt, now)}`;
 }
 
 export function DatasetCard({ dataset, now }: { dataset: ExploreDataset; now: Date }) {

@@ -13,6 +13,11 @@ export interface IProject extends Document {
   owner: ResourceOwner;
   /** attribution only: never changes and grants nothing */
   createdBy: string;
+  /**
+   * When anything last happened in it: a run or an epoch, a finding, a result, a change of settings. Throttled to once
+   * a minute (`touchProjectActivity`). Absent on a project older than this field, which reads as `updatedAt`.
+   */
+  lastActivityAt?: Date;
   visibility: Visibility;
   /** groups it is shared with for collaboration: their members get `contribute` */
   editorGroupIds?: string[];
@@ -58,6 +63,8 @@ const ProjectSchema: Schema = new Schema(
     },
     owner: { type: OwnerSchema, required: true },
     createdBy: { type: String, required: true },
+    // No schema default: one would fill in every project older than the field, on read, as active just now.
+    lastActivityAt: { type: Date },
     visibility: { type: String, enum: VISIBILITIES, default: 'private', index: true },
     editorGroupIds: { type: [String], default: [], index: true },
     trashedAt: { type: Date },

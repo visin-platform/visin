@@ -34,7 +34,7 @@ const projects: ExploreProject[] = [
     runs: 9,
     lastRunAt: hoursAgo(5),
   },
-  { _id: 'p2', name: 'Night driving', visibility: 'public', owner: { kind: 'user', id: 'u1' }, updatedAt: hoursAgo(48), runs: 0 },
+  { _id: 'p2', name: 'Night driving', visibility: 'public', owner: { kind: 'user', id: 'u1' }, updatedAt: hoursAgo(96), lastActivityAt: hoursAgo(48), runs: 0 },
 ];
 const datasets = [
   {
@@ -124,6 +124,7 @@ describe('ExplorePage', () => {
     const card = async (name: string) => (await screen.findByRole('link', { name })).closest('article')!;
     expect(within(await card('Window ablations')).getByText('9 runs · last run 5 hours ago')).toBeInTheDocument();
     expect(within(await card('One run')).getByText('1 run · last run 1 hour ago')).toBeInTheDocument();
+    // No runs: when anything last happened in it, not when its settings were last edited (4 days ago).
     expect(within(await card('Night driving')).getByText(/^Updated 2 days ago/)).toBeInTheDocument();
   });
 

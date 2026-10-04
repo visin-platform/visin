@@ -109,6 +109,28 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
     expect(await names()).toEqual(['Window ablations', 'Team harbour', 'Night driving']);
   });
 
+  it('puts the most recently active first, which a run can make a project that was edited long ago', async () => {
+    await Project.collection.updateOne({ _id: new mongoose.Types.ObjectId(ids['Night driving']) }, { $set: { lastActivityAt: at('2026-09-20') } });
+    await Project.collection.updateOne({ _id: new mongoose.Types.ObjectId(ids['Team harbour']) }, { $set: { lastActivityAt: at('2026-08-01') } });
+
+    const { projects } = (await list()).body.data;
+
+    // Night driving was edited 09-03 but is active 09-20; Team harbour was edited 09-04 but is quiet since 08-01.
+    expect(projects.map((card) => card.name)).toEqual(['Night driving', 'Window ablations', 'Team harbour']);
+    expect(projects[0].lastActivityAt).toBe('2026-09-20T12:00:00.000Z');
+  });
+
+  it('reads a project older than the field as last active when it was last edited, and sorts it by that', async () => {
+    // The fixtures above have no lastActivityAt: they are exactly such projects.
+    const cards = (await list()).body.data.projects;
+
+    expect(cards.map((card) => [card.name, card.lastActivityAt])).toEqual([
+      ['Window ablations', '2026-09-05T12:00:00.000Z'],
+      ['Team harbour', '2026-09-04T12:00:00.000Z'],
+      ['Night driving', '2026-09-03T12:00:00.000Z']
+    ]);
+  });
+
   it('can list the newest projects first instead', async () => {
     expect(await names('sort=created')).toEqual(['Night driving', 'Team harbour', 'Window ablations']);
   });
@@ -124,6 +146,7 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
       owner: { kind: 'user', id: ANN, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' },
       createdAt: '2026-09-01T12:00:00.000Z',
       updatedAt: '2026-09-05T12:00:00.000Z',
+      lastActivityAt: '2026-09-05T12:00:00.000Z',
       runs: 2,
       lastRunAt: '2026-09-06T08:00:00.000Z'
     });
@@ -139,7 +162,7 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
     expect(lookupOwnerIdentities).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(body)).not.toContain('createdBy');
     expect(Object.keys(body.data.projects[0]).sort()).toEqual(
-      ['createdAt', 'description', 'id', 'lastRunAt', 'name', 'owner', 'runs', 'slug', 'updatedAt']
+      ['createdAt', 'description', 'id', 'lastActivityAt', 'lastRunAt', 'name', 'owner', 'runs', 'slug', 'updatedAt']
     );
   });
 

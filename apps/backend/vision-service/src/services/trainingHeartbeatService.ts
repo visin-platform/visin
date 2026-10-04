@@ -1,11 +1,18 @@
 import Training from '../models/Training';
 import Project from '../models/Project';
 import { assertResourceWrite } from './writeAccessService';
+import { touchProjectActivity } from './projectActivity';
 
 /** Server receipt time, never a replay's historical timestamp. Terminal runs stay terminal. */
 export async function touchTraining(trainingId: string) {
   const now = new Date();
-  await Training.updateOne({ _id: trainingId, deletedAt: null }, { $set: { lastSeenAt: now } });
+  const touched = await Training.findOneAndUpdate(
+    { _id: trainingId, deletedAt: null },
+    { $set: { lastSeenAt: now } },
+    { projection: { projectId: 1 } }
+  );
+  // A run that is posting epochs is a project that is active.
+  await touchProjectActivity(touched?.projectId, now);
   await Training.updateOne({ _id: trainingId, deletedAt: null, status: 'stalled' }, { $set: { status: 'running' } });
   return now;
 }

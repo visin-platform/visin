@@ -174,7 +174,9 @@ export const createProject = async (userId: string, data: CreateProjectData): Pr
     owner,
     createdBy: userId,
     visibility: data.visibility ?? 'private',
-    taxonomy: applyTaskTypePresets(data.taxonomy)
+    taxonomy: applyTaskTypePresets(data.taxonomy),
+    // Making it is the first thing that happens in it.
+    lastActivityAt: new Date()
   }).save();
   return toProjectView(project, userId);
 };
@@ -242,6 +244,8 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
   }
   if (data.storage !== undefined) project.storage = data.storage;
 
+  // Changing a project is something happening in it.
+  project.lastActivityAt = new Date();
   await project.save();
   invalidatePublic();
   return toProjectView(project, userId);

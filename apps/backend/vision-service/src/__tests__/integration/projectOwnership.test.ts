@@ -152,6 +152,8 @@ describe('project ownership with in-memory MongoDB', () => {
       expect((await put(ADMIN, { name: 'Renamed', visibility: 'private' })).body.data.name).toBe('Renamed');
       expect((await put(ADMIN, { visibility: 'public' })).status).toBe(403);
       expect((await put(OWNER, { visibility: 'public' })).body.data.visibility).toBe('public');
+      // Changing a project is something happening in it.
+      expect((await Project.findById(id).lean())?.lastActivityAt).toBeInstanceOf(Date);
       expect((await call(`/projects/${id}`, { user: STRANGER })).status).toBe(200);
       expect((await events()).map(event => event.action)).toEqual(['visibility']);
     });
@@ -162,6 +164,14 @@ describe('project ownership with in-memory MongoDB', () => {
       const created = await call('/projects', { method: 'POST', body: { name: 'New' } });
       expect(created.status).toBe(201);
       expect(created.body.data).toMatchObject({ owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'private', permissions: { own: true } });
+    });
+
+    it('counts as the first thing to happen in it, so it starts out recently active', async () => {
+      const before = Date.now();
+      const created = await call('/projects', { method: 'POST', body: { name: 'Fresh' } });
+
+      const stored = await Project.findById(created.body.data._id).lean();
+      expect(stored?.lastActivityAt?.getTime()).toBeGreaterThanOrEqual(before);
     });
 
     it("puts it in a group only for the group's members, and public there only for its owner", async () => {

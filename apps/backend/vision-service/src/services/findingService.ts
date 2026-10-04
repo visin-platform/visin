@@ -8,6 +8,7 @@ import { ExportOptions, ExportRun, findingToLatex } from './latexExport';
 import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds, resolveProject } from './projectAccessService';
 import { tokenProjectId } from '../middleware/projectTokenContext';
 import { parseFindingCursor } from './findingCursor';
+import { touchProjectActivity } from './projectActivity';
 
 /**
  * Written conclusions about a project or a run.
@@ -220,6 +221,8 @@ export const createFinding = async (
     authorLabel: author.label,
     authorUserId: author.userId
   });
+
+  await touchProjectActivity(projectId);
 
   // Named here too, so `citedTrainings` is present on every finding this
   // service hands back rather than on two endpoints out of three.

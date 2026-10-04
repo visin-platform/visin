@@ -22,11 +22,10 @@ import {
   useMediaQuery,
   useTheme
 } from '@mui/material';
-import { Add, ExpandMore, Logout, Person, Search } from '@mui/icons-material';
+import { Add, DarkModeOutlined, ExpandMore, LightModeOutlined, Logout, Person, Search } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 
 import { chrome, glass, livePalette, pageBackground, surface } from '../../theme';
-import { COLOR_MODE_OPTIONS, type ColorMode } from '../ColorMode';
 import { TAB_BAR_HEIGHT, useCompactLayout } from '../Page/layout';
 
 const RAIL_WIDTH = 88;
@@ -138,7 +137,7 @@ const linkProps = (item: AppLayoutNavItem) =>
  * dropdown on phones. The rail is for places; who you are and what you can do
  * sit at the end of that bar: search, Sign in / Sign up for a visitor, and for
  * a member a New menu and the account menu, the only place account actions live. The appearance
- * button (Auto, Light, Dark) is there for everyone, signed in or not.
+ * button (light or dark) is there for everyone, signed in or not.
  *
  * Every entry carries a visible label. The sidebar this replaced hid its menu
  * behind a burger button on phones, and collapsed on desktop to an icon rail
@@ -171,10 +170,9 @@ export function AppLayout({
   const mobile = useCompactLayout();
 
   const palette = livePalette(theme);
-  const { mode, setMode } = useColorScheme();
-  const colorMode = COLOR_MODE_OPTIONS.find((option) => option.value === (mode ?? 'system')) ?? COLOR_MODE_OPTIONS[0];
-  const nextColorMode: ColorMode =
-    COLOR_MODE_OPTIONS[(COLOR_MODE_OPTIONS.indexOf(colorMode) + 1) % COLOR_MODE_OPTIONS.length].value;
+  const { mode, systemMode, setMode } = useColorScheme();
+  // What is showing, whether chosen or the device's: the switch flips that, so it always does something visible.
+  const dark = (mode && mode !== 'system' ? mode : systemMode) === 'dark';
 
   const [accountAnchor, setAccountAnchor] = useState<HTMLElement | null>(null);
   const [sectionAnchor, setSectionAnchor] = useState<HTMLElement | null>(null);
@@ -457,17 +455,17 @@ export function AppLayout({
     </>
   );
 
-  // One button that steps through Auto, Light and Dark, in the bar rather than a menu: a visitor has no
-  // account menu, and the page they are reading is the one they want to change.
-  const nextColorModeLabel = COLOR_MODE_OPTIONS.find((option) => option.value === nextColorMode)?.label;
+  // Light or dark, in the bar rather than a menu: a visitor has no account menu, and the page they are reading is
+  // the one they want to change. It shows the one a click gives (a sun while dark) and always sets a choice; "Auto"
+  // is still there, in Account's appearance settings, for whoever wants the device to decide.
   const themeButton = (
     <IconButton
-      onClick={() => setMode(nextColorMode)}
-      aria-label={`Appearance: ${colorMode.label}. Switch to ${nextColorModeLabel}`}
-      title={`Appearance: ${colorMode.label}`}
+      onClick={() => setMode(dark ? 'light' : 'dark')}
+      aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
       sx={{ color: chrome.inkMuted, '&:hover': { color: chrome.ink } }}
     >
-      <colorMode.Icon />
+      {dark ? <LightModeOutlined /> : <DarkModeOutlined />}
     </IconButton>
   );
 
