@@ -31,6 +31,7 @@ import {
   OwnerChip,
   ResponsiveActions,
   TransferOwnershipDialog,
+  useTrackVisit,
   type OwnerGroup,
   type OwnerRef,
   type OwnerRole
@@ -132,6 +133,7 @@ const DatasetDetailPage: React.FC = () => {
         : false
   });
   usePageTitle(dataset ? `${dataset.name} - Datasets - Vision` : 'Dataset - Vision');
+  useTrackVisit(dataset ? { kind: 'dataset', id: dataset._id, name: dataset.name, path: `/datasets/${dataset._id}` } : null);
 
   // Forget the arrival state, so a reload does not reopen anything.
   useEffect(() => {

@@ -1,10 +1,11 @@
 import { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Add, AddTask, Key, PhotoLibrary } from '@mui/icons-material';
-import { AppLayout, createVisinNavigation, type AppLayoutNavItem } from '@visin/frontend-core';
+import { AppLayout, createVisinNavigation, useRecentVisits, type AppLayoutNavItem } from '@visin/frontend-core';
 import { useConfig } from '../config/ConfigProvider';
 import { useAuth } from '../contexts/AuthContext';
 import { APPS, appForPath } from '../apps';
+import { visitIcon, visitLabel } from './home/visitKinds';
 
 /** Outside any app's routes (Home, Explore, the not-found page): the widest frame, no header. */
 const NO_APP_LAYOUT = { maxContentWidth: 1600, showPageHeader: false };
@@ -16,6 +17,9 @@ const NO_APP_LAYOUT = { maxContentWidth: 1600, showPageHeader: false };
 const APP_LIST = ['shell', 'vision', 'label', 'account'] as const;
 const MEMBER_NAVIGATION = createVisinNavigation(APP_LIST, {});
 const VISITOR_NAVIGATION = createVisinNavigation(APP_LIST, {}, { isAuthenticated: false });
+
+/** How many recent places the search box offers. */
+const RECENT_OFFERED = 6;
 
 /** What the New menu creates. Each opens the page that makes it, with its form already open. */
 const CREATE_ITEMS: AppLayoutNavItem[] = [
@@ -40,6 +44,16 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   const definition = app ? APPS[app] : null;
   const layout = definition ? definition.layout(pathname) : NO_APP_LAYOUT;
   const navigation = isAuthenticated ? MEMBER_NAVIGATION : VISITOR_NAVIGATION;
+  // Where this browser was lately, offered by the search box before anything is typed.
+  const recent = useRecentVisits()
+    .slice(0, RECENT_OFFERED)
+    .map((visit) => ({
+      key: `${visit.kind}:${visit.id}`,
+      text: visit.name,
+      secondary: visitLabel(visit.kind),
+      icon: visitIcon(visit.kind),
+      path: visit.path
+    }));
 
   // Docs and About live on the landing site; without its address there is nothing to link to.
   const landing = config.LANDING_FRONT_URL?.replace(/\/$/, '');
@@ -64,6 +78,7 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       onLogout={logout}
       onSearch={(query) => navigate(`/search?q=${encodeURIComponent(query)}`)}
       searchPlaceholder="Search Visin…"
+      recent={recent}
       createItems={CREATE_ITEMS}
       visitorLinks={visitorLinks}
       maxContentWidth={layout.maxContentWidth}

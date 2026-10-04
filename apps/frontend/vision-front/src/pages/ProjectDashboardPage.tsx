@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Container, CircularProgress, Alert, Button } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTrackVisit } from '@visin/frontend-core';
 
 import { projectService } from '../services/projectService';
 import { useAuth } from '../contexts/AuthContext';
@@ -108,6 +109,11 @@ const ProjectDashboardPage: React.FC = () => {
     handleSort,
     invalidateProjectQueries
   } = useProjectDashboard(id, tabValue);
+
+  // So it is one of the places the search box offers next time.
+  useTrackVisit(
+    project ? { kind: 'project', id: project._id, name: project.name, path: `/projects/${project.slug || project._id}` } : null
+  );
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);

@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import { useTrackVisit } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { exploreApi } from '../services/exploreApi';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
@@ -18,6 +19,7 @@ export function ProfilePage({ now }: { now?: Date }) {
   const { user: me } = useAuth();
   const profile = useQuery({ queryKey: ['profile', handle], queryFn: () => exploreApi.user(handle) });
   const person = profile.data ?? undefined;
+  useTrackVisit(person ? { kind: 'person', id: person.id, name: person.name, path: `/u/${person.handle}` } : null);
 
   if (profile.isPending) {
     return (

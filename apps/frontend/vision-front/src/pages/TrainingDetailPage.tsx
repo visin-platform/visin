@@ -22,6 +22,7 @@ import SampleTour from '../components/guide/SampleTour';
 import UseThisDialog from '../components/common/UseThisDialog';
 import { runSnippets } from '../utils/useSnippets';
 
+import { useTrackVisit } from '@visin/frontend-core';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useTrainingDetail } from '../hooks/useTrainingDetail';
 import { useTrainingEdit } from '../hooks/useTrainingEdit';
@@ -123,6 +124,7 @@ const TrainingDetailPage: React.FC = () => {
 
   // Set page title
   usePageTitle(training ? `${training.name} - Vision` : 'Training Details - Vision');
+  useTrackVisit(training ? { kind: 'training', id: training._id, name: training.name, path: `/trainings/${training._id}` } : null);
 
   // Handle tab change with URL update
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {

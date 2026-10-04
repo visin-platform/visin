@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { createAuthContext } from './AuthProvider';
 import type { AuthService, AuthUser } from './authService';
+import { readVisits, recordVisit } from '../recentVisits';
 
 const testUser: AuthUser = { id: 'u1', email: 'u1@test.dev', name: 'Test User' };
 
@@ -104,6 +105,19 @@ describe('createAuthContext', () => {
     expect(service.logout).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('none'));
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('logout forgets what was visited, so the next person at this browser does not read it', async () => {
+    Object.defineProperty(window, 'location', { value: { ...window.location, reload: vi.fn() }, writable: true });
+    recordVisit({ kind: 'project', id: 'p1', name: 'A private project', path: '/projects/p1' });
+    const service = makeAuthService();
+    renderWithProvider(service);
+    await waitFor(() => expect(screen.getByTestId('user')).toHaveTextContent('Test User'));
+    expect(readVisits()).toHaveLength(1);
+
+    await act(async () => screen.getByRole('button', { name: 'logout' }).click());
+
+    expect(readVisits()).toEqual([]);
   });
 
   it('refresh re-runs the session check and updates the shared state', async () => {

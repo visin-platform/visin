@@ -15,6 +15,7 @@ vi.mock('../services/exploreApi', async (importOriginal) => ({
   exploreApi: { user: vi.fn(), projects: vi.fn(), datasets: vi.fn(), activity: vi.fn() },
 }));
 
+import { clearVisits, readVisits } from '@visin/frontend-core';
 import { ProfilePage } from './ProfilePage';
 import { exploreApi } from '../services/exploreApi';
 
@@ -71,6 +72,19 @@ beforeEach(() => {
 });
 
 describe('ProfilePage', () => {
+  it('notes the person as visited once their page has loaded, and not for a page that is not there', async () => {
+    clearVisits();
+    renderAt();
+    await screen.findByRole('heading', { level: 1, name: 'Ann Lee' });
+    expect(readVisits()).toMatchObject([{ kind: 'person', id: 'u9', name: 'Ann Lee', path: '/u/ann-lee' }]);
+
+    clearVisits();
+    api.user.mockResolvedValue(null);
+    renderAt('/u/nobody');
+    await screen.findByRole('heading', { level: 1, name: 'No such person' });
+    expect(readVisits()).toEqual([]);
+  });
+
   it('shows who the person is, as they wrote it', async () => {
     renderAt();
 

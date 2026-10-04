@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
+import { useTrackVisit } from '@visin/frontend-core';
 import { exploreApi } from '../services/exploreApi';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { ProfileLists } from '../components/profile/ProfileLists';
@@ -15,6 +16,7 @@ export function GroupProfilePage({ now }: { now?: Date }) {
   const { handle = '' } = useParams();
   const group = useQuery({ queryKey: ['group-profile', handle], queryFn: () => exploreApi.group(handle) });
   const page = group.data ?? undefined;
+  useTrackVisit(page ? { kind: 'group', id: page.id, name: page.name, path: `/g/${page.handle}` } : null);
 
   if (group.isPending) {
     return (

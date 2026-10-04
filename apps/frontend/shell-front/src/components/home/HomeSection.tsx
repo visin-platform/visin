@@ -10,6 +10,8 @@ interface HomeSectionProps {
   title: string;
   /** Where the full list lives; left out where there is no such page. */
   seeAll?: { to: string; label: string };
+  /** Something else to do with the whole group (clear it), where "See all" would be. */
+  action?: ReactNode;
   children: ReactNode;
 }
 
@@ -17,7 +19,7 @@ interface HomeSectionProps {
  * A captioned group of rows, the way a phone's settings screens group theirs:
  * a small caption with "See all" beside it, then the rows in one panel.
  */
-export function HomeSection({ id, title, seeAll, children }: HomeSectionProps) {
+export function HomeSection({ id, title, seeAll, action, children }: HomeSectionProps) {
   return (
     <Box component="section" aria-labelledby={id} sx={{ minWidth: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, px: 0.5, mb: 1 }}>
@@ -34,6 +36,7 @@ export function HomeSection({ id, title, seeAll, children }: HomeSectionProps) {
         >
           {title}
         </Typography>
+        {action}
         {seeAll && (
           <Link
             component={RouterLink}

@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { clearVisits, readVisits } from '@visin/frontend-core';
 
 const useTrainingDetailMock = vi.fn();
 vi.mock('../../hooks/useTrainingDetail', () => ({
@@ -210,6 +211,18 @@ describe('TrainingDetailPage', () => {
     useTrainingEditMock.mockReturnValue(baseTrainingEdit());
     useTrainingActionsMock.mockReturnValue(baseTrainingActions());
     getProjectByIdMock.mockResolvedValue({ data: null });
+  });
+
+  it('notes the run as visited once it has loaded', () => {
+    clearVisits();
+    useTrainingDetailMock.mockReturnValue(baseTrainingDetail({ training: null, isLoading: true }));
+    const { unmount } = renderPage();
+    expect(readVisits()).toEqual([]);
+    unmount();
+
+    useTrainingDetailMock.mockReturnValue(baseTrainingDetail());
+    renderPage();
+    expect(readVisits()).toMatchObject([{ kind: 'training', id: 'tr1', name: 'Training One', path: '/trainings/tr1' }]);
   });
 
   describe('use this run', () => {

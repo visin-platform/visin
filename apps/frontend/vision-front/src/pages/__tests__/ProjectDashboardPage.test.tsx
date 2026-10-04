@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -68,6 +68,7 @@ vi.mock('../../components/common/PageBreadcrumbs', () => ({
   default: (props: any) => <div data-testid="breadcrumbs">{props.items.map((i: any) => i.label).join('>')}</div>
 }));
 
+import { clearVisits, readVisits } from '@visin/frontend-core';
 import ProjectDashboardPage from '../ProjectDashboardPage';
 
 const baseHookReturn = (overrides: Record<string, unknown> = {}) => ({
@@ -154,6 +155,25 @@ describe('ProjectDashboardPage', () => {
     expect(screen.getByTestId('project-header')).toHaveTextContent('My Project');
     expect(screen.getByTestId('is-owner').textContent).toBe('true');
     expect(screen.getByTestId('project-tabs')).toBeInTheDocument();
+  });
+
+  it('notes the project as visited once it has loaded, by its slug where it has one, and not while it is loading', () => {
+    clearVisits();
+    useProjectDashboardMock.mockReturnValue(baseHookReturn({ project: undefined, isProjectLoading: true }));
+    renderPage();
+    expect(readVisits()).toEqual([]);
+    cleanup();
+
+    useProjectDashboardMock.mockReturnValue(
+      baseHookReturn({ project: { ...baseHookReturn().project, slug: 'my-project' } })
+    );
+    renderPage();
+    expect(readVisits()).toMatchObject([{ kind: 'project', id: 'p1', name: 'My Project', path: '/projects/my-project' }]);
+
+    clearVisits();
+    useProjectDashboardMock.mockReturnValue(baseHookReturn());
+    renderPage();
+    expect(readVisits()).toMatchObject([{ path: '/projects/p1' }]);
   });
 
   it('uses server permissions even when the current user did not create the project', () => {

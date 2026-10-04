@@ -1,6 +1,8 @@
 // @visin/frontend-core - Shared frontend auth/API-client logic for Visin frontends
 
 export { createApiClient, ApiError } from './apiClient';
+export { clearVisits, readVisits, recordVisit, removeVisit, useRecentVisits, useTrackVisit } from './recentVisits';
+export type { Visit, VisitKind } from './recentVisits';
 export type { ApiClientOptions, ApiRequestOptions, ApiClient } from './apiClient';
 
 export { Loader } from './components/Loader';
@@ -14,6 +16,7 @@ export type {
   AppLayoutNavItem,
   AppLayoutInternalNavItem,
   AppLayoutExternalNavItem,
+  AppLayoutRecent,
   AppLayoutUser
 } from './components/AppLayout';
 export {

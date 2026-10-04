@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { clearVisits, readVisits } from '@visin/frontend-core';
 
 const service = vi.hoisted(() => ({
   getDataset: vi.fn(),
@@ -64,6 +65,14 @@ describe('DatasetDetailPage', () => {
     expect(screen.getByText('Contents')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Images' })).toBeInTheDocument();
     await waitFor(() => expect(service.listItems).toHaveBeenCalledWith('d1', expect.objectContaining({ kind: 'image' })));
+  });
+
+  it('notes the dataset as visited once it has loaded', async () => {
+    clearVisits();
+    renderPage();
+    await screen.findByRole('heading', { name: 'VLM' });
+
+    expect(readVisits()).toMatchObject([{ kind: 'dataset', id: 'd1', name: 'VLM', path: '/datasets/d1' }]);
   });
 
   it('edits details and reports a refusal inside the dialog', async () => {

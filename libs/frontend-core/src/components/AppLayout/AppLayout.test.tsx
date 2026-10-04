@@ -550,6 +550,51 @@ describe('AppLayout', () => {
       });
     });
 
+    describe('recently visited', () => {
+      const recent = [
+        { key: 'project:p1', text: 'Window ablations', secondary: 'Project', icon: <i data-testid="icon" />, path: '/projects/window-ablations' },
+        { key: 'dataset:d1', text: 'Harbour frames', path: '/datasets/d1' }
+      ];
+
+      it('offers where the person was lately before anything is typed', () => {
+        renderAt('/projects', undefined, { onSearch: vi.fn(), recent });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+
+        const list = screen.getByRole('list', { name: 'Recently visited' });
+        expect(within(list).getAllByRole('link').map((link) => link.textContent)).toEqual(['Window ablationsProject', 'Harbour frames']);
+        expect(within(list).getByRole('link', { name: /Window ablations/ })).toHaveAttribute('href', '/projects/window-ablations');
+        expect(screen.getAllByTestId('icon')).toHaveLength(1);
+      });
+
+      it('goes there client-side and closes the search', async () => {
+        renderAt('/projects', undefined, { onSearch: vi.fn(), recent });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+        fireEvent.click(screen.getByRole('link', { name: /Harbour frames/ }));
+
+        expect(screen.getByTestId('path')).toHaveTextContent('/datasets/d1');
+        await waitFor(() => expect(screen.queryByRole('search')).not.toBeInTheDocument());
+      });
+
+      it('gives way to what is being typed', () => {
+        renderAt('/projects', undefined, { onSearch: vi.fn(), recent });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: 'win' } });
+
+        expect(screen.queryByRole('list', { name: 'Recently visited' })).not.toBeInTheDocument();
+      });
+
+      it('shows nothing where there is nowhere to offer', () => {
+        renderAt('/projects', undefined, { onSearch: vi.fn() });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+
+        expect(screen.queryByText('Recently visited')).not.toBeInTheDocument();
+      });
+    });
+
     it('leaves a plain k alone', () => {
       renderAt('/projects', undefined, { onSearch: vi.fn() });
 

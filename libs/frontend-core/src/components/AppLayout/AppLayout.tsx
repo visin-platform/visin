@@ -11,6 +11,8 @@ import {
   IconButton,
   InputAdornment,
   Link as MuiLink,
+  List,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -67,6 +69,16 @@ export interface AppLayoutNavGroup {
   match?: string[];
 }
 
+/** One place offered by the search box before anything is typed. */
+export interface AppLayoutRecent {
+  key: string;
+  text: string;
+  secondary?: string;
+  icon?: ReactNode;
+  /** A path within the app: it is followed client-side. */
+  path: string;
+}
+
 export interface AppLayoutUser {
   name?: string;
   email?: string;
@@ -114,6 +126,11 @@ export interface AppLayoutProps {
    */
   onSearch?: (query: string) => void;
   searchPlaceholder?: string;
+  /**
+   * What the search box offers before anything is typed: where the person was lately. The app decides what these are
+   * and where they lead, as it does for the menu. Empty, nothing is offered.
+   */
+  recent?: AppLayoutRecent[];
   /** Opens sign-up for a visitor. Left out, only "Sign in" is offered. */
   onSignup?: () => void;
   /** The "New" menu of a signed-in user: the things they can create. Empty, no menu. */
@@ -158,6 +175,7 @@ export function AppLayout({
   homePath,
   onSearch,
   searchPlaceholder = 'Search…',
+  recent = [],
   onSignup,
   createItems = [],
   visitorLinks = []
@@ -671,6 +689,7 @@ export function AppLayout({
         <SearchDialog
           open={searchOpen}
           placeholder={searchPlaceholder}
+          recent={recent}
           onClose={() => setSearchOpen(false)}
           onSubmit={(query) => {
             setSearchOpen(false);
@@ -687,11 +706,12 @@ const SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navi
 interface SearchDialogProps {
   open: boolean;
   placeholder: string;
+  recent: AppLayoutRecent[];
   onClose: () => void;
   onSubmit: (query: string) => void;
 }
 
-function SearchDialog({ open, placeholder, onClose, onSubmit }: SearchDialogProps) {
+function SearchDialog({ open, placeholder, recent, onClose, onSubmit }: SearchDialogProps) {
   const [query, setQuery] = useState('');
 
   const submit = (event: FormEvent) => {
@@ -729,6 +749,25 @@ function SearchDialog({ open, placeholder, onClose, onSubmit }: SearchDialogProp
             }
           }}
         />
+        {!query.trim() && recent.length > 0 && (
+          <Box sx={{ mt: 1.5 }}>
+            <Typography
+              id="search-recent"
+              component="h2"
+              sx={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary', px: 1, mb: 0.5 }}
+            >
+              Recently visited
+            </Typography>
+            <List dense aria-labelledby="search-recent" disablePadding>
+              {recent.map((place) => (
+                <ListItemButton key={place.key} component={Link} to={place.path} onClick={onClose} sx={{ borderRadius: 2 }}>
+                  {place.icon && <ListItemIcon sx={{ minWidth: 36 }}>{place.icon}</ListItemIcon>}
+                  <ListItemText primary={place.text} secondary={place.secondary} slotProps={{ primary: { noWrap: true } }} />
+                </ListItemButton>
+              ))}
+            </List>
+          </Box>
+        )}
       </Box>
     </Dialog>
   );

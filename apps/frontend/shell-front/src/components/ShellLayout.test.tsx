@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { clearVisits, recordVisit } from '@visin/frontend-core';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
 const authState = {
@@ -32,6 +33,7 @@ const main = () => within(screen.getByRole('navigation', { name: 'Main' }));
 const sectionBar = (name: string) => within(screen.getByRole('navigation', { name }));
 
 beforeEach(() => {
+  clearVisits();
   vi.clearAllMocks();
   authState.isAuthenticated = true;
   authState.isLoading = false;
@@ -212,6 +214,21 @@ describe('ShellLayout', () => {
       fireEvent.submit(screen.getByRole('search'));
 
       expect(screen.getByTestId('path')).toHaveTextContent('/search');
+    });
+
+    it('offers the places this browser opened lately before anything is typed, at most six, and goes to one', () => {
+      for (let index = 0; index < 8; index += 1) {
+        recordVisit({ kind: index % 2 ? 'dataset' : 'project', id: `v${index}`, name: `Place ${index}`, path: `/p/${index}` }, 1000 + index);
+      }
+      renderAt('/account/groups');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+      const list = screen.getByRole('list', { name: 'Recently visited' });
+      expect(within(list).getAllByRole('link')).toHaveLength(6);
+      expect(within(list).getAllByRole('link')[0]).toHaveTextContent('Place 7Dataset');
+      fireEvent.click(within(list).getByRole('link', { name: /Place 6/ }));
+
+      expect(screen.getByTestId('path')).toHaveTextContent('/p/6');
     });
 
     it('has the search box whichever services are configured, since people and groups are found elsewhere', () => {

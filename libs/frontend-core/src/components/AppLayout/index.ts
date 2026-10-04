@@ -5,5 +5,6 @@ export type {
   AppLayoutNavItem,
   AppLayoutInternalNavItem,
   AppLayoutExternalNavItem,
+  AppLayoutRecent,
   AppLayoutUser
 } from './AppLayout';

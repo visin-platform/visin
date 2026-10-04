@@ -11,6 +11,7 @@ vi.mock('../services/exploreApi', async (importOriginal) => ({
   exploreApi: { group: vi.fn(), projects: vi.fn(), datasets: vi.fn(), activity: vi.fn() },
 }));
 
+import { clearVisits, readVisits } from '@visin/frontend-core';
 import { GroupProfilePage } from './GroupProfilePage';
 import { exploreApi } from '../services/exploreApi';
 
@@ -46,6 +47,14 @@ beforeEach(() => {
 });
 
 describe('GroupProfilePage', () => {
+  it('notes the group as visited once its page has loaded', async () => {
+    clearVisits();
+    renderAt();
+
+    await screen.findByRole('heading', { level: 1, name: 'Road lab' });
+    expect(readVisits()).toMatchObject([{ kind: 'group', id: 'g7', name: 'Road lab', path: '/g/road-lab' }]);
+  });
+
   it('shows the group as it describes itself, and nothing about who is in it', async () => {
     renderAt();
 

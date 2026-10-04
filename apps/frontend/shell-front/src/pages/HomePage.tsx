@@ -14,6 +14,7 @@ import { LabelingSection } from '../components/home/LabelingSection';
 import { FindingsSection } from '../components/home/FindingsSection';
 import { GetStarted } from '../components/home/GetStarted';
 import { InvitationsCard } from '../components/home/InvitationsCard';
+import { RecentSection } from '../components/home/RecentSection';
 
 const RECENT_TRAININGS = 5;
 const RECENT_FINDINGS = 4;
@@ -162,6 +163,7 @@ export function HomePage({ userName, now }: HomePageProps) {
           alignItems: 'start'
         }}
       >
+        <RecentSection now={today} />
         {vision && <TrainingsSection query={recent} projectNames={projectNames} now={today} />}
         {label && <LabelingSection query={jobs} />}
         {vision && <FindingsSection query={findings} projectNames={projectNames} now={today} />}

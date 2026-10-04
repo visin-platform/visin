@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { AuthCheckResult, AuthService, AuthUser } from './authService';
+import { clearVisits } from '../recentVisits';
 
 /**
  * How stale the session check may get before returning to the app re-runs it.
@@ -88,6 +89,8 @@ export function createAuthContext(authService: AuthService) {
 
     const logout = useCallback(async (): Promise<void> => {
       await authService.logout();
+      // What was visited names things this account could see: not the next person's to read.
+      clearVisits();
       lastKnownUser = null;
       setUser(null);
       window.location.reload();
