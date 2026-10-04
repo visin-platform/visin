@@ -30,13 +30,15 @@ const publicValuesOf = (user: User): PublicProfileValues => ({
   handle: user.handle ?? '',
   bio: user.bio ?? '',
   linksText: (user.links ?? []).join('\n'),
-  profilePublic: user.profilePublic !== false
+  profilePublic: user.profilePublic !== false,
+  showActivity: user.showActivity !== false
 });
 
 const samePublicValues = (a: PublicProfileValues, b: PublicProfileValues): boolean =>
   a.handle === b.handle &&
   a.bio === b.bio &&
   a.profilePublic === b.profilePublic &&
+  a.showActivity === b.showActivity &&
   parseLinks(a.linksText).join('\n') === parseLinks(b.linksText).join('\n');
 
 const ProfileTab: React.FC = () => {
@@ -48,7 +50,8 @@ const ProfileTab: React.FC = () => {
     handle: '',
     bio: '',
     linksText: '',
-    profilePublic: true
+    profilePublic: true,
+    showActivity: true
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -105,7 +108,8 @@ const ProfileTab: React.FC = () => {
         ...(publicProfile.handle !== (user.handle ?? '') && publicProfile.handle ? { handle: publicProfile.handle } : {}),
         bio: publicProfile.bio.trim(),
         links,
-        profilePublic: publicProfile.profilePublic
+        profilePublic: publicProfile.profilePublic,
+        showActivity: publicProfile.showActivity
       });
 
       if (response.success) {

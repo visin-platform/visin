@@ -11,7 +11,8 @@ const profileFields = (user: IUser) => ({
   handle: user.handle,
   bio: user.bio,
   links: user.links ?? [],
-  profilePublic: user.profilePublic !== false
+  profilePublic: user.profilePublic !== false,
+  showActivity: user.showActivity !== false
 });
 
 export const getProfile = async (req: Request, res: Response): Promise<void> => {
@@ -50,7 +51,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     throw new UnauthorizedError('Not authenticated');
   }
 
-  const { firstName, lastName, handle, bio, links, profilePublic } = req.body;
+  const { firstName, lastName, handle, bio, links, profilePublic, showActivity } = req.body;
 
   // Update the user in database - handle empty strings explicitly
   const updateData: UpdateQuery<IUser> = {};
@@ -67,6 +68,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   if (bio !== undefined) updateData.bio = bio === '' ? null : bio;
   if (links !== undefined) updateData.links = links;
   if (profilePublic !== undefined) updateData.profilePublic = profilePublic;
+  if (showActivity !== undefined) updateData.showActivity = showActivity;
 
   let updatedUser: IUser | null;
   try {

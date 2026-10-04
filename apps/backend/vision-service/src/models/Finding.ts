@@ -76,6 +76,8 @@ const FindingSchema = new Schema<IFinding>(
 FindingSchema.index({ projectId: 1, deletedAt: 1, createdAt: -1, _id: -1 });
 // And the other way in: what has been concluded about this run.
 FindingSchema.index({ trainingIds: 1, createdAt: -1 });
+// A person's public activity: the findings they wrote, newest first.
+FindingSchema.index({ authorUserId: 1, createdAt: -1 });
 
 export const Finding = mongoose.models.Finding
   ? (mongoose.models.Finding as mongoose.Model<IFinding>)

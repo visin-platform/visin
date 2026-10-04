@@ -734,6 +734,99 @@ paths:
       security:
         - BearerCredential: []
         - SessionCookie: []
+  /datasets/activity:
+    get:
+      tags:
+        - Datasets
+      summary: What a person or a group has made in public
+      operationId: getDatasetActivity
+      description: |
+        The public datasets a person created, or a group owns, newest first. Derived on each request from the datasets
+        themselves, so a dataset made private, trashed or deleted leaves it at once. Only public datasets count, whoever
+        asks, so it reads the same to its owner as to a stranger.
+      security:
+        - {}
+        - BearerCredential: []
+        - SessionCookie: []
+      parameters:
+        - name: user
+          in: query
+          required: false
+          description: A person's account id. Give this or `owner`, not both.
+          schema:
+            $ref: ./generated/request-schemas.json#/ActivityQuery/properties/user
+        - name: owner
+          in: query
+          required: false
+          description: "A group's id: the public datasets that group owns. Give this or `user`, not both."
+          schema:
+            $ref: ./generated/request-schemas.json#/ActivityQuery/properties/owner
+        - name: limit
+          in: query
+          required: false
+          description: Lines to return (default 30, at most 100).
+          schema:
+            $ref: ./generated/request-schemas.json#/ActivityQuery/properties/limit
+      responses:
+        "200":
+          description: The activity, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - kind
+                        - at
+                        - dataset
+                      properties:
+                        kind:
+                          type: string
+                          const: dataset.created
+                        at:
+                          type: string
+                          format: date-time
+                        dataset:
+                          type: object
+                          required:
+                            - id
+                            - name
+                            - imageCount
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                            imageCount:
+                              type: integer
+        "400":
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+
   /datasets/{id}:
     get:
       tags:

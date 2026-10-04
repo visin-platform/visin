@@ -8,7 +8,7 @@ const { config } = vi.hoisted(() => ({ config: {} as Record<string, string | und
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalConfig: () => config }));
 vi.mock('../services/exploreApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/exploreApi')>()),
-  exploreApi: { group: vi.fn(), projects: vi.fn(), datasets: vi.fn() },
+  exploreApi: { group: vi.fn(), projects: vi.fn(), datasets: vi.fn(), activity: vi.fn() },
 }));
 
 import { GroupProfilePage } from './GroupProfilePage';
@@ -22,7 +22,7 @@ const lab = { id: 'g7', handle: 'road-lab', name: 'Road lab', description: 'Segm
 const owner = { kind: 'group' as const, id: 'g7', name: 'Road lab', handle: 'road-lab' };
 const projects = [{ _id: 'p1', name: 'Window ablations', slug: 'window-ablations', visibility: 'public' as const, owner, updatedAt: hoursAgo(3) }];
 
-const renderAt = (path = '/g/road-lab') =>
+const renderAt = (path = '/g/road-lab?tab=projects') =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[path]}>
@@ -40,6 +40,9 @@ beforeEach(() => {
   api.group.mockResolvedValue(lab);
   api.projects.mockResolvedValue(projects);
   api.datasets.mockResolvedValue([]);
+  api.activity.mockResolvedValue([
+    { kind: 'project.created', at: hoursAgo(3), project: { id: 'p1', name: 'Window ablations', slug: 'window-ablations' } },
+  ]);
 });
 
 describe('GroupProfilePage', () => {
@@ -59,6 +62,13 @@ describe('GroupProfilePage', () => {
 
     expect(await screen.findByRole('link', { name: 'Window ablations' })).toHaveAttribute('href', '/projects/window-ablations');
     expect(api.projects).toHaveBeenCalledWith({ owner: 'g7' });
+  });
+
+  it("opens on the group's activity, asked for by the group's id", async () => {
+    renderAt('/g/road-lab');
+
+    expect(await screen.findByText('Today')).toBeInTheDocument();
+    expect(api.activity).toHaveBeenCalledWith({ owner: 'g7' });
   });
 
   it('says there is no such group for a handle with no public page', async () => {

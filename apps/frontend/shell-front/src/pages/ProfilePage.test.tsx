@@ -12,7 +12,7 @@ vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalC
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
 vi.mock('../services/exploreApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/exploreApi')>()),
-  exploreApi: { user: vi.fn(), projects: vi.fn(), datasets: vi.fn() },
+  exploreApi: { user: vi.fn(), projects: vi.fn(), datasets: vi.fn(), activity: vi.fn() },
 }));
 
 import { ProfilePage } from './ProfilePage';
@@ -29,6 +29,7 @@ const ann = {
   picture: 'https://p.test/ann.jpg',
   bio: 'Segmentation under bad weather',
   links: ['https://ann.example.test/', 'https://github.com/ann-lee'],
+  showActivity: true,
   createdAt: '2025-03-02T10:00:00Z',
 };
 const owner = { kind: 'user' as const, id: 'u9', name: 'Ann Lee', handle: 'ann-lee' };
@@ -44,7 +45,7 @@ const Where = () => {
   return <div data-testid="where">{pathname + search}</div>;
 };
 
-const renderAt = (path = '/u/ann-lee') =>
+const renderAt = (path = '/u/ann-lee?tab=projects') =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[path]}>
@@ -64,6 +65,9 @@ beforeEach(() => {
   api.user.mockResolvedValue(ann);
   api.projects.mockResolvedValue(projects);
   api.datasets.mockResolvedValue(datasets);
+  api.activity.mockResolvedValue([
+    { kind: 'project.created', at: hoursAgo(3), project: { id: 'p1', name: 'Window ablations', slug: 'window-ablations' } },
+  ]);
 });
 
 describe('ProfilePage', () => {
@@ -118,7 +122,26 @@ describe('ProfilePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Projects/ }));
     expect(await screen.findByText('Window ablations')).toBeInTheDocument();
-    expect(screen.getByTestId('where')).toHaveTextContent(/^\/u\/ann-lee$/);
+    expect(screen.getByTestId('where')).toHaveTextContent('/u/ann-lee?tab=projects');
+  });
+
+  it('opens on the activity of the person, which is what they have been up to', async () => {
+    renderAt('/u/ann-lee');
+
+    expect(await screen.findByText('Today')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Activity' })).toHaveAttribute('aria-pressed', 'true');
+    expect(api.activity).toHaveBeenCalledWith({ user: 'u9' });
+  });
+
+  it('has no activity tab for someone who keeps it to themselves, and opens on their projects', async () => {
+    api.user.mockResolvedValue({ ...ann, showActivity: false });
+    renderAt('/u/ann-lee');
+
+    expect(await screen.findByRole('link', { name: 'Window ablations' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Activity' })).not.toBeInTheDocument();
+    expect(api.activity).not.toHaveBeenCalled();
+    // Asking for the hidden tab by address gets the first one there is.
+    expect(screen.getByRole('button', { name: /^Projects/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('opens on the tab the address asks for', async () => {

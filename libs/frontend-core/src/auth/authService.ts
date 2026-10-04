@@ -33,6 +33,8 @@ export interface AuthUser {
   links?: string[];
   /** False hides the public page and the name shown on what the account owns. */
   profilePublic?: boolean;
+  /** Whether the public page lists what the account has been doing. */
+  showActivity?: boolean;
 }
 
 export interface AuthCheckResult {

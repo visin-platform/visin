@@ -7,6 +7,7 @@ export interface PublicProfileValues {
   /** One address per line, as typed. */
   linksText: string;
   profilePublic: boolean;
+  showActivity: boolean;
 }
 
 /** The addresses typed in the links box: one per line, blanks ignored. */

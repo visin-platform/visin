@@ -204,6 +204,8 @@ const DatasetSchema = new Schema<IDataset>(
 DatasetSchema.index({ visibility: 1, updatedAt: -1 });
 DatasetSchema.index({ 'owner.kind': 1, 'owner.id': 1 });
 DatasetSchema.index({ trashedAt: 1 }, { sparse: true });
+// A person's public activity: the datasets they made, newest first.
+DatasetSchema.index({ createdBy: 1, createdAt: -1 });
 DatasetSchema.index({ name: 'text', description: 'text' });
 
 export const Dataset = model<IDataset>('Dataset', DatasetSchema, 'datasets');

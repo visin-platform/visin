@@ -961,3 +961,67 @@ describe('who owns a dataset', () => {
     expect((await call('/api/datasets?user=ann-lee')).status).toBe(400);
   });
 });
+
+describe('the public activity feed', () => {
+  const feed = async (query: string, user?: string) => (await call(`/api/datasets/activity?${query}`, { user })).body.data as {
+    kind: string;
+    at: string;
+    dataset: { id: string; name: string; imageCount: number };
+  }[];
+  const names = async (query: string, user?: string) => (await feed(query, user)).map((item) => item.dataset.name);
+  const madeOn = (id: string, day: string) =>
+    Dataset.collection.updateOne({ _id: new mongoose.Types.ObjectId(id) }, { $set: { createdAt: new Date(`${day}T12:00:00.000Z`) } });
+
+  it("lists the public datasets a person made, newest first, and nothing of anyone else's", async () => {
+    await madeOn(await createDataset({ name: 'Old', visibility: 'public' }, OWNER), '2026-09-01');
+    await madeOn(await createDataset({ name: 'New', visibility: 'public' }, OWNER), '2026-09-05');
+    await createDataset({ name: 'Mine only' }, OWNER);
+    await createDataset({ name: 'Theirs', visibility: 'public' }, MEMBER);
+
+    const items = await feed(`user=${OWNER}`);
+
+    expect(items.map((item) => item.dataset.name)).toEqual(['New', 'Old']);
+    expect(items[0]).toEqual({ kind: 'dataset.created', at: '2026-09-05T12:00:00.000Z', dataset: { id: expect.any(String), name: 'New', imageCount: 0 } });
+    expect(JSON.stringify(items)).not.toMatch(new RegExp(`${OWNER}|${MEMBER}`));
+  });
+
+  it('reads the same to its owner as to a stranger, since only public datasets count', async () => {
+    await createDataset({ name: 'Public', visibility: 'public' }, OWNER);
+    await createDataset({ name: 'Private' }, OWNER);
+
+    expect(await names(`user=${OWNER}`)).toEqual(['Public']);
+    expect(await names(`user=${OWNER}`, OWNER)).toEqual(['Public']);
+    expect(await names(`user=${OWNER}`, STRANGER)).toEqual(['Public']);
+  });
+
+  it('drops a dataset the moment it is made private or trashed', async () => {
+    const id = await createDataset({ name: 'Going', visibility: 'public' }, OWNER);
+    expect(await names(`user=${OWNER}`)).toEqual(['Going']);
+
+    expect((await call(`/api/datasets/${id}`, { method: 'PATCH', user: OWNER, body: { visibility: 'private' } })).status).toBe(200);
+    expect(await names(`user=${OWNER}`)).toEqual([]);
+
+    await call(`/api/datasets/${id}`, { method: 'PATCH', user: OWNER, body: { visibility: 'public' } });
+    expect(await names(`user=${OWNER}`)).toEqual(['Going']);
+    expect((await call(`/api/datasets/${id}`, { method: 'DELETE', user: OWNER })).status).toBeLessThan(300);
+    expect(await names(`user=${OWNER}`)).toEqual([]);
+  });
+
+  it("lists a group's public datasets, whoever in the group made them", async () => {
+    await createDataset({ name: 'Team public', owner: { kind: 'group', id: GROUP }, visibility: 'public' }, GROUP_OWNER);
+    await groupDataset('Team private', MEMBER);
+    await createDataset({ name: 'Personal', visibility: 'public' }, GROUP_OWNER);
+
+    expect(await names(`owner=${GROUP}`)).toEqual(['Team public']);
+  });
+
+  it('is limited, and wants exactly one of a person or a group, as ids', async () => {
+    await createDataset({ name: 'One', visibility: 'public' }, OWNER);
+    await createDataset({ name: 'Two', visibility: 'public' }, OWNER);
+
+    expect(await feed(`user=${OWNER}&limit=1`)).toHaveLength(1);
+    for (const query of ['', `user=${OWNER}&owner=${GROUP}`, 'user=ann', `user=${OWNER}&limit=0`, `user=${OWNER}&limit=101`]) {
+      expect((await call(`/api/datasets/activity?${query}`)).status).toBe(400);
+    }
+  });
+});

@@ -85,6 +85,8 @@ const ProjectSchema: Schema = new Schema(
 );
 
 ProjectSchema.index({ 'owner.kind': 1, 'owner.id': 1 });
+// A person's public activity: the projects they made, newest first.
+ProjectSchema.index({ createdBy: 1, createdAt: -1 });
 ProjectSchema.index({ trashedAt: 1 }, { sparse: true });
 
 // Index for searching

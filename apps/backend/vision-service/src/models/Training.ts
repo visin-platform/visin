@@ -128,6 +128,8 @@ TrainingSchema.index({ name: 'text', description: 'text' });
 
 // Index for sorting
 TrainingSchema.index({ createdAt: -1 });
+// A person's public activity: the runs they started, newest first.
+TrainingSchema.index({ ownerId: 1, createdAt: -1 });
 TrainingSchema.index({ updatedAt: -1 });
 
 export default mongoose.model<ITraining>('training', TrainingSchema);

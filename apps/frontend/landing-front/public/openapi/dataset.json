@@ -1377,6 +1377,147 @@
         ]
       }
     },
+    "/datasets/activity": {
+      "get": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "What a person or a group has made in public",
+        "operationId": "getDatasetActivity",
+        "description": "The public datasets a person created, or a group owns, newest first. Derived on each request from the datasets\nthemselves, so a dataset made private, trashed or deleted leaves it at once. Only public datasets count, whoever\nasks, so it reads the same to its owner as to a stranger.\n",
+        "security": [
+          {},
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user",
+            "in": "query",
+            "required": false,
+            "description": "A person's account id. Give this or `owner`, not both.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          {
+            "name": "owner",
+            "in": "query",
+            "required": false,
+            "description": "A group's id: the public datasets that group owns. Give this or `user`, not both.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Lines to return (default 30, at most 100).",
+            "schema": {
+              "default": 30,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The activity, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "kind",
+                          "at",
+                          "dataset"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "dataset.created"
+                          },
+                          "at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "dataset": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "name",
+                              "imageCount"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "imageCount": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "message"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/datasets/{id}": {
       "get": {
         "tags": [

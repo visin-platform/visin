@@ -15,9 +15,10 @@ describe('the public page a person edits', () => {
         handle: 'Ann',
         bio: '  Road scenes ',
         links: [' https://ann.example.test/me '],
-        profilePublic: false
+        profilePublic: false,
+        showActivity: false
       })
-    ).toEqual({ handle: 'ann', bio: 'Road scenes', links: ['https://ann.example.test/me'], profilePublic: false });
+    ).toEqual({ handle: 'ann', bio: 'Road scenes', links: ['https://ann.example.test/me'], profilePublic: false, showActivity: false });
   });
 
   it('keeps a bio to a tweet and links to five', () => {

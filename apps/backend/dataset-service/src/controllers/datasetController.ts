@@ -3,7 +3,9 @@ import { createDatasetAccess } from '../services/accessService';
 import * as groups from '../clients/groupServiceClient';
 import * as datasets from '../services/datasetService';
 import * as items from '../services/itemService';
+import { listDatasetActivity } from '../services/activityService';
 import type {
+  ActivityQuery,
   ArchiveUploadBody,
   CreateDatasetBody,
   ListDatasetsQuery,
@@ -22,6 +24,11 @@ const idOf = (req: Request): string => String(req.params.id);
 export const listDatasets = async (req: Request, res: Response): Promise<void> => {
   const data = await datasets.listDatasets(accessFor(req, res), req.query as unknown as ListDatasetsQuery);
   res.json({ success: true, data });
+};
+
+/** What a person or a group has made in public, for a profile; the same for everyone who asks. */
+export const getActivity = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await listDatasetActivity(req.query as unknown as ActivityQuery) });
 };
 
 /** The caller's groups — what a dataset can be shared with. */

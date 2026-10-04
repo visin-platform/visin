@@ -246,6 +246,9 @@
       },
       "profilePublic": {
         "type": "boolean"
+      },
+      "showActivity": {
+        "type": "boolean"
       }
     }
   },

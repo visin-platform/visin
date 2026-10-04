@@ -157,7 +157,7 @@ describe('handles and public users with in-memory MongoDB', () => {
       const { status, body } = await get('ann-lee');
 
       expect(status).toBe(200);
-      expect(Object.keys(body.data!).sort()).toEqual(['bio', 'createdAt', 'handle', 'id', 'links', 'name', 'picture']);
+      expect(Object.keys(body.data!).sort()).toEqual(['bio', 'createdAt', 'handle', 'id', 'links', 'name', 'picture', 'showActivity']);
       expect(body.data).toMatchObject({
         handle: 'ann-lee',
         name: 'Ann Lee',
@@ -173,7 +173,14 @@ describe('handles and public users with in-memory MongoDB', () => {
       const { body } = await get('nameless');
 
       expect(body.data).toMatchObject({ name: 'nameless', links: [] });
-      expect(Object.keys(body.data!).sort()).toEqual(['createdAt', 'handle', 'id', 'links', 'name']);
+      expect(Object.keys(body.data!).sort()).toEqual(['createdAt', 'handle', 'id', 'links', 'name', 'showActivity']);
+      expect(body.data).toMatchObject({ showActivity: true });
+    });
+
+    it('says whether the page may list what they have been doing, which they can switch off', async () => {
+      await account('quiet@example.test', { handle: 'quiet', showActivity: false });
+
+      expect((await get('quiet')).body.data).toMatchObject({ showActivity: false });
     });
 
     it('finds a handle however it is cased', async () => {

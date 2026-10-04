@@ -38,6 +38,19 @@ export type TransferDatasetBody = z.infer<typeof transferDatasetBodySchema>;
 export const setCoverBodySchema = z.object({ itemId: objectId.nullable() });
 export type SetCoverBody = z.infer<typeof setCoverBodySchema>;
 
+/**
+ * Whose activity: one person (`user`, an account id) or one group (`owner`, a group id). Never both and never
+ * neither, so a feed is always of someone and an empty query cannot become everyone's.
+ */
+export const activityQuerySchema = z
+  .object({
+    user: objectId.optional(),
+    owner: objectId.optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(30)
+  })
+  .refine((query) => Boolean(query.user) !== Boolean(query.owner), 'Give either user or owner');
+export type ActivityQuery = z.infer<typeof activityQuerySchema>;
+
 export const listDatasetsQuerySchema = z.object({
   search: z.string().trim().max(200).optional(),
   /** `me`, or a group id: only datasets that owner has */

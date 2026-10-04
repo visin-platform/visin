@@ -68,6 +68,10 @@
     {
       "name": "Public leaderboards",
       "description": "Anonymous, read-only rankings of the results a manager chose to publish"
+    },
+    {
+      "name": "Public activity",
+      "description": "Anonymous, read-only feed of what a person or a group has done in public projects"
     }
   ],
   "components": {
@@ -1748,6 +1752,183 @@
             "format": "date-time"
           }
         }
+      },
+      "ActivityProject": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityItem": {
+        "description": "One line of a public activity feed. Always about a public project.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "at",
+              "project"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "project.created"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "project": {
+                "$ref": "#/components/schemas/ActivityProject"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "at",
+              "project",
+              "finding"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "finding.posted"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "project": {
+                "$ref": "#/components/schemas/ActivityProject"
+              },
+              "finding": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "title",
+                  "authorKind",
+                  "authorLabel"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "authorKind": {
+                    "type": "string",
+                    "enum": [
+                      "person",
+                      "assistant"
+                    ]
+                  },
+                  "authorLabel": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "at",
+              "project",
+              "count"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "training.run"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The latest start of that day"
+              },
+              "project": {
+                "$ref": "#/components/schemas/ActivityProject"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Runs started that UTC day in that project"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "at",
+              "project",
+              "evaluation"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "evaluation.recorded"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "project": {
+                "$ref": "#/components/schemas/ActivityProject"
+              },
+              "evaluation": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "status"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "completed",
+                      "failed"
+                    ]
+                  },
+                  "suite": {
+                    "type": "object",
+                    "required": [
+                      "slug",
+                      "version"
+                    ],
+                    "properties": {
+                      "slug": {
+                        "type": "string"
+                      },
+                      "version": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       "Project": {
         "type": "object",
@@ -10816,6 +10997,87 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/public/activity": {
+      "get": {
+        "tags": [
+          "Public activity"
+        ],
+        "summary": "What a person or a group has been doing in public",
+        "operationId": "getPublicActivity",
+        "description": "Newest first: projects made, findings posted, runs started (one line per project per UTC day, not one per run) and\nresults recorded. Derived on each request from what is stored rather than from a log, so it is never stale, and a\nproject made private or trashed takes its whole history out of it at once. Only public projects count, whoever asks,\nand of the evaluations only what a reader of a public project is shown (its runs' tests, and what a manager\npublished). Anonymous, never cached, and rate limited by client address.\n",
+        "security": [
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "user",
+            "in": "query",
+            "description": "A person's account id. Give this or `owner`, not both.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          {
+            "name": "owner",
+            "in": "query",
+            "description": "A group's id: everything in the public projects that group owns. Give this or `user`, not both.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Lines to return (default 30, at most 100).",
+            "schema": {
+              "default": 30,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The activity, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ActivityItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
           },
           "default": {
             "$ref": "#/components/responses/Error"

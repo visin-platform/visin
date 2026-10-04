@@ -64,7 +64,8 @@ export const updateProfileBodySchema = z.object({
     )
     .max(5)
     .optional(),
-  profilePublic: z.boolean().optional()
+  profilePublic: z.boolean().optional(),
+  showActivity: z.boolean().optional()
 });
 
 export const handleParamsSchema = z.object({

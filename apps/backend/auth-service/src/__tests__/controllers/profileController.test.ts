@@ -86,6 +86,7 @@ describe('getProfile', () => {
         bio: undefined,
         links: [],
         profilePublic: true,
+        showActivity: true,
       },
     });
   });
@@ -187,19 +188,19 @@ describe('updateProfile public page', () => {
     await updateProfile(
       makeReq({
         user: jwtUser,
-        body: { handle: 'ann', bio: '', links: ['https://ann.example.test'], profilePublic: false },
+        body: { handle: 'ann', bio: '', links: ['https://ann.example.test'], profilePublic: false, showActivity: false },
       }),
       res
     );
 
     expect(mockedUser.findByIdAndUpdate).toHaveBeenCalledWith(
       'db-id-1',
-      { $set: { handle: 'ann', bio: null, links: ['https://ann.example.test'], profilePublic: false } },
+      { $set: { handle: 'ann', bio: null, links: ['https://ann.example.test'], profilePublic: false, showActivity: false } },
       { returnDocument: 'after' }
     );
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      user: expect.objectContaining({ handle: 'ann', links: ['https://ann.example.test'], profilePublic: true }),
+      user: expect.objectContaining({ handle: 'ann', links: ['https://ann.example.test'], profilePublic: true, showActivity: true }),
     });
   });
 

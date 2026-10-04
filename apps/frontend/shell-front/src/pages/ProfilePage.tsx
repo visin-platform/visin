@@ -60,7 +60,7 @@ export function ProfilePage({ now }: { now?: Date }) {
         meta={`Joined ${joined}`}
         edit={me?.id === person.id ? { to: '/account/profile' } : undefined}
       />
-      <ProfileLists owner={{ user: person.id }} cacheKey={`user:${handle}`} now={now} />
+      <ProfileLists owner={{ user: person.id }} cacheKey={`user:${handle}`} showActivity={person.showActivity} now={now} />
     </Box>
   );
 }

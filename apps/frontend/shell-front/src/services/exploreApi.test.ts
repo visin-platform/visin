@@ -25,7 +25,7 @@ vi.mock('@visin/frontend-core', () => ({
 vi.mock('../config/ConfigProvider', () => ({ getGlobalConfig: () => config }));
 
 import { ApiError } from '@visin/frontend-core';
-import { entryName, exploreApi } from './exploreApi';
+import { entryName, exploreApi, type ActivityItem } from './exploreApi';
 
 beforeEach(() => {
   get.mockReset();
@@ -58,6 +58,61 @@ describe('exploreApi', () => {
 
     await expect(exploreApi.datasets(24)).resolves.toEqual([{ _id: 'd2', visibility: 'public' }]);
     expect(get).toHaveBeenCalledWith('https://dataset-api.test/api/datasets?limit=24', undefined);
+  });
+
+  describe('activity', () => {
+    const project = { id: 'p1', name: 'Window ablations' };
+    const lines = (at: string): ActivityItem[] => [{ kind: 'project.created', at, project }];
+    const datasetLine: ActivityItem = { kind: 'dataset.created', at: '2026-09-02T00:00:00Z', dataset: { id: 'd1', name: 'Frames', imageCount: 1 } };
+
+    it('merges what Vision and the dataset service say, newest first, and stops at the limit', async () => {
+      get.mockImplementation(async (url: string) => ({
+        success: true,
+        data: url.includes('/public/activity') ? [...lines('2026-09-03T00:00:00Z'), ...lines('2026-09-01T00:00:00Z')] : [datasetLine],
+      }));
+
+      const items = await exploreApi.activity({ user: 'u1' }, 2);
+
+      expect(items.map((item) => item.at)).toEqual(['2026-09-03T00:00:00Z', '2026-09-02T00:00:00Z']);
+      expect(get).toHaveBeenCalledWith('https://vision-api.test/api/public/activity?limit=2&user=u1', { skipAuthRedirect: true });
+      expect(get).toHaveBeenCalledWith('https://dataset-api.test/api/datasets/activity?limit=2&user=u1', { skipAuthRedirect: true });
+    });
+
+    it("asks for a group's by the group's id, thirty lines unless told otherwise", async () => {
+      get.mockResolvedValue({ success: true, data: [] });
+
+      await exploreApi.activity({ owner: 'g1' });
+
+      expect(get).toHaveBeenCalledWith('https://vision-api.test/api/public/activity?limit=30&owner=g1', { skipAuthRedirect: true });
+    });
+
+    it('is what the other service had when one is down, and an error only when both are', async () => {
+      get.mockImplementation(async (url: string) => {
+        if (url.includes('/public/activity')) throw new Error('vision down');
+        return { success: true, data: [datasetLine] };
+      });
+      await expect(exploreApi.activity({ user: 'u1' })).resolves.toEqual([datasetLine]);
+
+      get.mockRejectedValue(new Error('both down'));
+      await expect(exploreApi.activity({ user: 'u1' })).rejects.toThrow('both down');
+    });
+
+    it('asks only the services that are configured, and is empty with none', async () => {
+      const saved = { ...config };
+      delete (config as Record<string, unknown>).DATASET_API_URL;
+      get.mockResolvedValue({ success: true, data: lines('2026-09-03T00:00:00Z') });
+      try {
+        await exploreApi.activity({ user: 'u1' });
+        expect(get).toHaveBeenCalledTimes(1);
+
+        get.mockClear();
+        delete (config as Record<string, unknown>).VISION_API_URL;
+        await expect(exploreApi.activity({ user: 'u1' })).resolves.toEqual([]);
+        expect(get).not.toHaveBeenCalled();
+      } finally {
+        Object.assign(config, saved);
+      }
+    });
   });
 
   it("lists one person's public projects and datasets for their profile", async () => {

@@ -9,6 +9,7 @@ import {
   specProblems
 } from '@visin/backend-core/openapi-testing';
 import { API_ROUTE_GROUPS } from '../../routes/apiRoutes';
+import * as activitySchemas from '../../validation/activitySchemas';
 import * as artifactSchemas from '../../validation/artifactSchemas';
 import * as bestRunSchemas from '../../validation/bestRunSchemas';
 import * as benchmarkSchemas from '../../validation/benchmarkSchemas';
@@ -36,6 +37,7 @@ import * as writeCapabilitiesSchemas from '../../validation/writeCapabilitiesSch
 const DOCS_DIR = path.join(__dirname, '../../../docs');
 const routes = collectRoutes(API_ROUTE_GROUPS, { specBase: '/api' });
 const nameOf = schemaNamer([
+  activitySchemas,
   artifactSchemas,
   benchmarkSchemas,
   bestRunSchemas,

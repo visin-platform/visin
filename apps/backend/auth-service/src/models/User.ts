@@ -32,6 +32,11 @@ export interface IUser extends Document {
    * what is shown is then only that someone owns it. Defaults to shown.
    */
   profilePublic?: boolean;
+  /**
+   * Whether the public page lists what the account has been doing (projects made, findings, runs). Off leaves the
+   * header and the lists of projects and datasets. Defaults to shown.
+   */
+  showActivity?: boolean;
   /** Internal singleton marker; only first-run setup may assign it. */
   bootstrapSlot?: 'initial-admin';
   lastLoginAt?: Date;
@@ -54,6 +59,7 @@ const UserSchema = new Schema<IUser>(
     links: { type: [String], default: undefined },
     picture: { type: String },
     profilePublic: { type: Boolean, default: true },
+    showActivity: { type: Boolean, default: true },
     bootstrapSlot: { type: String, enum: ['initial-admin'], immutable: true, select: false },
     lastLoginAt: { type: Date },
     tokenVersion: { type: Number, default: 1 }

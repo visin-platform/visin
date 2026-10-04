@@ -84,6 +84,14 @@ const PublicProfileCard: React.FC<PublicProfileCardProps> = ({ values, savedHand
             public stay public.
           </Typography>
         )}
+        <FormControlLabel
+          control={<Switch checked={values.showActivity} onChange={(event) => set('showActivity', event.target.checked)} />}
+          label="Show my recent activity on my page"
+        />
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: -1 }}>
+          What you made, wrote and ran in public projects, by day. Never anything private. Off, your page keeps its
+          lists of projects and datasets but not this timeline.
+        </Typography>
       </Box>
     </Paper>
   );

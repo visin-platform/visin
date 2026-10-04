@@ -81,7 +81,14 @@ describe('ProfileTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => expect(screen.getByText('Profile updated successfully')).toBeInTheDocument());
-    expect(mockedUpdateProfile).toHaveBeenCalledWith({ firstName: 'Grace', lastName: 'Lovelace', bio: '', links: [], profilePublic: true });
+    expect(mockedUpdateProfile).toHaveBeenCalledWith({
+      firstName: 'Grace',
+      lastName: 'Lovelace',
+      bio: '',
+      links: [],
+      profilePublic: true,
+      showActivity: true
+    });
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
@@ -95,7 +102,14 @@ describe('ProfileTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() =>
-      expect(mockedUpdateProfile).toHaveBeenCalledWith({ firstName: 'Grace', lastName: 'Lovelace', bio: '', links: [], profilePublic: true })
+      expect(mockedUpdateProfile).toHaveBeenCalledWith({
+      firstName: 'Grace',
+      lastName: 'Lovelace',
+      bio: '',
+      links: [],
+      profilePublic: true,
+      showActivity: true
+    })
     );
   });
 
@@ -273,6 +287,7 @@ describe('ProfileTab public profile', () => {
       bio: 'Notes',
       links: ['https://a.test', 'https://b.test'],
       profilePublic: true,
+      showActivity: true,
     });
     // The form now shows what was saved, so there is nothing left to save.
     expect(screen.getByLabelText('Links')).toHaveValue('https://a.test\nhttps://b.test');
@@ -356,6 +371,19 @@ describe('ProfileTab public profile', () => {
 
     expect(screen.getByLabelText('Bio')).toHaveValue('Analytical engines');
     expect(screen.getByRole('switch', { name: 'Show my public page' })).toBeChecked();
+  });
+
+  it('keeps the timeline off the page when asked, and says what it is', async () => {
+    await open();
+    mockedUpdateProfile.mockResolvedValue({ success: true, user: { ...profile, showActivity: false } });
+
+    expect(screen.getByRole('switch', { name: 'Show my recent activity on my page' })).toBeChecked();
+    expect(screen.getByText(/Never anything private/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch', { name: 'Show my recent activity on my page' }));
+    save();
+
+    await waitFor(() => expect(mockedUpdateProfile).toHaveBeenCalledWith(expect.objectContaining({ showActivity: false })));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Show my recent activity on my page' })).not.toBeChecked());
   });
 
   it('starts an account that predates handles empty and visible, with no page to view yet', async () => {

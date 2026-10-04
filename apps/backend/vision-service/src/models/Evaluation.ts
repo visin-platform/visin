@@ -110,6 +110,8 @@ EvaluationSchema.index({ projectId: 1, uuid: 1 }, { unique: true });
 // A leaderboard reads one suite version's live evaluations.
 EvaluationSchema.index({ 'suite.id': 1, deletedAt: 1, receivedAt: -1 });
 EvaluationSchema.index({ projectId: 1, deletedAt: 1, receivedAt: -1 });
+// A person's public activity: the results they recorded, newest first.
+EvaluationSchema.index({ ownerId: 1, receivedAt: -1 });
 EvaluationSchema.index({ checkpointKey: 1, projectId: 1 });
 // What a run's checkpoints scored, and what an epoch's did: the run and epoch pages read these.
 EvaluationSchema.index({ 'source.trainingId': 1, deletedAt: 1, receivedAt: -1 });

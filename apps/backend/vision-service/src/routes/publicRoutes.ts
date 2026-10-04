@@ -6,6 +6,8 @@ import {
   getPublicLeaderboard,
   getPublicLeaderboards
 } from '../controllers/publicLeaderboardController';
+import { getPublicActivity } from '../controllers/publicActivityController';
+import { activityQuerySchema } from '../validation/activitySchemas';
 import { publicBadgeParamsSchema, publicBadgeQuerySchema, publicLeaderboardParamsSchema, leaderboardPageQuerySchema, leaderboardQuerySchema } from '../validation/evaluationSchemas';
 
 const router = express.Router();
@@ -35,5 +37,8 @@ router.get(
   getPublicLeaderboard
 );
 router.get('/evaluations/:id', getPublicEvaluation);
+// What a person or a group has been doing in public, derived on each request (so never stale, and a project made
+// private is gone from it at once). See the service.
+router.get('/activity', validateRequest({ query: activityQuerySchema }), getPublicActivity);
 
 export default router;

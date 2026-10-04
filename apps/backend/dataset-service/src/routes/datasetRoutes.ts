@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticateToken, validateRequest } from '@visin/backend-core';
 import * as ctrl from '../controllers/datasetController';
 import {
+  activityQuerySchema,
   archiveUploadBodySchema,
   setCoverBodySchema,
   createDatasetBodySchema,
@@ -20,6 +21,7 @@ const router = Router();
 router.get('/', validateRequest({ query: listDatasetsQuerySchema }), ctrl.listDatasets);
 router.post('/', authenticateToken, validateRequest({ body: createDatasetBodySchema }), ctrl.createDataset);
 // Before `/:id`, which would otherwise read "groups" or "trash" as a dataset id.
+router.get('/activity', validateRequest({ query: activityQuerySchema }), ctrl.getActivity);
 router.get('/groups', authenticateToken, ctrl.listMyGroups);
 router.get('/trash', authenticateToken, ctrl.listTrash);
 router.get('/:id', ctrl.getDataset);

@@ -3,7 +3,7 @@ import { NotFoundError } from '@visin/backend-core';
 import { User, type IUser } from '../models/User';
 import { ensureHandle } from '../services/handleService';
 
-const PUBLIC_FIELDS = 'handle firstName lastName picture bio links profilePublic createdAt';
+const PUBLIC_FIELDS = 'handle firstName lastName picture bio links profilePublic showActivity createdAt';
 
 /**
  * What the world may know of an account: never the email, and a name only as
@@ -17,6 +17,8 @@ export const toPublicUser = (user: IUser) => ({
   ...(user.picture ? { picture: user.picture } : {}),
   ...(user.bio ? { bio: user.bio } : {}),
   links: user.links ?? [],
+  /** Whether the page may list what they have been doing. */
+  showActivity: user.showActivity !== false,
   createdAt: user.createdAt.toISOString()
 });
 

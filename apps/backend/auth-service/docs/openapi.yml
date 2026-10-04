@@ -162,13 +162,15 @@ components:
         bio: { type: string }
         links: { type: array, items: { type: string, format: uri } }
         profilePublic: { type: boolean, description: 'False hides the public page and the name shown on what the account owns' }
+        showActivity: { type: boolean, description: 'Whether the public page lists what the account has been doing' }
     PublicUser:
       type: object
       description: What anyone may see of an account. Never the email.
-      required: [id, handle, name, links, createdAt]
+      required: [id, handle, name, links, showActivity, createdAt]
       properties:
         id: { type: string }
         handle: { type: string, example: ann-example }
+        showActivity: { type: boolean, description: 'Whether the page may list what they have been doing. A page that hides it still lists their projects and datasets.' }
         name: { type: string, description: 'The name the person gave, else their handle' }
         picture: { type: string, format: uri }
         bio: { type: string }

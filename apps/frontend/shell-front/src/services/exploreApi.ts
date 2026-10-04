@@ -32,8 +32,34 @@ export interface PublicUser {
   picture?: string;
   bio?: string;
   links: string[];
+  /** Whether the page may list what they have been doing. */
+  showActivity: boolean;
   createdAt: string;
 }
+
+export interface ActivityProject {
+  id: string;
+  name: string;
+  slug?: string;
+}
+
+/** One line of a person's or a group's public activity; always about something public. */
+export type ActivityItem =
+  | { kind: 'project.created'; at: string; project: ActivityProject }
+  | {
+      kind: 'finding.posted';
+      at: string;
+      project: ActivityProject;
+      finding: { id: string; title: string; authorKind: 'person' | 'assistant'; authorLabel: string };
+    }
+  | { kind: 'training.run'; at: string; project: ActivityProject; count: number }
+  | {
+      kind: 'evaluation.recorded';
+      at: string;
+      project: ActivityProject;
+      evaluation: { id: string; status: 'completed' | 'failed'; suite?: { slug: string; version: number } };
+    }
+  | { kind: 'dataset.created'; at: string; dataset: { id: string; name: string; imageCount: number } };
 
 /** A project as Explore shows it: the fields of vision-service's project the cards read. */
 export interface ExploreProject {
@@ -83,6 +109,9 @@ interface Envelope<T> {
   data: T;
 }
 
+/** Lines of activity a page shows. */
+export const ACTIVITY_LIMIT = 30;
+
 const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
 
 // Everything here is readable without an account; the session cookie only widens it
@@ -120,6 +149,33 @@ export const exploreApi = {
     if (options.owner) query.set('owner', options.owner);
     const { data } = await datasetApi.get<Envelope<{ datasets: ExploreDataset[] }>>(`?${query}`);
     return data.datasets.filter((dataset) => dataset.visibility === 'public');
+  },
+
+  /**
+   * What a person or a group has been doing in public, newest first, from Vision (projects, findings, runs,
+   * results) and the dataset service (datasets made). Either may be unconfigured or down: the feed is then what the
+   * other had, and only when both fail is it an error.
+   */
+  async activity(filter: OwnerFilter, limit = ACTIVITY_LIMIT): Promise<ActivityItem[]> {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (filter.user) query.set('user', filter.user);
+    if (filter.owner) query.set('owner', filter.owner);
+    const config = getGlobalConfig();
+    const asked = [
+      config.VISION_API_URL
+        ? visionApi.get<Envelope<ActivityItem[]>>(`/public/activity?${query}`, { skipAuthRedirect: true })
+        : undefined,
+      config.DATASET_API_URL
+        ? datasetApi.get<Envelope<ActivityItem[]>>(`/activity?${query}`, { skipAuthRedirect: true })
+        : undefined
+    ].filter((request): request is Promise<Envelope<ActivityItem[]>> => request !== undefined);
+    const settled = await Promise.allSettled(asked);
+    const failed = settled.filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected');
+    if (failed.length > 0 && failed.length === settled.length) throw failed[0].reason;
+    return settled
+      .flatMap((outcome) => (outcome.status === 'fulfilled' ? outcome.value.data : []))
+      .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+      .slice(0, limit);
   },
 
   /** A person's public page, or null where there is none: no such handle, or the person hid theirs. */
