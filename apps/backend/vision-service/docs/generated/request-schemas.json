@@ -2421,41 +2421,37 @@
     ]
   },
   "ModelLink": {
-    "oneOf": [
-      {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "hf"
-          },
-          "kind": {
-            "default": "model",
-            "type": "string",
-            "const": "model"
-          },
-          "repo": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
-          },
-          "revision": {
-            "type": "string"
-          },
-          "path": {
-            "type": "string",
-            "maxLength": 500
-          },
-          "epoch": {
-            "type": "integer",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "provider",
-          "repo",
-          "revision"
-        ]
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string",
+        "const": "hf"
+      },
+      "kind": {
+        "default": "model",
+        "type": "string",
+        "const": "model"
+      },
+      "repo": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+      },
+      "revision": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "epoch": {
+        "type": "integer",
+        "minimum": 0
       }
+    },
+    "required": [
+      "provider",
+      "repo",
+      "revision"
     ]
   },
   "PromoteEvaluationBody": {

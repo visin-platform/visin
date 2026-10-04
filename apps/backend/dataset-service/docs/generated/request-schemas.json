@@ -60,28 +60,24 @@
         ]
       },
       "source": {
-        "oneOf": [
-          {
-            "type": "object",
-            "properties": {
-              "provider": {
-                "type": "string",
-                "const": "hf"
-              },
-              "repo": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
-              },
-              "revision": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "provider",
-              "repo",
-              "revision"
-            ]
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "hf"
+          },
+          "repo": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "revision": {
+            "type": "string"
           }
+        },
+        "required": [
+          "provider",
+          "repo",
+          "revision"
         ]
       }
     },
@@ -260,28 +256,24 @@
       "source": {
         "anyOf": [
           {
-            "oneOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "provider": {
-                    "type": "string",
-                    "const": "hf"
-                  },
-                  "repo": {
-                    "type": "string",
-                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
-                  },
-                  "revision": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "provider",
-                  "repo",
-                  "revision"
-                ]
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "const": "hf"
+              },
+              "repo": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+              },
+              "revision": {
+                "type": "string"
               }
+            },
+            "required": [
+              "provider",
+              "repo",
+              "revision"
             ]
           },
           {

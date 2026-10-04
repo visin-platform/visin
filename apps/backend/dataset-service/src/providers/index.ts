@@ -1,4 +1,3 @@
-import { z } from '@visin/backend-core';
 import { hubSummary } from '../services/hubService';
 import { HUB, HUB_NAME, hubSourcePaths, hubSourceSchema, hubSourceView, type HubSource } from './huggingFace';
 
@@ -14,7 +13,7 @@ export type DatasetSourceProvider = (typeof DATASET_SOURCE_PROVIDERS)[number];
 /** Where the bytes are when they are not (only) in file-service: a pointer, never a copy. */
 export type DatasetSource = HubSource;
 
-export const datasetSourceSchema = z.discriminatedUnion('provider', [hubSourceSchema]);
+export const datasetSourceSchema = hubSourceSchema;
 
 /** The stored fields each store adds to a dataset's source (a Mongoose schema definition); a new store spreads its own. */
 export const DATASET_SOURCE_PATHS = { ...hubSourcePaths };

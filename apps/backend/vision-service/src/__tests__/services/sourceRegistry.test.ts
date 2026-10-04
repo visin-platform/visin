@@ -40,7 +40,7 @@ describe('the source registries', () => {
     expect([...MODEL_LINK_PROVIDERS].sort()).toEqual(Object.keys(modelLinkSources).sort());
     const providersOf = (union: { options: { shape: { provider: { value: string } } }[] }) => union.options.map((option) => option.shape.provider.value).sort();
     expect(providersOf(projectStorageSchema as never)).toEqual([...STORAGE_PROVIDERS].sort());
-    expect(providersOf(modelLinkSchema as never)).toEqual([...MODEL_LINK_PROVIDERS].sort());
+    expect([modelLinkSchema.shape.provider.value]).toEqual([...MODEL_LINK_PROVIDERS].sort());
     const observed = (evidenceSchema.shape.data as unknown as { unwrap(): { options: { shape: { kind: { value: string } } }[] } }).unwrap();
     expect(kindsOf(observed as never)).toEqual(Object.keys(dataSources).sort());
   });

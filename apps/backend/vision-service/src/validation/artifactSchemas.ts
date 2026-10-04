@@ -13,7 +13,7 @@ export type ProjectStorageInput = z.infer<typeof projectStorageSchema>;
  * A pointer to bytes that live elsewhere, pinned to the exact commit a run used. One variant per store a model can be
  * linked from (`MODEL_LINK_PROVIDERS`); each says what it takes to name a revision.
  */
-export const modelLinkSchema = z.discriminatedUnion('provider', [hubModelLinkSchema]);
+export const modelLinkSchema = hubModelLinkSchema;
 export type ModelLinkInput = z.infer<typeof modelLinkSchema>;
 
 /** What a model card is written for: the run, and optionally which checkpoint of it. */

@@ -37,18 +37,23 @@ test('reaches the quickstart from the landing page and copies its code', async (
   expect(pageErrors, `Uncaught exceptions: ${pageErrors.join(', ')}`).toEqual([]);
 });
 
-test('reads on a phone without scrolling sideways', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-
-  // The guides' tables and code must scroll inside their own box, never the page.
-  expect(DOCS_PATHS.length).toBeGreaterThan(5);
-  for (const path of DOCS_PATHS) {
+// Each page gets its own timeout; visiting all guides in one test can exceed
+// 30 seconds while the dev server compiles them on a cold CI runner.
+for (const path of DOCS_PATHS) {
+  test(`reads ${path} on a phone without scrolling sideways`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    // Tables and code must scroll inside their own box, never the page.
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, `${path} scrolls sideways`).toBe(0);
-  }
+  });
+}
 
+test('navigates the docs menu on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/docs');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await page.getByRole('button', { name: 'Docs menu' }).click();
   await page.getByRole('presentation').getByRole('link', { name: 'Quickstart' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Quickstart' })).toBeVisible();

@@ -375,7 +375,7 @@ components:
             trainingId: { type: string }
             epochUuid: { type: string }
             epoch: { type: integer }
-            evaluationId: { type: string, description: The evaluation it was copied from, when it was promoted. }
+            evaluationId: { type: string, description: 'The evaluation it was copied from, when it was promoted.' }
         run:
           type: object
           description: The run it came from, when that run is still live. Only in a list.
@@ -524,7 +524,7 @@ components:
                   additionalProperties: { type: number },
                   description: The headline metric in each condition.
                 }
-              attempts: { type: integer, description: How many results this project recorded of this checkpoint on the suite, published or not. }
+              attempts: { type: integer, description: 'How many results this project recorded of this checkpoint on the suite, published or not.' }
               evidenceLevel:
                 { type: string, enum: [observed, reported, attested, none], description: 'Whether the evaluator sent complete evidence (observed), less (reported), or a manager vouched for an old result (attested).' }
               project: { type: object, properties: { name: { type: string }, slug: { type: string } } }
