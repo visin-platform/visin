@@ -5,7 +5,7 @@ backend of its own; its leaderboard preview and "try it" read vision-service ano
 
 - Dev port: `3000`
 - Stack: React + Vite + MUI
-- Production: `about.visin.eu` serves this site; `visin.eu` serves `shell-front`.
+- Production: `docs.visin.eu` serves this site; `visin.eu` serves `shell-front`.
 
 ## Develop
 
