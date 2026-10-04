@@ -3,13 +3,18 @@ import Benchmark from '../models/Benchmark';
 import Config from '../models/Config';
 import Epoch from '../models/Epoch';
 import Project from '../models/Project';
-import TestResult from '../models/TestResult';
+import Evaluation from '../models/Evaluation';
 import type { IProjectTaxonomy } from '../models/taxonomy';
 import Training from '../models/Training';
 import type { ModelCardQuery } from '../validation/artifactSchemas';
 import { headlineMetric } from './bestRunService';
 import { epochMetrics } from './latexExport';
+import { hubLinksOfRepo } from './huggingFace';
+import { modelLinkKey, type ModelLink } from './sourceRegistry';
+import { evaluationScope, readerVisible } from './evaluationScope';
 import { checkProjectAccess } from './projectAccessService';
+import { configuredUrl } from './publicUrls';
+import { publicStandings, type PublicStanding } from './publicLeaderboardService';
 import { directionOf } from './trainingSummaryService';
 
 /** The Hub's task ids, for the project task types that name one. Anything else gets no model-index. */
@@ -85,7 +90,8 @@ function pickEpoch<T extends { epoch: number; results?: unknown }>(epochs: T[], 
  * the run: where the data came from, how far it trained, what it scored, how fast
  * it runs. Front matter is the Hub's `model-index`, so the scores show on the model
  * page and the model can be found by them. It cites no config values (a config can
- * hold anything) and no Visin address (none is configured here).
+ * hold anything). A Visin address appears only when this deployment configures one (`PUBLIC_APP_URL`,
+ * `VISION_API_URL`), in the leaderboard section, and only for results a manager published.
  */
 export async function buildModelCard(trainingId: string, userId: string | undefined, query: ModelCardQuery): Promise<string> {
   const training = await Training.findOne({ _id: trainingId, deletedAt: null });
@@ -95,13 +101,29 @@ export async function buildModelCard(trainingId: string, userId: string | undefi
   const runId = training._id.toString();
   const [epochs, project] = await Promise.all([
     Epoch.find({ trainingId: runId, deletedAt: null }).sort({ epoch: 1 }).select('epoch results epoch_time').lean(),
-    training.projectId ? Project.findById(training.projectId).select('name taxonomy').lean() : null
+    training.projectId ? Project.findById(training.projectId).select('name slug taxonomy').lean() : null
   ]);
   const { epoch: chosen, basis } = pickEpoch(epochs, project?.taxonomy, query.epoch);
+  // What the run's checkpoint scored at that epoch: everything for someone in the project, and only what a project shows
+  // for someone who can merely read it, so a card never tells a reader what the evaluations page would not.
+  const member = training.projectId ? (await evaluationScope(userId)).full.includes(training.projectId) : false;
 
   const [config, tests, benchmark] = await Promise.all([
     training.configId ? Config.findById(training.configId).select('summary').lean() : null,
-    chosen ? TestResult.find({ trainingId: runId, epoch: chosen.epoch, deletedAt: null }).sort({ timestamp: -1 }).limit(1).lean() : [],
+    chosen
+      ? Evaluation.find({
+          'source.trainingId': runId,
+          'source.epoch': chosen.epoch,
+          deletedAt: null,
+          status: 'completed',
+          supersededById: { $exists: false },
+          ...(member ? {} : readerVisible)
+        })
+          .sort({ executedAt: -1, receivedAt: -1 })
+          .limit(1)
+          .select('results')
+          .lean()
+      : [],
     Benchmark.findOne({ training_id: training._id, deletedAt: null, ...(chosen ? { $or: [{ epoch: chosen.epoch }, { epoch: { $exists: false } }] } : {}) }).sort({ timestamp: -1 }).lean()
   ]);
 
@@ -149,7 +171,7 @@ export async function buildModelCard(trainingId: string, userId: string | undefi
   if (metrics.length) {
     body.push('', `## Results at epoch ${chosen!.epoch}`, '', table(['Metric', 'Value'], metrics.map(([name, value]) => [name, figure(value)])));
   }
-  const overall = tests[0] ? overallRows((tests[0].test_results ?? {}) as Record<string, unknown>).slice(0, MAX_CONDITIONS) : [];
+  const overall = tests[0] ? overallRows((tests[0].results ?? {}) as Record<string, unknown>).slice(0, MAX_CONDITIONS) : [];
   if (overall.length) {
     const names = [...new Set(overall.flatMap(row => Object.keys(row.metrics)))].sort();
     body.push('', '## Test results', '', table(['Condition', ...names], overall.map(row => [row.condition, ...names.map(name => (row.metrics[name] === undefined ? '-' : figure(row.metrics[name])))])));
@@ -164,5 +186,37 @@ export async function buildModelCard(trainingId: string, userId: string | undefi
     ])));
   }
 
+  const standings = training.projectId ? await standingsOf(training.models ?? [], query.repo, training.projectId) : [];
+  if (standings.length) body.push('', '## Leaderboards', '', leaderboardTable(standings, project?.slug));
+
   return `${front.join('\n')}\n\n${body.join('\n')}\n`;
+}
+
+/** The public leaderboards the Hub repo's linked checkpoints are published to; none for a repo no link names. */
+async function standingsOf(models: ModelLink[], repo: string | undefined, projectId: string): Promise<Array<PublicStanding & { key: string }>> {
+  if (!repo) return [];
+  const keys = [...new Set(hubLinksOfRepo(models, repo).map(modelLinkKey))];
+  const found = await Promise.all(keys.map(async key => (await publicStandings(key, projectId)).map(standing => ({ ...standing, key }))));
+  return found.flat();
+}
+
+/**
+ * The published standings as a table. Links and badges are written only from this deployment's own configured
+ * addresses (and a badge only for a project that has a slug); with none configured the table still says suite, rank and
+ * score.
+ */
+function leaderboardTable(standings: Array<PublicStanding & { key: string }>, projectSlug: string | undefined): string {
+  const app = configuredUrl('PUBLIC_APP_URL');
+  const api = configuredUrl('VISION_API_URL');
+  return table(
+    ['Suite', 'Rank', 'Score', ''],
+    standings.map(standing => {
+      const name = `${standing.suite.slug}@${standing.suite.version}`;
+      const page = app ? `${app}/leaderboards/${standing.suite.slug}/${standing.suite.version}/${standing.evaluationId}` : undefined;
+      // A badge names the project as well as the checkpoint: two projects can each publish the same Hub model.
+      const badge = api && projectSlug ? `${api}/api/public/badges/${standing.suite.slug}/${standing.suite.version}/${encodeURIComponent(standing.key)}.svg?project=${encodeURIComponent(projectSlug)}` : undefined;
+      const link = page ? `[${name}](${page})` : name;
+      return [link, `${standing.rank} of ${standing.total}`, `${standing.headline.key} ${figure(standing.headline.value)}`, badge ? `[![${name}](${badge})](${page ?? badge})` : ''];
+    })
+  );
 }

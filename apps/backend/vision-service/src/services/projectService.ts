@@ -23,12 +23,16 @@ import {
 import { IProjectCosting, costOf, resolveCosting } from '../models/costing';
 import Training from '../models/Training';
 import Epoch from '../models/Epoch';
+import Evaluation from '../models/Evaluation';
+import { readerVisible } from './evaluationScope';
 import Benchmark from '../models/Benchmark';
-import TestResult from '../models/TestResult';
+import { restoreRunEvaluations, trashRunEvaluations } from './runEvaluations';
 import type { GetProjectsQuery } from '../validation/projectSchemas';
 import { requireUserCredential } from '../middleware/projectTokenContext';
 import { callerGroups, membershipOf, projectFilter, projectPermission, resolveProject } from './projectAccessService';
 import { purgeProject, TRASH_DAYS } from './purgeService';
+import { invalidatePublic } from './publicCache';
+import { clearPublications } from './publications';
 
 export interface ProjectPermissions {
   read: boolean;
@@ -186,6 +190,8 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
     }
     project.visibility = visibility;
     recordEvent(project, userId, 'visibility', { visibility });
+    // Going private ends every publication of the project's results: public again does not bring them back.
+    if (visibility === 'private') await clearPublications({ projectId: project._id.toString() }, 'project made private');
   }
   if (editorGroupIds !== undefined) {
     await assertAssignableGroups(editorGroupIds, project.editorGroupIds || [], userId);
@@ -224,6 +230,7 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
   if (data.storage !== undefined) project.storage = data.storage;
 
   await project.save();
+  invalidatePublic();
   return toProjectView(project, userId);
 };
 
@@ -275,9 +282,10 @@ export const trashProject = async (id: string, userId: string): Promise<void> =>
   const projectId = project._id.toString();
   const trainingIds = (await Training.find({ projectId, deletedAt: null }).select('_id')).map(training => training._id.toString());
   await Training.updateMany({ _id: { $in: trainingIds }, deletedAt: null }, { $set: { deletedAt: now } });
-  const epochUuids = (await Epoch.find({ trainingId: { $in: trainingIds }, deletedAt: null }).select('epoch_uuid')).map(epoch => epoch.epoch_uuid);
   await Epoch.updateMany({ trainingId: { $in: trainingIds }, deletedAt: null }, { $set: { deletedAt: now } });
-  await TestResult.updateMany({ epoch_uuid: { $in: epochUuids }, deletedAt: null }, { $set: { deletedAt: now } });
+  await trashRunEvaluations({ trainingIds }, now);
+  await clearPublications({ projectId }, 'project trashed');
+  invalidatePublic();
   recordEvent(project, userId, 'trash');
   logger.info('Project moved to the trash', { projectId, trainings: trainingIds.length });
 };
@@ -310,12 +318,12 @@ export const restoreProject = async (id: string, userId: string): Promise<Projec
   const trashedAt = project.trashedAt!;
   const projectId = project._id.toString();
   const trainingIds = (await Training.find({ projectId, deletedAt: trashedAt }).select('_id')).map(training => training._id.toString());
-  const epochUuids = (await Epoch.find({ trainingId: { $in: trainingIds }, deletedAt: trashedAt }).select('epoch_uuid')).map(epoch => epoch.epoch_uuid);
-  await TestResult.updateMany({ epoch_uuid: { $in: epochUuids }, deletedAt: trashedAt }, { $unset: { deletedAt: 1 } });
+  await restoreRunEvaluations({ trainingIds }, trashedAt);
   await Epoch.updateMany({ trainingId: { $in: trainingIds }, deletedAt: trashedAt }, { $unset: { deletedAt: 1 } });
   await Training.updateMany({ _id: { $in: trainingIds }, deletedAt: trashedAt }, { $unset: { deletedAt: 1 } });
   project.trashedAt = undefined;
   await project.save();
+  invalidatePublic();
   recordEvent(project, userId, 'restore');
   return toProjectView(project, userId);
 };
@@ -402,26 +410,11 @@ export const getProjectDashboardStats = async (
     }
   ];
 
-  /**
-   * Count rows in `collection` that hang off this project's epochs.
-   *
-   * Test results and visualizations reach a training only through
-   * `epoch_uuid`, so the join has to pass through the epochs either way. What
-   * changed is the direction and the shape: this starts from the epochs of a
-   * known set of trainings and sums the matches, where the previous form
-   * `$lookup`-ed every epoch, `$unwind`-ed one document per epoch, joined, and
-   * unwound again — a fan-out of tens of thousands of documents to produce a
-   * single number.
-   *
-   * The `$in` is the training ids, not the epoch uuids: both work, and the
-   * uuid version measured slightly faster here, but it ships one array element
-   * per epoch — 22,526 of them on this project — and that grows without bound.
-   */
+  // Visualizations still belong to epochs; evaluations carry their project and run directly.
   const countByEpoch = (collection: string) =>
     Epoch.aggregate([
       { $match: { trainingId: { $in: trainingIds }, $or: NOT_DELETED } },
-      // Live rows only: a test result deleted on its own stays in the collection
-      // with a `deletedAt`. Visualizations carry no such field, which this matches.
+      // Keep the join limited to live records.
       {
         $lookup: {
           from: collection,
@@ -434,12 +427,19 @@ export const getProjectDashboardStats = async (
       { $group: { _id: null, count: { $sum: { $size: '$joined' } } } }
     ]);
 
+  const fullResults = atLeast(await projectPermission(project, userId), 'contribute');
+
   // All four are independent, and they used to be awaited one after another —
   // so the endpoint's latency was their sum. It answers with about 300 bytes
   // and was measured at 3.9s against production.
-  const [trainingResult, testResultsResult, visualizationsResult, benchmarksCount] = await Promise.all([
+  const [trainingResult, testResultsCount, visualizationsResult, benchmarksCount] = await Promise.all([
     Training.aggregate(trainingAggregationPipeline),
-    countByEpoch('test_results'),
+    Evaluation.countDocuments({
+      projectId,
+      'source.trainingId': { $in: trainingIds },
+      deletedAt: null,
+      ...(!fullResults ? readerVisible : {})
+    }),
     countByEpoch('epoch_visualizations'),
     Benchmark.countDocuments({
       training_id: { $in: trainingObjectIds },
@@ -453,7 +453,6 @@ export const getProjectDashboardStats = async (
     totalEpochs: 0,
     avgEpochTime: 0
   };
-  const testResultsCount = testResultsResult[0]?.count || 0;
   const visualizationsCount = visualizationsResult[0]?.count || 0;
 
   const costing = resolveCosting(project.costing);

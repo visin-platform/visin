@@ -31,6 +31,9 @@ const renderAt = (path: string) =>
     </MemoryRouter>
   );
 
+/** A page title may hold a character a pattern reads as syntax, like the "?" in a question. */
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const article = () => within(screen.getByRole('article'));
 
 beforeEach(() => {
@@ -116,12 +119,12 @@ describe('docs pages', () => {
     const way = () => within(screen.getByRole('navigation', { name: 'Previous and next' }));
     expect(way().queryByText('Previous')).not.toBeInTheDocument();
     for (const page of DOC_PAGES.slice(1)) {
-      fireEvent.click(way().getByRole('link', { name: new RegExp(`^next ${page.title}$`, 'i') }));
+      fireEvent.click(way().getByRole('link', { name: new RegExp(`^next ${escapeRegExp(page.title)}$`, 'i') }));
       expect(article().getByRole('heading', { level: 1, name: page.title })).toBeInTheDocument();
     }
     expect(way().queryByText('Next')).not.toBeInTheDocument();
     const secondLast = DOC_PAGES[DOC_PAGES.length - 2];
-    expect(way().getByRole('link', { name: new RegExp(`^previous ${secondLast.title}$`, 'i') })).toHaveAttribute(
+    expect(way().getByRole('link', { name: new RegExp(`^previous ${escapeRegExp(secondLast.title)}$`, 'i') })).toHaveAttribute(
       'href',
       docPath(secondLast)
     );

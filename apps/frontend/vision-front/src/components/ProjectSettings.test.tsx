@@ -172,13 +172,13 @@ describe('ProjectSettings', () => {
       await waitFor(() =>
         expect(mockedProjectService.updateProject).toHaveBeenCalledWith(
           'p1',
-          expect.objectContaining({ storage: { provider: 'hf', hfNamespace: 'acme' } })
+          expect.objectContaining({ storage: { provider: 'hf', settings: { namespace: 'acme' } } })
         )
       );
     });
 
     it('starts from the project’s saved storage', () => {
-      renderComponent({ ...project, storage: { provider: 'hf', hfNamespace: 'acme' } });
+      renderComponent({ ...project, storage: { provider: 'hf', settings: { namespace: 'acme' } } });
       expect(screen.getByLabelText('Hub user or organisation')).toHaveValue('acme');
     });
   });

@@ -8,7 +8,7 @@ import { checkProjectAccess, getVisibleProjectIds } from './projectAccessService
 import { tokenProjectId } from '../middleware/projectTokenContext';
 import Training from '../models/Training';
 import Epoch from '../models/Epoch';
-import TestResult from '../models/TestResult';
+import Evaluation from '../models/Evaluation';
 import Benchmark from '../models/Benchmark';
 import type { GetComparisonsQuery, GetComparisonStatsQuery } from '../validation/comparisonSchemas';
 
@@ -51,15 +51,17 @@ async function assertItemsReadable(
     else if (type === 'benchmarks') {
       const benchmark = await Benchmark.findOne({ _id: id, ...live });
       trainingId = benchmark?.training_id?.toString();
-    } else {
-      const test = type === 'tests' ? await TestResult.findOne({ _id: id, ...live }) : undefined;
-      if (type === 'tests' && !test) {
+    } else if (type === 'tests') {
+      // A test is an evaluation (one a run reported, or ranked on a suite): it lives in a project of its own.
+      const test = await Evaluation.findOne({ _id: id, ...live });
+      if (!test) {
         if (viewing) continue;
         throw new ForbiddenError();
       }
-      const epoch = type === 'epochs'
-        ? await Epoch.findOne({ _id: id, ...live })
-        : await Epoch.findOne({ epoch_uuid: test!.epoch_uuid, ...live });
+      if (!(await checkProjectAccess(userId, test.projectId))) throw new ForbiddenError();
+      continue;
+    } else {
+      const epoch = await Epoch.findOne({ _id: id, ...live });
       trainingId = epoch?.trainingId;
     }
     const training = trainingId && isValidObjectId(trainingId) ? await Training.findOne({ _id: trainingId, ...live }) : null;

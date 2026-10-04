@@ -11,6 +11,10 @@ Every deployment is its own: addresses below are this deployment's. Examples in 
 - [Authentication](__LANDING_FRONT_URL__/docs/authentication): Which credential to use, what it can reach, and what the errors mean.
 - [Sending results](__LANDING_FRONT_URL__/docs/sending-results): What an epoch can carry, which names the charts read, and what Visin finds by itself.
 - [Test results and benchmarks](__LANDING_FRONT_URL__/docs/test-results-and-benchmarks): Scores on held-out data by condition and class, and how fast a model runs.
+- [Evaluation suites](__LANDING_FRONT_URL__/docs/suites): Write down how a model is scored, so results on one suite version can be compared.
+- [Evaluating models](__LANDING_FRONT_URL__/docs/evaluating-models): Record a checkpoint's results on a suite, check them first, and read the ranking.
+- [Why is my result unranked?](__LANDING_FRONT_URL__/docs/eligibility): Every reason a result cannot be ranked, and how to fix each one.
+- [Publishing to a leaderboard](__LANDING_FRONT_URL__/docs/publishing): Put a ranked result on a public leaderboard, what becomes public, and how to take it back.
 - [Prediction frames](__LANDING_FRONT_URL__/docs/prediction-frames): Store the images a run renders, and see them epoch by epoch.
 - [Errors, limits and pages](__LANDING_FRONT_URL__/docs/errors-and-limits): What a failed request answers, what to retry, how much you can send, and paging through lists.
 - [Connecting an assistant](__LANDING_FRONT_URL__/docs/assistants): Let Claude or another MCP client read your runs, with only the access you choose.

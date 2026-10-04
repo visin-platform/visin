@@ -61,10 +61,8 @@ describe('routing', () => {
   });
 
   it('sends page alongside limit, or the endpoint ignores the limit entirely', async () => {
-    // testResultService only paginates when it has both. Given `limit` alone it
-    // returned all 989 rows — 3 MB, 164,000 tokens — for a request asking for
-    // five. The pairing is sent on every list call, not just this one.
-    called.mockResolvedValue({ testResults: [] });
+    // Send both pagination keys when listing evaluations, as on every list call.
+    called.mockResolvedValue({ evaluations: [] });
 
     await vision.listTestResults('k', { limit: 5 });
 
@@ -72,7 +70,7 @@ describe('routing', () => {
   });
 
   it('lets a caller override the page rather than pinning it to the first', async () => {
-    called.mockResolvedValue({ testResults: [] });
+    called.mockResolvedValue({ evaluations: [] });
 
     await vision.listTestResults('k', { page: 3, limit: 5 });
 
@@ -127,9 +125,9 @@ describe('routing', () => {
     ],
     [
       'listTestResults',
-      () => vision.listTestResults('k', { training_uuid: 'u1' }),
-      { testResults: [] },
-      { method: 'GET', path: '/test-results', query: { training_uuid: 'u1' } }
+      () => vision.listTestResults('k', { trainingUuid: 'u1' }),
+      { evaluations: [] },
+      { method: 'GET', path: '/evaluations', query: { page: 1, include: 'results', trainingUuid: 'u1' } }
     ],
     [
       'listBenchmarks',
@@ -241,6 +239,47 @@ describe('routing', () => {
     await invoke();
 
     expect(lastCall()).toMatchObject(expected);
+  });
+});
+
+describe('suites and rankings', () => {
+  const suite = { _id: 's1', slug: 'road-test', version: 1, name: 'Road', visibility: 'public', protocol: { conditions: [{ name: 'day' }], metrics: [{ key: 'm', direction: 'max', headline: true }] } };
+  const board = {
+    suite: { slug: 'road-test', version: 1, name: 'Road', headline: { key: 'm', direction: 'max' } },
+    scope: { candidates: 2 },
+    entries: [{ evaluationId: 'e1', rank: 1, attempts: 1, checkpoint: { kind: 'local', label: 'A' }, summary: { headline: { value: 0.7 }, worst: { condition: 'day', value: 0.6 }, gap: 0.1 } }],
+    unranked: []
+  };
+
+  it('lists suites with a page of a hundred unless told otherwise, and the filters it was given', async () => {
+    called.mockResolvedValue({ suites: [suite] });
+    expect((await vision.listSuites('k', { projectId: 'road-seg' })).suites[0].slug).toBe('road-test');
+    expect(lastCall()).toMatchObject({ method: 'GET', path: '/suites', query: { limit: 100, projectId: 'road-seg' } });
+  });
+
+  it('reads one suite by slug and version, or the latest, escaping the slug', async () => {
+    called.mockResolvedValue(suite);
+    await vision.getSuite('k', 'road/test', 'latest');
+    expect(lastCall().path).toBe('/suites/road%2Ftest/latest');
+    called.mockClear();
+    called.mockResolvedValue(suite);
+    expect((await vision.getSuite('k', 'road-test', 2)).protocol.metrics[0].key).toBe('m');
+    expect(lastCall().path).toBe('/suites/road-test/2');
+  });
+
+  it('reads a ranking with the page, limit and evidence it was asked for', async () => {
+    called.mockResolvedValue(board);
+    const result = await vision.getLeaderboard('k', 'road-test', 1, { limit: 5, page: 2, evidence: 'observed' });
+    expect(result.entries[0]).toMatchObject({ evaluationId: 'e1', rank: 1 });
+    expect(lastCall()).toMatchObject({ path: '/suites/road-test/1/leaderboard', query: { limit: 5, page: 2, evidence: 'observed' } });
+  });
+
+  it('reads one evaluation with its ranked scores, and refuses a ranking that has drifted from the contract', async () => {
+    called.mockResolvedValue({ _id: 'e1', validation: { state: 'eligible', scores: { conditions: { day: { m: 0.6 } }, overall: { m: 0.7 } } } });
+    expect((await vision.getEvaluation('k', 'e1')).validation.scores?.overall.m).toBe(0.7);
+    expect(lastCall().path).toBe('/evaluations/e1');
+    called.mockResolvedValue({ ...board, entries: [{ evaluationId: 'e1' }] });
+    await expect(vision.getLeaderboard('k', 'road-test', 1, {})).rejects.toBeInstanceOf(ShapeError);
   });
 });
 

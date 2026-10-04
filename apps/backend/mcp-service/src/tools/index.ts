@@ -4,6 +4,7 @@ import { annotateTools } from '../annotate';
 import { auditTools } from '../audit';
 import { Caller, ToolModule } from './module';
 import { datasetRead } from './dataset';
+import { evaluationRead } from './evaluation';
 import { visionRead, visionWrite } from './vision';
 import { visualizationRead } from './visualization';
 import { analysisRead, analysisWrite } from './analysis';
@@ -20,6 +21,7 @@ export type { Caller, ToolModule } from './module';
 export const MODULES: ToolModule[] = [
   visionRead,
   visionWrite,
+  evaluationRead,
   visualizationRead,
   datasetRead,
   analysisRead,

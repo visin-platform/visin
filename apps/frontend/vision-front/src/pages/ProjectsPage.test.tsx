@@ -117,6 +117,7 @@ describe('ProjectsPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('No projects yet')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('href', '/leaderboards');
     });
     // The empty list offers the first project itself.
     expect(screen.getAllByRole('button', { name: /New project/ }).length).toBeGreaterThan(1);

@@ -1,11 +1,14 @@
 import type { OwnerRef, Visibility } from '@visin/frontend-core';
 import { ProjectCosting, ProjectTaxonomy } from './taxonomy';
+import type { StorageProvider } from './providers';
 
-/** Where a project keeps its big files. `visin`: on this deployment only. `hf`: runs may link Hugging Face models. */
+/**
+ * Where a project keeps its big files. `visin`: on this deployment only; another store lets runs point at it. `settings`
+ * is what that store keeps about the project (a Hub project's default namespace), named by its `storageProviders` entry.
+ */
 export interface ProjectStorage {
-  provider: 'visin' | 'hf';
-  /** the Hub user or organisation a pipeline creates repos under by default */
-  hfNamespace?: string;
+  provider: StorageProvider;
+  settings?: Record<string, string>;
 }
 
 export interface Project {
@@ -51,7 +54,7 @@ export interface UpdateProjectData {
   taxonomy?: ProjectTaxonomy | null;
   /** null clears the rates, so the project stops reporting costs */
   costing?: ProjectCosting | null;
-  /** replaces the whole setting: leave hfNamespace out to clear it */
+  /** replaces the whole setting: leave `settings` out to clear it */
   storage?: ProjectStorage;
   stallAfterMinutes?: number;
 }

@@ -14,7 +14,8 @@ import Epoch from '../../models/Epoch';
 import EpochVisualization from '../../models/EpochVisualization';
 import Finding from '../../models/Finding';
 import Project from '../../models/Project';
-import TestResult from '../../models/TestResult';
+import Evaluation from '../../models/Evaluation';
+import { recordTest } from '../fixtures/recordedTest';
 import Training from '../../models/Training';
 import comparisonRoutes from '../../routes/comparisonRoutes';
 import projectRoutes from '../../routes/projectRoutes';
@@ -201,7 +202,7 @@ describe('project ownership with in-memory MongoDB', () => {
     const seed = async (projectId: string) => {
       const training = String((await Training.create({ name: 'Run', uuid: `run-${projectId}`, ownerId: MEMBER, projectId }))._id);
       await Epoch.create({ timestamp: new Date(), trainingId: training, training_uuid: `run-${projectId}`, epoch_uuid: `epoch-${projectId}`, epoch: 1, results: {} });
-      await TestResult.create({ timestamp: new Date(), epoch: 1, epoch_uuid: `epoch-${projectId}`, test_uuid: `test-${projectId}`, test_results: {} });
+      await recordTest({ projectId, trainingId: training, timestamp: new Date(), epoch: 1, epoch_uuid: `epoch-${projectId}`, test_uuid: `test-${projectId}`, test_results: {} });
       await EpochVisualization.create({ epoch_uuid: `epoch-${projectId}`, visualization_uuid: `viz-${projectId}`, filename: 'a.png', type: 'curve', fileId: `file-${projectId}` });
       return training;
     };
@@ -230,7 +231,7 @@ describe('project ownership with in-memory MongoDB', () => {
       expect(restored.body.data.trashedAt).toBeUndefined();
       expect((await Training.findById(training))?.deletedAt).toBeUndefined();
       expect((await Training.findById(alone))?.deletedAt).toEqual(new Date(0));
-      expect(await TestResult.countDocuments({ deletedAt: null })).toBe(1);
+      expect(await Evaluation.countDocuments({ deletedAt: null })).toBe(1);
       expect((await events()).map(event => event.action)).toEqual(['trash', 'restore']);
     });
 
@@ -250,7 +251,7 @@ describe('project ownership with in-memory MongoDB', () => {
 
       expect((await call(`/projects/${id}/permanent`, { method: 'DELETE' })).status).toBe(200);
       expect(deleteFiles).toHaveBeenLastCalledWith([`file-${id}`]);
-      for (const model of [Project, Training, Epoch, TestResult, EpochVisualization, Comparison, Finding, Config] as unknown as mongoose.Model<unknown>[]) {
+      for (const model of [Project, Training, Epoch, Evaluation, EpochVisualization, Comparison, Finding, Config] as unknown as mongoose.Model<unknown>[]) {
         expect(await model.countDocuments()).toBe(0);
       }
       expect((await events()).at(-1)).toMatchObject({ action: 'purge' });
@@ -267,14 +268,14 @@ describe('project ownership with in-memory MongoDB', () => {
       const waiting = await teamProject({ name: 'Waiting', trashedAt: new Date() });
       const inWaiting = String((await Training.create({ name: 'In waiting', uuid: 'waiting', projectId: waiting, deletedAt: month }))._id);
 
-      expect(await purgeExpiredTrash()).toEqual({ projects: 1, trainings: 1 });
+      expect(await purgeExpiredTrash()).toEqual({ projects: 1, trainings: 1, evaluations: 0 });
       expect(await Project.exists({ _id: expired })).toBeNull();
       expect(await Training.exists({ _id: old })).toBeNull();
       expect(await Training.exists({ _id: recent })).not.toBeNull();
       // Its project decides: it goes when the project does.
       expect(await Training.exists({ _id: inWaiting })).not.toBeNull();
       expect(await Epoch.countDocuments()).toBe(0);
-      expect(await purgeExpiredTrash()).toEqual({ projects: 0, trainings: 0 });
+      expect(await purgeExpiredTrash()).toEqual({ projects: 0, trainings: 0, evaluations: 0 });
     });
   });
 

@@ -13,7 +13,7 @@ const makeRes = () => {
 jest.mock('../../models/Epoch');
 jest.mock('../../models/Training');
 jest.mock('../../models/Project', () => ({ __esModule: true, default: { findById: jest.fn().mockResolvedValue({ _id: 'p1' }) } }));
-jest.mock('../../models/TestResult');
+jest.mock('../../models/Evaluation');
 jest.mock('../../services/projectAccessService', () => ({
   checkProjectAccess: jest.fn(),
   projectPermission: jest.fn().mockResolvedValue('own'),
@@ -22,12 +22,12 @@ jest.mock('../../services/projectAccessService', () => ({
 
 import Epoch from '../../models/Epoch';
 import Training from '../../models/Training';
-import TestResult from '../../models/TestResult';
+import Evaluation from '../../models/Evaluation';
 import { checkProjectAccess } from '../../services/projectAccessService';
 
 const mockEpoch = Epoch as jest.Mocked<typeof Epoch>;
 const mockTraining = Training as jest.Mocked<typeof Training>;
-const mockTestResult = TestResult as jest.Mocked<typeof TestResult>;
+const mockEvaluation = Evaluation as jest.Mocked<typeof Evaluation>;
 const mockCheckProjectAccess = checkProjectAccess as jest.Mock;
 
 beforeEach(() => {
@@ -111,10 +111,10 @@ describe('deleteEpoch', () => {
 
     await expect(deleteEpoch(req, makeRes())).rejects.toThrow(ForbiddenError);
     expect(epoch.save).not.toHaveBeenCalled();
-    expect(mockTestResult.updateMany).not.toHaveBeenCalled();
+    expect(mockEvaluation.updateMany).not.toHaveBeenCalled();
   });
 
-  it('soft-deletes the epoch and its live test results under one timestamp', async () => {
+  it('soft-deletes the epoch and what a run recorded without a suite at it, under one timestamp', async () => {
     const epoch: Record<string, unknown> = { trainingId: 't1', epoch_uuid: 'e1', save: jest.fn() };
     mockEpoch.findById.mockResolvedValueOnce(epoch as never);
     // A run in a project the caller owns.
@@ -126,8 +126,8 @@ describe('deleteEpoch', () => {
 
     expect(epoch.save).toHaveBeenCalled();
     expect(epoch.deletedAt).toBeInstanceOf(Date);
-    expect(mockTestResult.updateMany).toHaveBeenCalledWith(
-      { epoch_uuid: 'e1', deletedAt: null },
+    expect(mockEvaluation.updateMany).toHaveBeenCalledWith(
+      { suite: { $exists: false }, $or: [{ 'source.epochUuid': { $in: ['e1'] } }], deletedAt: null },
       { deletedAt: epoch.deletedAt }
     );
     expect(res.json).toHaveBeenCalledWith({ success: true, message: 'Epoch deleted successfully' });

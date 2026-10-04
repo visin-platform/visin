@@ -32,14 +32,7 @@ import {
   createProjectBodySchema,
   updateProjectBodySchema,
 } from '../../validation/projectSchemas';
-import {
-  getTestResultsQuerySchema,
-  getTestResultsByEpochUuidQuerySchema,
-  createTestResultBodySchema,
-  updateTestResultBodySchema,
-  compareTestResultsBodySchema,
-  compareAggregatedTestResultsBodySchema,
-} from '../../validation/testResultSchemas';
+import { evaluationBodySchema, listEvaluationsQuerySchema } from '../../validation/evaluationSchemas';
 import {
   getTrainingsQuerySchema,
   getTrainingStatsQuerySchema,
@@ -274,29 +267,31 @@ describe('projectSchemas', () => {
   });
 });
 
-describe('testResultSchemas', () => {
-  it('getTestResultsQuerySchema splits comma-separated epoch_uuids', () => {
-    const parsed = getTestResultsQuerySchema.parse({ epoch_uuids: 'a, b,c' });
-    expect(parsed.epoch_uuids).toEqual(['a', 'b', 'c']);
-    expect(parsed.sortBy).toBe('timestamp');
-    expect(getTestResultsQuerySchema.parse({}).epoch_uuids).toBeUndefined();
-    expect(getTestResultsByEpochUuidQuerySchema.parse({}).order).toBe(-1);
+describe('listEvaluationsQuerySchema', () => {
+  it('splits comma-separated epoch uuids and defaults to newest first', () => {
+    const parsed = listEvaluationsQuerySchema.parse({ epochUuids: 'a, b,c' });
+    expect(parsed.epochUuids).toEqual(['a', 'b', 'c']);
+    expect(parsed.sortBy).toBe('receivedAt');
+    expect(parsed.order).toBe(-1);
+    expect(listEvaluationsQuerySchema.parse({}).epochUuids).toBeUndefined();
+    expect(listEvaluationsQuerySchema.parse({ epochUuids: ' , ' }).epochUuids).toEqual([]);
   });
 
-  it('createTestResultBodySchema requires epoch, epoch_uuid, and results', () => {
-    expect(
-      createTestResultBodySchema.safeParse({ epoch: '1', epoch_uuid: 'e', test_results: {} }).success
-    ).toBe(true);
-    expect(createTestResultBodySchema.safeParse({ epoch: 1, epoch_uuid: 'e' }).success).toBe(false);
-    expect(updateTestResultBodySchema.parse({ epoch: '2' }).epoch).toBe(2);
+  it('takes the run, the epoch, the order and whether to carry the results', () => {
+    const parsed = listEvaluationsQuerySchema.parse({ trainingUuid: 'u1', epoch: '3', sortBy: 'executedAt', order: 'asc', include: 'results' });
+    expect(parsed).toMatchObject({ trainingUuid: 'u1', epoch: 3, sortBy: 'executedAt', order: 1, include: 'results' });
+    expect(listEvaluationsQuerySchema.safeParse({ sortBy: 'createdAt' }).success).toBe(false);
+    expect(listEvaluationsQuerySchema.safeParse({ include: 'provenance' }).success).toBe(false);
+    expect(listEvaluationsQuerySchema.safeParse({ trainingId: 'nope' }).success).toBe(false);
   });
+});
 
-  it('compare schemas bound their id lists', () => {
-    expect(compareTestResultsBodySchema.safeParse({ testResultIds: [] }).success).toBe(false);
-    expect(
-      compareTestResultsBodySchema.safeParse({ testResultIds: Array(21).fill('x') }).success
-    ).toBe(false);
-    expect(compareAggregatedTestResultsBodySchema.safeParse({ trainingIds: ['t'] }).success).toBe(true);
+describe('evaluationBodySchema', () => {
+  it('needs a project, or the epoch whose project it is', () => {
+    expect(evaluationBodySchema.safeParse({ results: {} }).success).toBe(false);
+    expect(evaluationBodySchema.safeParse({ projectId: 'p', results: {} }).success).toBe(true);
+    expect(evaluationBodySchema.safeParse({ source: { epochUuid: 'e' }, results: {} }).success).toBe(true);
+    expect(evaluationBodySchema.safeParse({ source: { epoch: 3 }, results: {} }).success).toBe(false);
   });
 });
 

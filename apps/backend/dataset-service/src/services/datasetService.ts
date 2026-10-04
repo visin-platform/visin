@@ -15,7 +15,7 @@ import { Dataset, IDataset, ImportMapping } from '../models/Dataset';
 import { DatasetItem } from '../models/DatasetItem';
 import * as files from '../clients/fileServiceClient';
 import { summarizeItems } from './importService';
-import { hubSummary } from './hubService';
+import { sourceInfo, sourceView } from '../providers';
 import { enqueueDelete, enqueueImport, enqueueRemoveGroup, enqueueScan, removeQueuedImport } from '../queue/importQueue';
 import { expectedImportFiles } from '../utils/contents';
 import { normalizeFolder } from '../utils/zipPaths';
@@ -69,7 +69,7 @@ export const toDatasetView = (dataset: IDataset, permissions: DatasetPermissions
   createdBy: dataset.createdBy,
   visibility: dataset.visibility,
   trashedAt: dataset.trashedAt,
-  source: dataset.source ? { provider: dataset.source.provider, repo: dataset.source.repo, revision: dataset.source.revision } : undefined,
+  source: dataset.source ? sourceView(dataset.source) : undefined,
   archive: dataset.archive ? { filename: dataset.archive.filename, size: dataset.archive.size, uploadedAt: dataset.archive.uploadedAt } : undefined,
   uploading: dataset.pendingUpload ? { filename: dataset.pendingUpload.filename, size: dataset.pendingUpload.size } : undefined,
   contents: dataset.contents,
@@ -476,11 +476,11 @@ export const rescanArchive = async (access: DatasetAccess, id: string) => {
   return viewFor(access, dataset);
 };
 
-/** What the Hub says about a dataset's repo; anyone who may read the dataset may see it. */
+/** What the store says about a dataset kept on one; anyone who may read the dataset may see it. */
 export const getHubInfo = async (access: DatasetAccess, id: string) => {
   const dataset = await readableDataset(access, id);
-  if (!dataset.source) throw new BadRequestError('This dataset is not kept on the Hugging Face Hub');
-  return hubSummary(dataset.source);
+  if (!dataset.source) throw new BadRequestError('This dataset is not kept on an external store');
+  return sourceInfo(dataset.source);
 };
 
 /**
@@ -490,7 +490,7 @@ export const getHubInfo = async (access: DatasetAccess, id: string) => {
  */
 export const getArchiveDownload = async (access: DatasetAccess, id: string) => {
   const dataset = await readableDataset(access, id);
-  const source = dataset.source ? { provider: dataset.source.provider, repo: dataset.source.repo, revision: dataset.source.revision } : undefined;
+  const source = dataset.source ? sourceView(dataset.source) : undefined;
   if (!dataset.archive) {
     if (!source) throw new BadRequestError('This dataset has no zip yet');
     return { source, revision: source.revision };

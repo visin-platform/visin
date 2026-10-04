@@ -30,11 +30,16 @@ What you tick decides which tools the assistant has:
 
 | Permission       | Tools                                                                                                                                                                  |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vision:read`    | List and read projects and runs, sample a run's training curve, compare runs at their best epoch, read test results and benchmarks, list and look at prediction frames |
+| `vision:read`    | List and read projects and runs, sample a run's training curve, compare runs at their best epoch, read test results and benchmarks, list and look at prediction frames, list [evaluation suites](/docs/suites), read how models rank on one and where each is weakest |
 | `vision:write`   | Create and rename projects, rename and retag runs                                                                                                                      |
 | `dataset:read`   | List and read datasets                                                                                                                                                 |
 | `analysis:read`  | List and read findings                                                                                                                                                 |
 | `analysis:write` | Record a finding: a written conclusion about runs, kept in the project                                                                                                 |
+
+The ranking tools (`list_suites`, `get_leaderboard`, `get_worst_conditions`) return a bounded page of rows. They say
+what the ranking is: results the submitters reported and Visin has not verified, ranked among the results your account
+can read, each labelled observed, reported or attested by how much the evaluator said about what it ran. Ask for
+`observed_only` to rank only results with complete evidence.
 
 It sees only what your account can see, and cannot write epochs or results: those come from your training pipeline,
 with a [pipeline key](/docs/authentication#pipeline-keys).

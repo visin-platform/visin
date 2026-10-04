@@ -211,16 +211,47 @@ export const testResultSchema = z
   .loose();
 
 /**
- * `/test-results` answers with pagination when asked for a page and a bare
- * total when not. Both are accepted because both are real.
+ * What a run's checkpoints scored, as `/evaluations` lists it with `include=results`: the result blob stays open
+ * here (a suite's result may carry keys the breakdown has no use for), and `testResultOf` keeps the part that is a
+ * condition-by-class breakdown.
  */
-export const testResultsResponseSchema = z
+export const runEvaluationsResponseSchema = z
   .object({
-    testResults: z.array(testResultSchema),
-    pagination: pagination.optional(),
-    total: z.number().optional()
+    evaluations: z.array(
+      z
+        .object({
+          _id: z.string(),
+          uuid: z.string().optional(),
+          source: z.object({ epochUuid: z.string().optional(), epoch: z.number().optional() }).loose().optional(),
+          executedAt: z.string().optional(),
+          receivedAt: z.string().optional(),
+          results: z.record(z.string(), z.unknown()).default({}),
+          run: z.object({ _id: z.string(), name: z.string(), uuid: z.string().optional() }).loose().optional()
+        })
+        .loose()
+    ),
+    pagination: pagination.optional()
   })
   .loose();
+export type RunEvaluation = z.infer<typeof runEvaluationsResponseSchema>['evaluations'][number];
+
+/** The breakdown of one evaluation: its conditions, each a set of classes (and summary scalars). Anything else is left out. */
+export function testResultOf(row: RunEvaluation): TestResult {
+  const breakdown: Record<string, Record<string, z.infer<typeof conditionEntrySchema>>> = {};
+  for (const [condition, entries] of Object.entries(row.results)) {
+    const parsed = z.record(z.string(), conditionEntrySchema).safeParse(entries);
+    if (parsed.success) breakdown[condition] = parsed.data;
+  }
+  return {
+    _id: row._id,
+    ...(row.source?.epoch !== undefined ? { epoch: row.source.epoch } : {}),
+    ...(row.uuid ? { test_uuid: row.uuid } : {}),
+    ...(row.source?.epochUuid ? { epoch_uuid: row.source.epochUuid } : {}),
+    ...((row.executedAt ?? row.receivedAt) ? { timestamp: row.executedAt ?? row.receivedAt } : {}),
+    test_results: breakdown,
+    ...(row.run ? { training: row.run } : {})
+  };
+}
 
 const benchmarkResultSchema = z
   .object({
@@ -483,6 +514,110 @@ export class ShapeError extends Error {
     this.name = 'ShapeError';
   }
 }
+
+/** A suite: a written-down way of scoring a model. Results on one suite version can be compared. */
+export const suiteSchema = z
+  .object({
+    _id: z.string(),
+    slug: z.string(),
+    version: z.number(),
+    name: z.string(),
+    description: z.string().optional(),
+    visibility: z.enum(['private', 'public']).catch('private'),
+    digest: z.string().optional(),
+    archivedAt: z.string().optional(),
+    protocol: z
+      .object({
+        task: z.string().optional(),
+        split: z.string().optional(),
+        aggregation: z.string().optional(),
+        conditions: z.array(z.object({ name: z.string(), sampleCount: z.number().optional() }).loose()).catch([]),
+        metrics: z
+          .array(
+            z
+              .object({
+                key: z.string(),
+                direction: z.enum(['max', 'min']).catch('max'),
+                unit: z.string().optional(),
+                headline: z.boolean().optional()
+              })
+              .loose()
+          )
+          .catch([])
+      })
+      .loose()
+  })
+  .loose();
+
+export const suitesResponseSchema = z.object({ suites: z.array(suiteSchema), pagination: pagination.optional() }).loose();
+
+/**
+ * Where a checkpoint lives. Only its kind is required: each kind's own fields are read where it is named
+ * (`checkpointNames` in tools/evaluation.ts), so a kind this server does not know yet is shown by its kind, not lost.
+ */
+const checkpointSchema = z.object({ kind: z.string() }).loose().optional().catch(undefined);
+
+const evidenceLevel = z.enum(['observed', 'reported', 'attested', 'none']).optional().catch(undefined);
+
+export const leaderboardSchema = z
+  .object({
+    suite: z
+      .object({
+        slug: z.string(),
+        version: z.number(),
+        name: z.string(),
+        headline: z.object({ key: z.string(), direction: z.enum(['max', 'min']).catch('max'), unit: z.string().optional() }).loose()
+      })
+      .loose(),
+    scope: z.object({ candidates: z.number().catch(0) }).loose(),
+    entries: z.array(
+      z
+        .object({
+          evaluationId: z.string(),
+          rank: z.number(),
+          attempts: z.number().catch(1),
+          checkpoint: checkpointSchema,
+          evidenceLevel,
+          summary: z
+            .object({
+              headline: z.object({ value: z.number() }).loose(),
+              worst: z.object({ condition: z.string(), value: z.number() }).loose(),
+              gap: z.number()
+            })
+            .loose()
+        })
+        .loose()
+    ),
+    unranked: z.array(z.object({ state: z.string().catch('unknown'), reasons: z.array(z.object({ code: z.string() }).loose()).catch([]) }).loose()).catch([]),
+    pagination: pagination.optional()
+  })
+  .loose();
+
+/** One evaluation, with the scores the ranking uses when it is ranked. */
+export const evaluationSchema = z
+  .object({
+    _id: z.string(),
+    checkpoint: checkpointSchema,
+    suite: z.object({ slug: z.string(), version: z.number() }).loose().optional(),
+    validation: z
+      .object({
+        state: z.string(),
+        evidence: evidenceLevel,
+        scores: z
+          .object({
+            conditions: z.record(z.string(), z.record(z.string(), z.number())),
+            overall: z.record(z.string(), z.number())
+          })
+          .loose()
+          .optional()
+      })
+      .loose()
+  })
+  .loose();
+
+export type Suite = z.infer<typeof suiteSchema>;
+export type Leaderboard = z.infer<typeof leaderboardSchema>;
+export type EvaluationRecord = z.infer<typeof evaluationSchema>;
 
 /** Parse, or fail with something a person can act on. */
 export function parseResponse<T>(schema: z.ZodType<T>, path: string, body: unknown): T {

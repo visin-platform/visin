@@ -1,5 +1,6 @@
 import { stallSilentTrainings } from './services/trainingHeartbeatService';
 import express from 'express';
+import { jsonBody } from './middleware/bodyLimit';
 import { identityContextMiddleware } from './middleware/requestIdentityContext';
 import path from 'path';
 import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve, startSweeper } from '@visin/backend-core';
@@ -21,13 +22,8 @@ const app = createBaseApp({
   json: false
 });
 
-// Training/epoch/benchmark/test-result ingestion can carry large result payloads;
-// everything else (projects, comparisons, configs, ...) gets the smaller default.
-const LARGE_PAYLOAD_PREFIXES = ['/api/epochs', '/api/benchmarks', '/api/test-results', '/api/trainings'];
-app.use((req, res, next) => {
-  const limit = LARGE_PAYLOAD_PREFIXES.some(prefix => req.path.startsWith(prefix)) ? '50mb' : '1mb';
-  express.json({ limit })(req, res, next);
-});
+// Ingestion routes carry large result payloads; everything else gets the smaller default (see bodyLimit.ts).
+app.use(jsonBody);
 
 // Global Middleware
 app.use(identityContextMiddleware);

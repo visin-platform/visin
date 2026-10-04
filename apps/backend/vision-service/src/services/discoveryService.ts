@@ -1,3 +1,4 @@
+import { configuredUrl } from './publicUrls';
 import type { Request } from 'express';
 import Project from '../models/Project';
 
@@ -19,7 +20,7 @@ export interface Discovery {
 }
 
 /** Addresses come from this deployment's own settings, never from a built-in default: a self-hosted Visin must not point its users at someone else's. */
-const configured = (name: string): string | undefined => process.env[name]?.trim().replace(/\/+$/, '') || undefined;
+const configured = configuredUrl;
 
 /**
  * What a client needs to set itself up from one address: the other services' public

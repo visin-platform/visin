@@ -1,5 +1,6 @@
 import { Schema, model, Document, Types } from 'mongoose';
 import { VISIBILITIES, type ResourceOwner, type Visibility } from '@visin/backend-core';
+import { DATASET_SOURCE_PATHS, DATASET_SOURCE_PROVIDERS, type DatasetSource } from '../providers';
 
 export type DatasetVisibility = Visibility;
 
@@ -93,13 +94,7 @@ export interface DatasetHold {
   createdAt: Date;
 }
 
-/** Where the bytes are when they are not (only) in file-service: a pointer, never a copy. */
-export interface DatasetSource {
-  provider: 'hf';
-  repo: string;
-  /** a full commit hash, never a branch */
-  revision: string;
-}
+export type { DatasetSource } from '../providers';
 
 export interface IDataset extends Document {
   _id: Types.ObjectId;
@@ -159,9 +154,9 @@ const DatasetSchema = new Schema<IDataset>(
     source: {
       type: {
         _id: false,
-        provider: { type: String, enum: ['hf'], required: true },
-        repo: { type: String, required: true },
-        revision: { type: String, required: true }
+        provider: { type: String, enum: DATASET_SOURCE_PROVIDERS, required: true },
+        // The store's own fields (a Hub source's repo and a full commit hash): its schema is what requires them.
+        ...DATASET_SOURCE_PATHS
       },
       default: undefined
     },

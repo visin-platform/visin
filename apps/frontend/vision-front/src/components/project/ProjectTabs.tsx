@@ -17,6 +17,7 @@ import ProjectVisualizationsTab, { type VisualizationsGroupedResult } from './Pr
 import ProjectBenchmarksTab from './ProjectBenchmarksTab';
 import ProjectComparisonsTab from './ProjectComparisonsTab';
 import ModelRegistry from '../models/ModelRegistry';
+import EvaluationList from '../evaluations/EvaluationList';
 import FindingsPanel from '../analysis/FindingsPanel';
 import ProjectSettings from '../ProjectSettings';
 import { discoverClasses, discoverConditions } from '../../taxonomy/discover';
@@ -168,6 +169,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
           <Tab label="Comparisons" />
           <Tab label="Analysis" />
           <Tab label="Models" />
+          <Tab label="Evaluations" />
           {canManage && <Tab label="Settings" />}
         </Tabs>
       </Box>
@@ -255,9 +257,16 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
         </Box>
       </TabPanel>
 
+      {/* Evaluations Tab */}
+      <TabPanel value={tabValue} index={8}>
+        <Box sx={{ px: { xs: 0, sm: 3 } }}>
+          <EvaluationList projectId={project._id} title="Evaluations" />
+        </Box>
+      </TabPanel>
+
       {/* Settings Tab */}
       {canManage && (
-        <TabPanel value={tabValue} index={8}>
+        <TabPanel value={tabValue} index={9}>
           <Box sx={{ px: { xs: 0, sm: 3 } }}>
             <ProjectSettings project={project} discovered={discoveredVocabulary} />
           </Box>

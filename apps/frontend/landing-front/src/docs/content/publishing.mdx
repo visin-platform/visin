@@ -1,0 +1,173 @@
+A ranked result is private to its project until a manager **publishes** it. Publishing puts that one result on the
+public leaderboard of its [suite](/docs/suites), where anyone can read it without signing in. This page says what
+it takes, exactly what becomes public, and how to take it back.
+
+The examples use `VISIN_URL` and `HEADERS` as in the [quickstart](/docs/quickstart).
+
+## What it takes
+
+The **Leaderboards** page also ranks recorded evaluation scores, including migrated results without a suite.
+Use **All**, **Verified**, or **Not verified** to filter them. A manager can mark a result verified on its evaluation
+page; an automated job can use `POST /api/evaluations/{id}/verification` with `{ "verified": true }` and a manager's
+project API key. The server records only `verifiedAt` and `verifiedBy`; removing verification clears both.
+Verification is independent of protocol validation and publication, and does not decide whether a readable result
+appears. Private project results remain visible only to people with access. Compare scores from the same data and metric.
+
+Publishing is a decision about **one result**. A public project does not publish its results by existing, and a public
+suite does not publish anyone's. For a result to be published, all of these hold:
+
+| Needed                          | Why                                                                                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| You can **manage** the project  | Publishing shows a result to everyone, so it is a manager's call. Contributors can record results but not publish them.                   |
+| The result is **ranked**        | An incomplete or incompatible result has no place in a ranking. See [why a result is unranked](/docs/eligibility).                        |
+| The project is **public**       | A private project's results never leave it. Make the project public in its settings first.                                                |
+| The suite is **public**         | The protocol is part of what readers see. Publish the suite with `"visibility": "public"`, or change it with `PATCH /api/suites/<slug>/<version>`. |
+| It is the checkpoint's **latest** ranked result | A board shows each model by its latest result. Publishing an earlier, better attempt would let the best of several stand in for the model, so it is refused. |
+| The suite **takes your project's results** | A suite can take results from anyone (`open`), only from its own project (`members`), or from anyone with a verification review list (`approval`). See [who can publish to a suite](#who-can-publish-to-a-suite). |
+
+If one is missing, publishing answers `409` and says which.
+
+When a **newer ranked result** of the same checkpoint arrives, the earlier published one is withdrawn, and the newer one
+is published on its own: the board never shows an old result while newer ones go unmentioned. A result replaced by a
+correction (`supersedesId`) cannot be published either, and leaves the ranking at once.
+
+## Publish and withdraw
+
+In the app, open the evaluation and choose **Publish to public leaderboard**. A banner then says it is public and links
+to its public page. **Withdraw from public leaderboard** takes it back.
+
+Or through the API:
+
+<CodeTabs>
+
+```python
+evaluation_id = "6ab5932a0e9a6b7570e30e2e"
+
+requests.post(f"{VISIN_URL}/api/evaluations/{evaluation_id}/publish", headers=HEADERS).raise_for_status()
+# and to take it back:
+requests.post(f"{VISIN_URL}/api/evaluations/{evaluation_id}/withdraw", headers=HEADERS).raise_for_status()
+```
+
+```bash
+curl -sS -X POST "$VISIN_URL/api/evaluations/$EVALUATION_ID/publish" \
+  -H "Authorization: Bearer $VISIN_TOKEN"
+```
+
+</CodeTabs>
+
+Both are safe to repeat. Each change is recorded, with who made it.
+
+## Exactly what becomes public
+
+A published evaluation shows a fixed set of fields, and nothing else, whatever the submitter put in it:
+
+| Public                                                                                             | Never public                                                                                  |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| The checkpoint: a Hub repo and commit, or a local one's label and weights digest                   | Commands, hostnames and environment variables                                                 |
+| The scores, in every condition, and the sample counts                                              | Raw configuration and the raw result blob                                                     |
+| The headline, the worst condition and the gap                                                      | Run, user and project ids, and signed file addresses                                          |
+| The suite's protocol: task, split, conditions, metrics, how the overall figure is formed           | A Visin dataset's id or digest: it is shown only as "a Visin dataset"                         |
+| The evaluator's package, version and commit, when the submitter reported them                      | Anything else in `provenance`                                                                 |
+| Whether the evaluator observed the run, only reported it, or a manager attested an older result    | The evidence itself: data digests, the protocol digest, and who promoted a result        |
+| The project's name, as the submitter, and the dates, and how many attempts it recorded of the checkpoint | Results that were not published, including the other attempts themselves                      |
+
+Every published result is labelled **submitter-reported**. Visin checks that a result fits the suite's protocol. It
+cannot prove that the checkpoint or the data were what the submitter says, and nothing public calls a result verified.
+
+## What a visitor sees
+
+- **Leaderboards** (`/leaderboards` in the app) lists every suite with something published.
+- A leaderboard ranks the published results. One row per model and project, from the model's **latest ranked** result,
+  never its best, and only when that very result is published: a newer ranked result that is not published takes the
+  row off the board until it is. Ties share a rank; the suite decides which direction is better. The attempt count on
+  a row is every attempt that project recorded of the model, published or not. Another project's result for the same
+  model is its own row; it never replaces yours.
+- Each row leads to that result's evidence: its scores, checkpoint, samples and evaluator. A result a manager promoted
+  from a result recorded without a suite is marked **attested**, and one that sent little evidence **reported**; the **Observed
+  evidence only** switch (`?evidence=observed` on the API) ranks only results whose evaluator sent complete evidence.
+
+The same is available without signing in:
+
+```bash
+curl -sS "$VISIN_URL/api/public/leaderboards"                          # the leaderboards
+curl -sS "$VISIN_URL/api/public/leaderboards/road-test/1"              # one ranking
+curl -sS "$VISIN_URL/api/public/evaluations/$EVALUATION_ID"            # the evidence behind a row
+```
+
+A signed-in manager gets exactly the same answer as a stranger: the public views never look at who is asking. They
+are rate limited by address.
+
+## Who can read what
+
+A public project is readable by anyone, but its results are not: someone who is not part of the project sees an
+evaluation only once it is **published**, and never who recorded it, who vouched for a promoted result, or anything of
+how the run was set up beyond its evaluator. The people in the project see everything, as recorded. This holds for the
+evaluations list, a single evaluation, and the ranking in the app's own suite pages.
+
+## Badges and model cards
+
+A published result can carry its standing to wherever the model is shown. `GET
+/api/public/badges/<suite>/<version>/<checkpoint key>.svg?project=<project slug>` is a small badge such as `road-test v1 |
+mIoU 0.7351 · rank 2/9`, for a README or a model page. It names the project because two projects can each publish the
+same checkpoint, and a badge shows one project's row. The checkpoint key is the canonical one, URL-encoded because it holds `:`, `@` and
+`/`: `hf:<repo>@<commit>:<path>` for a Hub checkpoint (repo in lower case, the path empty when there is none) or
+`sha256:<digest>` for weights held elsewhere.
+
+```markdown
+[![road-test v1](https://api.example.com/api/public/badges/road-test/1/hf%3Aacme%2Fclftv2%40<commit>%3A.svg?project=road-team)](https://app.example.com/leaderboards/road-test/1)
+```
+
+A badge says nothing the public leaderboard page does not: it is a `404` for anything that is not published there right
+now (withdrawn, trashed, never published, a private suite or project, hidden by the suite's managers), whatever the
+reason. A badge may be kept for a minute by whoever fetches it, so a withdrawal can linger in a README image for that
+long; the pages below are never kept.
+
+The model card Visin writes for a Hub repo gets a **Leaderboards** section in the same way: for each public leaderboard
+the repo's linked checkpoint is published to, its rank, its score and a link to the evidence. The links and the badge
+image are written only from addresses this deployment configures: `PUBLIC_APP_URL` for the page links and
+`VISION_API_URL` (this service's own public address) for the badge image, and only for a project that has a slug to name
+it by. The section lists only that project's own published results of the checkpoint. Leave the addresses unset and
+the section names the suite, rank and score and writes no link.
+
+## Taking something back
+
+A withdrawal, a trashed evaluation, and making the project or the suite private all remove a result from every
+public list, count and page **at once**. Visin re-checks all of it on every read, and the public pages are never
+cached by a browser or a proxy (`Cache-Control: no-store`); the server remembers what it computed for a short time
+(a fixed 30 seconds) and forgets it on every such change, so nothing keeps serving it afterwards.
+
+Going **private** ends the publication for good: a project or suite that is made private, or a project moved to the
+trash, loses the publication of its results, so making it public or restoring it does not publish them again. Publish
+what you want public, afresh.
+
+What it cannot do is recall a copy someone already took: a page saved, a response stored by a script, a table pasted
+into a paper. Publish what you are willing to have copied.
+
+An archived suite keeps its published results visible, marked as archived.
+
+## Who can publish to a suite
+
+A suite has a **publishing policy**, set by a manager of the project that owns it (`PATCH /api/suites/<slug>/<version>`
+with `submissions`, or the suite's page in the app):
+
+| Policy     | Who may publish to its leaderboard                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `open`     | A manager of any public project. The default.                                                                          |
+| `members`  | Only the project that owns the suite. Anyone else is refused with `409`.                                                |
+| `approval` | Any public project; managers can verify submissions in the review list. Verification does not hide unverified results.      |
+
+The managers of the suite's project also decide what stands on the board afterwards. They can **hide** any published
+result, whichever project it is from, with a reason that is kept and recorded; its project is told, can still withdraw
+it, and cannot publish it again until they show it. They see unverified submissions and what they hid in the suite's
+page, or with `GET /api/suites/<slug>/<version>/submissions`, and act with `POST /api/evaluations/<id>/approve`,
+`/hide` (with a `reason`) and `/unhide`. They see only what the public sees of another project's result: the
+checkpoint, the project's name and the headline score. Changing the policy does not touch what is already published.
+
+## Your home page features one
+
+The landing page shows recorded results by default, including migrated evaluations from public projects, with an
+**All / Verified / Not verified** filter. It reads anonymously from your own deployment, so private results stay private.
+The preview links to the full leaderboard and each evaluation. No featured suite setting is needed.
+
+- If there are no matching recorded scores, the section says so.
+- If the API cannot be reached, the section says the leaderboard is not available right now, and the rest of the page is unaffected.

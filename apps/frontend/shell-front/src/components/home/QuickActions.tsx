@@ -1,7 +1,7 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, ButtonBase, Typography } from '@mui/material';
 import { glassInteractive, tint, useChartColors } from '@visin/frontend-core';
-import { AddTask, Memory, ModelTraining, PhotoLibrary } from '@mui/icons-material';
+import { AddTask, Memory, ModelTraining, PhotoLibrary, Scoreboard } from '@mui/icons-material';
 import type { SvgIconComponent } from '@mui/icons-material';
 import { LABELING_SLOT } from './accents';
 
@@ -15,6 +15,7 @@ interface Shortcut {
 }
 
 const SHORTCUTS: Shortcut[] = [
+  { label: 'Leaderboards', to: '/leaderboards', Icon: Scoreboard, slot: 1, app: 'vision' },
   { label: 'Trainings', to: '/trainings', Icon: ModelTraining, slot: 0, app: 'vision' },
   { label: 'Models', to: '/models', Icon: Memory, slot: 2, app: 'vision' },
   { label: 'Datasets', to: '/datasets', Icon: PhotoLibrary, slot: 5, app: 'vision' },
@@ -45,7 +46,7 @@ export function QuickActions({ apps }: QuickActionsProps) {
     <Box
       component="nav"
       aria-label="Shortcuts"
-      sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: { xs: 1, md: 2 } }}
+      sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(3, minmax(0, 1fr))', lg: 'repeat(5, minmax(0, 1fr))' }, gap: { xs: 1, md: 2 } }}
     >
       {shortcuts.map(({ label, to, Icon, slot }) => {
         const color = colors.slot(slot);

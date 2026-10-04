@@ -701,7 +701,7 @@ describe('scoping results to one run', () => {
     await call('get_test_results', { training: 't1' });
 
     expect(mocked.getTraining).toHaveBeenCalledWith('vsn_live_abc', 't1');
-    expect(mocked.listTestResults.mock.calls[0][1]).toMatchObject({ training_uuid: 'the-uuid' });
+    expect(mocked.listTestResults.mock.calls[0][1]).toMatchObject({ trainingUuid: 'the-uuid' });
   });
 
   it('does the same for benchmarks', async () => {
@@ -720,7 +720,7 @@ describe('scoping results to one run', () => {
 
     expect(mocked.getTraining).not.toHaveBeenCalled();
     expect(mocked.listTestResults.mock.calls[0][1]).toMatchObject({
-      training_uuid: '3205072b-d453-4480-bb0b-bbf7564a6435'
+      trainingUuid: '3205072b-d453-4480-bb0b-bbf7564a6435'
     });
   });
 
@@ -730,7 +730,7 @@ describe('scoping results to one run', () => {
     await call('get_test_results', {});
 
     expect(mocked.getTraining).not.toHaveBeenCalled();
-    expect(mocked.listTestResults.mock.calls[0][1].training_uuid).toBeUndefined();
+    expect(mocked.listTestResults.mock.calls[0][1].trainingUuid).toBeUndefined();
   });
 
   it('says so rather than filtering on nothing when a run has no uuid', async () => {

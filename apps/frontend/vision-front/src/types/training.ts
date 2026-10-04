@@ -1,21 +1,25 @@
 import { PaginatedResponse } from './api';
+import type { HubModelLink } from '../providers/huggingFace';
+import type { DatasetSourceKind } from './providers';
 
-/** A model on the Hugging Face Hub, pinned to the commit the run produced. */
-export interface ModelReference {
-  _id: string;
-  provider: 'hf';
-  kind: 'model';
-  /** `org/name` */
-  repo: string;
-  /** the full commit hash, never a branch */
-  revision: string;
-  /** a file or folder inside the repo, when the model is not all of it */
-  path?: string;
-  epoch?: number;
-  /** a demo Space on the Hub where anyone can try the model: `org/name` */
-  space?: string;
-  addedAt: string;
+/** Where a run's data came from: a Visin dataset, a store, or something Visin only names. */
+export interface DatasetReference {
+  source: DatasetSourceKind;
+  id?: string;
+  name: string;
+  revision?: string;
+  archiveRevision?: string;
 }
+
+/** A pointer to a model on a store: one variant per store a model can be linked from. */
+export type ModelLink = HubModelLink;
+
+/** A model kept on a store, pinned to the revision the run produced; the fields beyond these are the store's own. */
+export type ModelReference = ModelLink & {
+  _id: string;
+  epoch?: number;
+  addedAt: string;
+};
 
 /** What a run was started from, so it can be reproduced; filled in by the pipeline's client. */
 export interface Provenance {
@@ -33,7 +37,7 @@ export interface Training {
   name: string;
   description?: string;
   datasetId?: string;
-  dataset?: { source: 'visin' | 'hf' | 'other'; id?: string; name: string; revision?: string; archiveRevision?: string };
+  dataset?: DatasetReference;
   /** Hub models linked to this run; the bytes stay on the Hub */
   models?: ModelReference[];
   /** the researcher's own commentary on the run, apart from `description` */
@@ -71,7 +75,7 @@ export interface CreateTrainingData {
   /** an empty string removes the note */
   notes?: string;
   datasetId?: string;
-  dataset?: { source: 'visin' | 'hf' | 'other'; id?: string; name: string; revision?: string; archiveRevision?: string };
+  dataset?: DatasetReference;
   configId?: string;
   projectId?: string;
   status?: 'pending' | 'running' | 'completed' | 'failed' | 'stalled';

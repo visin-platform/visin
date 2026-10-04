@@ -667,7 +667,7 @@ files['context.svg'] = doc(
       w: 358,
       h: 108,
       title: 'Landing',
-      lines: ['The public site, these docs, and the API', 'reference\'s "try it"'],
+      lines: ['The public site, these docs, a leaderboard', 'preview, and the API reference\'s "try it"'],
       calls: ['Vision API', 'Auth API']
     })
   );

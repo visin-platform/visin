@@ -60,24 +60,28 @@
         ]
       },
       "source": {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "default": "hf",
-            "type": "string",
-            "const": "hf"
-          },
-          "repo": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
-          },
-          "revision": {
-            "type": "string"
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "const": "hf"
+              },
+              "repo": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+              },
+              "revision": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "repo",
+              "revision"
+            ]
           }
-        },
-        "required": [
-          "repo",
-          "revision"
         ]
       }
     },
@@ -256,24 +260,28 @@
       "source": {
         "anyOf": [
           {
-            "type": "object",
-            "properties": {
-              "provider": {
-                "default": "hf",
-                "type": "string",
-                "const": "hf"
-              },
-              "repo": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
-              },
-              "revision": {
-                "type": "string"
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "const": "hf"
+                  },
+                  "repo": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+                  },
+                  "revision": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "provider",
+                  "repo",
+                  "revision"
+                ]
               }
-            },
-            "required": [
-              "repo",
-              "revision"
             ]
           },
           {

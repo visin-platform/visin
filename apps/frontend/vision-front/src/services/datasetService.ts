@@ -1,5 +1,6 @@
 import type { OwnerRef, Visibility } from '@visin/frontend-core';
 import { datasetApi } from '../config/datasetApi';
+import type { HubDatasetSource } from '../providers/huggingFace';
 import { uploadToSignedUrl } from '../utils/chunkedUpload';
 
 export type DatasetVisibility = Visibility;
@@ -81,13 +82,8 @@ export interface HubDatasetInfo {
   truncated: boolean;
 }
 
-/** A dataset kept on the Hugging Face Hub: Visin stores only this pointer. */
-export interface DatasetSource {
-  provider: 'hf';
-  repo: string;
-  /** the full commit hash */
-  revision: string;
-}
+/** A dataset kept on a store: Visin stores only this pointer. */
+export type DatasetSource = HubDatasetSource;
 
 export interface Dataset {
   _id: string;
@@ -180,7 +176,7 @@ export interface DatasetFields {
   /** who it belongs to at creation; afterwards it moves by transfer */
   owner?: OwnerRef;
   /** null goes back to the zip kept on Visin */
-  source?: Pick<DatasetSource, 'repo' | 'revision'> | null;
+  source?: DatasetSource | null;
 }
 
 export const createDataset = async (fields: DatasetFields) => (await datasetApi.post<Envelope<Dataset>>('', fields)).data;

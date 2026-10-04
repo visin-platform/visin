@@ -11,7 +11,7 @@ import { getUserGroups } from '../clients/projectGroupsClient';
 import { requestIdentityContext } from '../middleware/requestIdentityContext';
 import Project, { IProject } from '../models/Project';
 import Training from '../models/Training';
-import { tokenProjectId } from '../middleware/projectTokenContext';
+import { projectTokenContext, tokenProjectId } from '../middleware/projectTokenContext';
 
 /**
  * The caller's own groups and roles, as backend-core's ownership rules ask for
@@ -80,6 +80,14 @@ export async function projectPermission(
   const groups = await getUserGroups(userId);
   return groups.some(group => project.editorGroupIds!.includes(group.id)) ? 'contribute' : permission;
 }
+
+/**
+ * What the caller could do with a project if a credential limited to one project did not confine them: their own
+ * permission, as an unlimited session would see it. A limited key is told its limit only for a project its owner
+ * can read; for one they cannot, the answer must read exactly as for a project that does not exist.
+ */
+export const permissionIgnoringKeyLimit = (project: IProject | null, userId: string | undefined): Promise<Permission> =>
+  projectTokenContext.exit(() => projectPermission(project, userId));
 
 /** The permission on a project named by id or slug; `none` for one that does not exist. */
 export async function projectPermissionById(userId: string | undefined, projectId: string | undefined | null): Promise<Permission> {

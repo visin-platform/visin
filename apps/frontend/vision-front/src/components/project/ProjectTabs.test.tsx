@@ -11,6 +11,7 @@ vi.mock('./ProjectBenchmarksTab', () => ({ default: () => <div>benchmarks-tab</d
 vi.mock('./ProjectComparisonsTab', () => ({ default: () => <div>comparisons-tab</div> }));
 vi.mock('../analysis/FindingsPanel', () => ({ default: () => <div>analysis-tab</div> }));
 vi.mock('../models/ModelRegistry', () => ({ default: ({ projectId }: { projectId: string }) => <div>models-tab:{projectId}</div> }));
+vi.mock('../evaluations/EvaluationList', () => ({ default: ({ projectId }: { projectId: string }) => <div>evaluations-tab:{projectId}</div> }));
 vi.mock('../ProjectSettings', () => ({ default: () => <div>settings-tab</div> }));
 vi.mock('../common/BestRunCard', () => ({ default: ({ projectId }: { projectId: string }) => <div>best-run:{projectId}</div> }));
 vi.mock('./FirstRunPanel', () => ({ default: () => <div>first-run-panel</div> }));
@@ -111,9 +112,16 @@ describe('ProjectTabs', () => {
     expect(screen.getByText('models-tab:p1')).toBeInTheDocument();
   });
 
+  it('shows the Evaluations tab for the project, to every viewer', () => {
+    render(<ProjectTabs {...baseProps} tabValue={8} />);
+
+    expect(screen.getByRole('tab', { name: 'Evaluations' })).toBeInTheDocument();
+    expect(screen.getByText('evaluations-tab:p1')).toBeInTheDocument();
+  });
+
   it('shows the Settings tab and its content when the caller is the owner', () => {
-    // Settings sits after Models, so it is index 8.
-    render(<ProjectTabs {...baseProps} canManage tabValue={8} />);
+    // Settings sits after Evaluations, so it is index 9.
+    render(<ProjectTabs {...baseProps} canManage tabValue={9} />);
 
     expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.getByText('settings-tab')).toBeInTheDocument();

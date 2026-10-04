@@ -23,6 +23,7 @@ import { INK } from '../theme';
 // link that differs only in its #fragment scrolls instead of reloading.
 const LINKS = [
   { label: 'Product', href: '/#product' },
+  { label: 'Leaderboards', href: '/#leaderboards' },
   { label: 'Docs', href: '/docs' },
   { label: 'Assistant', href: '/#assistant' },
   { label: 'Self-hosting', href: '/#open-source' }

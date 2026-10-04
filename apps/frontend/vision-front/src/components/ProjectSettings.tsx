@@ -107,7 +107,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
       taxonomy: Object.keys(editTaxonomy).length > 0 ? editTaxonomy : null,
       costing: Object.keys(editCosting).length > 0 ? editCosting : null,
       // Only when changed: an untouched project keeps no setting, which reads as Visin.
-      ...(editStorage.provider !== (project.storage?.provider ?? 'visin') || editStorage.hfNamespace !== project.storage?.hfNamespace
+      ...(editStorage.provider !== (project.storage?.provider ?? 'visin') || JSON.stringify(editStorage.settings ?? {}) !== JSON.stringify(project.storage?.settings ?? {})
         ? { storage: editStorage }
         : {})
     };

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -27,6 +27,7 @@ import {
   Tab
 } from '@mui/material';
 import {
+  Scoreboard as LeaderboardIcon,
   Refresh as RefreshIcon,
   Add as AddIcon,
   Edit as EditIcon,
@@ -456,6 +457,7 @@ const ProjectsPage: React.FC = () => {
         }
         primaryAction={user ? { label: 'New project', icon: <AddIcon />, onClick: openCreate } : undefined}
       />
+      <Button component={RouterLink} to="/leaderboards" variant="outlined" startIcon={<LeaderboardIcon />} sx={{ mb: 2 }}>Leaderboards</Button>
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error instanceof Error ? error.message : 'Failed to load projects'}

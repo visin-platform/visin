@@ -1,0 +1,75 @@
+Every evaluation gets a **verdict**, stored with it in `validation`: a state, and the reasons behind it. This page
+lists them all and says what to do. A result that cannot be ranked is still **kept**, and you can read it, so you
+never have to re-send to see what was wrong.
+
+You can get the verdict without storing anything by sending the same body to `POST /api/evaluations/check`; see
+[Evaluating models](/docs/evaluating-models).
+
+## The states
+
+| State               | Means                                                                                                                      | What to do                                                                      |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `eligible`          | Complete, in range and on the suite's protocol. It can be ranked, and carries the scores the ranking uses.                  | Nothing.                                                                        |
+| `incomplete`        | Something the suite requires is missing: a condition, a metric, a sample count, a checkpoint.                                | Send the missing part. A new evaluation, naming the old one in `supersedesId`.   |
+| `incompatible`      | What was measured is not what the suite measures: another protocol, a different scale, other sample counts.                  | Evaluate again on the suite's protocol, or publish the suite you really used.    |
+| `exploratory`       | You named no suite. Kept and shown, never ranked.                                                                          | Add `suite` to rank it.                                                         |
+| `legacy-unverified` | Recorded before suites existed. Kept, never ranked.                                                                        | [Promote it](/docs/evaluating-models#rank-results-you-already-have) onto a suite, or evaluate again. |
+
+When a result has reasons of both kinds it is `incompatible`: sending the missing parts would not make a different
+measurement comparable.
+
+## Reasons
+
+Each reason has a `code` and often a `detail` that says what it is about, like `night` or `night/mIoU_foreground`.
+
+| Code                      | State          | Means                                                                                              | Fix                                                                                         |
+| ------------------------- | -------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `no-suite`                | `exploratory`  | The result names no suite.                                                                         | Send `"suite": "slug@version"`.                                                             |
+| `evaluation-failed`       | `incomplete`   | You recorded it with `"status": "failed"`.                                                         | Run it again and record the new result. A failed attempt never replaces a good one.          |
+| `results-not-an-object`   | `incomplete`   | `results` is not an object of conditions.                                                          | Send `{ "<condition>": { "overall": { "<metric>": … } } }`.                                  |
+| `no-checkpoint`           | `incomplete`   | The result does not say which checkpoint it was.                                                   | Send `checkpoint`: a Hub repo and full commit, or the SHA-256 of the weights you loaded.     |
+| `missing-condition`       | `incomplete`   | A condition the suite names has no `overall` block. `detail` is the condition.                      | Evaluate that condition too. A condition cannot be left out to improve a score.              |
+| `missing-metric`          | `incomplete`   | A condition has no number for a metric the suite names. `detail` is `condition/metric`.             | Report the metric in that condition's `overall`. A string such as `"n/a"` is not a number.   |
+| `missing-sample-count`    | `incomplete`   | You did not say how many samples a condition scored. `detail` is the condition.                     | Send `sampleCounts: { "<condition>": <n> }` for every condition.                             |
+| `missing-overall`         | `incomplete`   | A `pooled` suite needs the evaluator's own overall figure and the result's top-level `overall` has none. `detail` is the metric. | Add `overall` with the metric, counted across every sample.   |
+| `protocol-mismatch`       | `incompatible` | The `evidence.protocolDigest` you sent is not the digest of that suite version. Evidence is optional, but what you send must match. | Evaluate with the protocol of the version you named, or name the version you really used.    |
+| `data-mismatch`           | `incompatible` | The data the evaluator read is not the data the suite pins. `detail` is the field that differs: `kind`, `archiveSha256`, `manifestSha256`, `repo` or `commit`. | Score the suite's data. Equal sample counts on other data are a different test set. |
+| `evaluator-mismatch`      | `incompatible` | The package that scored it is not the one the suite names. `detail` is the package you sent.        | Score with the suite's evaluator, or publish a suite that names yours.                       |
+| `evaluator-unsupported`   | `incompatible` | The evaluator's version is older than the suite's `minVersion`, or is not a version number that can be compared. `detail` shows both. | Upgrade the evaluator, or lower `minVersion` in a new suite version. |
+| `class-mismatch`          | `incompatible` | The classes scored (or ignored) differ from the suite's. `detail` is `scored` or `ignored`.         | Score the classes the suite names and leave out the ones it ignores.                         |
+| `metric-out-of-range`     | `incompatible` | A score is outside the range the suite declares, usually another scale (a percentage for a ratio). `detail` is `condition/metric`. | Report it on the suite's scale. |
+| `sample-count-mismatch`   | `incompatible` | A condition scored a different number of samples than the suite says. `detail` is the condition.   | Score every sample the suite names. A different count is a different test set.               |
+
+## Warnings
+
+A warning does not change the state.
+
+| Code                        | Means                                                                                                                                         |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `no-data-evidence`, `no-protocol-evidence`, `no-evaluator-evidence` | You did not send that part of the evidence. The result is still ranked, as **reported**; send all three and it is **observed**. See [Mark it as observed](/docs/evaluating-models#mark-it-as-observed). |
+| `submitted-overall-differs` | The top-level `overall` you sent differs from the one Visin computed from the conditions. The computed one is what is ranked. `detail` is the metric. |
+
+## What the evidence is, and is not
+
+You do not need any evidence to be ranked: results, a suite, a checkpoint and sample counts are enough. Evidence only
+changes how a row is **labelled**, in `validation.evidence`:
+
+| Level      | Means                                                                                                                                         |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `observed` | The evaluator sent the data it read, the digest of the protocol it ran, and its own package and version, and each matched the suite.           |
+| `reported` | Ranked on the submitter's word: none, or only some, of that evidence was sent. Whatever was sent matched.                                       |
+| `attested` | A project manager [promoted](/docs/evaluating-models#rank-results-you-already-have) an older result and vouched for its checkpoint and sample counts. Nothing was observed, and none is invented from the suite. |
+| `none`     | No suite, so nothing is ranked.                                                                                                                  |
+
+The app and the public pages mark `reported` and `attested` rows, and `?evidence=observed` on a leaderboard (a switch
+in the app) ranks the observed results alone. **None of it is verified.** Visin checks that the evaluator's claim is
+the right one, not that it is true: it cannot see which bytes were read, or whether the preprocessing the protocol
+declares was the preprocessing that ran. A digest of a sample list identifies which samples were scored, not their
+image or annotation bytes, unless the list itself carries content hashes.
+
+## Why Visin computes the overall figure
+
+For `equal-mean-of-conditions` and `sample-weighted-mean` suites, Visin forms the overall figure itself from the
+condition scores. An evaluator that skips an empty test set and averages the rest would otherwise lift its own
+number; here a skipped condition is `missing-condition`, and the result is not ranked. A `pooled` suite is the
+exception, because only the evaluator can count across every sample, so it is read from your `overall`.

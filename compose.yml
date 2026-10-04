@@ -155,6 +155,7 @@ services:
     environment:
       <<: [*app-env, *file-creds]
       PORT: 4010
+      VISION_API_URL: ${PUBLIC_HOST:-http://localhost}:4010
       # Internal: /internal/* calls, container to container.
       FILE_SERVICE_INTERNAL_URL: http://file-service:5002
       # Project editor groups are read from group-service on every signed-in request.
@@ -279,6 +280,7 @@ services:
       AUTH_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3004
       ACCOUNT_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3007
       LABEL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3008
+      LANDING_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3000
       HF_ENDPOINT: ${HF_ENDPOINT:-}
 
   # The module-federation host: one page that renders vision, label and account,

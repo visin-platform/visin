@@ -19,7 +19,7 @@ describe('HubSourceDialog', () => {
     const onSave = renderDialog();
     fill(' acme/zod-png ', ` ${COMMIT.toUpperCase()} `);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(onSave).toHaveBeenCalledWith({ repo: 'acme/zod-png', revision: COMMIT });
+    expect(onSave).toHaveBeenCalledWith({ provider: 'hf', repo: 'acme/zod-png', revision: COMMIT });
   });
 
   it('refuses a branch name and a bare repo name, saying why', () => {

@@ -1,0 +1,186 @@
+A **suite** is a written-down way of scoring a model: which data, which conditions, which metrics, and which way
+is better. Scores that were produced on the same suite version can be compared; scores from different ones
+cannot. That is all a suite is for, and it is why a published version never changes.
+
+Once a suite exists you [record evaluations](/docs/evaluating-models) on it, and Visin ranks the ones that can be
+compared. If a result is not ranked, [here is why](/docs/eligibility).
+
+The examples use `VISIN_URL` and `HEADERS` as in the [quickstart](/docs/quickstart). A key limited to one project
+can publish to that project.
+
+## A suite, in full
+
+```json
+{
+  "slug": "road-test",
+  "version": 1,
+  "name": "Road scenes, day and night",
+  "description": "Held-out frames from the Road dataset, scored per lighting condition.",
+  "projectId": "road",
+  "visibility": "private",
+  "protocol": {
+    "task": "semantic-segmentation",
+    "data": {
+      "kind": "external",
+      "label": "Road test frames",
+      "manifestSha256": "9f2b…c41a"
+    },
+    "split": "test",
+    "conditions": [
+      { "name": "day", "sampleCount": 1200 },
+      { "name": "night", "sampleCount": 800 }
+    ],
+    "classes": [{ "id": "vehicle" }, { "id": "pedestrian" }],
+    "ignoredClasses": ["void"],
+    "metrics": [
+      {
+        "key": "mIoU_foreground",
+        "direction": "max",
+        "unit": "ratio",
+        "range": { "min": 0, "max": 1 },
+        "headline": true
+      },
+      { "key": "mean_ap", "direction": "max", "range": { "min": 0, "max": 1 } }
+    ],
+    "aggregation": "equal-mean-of-conditions",
+    "input": { "sensors": ["camera"], "resolution": "1280x720" },
+    "evaluator": { "package": "visin-fusion", "minVersion": "1.0.0" }
+  }
+}
+```
+
+The part outside `protocol` is about the suite as a page: its name, who can see it and which project it lives in.
+Everything inside `protocol` decides what a score means.
+
+## Publish it
+
+<CodeTabs>
+
+```python
+import requests
+
+suite = {...}  # the JSON above
+
+response = requests.post(f"{VISIN_URL}/api/suites", headers=HEADERS, json=suite)
+response.raise_for_status()
+print(response.status_code, response.json()["data"]["digest"])
+```
+
+```bash
+curl -sS -X POST "$VISIN_URL/api/suites" \
+  -H "Authorization: Bearer $VISIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @suite.json
+```
+
+</CodeTabs>
+
+The answer is `201` with the suite and its `digest`. Publish the same protocol again and you get `200` with the
+stored suite, so a setup script can run every time without harm. Read a suite back with
+`GET /api/suites/road-test/1`, or `GET /api/suites/road-test/latest` for the highest version that is not archived.
+
+## The protocol, field by field
+
+| Field               | What it says                                                                                                                                                                                                                                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `task`              | What the model does, such as `semantic-segmentation`. A label for readers; nothing branches on it.                                                                                                                                                                                                                     |
+| `data`              | The evaluated data, pinned. `{ "kind": "visin", "datasetId", "archiveSha256" }` for a Visin dataset, `{ "kind": "hf", "repo", "commit" }` for a Hub dataset at a full 40-character commit, or `{ "kind": "external", "label", "manifestSha256" }` for anything else, by the SHA-256 of a manifest listing its samples. |
+| `split`             | The split that is scored, such as `test`.                                                                                                                                                                                                                                                                              |
+| `annotationVersion` | Optional. Which annotations the scores were measured against.                                                                                                                                                                                                                                                          |
+| `conditions`        | The named parts of the test, one per test set: `day`, `night`. Each has the `sampleCount` a faithful run scores. A result that skips a condition, or scores a different number of samples, is not comparable.                                                                                                          |
+| `classes`           | The class ids the metrics are about, with optional names.                                                                                                                                                                                                                                                              |
+| `ignoredClasses`    | Class ids left out of every score, such as `void`.                                                                                                                                                                                                                                                                     |
+| `metrics`           | What is measured. Each has a `key`, a `direction` (`max` when larger is better, `min` for a loss or a latency), an optional `unit`, and a `range` a valid score stays inside. Exactly one is the `headline`, the one a ranking sorts by.                                                                               |
+| `aggregation`       | How the overall figure is formed. See below.                                                                                                                                                                                                                                                                           |
+| `input`             | Optional. The sensors, resolution, preprocessing, postprocessing and calibration the model was run with.                                                                                                                                                                                                               |
+| `evaluator`         | The package that produced the scores, and the oldest version that is acceptable. An evaluation that reports its package and version is compared with both: another package is `evaluator-mismatch`, an older version `evaluator-unsupported`.                                                                                                                                                                                                                                     |
+
+<Callout kind="note" title="The data digest is compared with what the evaluator reports">
+  An evaluation can send the identity of the data it read (`evidence.data`), and Visin compares it with this one: a
+  different digest or commit is `data-mismatch`. Sending it is optional; it marks the result observed. For `kind: "visin"`, `archiveSha256` is the SHA-256 of the dataset's
+  zip, which you can compute with `sha256sum dataset.zip`. Visin stores it as you give it and does not yet compare it
+  with the archive it holds, so keep it honest: it is what makes the suite name those exact bytes.
+</Callout>
+
+A metric `key` is a name in a condition's `overall` block, and in the result's top-level `overall`:
+`results["day"]["overall"]["mIoU_foreground"]`. Per-class numbers stay in the result for reading, but a ranking
+uses the metrics the suite names.
+
+### How `overall` is formed
+
+| `aggregation`              | The overall figure is                                                                                                                   |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `equal-mean-of-conditions` | The mean of the condition scores. Visin computes it, so a condition left out cannot lift the number.                                    |
+| `sample-weighted-mean`     | The mean of the condition scores weighted by each condition's `sampleCount`. Visin computes it.                                         |
+| `pooled`                   | Counted across every sample by the evaluator, for example a mean IoU over all pixels. It is read from the result's top-level `overall`. |
+
+Say which one your pipeline really does. The fusion test stage, for example, averages its test sets equally, so a
+suite for its results says `equal-mean-of-conditions`.
+
+## One name, many versions
+
+A version is what tells a reader two scores are comparable, so a published version is never edited. Publishing a
+**different** protocol under a version that exists answers `409`:
+
+```text
+road-test version 1 already exists with a different protocol. A published version never changes: publish it as version 2.
+```
+
+Change any of the fields above and publish the result as the next version. The suite's `name` and `description`
+are not part of the protocol, so you can reword them any time (`PATCH /api/suites/road-test/1`) without making a
+new version. Neither does the order you list conditions, classes, metrics or sensors in.
+
+Every suite has a `digest`: the SHA-256 of its canonical protocol. Two suites with the same digest score
+identically, wherever they were published. To get the digest of a protocol file without publishing it, send it to
+`POST /api/suites/check`; an evaluator records that digest as the protocol it ran.
+
+A `slug` is one name per deployment. Publishing reserves it for the project before inserting a version, so another
+project gets `409` even if both publish different versions at the same time. The reservation stays after a failed
+insert or permanent project deletion: retry a failed push from the original project, and choose a new name for a
+different project. This keeps an old leaderboard address from pointing to another project's protocol.
+
+Suites published before reservations were introduced acquire them on their next push or project purge. If older
+versions already belong to different projects, an operator must resolve the ownership conflict before further
+publishing or purging. Existing protocols are preserved.
+
+## Who can see it
+
+A suite follows its project: anyone who can read the project can read the suite, and a stranger gets `404`, the
+same as for a suite that does not exist. Set `"visibility": "public"` to let anyone read the protocol, for a suite
+others should run their models on. A public suite grants nothing in its project. The first version defaults to
+private; a new version inherits the highest existing version's visibility unless you specify it.
+
+Creating a private version needs **contribute** access to the project. Creating a public version needs **manage**,
+whether you set `"visibility": "public"` explicitly or inherit it. If a contributor pushes a new version after a
+public version, the default is refused with `403`; set `"visibility": "private"` to create a private protocol.
+Changing an existing version's visibility also needs **manage**.
+
+A public suite also has a **publishing policy**, `submissions`: `open` (a manager of any public project may publish
+results to its leaderboard, the default), `members` (only the project that owns the suite) or `approval` (any public
+project; managers can verify submitted results without hiding unverified results). Changing it
+needs **manage** and leaves what is published as it is; a new version inherits it. Making a suite private ends the
+publication of every result on it. See [Publishing](/docs/publishing#who-can-publish-to-a-suite).
+
+Pushing an existing version with the same protocol returns the stored suite. It does not change its name or
+visibility, even if the push supplies different metadata. A contributor can replay an existing public version;
+this creates no new disclosure. Initial public creation and later visibility changes are recorded in the history.
+
+A project pipeline key with write scope can create a public suite in its own project when its actor has **manage**.
+It grants no extra sharing permission and cannot create suites in another project, even one its actor manages.
+
+## Retire a suite
+
+`PATCH /api/suites/road-test/1` with `{ "archived": true }` stops new results being recorded on that version. The
+suite and everything already recorded on it stay readable, and `latest` skips it. Send `{ "archived": false }` to
+bring it back.
+
+### Leaderboard pages
+
+Leaderboards select the latest eligible completed attempt for each checkpoint from the complete pool you can read,
+then rank it before returning a page. `page` starts at 1 and `limit` defaults to 100 (maximum 100). The response's
+`pagination` reports the page, limit, total ranked checkpoints and number of pages. Ranks and attempt counts do not
+restart on each page; a tie can span pages. `scope.candidates` counts all authorized attempts, including repeats.
+
+On `/suites/{slug}/{version}/leaderboard`, `unrankedPage` independently pages checkpoints with no eligible result;
+`unrankedPagination` reports their totals. Public discovery and public rankings also accept `page` and `limit`.
+A published evaluation's evidence URL remains valid even when another attempt takes its place in the ranking.

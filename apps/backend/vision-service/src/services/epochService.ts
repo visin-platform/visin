@@ -4,7 +4,7 @@ import { randomUUID as uuidv4 } from 'crypto';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Epoch, { IEpoch } from '../models/Epoch';
 import Training, { ITraining } from '../models/Training';
-import TestResult from '../models/TestResult';
+import { trashRunEvaluations } from './runEvaluations';
 import { checkProjectAccess, isWithinTokenScope } from './projectAccessService';
 import type { z } from '@visin/backend-core';
 import type { GetEpochsByTrainingQuery, createEpochsBatchBodySchema } from '../validation/epochSchemas';
@@ -210,7 +210,7 @@ export const deleteEpoch = async (
   const now = new Date();
   epoch.deletedAt = now;
   await epoch.save();
-  await TestResult.updateMany({ epoch_uuid: epoch.epoch_uuid, deletedAt: null }, { deletedAt: now });
+  await trashRunEvaluations({ epochUuids: [epoch.epoch_uuid] }, now);
   await Training.findByIdAndUpdate(epoch.trainingId, { updatedAt: now });
 };
 

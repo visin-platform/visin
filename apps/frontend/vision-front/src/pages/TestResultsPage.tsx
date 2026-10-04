@@ -29,7 +29,8 @@ import {
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
-  Compare as CompareIcon
+  Compare as CompareIcon,
+  Scoreboard as PromoteIcon
 } from '@mui/icons-material';
 import { testResultService } from '../services/testResultService';
 import { TestResult, TestResultData } from '../types';
@@ -37,6 +38,7 @@ import { isRecord, readMetric } from '../taxonomy/discover';
 import { RESERVED_CLASS_KEYS, RESERVED_CONDITION_KEYS } from '../taxonomy/reserved';
 import { useTaxonomyFor } from '../taxonomy/useTaxonomy';
 import MetricName from '../components/common/MetricName';
+import PromoteDialog from '../components/evaluations/PromoteDialog';
 
 /** Per-class metrics this listing averages into one column each. */
 const AVERAGED_METRICS = ['iou', 'precision', 'recall', 'f1_score'];
@@ -49,6 +51,7 @@ export const TestResultsPage: React.FC = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TestResult | null>(null);
   const [selectedTestResults, setSelectedTestResults] = useState<Set<string>>(new Set());
+  const [promoting, setPromoting] = useState<{ id: string; trainingId?: string; epoch: number } | null>(null);
   const queryClient = useQueryClient();
 
   const {
@@ -82,7 +85,7 @@ export const TestResultsPage: React.FC = () => {
   const success = deleteMutation.isSuccess ? 'Test result deleted successfully' : null;
 
   // Check if user has permission to delete test results (owner or admin role)
-  const canDeleteTestResults = useWriteCapabilities('test-result', testResults.map(row => row._id));
+  const canDeleteTestResults = useWriteCapabilities('evaluation', testResults.map(row => row._id));
 
   const handleDeleteClick = (testResult: TestResult) => {
     setDeleteTarget(testResult);
@@ -278,7 +281,10 @@ export const TestResultsPage: React.FC = () => {
                   actionsLabel={`Actions for ${name} epoch ${testResult.epoch}`}
                   actions={
                     canDeleteTestResults(testResult._id)
-                      ? [{ label: 'Delete', icon: <DeleteIcon fontSize="small" />, onClick: () => handleDeleteClick(testResult), danger: true }]
+                      ? [
+                          { label: 'Rank on a suite', icon: <PromoteIcon fontSize="small" />, onClick: () => setPromoting({ id: testResult._id, trainingId: testResult.training?._id, epoch: testResult.epoch }) },
+                          { label: 'Delete', icon: <DeleteIcon fontSize="small" />, onClick: () => handleDeleteClick(testResult), danger: true }
+                        ]
                       : []
                   }
                 />
@@ -376,6 +382,13 @@ export const TestResultsPage: React.FC = () => {
                         </TableCell>
                         <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                           {canDeleteTestResults(testResult._id) && (
+                            <Tooltip title="Rank on a suite">
+                              <IconButton size="small" aria-label="Rank on a suite" onClick={() => setPromoting({ id: testResult._id, trainingId: testResult.training?._id, epoch: testResult.epoch })}>
+                                <PromoteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          {canDeleteTestResults(testResult._id) && (
                             <Tooltip title="Delete">
                               <IconButton size="small" onClick={() => handleDeleteClick(testResult)}>
                                 <DeleteIcon fontSize="small" />
@@ -390,6 +403,14 @@ export const TestResultsPage: React.FC = () => {
               </Table>
             </TableContainer>
           )}
+      {promoting && (
+        <PromoteDialog
+          evaluationId={promoting.id}
+          source={{ trainingId: promoting.trainingId, epoch: promoting.epoch }}
+          onClose={() => setPromoting(null)}
+          onPromoted={evaluation => navigate(`/evaluations/${evaluation._id}`)}
+        />
+      )}
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>
         <DialogTitle>Delete Test Result</DialogTitle>

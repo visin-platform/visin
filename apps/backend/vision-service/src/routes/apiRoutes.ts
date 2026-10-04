@@ -4,7 +4,6 @@ import writeCapabilitiesRoutes from './writeCapabilitiesRoutes';
 import trainingRoutes from './trainingRoutes';
 import epochRoutes from './epochRoutes';
 import configRoutes from './configRoutes';
-import testResultRoutes from './testResultRoutes';
 import visualizationRoutes from './visualizationRoutes';
 import benchmarkRoutes from './benchmarkRoutes';
 import comparisonRoutes from './comparisonRoutes';
@@ -12,6 +11,9 @@ import projectRoutes from './projectRoutes';
 import findingRoutes from './findingRoutes';
 import modelRoutes from './modelRoutes';
 import discoveryRoutes from './discoveryRoutes';
+import suiteRoutes from './suiteRoutes';
+import evaluationRoutes from './evaluationRoutes';
+import publicRoutes from './publicRoutes';
 
 export interface ApiRouteGroup {
   path: string;
@@ -50,12 +52,15 @@ export const API_ROUTE_GROUPS: ApiRouteGroup[] = [
   { path: '/api/trainings', guards: [projectKeyAuth('vision', COMPARE_IS_A_READ)], router: trainingRoutes },
   { path: '/api/epochs', guards: [projectKeyAuth('vision')], router: epochRoutes },
   { path: '/api/configs', guards: [projectKeyAuth('vision')], router: configRoutes },
-  { path: '/api/test-results', guards: [projectKeyAuth('vision', COMPARE_IS_A_READ)], router: testResultRoutes },
   { path: '/api/visualizations', guards: [projectKeyAuth('vision')], router: visualizationRoutes },
   { path: '/api/benchmarks', guards: [projectKeyAuth('vision')], router: benchmarkRoutes },
   { path: '/api/comparisons', guards: [projectKeyAuth('vision')], router: comparisonRoutes },
   { path: '/api/models', guards: [projectKeyAuth('vision')], router: modelRoutes },
   { path: '/api/projects', guards: [projectKeyAuth('vision')], router: projectRoutes },
+  // Anonymous and the same for everyone: no guard, so a credential in the request is not even read.
+  { path: '/api/public', guards: [], router: publicRoutes },
+  { path: '/api/evaluations', guards: [projectKeyAuth('vision')], router: evaluationRoutes },
+  { path: '/api/suites', guards: [projectKeyAuth('vision')], router: suiteRoutes },
   // Written conclusions. Its own scope domain, so an assistant can be granted
   // "read my experiments and record what you conclude" without also being able to
   // rename projects or retag runs.

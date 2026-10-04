@@ -1,5 +1,5 @@
 import { resolveDatasetReference } from './datasetReferenceService';
-import { requireHubStorage } from './projectStorage';
+import { requireDatasetStorage } from './sourceRegistry';
 import Config from '../models/Config';
 import { assertResourceWrite, requireActor } from './writeAccessService';
 import { getEditableProjectIds, projectFilter, resolveProject } from './projectAccessService';
@@ -9,11 +9,11 @@ import { tokenProjectId } from '../middleware/projectTokenContext';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@visin/backend-core';
 import Training, { ITraining } from '../models/Training';
 import Epoch, { IEpoch } from '../models/Epoch';
-import TestResult from '../models/TestResult';
+import { restoreRunEvaluations, trashRunEvaluations } from './runEvaluations';
 import Benchmark, { IBenchmark } from '../models/Benchmark';
 import Comparison from '../models/Comparison';
 import Project from '../models/Project';
-import { testResultService } from './testResultService';
+import { latestResultsByRun, type RunResultSummary } from './resultAggregation';
 import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from './projectAccessService';
 import { costOf, costingByProject, costingFor } from './costingService';
 import type { TrainingSortField } from '../validation/trainingSchemas';
@@ -37,7 +37,7 @@ interface CurrencyCostTotal {
   totalCost: number;
 }
 export type TrainingWithMetrics = Record<string, unknown> & { metrics: TrainingMetrics };
-type TrainingComparisonItem = Awaited<ReturnType<typeof testResultService.getAggregatedTestResultsByTraining>>['comparison'][number];
+type TrainingComparisonItem = RunResultSummary;
 // benchmark.training_id is declared as a plain ObjectId, but these queries populate it
 // with `name`/`uuid` — Mongoose's static types don't reflect .populate() shape changes.
 type PopulatedTrainingRef = Pick<ITraining, '_id' | 'name' | 'uuid'>;
@@ -491,7 +491,7 @@ export const trainingService = {
     const uuid = data.uuid || uuidv4();
 
     const dataset = await resolveDatasetReference(data.dataset, datasetId, userId, tokenProjectId() ? project.owner : undefined);
-    if (dataset?.source === 'hf') requireHubStorage(project, 'train on datasets from the Hub');
+    requireDatasetStorage(project, dataset);
 
     const training = new Training({
       ownerId,
@@ -558,7 +558,7 @@ export const trainingService = {
     if (data.dataset !== undefined || datasetId !== undefined) {
       const project = training.projectId ? await resolveProject(training.projectId) : undefined;
       const dataset = await resolveDatasetReference(data.dataset, datasetId, userId, tokenProjectId() ? project?.owner : undefined);
-      if (dataset?.source === 'hf') requireHubStorage(project, 'train on datasets from the Hub');
+      requireDatasetStorage(project, dataset);
       training.dataset = dataset;
       training.datasetId = training.dataset?.source === 'visin' ? training.dataset.id : datasetId;
     }
@@ -608,13 +608,8 @@ export const trainingService = {
     // Anything deleted on its own beforehand keeps its own time and stays deleted.
     await Epoch.updateMany({ trainingId: id, deletedAt: null }, { deletedAt: now });
 
-    // Get all epoch UUIDs for this training to mark test results as deleted
-    const trainingEpochs = await Epoch.find({ trainingId: id }, 'epoch_uuid');
-    const epochUuids = trainingEpochs.map(e => e.epoch_uuid);
-
-    if (epochUuids.length > 0) {
-      await TestResult.updateMany({ epoch_uuid: { $in: epochUuids }, deletedAt: null }, { deletedAt: now });
-    }
+    // What the run recorded without a suite goes with it.
+    await trashRunEvaluations({ trainingIds: [id] }, now);
 
     // Only edit comparisons this principal can write. Foreign references remain
     // historical references; deleting a training does not grant their ownership.
@@ -696,11 +691,7 @@ export const trainingService = {
 
     await Epoch.updateMany({ trainingId: id, deletedAt }, { $unset: { deletedAt: 1 } });
 
-    const trainingEpochs = await Epoch.find({ trainingId: id }, 'epoch_uuid');
-    const epochUuids = trainingEpochs.map(e => e.epoch_uuid);
-    if (epochUuids.length > 0) {
-      await TestResult.updateMany({ epoch_uuid: { $in: epochUuids }, deletedAt }, { $unset: { deletedAt: 1 } });
-    }
+    await restoreRunEvaluations({ trainingIds: [id] }, deletedAt);
 
     return training;
   },
@@ -879,7 +870,7 @@ export const trainingService = {
     const epochUuids = epochs.map(e => e.epoch_uuid);
 
     // Get aggregated test results for these trainings
-    const aggregatedTestResults = await testResultService.getAggregatedTestResultsByTraining(userId, foundTrainingIds);
+    const aggregatedTestResults = await latestResultsByRun(userId, foundTrainingIds);
 
     // Get all benchmarks for these trainings
     const benchmarks = await Benchmark.find({ 

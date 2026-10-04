@@ -9,7 +9,12 @@ import {
   type Config,
   projectSchema,
   projectsResponseSchema,
-  testResultsResponseSchema,
+  evaluationSchema,
+  leaderboardSchema,
+  suiteSchema,
+  suitesResponseSchema,
+  runEvaluationsResponseSchema,
+  testResultOf,
   trainingSchema,
   trainingSummarySchema,
   trainingWithEpochsSchema,
@@ -17,7 +22,10 @@ import {
   type Benchmark,
   type ComparisonEntry,
   type DashboardStats,
+  type EvaluationRecord,
   type Epoch,
+  type Leaderboard,
+  type Suite,
   type Project,
   type TestResult,
   type Training,
@@ -93,6 +101,18 @@ export const vision = {
   ): Promise<{ trainings: Training[]; pagination?: { total?: number } }> =>
     get(trainingsResponseSchema, apiKey, '/trainings', { page: 1, ...query }),
 
+  listSuites: (apiKey: string, query: Query): Promise<{ suites: Suite[]; pagination?: { total?: number; pages?: number } }> =>
+    get(suitesResponseSchema, apiKey, '/suites', { limit: 100, ...query }),
+
+  getSuite: (apiKey: string, slug: string, version: number | 'latest'): Promise<Suite> =>
+    get(suiteSchema, apiKey, `/suites/${encodeURIComponent(slug)}/${version}`),
+
+  getLeaderboard: (apiKey: string, slug: string, version: number | 'latest', query: Query): Promise<Leaderboard> =>
+    get(leaderboardSchema, apiKey, `/suites/${encodeURIComponent(slug)}/${version}/leaderboard`, query),
+
+  getEvaluation: (apiKey: string, id: string): Promise<EvaluationRecord> =>
+    get(evaluationSchema, apiKey, `/evaluations/${encodeURIComponent(id)}`),
+
   getTraining: (apiKey: string, id: string): Promise<Training> =>
     get(trainingSchema, apiKey, `/trainings/${encodeURIComponent(id)}`),
 
@@ -154,26 +174,17 @@ export const vision = {
     post(comparisonResponseSchema, apiKey, '/trainings/compare', { trainingIds }),
 
   /**
-   * `page` is sent alongside `limit`, and must be.
+   * A test result is an evaluation a run reported, so this lists the run's evaluations with their results. `page` is sent
+   * alongside `limit`, as everywhere, so a call asking for five gets five.
    *
-   * testResultService only paginates when it has both — given `limit` alone it
-   * silently returns every row. That is not a small overshoot: it fetched all
-   * 989 results, 3 MB of JSON that rendered to 164,000 tokens, from a call
-   * asking for five. Every other list endpoint honours `limit` on its own, so
-   * the pairing is sent everywhere rather than only here: the contract has
-   * surprised us once already.
-   *
-   * The filter key is `training_uuid` — see `getTestResultsQuerySchema`. Zod
-   * strips a key it does not define rather than rejecting it, so the earlier
-   * `trainingId` was accepted, ignored, and returned every run's results as
-   * though they belonged to the one asked about. Silence is the danger here:
-   * a wrong answer that looks right.
+   * The filter key is `trainingUuid`. Zod strips a key it does not define rather than rejecting it, so a wrong name would
+   * be accepted, ignored, and answer with every run's results as though they belonged to the one asked about. Silence
+   * is the danger here: a wrong answer that looks right.
    */
-  listTestResults: (
-    apiKey: string,
-    query: Query
-  ): Promise<{ testResults: TestResult[]; total?: number }> =>
-    get(testResultsResponseSchema, apiKey, '/test-results', { page: 1, ...query }),
+  listTestResults: async (apiKey: string, query: Query): Promise<{ testResults: TestResult[]; total?: number }> => {
+    const { evaluations, pagination } = await get(runEvaluationsResponseSchema, apiKey, '/evaluations', { page: 1, include: 'results', ...query });
+    return { testResults: evaluations.map(testResultOf), total: pagination?.total };
+  },
 
   listBenchmarks: (apiKey: string, query: Query): Promise<{ benchmarks: Benchmark[] }> =>
     get(benchmarksResponseSchema, apiKey, '/benchmarks', { page: 1, ...query }),

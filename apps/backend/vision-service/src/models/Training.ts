@@ -1,7 +1,8 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { DATASET_SOURCES, MODEL_LINK_PATHS, MODEL_LINK_PROVIDERS, type DatasetSourceKind, type ModelLink } from '../services/sourceRegistry';
 
 export interface DatasetReference {
-  source: 'visin' | 'hf' | 'other';
+  source: DatasetSourceKind;
   id?: string;
   name: string;
   /** a Hub commit for a dataset kept on the Hub, else the zip's upload time */
@@ -10,20 +11,14 @@ export interface DatasetReference {
   archiveRevision?: string;
 }
 
-/** A model checkpoint kept elsewhere, pinned to the commit the run produced. */
-export interface ModelReference {
+/**
+ * A model checkpoint kept elsewhere, pinned to the revision the run produced: a full commit, never a branch, so a run
+ * from last year still names the same bytes. Which fields it has beyond these is the provider's own (`ModelLink`).
+ */
+export type ModelReference = ModelLink & {
   _id: Types.ObjectId;
-  provider: 'hf';
-  kind: 'model';
-  repo: string;
-  /** a full commit hash, never a branch: a run from last year must still name the same bytes */
-  revision: string;
-  path?: string;
-  epoch?: number;
-  /** a demo Space on the Hub where anyone can try the model: `org/name` */
-  space?: string;
   addedAt: Date;
-}
+};
 
 export interface ITraining extends Document {
   /** Absent on legacy records; never inferred from the first editor. */
@@ -74,17 +69,15 @@ const TrainingSchema: Schema = new Schema(
     },
     notes: { type: String, maxlength: 5000 },
     dataset: { type: new Schema({
-      source: { type: String, enum: ['visin', 'hf', 'other'], required: true },
+      source: { type: String, enum: DATASET_SOURCES, required: true },
       id: String, name: { type: String, required: true }, revision: String, archiveRevision: String
     }, { _id: false }) },
+    // The provider's own fields (a Hub link's repo and revision) are added by it; its schema is what requires them.
     models: { type: [new Schema({
-      provider: { type: String, enum: ['hf'], required: true },
+      provider: { type: String, enum: MODEL_LINK_PROVIDERS, required: true },
       kind: { type: String, enum: ['model'], required: true },
-      repo: { type: String, required: true },
-      revision: { type: String, required: true },
-      path: String,
+      ...MODEL_LINK_PATHS,
       epoch: Number,
-      space: String,
       addedAt: { type: Date, default: Date.now }
     })], default: undefined },
     provenance: { type: Schema.Types.Mixed },

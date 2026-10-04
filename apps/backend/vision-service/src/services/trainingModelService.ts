@@ -1,8 +1,8 @@
 import { BadRequestError, NotFoundError } from '@visin/backend-core';
 import Project from '../models/Project';
 import Training from '../models/Training';
-import type { ArtifactRefInput } from '../validation/artifactSchemas';
-import { requireHubStorage } from './projectStorage';
+import type { ModelLinkInput } from '../validation/artifactSchemas';
+import { modelLinkIdentity, requireModelLinkStorage, sameModelLink } from './sourceRegistry';
 import { assertResourceWrite } from './writeAccessService';
 
 const MAX_MODELS_PER_RUN = 50;
@@ -17,18 +17,19 @@ async function requireRun(trainingId: string, userId: string | undefined) {
 }
 
 /**
- * Link a model on the Hub to a run. Visin keeps the pointer, never the bytes, so
+ * Link a model kept on a store to a run. Visin keeps the pointer, never the bytes, so
  * this is cheap and idempotent: the same repo, commit and path again changes
  * nothing, which lets a pipeline retry it blindly, even concurrently.
  *
  * The project's storage setting is what makes the choice real: a `visin` project
- * (data that must stay on its own servers) refuses a link to anywhere else.
+ * (data that must stay on its own servers) refuses a link to anywhere else. What makes two links the same is the
+ * provider's own (`modelLinkIdentity`).
  */
-export async function addModelReference(trainingId: string, userId: string | undefined, ref: ArtifactRefInput) {
+export async function addModelReference(trainingId: string, userId: string | undefined, ref: ModelLinkInput) {
   const training = await requireRun(trainingId, userId);
   // A run with no project fails the write check above, so it always has one here.
   const project = await Project.findById(training.projectId);
-  requireHubStorage(project, 'link Hub models');
+  requireModelLinkStorage(project, ref);
 
   // One conditional update, so two retries cannot both pass a check and both push.
   // `path: null` matches a reference stored without one.
@@ -36,7 +37,7 @@ export async function addModelReference(trainingId: string, userId: string | und
     {
       _id: training._id,
       deletedAt: null,
-      models: { $not: { $elemMatch: { provider: ref.provider, repo: ref.repo, revision: ref.revision, path: ref.path ?? null } } },
+      models: { $not: { $elemMatch: modelLinkIdentity(ref) } },
       [`models.${MAX_MODELS_PER_RUN - 1}`]: { $exists: false }
     },
     { $push: { models: { ...ref, addedAt: new Date() } } },
@@ -48,7 +49,7 @@ export async function addModelReference(trainingId: string, userId: string | und
   const current = await Training.findOne({ _id: training._id, deletedAt: null });
   if (!current) throw new NotFoundError('Training not found');
   const models = current.models ?? [];
-  const linked = models.some(model => model.provider === ref.provider && model.repo === ref.repo && model.revision === ref.revision && (model.path ?? null) === (ref.path ?? null));
+  const linked = models.some(model => sameModelLink(model, ref));
   if (!linked) throw new BadRequestError(`A run can link at most ${MAX_MODELS_PER_RUN} models`);
   return { created: false, models };
 }

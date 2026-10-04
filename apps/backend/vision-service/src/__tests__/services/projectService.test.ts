@@ -10,6 +10,7 @@ jest.mock('../../models/Training', () => ({
   __esModule: true,
   default: { find: jest.fn(), aggregate: jest.fn() },
 }));
+jest.mock('../../models/Evaluation', () => ({ __esModule: true, default: { updateMany: jest.fn().mockResolvedValue({ modifiedCount: 0 }), countDocuments: jest.fn() } }));
 jest.mock('../../models/Epoch', () => ({ __esModule: true, default: { aggregate: jest.fn() } }));
 jest.mock('../../models/Benchmark', () => ({
   __esModule: true,
@@ -26,9 +27,11 @@ import {
 import Project from '../../models/Project';
 import Training from '../../models/Training';
 import Epoch from '../../models/Epoch';
+import Evaluation from '../../models/Evaluation';
 import Benchmark from '../../models/Benchmark';
 
 const mockedProject = Project as unknown as jest.Mock & Record<string, jest.Mock>;
+const mockedEvaluation = Evaluation as unknown as Record<string, jest.Mock>;
 const mockedTraining = Training as unknown as Record<string, jest.Mock>;
 const mockedEpoch = Epoch as unknown as Record<string, jest.Mock>;
 const mockedBenchmark = Benchmark as unknown as Record<string, jest.Mock>;
@@ -70,6 +73,7 @@ const projectDoc = (overrides: AnyDoc = {}): AnyDoc => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedEvaluation.countDocuments.mockResolvedValue(0);
 });
 
 describe('project lookups', () => {
@@ -165,6 +169,8 @@ describe('updateProject', () => {
     expect(doc.description).toBe('');
     expect(doc.visibility).toBe('private');
     expect(doc.save).toHaveBeenCalled();
+    // Going private ends the publication of the project's results.
+    expect(mockedEvaluation.updateMany).toHaveBeenCalledWith({ projectId: doc._id.toString(), publishedAt: { $ne: null } }, expect.anything());
   });
 
   it('enforces slug uniqueness', async () => {
@@ -241,7 +247,8 @@ describe('getProjectDashboardStats', () => {
         avgEpochTime: 1800,
       },
     ]);
-    mockedEpoch.aggregate.mockResolvedValueOnce([{ count: 9 }]).mockResolvedValueOnce([{ count: 7 }]);
+    mockedEvaluation.countDocuments.mockResolvedValue(9);
+    mockedEpoch.aggregate.mockResolvedValue([{ count: 7 }]);
     trainingIdsAre(['t1']);
     mockedBenchmark.countDocuments.mockResolvedValue(3);
 
@@ -276,11 +283,7 @@ describe('getProjectDashboardStats', () => {
     expect(stats.trainingStats.currency).toBe('EUR');
   });
 
-  it('counts through the epochs of a known training set, not by fanning out', async () => {
-    // The old form `$lookup`-ed every epoch of every training into an array,
-    // `$unwind`-ed one document per epoch, joined, and unwound again — tens of
-    // thousands of documents to produce one number. Measured on the real
-    // database: 1.8s each for test results and visualizations.
+  it('counts evaluations directly by project and live run ids, and visualizations through epochs', async () => {
     mockedProject.findOne.mockResolvedValue(projectDoc());
     mockedTraining.aggregate.mockResolvedValue([]);
     mockedEpoch.aggregate.mockResolvedValue([{ count: 4 }]);
@@ -289,19 +292,20 @@ describe('getProjectDashboardStats', () => {
 
     await getProjectDashboardStats('p-slug', 'owner-1');
 
-    const [testResults, visualizations] = mockedEpoch.aggregate.mock.calls.map(c => c[0]);
-    // Bounded by the training ids. Joining on epoch uuids measured marginally
-    // faster but ships one array element per epoch, which grows without bound.
-    expect(testResults[0].$match.trainingId).toEqual({ $in: ['t1', 't2'] });
-    expect(testResults[1].$lookup.from).toBe('test_results');
+    expect(mockedEvaluation.countDocuments).toHaveBeenCalledWith({ projectId: ID, 'source.trainingId': { $in: ['t1', 't2'] }, deletedAt: null });
+    const [visualizations] = mockedEpoch.aggregate.mock.calls.map(c => c[0]);
+    expect(visualizations[0].$match.trainingId).toEqual({ $in: ['t1', 't2'] });
     expect(visualizations[1].$lookup.from).toBe('epoch_visualizations');
-    // A test result deleted on its own is not counted; visualizations, which have
-    // no deletedAt at all, still match.
-    expect(testResults[1].$lookup.pipeline).toEqual([
-      { $match: { $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] } },
-    ]);
-    // Summed inside the group; nothing is unwound.
-    expect(JSON.stringify(testResults)).not.toContain('$unwind');
+    expect(JSON.stringify(visualizations)).not.toContain('$unwind');
+  });
+
+  it('counts only run tests and published suite results for a public reader', async () => {
+    mockedProject.findOne.mockResolvedValue(projectDoc());
+    mockedTraining.aggregate.mockResolvedValue([]);
+    mockedEpoch.aggregate.mockResolvedValue([]);
+    trainingIdsAre(['t1']);
+    await getProjectDashboardStats('p-slug', undefined);
+    expect(mockedEvaluation.countDocuments).toHaveBeenCalledWith({ projectId: ID, 'source.trainingId': { $in: ['t1'] }, deletedAt: null, $or: [{ publishedAt: { $ne: null } }, { suite: { $exists: false } }] });
   });
 
   it('reads the project\'s trainings once and reuses them for the benchmark count', async () => {
@@ -329,16 +333,18 @@ describe('getProjectDashboardStats', () => {
       release = () => resolve([]);
     });
     mockedTraining.aggregate.mockReturnValueOnce(blocked);
-    mockedEpoch.aggregate.mockResolvedValueOnce([{ count: 9 }]).mockResolvedValueOnce([{ count: 7 }]);
+    mockedEvaluation.countDocuments.mockResolvedValue(9);
+    mockedEpoch.aggregate.mockResolvedValue([{ count: 7 }]);
     trainingIdsAre([]);
     mockedBenchmark.countDocuments.mockResolvedValue(0);
 
     const pending = getProjectDashboardStats('p-slug', 'owner-1');
     for (let i = 0; i < 6; i += 1) await Promise.resolve();
 
-    // The training stats are still outstanding, and both counts have been
+    // The training stats are still outstanding, and the other counts have been
     // issued rather than queued behind them.
-    expect(mockedEpoch.aggregate).toHaveBeenCalledTimes(2);
+    expect(mockedEpoch.aggregate).toHaveBeenCalledTimes(1);
+    expect(mockedEvaluation.countDocuments).toHaveBeenCalledTimes(1);
 
     release();
     await expect(pending).resolves.toMatchObject({ testResultsCount: 9, visualizationsCount: 7 });

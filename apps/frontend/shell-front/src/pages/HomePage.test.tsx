@@ -177,6 +177,7 @@ describe('HomePage', () => {
     renderHome();
 
     const shortcuts = within(screen.getByRole('navigation', { name: 'Shortcuts' }));
+    expect(shortcuts.getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('href', '/leaderboards');
     expect(shortcuts.getByRole('link', { name: 'Trainings' })).toHaveAttribute('href', '/trainings');
     expect(shortcuts.getByRole('link', { name: 'New job' })).toHaveAttribute('href', '/jobs/new');
   });

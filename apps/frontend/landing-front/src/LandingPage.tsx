@@ -1,6 +1,7 @@
 import { useConfig } from './config/ConfigProvider';
 import PageFrame from './components/PageFrame';
 import Hero from './components/Hero';
+import LeaderboardPreview from './components/LeaderboardPreview';
 import Showcase from './components/Showcase';
 import FromYourScript from './components/FromYourScript';
 import OnYourPhone from './components/OnYourPhone';
@@ -15,6 +16,7 @@ function LandingPage() {
     <PageFrame>
       <Hero appUrl={appUrl} />
       <Showcase />
+      <LeaderboardPreview />
       <FromYourScript />
       <OnYourPhone />
       <Assistant />

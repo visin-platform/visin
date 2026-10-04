@@ -627,7 +627,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
     async ({ training, epoch, limit }) => {
       try {
         const { testResults } = await vision.listTestResults(key, {
-          training_uuid: training ? await resolveTrainingUuid((id) => vision.getTraining(key, id), training) : undefined,
+          trainingUuid: training ? await resolveTrainingUuid((id) => vision.getTraining(key, id), training) : undefined,
           epoch,
           limit: limit ?? 5
         });

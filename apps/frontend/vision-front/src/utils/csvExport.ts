@@ -35,7 +35,7 @@ const formatDuration = (seconds: number) => {
  * field early and shifts every column after it. Text a spreadsheet would run as a formula (a name that
  * starts with `=`, `+`, `-` or `@`) gets a leading apostrophe, which shows it as plain text.
  */
-const csvField = (value: unknown): string => {
+export const csvField = (value: unknown): string => {
   const text = String(value ?? '');
   const inert = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
   return `"${inert.replace(/"/g, '""')}"`;

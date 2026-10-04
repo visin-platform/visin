@@ -4,6 +4,10 @@ import Quickstart from './content/quickstart.mdx';
 import Authentication from './content/authentication.mdx';
 import SendingResults from './content/sending-results.mdx';
 import TestResultsAndBenchmarks from './content/test-results-and-benchmarks.mdx';
+import Suites from './content/suites.mdx';
+import EvaluatingModels from './content/evaluating-models.mdx';
+import Eligibility from './content/eligibility.mdx';
+import Publishing from './content/publishing.mdx';
 import PredictionFrames from './content/prediction-frames.mdx';
 import ErrorsAndLimits from './content/errors-and-limits.mdx';
 import Assistants from './content/assistants.mdx';
@@ -62,6 +66,30 @@ export const DOC_SECTIONS: DocSection[] = [
         title: 'Test results and benchmarks',
         description: 'Scores on held-out data by condition and class, and how fast a model runs.',
         Content: TestResultsAndBenchmarks
+      },
+      {
+        slug: 'suites',
+        title: 'Evaluation suites',
+        description: 'Write down how a model is scored, so results on one suite version can be compared.',
+        Content: Suites
+      },
+      {
+        slug: 'evaluating-models',
+        title: 'Evaluating models',
+        description: 'Record a checkpoint\'s results on a suite, check them first, and read the ranking.',
+        Content: EvaluatingModels
+      },
+      {
+        slug: 'eligibility',
+        title: 'Why is my result unranked?',
+        description: 'Every reason a result cannot be ranked, and how to fix each one.',
+        Content: Eligibility
+      },
+      {
+        slug: 'publishing',
+        title: 'Publishing to a leaderboard',
+        description: 'Put a ranked result on a public leaderboard, what becomes public, and how to take it back.',
+        Content: Publishing
       },
       {
         slug: 'prediction-frames',

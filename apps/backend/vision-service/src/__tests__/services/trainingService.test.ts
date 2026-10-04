@@ -29,7 +29,7 @@ jest.mock('../../models/Epoch', () => ({
   __esModule: true,
   default: { find: jest.fn(), updateMany: jest.fn() },
 }));
-jest.mock('../../models/TestResult', () => ({
+jest.mock('../../models/Evaluation', () => ({
   __esModule: true,
   default: { updateMany: jest.fn() },
 }));
@@ -45,8 +45,8 @@ jest.mock('../../models/Comparison', () => ({
   __esModule: true,
   default: { updateMany: jest.fn() },
 }));
-jest.mock('../../services/testResultService', () => ({
-  testResultService: { getAggregatedTestResultsByTraining: jest.fn() },
+jest.mock('../../services/resultAggregation', () => ({
+  latestResultsByRun: jest.fn(),
 }));
 jest.mock('../../services/projectAccessService', () => {
   const checkProjectAccess = jest.fn();
@@ -67,23 +67,23 @@ import { trainingService } from '../../services/trainingService';
 import type { TrainingWithMetrics } from '../../services/trainingService';
 import Training from '../../models/Training';
 import Epoch from '../../models/Epoch';
-import TestResult from '../../models/TestResult';
+import Evaluation from '../../models/Evaluation';
 import Benchmark from '../../models/Benchmark';
 import Project from '../../models/Project';
 import Comparison from '../../models/Comparison';
 import { Types } from 'mongoose';
-import { testResultService } from '../../services/testResultService';
+import { latestResultsByRun } from '../../services/resultAggregation';
 import { checkProjectAccess, getVisibleProjectIds } from '../../services/projectAccessService';
 
 const mockedTraining = Training as unknown as jest.Mock & Record<string, jest.Mock>;
 const mockedEpoch = Epoch as unknown as Record<string, jest.Mock>;
-const mockedTestResult = TestResult as unknown as Record<string, jest.Mock>;
+const mockedEvaluation = Evaluation as unknown as Record<string, jest.Mock>;
 const mockedBenchmark = Benchmark as unknown as Record<string, jest.Mock>;
 const mockedProject = Project as unknown as Record<string, jest.Mock>;
 const mockedComparison = Comparison as unknown as Record<string, jest.Mock>;
 const mockedCheckAccess = checkProjectAccess as jest.Mock;
 const mockedVisibleProjects = getVisibleProjectIds as jest.Mock;
-const mockedAggregated = testResultService.getAggregatedTestResultsByTraining as jest.Mock;
+const mockedAggregated = latestResultsByRun as jest.Mock;
 
 const VALID_ID = 'a'.repeat(24);
 
@@ -588,12 +588,11 @@ describe('deleteTraining', () => {
     await expect(trainingService.deleteTraining(VALID_ID, 'u1')).rejects.toThrow();
   });
 
-  it('cascades the soft delete to epochs, test results, and comparisons', async () => {
+  it('cascades the soft delete to epochs, what the run recorded without a suite, and comparisons', async () => {
     const doc = trainingDoc('t1');
     mockedTraining.findOne.mockResolvedValue(doc);
     mockedEpoch.updateMany.mockResolvedValue({});
-    mockedEpoch.find.mockResolvedValue([{ epoch_uuid: 'e1' }, { epoch_uuid: 'e2' }]);
-    mockedTestResult.updateMany.mockResolvedValue({});
+    mockedEvaluation.updateMany.mockResolvedValue({});
     mockedComparison.updateMany.mockResolvedValue({});
 
     await expect(trainingService.deleteTraining(VALID_ID, 'u1')).resolves.toBe(true);
@@ -604,25 +603,15 @@ describe('deleteTraining', () => {
       { trainingId: VALID_ID, deletedAt: null },
       { deletedAt: doc.deletedAt }
     );
-    expect(mockedTestResult.updateMany).toHaveBeenCalledWith(
-      { epoch_uuid: { $in: ['e1', 'e2'] }, deletedAt: null },
+    // Only what the run recorded without a suite follows it; a result judged on a suite stays where it is.
+    expect(mockedEvaluation.updateMany).toHaveBeenCalledWith(
+      { suite: { $exists: false }, $or: [{ 'source.trainingId': { $in: [VALID_ID] } }], deletedAt: null },
       { deletedAt: doc.deletedAt }
     );
     expect(mockedComparison.updateMany).toHaveBeenCalledWith(
       { itemIds: VALID_ID, $or: [{ projectId: { $in: ['p1'] } }, { projectId: null, ownerId: 'u1' }] },
       { $pull: { itemIds: VALID_ID }, updatedAt: expect.any(Date) }
     );
-  });
-
-  it('skips the test-result cascade when the training has no epochs', async () => {
-    mockedTraining.findOne.mockResolvedValue(trainingDoc('t1'));
-    mockedEpoch.updateMany.mockResolvedValue({});
-    mockedEpoch.find.mockResolvedValue([]);
-    mockedComparison.updateMany.mockResolvedValue({});
-
-    await trainingService.deleteTraining(VALID_ID, 'u1');
-
-    expect(mockedTestResult.updateMany).not.toHaveBeenCalled();
   });
 });
 
@@ -667,13 +656,12 @@ describe('restoreTraining', () => {
     expect(mockedEpoch.updateMany).not.toHaveBeenCalled();
   });
 
-  it('brings back only the epochs and test results carrying that delete\'s stamp', async () => {
+  it('brings back only the epochs and unranked results carrying that delete\'s stamp', async () => {
     const stamp = new Date('2026-09-01T00:00:00Z');
     const doc = trainingDoc('t1', { deletedAt: stamp });
     mockedTraining.findOne.mockResolvedValue(doc);
     mockedEpoch.updateMany.mockResolvedValue({});
-    mockedEpoch.find.mockResolvedValue([{ epoch_uuid: 'e1' }, { epoch_uuid: 'e2' }]);
-    mockedTestResult.updateMany.mockResolvedValue({});
+    mockedEvaluation.updateMany.mockResolvedValue({});
 
     await expect(trainingService.restoreTraining(VALID_ID, 'u1')).resolves.toBe(doc);
 
@@ -683,8 +671,8 @@ describe('restoreTraining', () => {
       { trainingId: VALID_ID, deletedAt: stamp },
       { $unset: { deletedAt: 1 } }
     );
-    expect(mockedTestResult.updateMany).toHaveBeenCalledWith(
-      { epoch_uuid: { $in: ['e1', 'e2'] }, deletedAt: stamp },
+    expect(mockedEvaluation.updateMany).toHaveBeenCalledWith(
+      { suite: { $exists: false }, $or: [{ 'source.trainingId': { $in: [VALID_ID] } }], deletedAt: stamp },
       { $unset: { deletedAt: 1 } }
     );
   });

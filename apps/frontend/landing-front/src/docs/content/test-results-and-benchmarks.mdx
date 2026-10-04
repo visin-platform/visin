@@ -6,14 +6,19 @@ held-out data, and **benchmarks**, speed and size on a device. Both post with th
 A test result belongs to one epoch, usually the checkpoint you would ship. Name it by the `epoch_uuid` you sent
 with that epoch (see [sending results](/docs/sending-results#an-epoch)), or the one its upload returned.
 
+Visin keeps a test result as an **evaluation with no suite**: the same record a ranked result is, stored and shown
+with its run and epoch but not ranked. So you record one with `POST /api/evaluations`, and leave out `projectId` and
+`suite`: the project is the epoch's. Score it on a [suite](/docs/suites) instead when it should be ranked, or
+[promote](/docs/evaluating-models#rank-results-you-already-have) it onto one later.
+
 ```python
 requests.post(
-    f"{VISIN_URL}/api/test-results/upload",
+    f"{VISIN_URL}/api/evaluations",
     headers=HEADERS,
     json={
-        "epoch": 12,
-        "epoch_uuid": epoch_id,
-        "test_results": {
+        "uuid": test_id,  # your own id: sending the same result again returns the stored one
+        "source": {"epochUuid": epoch_id, "epoch": 12},
+        "results": {
             "day": {
                 "overall": {"pixel_accuracy": 0.93, "mean_accuracy": 0.81},
                 "car": {"iou": 0.74, "precision": 0.82, "recall": 0.79},
@@ -31,10 +36,13 @@ requests.post(
 
 ### Conditions, classes and metrics
 
-`test_results` has three levels, and Visin finds every name at each of them:
+`results` has three levels, and Visin finds every name at each of them:
 
 - **Conditions** are the top-level keys: `day` and `night` above, or `clear`, `rain`, `fog`, or one per test set.
   Each is shown on its own in the run's test results, and runs can be compared condition by condition.
+
+List a run's results with `GET /api/evaluations?trainingUuid=<run uuid>&include=results`, or one epoch's with
+`epochUuids=<epoch uuid>`. In the app they are under the run's **Test results** tab.
 - **Classes** are the keys inside a condition whose values hold metrics: `car` and `pedestrian`.
 - **Metrics** are the numbers inside a class: any name, such as `iou`, `precision`, `recall`, `f1` or `ap`.
 
@@ -42,7 +50,7 @@ Three keys are not conditions or classes:
 
 | Key              | Holds                                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `overall`        | Metrics for a whole condition, such as `pixel_accuracy` or `mean_accuracy`. At the top level of `test_results`, metrics for the whole test. |
+| `overall`        | Metrics for a whole condition, such as `pixel_accuracy` or `mean_accuracy`. At the top level of `results`, metrics for the whole test. |
 | `inference_time` | Timing of the test run: `total_seconds`, `samples`, `batches`, `avg_per_sample_ms`, `avg_per_batch_ms`, `throughput_fps`.                   |
 | `metadata`       | Anything else to keep with the result.                                                                                                      |
 

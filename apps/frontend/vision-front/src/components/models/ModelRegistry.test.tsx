@@ -60,6 +60,7 @@ describe('ModelRegistry', () => {
       expect(service.list).toHaveBeenLastCalledWith({ metric: 'val.loss', direction: 'min', sortBy: 'best', order: 'asc', page: 1, limit: 30 })
     );
     expect(await screen.findByText('0.1235 (epoch 9)')).toBeInTheDocument();
+    expect(screen.getByText('run best')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'val.loss' })).toBeInTheDocument();
     expect(screen.getAllByText('-').length).toBeGreaterThan(0);
   });
@@ -117,6 +118,52 @@ describe('ModelRegistry', () => {
     service.list.mockRejectedValue(new Error('Access denied to project'));
     renderWithClient(<ModelRegistry projectId="p1" />);
     expect(await screen.findByText('Access denied to project')).toBeInTheDocument();
+  });
+
+  it('scores a checkpoint by its own epoch and labels the run’s peak apart from it', async () => {
+    service.list.mockResolvedValue(
+      page([
+        row('1', {
+          model: { ...row('1').model, epoch: 1 },
+          best: { metric: 'val.iou', direction: 'max', value: 0.8, epoch: 2 },
+          checkpoint: { metric: 'val.iou', direction: 'max', value: 0.4, epoch: 1 }
+        }),
+        row('2', { model: { ...row('2').model, epoch: 9 }, best: { metric: 'val.iou', direction: 'max', value: 0.8, epoch: 2 } })
+      ])
+    );
+    renderWithClient(<ModelRegistry />);
+    await screen.findByText('Run 1');
+    fireEvent.change(screen.getByLabelText('Rank by result'), { target: { value: 'val.iou' } });
+    expect(await screen.findByText('0.4 (epoch 1)')).toBeInTheDocument();
+    expect(screen.getByText('this checkpoint · run best 0.8 (epoch 2)')).toBeInTheDocument();
+    expect(screen.getByText('epoch 9 reported no value · run best 0.8 (epoch 2)')).toBeInTheDocument();
+    expect(screen.queryByText('0.8 (epoch 2)')).not.toBeInTheDocument();
+  });
+
+  it('shows what a checkpoint scored on suites, each linking to the evidence, and marks the weaker evidence', async () => {
+    const evaluations = [
+      { evaluationId: 'e2', suite: { slug: 'road-test', version: 2, name: 'Road' }, headline: { key: 'mIoU', value: 0.73514, unit: 'ratio' }, evidence: 'observed' as const, receivedAt: '2026-10-02T00:00:00.000Z' },
+      { evaluationId: 'e1', suite: { slug: 'road-test', version: 1, name: 'Road' }, headline: { key: 'mIoU', value: 0.6, unit: 'ratio' }, evidence: 'reported' as const, receivedAt: '2026-10-01T00:00:00.000Z' }
+    ];
+    service.list.mockResolvedValue(page([row('1', { evaluations }), row('2')]));
+    renderWithClient(<ModelRegistry />);
+    const first = await screen.findByRole('link', { name: 'road-test@2 mIoU 0.7351' });
+    expect(first).toHaveAttribute('href', '/evaluations/e2');
+    expect(screen.getByRole('link', { name: 'road-test@1 mIoU 0.6' })).toHaveAttribute('href', '/evaluations/e1');
+    const line = screen.getByLabelText('Evaluations');
+    expect(line).toHaveTextContent('Evaluated: road-test@2 mIoU 0.7351 · road-test@1 mIoU 0.6 (reported)');
+    expect(screen.getAllByLabelText('Evaluations')).toHaveLength(1);
+  });
+
+  it('lists the suites a checkpoint was evaluated on in a row on a phone, and leaves out the line when there are none', async () => {
+    layout.compact = true;
+    service.list.mockResolvedValue(page([
+      row('1', { evaluations: [{ evaluationId: 'e1', suite: { slug: 'road-test', version: 1, name: 'Road' }, headline: { key: 'mIoU', value: 0.7 }, evidence: 'observed', receivedAt: '2026-10-01T00:00:00.000Z' }] }),
+      row('2')
+    ]));
+    renderWithClient(<ModelRegistry />);
+    expect(await screen.findByText('road-test@1 mIoU 0.7')).toBeInTheDocument();
+    expect(screen.getAllByText('Evaluated')).toHaveLength(1);
   });
 
   it('is a list of rows on a phone, each leading to the run', async () => {

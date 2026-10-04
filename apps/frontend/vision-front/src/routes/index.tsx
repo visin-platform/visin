@@ -20,6 +20,14 @@ const VisualizationsComparisonPage = lazy(() => import('../pages/VisualizationsC
 const TrainingVisualizationsComparisonPage = lazy(() => import('../pages/TrainingVisualizationsComparisonPage'));
 const BenchmarksPage = lazy(() => import('../pages/BenchmarksPage'));
 const ModelsPage = lazy(() => import('../pages/ModelsPage'));
+const EvaluationsPage = lazy(() => import('../pages/EvaluationsPage'));
+const EvaluationDetailPage = lazy(() => import('../pages/EvaluationDetailPage'));
+const SuitesPage = lazy(() => import('../pages/SuitesPage'));
+const SuitePage = lazy(() => import('../pages/SuitePage'));
+const SuiteComparePage = lazy(() => import('../pages/SuiteComparePage'));
+const PublicLeaderboardsPage = lazy(() => import('../pages/PublicLeaderboardsPage'));
+const PublicLeaderboardPage = lazy(() => import('../pages/PublicLeaderboardPage'));
+const PublicEvaluationPage = lazy(() => import('../pages/PublicEvaluationPage'));
 const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
 const ProjectDashboardPage = lazy(() => import('../pages/ProjectDashboardPage'));
 
@@ -46,6 +54,14 @@ function AppRoutes() {
         <Route path="/visualizations/compare-trainings" element={<TrainingVisualizationsComparisonPage />} />
         <Route path="/benchmarks" element={<BenchmarksPage />} />
         <Route path="/models" element={<ModelsPage />} />
+        <Route path="/evaluations" element={<EvaluationsPage />} />
+        <Route path="/evaluations/:id" element={<EvaluationDetailPage />} />
+        <Route path="/suites" element={<SuitesPage />} />
+        <Route path="/suites/:slug/:version" element={<SuitePage />} />
+        <Route path="/suites/:slug/:version/compare" element={<SuiteComparePage />} />
+        <Route path="/leaderboards" element={<PublicLeaderboardsPage />} />
+        <Route path="/leaderboards/:slug/:version" element={<PublicLeaderboardPage />} />
+        <Route path="/leaderboards/:slug/:version/:id" element={<PublicEvaluationPage />} />
       </Routes>
     </Suspense>
   );

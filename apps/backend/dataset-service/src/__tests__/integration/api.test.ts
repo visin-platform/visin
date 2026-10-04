@@ -831,7 +831,7 @@ describe('datasets kept on the Hugging Face Hub', () => {
   const resolve = (reference: string) => call('/internal/datasets/resolve', { internal: true, method: 'POST', body: { reference, userId: OWNER } });
 
   it('is created on the Hub alone and downloads by pointer, with no zip', async () => {
-    const id = await createDataset({ name: 'Hub set', visibility: 'public', source: { repo: 'acme/zod-png', revision: COMMIT.toUpperCase() } });
+    const id = await createDataset({ name: 'Hub set', visibility: 'public', source: { provider: 'hf', repo: 'acme/zod-png', revision: COMMIT.toUpperCase() } });
     expect((await call(`/api/datasets/${id}`)).body.data.source).toEqual(source);
     const download = (await call(`/api/datasets/${id}/download`)).body.data;
     expect(download).toEqual({ source, revision: COMMIT });
@@ -867,12 +867,13 @@ describe('datasets kept on the Hugging Face Hub', () => {
   it('refuses anything but a repo id pinned to a commit', async () => {
     const id = await createDataset();
     for (const bad of [
-      { repo: 'acme/zod-png', revision: 'main' },
-      { repo: 'acme/zod-png', revision: COMMIT.slice(0, 7) },
-      { repo: 'zod-png', revision: COMMIT },
+      { provider: 'hf', repo: 'acme/zod-png', revision: 'main' },
+      { provider: 'hf', repo: 'acme/zod-png', revision: COMMIT.slice(0, 7) },
+      { provider: 'hf', repo: 'zod-png', revision: COMMIT },
+      { repo: 'acme/zod-png', revision: COMMIT },
       { repo: 'acme/zod-png', revision: COMMIT, provider: 's3' }
     ]) expect((await call(`/api/datasets/${id}`, { method: 'PATCH', user: OWNER, body: { source: bad } })).status).toBe(400);
-    expect((await call('/api/datasets', { method: 'POST', user: OWNER, body: { name: 'Bad', source: { repo: 'x', revision: 'main' } } })).status).toBe(400);
+    expect((await call('/api/datasets', { method: 'POST', user: OWNER, body: { name: 'Bad', source: { provider: 'hf', repo: 'x', revision: 'main' } } })).status).toBe(400);
   });
 
   it('shows what the Hub says about the repo to anyone who may read the dataset, and nothing for a private one', async () => {

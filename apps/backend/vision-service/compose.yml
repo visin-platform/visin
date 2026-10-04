@@ -19,6 +19,7 @@ services:
       # What GET /api/.well-known/visin tells a client about the rest of this deployment. Both optional: unset, they are left out.
       - PUBLIC_DATASET_API_URL=${PUBLIC_DATASET_API_URL:-}
       - PUBLIC_APP_URL=${PUBLIC_APP_URL:-}
+      - VISION_API_URL=${VISION_API_URL:-}
       # The MCP server OAuth access tokens must be minted for; unset, they are refused.
       - MCP_PUBLIC_URL=${MCP_PUBLIC_URL}
       # File Service configuration

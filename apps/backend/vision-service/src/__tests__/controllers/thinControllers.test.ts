@@ -1,5 +1,5 @@
 /**
- * Covers the thin delegation controllers (training / testResult / benchmark /
+ * Covers the thin delegation controllers (training / benchmark /
  * visualization / project): each handler extracts request data, calls its
  * service, and shapes the JSON response — so one parametrized suite per
  * controller keeps this compact.
@@ -20,20 +20,7 @@ jest.mock('../../services/trainingService', () => ({
     restoreTraining: jest.fn(),
   },
 }));
-jest.mock('../../services/testResultService', () => ({
-  testResultService: {
-    getTestResults: jest.fn(),
-    getTestResultById: jest.fn(),
-    getTestResultByTestUuid: jest.fn(),
-    getTestResultsByEpochUuid: jest.fn(),
-    createTestResult: jest.fn(),
-    updateTestResult: jest.fn(),
-    deleteTestResult: jest.fn(),
-    getTestResultEpochs: jest.fn(),
-    compareTestResults: jest.fn(),
-    getAggregatedTestResultsByTraining: jest.fn(),
-  },
-}));
+
 jest.mock('../../services/benchmarkService', () => ({
   getBenchmarks: jest.fn(),
   getBenchmarkById: jest.fn(),
@@ -67,18 +54,15 @@ jest.mock('../../services/projectService', () => ({
 
 import type { Request, Response } from 'express';
 import * as trainingCtrl from '../../controllers/trainingController';
-import * as testResultCtrl from '../../controllers/testResultController';
 import * as benchmarkCtrl from '../../controllers/benchmarkController';
 import * as visualizationCtrl from '../../controllers/visualizationController';
 import * as projectCtrl from '../../controllers/projectController';
 import { trainingService } from '../../services/trainingService';
-import { testResultService } from '../../services/testResultService';
 import * as benchmarkService from '../../services/benchmarkService';
 import * as visualizationService from '../../services/visualizationService';
 import * as projectService from '../../services/projectService';
 
 const mockedTrainingSvc = trainingService as unknown as Record<string, jest.Mock>;
-const mockedTestResultSvc = testResultService as unknown as Record<string, jest.Mock>;
 const mockedBenchmarkSvc = benchmarkService as unknown as Record<string, jest.Mock>;
 const mockedVizSvc = visualizationService as unknown as Record<string, jest.Mock>;
 const mockedProjectSvc = projectService as unknown as Record<string, jest.Mock>;
@@ -224,76 +208,6 @@ describe('trainingController', () => {
 
     expect(mockedTrainingSvc.getTrainingTags).toHaveBeenCalledWith('u1');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: ['a', 'b'] });
-  });
-});
-
-describe('testResultController', () => {
-  it('getTestResults forwards filters and pagination', async () => {
-    mockedTestResultSvc.getTestResults.mockResolvedValue({});
-    const res = makeRes();
-
-    await testResultCtrl.getTestResults(
-      makeReq({ query: { page: 1, limit: 2, sortBy: 'timestamp', order: -1, epoch: 3 } }),
-      res
-    );
-
-    expect(mockedTestResultSvc.getTestResults).toHaveBeenCalledWith(
-      'u1',
-      expect.objectContaining({ epoch: 3 }),
-      expect.objectContaining({ page: 1, limit: 2 })
-    );
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: {} });
-  });
-
-  it('lookup, create, update, delete, epochs, and compare handlers delegate', async () => {
-    mockedTestResultSvc.getTestResultById.mockResolvedValue('tr');
-    mockedTestResultSvc.getTestResultByTestUuid.mockResolvedValue('tr');
-    mockedTestResultSvc.getTestResultsByEpochUuid.mockResolvedValue('list');
-    mockedTestResultSvc.createTestResult.mockResolvedValue('new');
-    mockedTestResultSvc.updateTestResult.mockResolvedValue('upd');
-    mockedTestResultSvc.deleteTestResult.mockResolvedValue(true);
-    mockedTestResultSvc.getTestResultEpochs.mockResolvedValue([1]);
-    mockedTestResultSvc.compareTestResults.mockResolvedValue('cmp');
-    mockedTestResultSvc.getAggregatedTestResultsByTraining.mockResolvedValue('agg');
-
-    await testResultCtrl.getTestResultById(makeReq({ params: { id: 'i' } }), makeRes());
-    expect(mockedTestResultSvc.getTestResultById).toHaveBeenCalledWith('i', 'u1');
-
-    await testResultCtrl.getTestResultByTestUuid(makeReq({ params: { testUuid: 'tu' } }), makeRes());
-    expect(mockedTestResultSvc.getTestResultByTestUuid).toHaveBeenCalledWith('tu', 'u1');
-
-    await testResultCtrl.getTestResultsByEpochUuid(makeReq({ params: { epochUuid: 'e' } }), makeRes());
-    expect(mockedTestResultSvc.getTestResultsByEpochUuid).toHaveBeenCalledWith('e', 'u1', expect.anything());
-
-    const createRes = makeRes();
-    await testResultCtrl.createTestResult(
-      makeReq({ projectId: 'p-token', body: { epoch: 1 } }),
-      createRes
-    );
-    expect(mockedTestResultSvc.createTestResult).toHaveBeenCalledWith('u1', 'p-token', { epoch: 1 });
-    expect(createRes.status).toHaveBeenCalledWith(201);
-
-    await testResultCtrl.createTestResultFromJson(makeReq({ body: { epoch: 2 } }), makeRes());
-    expect(mockedTestResultSvc.createTestResult).toHaveBeenLastCalledWith('u1', undefined, { epoch: 2 });
-
-    await testResultCtrl.updateTestResult(makeReq({ params: { id: 'i' }, body: { epoch: 3 } }), makeRes());
-    expect(mockedTestResultSvc.updateTestResult).toHaveBeenCalledWith('i', 'u1', undefined, { epoch: 3 });
-
-    await testResultCtrl.deleteTestResult(makeReq({ params: { id: 'i' } }), makeRes());
-    expect(mockedTestResultSvc.deleteTestResult).toHaveBeenCalledWith('i', 'u1', undefined);
-
-    const epochsRes = makeRes();
-    await testResultCtrl.getTestResultEpochs(makeReq(), epochsRes);
-    expect(epochsRes.json).toHaveBeenCalledWith({ success: true, data: { epochs: [1] } });
-
-    await testResultCtrl.compareTestResults(makeReq({ body: { testResultIds: ['a'] } }), makeRes());
-    expect(mockedTestResultSvc.compareTestResults).toHaveBeenCalledWith('u1', ['a']);
-
-    await testResultCtrl.compareAggregatedTestResultsByTraining(
-      makeReq({ body: { trainingIds: ['t'] } }),
-      makeRes()
-    );
-    expect(mockedTestResultSvc.getAggregatedTestResultsByTraining).toHaveBeenCalledWith('u1', ['t']);
   });
 });
 

@@ -27,6 +27,17 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => useAuthMock()
 }));
 
+vi.mock('../components/evaluations/PromoteDialog', () => ({
+  default: ({ evaluationId, source, onClose, onPromoted }: { evaluationId: string; source?: { trainingId?: string; epoch?: number }; onClose: () => void; onPromoted: (evaluation: { _id: string }) => void }) => (
+    <div role="dialog" aria-label="promote">
+      promote:{evaluationId}
+      <span>source:{JSON.stringify(source)}</span>
+      <button onClick={onClose}>close-promote</button>
+      <button onClick={() => onPromoted({ _id: 'e7' })}>finish-promote</button>
+    </div>
+  )
+}));
+
 import TestResultsPage from './TestResultsPage';
 import { testResultService } from '../services/testResultService';
 
@@ -163,5 +174,30 @@ describe('TestResultsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Test result deleted successfully')).toBeInTheDocument();
     });
+  });
+
+  it('offers to rank a result on a suite, opens the form for that result, and goes to the evaluation it makes', async () => {
+    testResultServiceMock.getTestResults.mockResolvedValue({ data: { testResults: [testResult1] } });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Training One')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rank on a suite' }));
+    expect(screen.getByText('promote:tr1')).toBeInTheDocument();
+    // the dialog is told which run and epoch the result came from, where evidence for its checkpoint would be
+    expect(screen.getByText('source:{"trainingId":"t1","epoch":5}')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('close-promote'));
+    expect(screen.queryByText('promote:tr1')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rank on a suite' }));
+    fireEvent.click(screen.getByText('finish-promote'));
+    expect(navigateMock).toHaveBeenCalledWith('/evaluations/e7');
+  });
+
+  it('does not offer to rank a result to someone who cannot write to its project', async () => {
+    canWriteMock.mockReturnValue(false);
+    testResultServiceMock.getTestResults.mockResolvedValue({ data: { testResults: [testResult1] } });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Training One')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Rank on a suite' })).not.toBeInTheDocument();
   });
 });

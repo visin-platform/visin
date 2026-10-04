@@ -15,10 +15,11 @@ import * as benchmarkSchemas from '../../validation/benchmarkSchemas';
 import * as comparisonSchemas from '../../validation/comparisonSchemas';
 import * as configSchemas from '../../validation/configSchemas';
 import * as epochSchemas from '../../validation/epochSchemas';
+import * as evaluationSchemas from '../../validation/evaluationSchemas';
 import * as findingSchemas from '../../validation/findingSchemas';
 import * as modelRegistrySchemas from '../../validation/modelRegistrySchemas';
 import * as projectSchemas from '../../validation/projectSchemas';
-import * as testResultSchemas from '../../validation/testResultSchemas';
+import * as suiteSchemas from '../../validation/suiteSchemas';
 import * as trainingSchemas from '../../validation/trainingSchemas';
 import * as visualizationSchemas from '../../validation/visualizationSchemas';
 import * as writeCapabilitiesSchemas from '../../validation/writeCapabilitiesSchemas';
@@ -41,10 +42,11 @@ const nameOf = schemaNamer([
   comparisonSchemas,
   configSchemas,
   epochSchemas,
+  evaluationSchemas,
   findingSchemas,
   modelRegistrySchemas,
   projectSchemas,
-  testResultSchemas,
+  suiteSchemas,
   trainingSchemas,
   visualizationSchemas,
   writeCapabilitiesSchemas

@@ -7,6 +7,8 @@ export interface AppConfig {
   AUTH_FRONT_URL?: string;
   ACCOUNT_FRONT_URL?: string;
   LABEL_FRONT_URL?: string;
+  /** Where this deployment's docs site lives (the landing site), for links to a guide; no such links when empty. */
+  LANDING_FRONT_URL?: string;
   /** The Hugging Face Hub that links point at; the public Hub when empty. */
   HF_ENDPOINT?: string;
 }
@@ -19,6 +21,7 @@ function createDevConfig(): AppConfig {
     AUTH_FRONT_URL: import.meta.env.VITE_AUTH_FRONT_URL,
     ACCOUNT_FRONT_URL: import.meta.env.VITE_ACCOUNT_FRONT_URL,
     LABEL_FRONT_URL: import.meta.env.VITE_LABEL_FRONT_URL,
+    LANDING_FRONT_URL: import.meta.env.VITE_LANDING_FRONT_URL,
     HF_ENDPOINT: import.meta.env.VITE_HF_ENDPOINT
   };
 }

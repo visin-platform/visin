@@ -5,7 +5,6 @@ import configRoutes from '../../routes/configRoutes';
 import epochRoutes from '../../routes/epochRoutes';
 import findingRoutes from '../../routes/findingRoutes';
 import projectRoutes from '../../routes/projectRoutes';
-import testResultRoutes from '../../routes/testResultRoutes';
 import trainingRoutes from '../../routes/trainingRoutes';
 import visualizationRoutes from '../../routes/visualizationRoutes';
 
@@ -33,9 +32,8 @@ describe('vision-service routers', () => {
     ['benchmarkRoutes', benchmarkRoutes, 7],
     ['comparisonRoutes', comparisonRoutes, 8],
     ['configRoutes', configRoutes, 5],
-    ['epochRoutes', epochRoutes, 9],
+    ['epochRoutes', epochRoutes, 8],
     ['projectRoutes', projectRoutes, 10],
-    ['testResultRoutes', testResultRoutes, 10],
     ['trainingRoutes', trainingRoutes, 20],
     ['visualizationRoutes', visualizationRoutes, 9],
   ];

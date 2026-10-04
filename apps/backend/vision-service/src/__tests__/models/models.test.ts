@@ -4,7 +4,6 @@ import Config from '../../models/Config';
 import Epoch from '../../models/Epoch';
 import EpochVisualization from '../../models/EpochVisualization';
 import Project from '../../models/Project';
-import TestResult from '../../models/TestResult';
 import Training from '../../models/Training';
 
 describe('model registration', () => {
@@ -15,7 +14,6 @@ describe('model registration', () => {
     expect(Epoch.modelName).toBe('training_epoch');
     expect(EpochVisualization.modelName).toBe('epoch_visualization');
     expect(Project.modelName).toBe('Project');
-    expect(TestResult.modelName).toBe('test_result');
     expect(Training.modelName).toBe('training');
   });
 });

@@ -1,9 +1,10 @@
 import { z } from '@visin/backend-core';
+import { DATASET_SOURCES } from '../services/sourceRegistry';
 import { accessFilterSchema } from './projectSchemas';
 import { MAX_PAGE_SIZE, sortOrderSchema } from './common';
 
 export const datasetReferenceSchema = z.object({
-  source: z.enum(['visin', 'hf', 'other']), id: z.string().min(1).optional(),
+  source: z.enum(DATASET_SOURCES), id: z.string().min(1).optional(),
   name: z.string().min(1), revision: z.string().min(1).optional(),
   archiveRevision: z.string().min(1).optional()
 });

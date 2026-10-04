@@ -2,6 +2,7 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 import { VISIBILITIES, type ResourceOwner, type Visibility } from '@visin/backend-core';
 import { IProjectTaxonomy, TaxonomySchema } from './taxonomy';
 import { CostingSchema, IProjectCosting } from './costing';
+import { STORAGE_PROVIDERS, type StorageProvider } from '../services/sourceRegistry';
 
 export interface IProject extends Document {
   _id: Types.ObjectId;
@@ -20,7 +21,7 @@ export interface IProject extends Document {
   taxonomy?: IProjectTaxonomy;
   costing?: IProjectCosting;
   /** where its big files live; absent means `visin` (this deployment's own storage) */
-  storage?: { provider: 'visin' | 'hf'; hfNamespace?: string };
+  storage?: { provider: StorageProvider; settings?: Record<string, unknown> };
   stallAfterMinutes?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -66,9 +67,10 @@ const ProjectSchema: Schema = new Schema(
     },
     storage: {
       type: new Schema({
-        provider: { type: String, enum: ['visin', 'hf'], required: true },
-        hfNamespace: { type: String, trim: true, maxlength: 96 }
-      }, { _id: false }),
+        provider: { type: String, enum: STORAGE_PROVIDERS, required: true },
+        // What the provider keeps about the project: validated by the provider's own schema, so its fields are its own.
+        settings: { type: Schema.Types.Mixed }
+      }, { _id: false, minimize: false }),
       required: false
     },
     stallAfterMinutes: { type: Number, default: 30, min: 1, max: 10080 },

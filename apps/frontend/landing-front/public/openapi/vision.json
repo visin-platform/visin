@@ -38,10 +38,6 @@
       "description": "Training configuration management"
     },
     {
-      "name": "Test Results",
-      "description": "Model testing and evaluation results"
-    },
-    {
       "name": "Visualizations",
       "description": "Training epoch visualization management"
     },
@@ -60,6 +56,18 @@
     {
       "name": "Findings",
       "description": "Written conclusions about runs, by people or assistants"
+    },
+    {
+      "name": "Suites",
+      "description": "Immutable evaluation protocols that results are ranked on"
+    },
+    {
+      "name": "Evaluations",
+      "description": "One checkpoint scored against one suite version, with the server's verdict on whether it can be ranked"
+    },
+    {
+      "name": "Public leaderboards",
+      "description": "Anonymous, read-only rankings of the results a manager chose to publish"
     }
   ],
   "components": {
@@ -332,6 +340,1177 @@
           }
         }
       },
+      "Checkpoint": {
+        "description": "Which bytes were scored. A Hub checkpoint is its repo, a full commit and optionally a file; a local one is\nthe SHA-256 of the weights that were loaded, never a path.\n",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "repo",
+              "commit"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hf"
+              },
+              "repo": {
+                "type": "string",
+                "example": "acme/clftv2"
+              },
+              "commit": {
+                "type": "string",
+                "description": "The full 40-character commit hash."
+              },
+              "path": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "sha256",
+              "label"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "local"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "ValidationReason": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "A stable code, listed with how to fix it in the Evaluations guide.",
+            "example": "missing-condition"
+          },
+          "detail": {
+            "type": "string",
+            "description": "What it is about.",
+            "example": "night"
+          }
+        }
+      },
+      "ValidationReport": {
+        "type": "object",
+        "required": [
+          "version",
+          "state",
+          "evidence",
+          "reasons",
+          "warnings"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "const": 2,
+            "description": "The rules that judged it."
+          },
+          "evidence": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "reported",
+              "attested",
+              "none"
+            ],
+            "description": "How much the evaluator reported about the run. It labels a result and never decides whether it is ranked.\n`observed`: it sent the data, the protocol digest and its own package and version, and each matched the\nsuite. `reported`: ranked on the submitter's word, with none or only some of that evidence (what was sent\nmatched). `attested`: a manager promoted an old result and vouched for it; nothing was observed, and none\nis invented. `none`: no suite. Every level is the submitter's word, never verified.\n"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "eligible",
+              "incomplete",
+              "incompatible",
+              "exploratory",
+              "legacy-unverified"
+            ],
+            "description": "`eligible` may be ranked. `incomplete` lacks something the suite requires. `incompatible` measured\nsomething other than the suite measures. `exploratory` named no suite. `legacy-unverified` predates suites.\n"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationReason"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationReason"
+            }
+          },
+          "scores": {
+            "type": "object",
+            "description": "Present when eligible. Per condition and overall, for each metric the suite names.",
+            "properties": {
+              "conditions": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              },
+              "overall": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "EvaluationEvidence": {
+        "description": "What was reported about the run. `observed` carries the evaluator's own evidence, which the suite is compared\nagainst; `attested` records the manager who promoted an old result and the checkpoint and counts they\nsupplied. A promoted result never carries observed fields, because none were observed.\n",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "observed"
+              },
+              "data": {
+                "type": "object",
+                "description": "The data actually scored, in the shape a suite pins it.",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "visin",
+                      "hf",
+                      "external"
+                    ]
+                  },
+                  "archiveSha256": {
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  },
+                  "commit": {
+                    "type": "string"
+                  },
+                  "manifestSha256": {
+                    "type": "string"
+                  }
+                }
+              },
+              "protocolDigest": {
+                "type": "string",
+                "description": "The digest of the protocol file the evaluator ran."
+              },
+              "evaluator": {
+                "type": "object",
+                "properties": {
+                  "package": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                }
+              },
+              "classes": {
+                "type": "object",
+                "properties": {
+                  "scored": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "ignored": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "at",
+              "evaluationId",
+              "claims"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "attested"
+              },
+              "by": {
+                "type": "string",
+                "description": "The manager who promoted it."
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "evaluationId": {
+                "type": "string"
+              },
+              "claims": {
+                "type": "object",
+                "properties": {
+                  "checkpoint": {
+                    "$ref": "#/components/schemas/Checkpoint"
+                  },
+                  "sampleCounts": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Evaluation": {
+        "type": "object",
+        "required": [
+          "_id",
+          "uuid",
+          "projectId",
+          "status",
+          "receivedAt",
+          "validation",
+          "createdAt"
+        ],
+        "description": "What a reader may see depends on who they are. Someone in the project (who can add to it) sees everything. Anyone\nelse who can read it, because it is public, sees only results a manager published, without `ownerId`, without\nwho vouched for an attested result, and with only the evaluator of the run's `provenance`.\n",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string",
+            "description": "The writer's id, unique within the project."
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Who recorded it. Left out for a reader who is not in the project."
+          },
+          "checkpoint": {
+            "$ref": "#/components/schemas/Checkpoint"
+          },
+          "checkpointKey": {
+            "type": "string",
+            "description": "`hf:<repo>@<commit>:<path>` or `sha256:<digest>`. Evaluations with one key are the same model."
+          },
+          "source": {
+            "type": "object",
+            "description": "Where the checkpoint came from. It says nothing about which bytes were scored.",
+            "properties": {
+              "trainingId": {
+                "type": "string"
+              },
+              "epochUuid": {
+                "type": "string"
+              },
+              "epoch": {
+                "type": "integer"
+              },
+              "evaluationId": {
+                "type": "string",
+                "description": "The evaluation it was copied from",
+                "when it was promoted.": null
+              }
+            }
+          },
+          "run": {
+            "type": "object",
+            "description": "The run it came from, when that run is still live. Only in a list.",
+            "properties": {
+              "_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "uuid": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          },
+          "epochInfo": {
+            "type": "object",
+            "description": "The epoch it was recorded at, when that epoch is still live. Only in a list.",
+            "properties": {
+              "epoch": {
+                "type": "integer"
+              },
+              "epoch_time": {
+                "type": "number"
+              }
+            }
+          },
+          "suite": {
+            "type": "object",
+            "description": "The suite version it was judged on, and that protocol's digest at the time.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer"
+              },
+              "digest": {
+                "type": "string"
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed"
+            ]
+          },
+          "sampleCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvaluationEvidence"
+          },
+          "executedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the writer says it ran."
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the server stored it; this orders attempts."
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ValidationReport"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Present when a manager put this result on its suite's public leaderboard."
+          },
+          "verifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When a manager or an automated job verified this result. Verification does not control visibility."
+          },
+          "verifiedBy": {
+            "type": "string",
+            "description": "The verifying account; omitted for public readers."
+          },
+          "hidden": {
+            "type": "object",
+            "description": "Present when a manager of the suite took it off the suite's leaderboard.",
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          },
+          "supersedesId": {
+            "type": "string",
+            "description": "The evaluation this one corrects. It must be of the same suite and checkpoint."
+          },
+          "supersededById": {
+            "type": "string",
+            "description": "The live correction that replaces this result. It is never ranked or published again."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "results": {
+            "type": "object",
+            "description": "Only on a single evaluation. The result as sent.",
+            "additionalProperties": true
+          },
+          "provenance": {
+            "type": "object",
+            "description": "Only on a single evaluation. Submitter-reported; nothing here is verified.",
+            "additionalProperties": true
+          }
+        }
+      },
+      "PublicSuite": {
+        "type": "object",
+        "description": "A suite as an anonymous reader sees it. A Visin dataset is reported only as `{ kind: visin }`: its id and digest\nbelong to the deployment and are not shown.\n",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "archived": {
+            "type": "boolean",
+            "const": true
+          },
+          "task": {
+            "type": "string"
+          },
+          "split": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "description": "What the data is. `visin` carries nothing else; `hf` a repo and commit; `external` a label.",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "visin",
+                  "hf",
+                  "external"
+                ]
+              },
+              "repo": {
+                "type": "string"
+              },
+              "commit": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "sampleCount": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "headline": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "max",
+                  "min"
+                ]
+              },
+              "unit": {
+                "type": "string"
+              }
+            }
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "equal-mean-of-conditions",
+              "sample-weighted-mean",
+              "pooled"
+            ]
+          },
+          "evaluator": {
+            "type": "object",
+            "properties": {
+              "package": {
+                "type": "string"
+              },
+              "minVersion": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "PublicCheckpoint": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "repo",
+              "commit"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "hf"
+              },
+              "repo": {
+                "type": "string"
+              },
+              "commit": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "label",
+              "sha256"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "local"
+              },
+              "label": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "PublicLeaderboard": {
+        "type": "object",
+        "required": [
+          "suite",
+          "selection",
+          "scope",
+          "evidence",
+          "generatedAt",
+          "entries",
+          "pagination"
+        ],
+        "properties": {
+          "suite": {
+            "$ref": "#/components/schemas/PublicSuite"
+          },
+          "selection": {
+            "type": "string",
+            "const": "latest-eligible-completed"
+          },
+          "scope": {
+            "type": "object",
+            "description": "The attempts behind the rows shown: every attempt of those checkpoints, published or not.",
+            "properties": {
+              "candidates": {
+                "type": "integer"
+              }
+            }
+          },
+          "evidence": {
+            "type": "string",
+            "const": "submitter-reported",
+            "description": "Evidence is reported by the submitter. Manager or job verification is recorded separately in verifiedAt."
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this response was computed."
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "rank": {
+                  "type": "integer"
+                },
+                "evaluationId": {
+                  "type": "string"
+                },
+                "checkpoint": {
+                  "$ref": "#/components/schemas/PublicCheckpoint"
+                },
+                "headline": {
+                  "type": "number"
+                },
+                "worst": {
+                  "type": "object",
+                  "properties": {
+                    "condition": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "gap": {
+                  "type": "number"
+                },
+                "conditions": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  },
+                  "description": "The headline metric in each condition."
+                },
+                "attempts": {
+                  "type": "integer",
+                  "description": "How many results this project recorded of this checkpoint on the suite",
+                  "published or not.": null
+                },
+                "evidenceLevel": {
+                  "type": "string",
+                  "enum": [
+                    "observed",
+                    "reported",
+                    "attested",
+                    "none"
+                  ],
+                  "description": "Whether the evaluator sent complete evidence (observed), less (reported), or a manager vouched for an old result (attested)."
+                },
+                "project": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "executedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "publishedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verifiedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
+      "PublicEvaluation": {
+        "type": "object",
+        "properties": {
+          "evaluationId": {
+            "type": "string"
+          },
+          "suite": {
+            "$ref": "#/components/schemas/PublicSuite"
+          },
+          "checkpoint": {
+            "$ref": "#/components/schemas/PublicCheckpoint"
+          },
+          "scores": {
+            "type": "object",
+            "properties": {
+              "conditions": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "number"
+                  }
+                }
+              },
+              "overall": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "sampleCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "evaluator": {
+            "type": "object",
+            "description": "Only the evaluator's package, version and commit, when the submitter reported them.",
+            "properties": {
+              "package": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "commit": {
+                "type": "string"
+              }
+            }
+          },
+          "project": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            }
+          },
+          "evidence": {
+            "type": "string",
+            "const": "submitter-reported"
+          },
+          "evidenceLevel": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "reported",
+              "attested",
+              "none"
+            ],
+            "description": "Whether the evaluator sent complete evidence (observed), less (reported), or a manager vouched for an old result (attested)."
+          },
+          "executedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "verifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "required": [
+          "page",
+          "limit",
+          "total",
+          "pages"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Selected summaries across all pages."
+          },
+          "pages": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "Leaderboard": {
+        "type": "object",
+        "required": [
+          "suite",
+          "selection",
+          "scope",
+          "entries",
+          "unranked",
+          "pagination",
+          "unrankedPagination"
+        ],
+        "properties": {
+          "suite": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "digest": {
+                "type": "string"
+              },
+              "headline": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "max",
+                      "min"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "selection": {
+            "type": "string",
+            "const": "latest-eligible-completed",
+            "description": "One evaluation per checkpoint, the latest eligible completed one by server arrival time. Never the best repeat."
+          },
+          "scope": {
+            "type": "object",
+            "description": "The pool that was ranked. A rank is a position within it, not among everything ever run.",
+            "properties": {
+              "candidates": {
+                "type": "integer"
+              },
+              "truncated": {
+                "type": "boolean",
+                "const": false,
+                "description": "The complete authorized pool is always ranked."
+              }
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "unrankedPagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "entries": {
+            "type": "array",
+            "description": "Best first. Ties share a rank, and the next rank skips (\"1, 2, 2, 4\").",
+            "items": {
+              "type": "object",
+              "properties": {
+                "evaluationId": {
+                  "type": "string"
+                },
+                "uuid": {
+                  "type": "string"
+                },
+                "rank": {
+                  "type": "integer"
+                },
+                "attempts": {
+                  "type": "integer",
+                  "description": "How many evaluations of this checkpoint were recorded, of any outcome."
+                },
+                "checkpointKey": {
+                  "type": "string"
+                },
+                "checkpoint": {
+                  "$ref": "#/components/schemas/Checkpoint"
+                },
+                "evidenceLevel": {
+                  "type": "string",
+                  "enum": [
+                    "observed",
+                    "reported",
+                    "attested",
+                    "none"
+                  ],
+                  "description": "How much the evaluator reported; see `validation.evidence`."
+                },
+                "project": {
+                  "type": "object",
+                  "properties": {
+                    "_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "receivedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "summary": {
+                  "type": "object",
+                  "properties": {
+                    "headline": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        },
+                        "direction": {
+                          "type": "string",
+                          "enum": [
+                            "max",
+                            "min"
+                          ]
+                        },
+                        "unit": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "worst": {
+                      "type": "object",
+                      "description": "The condition the headline is worst on, which for a `min` metric is its highest value.",
+                      "properties": {
+                        "condition": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "gap": {
+                      "type": "number",
+                      "description": "How far the worst condition falls short of the overall figure."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "unranked": {
+            "type": "array",
+            "description": "Checkpoints with attempts but none eligible, with the latest attempt's reasons.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "evaluationId": {
+                  "type": "string"
+                },
+                "uuid": {
+                  "type": "string"
+                },
+                "checkpointKey": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "attempts": {
+                  "type": "integer"
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ValidationReason"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "SuiteProtocol": {
+        "type": "object",
+        "description": "What decides a score: the data, the conditions with their sample counts, the metrics and which way is\nbetter, and how the overall figure is formed. It is hashed into the suite's `digest`, so changing any\nfield is a new version. The request form is `#/SuiteProtocol` in `generated/request-schemas.json`.\n",
+        "additionalProperties": true
+      },
+      "Suite": {
+        "type": "object",
+        "required": [
+          "_id",
+          "slug",
+          "version",
+          "name",
+          "projectId",
+          "visibility",
+          "submissions",
+          "createdBy",
+          "protocol",
+          "digest",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "example": "clftv2-test"
+          },
+          "version": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "The project that published it, and whose access rules apply."
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ],
+            "description": "`public` lets anyone read the protocol; it grants nothing in the project."
+          },
+          "submissions": {
+            "type": "string",
+            "enum": [
+              "open",
+              "members",
+              "approval"
+            ],
+            "description": "Who may publish results to its public leaderboard. `open`: a manager of any public project. `members`: only\nthe project that owns the suite. `approval`: any public project; managers review unverified submissions.\nVerification is a label and does not control visibility.\n"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/SuiteProtocol"
+          },
+          "digest": {
+            "type": "string",
+            "description": "SHA-256 of the canonical protocol. Two suites with one digest score identically."
+          },
+          "archivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Present once archived. New evaluations are refused; the suite and its results stay readable."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Submission": {
+        "type": "object",
+        "description": "A published result as a manager of the suite sees another project's, with only what the public sees.",
+        "properties": {
+          "evaluationId": {
+            "type": "string"
+          },
+          "checkpoint": {
+            "$ref": "#/components/schemas/PublicCheckpoint"
+          },
+          "project": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            }
+          },
+          "headline": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string"
+              }
+            }
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hidden": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
       "ModelReference": {
         "type": "object",
         "required": [
@@ -454,39 +1633,6 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
-          }
-        }
-      },
-      "TestResult": {
-        "type": "object",
-        "properties": {
-          "_id": {
-            "type": "string"
-          },
-          "testUuid": {
-            "type": "string"
-          },
-          "epochUuid": {
-            "type": "string"
-          },
-          "trainingUuid": {
-            "type": "string"
-          },
-          "metrics": {
-            "type": "object"
-          },
-          "results": {
-            "type": "object"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "trainingId": {
-            "type": "string"
-          },
-          "projectId": {
-            "type": "string"
           }
         }
       },
@@ -686,9 +1832,15 @@
                 ],
                 "description": "`visin`: everything stays on this deployment, and a run's links to Hub models and its references to Hub datasets (`dataset.source: hf`) are refused with `409`. `hf`: runs may link Hugging Face Hub models and train on Hub datasets. A Visin dataset that is itself kept on the Hub is governed by the dataset, not by this setting."
               },
-              "hfNamespace": {
-                "type": "string",
-                "description": "The Hub user or organisation a pipeline should create repos under by default."
+              "settings": {
+                "type": "object",
+                "description": "What the provider keeps about the project, validated by that provider. Replaces the whole setting, so leaving it out clears it.",
+                "properties": {
+                  "namespace": {
+                    "type": "string",
+                    "description": "For `hf`, the Hub user or organisation a pipeline should create repos under by default."
+                  }
+                }
               }
             }
           }
@@ -1347,79 +2499,6 @@
           "config_data"
         ]
       },
-      "CreateTestResultBody": {
-        "type": "object",
-        "properties": {
-          "epoch": {
-            "type": "number"
-          },
-          "epoch_uuid": {
-            "type": "string",
-            "minLength": 1
-          },
-          "test_uuid": {
-            "type": "string"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "test_results": {}
-        },
-        "required": [
-          "epoch",
-          "epoch_uuid",
-          "test_results"
-        ]
-      },
-      "CompareTestResultsBody": {
-        "type": "object",
-        "properties": {
-          "testResultIds": {
-            "minItems": 1,
-            "maxItems": 20,
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "testResultIds"
-        ]
-      },
-      "CompareAggregatedTestResultsBody": {
-        "type": "object",
-        "properties": {
-          "trainingIds": {
-            "minItems": 1,
-            "maxItems": 20,
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "trainingIds"
-        ]
-      },
-      "UpdateTestResultBody": {
-        "type": "object",
-        "properties": {
-          "epoch": {
-            "type": "number"
-          },
-          "epoch_uuid": {
-            "type": "string"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "test_results": {}
-        }
-      },
       "CreateVisualizationBody": {
         "type": "object",
         "properties": {
@@ -1849,22 +2928,43 @@
             }
           },
           "storage": {
-            "type": "object",
-            "properties": {
-              "provider": {
-                "type": "string",
-                "enum": [
-                  "visin",
-                  "hf"
-                ]
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "const": "visin"
+                  }
+                },
+                "required": [
+                  "provider"
+                ],
+                "additionalProperties": false
               },
-              "hfNamespace": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+              {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "const": "hf"
+                  },
+                  "settings": {
+                    "type": "object",
+                    "properties": {
+                      "namespace": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "provider"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "provider"
             ]
           }
         },
@@ -2069,22 +3169,43 @@
             ]
           },
           "storage": {
-            "type": "object",
-            "properties": {
-              "provider": {
-                "type": "string",
-                "enum": [
-                  "visin",
-                  "hf"
-                ]
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "const": "visin"
+                  }
+                },
+                "required": [
+                  "provider"
+                ],
+                "additionalProperties": false
               },
-              "hfNamespace": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+              {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "const": "hf"
+                  },
+                  "settings": {
+                    "type": "object",
+                    "properties": {
+                      "namespace": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "provider"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "provider"
             ]
           }
         }
@@ -2117,38 +3238,42 @@
           "owner"
         ]
       },
-      "ArtifactRef": {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "default": "hf",
-            "type": "string",
-            "const": "hf"
-          },
-          "kind": {
-            "default": "model",
-            "type": "string",
-            "const": "model"
-          },
-          "repo": {
-            "type": "string",
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
-          },
-          "revision": {
-            "type": "string"
-          },
-          "path": {
-            "type": "string",
-            "maxLength": 500
-          },
-          "epoch": {
-            "type": "integer",
-            "minimum": 0
+      "ModelLink": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "const": "hf"
+              },
+              "kind": {
+                "default": "model",
+                "type": "string",
+                "const": "model"
+              },
+              "repo": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+              },
+              "revision": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "epoch": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "provider",
+              "repo",
+              "revision"
+            ]
           }
-        },
-        "required": [
-          "repo",
-          "revision"
         ]
       },
       "ModelDemoBody": {
@@ -2169,6 +3294,1010 @@
         "required": [
           "space"
         ]
+      },
+      "VerifyEvaluationBody": {
+        "type": "object",
+        "properties": {
+          "verified": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verified"
+        ]
+      },
+      "EvaluationBody": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "uuid": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "suite": {
+            "type": "string",
+            "pattern": "^([a-z0-9][a-z0-9-]{0,62}[a-z0-9]|[a-z0-9])@([1-9][0-9]{0,5})$"
+          },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "visin"
+                      },
+                      "archiveSha256": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "archiveSha256"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "hf"
+                      },
+                      "repo": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+                      },
+                      "commit": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "repo",
+                      "commit"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "external"
+                      },
+                      "manifestSha256": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "manifestSha256"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "protocolDigest": {
+                "type": "string"
+              },
+              "evaluator": {
+                "type": "object",
+                "properties": {
+                  "package": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  }
+                },
+                "required": [
+                  "package",
+                  "version"
+                ],
+                "additionalProperties": false
+              },
+              "classes": {
+                "type": "object",
+                "properties": {
+                  "scored": {
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "ignored": {
+                    "default": [],
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  }
+                },
+                "required": [
+                  "scored"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "checkpoint": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "hf"
+                  },
+                  "repo": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+                  },
+                  "commit": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "kind",
+                  "repo",
+                  "commit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "local"
+                  },
+                  "sha256": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "kind",
+                  "sha256",
+                  "label"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "trainingUuid": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "epochUuid": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "epoch": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          "status": {
+            "default": "completed",
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed"
+            ]
+          },
+          "results": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "additionalProperties": {}
+          },
+          "sampleCounts": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "provenance": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "additionalProperties": {}
+          },
+          "executedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "supersedesId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
+          }
+        }
+      },
+      "PromoteEvaluationBody": {
+        "type": "object",
+        "properties": {
+          "evaluationId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
+          },
+          "suite": {
+            "type": "string",
+            "pattern": "^([a-z0-9][a-z0-9-]{0,62}[a-z0-9]|[a-z0-9])@([1-9][0-9]{0,5})$"
+          },
+          "checkpoint": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "hf"
+                  },
+                  "repo": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+                  },
+                  "commit": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "kind",
+                  "repo",
+                  "commit"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "local"
+                  },
+                  "sha256": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "kind",
+                  "sha256",
+                  "label"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "sampleCounts": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "required": [
+          "evaluationId",
+          "suite",
+          "checkpoint",
+          "sampleCounts"
+        ]
+      },
+      "HideEvaluationBody": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "CreateSuiteBody": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^[a-z0-9]$"
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 100000
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "projectId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
+          "submissions": {
+            "type": "string",
+            "enum": [
+              "open",
+              "members",
+              "approval"
+            ]
+          },
+          "protocol": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "data": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "visin"
+                      },
+                      "datasetId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "archiveSha256": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "datasetId",
+                      "archiveSha256"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "hf"
+                      },
+                      "repo": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+                      },
+                      "commit": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "repo",
+                      "commit"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "external"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "manifestSha256": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "label",
+                      "manifestSha256"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "split": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "annotationVersion": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "conditions": {
+                "minItems": 1,
+                "maxItems": 50,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "sampleCount": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "sampleCount"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "classes": {
+                "default": [],
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "ignoredClasses": {
+                "default": [],
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              },
+              "metrics": {
+                "minItems": 1,
+                "maxItems": 30,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "max",
+                        "min"
+                      ]
+                    },
+                    "unit": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 20
+                    },
+                    "range": {
+                      "type": "object",
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "min",
+                        "max"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "headline": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "direction"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "aggregation": {
+                "type": "string",
+                "enum": [
+                  "equal-mean-of-conditions",
+                  "sample-weighted-mean",
+                  "pooled"
+                ]
+              },
+              "input": {
+                "default": {},
+                "type": "object",
+                "properties": {
+                  "sensors": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "preprocessing": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "postprocessing": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "calibration": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "additionalProperties": false
+              },
+              "evaluator": {
+                "type": "object",
+                "properties": {
+                  "package": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "minVersion": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  }
+                },
+                "required": [
+                  "package"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "task",
+              "data",
+              "split",
+              "conditions",
+              "metrics",
+              "aggregation",
+              "evaluator"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "slug",
+          "version",
+          "name",
+          "projectId",
+          "protocol"
+        ]
+      },
+      "CheckSuiteBody": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "object",
+            "properties": {
+              "task": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "data": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "visin"
+                      },
+                      "datasetId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "archiveSha256": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "datasetId",
+                      "archiveSha256"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "hf"
+                      },
+                      "repo": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+                      },
+                      "commit": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "repo",
+                      "commit"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "external"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "manifestSha256": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "label",
+                      "manifestSha256"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "split": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "annotationVersion": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "conditions": {
+                "minItems": 1,
+                "maxItems": 50,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "sampleCount": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "sampleCount"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "classes": {
+                "default": [],
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "ignoredClasses": {
+                "default": [],
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              },
+              "metrics": {
+                "minItems": 1,
+                "maxItems": 30,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "max",
+                        "min"
+                      ]
+                    },
+                    "unit": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 20
+                    },
+                    "range": {
+                      "type": "object",
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "min",
+                        "max"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "headline": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "direction"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "aggregation": {
+                "type": "string",
+                "enum": [
+                  "equal-mean-of-conditions",
+                  "sample-weighted-mean",
+                  "pooled"
+                ]
+              },
+              "input": {
+                "default": {},
+                "type": "object",
+                "properties": {
+                  "sensors": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "preprocessing": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "postprocessing": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "calibration": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "additionalProperties": false
+              },
+              "evaluator": {
+                "type": "object",
+                "properties": {
+                  "package": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "minVersion": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  }
+                },
+                "required": [
+                  "package"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "task",
+              "data",
+              "split",
+              "conditions",
+              "metrics",
+              "aggregation",
+              "evaluator"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "protocol"
+        ]
+      },
+      "UpdateSuiteBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
+          "submissions": {
+            "type": "string",
+            "enum": [
+              "open",
+              "members",
+              "approval"
+            ]
+          },
+          "archived": {
+            "type": "boolean"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -4388,119 +6517,6 @@
         }
       }
     },
-    "/epochs/uuid/{epochUuid}/test-results": {
-      "get": {
-        "tags": [
-          "Epochs"
-        ],
-        "summary": "Get test results for an epoch",
-        "operationId": "getTestResultsByEpochUuid",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {}
-        ],
-        "parameters": [
-          {
-            "name": "epochUuid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "exclusiveMinimum": 0
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 1000
-            }
-          },
-          {
-            "name": "sortBy",
-            "in": "query",
-            "schema": {
-              "default": "timestamp",
-              "type": "string",
-              "enum": [
-                "epoch",
-                "createdAt",
-                "updatedAt",
-                "timestamp",
-                "test_uuid"
-              ]
-            }
-          },
-          {
-            "name": "order",
-            "in": "query",
-            "schema": {
-              "default": "desc",
-              "type": "string",
-              "enum": [
-                "asc",
-                "desc"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "testResults": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/TestResult"
-                          }
-                        },
-                        "pagination": {
-                          "$ref": "#/components/schemas/PaginationMeta"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
     "/epochs/training/{trainingId}": {
       "get": {
         "tags": [
@@ -4926,656 +6942,6 @@
                     },
                     "data": {
                       "$ref": "#/components/schemas/Configuration"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/test-results": {
-      "get": {
-        "tags": [
-          "Test Results"
-        ],
-        "summary": "Get all test results",
-        "operationId": "getTestResults",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {}
-        ],
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "exclusiveMinimum": 0
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 1000
-            }
-          },
-          {
-            "name": "sortBy",
-            "in": "query",
-            "schema": {
-              "default": "timestamp",
-              "type": "string",
-              "enum": [
-                "epoch",
-                "createdAt",
-                "updatedAt",
-                "timestamp",
-                "test_uuid"
-              ]
-            }
-          },
-          {
-            "name": "order",
-            "in": "query",
-            "schema": {
-              "default": "desc",
-              "type": "string",
-              "enum": [
-                "asc",
-                "desc"
-              ]
-            }
-          },
-          {
-            "name": "epoch",
-            "in": "query",
-            "schema": {
-              "type": "number"
-            }
-          },
-          {
-            "name": "epoch_uuids",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "training_uuid",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "trainingId",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "pattern": "^[0-9a-fA-F]{24}$"
-            }
-          },
-          {
-            "name": "projectId",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "testResults": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/TestResult"
-                          }
-                        },
-                        "pagination": {
-                          "$ref": "#/components/schemas/PaginationMeta"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Test Results"
-        ],
-        "summary": "Create a new test result",
-        "operationId": "createTestResult",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateTestResultBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Test result created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/TestResult"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/test-results/upload": {
-      "post": {
-        "tags": [
-          "Test Results"
-        ],
-        "summary": "Upload test result from JSON",
-        "operationId": "createTestResultFromJson",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateTestResultBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Test result uploaded successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/TestResult"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/test-results/compare": {
-      "post": {
-        "tags": [
-          "Test Results"
-        ],
-        "summary": "Compare test results",
-        "operationId": "compareTestResults",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {}
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompareTestResultsBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Comparison results",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/test-results/compare/aggregated": {
-      "post": {
-        "tags": [
-          "Test Results"
-        ],
-        "summary": "Compare aggregated test results by training",
-        "operationId": "compareAggregatedTestResultsByTraining",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {}
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompareAggregatedTestResultsBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Aggregated comparison results",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "object"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/test-results/epochs": {
-      "get": {
-        "tags": [
-          "Test Results"
-        ],
-        "summary": "Get test result epochs",
-        "operationId": "getTestResultEpochs",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "type": "integer"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/test-results/{id}": {
-      "get": {
-        "tags": [
-          "Test Results"
-        ],
-        "summary": "Get test result by ID",
-        "operationId": "getTestResultById",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {}
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/TestResult"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Test Results"
-        ],
-        "summary": "Update test result",
-        "operationId": "updateTestResult",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateTestResultBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Test result updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/TestResult"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Test Results"
-        ],
-        "summary": "Delete test result",
-        "operationId": "deleteTestResult",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Test result deleted successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Success"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "default": {
-            "$ref": "#/components/responses/Error"
-          }
-        }
-      }
-    },
-    "/test-results/test/{testUuid}": {
-      "get": {
-        "tags": [
-          "Test Results"
-        ],
-        "summary": "Get test result by test UUID",
-        "operationId": "getTestResultByTestUuid",
-        "security": [
-          {
-            "BearerCredential": []
-          },
-          {
-            "SessionCookie": []
-          },
-          {}
-        ],
-        "parameters": [
-          {
-            "name": "testUuid",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/TestResult"
                     }
                   }
                 }
@@ -7846,7 +9212,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ArtifactRef"
+                "$ref": "#/components/schemas/ModelLink"
               }
             }
           }
@@ -8036,7 +9402,7 @@
         ],
         "summary": "Model registry",
         "operationId": "getModels",
-        "description": "Every Hugging Face Hub model linked to a run the caller may see, one row per link. This is what to open to\nanswer \"which model should I use\": filter by project or dataset, and rank by how well each run did on a\nresult of your choice.\n\nVisin does not know whether a result is better high or low, so `direction` is yours to give. A project-limited\nkey sees only its own project.\n",
+        "description": "Every Hugging Face Hub model linked to a run the caller may see, one row per link. This is what to open to\nanswer \"which model should I use\": filter by project or dataset, and rank by how well each run did on a\nresult of your choice.\n\nWith `metric`, a row carries two scores that are not the same thing. `best` is where the *run* peaked on the\nresult. `checkpoint` is what the epoch the link names (`model.epoch`) reported, so a checkpoint saved at epoch\n12 is not credited with the epoch-40 peak. A link that names its epoch is ranked by `checkpoint` alone, and is\nlisted last when that epoch did not report the result. A link without an epoch is ranked by `best`.\n\nVisin does not know whether a result is better high or low, so `direction` is yours to give. A project-limited\nkey sees only its own project.\n",
         "security": [
           {
             "BearerCredential": []
@@ -8081,7 +9447,7 @@
             "name": "metric",
             "in": "query",
             "required": false,
-            "description": "Rank by the best value each run reached for this result, e.g. `val.mean_iou`. Adds `best` to each row.",
+            "description": "Rank by this result, e.g. `val.mean_iou`. Adds `best` (the run's peak) and, for a link that names its epoch, `checkpoint` (that epoch's value) to each row.",
             "schema": {
               "type": "string",
               "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.@()%+:,= /[\\]-]{0,99}$"
@@ -8105,7 +9471,7 @@
             "name": "sortBy",
             "in": "query",
             "required": false,
-            "description": "`addedAt` (default) or `best`, which needs `metric`. A run with no value for the metric is listed last.",
+            "description": "`addedAt` (default) or `best`, which needs `metric`. Ranks by `checkpoint` for a link that names its epoch, else by `best`. A link with no score is listed last.",
             "schema": {
               "default": "addedAt",
               "type": "string",
@@ -8256,6 +9622,94 @@
                                     "type": "integer"
                                   }
                                 }
+                              },
+                              "checkpoint": {
+                                "type": "object",
+                                "description": "Present when `metric` was given, the link names its epoch (`model.epoch`) and that epoch\nreported the result. The value is that epoch's, not the run's peak.\n",
+                                "required": [
+                                  "metric",
+                                  "direction",
+                                  "value",
+                                  "epoch"
+                                ],
+                                "properties": {
+                                  "metric": {
+                                    "type": "string"
+                                  },
+                                  "direction": {
+                                    "type": "string",
+                                    "enum": [
+                                      "max",
+                                      "min"
+                                    ]
+                                  },
+                                  "value": {
+                                    "type": "number"
+                                  },
+                                  "epoch": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "evaluations": {
+                                "type": "array",
+                                "description": "What this checkpoint scored on suites: its latest eligible evaluation on each suite\nversion, as the suite's headline figure. The checkpoint is matched by its canonical key\n(`hf:<repo>@<revision>:<path>`), never by model name or epoch, so a Hub link and a\nlocal weights digest are different checkpoints. Only evaluations in projects the\ncaller may read count, and a credential limited to one project sees only that\nproject's. Absent when there are none.\n",
+                                "items": {
+                                  "type": "object",
+                                  "required": [
+                                    "evaluationId",
+                                    "suite",
+                                    "headline",
+                                    "evidence",
+                                    "receivedAt"
+                                  ],
+                                  "properties": {
+                                    "evaluationId": {
+                                      "type": "string"
+                                    },
+                                    "suite": {
+                                      "type": "object",
+                                      "properties": {
+                                        "slug": {
+                                          "type": "string"
+                                        },
+                                        "version": {
+                                          "type": "integer"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "headline": {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "type": "number"
+                                        },
+                                        "unit": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "evidence": {
+                                      "type": "string",
+                                      "enum": [
+                                        "observed",
+                                        "reported",
+                                        "attested",
+                                        "none"
+                                      ]
+                                    },
+                                    "receivedAt": {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    }
+                                  }
+                                }
                               }
                             }
                           }
@@ -8275,6 +9729,2417 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/leaderboard": {
+      "get": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Rank readable recorded results, including migrated evaluations",
+        "operationId": "getRecordedLeaderboard",
+        "description": "Includes completed recorded scores without a suite. Uses normal evaluation access permissions, so private\nprojects remain private. Selects the latest completed live result per project, suite and checkpoint or run,\nthen filters verification and ranks the selected metric. Different data remains labelled by project and run.\nVerification is a label, not a condition for inclusion. Scores with no value for the selected metric are omitted.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "verification",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "type": "string",
+              "enum": [
+                "all",
+                "verified",
+                "unverified"
+              ]
+            }
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 700
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "max",
+                "min"
+              ]
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recorded scores ranked and paginated after verification filtering",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "metrics",
+                        "direction",
+                        "verification",
+                        "entries",
+                        "pagination"
+                      ],
+                      "properties": {
+                        "metric": {
+                          "type": "string"
+                        },
+                        "metrics": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "direction": {
+                          "type": "string",
+                          "enum": [
+                            "max",
+                            "min"
+                          ]
+                        },
+                        "verification": {
+                          "type": "string",
+                          "enum": [
+                            "all",
+                            "verified",
+                            "unverified"
+                          ]
+                        },
+                        "entries": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "rank",
+                              "evaluationId",
+                              "project",
+                              "value",
+                              "verified",
+                              "receivedAt"
+                            ],
+                            "properties": {
+                              "rank": {
+                                "type": "integer"
+                              },
+                              "evaluationId": {
+                                "type": "string"
+                              },
+                              "checkpoint": {
+                                "$ref": "#/components/schemas/Checkpoint"
+                              },
+                              "project": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "slug": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "run": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "dataset": {
+                                "type": "string"
+                              },
+                              "epoch": {
+                                "type": "integer"
+                              },
+                              "value": {
+                                "type": "number"
+                              },
+                              "verified": {
+                                "type": "boolean"
+                              },
+                              "receivedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            }
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "integer"
+                            },
+                            "limit": {
+                              "type": "integer"
+                            },
+                            "total": {
+                              "type": "integer"
+                            },
+                            "pages": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/{id}/verification": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Set or remove verification on a result",
+        "operationId": "verifyEvaluation",
+        "description": "A manager of the result's project, or an automated job using their project-scoped API key, sets verification.\nTrue stamps `verifiedAt` and `verifiedBy` on the server; false clears both. Repeating the same action is harmless.\nVerification does not change the score, protocol validation or publication. Public readers see the timestamp,\nbut never the account id. Needs `manage` on the project.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEvaluationBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current verification state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "verified"
+                      ],
+                      "properties": {
+                        "verified": {
+                          "type": "boolean"
+                        },
+                        "verifiedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "verifiedBy": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations": {
+      "get": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "List evaluations",
+        "operationId": "getEvaluations",
+        "description": "Evaluations in the projects the caller may read, newest first. In a project the caller is part of, all of them; in a\npublic project they are not part of, only the published ones, without who recorded them. Result blobs and\nprovenance are left out; open one to read them, or ask for `include=results` on a small page.\n\nWhat a run reported is here too: a result recorded without a suite (a test), and one scored on a suite, both\ncarry the run (`run`) and epoch (`epochInfo`) they came from when those are still live. Filter by run with\n`trainingId` or `trainingUuid`, and by epoch with `epoch` or `epochUuids`.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "description": "A project id or slug.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "suite",
+            "in": "query",
+            "required": false,
+            "description": "Only evaluations on this suite version, as `slug@version`.",
+            "schema": {
+              "type": "string",
+              "pattern": "^([a-z0-9][a-z0-9-]{0,62}[a-z0-9]|[a-z0-9])@([1-9][0-9]{0,5})$"
+            }
+          },
+          {
+            "name": "checkpointKey",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 700
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "description": "Only evaluations in this validation state.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "eligible",
+                "incomplete",
+                "incompatible",
+                "exploratory",
+                "legacy-unverified"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "completed",
+                "failed"
+              ]
+            }
+          },
+          {
+            "name": "trainingId",
+            "in": "query",
+            "required": false,
+            "description": "Only what came from this run, by its id.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          {
+            "name": "trainingUuid",
+            "in": "query",
+            "required": false,
+            "description": "Only what came from the run with this uuid. A run that is gone or not visible has nothing to list.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "epoch",
+            "in": "query",
+            "required": false,
+            "description": "Only what was recorded at this epoch number.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "epochUuids",
+            "in": "query",
+            "required": false,
+            "description": "Only what came from any of these epochs, as comma separated epoch uuids.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "description": "Newest first by default; `executedAt` is when the writer says it ran, `epoch` the epoch it came from.",
+            "schema": {
+              "default": "receivedAt",
+              "type": "string",
+              "enum": [
+                "receivedAt",
+                "executedAt",
+                "epoch"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "description": "`results` carries each evaluation's results, which a list leaves out. Use it with a small page.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "results"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of evaluations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "evaluations",
+                        "pagination"
+                      ],
+                      "properties": {
+                        "evaluations": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Evaluation"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Record an evaluation",
+        "operationId": "createEvaluation",
+        "description": "Record one checkpoint's results, optionally against a suite version. Name the project, or leave it out and name\nthe epoch the result came from (`source.epochUuid`): a run's pipeline knows its epoch, and the epoch's project is\nthe run's. A result recorded without a suite (a test a run reports) is stored and shown but not ranked. The\nserver judges the result and stores\nthe verdict in `validation`: a well-formed result that cannot be ranked is kept, with the reasons, rather than\nrefused. A malformed body, a credential in `provenance`, an unknown suite or an archived one is refused.\n\nSend your own `uuid`. The same result again answers `200` with the stored evaluation, so a retry after a lost\nresponse is safe; a different result under that uuid is `409`. To correct a result, send a new one with\n`supersedesId`, of the same suite and the same checkpoint: the corrected result is then replaced by the\ncorrection and leaves the ranking even when the correction cannot be ranked. One live correction at a time can\nreplace a result (`409` otherwise); trashing the correction gives the original its place back. Results never\nchange.\n\nA Hub checkpoint needs a project whose storage is Hugging Face. Needs `contribute` on the project.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "This result was already recorded under this uuid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Evaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Evaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/promote": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Rank a result you already have",
+        "operationId": "promoteEvaluation",
+        "description": "Copy a result recorded without a suite (a test a run reported) onto one, so it can be ranked without being run\nagain. The evaluation it is copied from is not changed: its results are copied as they are, and the new evaluation\nrecords the run, epoch and evaluation it came from, with provenance saying it was promoted.\n\nA result recorded without a suite carries no checkpoint identity and no sample counts, so you supply both. What you\nsupply is yours to vouch for. The verdict is computed like any other, and a result that cannot be ranked is stored\nwith its reasons.\n\nPromoting the same evaluation onto the same suite again returns the first (`200`). A different checkpoint, or\ndifferent sample counts, for it is `409` until that evaluation is trashed; a failed evaluation, or one already\njudged on that suite, is `409` too. Needs `manage` on the evaluation's project.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteEvaluationBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "This evaluation was already promoted onto this suite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Evaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Promoted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Evaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/{id}/publish": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Publish an evaluation to its public leaderboard",
+        "operationId": "publishEvaluation",
+        "description": "Put one ranked result on the public leaderboard of its suite. Publishing is a decision about a single result: a\npublic project or suite does not publish anything by existing.\n\nOnly a ranked, completed result can be published, in a **public project** and on a **public suite**; otherwise\n`409` says which. Only the checkpoint's **latest** ranked result on the suite can be published, because a\nleaderboard shows each checkpoint by its latest result: publishing an earlier, better one would let the best of\nseveral attempts stand in for the model, so it is `409`. A result replaced by a correction cannot be published\neither. Recording a newer ranked result of a checkpoint withdraws its earlier published ones, and the newer one\nis published on its own. Needs `manage` on the project. The public views re-check all of it on every read, so\nwithdrawing, trashing, or making the project or suite private removes the result at once. Publishing again is\nharmless. The change is recorded in the project's history.\n\nWhat becomes public is limited to a fixed set of fields. See `GET /public/evaluations/{id}`.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The evaluation, with `publishedAt` set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Evaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/{id}/withdraw": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Take an evaluation off the public leaderboard",
+        "operationId": "withdrawEvaluation",
+        "description": "Removes it from every public list and detail at once. Withdrawing one that is not published changes nothing. Needs `manage` on the project.",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The evaluation, without `publishedAt`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Evaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/{id}/approve": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Approve a result submitted to a suite",
+        "operationId": "approveEvaluation",
+        "description": "Compatibility action for a suite manager to verify a published result. Sets the same `verifiedAt` and\n`verifiedBy` fields as the verification action; it does not control visibility. Needs `manage` on the suite's\nproject. An unpublished result is `409`; an already verified result answers `200`.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "approved": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/{id}/hide": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Hide a published result from a suite's leaderboard",
+        "operationId": "hideEvaluation",
+        "description": "A manager of the suite's own project can take any published result off the suite's public leaderboard, whichever\nproject it is from. The reason is kept with it, and the change is recorded. Its submitter can still see it and\nwithdraw it, but cannot publish it again until a manager shows it. Needs `manage` on the suite's project.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HideEvaluationBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hidden (also when it already was)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "hidden": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/{id}/unhide": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Show a hidden result on its suite's leaderboard again",
+        "operationId": "unhideEvaluation",
+        "description": "Needs `manage` on the suite's project. Its publisher's decision to publish it is still in force, so it stands on the board again. Unhiding one that is not hidden changes nothing.",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shown again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "hidden": {
+                          "type": "boolean",
+                          "const": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/public/leaderboards": {
+      "get": {
+        "tags": [
+          "Public leaderboards"
+        ],
+        "summary": "List the public leaderboards",
+        "operationId": "getPublicLeaderboards",
+        "description": "The suites that have at least one published, ranked result, newest activity first. Anonymous, and the same for\neveryone: a credential in the request is not read. Never cached (`Cache-Control: no-store`), so a withdrawal is\nnot left standing anywhere, and rate limited by client address.\n",
+        "security": [
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page of selected ranked summaries (default 1).",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Summaries per page (default and maximum 100).",
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The leaderboards",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "pagination": {
+                          "$ref": "#/components/schemas/Pagination"
+                        },
+                        "leaderboards": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              {
+                                "$ref": "#/components/schemas/PublicSuite"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "checkpoints": {
+                                    "type": "integer",
+                                    "description": "How many checkpoints are ranked."
+                                  },
+                                  "lastPublishedAt": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/public/leaderboards/{slug}/{version}": {
+      "get": {
+        "tags": [
+          "Public leaderboards"
+        ],
+        "summary": "Get a public leaderboard",
+        "operationId": "getPublicLeaderboard",
+        "description": "The ranking of one suite version over its published results. One row per checkpoint and project, from the\ncheckpoint's latest ranked attempt, never its best, and only when that very attempt is published: a newer ranked\nattempt that is not published takes the row off the board until it is. Another project's result for the same\ncheckpoint is its own row. Ties share a rank; direction comes from the suite. `attempts` counts every attempt\nthe project recorded, published or not. `evidence` says the results are the submitters' own claims.\n\nA suite that is private, absent or in a trashed project is `404`. Anonymous, never cached, rate limited.\nSelection, attempt counts and ranks use the complete authorized pool before paging the summaries.\nRanks are global within that pool, including ties across page boundaries.\n",
+        "security": [
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^([a-z0-9][a-z0-9-]{0,62}[a-z0-9]|[a-z0-9])$"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "A version number. `latest` is not accepted, so a link keeps meaning one protocol.",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page of selected ranked summaries (default 1).",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Summaries per page (default and maximum 100).",
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "evidence",
+            "in": "query",
+            "description": "`observed` ranks only the results whose evaluator reported what it observed. The pool, its counts and the\nranks are then those of the observed results alone; promoted results are left out.\n",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "observed"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The ranking",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PublicLeaderboard"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/public/evaluations/{id}": {
+      "get": {
+        "tags": [
+          "Public leaderboards"
+        ],
+        "summary": "Get the evidence behind a public entry",
+        "operationId": "getPublicEvaluation",
+        "description": "The scores, sample counts, checkpoint and evaluator of one published result, and nothing else: no commands,\nhosts, environment, raw configuration, run or user ids, or private dataset names. One that is not published, or\nwhose project or suite is no longer public, is `404`. Published evidence remains addressable even when\nit is superseded in the ranking or falls outside the current leaderboard page.\n",
+        "security": [
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The published evidence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PublicEvaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/public/badges/{slug}/{version}/{checkpointKey}.svg": {
+      "get": {
+        "tags": [
+          "Public leaderboards"
+        ],
+        "summary": "A badge for a published checkpoint",
+        "operationId": "getPublicBadge",
+        "description": "A small SVG, such as `road-test v1 | mIoU 0.7351 · rank 2/9`, for one checkpoint published to one public\nsuite version, to embed in a README or a model card. It says nothing the public leaderboard page does not,\nand it is `404` for anything that is not currently published there (a withdrawn, trashed or never published\nresult, a private suite or project), whatever the reason. Anonymous, never cached, rate limited.\n\nTwo projects can each publish the same checkpoint, so the badge names the project whose row it shows\n(`project`, its slug or id); a badge for another project's row is a different badge.\n\n`checkpointKey` is the canonical key, URL-encoded because it holds `:`, `@` and `/`:\n`hf:<repo>@<commit>:<path>` for a Hub checkpoint (the repo in lower case, the path empty when there is none) or\n`sha256:<digest>` for weights held elsewhere.\n",
+        "security": [
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^([a-z0-9][a-z0-9-]{0,62}[a-z0-9]|[a-z0-9])$"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "checkpointKey",
+            "in": "path",
+            "required": true,
+            "description": "The checkpoint's canonical key, URL-encoded.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 700
+            }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "required": true,
+            "description": "The project whose published row the badge shows, by slug or id.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The badge",
+            "content": {
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/check": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Check a result without recording it",
+        "operationId": "checkEvaluation",
+        "description": "Judge a result exactly as recording it would, and store nothing. Use it before an expensive upload to learn why\na result would be unranked. It needs the same access as recording, and the same readable suite.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The verdict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "validation"
+                      ],
+                      "properties": {
+                        "validation": {
+                          "$ref": "#/components/schemas/ValidationReport"
+                        },
+                        "checkpointKey": {
+                          "type": "string"
+                        },
+                        "suite": {
+                          "type": "object",
+                          "properties": {
+                            "slug": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "digest": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/uuid/{uuid}": {
+      "get": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Get an evaluation by your own uuid",
+        "operationId": "getEvaluationByUuid",
+        "description": "For recovering after a lost response. A uuid is unique within a project, so the project is part of the address.",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": true,
+            "description": "A project id or slug.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The evaluation, with its results and provenance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Evaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/{id}": {
+      "get": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Get an evaluation",
+        "operationId": "getEvaluation",
+        "description": "One that does not exist, is in the trash, or is in a project the caller may not read answers `404`.",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The evaluation, with its results and provenance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Evaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Move an evaluation to the trash",
+        "operationId": "trashEvaluation",
+        "description": "A trashed evaluation leaves every list and leaderboard. Needs `manage`, or `contribute` for one the caller\nrecorded. Bring it back with `POST /evaluations/{id}/restore`.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The trashed evaluation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Evaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/evaluations/{id}/restore": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Restore a trashed evaluation",
+        "operationId": "restoreEvaluation",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The restored evaluation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Evaluation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/suites": {
+      "get": {
+        "tags": [
+          "Suites"
+        ],
+        "summary": "List suites",
+        "operationId": "getSuites",
+        "description": "The suites the caller may read: those of projects they can read, and public suites of live projects. Newest\nversion first within a name. Archived suites are left out unless `includeArchived` is `true`.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000
+            }
+          },
+          {
+            "name": "slug",
+            "in": "query",
+            "required": false,
+            "description": "Only the versions of this suite.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "description": "A project id or slug.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "false",
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "description": "Version order within a name.",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of suites",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "suites",
+                        "pagination"
+                      ],
+                      "properties": {
+                        "suites": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Suite"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/PaginationMeta"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Suites"
+        ],
+        "summary": "Publish a suite version",
+        "operationId": "createSuite",
+        "description": "Publish a scoring protocol. A published version never changes, so a score on `slug@version` always means\nthe same thing.\n\nPublishing the same protocol again returns the stored suite with `200`, so a pipeline's setup script can\nrun every time. A different protocol under a version that exists is `409`: publish it as the next version.\nA `slug` is one name per deployment. Ownership is reserved atomically before inserting a version, so\nconcurrent publishes by different projects return `409` for the losing project even at different versions.\nThe reservation survives insertion failures and project purges; only the original project may retry a failed\ninsertion. Names cannot be reassigned. Existing suites acquire reservations lazily; conflicting historical\nownership returns `409` and requires operator resolution without rewriting published protocols.\n\nCreating a private version needs `contribute` on the project. Creating a public version needs `manage`,\nwhether `visibility: public` is explicit or inherited. The first version defaults to private; a new version\ninherits the highest existing version's visibility unless specified. A contributor can explicitly choose\n`visibility: private`; inherited public visibility otherwise returns `403`.\n\nExisting-version retries return the stored metadata, including visibility, without changing it or recording\nanother disclosure event. Initial public creation is recorded as a visibility event.\nA key limited to one project can publish to that project only. With write scope, it may create a public suite\nthere when its actor has `manage`; the key itself grants no extra sharing permission.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSuiteBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "This protocol was already published under this version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Suite"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Published",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Suite"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/suites/check": {
+      "post": {
+        "tags": [
+          "Suites"
+        ],
+        "summary": "Compute the digest of a protocol without publishing it",
+        "operationId": "checkSuite",
+        "description": "The digest the server would store for this protocol, and the protocol with its defaults filled in. Nothing is\nstored. An evaluator calls this with the protocol file it is about to run and sends the digest back as\n`evidence.protocolDigest`, so the digest comes from the file actually used. The server alone canonicalizes\n(defaults filled in, keys sorted), so clients never reimplement it.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckSuiteBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The digest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "digest",
+                        "protocol"
+                      ],
+                      "properties": {
+                        "digest": {
+                          "type": "string",
+                          "description": "SHA-256 of the normalized protocol."
+                        },
+                        "protocol": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "description": "The protocol with defaults filled in."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/suites/{slug}/{version}/submissions": {
+      "get": {
+        "tags": [
+          "Suites"
+        ],
+        "summary": "Unverified and hidden results on a suite",
+        "operationId": "getSuiteSubmissions",
+        "description": "For a manager of the suite's own project: published results without verification, and the ones hidden from\nits leaderboard, each with the checkpoint, the\nsubmitting project's name and the headline score, and nothing else of that project's records. Needs `manage` on the\nsuite's project; a suite the caller cannot read is `404`.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^[a-z0-9]$"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The two lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "suite": {
+                          "type": "object",
+                          "properties": {
+                            "slug": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "submissions": {
+                              "type": "string",
+                              "enum": [
+                                "open",
+                                "members",
+                                "approval"
+                              ]
+                            }
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Submission"
+                          }
+                        },
+                        "hidden": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Submission"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/suites/{slug}/{version}": {
+      "get": {
+        "tags": [
+          "Suites"
+        ],
+        "summary": "Get a suite version",
+        "operationId": "getSuite",
+        "description": "A suite that does not exist and one the caller may not read both answer `404`.",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^[a-z0-9]$"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "A version number, or `latest` for the highest one that is not archived.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "latest"
+                },
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The suite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Suite"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Suites"
+        ],
+        "summary": "Rename, reword, share or archive a suite",
+        "operationId": "updateSuite",
+        "description": "The protocol cannot change. Archiving stops new evaluations and keeps every result readable. Needs `manage`\non the project, or `contribute` on a suite the caller published; changing `visibility` or `submissions` needs\n`manage`. Making a suite private ends the publication of every result on it, so making it public again does not\npublish them afresh; changing `submissions` leaves what is published as it is.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^[a-z0-9]$"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSuiteBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated suite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Suite"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/suites/{slug}/{version}/leaderboard": {
+      "get": {
+        "tags": [
+          "Suites"
+        ],
+        "summary": "Rank the evaluations of a suite version",
+        "operationId": "getSuiteLeaderboard",
+        "description": "One row per checkpoint: its latest eligible completed evaluation by server arrival time, never its best\nrepeat. Direction comes from the suite. Ties share a rank. Checkpoints with attempts but none eligible are\nlisted under `unranked` with their reasons.\n\nThe pool is the evaluations of this suite version in projects the caller may read, and `scope` says how many\nthere were, so a rank is a position within that pool and not among everything ever run.\nSelection, attempt counts and ranks use the complete authorized pool before paging the summaries.\nRanks are global within that pool, including ties across page boundaries.\n",
+        "security": [
+          {
+            "BearerCredential": []
+          },
+          {
+            "SessionCookie": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$|^[a-z0-9]$"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "A version number, or `latest` for the highest one that is not archived.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "latest"
+                },
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page of selected ranked summaries (default 1).",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Summaries per page (default and maximum 100).",
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "evidence",
+            "in": "query",
+            "description": "`observed` ranks only the results whose evaluator reported what it observed. The pool, its counts and the\nranks are then those of the observed results alone; promoted results are left out.\n",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "observed"
+              ]
+            }
+          },
+          {
+            "name": "unrankedPage",
+            "in": "query",
+            "description": "Independent page of unranked checkpoints (default 1).",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The ranking",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Leaderboard"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"

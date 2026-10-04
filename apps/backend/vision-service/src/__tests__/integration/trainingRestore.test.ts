@@ -9,7 +9,8 @@ import { getUserGroups } from '../../clients/projectGroupsClient';
 import { identityContextMiddleware } from '../../middleware/requestIdentityContext';
 import Epoch from '../../models/Epoch';
 import Project from '../../models/Project';
-import TestResult from '../../models/TestResult';
+import Evaluation from '../../models/Evaluation';
+import { recordTest } from '../fixtures/recordedTest';
 import Training from '../../models/Training';
 import epochRoutes from '../../routes/epochRoutes';
 import trainingRoutes from '../../routes/trainingRoutes';
@@ -59,8 +60,8 @@ describe('restoring a deleted training with in-memory MongoDB', () => {
       await Epoch.create({
         timestamp: new Date(), trainingId, training_uuid: 'long-run', epoch_uuid: `epoch-${epoch}`, epoch, results: { loss: 1 / epoch }
       });
-      await TestResult.create({
-        timestamp: new Date(), epoch, epoch_uuid: `epoch-${epoch}`, test_uuid: `test-${epoch}`, test_results: { day: { overall: { score: epoch } } }
+      await recordTest({
+        projectId, trainingId, timestamp: new Date(), epoch, epoch_uuid: `epoch-${epoch}`, test_uuid: `test-${epoch}`, test_results: { day: { overall: { score: epoch } } }
       });
     }
   });
@@ -85,7 +86,7 @@ describe('restoring a deleted training with in-memory MongoDB', () => {
     ((await request('trainings/deleted', 'GET', userId)).body.data.trainings as Array<{ _id: string }>).map(row => row._id);
   const live = async () => ({
     epochs: (await Epoch.find({ trainingId, deletedAt: null })).map(row => row.epoch_uuid).sort(),
-    tests: (await TestResult.find({ deletedAt: null })).map(row => row.test_uuid).sort()
+    tests: (await Evaluation.find({ deletedAt: null })).map(row => row.uuid).sort()
   });
 
   it('brings back what the training delete removed, and not an epoch deleted before it', async () => {
@@ -109,6 +110,15 @@ describe('restoring a deleted training with in-memory MongoDB', () => {
     expect((await request(`trainings/${trainingId}`)).status).toBe(200);
     expect(await deletedIds()).toEqual([]);
     expect((await request(`trainings/${trainingId}/restore`, 'POST')).status).toBe(404);
+  });
+
+  it('leaves a result judged on a suite where it is when its run goes to the trash, and brings back only what had no suite', async () => {
+    const project = (await Training.findById(trainingId))!.projectId!;
+    await recordTest({ projectId: project, trainingId, epoch: 1, epoch_uuid: 'epoch-1', test_uuid: 'ranked', test_results: {}, suite: { id: 's', slug: 'road-test', version: 1, digest: 'd' } });
+    expect((await request(`trainings/${trainingId}`, 'DELETE')).status).toBe(200);
+    expect(await live()).toEqual({ epochs: [], tests: ['ranked'] });
+    expect((await request(`trainings/${trainingId}/restore`, 'POST')).status).toBe(200);
+    expect(await live()).toEqual({ epochs: ['epoch-1', 'epoch-2'], tests: ['ranked', 'test-1', 'test-2'] });
   });
 
   it("offers a group member their own runs back, and an admin everyone's", async () => {

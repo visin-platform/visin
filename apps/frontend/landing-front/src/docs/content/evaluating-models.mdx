@@ -1,0 +1,273 @@
+An **evaluation** is one checkpoint scored on one [suite](/docs/suites) version. You send the results your pipeline
+already computes; Visin checks them against the suite, keeps them, and ranks the ones that can be compared. This
+page goes from a suite to a ranking, in about ten minutes.
+
+The examples use `VISIN_URL` and `HEADERS` as in the [quickstart](/docs/quickstart), and the `road-test` suite from
+[Evaluation suites](/docs/suites), with conditions `day` and `night`.
+
+## What a result looks like
+
+The `results` you send are the ones your evaluator produced: a block per condition, each with an `overall` of
+metrics. The suite names which metrics count; anything else you include is kept and shown.
+
+```json
+{
+  "day":   { "overall": { "mIoU_foreground": 0.78, "mean_ap": 0.71 }, "vehicle": { "iou": 0.84 } },
+  "night": { "overall": { "mIoU_foreground": 0.69, "mean_ap": 0.62 }, "vehicle": { "iou": 0.73 } }
+}
+```
+
+Alongside them send how many samples each condition scored (`sampleCounts`) and which checkpoint it was.
+
+## Say which checkpoint it was
+
+A ranking is only as good as knowing which model each row is. Name the bytes you scored:
+
+| Kind    | Send                                                              | When                                                                                              |
+| ------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `hf`    | `{ "kind": "hf", "repo": "acme/clftv2", "commit": "<40 hex>" }`   | The model is on the Hugging Face Hub. Always a full commit, never a branch. The project's storage must be Hugging Face. |
+| `local` | `{ "kind": "local", "sha256": "<digest>", "label": "clftv2-e40" }` | The weights are on your own machine. The digest of the file you loaded; the label is for people.  |
+
+For a local checkpoint, hash the file you actually loaded. Visin stores the digest and the label, never the path
+or the file:
+
+```python
+import hashlib
+
+def sha256_of(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as file:
+        for block in iter(lambda: file.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+checkpoint = {"kind": "local", "sha256": sha256_of("checkpoints/epoch_40.pth"), "label": "clftv2-epoch-40"}
+```
+
+Two evaluations with the same checkpoint are the same model, however the file is named or moved.
+
+## Mark it as observed
+
+You can skip this section: a result with a checkpoint, sample counts and scores is ranked. Do it when you want your
+row labelled **observed** instead of **reported**, which is what a reader comparing models will trust more. You
+say what you actually ran, in `evidence`, and Visin compares each part with the suite:
+
+| Field                  | Send                                                                                         | Compared with                                  |
+| ---------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `evidence.data`        | The data you read, as the suite pins it: `{ "kind": "external", "manifestSha256": "…" }`, `{ "kind": "hf", "repo": "…", "commit": "…" }` or `{ "kind": "visin", "archiveSha256": "…" }`. | The suite's `data`.                    |
+| `evidence.protocolDigest` | The digest of the protocol file you ran.                                                  | The suite's `digest`.                          |
+| `evidence.evaluator`   | `{ "package": "visin-fusion", "version": "1.4.2" }`                                          | The suite's `evaluator` (package and `minVersion`). |
+| `evidence.classes`     | Optional. `{ "scored": ["car", "tree"], "ignored": ["void"] }`                               | The suite's `classes` and `ignoredClasses`.    |
+
+Send all of the first three and the result is `observed`. Send some or none and it is `reported`, with a warning
+naming what is missing. Whatever you do send must match the suite, or the result is `incompatible`: equal sample
+counts on other data do not pass.
+
+Do not type the protocol digest: Visin computes it, with defaults filled in and keys sorted, and `POST
+/api/suites/check` gives it to you for the protocol file you are about to run, without publishing anything:
+
+```python
+protocol = suite["protocol"]   # the file your evaluator loaded
+digest = requests.post(f"{VISIN_URL}/api/suites/check", headers=HEADERS, json={"protocol": protocol}).json()["data"]["digest"]
+
+evidence = {
+    "data": {"kind": "external", "manifestSha256": manifest_sha256},
+    "protocolDigest": digest,
+    "evaluator": {"package": "visin-fusion", "version": "1.4.2"},
+}
+```
+
+Add `"evidence": evidence` to the body below. This is what you reported about the run, compared with the suite. It is
+not proof: Visin cannot see which bytes you read.
+
+## Check before you upload
+
+`POST /api/evaluations/check` judges a result exactly as recording it would, and stores nothing. Run it first, so
+you learn why a result would be unranked before you spend a GPU-day on a long run.
+
+```python
+body = {
+    "projectId": "road",
+    "suite": "road-test@1",
+    "checkpoint": checkpoint,
+    "results": results,
+    "sampleCounts": {"day": 1200, "night": 800},
+}
+verdict = requests.post(f"{VISIN_URL}/api/evaluations/check", headers=HEADERS, json=body).json()["data"]
+print(verdict["validation"]["state"], verdict["validation"]["reasons"])
+```
+
+```text
+eligible []
+```
+
+When something is wrong you get a state and a list of reasons, each a stable code. [Why is my result
+unranked?](/docs/eligibility) lists every one and how to fix it.
+
+## Record it
+
+The same body, to `POST /api/evaluations`, with your own `uuid`:
+
+<CodeTabs>
+
+```python
+import uuid
+
+body["uuid"] = str(uuid.uuid4())   # keep it: it is how a retry is recognised
+response = requests.post(f"{VISIN_URL}/api/evaluations", headers=HEADERS, json=body)
+response.raise_for_status()
+evaluation = response.json()["data"]
+print(response.status_code, evaluation["validation"]["state"])
+```
+
+```bash
+curl -sS -X POST "$VISIN_URL/api/evaluations" \
+  -H "Authorization: Bearer $VISIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @evaluation.json
+```
+
+</CodeTabs>
+
+The answer is `201` with the evaluation and its verdict in `validation`. A result that is complete and on the
+suite's protocol is `eligible` and carries the `scores` the ranking will use. A result that cannot be ranked is
+**kept anyway**, with its reasons, so nothing you sent is lost and you can see what to fix.
+
+<Callout kind="note" title="Which project">
+  `projectId` is the project the results belong to, by id or slug. Contribute access to it is needed. The suite
+  can be from the same project or a public one from another.
+</Callout>
+
+## Rank results you already have
+
+A result you recorded without a suite (a test a run reported, which is an evaluation with no suite) can be ranked
+without running anything again. **Promote** one onto a suite:
+
+```python
+response = requests.post(
+    f"{VISIN_URL}/api/evaluations/promote",
+    headers=HEADERS,
+    json={
+        "evaluationId": "6ab5932a0e9a6b7570e30e2e",
+        "suite": "road-test@1",
+        "checkpoint": {"kind": "local", "sha256": sha256_of("checkpoints/epoch_40.pth"), "label": "clftv2-epoch-40"},
+        "sampleCounts": {"day": 1200, "night": 800},
+    },
+)
+```
+
+Promoting **copies** the result: the original is never changed, its numbers are copied as they are, and the new
+evaluation records which run, epoch and evaluation it came from, with provenance saying it was promoted. A result
+recorded without a suite never said which checkpoint it was or how many samples each condition scored, so you supply both, and
+what you supply is yours to vouch for. Visin judges the copy like any other, and says in `validation` if it still
+cannot be ranked. A promoted result is **attested**, not observed: the evaluation records who promoted it, when, and
+the checkpoint and counts they supplied, and no evidence about the data, protocol or evaluator is invented for it.
+The app and the public pages mark it.
+
+Promoting the same evaluation onto the same suite again with the same checkpoint and counts returns the first
+evaluation. Different counts or a different checkpoint are `409`: if you gave the wrong ones, move that evaluation to
+the trash and promote again. Promoting needs **manage** access to the project. In the app, open **Test Results** and choose **Rank on a suite** on a row. A failed evaluation cannot be promoted, and
+neither can one that was already judged on that suite.
+
+## Retries and corrections
+
+Send the same `uuid` with the same result again and the answer is `200` with the stored evaluation (the provenance
+is not part of the comparison, so running the same evaluation again on another machine is a retry too), so a retry
+after a lost response is safe, even when two arrive at once. A **different** result under a uuid that exists is
+`409`: a recorded result never changes.
+
+To correct a result, send a new one and name the one it replaces:
+
+```json
+{ "uuid": "…", "supersedesId": "6ab5932a0e9a6b7570e30e2e", "projectId": "road", "…": "…" }
+```
+
+A correction must be on the **same suite** and the **same checkpoint** as the result it replaces (another model's result
+is a different result, not a correction). Once it is recorded, the corrected result leaves the ranking even when the
+correction cannot be ranked yet, so a stale number never stands in for a failed re-run; it stays stored and counted as an
+attempt. One live correction replaces a result at a time (`409` otherwise), and trashing the correction gives the
+original its place back.
+
+If you lost the response and don't know whether the first attempt arrived, look it up by your own uuid:
+`GET /api/evaluations/uuid/<uuid>?projectId=road`.
+
+## Record how it was run
+
+`provenance` is free-form and is stored as sent. Put in what a reader needs to trust or repeat the number: the
+evaluator and its version, the config, the seeds, the container or environment.
+
+```json
+{
+  "provenance": {
+    "evaluator": { "package": "visin-fusion", "version": "1.4.2", "commit": "9d1c2ab" },
+    "seeds": [42],
+    "environment": { "container": "registry.example.com/visin-fusion@sha256:…" }
+  }
+}
+```
+
+Anything under a key that looks like a credential (`token`, `secret`, `password`, `api_key`, `authorization`) is
+refused with the path named, so a stray environment dump cannot leak a key. Provenance is **reported by whoever
+submitted the result**. Visin checks that results fit the suite; it cannot prove the checkpoint or the data you
+named were the ones used, and it does not say a result is verified.
+
+## Read the ranking
+
+In the app, the **Suites** page opens a suite version and shows this ranking, with the reasons for anything that is
+not ranked; an evaluation's own page shows its verdict, the scores that are ranked and the evidence behind them.
+The API gives the same thing. `GET /api/suites/road-test/1/leaderboard` ranks the suite version:
+
+```json
+{
+  "suite": { "slug": "road-test", "version": 1, "headline": { "key": "mIoU_foreground", "direction": "max" } },
+  "selection": "latest-eligible-completed",
+  "scope": { "candidates": 5, "truncated": false },
+  "entries": [
+    {
+      "rank": 1, "uuid": "…", "checkpoint": { "kind": "local", "label": "clftv2-epoch-40", "sha256": "…" },
+      "attempts": 2,
+      "summary": {
+        "headline": { "key": "mIoU_foreground", "value": 0.735, "direction": "max" },
+        "worst": { "condition": "night", "value": 0.69 },
+        "gap": 0.045
+      }
+    }
+  ],
+  "unranked": [{ "checkpointKey": "sha256:…", "state": "incomplete", "reasons": [{ "code": "missing-condition", "detail": "night" }] }]
+}
+```
+
+- **One row per checkpoint**, from its **latest eligible completed** evaluation by the time Visin received it. It is
+  never the best of several runs: a checkpoint cannot be re-run until it looks good. `attempts` says how many were
+  recorded, and all of them stay in `GET /api/evaluations`.
+- **Direction comes from the suite.** `max` ranks the highest first; `min`, for a loss or a latency, the lowest.
+- **`worst` and `gap` say where a model is weak.** `worst` is the condition the headline is worst on, and `gap` is
+  how far it falls below the overall figure. A model can lead overall and still collapse in one condition.
+- **Ties share a rank**, and the next one skips: 1, 2, 2, 4.
+- **`scope`** is the pool that was ranked: the evaluations of this suite version in projects *you* can read. A rank
+  is a position within that pool, not among everything ever run, and someone with different access may see a
+  different pool.
+- **`unranked`** lists checkpoints with attempts but none eligible, with the reasons of their latest attempt.
+
+## Put a ranking in a paper
+
+The ranking page has an **Export** button, and so does a public leaderboard. It gives the rows on the page as a LaTeX
+table or a CSV, to copy or download. The footnote (and the CSV's columns) name the suite and version, its protocol
+digest, the selection rule ("one row per checkpoint, from its latest eligible completed evaluation, never its best
+repeat"), the evidence level, and the evaluation id of every row, so a table in a paper can be traced to where it
+came from. A condition a model has no score in is a dash, never a zero.
+
+To stop a change that makes a model worse, `visin diff BASELINE CANDIDATE --max-drop 0.01` compares two evaluations
+of one suite version and fails a CI job (exit 4) when a score fell by more than that, or (exit 5) when one could not
+be compared. See the SDK's CLI guide.
+
+## Show it to everyone
+
+A ranked result stays private to its project until a manager publishes it. See [Publishing to a
+leaderboard](/docs/publishing) for what that takes and exactly what becomes public.
+
+## Take one out
+
+`DELETE /api/evaluations/<id>` moves it to the trash, which removes it from lists and leaderboards.
+`POST /api/evaluations/<id>/restore` brings it back. Needs **manage** on the project, or **contribute** for an
+evaluation you recorded yourself.

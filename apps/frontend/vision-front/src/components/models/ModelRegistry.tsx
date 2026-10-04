@@ -23,7 +23,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import ModelTryDialog from './ModelTryDialog';
 import { MobileListRow } from '../common/MobileList';
 import { modelService } from '../../services/modelService';
-import type { RegistryModel, RegistryQuery } from '../../types/modelRegistry';
+import type { RegistryEvaluation, RegistryModel, RegistryQuery } from '../../types/modelRegistry';
 import { formatDate } from '../../utils';
 import { hubModelUrl, hubSpaceUrl, shortRevision } from '../../utils/hubLinks';
 
@@ -36,8 +36,30 @@ interface ModelRegistryProps {
 
 const PAGE_SIZES = [10, 30, 100];
 
-const formatBest = (row: RegistryModel): string =>
-  row.best ? `${Number(row.best.value.toPrecision(4))} (epoch ${row.best.epoch})` : '-';
+const formatReading = (reading: { value: number; epoch: number }): string =>
+  `${Number(reading.value.toPrecision(4))} (epoch ${reading.epoch})`;
+
+/**
+ * The score a row is ranked by, and what it is a score of. A link that names its epoch is
+ * scored by that epoch alone; one that does not can only be scored by where its run peaked.
+ */
+const scoreOf = (row: RegistryModel): { text: string; note?: string } => {
+  if (row.model.epoch === undefined) {
+    return row.best ? { text: formatReading(row.best), note: 'run best' } : { text: '-' };
+  }
+  const peak = row.best && row.best.epoch !== row.model.epoch ? `run best ${formatReading(row.best)}` : undefined;
+  if (row.checkpoint) return { text: formatReading(row.checkpoint), note: peak ? `this checkpoint · ${peak}` : 'this checkpoint' };
+  return { text: '-', note: [`epoch ${row.model.epoch} reported no value`, peak].filter(Boolean).join(' · ') };
+};
+
+const formatBest = (row: RegistryModel): string => {
+  const { text, note } = scoreOf(row);
+  return note ? `${text}, ${note}` : text;
+};
+
+/** A checkpoint's score on a suite, in a line: `road-test@1 mIoU 0.7351`. */
+const evaluationText = (evaluation: RegistryEvaluation): string =>
+  `${evaluation.suite.slug}@${evaluation.suite.version} ${evaluation.headline.key} ${Number(evaluation.headline.value.toPrecision(4))}`;
 
 const datasetName = (row: RegistryModel): string => row.training.dataset?.name ?? row.training.datasetId ?? '-';
 
@@ -52,8 +74,8 @@ const useDebounced = (value: string, delay = 300): string => {
 };
 
 /**
- * Every Hub model linked to a run, newest first, or ranked by how well its run
- * did on a result you name. The page a researcher opens to answer "which model
+ * Every Hub model linked to a run, newest first, or ranked by a result you name: the
+ * epoch a checkpoint was saved at when the link says which, else how well its run did. The page a researcher opens to answer "which model
  * should I use?". Whether larger is better for a result is not known to Visin, so
  * the person says: a loss is lower-is-better.
  */
@@ -152,8 +174,9 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, title }) => {
             title={`${row.model.repo} @ ${shortRevision(row.model.revision)}`}
             meta={<span>{row.training.name}{row.project ? ` · ${row.project.name}` : ''}</span>}
             figures={[
-              { label: ranked ? row.best?.metric ?? 'Best' : 'Dataset', value: ranked ? formatBest(row) : datasetName(row) },
-              { label: 'Linked', value: formatDate(row.model.addedAt) }
+              { label: ranked ? row.checkpoint?.metric ?? row.best?.metric ?? 'Score' : 'Dataset', value: ranked ? formatBest(row) : datasetName(row) },
+              { label: 'Linked', value: formatDate(row.model.addedAt) },
+              ...(row.evaluations ? [{ label: 'Evaluated', value: row.evaluations.map(evaluationText).join(' · ') }] : [])
             ]}
             actionsLabel={`Actions for ${row.model.repo}`}
             actions={[{ label: 'Try it', onClick: () => setTryFor(row) }]}
@@ -188,6 +211,18 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, title }) => {
                   <Link component="button" type="button" variant="caption" onClick={() => setTryFor(row)} sx={{ ml: 1 }}>
                     Try it
                   </Link>
+                  {row.evaluations && (
+                    <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }} aria-label="Evaluations">
+                      Evaluated:{' '}
+                      {row.evaluations.map((evaluation, index) => (
+                        <React.Fragment key={evaluation.evaluationId}>
+                          {index > 0 && ' · '}
+                          <Link component={RouterLink} to={`/evaluations/${evaluation.evaluationId}`}>{evaluationText(evaluation)}</Link>
+                          {evaluation.evidence === 'reported' || evaluation.evidence === 'attested' ? ` (${evaluation.evidence})` : ''}
+                        </React.Fragment>
+                      ))}
+                    </Typography>
+                  )}
                   {(row.model.path || row.model.epoch !== undefined) && (
                     <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
                       {[row.model.path, row.model.epoch !== undefined ? `epoch ${row.model.epoch}` : undefined].filter(Boolean).join(' · ')}
@@ -203,7 +238,16 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, title }) => {
                   </TableCell>
                 )}
                 <TableCell>{datasetName(row)}</TableCell>
-                {ranked && <TableCell align="right">{formatBest(row)}</TableCell>}
+                {ranked && (
+                  <TableCell align="right">
+                    {scoreOf(row).text}
+                    {scoreOf(row).note && (
+                      <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                        {scoreOf(row).note}
+                      </Typography>
+                    )}
+                  </TableCell>
+                )}
                 <TableCell>{formatDate(row.model.addedAt)}</TableCell>
               </TableRow>
             ))}

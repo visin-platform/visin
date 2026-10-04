@@ -180,16 +180,17 @@ describe('vision-service responses match docs/openapi.yml', () => {
     await call('GET', `/api/epochs/uuid/${epochUuid}`, { auth: token });
   });
 
-  it('sends and reads test results and benchmarks', async () => {
-    const test = await call('POST', '/api/test-results/upload', {
+  it('sends and reads test results (evaluations without a suite) and benchmarks', async () => {
+    // A test a run reports is an evaluation with no suite; it names its epoch, and the project is the epoch's.
+    const test = await call('POST', '/api/evaluations', {
       auth: token,
-      body: { epoch: 2, epoch_uuid: epochUuid, test_results: { night: { overall: { mean_iou: 0.41 } } } }
+      body: { source: { epochUuid, epoch: 2 }, results: { night: { overall: { mean_iou: 0.41 } } } }
     });
     expect(test.status).toBe(201);
     testResultId = test.body.data._id;
-    await call('GET', '/api/test-results', { auth: token });
-    await call('GET', `/api/test-results/${testResultId}`, { auth: token });
-    await call('GET', `/api/epochs/uuid/${epochUuid}/test-results`, { auth: token });
+    await call('GET', `/api/evaluations?trainingUuid=${runUuid}&include=results`, { auth: token });
+    await call('GET', `/api/evaluations?epochUuids=${epochUuid}&sortBy=epoch&order=asc`, { auth: token });
+    await call('GET', `/api/evaluations/${testResultId}`, { auth: token });
 
     const benchmark = await call('POST', '/api/benchmarks/upload', {
       auth: token,
@@ -276,7 +277,7 @@ describe('vision-service responses match docs/openapi.yml', () => {
       'POST /epochs/upload',
       'POST /epochs/batch',
       'GET /epochs/training/{trainingId}',
-      'POST /test-results/upload',
+      'POST /evaluations',
       'POST /benchmarks/upload',
       'GET /visualizations/training/{training_uuid}'
     ];

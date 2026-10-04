@@ -18,6 +18,13 @@ vi.mock('../pages/VisualizationsComparisonPage', () => ({ default: () => <div>Vi
 vi.mock('../pages/TrainingVisualizationsComparisonPage', () => ({ default: () => <div>TrainingVisualizationsComparisonPage</div> }));
 vi.mock('../pages/BenchmarksPage', () => ({ default: () => <div>BenchmarksPage</div> }));
 vi.mock('../pages/ModelsPage', () => ({ default: () => <div>ModelsPage</div> }));
+vi.mock('../pages/EvaluationsPage', () => ({ default: () => <div>EvaluationsPage</div> }));
+vi.mock('../pages/EvaluationDetailPage', () => ({ default: () => <div>EvaluationDetailPage</div> }));
+vi.mock('../pages/SuitesPage', () => ({ default: () => <div>SuitesPage</div> }));
+vi.mock('../pages/SuitePage', () => ({ default: () => <div>SuitePage</div> }));
+vi.mock('../pages/PublicLeaderboardsPage', () => ({ default: () => <div>PublicLeaderboardsPage</div> }));
+vi.mock('../pages/PublicLeaderboardPage', () => ({ default: () => <div>PublicLeaderboardPage</div> }));
+vi.mock('../pages/PublicEvaluationPage', () => ({ default: () => <div>PublicEvaluationPage</div> }));
 vi.mock('../pages/ProjectsPage', () => ({ default: () => <div>ProjectsPage</div> }));
 vi.mock('../pages/ProjectDashboardPage', () => ({ default: () => <div>ProjectDashboardPage</div> }));
 
@@ -53,6 +60,13 @@ describe('AppRoutes', () => {
     ['/visualizations/compare-trainings', 'TrainingVisualizationsComparisonPage'],
     ['/benchmarks', 'BenchmarksPage'],
     ['/models', 'ModelsPage'],
+    ['/evaluations', 'EvaluationsPage'],
+    ['/evaluations/e1', 'EvaluationDetailPage'],
+    ['/suites', 'SuitesPage'],
+    ['/suites/road-test/1', 'SuitePage'],
+    ['/leaderboards', 'PublicLeaderboardsPage'],
+    ['/leaderboards/road-test/1', 'PublicLeaderboardPage'],
+    ['/leaderboards/road-test/1/e1', 'PublicEvaluationPage'],
   ])('renders %s at %s', async (path, expectedText) => {
     renderAt(path);
     expect(await screen.findByText(expectedText)).toBeInTheDocument();

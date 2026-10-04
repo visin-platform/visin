@@ -11,6 +11,7 @@ import {
   TextField,
   Typography
 } from '@mui/material';
+import { HUB, type HubDatasetSource } from '../../providers/huggingFace';
 import type { DatasetSource } from '../../services/datasetService';
 
 interface HubSourceDialogProps {
@@ -24,7 +25,7 @@ interface HubSourceDialogProps {
   error?: string | null;
   onCancel: () => void;
   /** null clears the source */
-  onSave: (source: Pick<DatasetSource, 'repo' | 'revision'> | null) => void;
+  onSave: (source: HubDatasetSource | null) => void;
 }
 
 const REPO = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$/;
@@ -56,7 +57,7 @@ const HubSourceDialog: React.FC<HubSourceDialogProps> = ({ open, current, datase
 
   const save = () => {
     setTouched(true);
-    if (valid) onSave({ repo: repo.trim(), revision: revision.trim().toLowerCase() });
+    if (valid) onSave({ provider: HUB, repo: repo.trim(), revision: revision.trim().toLowerCase() });
   };
 
   return (

@@ -4,7 +4,8 @@ import { identityContextMiddleware } from '../../middleware/requestIdentityConte
 jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn() }));
 import Epoch from '../../models/Epoch';
 import EpochVisualization from '../../models/EpochVisualization';
-import TestResult from '../../models/TestResult';
+import Evaluation from '../../models/Evaluation';
+import { recordTest, recordTests } from '../fixtures/recordedTest';
 import Benchmark from '../../models/Benchmark';
 import Comparison from '../../models/Comparison';
 import Config from '../../models/Config';
@@ -19,7 +20,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { apiKeyAuth, errorHandler } from '@visin/backend-core';
 import trainingRoutes from '../../routes/trainingRoutes';
 import epochRoutes from '../../routes/epochRoutes';
-import testResultRoutes from '../../routes/testResultRoutes';
+import evaluationRoutes from '../../routes/evaluationRoutes';
 import benchmarkRoutes from '../../routes/benchmarkRoutes';
 import comparisonRoutes from '../../routes/comparisonRoutes';
 import visualizationRoutes from '../../routes/visualizationRoutes';
@@ -58,7 +59,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     app.use(express.json(), identityContextMiddleware);
     app.use('/write-capabilities', writeCapabilitiesRoutes);
     for (const [path, router] of Object.entries({ projects: projectRoutes, configs: configRoutes, trainings: trainingRoutes, epochs: epochRoutes,
-      'test-results': testResultRoutes, benchmarks: benchmarkRoutes, comparisons: comparisonRoutes,
+      evaluations: evaluationRoutes, benchmarks: benchmarkRoutes, comparisons: comparisonRoutes,
       visualizations: visualizationRoutes })) {
       app.use(`/${path}`, apiKeyAuth('vision'), router);
     }
@@ -149,20 +150,23 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await request('epochs', 'POST', epochBody())).status).toBe(403);
   });
 
-  it('checks test-result old and replacement parents and rejects orphan ingestion', async () => {
-    const body = { epoch: 1, epoch_uuid: 'public-epoch', test_results: { day: { overall: { score: 1 } } } };
-    for (const path of ['test-results', 'test-results/upload']) {
-      expect((await request(path, 'POST', body, STRANGER)).status).toBe(403);
-      expect((await request(path, 'POST', { ...body, epoch_uuid: 'missing' })).status).toBe(403);
-      expect((await request(path, 'POST', body)).status).toBe(201);
-    }
-    const test = await TestResult.findOne();
-    await Epoch.create({ timestamp: new Date(), trainingId: legacyId, training_uuid: 'legacy-run', epoch_uuid: 'legacy-epoch', epoch: 1, results: {} });
-    expect((await request(`test-results/${test!._id}`, 'PUT', { epoch_uuid: 'legacy-epoch' })).status).toBe(403);
-    expect((await request(`test-results/${test!._id}`, 'PUT', { epoch: 2 }, STRANGER)).status).toBe(403);
-    expect((await request(`test-results/${test!._id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
-    expect((await request(`test-results/${test!._id}`, 'PUT', { epoch: 2 })).status).toBe(200);
-    expect((await request(`test-results/${test!._id}`, 'DELETE')).status).toBe(200);
+  it('records a test only against an epoch the caller may write to, and an unknown epoch reads like one they may not', async () => {
+    const body = { source: { epochUuid: 'public-epoch', epoch: 1 }, results: { day: { overall: { score: 1 } } } };
+    // The project is the epoch's. A stranger can read a public project but not add to it; an epoch nobody knows
+    // answers as a project the caller cannot read does.
+    expect((await request('evaluations', 'POST', { ...body, uuid: 't1' }, STRANGER)).status).toBe(403);
+    expect((await request('evaluations', 'POST', { ...body, uuid: 't2', source: { epochUuid: 'missing', epoch: 1 } })).status).toBe(404);
+    const created = await request('evaluations', 'POST', { ...body, uuid: 't3' });
+    expect(created.status).toBe(201);
+    const id = String(created.body.data._id);
+    const stored = await Evaluation.findById(id);
+    expect(stored).toMatchObject({ projectId, source: { epochUuid: 'public-epoch', epoch: 1 } });
+    // Anyone may read a public project's tests; only its people change them. A test can be trashed and restored, not edited.
+    expect((await request(`evaluations/${id}`, 'GET', undefined, STRANGER)).status).toBe(200);
+    expect((await request(`evaluations/${id}`, 'DELETE', undefined, STRANGER)).status).toBe(403);
+    expect((await request(`evaluations/${id}`, 'DELETE')).status).toBe(200);
+    expect((await request(`evaluations/${id}`, 'GET', undefined, STRANGER)).status).toBe(404);
+    expect((await request(`evaluations/${id}/restore`, 'POST')).status).toBe(200);
   });
 
   it('protects project benchmarks and refuses standalone writes including stale and conflicting parent references', async () => {
@@ -244,15 +248,16 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     const missing = new mongoose.Types.ObjectId().toString();
     const comparison = await Comparison.create({ uuid: 'cap-comparison', name: 'Comparison', type: 'trainings', itemIds: [], projectId });
     const benchmark = await Benchmark.create({ ...benchmarkBody, training_id: trainingId });
-    const test = await TestResult.create({ test_uuid: 'cap-test', epoch_uuid: 'public-epoch', epoch: 1, timestamp: new Date(), test_results: { day: { overall: { score: 1 } } } });
-    for (const [kind, id] of [['project', projectId], ['comparison', comparison._id], ['benchmark', benchmark._id], ['test-result', test._id]]) {
+    const test = await recordTest({ projectId, ownerId: OWNER, test_uuid: 'cap-test', trainingId, epoch_uuid: 'public-epoch', epoch: 1, timestamp: new Date(), test_results: { day: { overall: { score: 1 } } } });
+    for (const [kind, id] of [['project', projectId], ['comparison', comparison._id], ['benchmark', benchmark._id], ['evaluation', test._id]]) {
       const path = `write-capabilities?kind=${kind}&ids=${id},${missing}`;
       expect((await request(path)).body.data).toEqual({ [String(id)]: true, [missing]: false });
       expect((await request(path, 'GET', undefined, STRANGER)).body.data).toEqual({ [String(id)]: false, [missing]: false });
       expect((await request(path, 'GET', undefined, '')).body.data).toEqual({ [String(id)]: false, [missing]: false });
     }
+    await Evaluation.updateOne({ _id: test._id }, { deletedAt: new Date() });
+    expect((await request(`write-capabilities?kind=evaluation&ids=${test._id}`)).body.data[String(test._id)]).toBe(false);
     await Training.updateOne({ _id: trainingId }, { deletedAt: new Date() });
-    expect((await request(`write-capabilities?kind=test-result&ids=${test._id}`)).body.data[String(test._id)]).toBe(false);
     const groupId = new mongoose.Types.ObjectId().toString();
     await Project.updateOne({ _id: projectId }, { editorGroupIds: [groupId] });
     jest.mocked(getUserGroups).mockRejectedValueOnce(new Error('Membership lookup failed'));
@@ -277,7 +282,7 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
     expect((await request(`trainings/${id}`, 'PUT', { name: 'Edited by teammate' }, EDITOR)).status).toBe(200);
     const epoch = await request('epochs', 'POST', { trainingId: id, training_uuid: String(created.body.data.uuid), epoch_uuid: 'team-epoch', epoch: 1, results: {} }, EDITOR);
     expect(epoch.status).toBe(201);
-    expect((await request('test-results', 'POST', { epoch_uuid: 'team-epoch', epoch: 1, test_results: {} }, EDITOR)).status).toBe(201);
+    expect((await request('evaluations', 'POST', { source: { epochUuid: 'team-epoch', epoch: 1 }, results: {} }, EDITOR)).status).toBe(201);
     expect((await request('benchmarks', 'POST', { ...benchmarkBody, epoch_uuid: 'team-epoch' }, EDITOR)).status).toBe(201);
     expect((await request('comparisons', 'POST', { name: 'Team comparison', type: 'trainings', itemIds: [id], projectId: teamId }, EDITOR)).status).toBe(201);
     const list = await request('trainings', 'GET', undefined, EDITOR);
@@ -314,53 +319,60 @@ describe('public reads and authorized writes with in-memory MongoDB', () => {
       const project = await Project.create({ name: 'Secret', owner: { kind: 'user', id: OWNER }, createdBy: OWNER, visibility: 'private', editorGroupIds: ['a'.repeat(24)] });
       const training = await Training.create({ name: 'Secret run', uuid: 'secret-run', projectId: String(project._id) });
       await Epoch.create({ timestamp: new Date(), trainingId: String(training._id), training_uuid: training.uuid, epoch_uuid: 'secret-epoch', epoch: 73, results: {} });
-      const result = await TestResult.create({ epoch: 73, epoch_uuid: 'secret-epoch', trainingId: String(training._id), projectId: String(project._id), test_uuid: 'secret-test', timestamp: new Date(), test_results: { secret: { object: { iou: 1 } } } });
+      const result = await recordTest({ epoch: 73, epoch_uuid: 'secret-epoch', trainingId: String(training._id), projectId: String(project._id), test_uuid: 'secret-test', timestamp: new Date(), test_results: { secret: { object: { iou: 1 } } } });
       await EpochVisualization.create({ epoch_uuid: 'secret-epoch', visualization_uuid: 'secret-viz', filename: 'secret.png', type: 'secret-type', fileId: 'secret-file' });
       const benchmark = await Benchmark.create({ ...benchmarkBody, training_id: training._id, training_uuid: training.uuid });
       return { training, result, benchmark };
     }
     it.each(['', STRANGER])('does not expose private results through epoch filters (%s)', async actor => {
       await privateResults();
-      for (const query of ['epoch=73', 'epoch_uuids=secret-epoch', `projectId=${projectId}&epoch_uuids=secret-epoch`, 'training_uuid=public-run&epoch_uuids=secret-epoch']) {
-        const response = await request(`test-results?${query}&page=1&limit=1`, 'GET', undefined, actor);
+      for (const query of ['epoch=73', 'epochUuids=secret-epoch', `projectId=${projectId}&epochUuids=secret-epoch`, 'trainingUuid=public-run&epochUuids=secret-epoch', 'trainingUuid=secret-run']) {
+        const response = await request(`evaluations?${query}&page=1&limit=1`, 'GET', undefined, actor);
         expect(response.status).toBe(200);
         expect(JSON.stringify(response.body)).not.toContain('secret-test');
       }
-      expect(JSON.stringify((await request('test-results/epochs', 'GET', undefined, actor)).body)).not.toContain('73');
       expect(JSON.stringify((await request('visualizations/types', 'GET', undefined, actor)).body)).not.toContain('secret-type');
-      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, OWNER)).body)).toContain('secret-test');
-      expect(JSON.stringify((await request('test-results/epochs', 'GET', undefined, OWNER)).body)).toContain('73');
+      expect(JSON.stringify((await request('evaluations?epoch=73', 'GET', undefined, OWNER)).body)).toContain('secret-test');
     });
-    it('serves the frontend epoch-results route for public and authorized private epochs', async () => {
+    it("shows a public project's tests to anyone, without who recorded them, and a private project's only to its people", async () => {
       await privateResults();
-      await TestResult.create({ epoch: 1, epoch_uuid: 'public-epoch', trainingId, projectId, test_uuid: 'public-test', timestamp: new Date(), test_results: {} });
+      await recordTest({ projectId, trainingId, ownerId: OWNER, epoch: 1, epoch_uuid: 'public-epoch', test_uuid: 'public-test', test_results: {} });
       for (const actor of ['', OWNER, STRANGER]) {
-        const response = await request('epochs/uuid/public-epoch/test-results', 'GET', undefined, actor);
+        const response = await request('evaluations?epochUuids=public-epoch', 'GET', undefined, actor);
         expect(response.status).toBe(200);
         expect(JSON.stringify(response.body)).toContain('public-test');
+        expect(JSON.stringify(response.body).includes(OWNER)).toBe(actor === OWNER);
       }
-      expect((await request('epochs/uuid/secret-epoch/test-results')).status).toBe(200);
-      expect((await request('epochs/uuid/secret-epoch/test-results', 'GET', undefined, STRANGER)).status).toBe(403);
+      expect(JSON.stringify((await request('evaluations?epochUuids=secret-epoch')).body)).toContain('secret-test');
+      expect(JSON.stringify((await request('evaluations?epochUuids=secret-epoch', 'GET', undefined, STRANGER)).body)).not.toContain('secret-test');
       jest.mocked(getUserGroups).mockImplementation(async userId => userId === EDITOR ? [{ id: 'a'.repeat(24), name: 'Editors' }] : []);
-      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, EDITOR)).body)).toContain('secret-test');
-      expect((await request('epochs/uuid/secret-epoch/test-results', 'GET', undefined, EDITOR)).status).toBe(200);
+      expect(JSON.stringify((await request('evaluations?epoch=73', 'GET', undefined, EDITOR)).body)).toContain('secret-test');
       jest.mocked(getUserGroups).mockResolvedValue([]);
-      expect(JSON.stringify((await request('test-results?epoch=73', 'GET', undefined, EDITOR)).body)).not.toContain('secret-test');
-
+      expect(JSON.stringify((await request('evaluations?epoch=73', 'GET', undefined, EDITOR)).body)).not.toContain('secret-test');
+    });
+    it("shows a public project's tests but not its unpublished results on a suite", async () => {
+      await recordTest({ projectId, trainingId, epoch: 1, epoch_uuid: 'public-epoch', test_uuid: 'plain-test', test_results: {} });
+      const ranked = await recordTest({ projectId, trainingId, epoch: 1, epoch_uuid: 'public-epoch', test_uuid: 'ranked-test', test_results: {}, suite: { id: 's', slug: 'road-test', version: 1, digest: 'd' } });
+      const seen = JSON.stringify((await request('evaluations?epochUuids=public-epoch', 'GET', undefined, STRANGER)).body);
+      expect(seen).toContain('plain-test');
+      expect(seen).not.toContain('ranked-test');
+      expect((await request(`evaluations/${ranked._id}`, 'GET', undefined, STRANGER)).status).toBe(404);
+      expect((await request(`evaluations/${ranked._id}`, 'DELETE', undefined, STRANGER)).status).toBe(404);
+      expect((await request(`evaluations/${ranked._id}/publish`, 'POST', undefined, STRANGER)).status).toBe(404);
     });
     it('intersects filters and counts all matching authorized results across pages', async () => {
       await privateResults();
-      await TestResult.create([1, 2, 3].map(i => ({ epoch: 1, epoch_uuid: 'public-epoch', trainingId, projectId, test_uuid: `public-test-${i}`, timestamp: new Date(), test_results: {} })));
-      const response = await request('test-results?epoch=1&page=2&limit=1');
+      await recordTests([1, 2, 3].map(i => ({ epoch: 1, epoch_uuid: 'public-epoch', trainingId, projectId, test_uuid: `public-test-${i}`, timestamp: new Date(), test_results: {} })));
+      const response = await request('evaluations?epoch=1&page=2&limit=1');
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({ data: { pagination: { total: 3, pages: 3 } } });
-      expect(JSON.stringify((await request(`test-results?projectId=${projectId}&epoch_uuids=secret-epoch`)).body)).not.toContain('secret-test');
+      expect(JSON.stringify((await request(`evaluations?projectId=${projectId}&epochUuids=secret-epoch`)).body)).not.toContain('secret-test');
     });
     it.each(['soft-delete', 'missing'] as const)('denies result, benchmark and file reads with a %s parent', async action => {
       const { training, result, benchmark } = await privateResults();
       if (action === 'soft-delete') await Training.updateOne({ _id: training._id }, { deletedAt: new Date() });
       else await Training.deleteOne({ _id: training._id });
-      for (const path of ['visualizations/training/secret-run?includeUrls=true', 'visualizations/types?training_uuid=secret-run', 'visualizations/secret-viz', 'visualizations/epoch/secret-epoch', 'benchmarks?training_uuid=secret-run', 'benchmarks/stats?training_uuid=secret-run', `benchmarks/${benchmark._id}`, `test-results/${result._id}`]) {
+      for (const path of ['visualizations/training/secret-run?includeUrls=true', 'visualizations/types?training_uuid=secret-run', 'visualizations/secret-viz', 'visualizations/epoch/secret-epoch', 'benchmarks?training_uuid=secret-run', 'benchmarks/stats?training_uuid=secret-run', `benchmarks/${benchmark._id}`, `evaluations/${result._id}`]) {
         const response = await request(path, 'GET', undefined, STRANGER);
         expect([403, 404]).toContain(response.status);
       }

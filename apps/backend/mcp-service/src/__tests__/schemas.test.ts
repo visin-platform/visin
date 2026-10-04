@@ -5,7 +5,8 @@ import {
   dashboardStatsSchema,
   parseResponse,
   projectsResponseSchema,
-  testResultsResponseSchema,
+  runEvaluationsResponseSchema,
+  testResultOf,
   trainingWithEpochsSchema,
   trainingsResponseSchema
 } from '../schemas';
@@ -83,19 +84,18 @@ describe('tolerating what the API actually sends', () => {
   });
 
   it('accepts test results both with and without pagination', () => {
-    // `/test-results` paginates when asked for a page and reports a bare total
-    // when not. Both are real, so both are accepted.
-    const paged = parseResponse(testResultsResponseSchema, '/test-results', {
-      testResults: [],
+    // Evaluation responses can carry pagination or omit it.
+    const paged = parseResponse(runEvaluationsResponseSchema, '/evaluations', {
+      evaluations: [],
       pagination: { page: 1, limit: 5, total: 0, pages: 0 }
     });
-    const unpaged = parseResponse(testResultsResponseSchema, '/test-results', {
-      testResults: [],
-      total: 0
+    const unpaged = parseResponse(runEvaluationsResponseSchema, '/evaluations', {
+      evaluations: [],
     });
 
-    expect(paged.testResults).toEqual([]);
-    expect(unpaged.total).toBe(0);
+    expect(paged.evaluations).toEqual([]);
+    expect(unpaged.evaluations).toEqual([]);
+    expect(unpaged.pagination).toBeUndefined();
   });
 
   it('parses a condition that is summary scalars rather than per-class objects', () => {
@@ -104,12 +104,12 @@ describe('tolerating what the API actually sends', () => {
     // everywhere failed the whole parse on that one key — and the `.catch({})`
     // that used to sit here turned the failure into an empty result, so the
     // tool printed a header with no rows and looked uninteresting, not broken.
-    const parsed = parseResponse(testResultsResponseSchema, '/test-results', {
-      testResults: [
+    const parsed = parseResponse(runEvaluationsResponseSchema, '/evaluations', {
+      evaluations: [
         {
           _id: 'tr1',
-          epoch: 99,
-          test_results: {
+          source: { epoch: 99 },
+          results: {
             day_fair: {
               vehicle: { iou: 0.65, precision: 0.66, recall: 0.98, f1_score: 0.79, ap: 0.88 },
               overall: { mIoU_foreground: 0.57, fw_iou: 0.64, confusion_matrix: [[1, 2], [3, 4]] }
@@ -120,44 +120,59 @@ describe('tolerating what the API actually sends', () => {
       ]
     });
 
-    const conditions = parsed.testResults[0].test_results;
+    const conditions = testResultOf(parsed.evaluations[0]).test_results;
     expect(Object.keys(conditions)).toEqual(['day_fair', 'overall']);
     expect(conditions.overall.mIoU_foreground).toBe(0.55);
     expect(conditions.day_fair.vehicle).toMatchObject({ iou: 0.65 });
   });
 
-  it('raises rather than emptying when test_results is genuinely the wrong shape', () => {
+  it('raises rather than emptying when results is genuinely the wrong shape', () => {
     // No `.catch` here on purpose: a schema this permissive failing means the
     // contract really moved, and that should be a named error, not silence.
     expect(() =>
-      parseResponse(testResultsResponseSchema, '/test-results', {
-        testResults: [{ _id: 'tr1', test_results: 'not an object at all' }]
+      parseResponse(runEvaluationsResponseSchema, '/evaluations', {
+        evaluations: [{ _id: 'tr1', results: 'not an object at all' }]
       })
     ).toThrow(ShapeError);
   });
 
-  it('defaults a row that carries no test_results at all', () => {
-    const parsed = parseResponse(testResultsResponseSchema, '/test-results', {
-      testResults: [{ _id: 'tr1', epoch: 1 }]
+  it('defaults a row that carries no results at all', () => {
+    const parsed = parseResponse(runEvaluationsResponseSchema, '/evaluations', {
+      evaluations: [{ _id: 'tr1', source: { epoch: 1 } }]
     });
 
-    expect(parsed.testResults[0].test_results).toEqual({});
+    expect(testResultOf(parsed.evaluations[0]).test_results).toEqual({});
   });
 
   it('parses a nested per-class test result', () => {
-    const parsed = parseResponse(testResultsResponseSchema, '/test-results', {
-      testResults: [
+    const parsed = parseResponse(runEvaluationsResponseSchema, '/evaluations', {
+      evaluations: [
         {
           _id: 'tr1',
-          epoch: 40,
-          test_results: { night: { car: { iou: 0.81, f1_score: 0.77 } } }
+          source: { epoch: 40 },
+          results: { night: { car: { iou: 0.81, f1_score: 0.77 } } }
         }
       ]
     });
 
     // The union means a caller narrows before reading a score, exactly as the
     // renderer does — a condition entry may be a number.
-    expect(parsed.testResults[0].test_results.night.car).toMatchObject({ iou: 0.81 });
+    expect(testResultOf(parsed.evaluations[0]).test_results.night.car).toMatchObject({ iou: 0.81 });
+  });
+
+  it.each(['executedAt', 'receivedAt'] as const)('maps evaluation metadata and keeps only condition breakdowns (%s)', timestamp => {
+    const parsed = parseResponse(runEvaluationsResponseSchema, '/evaluations', {
+      evaluations: [{
+        _id: 'tr1', uuid: 'test-uuid', source: { epochUuid: 'epoch-uuid', epoch: 0 },
+        [timestamp]: '2026-10-04T12:00:00Z', run: { _id: 't1', name: 'Run', uuid: 'run-uuid' },
+        results: { night: { car: { iou: 0.81 } }, elapsed: 12, note: 'complete', samples: [1, 2] }
+      }]
+    });
+    expect(testResultOf(parsed.evaluations[0])).toEqual({
+      _id: 'tr1', test_uuid: 'test-uuid', epoch_uuid: 'epoch-uuid', epoch: 0,
+      timestamp: '2026-10-04T12:00:00Z', training: { _id: 't1', name: 'Run', uuid: 'run-uuid' },
+      test_results: { night: { car: { iou: 0.81 } } }
+    });
   });
 
   it('parses dashboard stats, defaulting a total the aggregation left out', () => {

@@ -31,7 +31,7 @@ describe('LandingPage structure', () => {
   it('renders every section landmark', () => {
     const { container } = render(<LandingPage />);
 
-    for (const id of ['top', 'product', 'script', 'mobile', 'assistant', 'open-source']) {
+    for (const id of ['top', 'product', 'leaderboards', 'script', 'mobile', 'assistant', 'open-source']) {
       expect(container.querySelector(`#${id}`)).toBeInTheDocument();
     }
     expect(container.querySelector('main#main')).toBeInTheDocument();
@@ -39,12 +39,12 @@ describe('LandingPage structure', () => {
   });
 
   it('shows the product before it explains anything', () => {
-    // Real screens first, then the phone, then the assistant: the page leads
-    // with what Visin looks like rather than paragraphs about it.
+    // Real screens first, then the evidence of a published ranking, then the script, the phone and the
+    // assistant: the page leads with what Visin looks like rather than paragraphs about it.
     const { container } = render(<LandingPage />);
 
     const sections = [...container.querySelectorAll('main section')].map(s => s.id);
-    expect(sections).toEqual(['top', 'product', 'script', 'mobile', 'assistant', 'open-source']);
+    expect(sections).toEqual(['top', 'product', 'leaderboards', 'script', 'mobile', 'assistant', 'open-source']);
   });
 
   it('leads with the headline and the product summary', () => {
@@ -226,6 +226,7 @@ describe('LandingPage calls to action', () => {
     // Absolute, so the same nav works on /docs: on / they only change the #fragment.
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(within(nav).getByRole('link', { name: 'Product' })).toHaveAttribute('href', '/#product');
+    expect(within(nav).getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('href', '/#leaderboards');
     expect(within(nav).getByRole('link', { name: 'Assistant' })).toHaveAttribute('href', '/#assistant');
     expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '/#open-source');
     // The old sections are gone; nothing may still point at where they were.

@@ -9,7 +9,6 @@ import {
   deleteEpoch,
   createEpochsBatch
 } from '../controllers/epochController';
-import { getTestResultsByEpochUuid } from '../controllers/testResultController';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '@visin/backend-core';
 import {
@@ -19,7 +18,6 @@ import {
   createEpochFromJsonBodySchema,
   createEpochsBatchBodySchema
 } from '../validation/epochSchemas';
-import { getTestResultsByEpochUuidQuerySchema } from '../validation/testResultSchemas';
 
 const router = express.Router();
 
@@ -30,12 +28,6 @@ router.get(
   optionalAuthMiddleware,
   validateRequest({ query: getEpochsByTrainingQuerySchema }),
   getEpochsByTraining
-);
-router.get(
-  '/uuid/:epochUuid/test-results',
-  optionalAuthMiddleware,
-  validateRequest({ query: getTestResultsByEpochUuidQuerySchema }),
-  getTestResultsByEpochUuid
 );
 router.get('/:id', optionalAuthMiddleware, getEpochById);
 router.get('/uuid/:uuid', optionalAuthMiddleware, getEpochByUuid);
