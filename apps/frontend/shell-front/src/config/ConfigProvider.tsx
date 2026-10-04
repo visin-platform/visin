@@ -11,11 +11,17 @@ export interface AppConfig {
   VISION_FRONT_URL?: string;
   LABEL_FRONT_URL?: string;
   ACCOUNT_FRONT_URL?: string;
-  /** The services the home page reads. Unset, the parts they feed are left out. */
+  /** The services the home and Explore pages read. Unset, the parts they feed are left out. */
   VISION_API_URL?: string;
+  DATASET_API_URL?: string;
   LABEL_SERVICE_URL?: string;
   /** Invitations waiting for the viewer; unset, the home page leaves them out. */
   GROUP_SERVICE_URL?: string;
+  /**
+   * The landing site, where Docs and About live. Unset, a visitor's top bar leaves
+   * those links out rather than pointing somewhere else.
+   */
+  LANDING_FRONT_URL?: string;
 }
 
 // `npm run dev` starts every app on its fixed port, so the shell needs no .env to
@@ -28,8 +34,10 @@ function createDevConfig(): AppConfig {
     LABEL_FRONT_URL: import.meta.env.VITE_LABEL_FRONT_URL || 'http://localhost:3008',
     ACCOUNT_FRONT_URL: import.meta.env.VITE_ACCOUNT_FRONT_URL || 'http://localhost:3007',
     VISION_API_URL: import.meta.env.VITE_VISION_API_URL || 'http://localhost:4010',
+    DATASET_API_URL: import.meta.env.VITE_DATASET_API_URL || 'http://localhost:5010',
     LABEL_SERVICE_URL: import.meta.env.VITE_LABEL_SERVICE_URL || 'http://localhost:5008',
-    GROUP_SERVICE_URL: import.meta.env.VITE_GROUP_SERVICE_URL || 'http://localhost:5006'
+    GROUP_SERVICE_URL: import.meta.env.VITE_GROUP_SERVICE_URL || 'http://localhost:5006',
+    LANDING_FRONT_URL: import.meta.env.VITE_LANDING_FRONT_URL || 'http://localhost:3000'
   };
 }
 

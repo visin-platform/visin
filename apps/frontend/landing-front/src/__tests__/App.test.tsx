@@ -1,10 +1,9 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import App from '../App';
 
-vi.mock('../config/ConfigProvider', () => ({
-  useConfig: () => ({ SHELL_FRONT_URL: 'http://shell.test' })
-}));
+const config = vi.hoisted(() => ({ SHELL_FRONT_URL: 'http://shell.test' as string | undefined }));
+vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config }));
 
 beforeAll(() => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
@@ -23,6 +22,14 @@ beforeAll(() => {
   });
 });
 
+const { redirectTo } = vi.hoisted(() => ({ redirectTo: vi.fn() }));
+vi.mock('../redirect', () => ({ redirectTo }));
+
+beforeEach(() => {
+  config.SHELL_FRONT_URL = 'http://shell.test';
+  redirectTo.mockClear();
+});
+
 afterEach(() => {
   window.history.pushState({}, '', '/');
 });
@@ -35,21 +42,37 @@ describe('App', () => {
 });
 
 describe('App routes', () => {
-  it('shows the landing page at the root', () => {
+  const pitch = () =>
+    screen.queryByRole('heading', { level: 1, name: /a clear view of your computer vision work/i });
+
+  it('sends the front page to the app, where what people published is shown', () => {
     render(<App />);
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: /a clear view of your computer vision work/i })
-    ).toBeInTheDocument();
+    expect(redirectTo).toHaveBeenCalledWith('http://shell.test');
+    expect(pitch()).not.toBeInTheDocument();
   });
 
-  it('shows the landing page at any address that is not the docs, as before there were routes', () => {
+  it('keeps the pitch at the front page of a deployment with no app to send anyone to', () => {
+    config.SHELL_FRONT_URL = undefined;
+    render(<App />);
+
+    expect(redirectTo).not.toHaveBeenCalled();
+    expect(pitch()).toBeInTheDocument();
+  });
+
+  it('shows the pitch at /about', () => {
+    window.history.pushState({}, '', '/about');
+    render(<App />);
+
+    expect(pitch()).toBeInTheDocument();
+    expect(redirectTo).not.toHaveBeenCalled();
+  });
+
+  it('shows the pitch at any other address that is not the docs, as before there were routes', () => {
     window.history.pushState({}, '', '/anything');
     render(<App />);
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: /a clear view of your computer vision work/i })
-    ).toBeInTheDocument();
+    expect(pitch()).toBeInTheDocument();
   });
 
   it('loads the docs under /docs', async () => {

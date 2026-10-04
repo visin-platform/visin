@@ -40,7 +40,7 @@ for (const mode of ['results', 'empty', 'down'] as const) {
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
     await mockApi(page, mode);
-    await page.goto('/');
+    await page.goto('/about');
 
     const section = page.getByRole('region', SECTION);
     await expect(section).toBeVisible();

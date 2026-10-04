@@ -22,11 +22,11 @@ import { INK } from '../theme';
 // Absolute, so they also work from the docs: on the landing page itself a
 // link that differs only in its #fragment scrolls instead of reloading.
 const LINKS = [
-  { label: 'Product', href: '/#product' },
-  { label: 'Leaderboards', href: '/#leaderboards' },
+  { label: 'Product', href: '/about#product' },
+  { label: 'Leaderboards', href: '/about#leaderboards' },
   { label: 'Docs', href: '/docs' },
-  { label: 'Assistant', href: '/#assistant' },
-  { label: 'Self-hosting', href: '/#open-source' }
+  { label: 'Assistant', href: '/about#assistant' },
+  { label: 'Self-hosting', href: '/about#open-source' }
 ];
 
 const isCurrent = (href: string) => href === '/docs' && window.location.pathname.startsWith('/docs');
@@ -46,7 +46,7 @@ export default function Nav({ appUrl }: NavProps) {
     >
       <Container maxWidth="lg" disableGutters>
         <Toolbar sx={{ gap: 2, px: { xs: 2, sm: 3 } }}>
-          <Box component="a" href="/#top" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: 'inherit', textDecoration: 'none' }}>
+          <Box component="a" href="/about#top" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: 'inherit', textDecoration: 'none' }}>
             <Box component="img" src="/logo.svg" alt="" sx={{ width: 30, height: 30 }} />
             <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.5px' }}>
               Visin
@@ -91,7 +91,7 @@ export default function Nav({ appUrl }: NavProps) {
             variant="contained"
             sx={{ display: { xs: 'none', sm: 'inline-flex' }, borderRadius: 2 }}
           >
-            Open the app
+            Explore
           </Button>
 
           <IconButton
@@ -130,7 +130,7 @@ export default function Nav({ appUrl }: NavProps) {
           ))}
           <ListItem disablePadding>
             <ListItemButton component="a" href={appUrl} onClick={() => setOpen(false)}>
-              <ListItemText primary="Open the app" slotProps={{ primary: { sx: { fontWeight: 700 } } }} />
+              <ListItemText primary="Explore" slotProps={{ primary: { sx: { fontWeight: 700 } } }} />
             </ListItemButton>
           </ListItem>
         </List>

@@ -63,8 +63,9 @@ const renderAt = (
   );
 
 const main = () => within(screen.getByRole('navigation', { name: 'Main' }));
+const bar = (container: HTMLElement) => within(container.querySelector('header')!);
 const sectionBar = (name: string) => within(screen.getByRole('navigation', { name }));
-const openAccount = () => fireEvent.click(main().getByRole('button', { name: 'Account' }));
+const openAccount = () => fireEvent.click(screen.getByRole('button', { name: 'Account' }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -201,7 +202,7 @@ describe('AppLayout', () => {
     it('opens a menu with who is signed in and the Account sections', () => {
       renderAt('/projects');
       // Held before opening: the open menu hides the rest of the page from queries by role.
-      const account = main().getByRole('button', { name: 'Account' });
+      const account = screen.getByRole('button', { name: 'Account' });
 
       fireEvent.click(account);
 
@@ -266,7 +267,6 @@ describe('AppLayout', () => {
     it('is a group of its own while one of its sections is shown', () => {
       renderAt('/account/groups');
 
-      expect(main().getByRole('button', { name: 'Account' })).toHaveAttribute('aria-current', 'true');
       expect(sectionBar('Account').getByRole('link', { name: 'Groups' })).toHaveAttribute('aria-current', 'page');
       expect(screen.getByRole('heading', { level: 1, name: 'Groups' })).toBeInTheDocument();
     });
@@ -296,14 +296,191 @@ describe('AppLayout', () => {
       expect(appearance()).toHaveAccessibleName('Appearance: Auto. Switch to Light');
     });
 
-    it('offers Login in its place to an anonymous visitor', () => {
-      renderAt('/projects', null, { isAuthenticated: false });
+    it('is in the top bar, leaving the rail to places', () => {
+      const { container } = renderAt('/projects');
 
-      expect(main().queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
-      fireEvent.click(main().getByRole('button', { name: 'Login' }));
+      expect(main().queryByRole('button')).not.toBeInTheDocument();
+      expect(bar(container).getByRole('button', { name: 'Account' })).toBeInTheDocument();
+    });
+  });
+
+  describe('for a visitor', () => {
+    const visitor = (extraProps: Partial<React.ComponentProps<typeof AppLayout>> = {}) =>
+      renderAt('/projects', null, { isAuthenticated: false, ...extraProps });
+
+    it('offers Sign in in place of the account menu', () => {
+      visitor();
+
+      expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
       expect(onLogin).toHaveBeenCalledTimes(1);
       expect(screen.queryByText('Logout')).not.toBeInTheDocument();
+    });
+
+    it('offers Sign up where the app can send one', () => {
+      const onSignup = vi.fn();
+      visitor({ onSignup });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Sign up' }));
+
+      expect(onSignup).toHaveBeenCalledTimes(1);
+    });
+
+    it('has no Sign up where the app cannot', () => {
+      visitor();
+
+      expect(screen.queryByRole('button', { name: 'Sign up' })).not.toBeInTheDocument();
+    });
+
+    it('gets the links to the docs beside Sign in, and no New menu', () => {
+      visitor({
+        visitorLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }],
+        createItems: [{ text: 'Project', icon: null, path: '/projects?new=1' }]
+      });
+
+      expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', 'https://docs.test/docs');
+      expect(screen.queryByRole('button', { name: 'New' })).not.toBeInTheDocument();
+    });
+
+    it('shows neither Sign in nor the account menu while the session is being checked', () => {
+      visitor({ authPending: true, onSignup: vi.fn() });
+
+      expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Sign up' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
+    });
+
+    it('gets no Sign in or links while signed in', () => {
+      renderAt('/projects', undefined, { visitorLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }] });
+
+      expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('new menu', () => {
+    const createItems: AppLayoutNavItem[] = [
+      { text: 'Project', icon: <i />, path: '/projects?new=1' },
+      { text: 'API key', icon: <i />, href: 'https://account.test/account/api-keys' }
+    ];
+
+    it('lists what a member can create, routing client-side where it can', () => {
+      renderAt('/datasets', undefined, { createItems });
+
+      fireEvent.click(screen.getByRole('button', { name: 'New' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Project' }));
+
+      expect(screen.getByTestId('path')).toHaveTextContent('/projects');
+    });
+
+    it('links another app as a plain anchor', () => {
+      renderAt('/datasets', undefined, { createItems });
+
+      fireEvent.click(screen.getByRole('button', { name: 'New' }));
+
+      expect(screen.getByRole('menuitem', { name: 'API key' })).toHaveAttribute(
+        'href',
+        'https://account.test/account/api-keys'
+      );
+    });
+
+    it('is absent without anything to create', () => {
+      renderAt('/datasets');
+
+      expect(screen.queryByRole('button', { name: 'New' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('search', () => {
+    it('is absent unless the app handles it', () => {
+      renderAt('/projects');
+
+      expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
+    });
+
+    it('hands what was typed to the app, trimmed', async () => {
+      const onSearch = vi.fn();
+      renderAt('/projects', undefined, { onSearch });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+      fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: '  window  ' } });
+      fireEvent.submit(screen.getByRole('search'));
+
+      expect(onSearch).toHaveBeenCalledWith('window');
+      await waitFor(() => expect(screen.queryByRole('search')).not.toBeInTheDocument());
+    });
+
+    it('ignores an empty query', () => {
+      const onSearch = vi.fn();
+      renderAt('/projects', undefined, { onSearch });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+      fireEvent.submit(screen.getByRole('search'));
+
+      expect(onSearch).not.toHaveBeenCalled();
+    });
+
+    it('opens from the keyboard anywhere on the page', () => {
+      renderAt('/projects', undefined, { onSearch: vi.fn() });
+
+      fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+
+      expect(screen.getByRole('search')).toBeInTheDocument();
+    });
+
+    it('closes on Escape without searching', async () => {
+      const onSearch = vi.fn();
+      renderAt('/projects', undefined, { onSearch });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+      fireEvent.keyDown(screen.getByRole('textbox', { name: 'Search' }), { key: 'Escape' });
+
+      await waitFor(() => expect(screen.queryByRole('search')).not.toBeInTheDocument());
+      expect(onSearch).not.toHaveBeenCalled();
+    });
+
+    describe('on a wide screen', () => {
+      beforeEach(() => {
+        // Wide, but not compact: only the min-width queries match.
+        Object.defineProperty(window, 'matchMedia', {
+          configurable: true,
+          writable: true,
+          value: (query: string) => ({
+            matches: query.includes('min-width'),
+            media: query,
+            onchange: null,
+            addListener: vi.fn(),
+            removeListener: vi.fn(),
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+            dispatchEvent: vi.fn()
+          })
+        });
+      });
+
+      afterEach(() => {
+        delete (window as { matchMedia?: unknown }).matchMedia;
+      });
+
+      it('shows the box itself, with its placeholder and shortcut, which opens the same search', () => {
+        renderAt('/projects', undefined, { onSearch: vi.fn(), searchPlaceholder: 'Search projects…' });
+
+        const box = screen.getByRole('button', { name: 'Search' });
+        expect(box).toHaveTextContent('Search projects…');
+        expect(box).toHaveAttribute('aria-keyshortcuts', 'Control+K Meta+K');
+        fireEvent.click(box);
+
+        expect(screen.getByRole('search')).toBeInTheDocument();
+      });
+    });
+
+    it('leaves a plain k alone', () => {
+      renderAt('/projects', undefined, { onSearch: vi.fn() });
+
+      fireEvent.keyDown(window, { key: 'k' });
+
+      expect(screen.queryByRole('search')).not.toBeInTheDocument();
     });
   });
 
@@ -344,7 +521,9 @@ describe('AppLayout', () => {
         'Data',
         'Labels'
       ]);
-      expect(within(tabBar).getByRole('button', { name: 'Account' })).toBeInTheDocument();
+      // Account is in the app bar, not among the places.
+      expect(within(tabBar).queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument();
       const content = container.querySelector('main')!;
       expect(content.compareDocumentPosition(tabBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       // The rail's logo has no room there.
@@ -378,6 +557,29 @@ describe('AppLayout', () => {
       const { container } = renderAt('/datasets');
       expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
       expect(container.querySelector('header')).toHaveTextContent('Datasets');
+    });
+
+    it('turns New into an icon that opens the same menu', () => {
+      renderAt('/datasets', undefined, {
+        createItems: [{ text: 'Project', icon: <i />, path: '/projects?create=1' }]
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'New' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Project' }));
+
+      expect(screen.getByTestId('path')).toHaveTextContent('/projects');
+    });
+
+    it('keeps Sign in and Sign up in the app bar, and leaves the docs links to the desktop', () => {
+      renderAt('/projects', null, {
+        isAuthenticated: false,
+        onSignup: vi.fn(),
+        visitorLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }]
+      });
+
+      expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Sign up' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
     });
 
     it('opens Account as a bottom sheet', () => {

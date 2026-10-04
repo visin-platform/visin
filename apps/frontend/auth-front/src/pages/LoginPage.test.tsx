@@ -46,6 +46,38 @@ beforeEach(() => {
   window.history.replaceState = vi.fn();
 });
 
+describe('LoginPage sign-up link', () => {
+  it('opens on the sign-up form when another front asked for it', async () => {
+    setLocation('?redirect_uri=http%3A%2F%2Fapp.test%2F&mode=register');
+    render(<LoginPage />);
+
+    expect(await screen.findByRole('heading', { name: /create an account/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /create account/i })).toBeInTheDocument();
+  });
+
+  it('opens on sign-in otherwise', async () => {
+    render(<LoginPage />);
+
+    expect(await screen.findByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
+  });
+
+  it('still offers setup first on an instance with no users', async () => {
+    setLocation('?mode=register');
+    api.getSetupStatus.mockResolvedValue({ needsSetup: true, googleEnabled: false });
+    render(<LoginPage />);
+
+    expect(await screen.findByRole('heading', { name: /create the owner account/i })).toBeInTheDocument();
+  });
+
+  it('opens sign-up even when auth-service cannot be reached for its status', async () => {
+    setLocation('?mode=register');
+    api.getSetupStatus.mockRejectedValue(new Error('down'));
+    render(<LoginPage />);
+
+    expect(await screen.findByRole('heading', { name: /create an account/i })).toBeInTheDocument();
+  });
+});
+
 describe('LoginPage first run', () => {
   it('offers setup instead of login when the instance has no users', async () => {
     api.getSetupStatus.mockResolvedValue({ needsSetup: true, googleEnabled: true });

@@ -90,14 +90,16 @@ const ProjectsPage: React.FC = () => {
   const [openedFromGuide, setOpenedFromGuide] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
+  // `?search=`, from the menu's search box: only projects matching it (name or description).
+  const search = searchParams.get('search')?.trim() || undefined;
 
   // Sorting state
   const [sortBy, setSortBy] = useState<'name' | 'createdAt'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['projects', user?.id, sortBy, sortOrder],
-    queryFn: () => projectService.getProjects({ sortBy, sortOrder })
+    queryKey: ['projects', user?.id, sortBy, sortOrder, search],
+    queryFn: () => projectService.getProjects({ sortBy, sortOrder, search })
   });
 
   const projects = data?.data || [];
@@ -235,6 +237,23 @@ const ProjectsPage: React.FC = () => {
     // openCreate only resets form state; running this once per ?new=1 is the point.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, user, groups.isLoading, groups.data]);
+
+  // `?create=1`, from the menu's New: the form, for the viewer as the owner. Unlike `?new=1`
+  // it does not pick a group or send the new project's author to its guide.
+  useEffect(() => {
+    if (searchParams.get('create') !== '1' || !user) return;
+    openCreate();
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        next.delete('create');
+        return next;
+      },
+      { replace: true }
+    );
+    // openCreate only resets form state; running this once per ?create=1 is the point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, user]);
 
   const openCreate = () => {
     setOwner({ kind: 'user', id: user?.id ?? '' });
@@ -461,6 +480,32 @@ const ProjectsPage: React.FC = () => {
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {error instanceof Error ? error.message : 'Failed to load projects'}
+        </Alert>
+      )}
+      {search && !showTrash && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() =>
+                setSearchParams(
+                  (params) => {
+                    const next = new URLSearchParams(params);
+                    next.delete('search');
+                    return next;
+                  },
+                  { replace: true }
+                )
+              }
+            >
+              Clear
+            </Button>
+          }
+        >
+          Projects matching “{search}”
         </Alert>
       )}
       {user && (

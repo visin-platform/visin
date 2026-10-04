@@ -29,6 +29,7 @@ vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
 vi.mock('../pages/HomePage', () => ({
   HomePage: ({ userName }: { userName?: string }) => <div>home page for {userName}</div>,
 }));
+vi.mock('../pages/ExplorePage', () => ({ ExplorePage: () => <div>explore page</div> }));
 
 import ShellRoutes from './index';
 import { forgetRemote } from '../remotes';
@@ -57,12 +58,35 @@ describe('ShellRoutes', () => {
     expect(screen.getByTestId('path')).toHaveTextContent(/^\/$/);
   });
 
-  it('sends a visitor from the root to Vision projects', () => {
+  it('opens a visitor on Explore, where the root stays the root', () => {
     authState.isAuthenticated = false;
     renderAt('/');
 
-    expect(screen.getByText('vision app')).toBeInTheDocument();
-    expect(screen.getByTestId('path')).toHaveTextContent('/projects');
+    expect(screen.getByText('explore page')).toBeInTheDocument();
+    expect(screen.queryByText(/home page/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/$/);
+  });
+
+  it('gives a member Explore as a second page', () => {
+    renderAt('/explore');
+
+    expect(screen.getByText('explore page')).toBeInTheDocument();
+    expect(screen.getByTestId('path')).toHaveTextContent('/explore');
+  });
+
+  it('keeps a visitor to one address for Explore', () => {
+    authState.isAuthenticated = false;
+    renderAt('/explore');
+
+    expect(screen.getByText('explore page')).toBeInTheDocument();
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/$/);
+  });
+
+  it('waits for the session check before showing Explore too', () => {
+    authState.isLoading = true;
+    renderAt('/explore');
+
+    expect(screen.queryByText('explore page')).not.toBeInTheDocument();
   });
 
   it('waits for the session check before choosing', () => {

@@ -1,7 +1,7 @@
 import { createLoginRedirect } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 
-/** `/projects` is where the shell's `/` lands too. */
-const LoginRedirect = createLoginRedirect(useAuth, { redirectTo: '/projects' });
+/** A signed-in session opens on the shell's home page. */
+const LoginRedirect = createLoginRedirect(useAuth, { redirectTo: '/' });
 
 export default LoginRedirect;

@@ -28,7 +28,7 @@ const renderAt = (path: string) =>
 
 const main = () => within(screen.getByRole('navigation', { name: 'Main' }));
 const accountBar = () => within(screen.getByRole('navigation', { name: 'Account' }));
-const openAccount = () => fireEvent.click(main().getByRole('button', { name: 'Account' }));
+const openAccount = () => fireEvent.click(screen.getByRole('button', { name: 'Account' }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,7 +42,6 @@ describe('AppLayout', () => {
     expect(screen.getByText('page content')).toBeInTheDocument();
     expect(accountBar().getByRole('link', { name: 'Profile' })).toHaveAttribute('aria-current', 'page');
     expect(accountBar().getByRole('link', { name: 'Groups' })).toHaveAttribute('href', '/account/groups');
-    expect(main().getByRole('button', { name: 'Account' })).toHaveAttribute('aria-current', 'true');
   });
 
   it('shows the active section title in the desktop header', () => {

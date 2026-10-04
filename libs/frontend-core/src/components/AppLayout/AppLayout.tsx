@@ -1,22 +1,28 @@
-import { ReactNode, useState, MouseEvent } from 'react';
+import { ReactNode, useEffect, useState, FormEvent } from 'react';
 import {
   Avatar,
   Box,
   Button,
   ButtonBase,
   CssBaseline,
+  Dialog,
   Divider,
   Drawer,
+  IconButton,
+  InputAdornment,
+  Link as MuiLink,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
   MenuList,
+  TextField,
   Typography,
   useColorScheme,
+  useMediaQuery,
   useTheme
 } from '@mui/material';
-import { ExpandMore, Login, Logout, Person } from '@mui/icons-material';
+import { Add, ExpandMore, Logout, Person, Search } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 
 import { chrome, glass, livePalette, pageBackground, surface } from '../../theme';
@@ -84,12 +90,18 @@ export interface AppLayoutProps {
   /** Max width of the centered content column. Defaults to 800. */
   maxContentWidth?: number;
   /**
-   * False shows Login in place of Account. Defaults to true — account-front
-   * serves no anonymous visitors.
+   * False shows Sign in (and Sign up) in the top bar in place of the account
+   * menu. Defaults to true — account-front serves no anonymous visitors.
    */
   isAuthenticated?: boolean;
   /** Required when `isAuthenticated` can be false. */
   onLogin?: () => void;
+  /**
+   * True while the session is still being checked: the bar then shows neither
+   * Sign in nor the account menu, rather than flashing the wrong one at someone
+   * who is signed in.
+   */
+  authPending?: boolean;
   /**
    * False drops the page title, for apps whose pages render
    * their own headings. Defaults to true.
@@ -97,6 +109,18 @@ export interface AppLayoutProps {
   showPageHeader?: boolean;
   /** Where the rail's logo leads, for an app with a home page (shell-front). Otherwise it is only a logo. */
   homePath?: string;
+  /**
+   * Turns on the search box in the top bar (and Ctrl/Cmd+K) and receives what
+   * was typed. Left out, the bar has no search.
+   */
+  onSearch?: (query: string) => void;
+  searchPlaceholder?: string;
+  /** Opens sign-up for a visitor. Left out, only "Sign in" is offered. */
+  onSignup?: () => void;
+  /** The "New" menu of a signed-in user: the things they can create. Empty, no menu. */
+  createItems?: AppLayoutNavItem[];
+  /** Plain links a visitor gets beside Sign in (Docs, About). Always absolute: they leave the app. */
+  visitorLinks?: { text: string; href: string }[];
 }
 
 const ownsPath = (prefix: string, pathname: string): boolean =>
@@ -111,8 +135,9 @@ const linkProps = (item: AppLayoutNavItem) =>
  * The navigation behind every Visin front. Groups sit in a rail beside the
  * content, or in a tab bar under it on phones where it stays in reach of a
  * thumb; the shown group's sections sit in a bar above the content, or in a
- * dropdown on phones. Account is the last entry of the rail and the only place
- * account actions live.
+ * dropdown on phones. The rail is for places; who you are and what you can do
+ * sit at the end of that bar: search, Sign in / Sign up for a visitor, and for
+ * a member a New menu and the account menu, the only place account actions live.
  *
  * Every entry carries a visible label. The sidebar this replaced hid its menu
  * behind a burger button on phones, and collapsed on desktop to an icon rail
@@ -128,8 +153,14 @@ export function AppLayout({
   maxContentWidth = 800,
   isAuthenticated = true,
   onLogin,
+  authPending = false,
   showPageHeader = true,
-  homePath
+  homePath,
+  onSearch,
+  searchPlaceholder = 'Search…',
+  onSignup,
+  createItems = [],
+  visitorLinks = []
 }: AppLayoutProps) {
   const { pathname } = useLocation();
   const theme = useTheme();
@@ -146,8 +177,25 @@ export function AppLayout({
 
   const [accountAnchor, setAccountAnchor] = useState<HTMLElement | null>(null);
   const [sectionAnchor, setSectionAnchor] = useState<HTMLElement | null>(null);
+  const [createAnchor, setCreateAnchor] = useState<HTMLElement | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const closeAccount = () => setAccountAnchor(null);
   const closeSections = () => setSectionAnchor(null);
+  const closeCreate = () => setCreateAnchor(null);
+  const wideSearch = useMediaQuery(theme.breakpoints.up('lg')) && !mobile;
+
+  // Ctrl/Cmd+K opens search from anywhere on the page.
+  useEffect(() => {
+    if (!onSearch) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onSearch]);
 
   const allItems = [...navGroups.flatMap((group) => group.items), ...accountItems];
 
@@ -192,31 +240,6 @@ export function AppLayout({
           mobile={mobile}
         />
       ))}
-
-      {/* Pins Account to the foot of the rail, away from the groups. */}
-      {!mobile && <Box sx={{ flex: 1 }} />}
-
-      {isAuthenticated ? (
-        <NavButton
-          label="Account"
-          icon={
-            <Avatar
-              src={user?.picture}
-              alt=""
-              sx={{ width: 26, height: 26, fontSize: '0.8rem', bgcolor: 'secondary.main' }}
-            >
-              {initial}
-            </Avatar>
-          }
-          active={Boolean(accountAnchor) || activeGroup === accountGroup}
-          current={activeGroup === accountGroup}
-          mobile={mobile}
-          onClick={(event) => setAccountAnchor(event.currentTarget)}
-          expanded={Boolean(accountAnchor)}
-        />
-      ) : (
-        <NavButton label="Login" icon={<Login />} active={false} current={false} mobile={mobile} onClick={onLogin} />
-      )}
     </>
   );
 
@@ -301,9 +324,9 @@ export function AppLayout({
       open={Boolean(accountAnchor)}
       onClose={closeAccount}
       anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       slotProps={{
-        paper: { sx: { ml: 1, minWidth: 240, maxWidth: 320, borderRadius: 3 } },
+        paper: { sx: { mt: 0.5, minWidth: 240, maxWidth: 320, borderRadius: 3 } },
         list: { 'aria-label': 'Account' }
       }}
     >
@@ -340,6 +363,126 @@ export function AppLayout({
     </Menu>
   );
 
+  const avatarButton = (
+    <IconButton
+      onClick={(event) => setAccountAnchor(event.currentTarget)}
+      aria-label="Account"
+      aria-haspopup="menu"
+      aria-expanded={Boolean(accountAnchor)}
+      sx={{ p: 0.5 }}
+    >
+      <Avatar src={user?.picture} alt="" sx={{ width: 32, height: 32, fontSize: '0.9rem', bgcolor: 'secondary.main' }}>
+        {initial}
+      </Avatar>
+    </IconButton>
+  );
+
+  const createMenu = isAuthenticated && createItems.length > 0 && (
+    <>
+      {mobile ? (
+        <IconButton
+          onClick={(event) => setCreateAnchor(event.currentTarget)}
+          aria-label="New"
+          aria-haspopup="menu"
+          aria-expanded={Boolean(createAnchor)}
+        >
+          <Add />
+        </IconButton>
+      ) : (
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={<Add />}
+          endIcon={<ExpandMore />}
+          onClick={(event) => setCreateAnchor(event.currentTarget)}
+          aria-haspopup="menu"
+          aria-expanded={Boolean(createAnchor)}
+          sx={{ flexShrink: 0, height: 36 }}
+        >
+          New
+        </Button>
+      )}
+      <Menu
+        anchorEl={createAnchor}
+        open={Boolean(createAnchor)}
+        onClose={closeCreate}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        slotProps={{ paper: { sx: { mt: 0.5, minWidth: 220 } }, list: { 'aria-label': 'New' } }}
+      >
+        {createItems.map((item) => menuItem(item, closeCreate))}
+      </Menu>
+    </>
+  );
+
+  const searchTrigger =
+    onSearch &&
+    (wideSearch ? (
+      <ButtonBase
+        onClick={() => setSearchOpen(true)}
+        aria-label="Search"
+        aria-keyshortcuts="Control+K Meta+K"
+        sx={{
+          width: 280,
+          height: 38,
+          px: 1.5,
+          gap: 1,
+          flexShrink: 0,
+          justifyContent: 'flex-start',
+          borderRadius: 999,
+          border: `1px solid ${chrome.edge}`,
+          color: chrome.inkMuted,
+          '&:hover': { bgcolor: surface.hover, color: chrome.ink }
+        }}
+      >
+        <Search fontSize="small" />
+        <Typography variant="body2" sx={{ flex: 1, textAlign: 'left', color: 'inherit' }}>
+          {searchPlaceholder}
+        </Typography>
+        <Typography variant="caption" aria-hidden sx={{ color: 'inherit' }}>
+          {SHORTCUT}
+        </Typography>
+      </ButtonBase>
+    ) : (
+      <IconButton onClick={() => setSearchOpen(true)} aria-label="Search" sx={{ color: chrome.inkMuted }}>
+        <Search />
+      </IconButton>
+    ));
+
+  const visitorActions = !isAuthenticated && (
+    <>
+      {!mobile &&
+        visitorLinks.map((link) => (
+          <MuiLink
+            key={link.href}
+            href={link.href}
+            underline="none"
+            sx={{ flexShrink: 0, fontWeight: 500, color: chrome.inkMuted, '&:hover': { color: chrome.ink } }}
+          >
+            {link.text}
+          </MuiLink>
+        ))}
+      <Button onClick={onLogin} size="small" sx={{ flexShrink: 0, height: 36, color: chrome.ink }}>
+        Sign in
+      </Button>
+      {onSignup && (
+        <Button onClick={onSignup} variant="contained" size="small" sx={{ flexShrink: 0, height: 36 }}>
+          Sign up
+        </Button>
+      )}
+    </>
+  );
+
+  // Who the viewer is and what they can do, at the end of the bar: the rail is for places.
+  const headerActions = (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: mobile ? 0.5 : 1.5, flexShrink: 0, ml: 'auto' }}>
+      {searchTrigger}
+      {!authPending && visitorActions}
+      {!authPending && createMenu}
+      {!authPending && isAuthenticated && avatarButton}
+    </Box>
+  );
+
   const header = mobile ? (
     <Box component="header" sx={{ ...appBarSx, minHeight: APP_BAR_HEIGHT, px: 1 }}>
       {sectionGroup ? (
@@ -371,6 +514,7 @@ export function AppLayout({
           {barTitle}
         </Typography>
       )}
+      {headerActions}
     </Box>
   ) : (
     <Box component="header" sx={{ ...appBarSx, minHeight: 64, gap: 3, px: { md: 5 } }}>
@@ -412,6 +556,7 @@ export function AppLayout({
           })}
         </Box>
       )}
+      {headerActions}
     </Box>
   );
 
@@ -524,26 +669,87 @@ export function AppLayout({
       )}
 
       {isAuthenticated && accountMenu}
+
+      {onSearch && (
+        <SearchDialog
+          open={searchOpen}
+          placeholder={searchPlaceholder}
+          onClose={() => setSearchOpen(false)}
+          onSubmit={(query) => {
+            setSearchOpen(false);
+            onSearch(query);
+          }}
+        />
+      )}
     </Box>
+  );
+}
+
+const SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘K' : 'Ctrl K';
+
+interface SearchDialogProps {
+  open: boolean;
+  placeholder: string;
+  onClose: () => void;
+  onSubmit: (query: string) => void;
+}
+
+function SearchDialog({ open, placeholder, onClose, onSubmit }: SearchDialogProps) {
+  const [query, setQuery] = useState('');
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = query.trim();
+    if (trimmed) {
+      onSubmit(trimmed);
+      setQuery('');
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      slotProps={{ paper: { sx: { alignSelf: 'flex-start', mt: { xs: 2, sm: 10 }, borderRadius: 3 } } }}
+    >
+      <Box component="form" role="search" onSubmit={submit} sx={{ p: 1.5 }}>
+        <TextField
+          autoFocus
+          fullWidth
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={placeholder}
+          slotProps={{
+            htmlInput: { 'aria-label': 'Search' },
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              )
+            }
+          }}
+        />
+      </Box>
+    </Dialog>
   );
 }
 
 interface NavButtonProps {
   label: string;
   icon: ReactNode;
-  /** Drawn highlighted: the group being shown, or Account while its menu is open. */
+  /** Drawn highlighted: the group being shown. */
   active: boolean;
   /** The group being shown, announced as such. */
   current: boolean;
   mobile: boolean;
-  /** Where the entry leads. Without one it is a button, for a menu or an action. */
-  target?: AppLayoutNavItem;
-  onClick?: (event: MouseEvent<HTMLElement>) => void;
-  /** Set on an entry that opens a menu. */
-  expanded?: boolean;
+  /** Where the entry leads. */
+  target: AppLayoutNavItem;
 }
 
-function NavButton({ label, icon, active, current, mobile, target, onClick, expanded }: NavButtonProps) {
+function NavButton({ label, icon, active, current, mobile, target }: NavButtonProps) {
   const theme = useTheme();
 
   const palette = livePalette(theme);
@@ -609,25 +815,8 @@ function NavButton({ label, icon, active, current, mobile, target, onClick, expa
     </>
   );
 
-  const ariaCurrent = current ? ('true' as const) : undefined;
-
-  if (target) {
-    return (
-      <ButtonBase {...linkProps(target)} aria-current={ariaCurrent} disableRipple sx={sx}>
-        {body}
-      </ButtonBase>
-    );
-  }
-
   return (
-    <ButtonBase
-      onClick={onClick}
-      aria-current={ariaCurrent}
-      aria-haspopup={expanded === undefined ? undefined : 'menu'}
-      aria-expanded={expanded}
-      disableRipple
-      sx={sx}
-    >
+    <ButtonBase {...linkProps(target)} aria-current={current ? ('true' as const) : undefined} disableRipple sx={sx}>
       {body}
     </ButtonBase>
   );

@@ -55,14 +55,23 @@ describe('AppLayout', () => {
     expect(screen.getByText('page content')).toBeInTheDocument();
   });
 
-  it('shows the shared Projects, Data and Labels groups', () => {
-    anonymous();
+  it('shows the shared Projects, Data and Leaderboards groups, and Labels once signed in', () => {
+    signedIn();
     renderLayout();
 
     expect(main().getByRole('link', { name: 'Projects' })).toHaveAttribute('href', '/projects');
     expect(main().getByRole('link', { name: 'Data' })).toHaveAttribute('href', '/datasets');
+    expect(main().getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('href', '/leaderboards');
     // The menu is identical in every app, so following a link across does not swap it out.
     expect(main().getByRole('link', { name: 'Labels' })).toHaveAttribute('href', 'https://label.example.com/jobs');
+  });
+
+  it('leaves Labels out of a visitor menu, since it needs an account', () => {
+    anonymous();
+    renderLayout();
+
+    expect(main().queryByRole('link', { name: 'Labels' })).not.toBeInTheDocument();
+    expect(main().getByRole('link', { name: 'Leaderboards' })).toBeInTheDocument();
   });
 
   it('lists the Projects sections while in a training', () => {
@@ -74,7 +83,7 @@ describe('AppLayout', () => {
   });
 
   it('sends label-front sections straight to label-front', () => {
-    anonymous();
+    signedIn();
     renderLayout('/datasets/123');
 
     // No interstitial page in between — the entry is the label-front URL.
@@ -86,7 +95,7 @@ describe('AppLayout', () => {
 
   it('drops label-front sections when label-front is unconfigured', () => {
     mockedGetGlobalConfig.mockReturnValue({} as any);
-    anonymous();
+    signedIn();
     renderLayout('/datasets');
 
     // Better absent entries than ones that 404 inside Vision.
@@ -95,21 +104,24 @@ describe('AppLayout', () => {
     expect(main().getByRole('link', { name: 'Data' })).toBeInTheDocument();
   });
 
-  it('shows the Login button when the user is not authenticated', () => {
+  it('offers a visitor Sign in and Sign up in the top bar', () => {
     const login = vi.fn();
-    mockedUseAuth.mockReturnValue({ user: null, isAuthenticated: false, login, logout: vi.fn() } as any);
+    const signup = vi.fn();
+    mockedUseAuth.mockReturnValue({ user: null, isAuthenticated: false, login, signup, logout: vi.fn() } as any);
     renderLayout();
 
-    fireEvent.click(main().getByRole('button', { name: 'Login' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign up' }));
 
     expect(login).toHaveBeenCalled();
+    expect(signup).toHaveBeenCalled();
   });
 
   it('shows who is signed in, with Account sections on account-front', () => {
     signedIn();
     renderLayout();
 
-    fireEvent.click(main().getByRole('button', { name: 'Account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
     expect(screen.getByText('jane@example.com')).toBeInTheDocument();
@@ -124,7 +136,7 @@ describe('AppLayout', () => {
     signedIn(logout);
     renderLayout();
 
-    fireEvent.click(main().getByRole('button', { name: 'Account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
 
     expect(logout).toHaveBeenCalled();

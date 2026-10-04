@@ -91,6 +91,18 @@ describe('DatasetsPage', () => {
     expect(service.uploadArchive).toHaveBeenCalledWith('new', file, expect.any(Function), expect.any(AbortSignal));
   });
 
+  it('opens the form from the menu\'s New (?create=1), for a signed-in user only', async () => {
+    renderWithClient(<DatasetsPage />, { route: '/datasets', path: '/datasets?create=1' });
+    expect(await screen.findByTestId('dataset-zip-input')).toBeInTheDocument();
+  });
+
+  it('does not open the form from ?create=1 for a visitor', async () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: false });
+    renderWithClient(<DatasetsPage />, { route: '/datasets', path: '/datasets?create=1' });
+    await screen.findByText('ZOD');
+    expect(screen.queryByTestId('dataset-zip-input')).not.toBeInTheDocument();
+  });
+
   it('shows a refused create, and leaves a failed upload to the dataset page', async () => {
     service.createDataset.mockRejectedValueOnce(new Error('Name taken'));
     renderWithClient(<DatasetsPage />, { route: '/datasets', path: '/datasets' });

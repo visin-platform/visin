@@ -1,22 +1,30 @@
 import { ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Home } from '@mui/icons-material';
-import { AppLayout, createVisinNavigation, type AppLayoutNavGroup } from '@visin/frontend-core';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Add, AddTask, Key, PhotoLibrary } from '@mui/icons-material';
+import { AppLayout, createVisinNavigation, type AppLayoutNavItem } from '@visin/frontend-core';
+import { useConfig } from '../config/ConfigProvider';
 import { useAuth } from '../contexts/AuthContext';
 import { APPS, appForPath } from '../apps';
 
-/** Outside any app's routes (the not-found page): the widest frame, no header. */
+/** Outside any app's routes (Home, Explore, the not-found page): the widest frame, no header. */
 const NO_APP_LAYOUT = { maxContentWidth: 1600, showPageHeader: false };
 
-/** Every app renders on this page, so no entry of the menu links across. */
-const NAVIGATION = createVisinNavigation(['vision', 'label', 'account'], {});
+/**
+ * Every app renders on this page, so no entry of the menu links across. A visitor's
+ * menu leaves out what needs an account, so none of it leads to a sign-in wall.
+ */
+const APP_LIST = ['shell', 'vision', 'label', 'account'] as const;
+const MEMBER_NAVIGATION = createVisinNavigation(APP_LIST, {});
+const VISITOR_NAVIGATION = createVisinNavigation(APP_LIST, {}, { isAuthenticated: false });
 
-/** Where a session opens. Only the shell has one, and only for a signed-in user. */
-const HOME: AppLayoutNavGroup = {
-  label: 'Home',
-  icon: <Home />,
-  items: [{ text: 'Home', icon: <Home />, path: '/' }]
-};
+/** What the New menu creates. Each opens the page that makes it, with its form already open. */
+const CREATE_ITEMS: AppLayoutNavItem[] = [
+  { text: 'Project', icon: <Add />, path: '/projects?create=1' },
+  { text: 'Dataset', icon: <PhotoLibrary />, path: '/datasets?create=1' },
+  { text: 'Labeling job', icon: <AddTask />, path: '/jobs/new' },
+  // A pipeline reports its runs with a key; the keys live in Account.
+  { text: 'API key', icon: <Key />, path: '/account/api-keys' }
+];
 
 /**
  * The shared navigation, mounted once for the whole session. Only the frame
@@ -25,21 +33,40 @@ const HOME: AppLayoutNavGroup = {
  */
 const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { pathname } = useLocation();
-  const { user, isAuthenticated, login, logout } = useAuth();
+  const navigate = useNavigate();
+  const config = useConfig();
+  const { user, isAuthenticated, isLoading, login, signup, logout } = useAuth();
   const app = appForPath(pathname);
   const definition = app ? APPS[app] : null;
   const layout = definition ? definition.layout(pathname) : NO_APP_LAYOUT;
+  const navigation = isAuthenticated ? MEMBER_NAVIGATION : VISITOR_NAVIGATION;
+
+  // Docs and About live on the landing site; without its address there is nothing to link to.
+  const landing = config.LANDING_FRONT_URL?.replace(/\/$/, '');
+  const visitorLinks = landing
+    ? [
+        { text: 'Docs', href: `${landing}/docs` },
+        { text: 'About', href: `${landing}/about` }
+      ]
+    : [];
 
   return (
     <AppLayout
       appName={definition?.title ?? 'Visin'}
-      navGroups={isAuthenticated ? [HOME, ...NAVIGATION.groups] : NAVIGATION.groups}
+      navGroups={navigation.groups}
       homePath="/"
-      accountItems={NAVIGATION.accountItems}
+      accountItems={navigation.accountItems}
       user={user}
       isAuthenticated={isAuthenticated}
+      authPending={isLoading}
       onLogin={login}
+      onSignup={signup}
       onLogout={logout}
+      // Projects are what the vision remote can search today; the box grows to the rest.
+      onSearch={config.VISION_FRONT_URL ? (query) => navigate(`/projects?search=${encodeURIComponent(query)}`) : undefined}
+      searchPlaceholder="Search projects…"
+      createItems={CREATE_ITEMS}
+      visitorLinks={visitorLinks}
       maxContentWidth={layout.maxContentWidth}
       showPageHeader={layout.showPageHeader}
     >

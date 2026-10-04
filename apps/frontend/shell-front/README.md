@@ -6,11 +6,17 @@ route change rather than a page load. Each of those apps also keeps running stan
 
 - Dev port: `3010`
 - Stack: React + Vite + MUI, `@module-federation/vite` host, auth/layout from `@visin/frontend-core`
-- Owns the router, the sidebar, the session shown in it, and `/`, `/login`, `/image-labeling/*`. Every other path
-  belongs to the app named in `src/apps.ts`, whose exposed `./App` renders it.
+- Owns the router, the sidebar, the top bar (search, Sign in / Sign up, New, account menu), the session shown in
+  it, and `/`, `/explore`, `/login`, `/image-labeling/*`. Every other path belongs to the app named in
+  `src/apps.ts`, whose exposed `./App` renders it.
+- `/` is **Explore** for a visitor (public projects, datasets, the leaderboard and recent findings, all readable
+  without an account) and the member's own home for a signed-in session, with Explore one tab over at `/explore`.
 - Remote addresses are runtime config (`VISION_FRONT_URL`, `LABEL_FRONT_URL`, `ACCOUNT_FRONT_URL` in
   `config.json`); each remote serves `remoteEntry.js` at that root. An app that is down or unconfigured shows a
   retry panel in place of its pages.
+- `VISION_API_URL`, `DATASET_API_URL`, `LABEL_SERVICE_URL` and `GROUP_SERVICE_URL` feed the home and Explore pages
+  (each part is left out when its URL is unset). `LANDING_FRONT_URL` is where a visitor's Docs and About links go;
+  unset, they are left out.
 
 ## Develop
 

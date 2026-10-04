@@ -612,9 +612,9 @@ files['context.svg'] = doc(
       h: 100,
       title: 'App shell',
       lines: [
-        'The app people open. Owns the router, the one layout and the home page, and renders the three apps below in one page.'
+        'The app people open. Owns the router, the one layout, the home and Explore pages, and renders the three apps below in one page.'
       ],
-      calls: ['Auth API', 'Vision API', 'Label API', 'Group API']
+      calls: ['Auth API', 'Vision API', 'Dataset API', 'Label API', 'Group API']
     })
   );
   const rx = [20, 280, 540];

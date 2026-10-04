@@ -27,7 +27,7 @@ const renderAt = (path: string) =>
   );
 
 const main = () => within(screen.getByRole('navigation', { name: 'Main' }));
-const openAccount = () => fireEvent.click(main().getByRole('button', { name: 'Account' }));
+const openAccount = () => fireEvent.click(screen.getByRole('button', { name: 'Account' }));
 
 beforeEach(() => {
   vi.clearAllMocks();

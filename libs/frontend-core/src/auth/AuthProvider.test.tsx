@@ -17,13 +17,14 @@ const makeAuthService = (overrides: Partial<AuthService> = {}): AuthService =>
   }) as unknown as AuthService;
 
 function Consumer({ useAuth }: { useAuth: ReturnType<typeof createAuthContext>['useAuth'] }) {
-  const { user, isAuthenticated, isLoading, login, logout, refresh } = useAuth();
+  const { user, isAuthenticated, isLoading, login, signup, logout, refresh } = useAuth();
   return (
     <div>
       <span data-testid="loading">{String(isLoading)}</span>
       <span data-testid="authenticated">{String(isAuthenticated)}</span>
       <span data-testid="user">{user ? user.name : 'none'}</span>
       <button onClick={login}>login</button>
+      <button onClick={signup}>signup</button>
       <button onClick={() => void logout()}>logout</button>
       <button onClick={() => void refresh()}>refresh</button>
     </div>
@@ -76,6 +77,16 @@ describe('createAuthContext', () => {
     act(() => screen.getByRole('button', { name: 'login' }).click());
 
     expect(service.redirectToLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it('signup asks for the sign-up form', async () => {
+    const service = makeAuthService();
+    renderWithProvider(service);
+    await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'));
+
+    act(() => screen.getByRole('button', { name: 'signup' }).click());
+
+    expect(service.redirectToLogin).toHaveBeenCalledWith(undefined, { mode: 'register' });
   });
 
   it('logout calls the service, clears the user, and reloads the page', async () => {

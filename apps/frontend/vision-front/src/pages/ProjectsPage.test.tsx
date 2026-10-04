@@ -191,6 +191,48 @@ describe('ProjectsPage', () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/projects/p9'));
   });
 
+  it('opens the form from the menu\'s New (?create=1) without the guide\'s group default or redirect', async () => {
+    projectServiceMock.getProjects.mockResolvedValue({ data: [] });
+    projectServiceMock.createProject.mockResolvedValue({ data: { ...project1, _id: 'p9' } });
+
+    renderPage('/projects?create=1');
+
+    const dialog = await screen.findByTestId('project-form-dialog');
+    expect(dialog).toHaveTextContent('editing:false');
+    fireEvent.click(screen.getByText('type-name'));
+    fireEvent.click(screen.getByText('submit-form'));
+
+    await waitFor(() => expect(projectServiceMock.createProject).toHaveBeenCalled());
+    expect(projectServiceMock.createProject.mock.calls[0][0]).toMatchObject({ owner: { kind: 'user', id: 'u1' } });
+    expect(navigateMock).not.toHaveBeenCalledWith('/projects/p9');
+  });
+
+  it('does not open the form from ?create=1 for a visitor', async () => {
+    useAuthMock.mockReturnValue({ user: null });
+    projectServiceMock.getProjects.mockResolvedValue({ data: [project1] });
+
+    renderPage('/projects?create=1');
+
+    await screen.findByText('Project One');
+    expect(screen.queryByTestId('project-form-dialog')).not.toBeInTheDocument();
+  });
+
+  it('lists only the projects matching the menu\'s search (?search=), until cleared', async () => {
+    projectServiceMock.getProjects.mockResolvedValue({ data: [project1] });
+
+    renderPage('/projects?search=night%20driving');
+
+    expect(await screen.findByText('Projects matching “night driving”')).toBeInTheDocument();
+    expect(projectServiceMock.getProjects).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: 'night driving' })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+
+    await waitFor(() => expect(screen.queryByText(/Projects matching/)).not.toBeInTheDocument());
+    expect(projectServiceMock.getProjects).toHaveBeenLastCalledWith(expect.objectContaining({ search: undefined }));
+  });
+
   it('opens the create dialog, submits, and refetches projects', async () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [project1] });
     projectServiceMock.createProject.mockResolvedValue({ data: project1 });

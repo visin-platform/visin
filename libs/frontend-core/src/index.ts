@@ -89,7 +89,7 @@ export type {
   Visibility
 } from './components/Ownership';
 export { createVisinNavigation } from './navigation';
-export type { VisinApp, VisinAppUrls, VisinNavigation } from './navigation';
+export type { VisinApp, VisinAppUrls, VisinNavigation, VisinNavigationOptions } from './navigation';
 export { createProtectedRoute } from './components/ProtectedRoute';
 export type { ProtectedRouteProps, ProtectedRouteAuth } from './components/ProtectedRoute';
 export { createLoginRedirect } from './components/LoginRedirect';

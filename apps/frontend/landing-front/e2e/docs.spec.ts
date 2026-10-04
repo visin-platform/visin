@@ -19,7 +19,7 @@ test('reaches the quickstart from the landing page and copies its code', async (
   page.on('pageerror', (err) => pageErrors.push(err.message));
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
-  await page.goto('/');
+  await page.goto('/about');
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Docs' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Integrate with Visin' })).toBeVisible();
 
@@ -89,7 +89,7 @@ test('renders both API references without calling anything but this site', async
 });
 
 test("keeps the reference's styles off the landing page", async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/about');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
   const scalarStyles = await page.evaluate(() =>
@@ -102,7 +102,7 @@ test("keeps the reference's styles off the landing page", async ({ page }) => {
 
 // One test per page: an axe scan takes about two seconds, and the whole site
 // in one test ran past Playwright's 30 s limit whenever the machine was busy.
-for (const path of ['/', ...DOCS_PATHS]) {
+for (const path of ['/about', ...DOCS_PATHS]) {
   test(`has no serious accessibility problems on ${path}`, async ({ page }) => {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

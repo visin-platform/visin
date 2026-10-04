@@ -70,7 +70,7 @@ export default function Hero({ appUrl }: HeroProps) {
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'center' }}>
             <Button href={appUrl} variant="contained" size="large" endIcon={<ArrowForward />} sx={{ borderRadius: 2, whiteSpace: 'nowrap' }}>
-              Open the app
+              Explore
             </Button>
             <Button href="#assistant" variant="outlined" size="large" sx={outlinedOnInk}>
               Connect an assistant

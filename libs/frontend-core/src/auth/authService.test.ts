@@ -140,6 +140,14 @@ describe('createAuthService', () => {
       expect(window.location.href).toBe('http://auth-front.test?redirect_uri=http%3A%2F%2Fapp.test%2Fdatasets');
     });
 
+    it('asks auth-front for its sign-up form', () => {
+      makeService().redirectToLogin('http://app.test/datasets', { mode: 'register' });
+
+      expect(window.location.href).toBe(
+        'http://auth-front.test?redirect_uri=http%3A%2F%2Fapp.test%2Fdatasets&mode=register'
+      );
+    });
+
     // Without an auth-front address the redirect would target this same page,
     // which reloads, finds no session, and redirects again without end.
     it('stays put and says what is missing when no auth-front URL is configured', () => {

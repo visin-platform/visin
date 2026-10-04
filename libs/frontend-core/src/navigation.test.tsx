@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { createVisinNavigation } from './navigation';
 
-const urls = { vision: 'https://vision.test', label: 'https://label.test', account: 'https://account.test' };
+const urls = {
+  shell: 'https://app.test',
+  vision: 'https://vision.test',
+  label: 'https://label.test',
+  account: 'https://account.test'
+};
 
 const labels = (nav: ReturnType<typeof createVisinNavigation>) => nav.groups.map(group => group.label);
 const texts = (nav: ReturnType<typeof createVisinNavigation>) =>
@@ -9,12 +14,18 @@ const texts = (nav: ReturnType<typeof createVisinNavigation>) =>
 
 describe('createVisinNavigation', () => {
   it('gives every app the same groups, in the same order', () => {
-    const expected = [['All projects', 'Trainings'], ['Datasets'], ['Jobs']];
+    const expected = [
+      ['For you', 'Explore'],
+      ['All projects', 'Trainings'],
+      ['Datasets'],
+      ['Leaderboards', 'Models', 'Suites', 'Evaluations'],
+      ['Jobs']
+    ];
 
     // Crossing apps must not change what the menu contains.
-    for (const local of ['vision', 'label', 'account', null] as const) {
+    for (const local of ['shell', 'vision', 'label', 'account', null] as const) {
       const nav = createVisinNavigation(local, urls);
-      expect(labels(nav)).toEqual(['Projects', 'Data', 'Labels']);
+      expect(labels(nav)).toEqual(['Home', 'Projects', 'Data', 'Leaderboards', 'Labels']);
       expect(texts(nav)).toEqual(expected);
     }
   });
@@ -26,8 +37,8 @@ describe('createVisinNavigation', () => {
   });
 
   it('keeps the current app sections as internal routes', () => {
-    const [projects] = createVisinNavigation('vision', urls).groups[0].items;
-    const [jobs] = createVisinNavigation('label', urls).groups[2].items;
+    const [projects] = createVisinNavigation('vision', urls).groups[1].items;
+    const [jobs] = createVisinNavigation('label', urls).groups[4].items;
 
     expect(projects.path).toBe('/projects');
     expect(projects.href).toBeUndefined();
@@ -37,8 +48,8 @@ describe('createVisinNavigation', () => {
 
   it('links the other app sections straight to that section', () => {
     const nav = createVisinNavigation('label', urls);
-    const [datasets] = nav.groups[1].items;
-    const [jobs] = nav.groups[2].items;
+    const [datasets] = nav.groups[2].items;
+    const [jobs] = nav.groups[4].items;
 
     expect(datasets.href).toBe('https://vision.test/datasets');
     expect(datasets.path).toBeUndefined();
@@ -49,25 +60,29 @@ describe('createVisinNavigation', () => {
   it('tolerates a trailing slash on the configured base URL', () => {
     const nav = createVisinNavigation('vision', { label: 'https://label.test/' });
 
-    expect(nav.groups[2].items[0]).toMatchObject({ href: 'https://label.test/jobs' });
+    expect(nav.groups.at(-1)!.items[0]).toMatchObject({ href: 'https://label.test/jobs' });
   });
 
   it('omits sections, and then groups, whose app has no URL configured', () => {
     // Dead links into the current origin would 404; an absent entry is honest.
-    expect(texts(createVisinNavigation('vision', {}))).toEqual([['All projects', 'Trainings'], ['Datasets']]);
+    expect(texts(createVisinNavigation('vision', {}))).toEqual([
+      ['All projects', 'Trainings'],
+      ['Datasets'],
+      ['Leaderboards', 'Models', 'Suites', 'Evaluations']
+    ]);
     expect(texts(createVisinNavigation('label', {}))).toEqual([['Jobs']]);
     expect(labels(createVisinNavigation(null, { label: 'https://label.test' }))).toEqual(['Labels']);
   });
 
   it('keeps Projects lit on the pages a project leads to, only where they are local', () => {
-    expect(createVisinNavigation('vision', urls).groups[0].match).toContain('/benchmarks');
-    expect(createVisinNavigation('label', urls).groups[0].match).toEqual([]);
-    expect(createVisinNavigation('vision', urls).groups[1].match).toEqual([]);
+    expect(createVisinNavigation('vision', urls).groups[1].match).toContain('/benchmarks');
+    expect(createVisinNavigation('label', urls).groups[1].match).toEqual([]);
+    expect(createVisinNavigation('vision', urls).groups[2].match).toEqual([]);
   });
 
   // shell-front renders every app on one page, so nothing links across.
   it('routes every listed app locally when several share the page', () => {
-    const nav = createVisinNavigation(['vision', 'label', 'account'], {});
+    const nav = createVisinNavigation(['shell', 'vision', 'label', 'account'], {});
     const items = [...nav.groups.flatMap(group => group.items), ...nav.accountItems];
 
     expect(items.every(item => item.path !== undefined && item.href === undefined)).toBe(true);
@@ -77,6 +92,40 @@ describe('createVisinNavigation', () => {
     const nav = createVisinNavigation('vision', { vision: 'https://vision.test' });
 
     expect(nav.groups[0].items.every(item => item.path !== undefined)).toBe(true);
+  });
+});
+
+describe('for a visitor', () => {
+  const visitor = { isAuthenticated: false };
+
+  it('leaves out what needs an account, so no entry leads to a sign-in wall', () => {
+    const nav = createVisinNavigation('shell', urls, visitor);
+
+    expect(labels(nav)).toEqual(['Explore', 'Projects', 'Data', 'Leaderboards']);
+    expect(texts(nav).flat()).not.toContain('Jobs');
+    expect(texts(nav).flat()).not.toContain('For you');
+  });
+
+  it('opens on Explore at the front page rather than behind /explore', () => {
+    const [explore] = createVisinNavigation('shell', urls, visitor).groups;
+
+    expect(explore.items).toMatchObject([{ text: 'Explore', path: '/' }]);
+  });
+
+  it('gives a signed-in session its own page first and Explore one tab over', () => {
+    const [home] = createVisinNavigation('shell', urls).groups;
+
+    expect(home.label).toBe('Home');
+    expect(home.items).toMatchObject([
+      { text: 'For you', path: '/' },
+      { text: 'Explore', path: '/explore' }
+    ]);
+  });
+
+  it('links Explore across to the shell from another app', () => {
+    const [explore] = createVisinNavigation('vision', urls, visitor).groups;
+
+    expect(explore.items).toMatchObject([{ href: 'https://app.test/' }]);
   });
 });
 

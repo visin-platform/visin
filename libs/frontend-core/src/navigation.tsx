@@ -1,24 +1,33 @@
 import type { ReactNode } from 'react';
 import {
+  Assessment,
   Assignment,
+  Checklist,
+  EmojiEvents,
+  Explore,
   Folder,
   FolderCopy,
   Groups,
+  Home,
   Insights,
   Key,
   Label,
   Link as LinkIcon,
+  Memory,
   ModelTraining,
   Person,
   PhotoLibrary,
+  Scoreboard,
   Storage
 } from '@mui/icons-material';
 import type { AppLayoutNavGroup, AppLayoutNavItem } from './components/AppLayout';
 
 /** The fronts whose sections make up the shared menu. */
-export type VisinApp = 'vision' | 'label' | 'account';
+export type VisinApp = 'shell' | 'vision' | 'label' | 'account';
 
 export interface VisinAppUrls {
+  /** Base URL of shell-front, which owns Home and Explore, e.g. https://app.example.com */
+  shell?: string;
   /** Base URL of vision-front, e.g. https://ml.example.com */
   vision?: string;
   /** Base URL of label-front, e.g. https://label.example.com */
@@ -37,12 +46,20 @@ interface NavSection {
   text: string;
   icon: ReactNode;
   path: string;
+  /** Left out for a visitor: the section needs an account. */
+  signedInOnly?: boolean;
+  /** Where the section lives for a visitor, where that differs from `path`. */
+  signedOutPath?: string;
 }
 
 interface NavGroup {
   label: string;
+  /** What a visitor sees the group called, where it differs. */
+  signedOutLabel?: string;
   icon: ReactNode;
   sections: NavSection[];
+  /** Left out for a visitor, with all its sections. */
+  signedInOnly?: boolean;
   /** Pages of the group reached from inside it — a project, a training — rather than from the menu. */
   pages?: { app: VisinApp; paths: string[] };
 }
@@ -53,6 +70,17 @@ interface NavGroup {
  * never what the menu contains.
  */
 const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Home',
+    signedOutLabel: 'Explore',
+    icon: <Home />,
+    sections: [
+      // A visitor's front page is Explore itself; a signed-in session opens on its own
+      // dashboard and keeps Explore one tab over.
+      { app: 'shell', text: 'For you', icon: <Home />, path: '/', signedInOnly: true },
+      { app: 'shell', text: 'Explore', icon: <Explore />, path: '/explore', signedOutPath: '/' }
+    ]
+  },
   {
     label: 'Projects',
     icon: <Folder />,
@@ -73,8 +101,19 @@ const NAV_GROUPS: NavGroup[] = [
     sections: [{ app: 'vision', text: 'Datasets', icon: <PhotoLibrary />, path: '/datasets' }]
   },
   {
+    label: 'Leaderboards',
+    icon: <EmojiEvents />,
+    sections: [
+      { app: 'vision', text: 'Leaderboards', icon: <Scoreboard />, path: '/leaderboards' },
+      { app: 'vision', text: 'Models', icon: <Memory />, path: '/models' },
+      { app: 'vision', text: 'Suites', icon: <Checklist />, path: '/suites' },
+      { app: 'vision', text: 'Evaluations', icon: <Assessment />, path: '/evaluations' }
+    ]
+  },
+  {
     label: 'Labels',
     icon: <Label />,
+    signedInOnly: true,
     // A labeling job is built on a dataset, which lives under Data; "New job"
     // is deliberately not here either, being an action on the Jobs list.
     sections: [{ app: 'label', text: 'Jobs', icon: <Assignment />, path: '/jobs' }]
@@ -91,6 +130,15 @@ const ACCOUNT_SECTIONS: NavSection[] = [
 
 const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
 
+export interface VisinNavigationOptions {
+  /**
+   * Whether the viewer has a session. A visitor's menu leaves out what needs an
+   * account (Labels, For you), so no entry leads to a sign-in wall. Defaults to
+   * true: label-front and account-front serve no visitors.
+   */
+  isAuthenticated?: boolean;
+}
+
 /**
  * Builds the shared menu. `localApps` are the apps whose sections are routes of
  * the page drawing the menu: one app in a standalone front, all of them in
@@ -104,25 +152,40 @@ const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
  */
 export function createVisinNavigation(
   localApps: VisinApp | readonly VisinApp[] | null,
-  urls: VisinAppUrls
+  urls: VisinAppUrls,
+  { isAuthenticated = true }: VisinNavigationOptions = {}
 ): VisinNavigation {
   const local = new Set<VisinApp>(localApps === null ? [] : typeof localApps === 'string' ? [localApps] : localApps);
 
-  const toItems = ({ app, text, icon, path }: NavSection): AppLayoutNavItem[] => {
+  const toItems = ({ app, text, icon, path, signedInOnly, signedOutPath }: NavSection): AppLayoutNavItem[] => {
+    if (signedInOnly && !isAuthenticated) {
+      return [];
+    }
+    const target = !isAuthenticated && signedOutPath ? signedOutPath : path;
     if (local.has(app)) {
-      return [{ text, icon, path }];
+      return [{ text, icon, path: target }];
     }
     const baseUrl = urls[app];
-    return baseUrl ? [{ text, icon, href: `${stripTrailingSlash(baseUrl)}${path}` }] : [];
+    return baseUrl ? [{ text, icon, href: `${stripTrailingSlash(baseUrl)}${target}` }] : [];
   };
 
-  const groups = NAV_GROUPS.flatMap(({ label, icon, sections, pages }): AppLayoutNavGroup[] => {
+  const groups = NAV_GROUPS.flatMap(({ label, signedOutLabel, icon, sections, pages, signedInOnly }): AppLayoutNavGroup[] => {
+    if (signedInOnly && !isAuthenticated) {
+      return [];
+    }
     const items = sections.flatMap(toItems);
     if (items.length === 0) {
       return [];
     }
     // Another app's pages never render on this one, so only local ones can match.
-    return [{ label, icon, items, match: pages && local.has(pages.app) ? pages.paths : [] }];
+    return [
+      {
+        label: !isAuthenticated && signedOutLabel ? signedOutLabel : label,
+        icon,
+        items,
+        match: pages && local.has(pages.app) ? pages.paths : []
+      }
+    ];
   });
 
   return { groups, accountItems: ACCOUNT_SECTIONS.flatMap(toItems) };

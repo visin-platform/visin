@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LandingPage from './LandingPage';
 import {
   ASK_CONVERSATION,
@@ -191,7 +191,7 @@ describe('LandingPage calls to action', () => {
   it('points every app link at shell-front, where the apps open', () => {
     render(<LandingPage />);
 
-    const appLinks = screen.getAllByRole('link', { name: /open the app/i });
+    const appLinks = screen.getAllByRole('link', { name: /^explore$/i });
     expect(appLinks.length).toBeGreaterThan(1);
     for (const link of appLinks) {
       expect(link).toHaveAttribute('href', 'http://shell.test');
@@ -202,7 +202,7 @@ describe('LandingPage calls to action', () => {
     config.SHELL_FRONT_URL = undefined;
     render(<LandingPage />);
 
-    expect(screen.getAllByRole('link', { name: /open the app/i })[0]).toHaveAttribute('href', '#');
+    expect(screen.getAllByRole('link', { name: /^explore$/i })[0]).toHaveAttribute('href', '#');
   });
 
   it('opens GitHub links in a new tab with rel protection', () => {
@@ -223,12 +223,12 @@ describe('LandingPage calls to action', () => {
   it('anchors the nav to the sections on the page, from any page', () => {
     render(<LandingPage />);
 
-    // Absolute, so the same nav works on /docs: on / they only change the #fragment.
+    // Absolute, so the same nav works on /docs: on /about they only change the #fragment.
     const nav = screen.getByRole('navigation', { name: 'Main' });
-    expect(within(nav).getByRole('link', { name: 'Product' })).toHaveAttribute('href', '/#product');
-    expect(within(nav).getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('href', '/#leaderboards');
-    expect(within(nav).getByRole('link', { name: 'Assistant' })).toHaveAttribute('href', '/#assistant');
-    expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '/#open-source');
+    expect(within(nav).getByRole('link', { name: 'Product' })).toHaveAttribute('href', '/about#product');
+    expect(within(nav).getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('href', '/about#leaderboards');
+    expect(within(nav).getByRole('link', { name: 'Assistant' })).toHaveAttribute('href', '/about#assistant');
+    expect(within(nav).getByRole('link', { name: 'Self-hosting' })).toHaveAttribute('href', '/about#open-source');
     // The old sections are gone; nothing may still point at where they were.
     expect(within(nav).queryByRole('link', { name: 'Contact' })).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Features' })).not.toBeInTheDocument();
@@ -258,6 +258,31 @@ describe('LandingPage calls to action', () => {
     } finally {
       window.history.pushState({}, '', '/');
     }
+  });
+});
+
+describe('LandingPage section links', () => {
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  it('scrolls to the section a link from another page asked for', () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.history.pushState({}, '', '/about#product');
+    render(<LandingPage />);
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays at the top for a section that is not there, or a browser that cannot scroll to one', () => {
+    window.history.pushState({}, '', '/about#nowhere');
+    expect(() => render(<LandingPage />)).not.toThrow();
+    cleanup();
+
+    window.history.pushState({}, '', '/about#product');
+    expect(() => render(<LandingPage />)).not.toThrow();
   });
 });
 
@@ -300,7 +325,7 @@ describe('LandingPage mobile menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
     const drawer = screen.getByRole('presentation');
-    fireEvent.click(within(drawer).getByRole('link', { name: /open the app/i }));
+    fireEvent.click(within(drawer).getByRole('link', { name: /^explore$/i }));
 
     await expectDrawerClosed();
   });

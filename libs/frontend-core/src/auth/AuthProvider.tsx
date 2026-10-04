@@ -14,6 +14,8 @@ export interface AuthContextValue {
   isLoading: boolean;
   /** Redirects to auth-front's login page, returning to the current page after. */
   login: () => void;
+  /** Like `login`, but opens auth-front's sign-up form. */
+  signup: () => void;
   logout: () => Promise<void>;
   /** Re-runs the session check and updates the shared context state; returns the fresh result. */
   refresh: () => Promise<AuthCheckResult>;
@@ -80,6 +82,10 @@ export function createAuthContext(authService: AuthService) {
       authService.redirectToLogin();
     }, []);
 
+    const signup = useCallback((): void => {
+      authService.redirectToLogin(undefined, { mode: 'register' });
+    }, []);
+
     const logout = useCallback(async (): Promise<void> => {
       await authService.logout();
       lastKnownUser = null;
@@ -88,7 +94,7 @@ export function createAuthContext(authService: AuthService) {
     }, []);
 
     return (
-      <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, refresh }}>
+      <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, signup, logout, refresh }}>
         {children}
       </AuthContext.Provider>
     );

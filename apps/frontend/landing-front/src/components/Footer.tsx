@@ -4,11 +4,11 @@ import { GITHUB_URL } from '../content';
 import { INK } from '../theme';
 
 const FOOTER_LINKS = [
-  { label: 'Product', href: '/#product' },
+  { label: 'Product', href: '/about#product' },
   { label: 'Docs', href: '/docs' },
   { label: 'Quickstart', href: '/docs/quickstart' },
   { label: 'API reference', href: '/docs/api' },
-  { label: 'Self-hosting', href: '/#open-source' }
+  { label: 'Self-hosting', href: '/about#open-source' }
 ];
 
 interface FooterProps {
@@ -52,7 +52,7 @@ export default function Footer({ appUrl }: FooterProps) {
             </Stack>
             <Stack spacing={1.25}>
               <Link href={appUrl} underline="none" variant="body2" sx={{ color: 'inherit', '&:hover': { color: '#fff' } }}>
-                Open the app
+                Explore
               </Link>
               <Link
                 href={GITHUB_URL}

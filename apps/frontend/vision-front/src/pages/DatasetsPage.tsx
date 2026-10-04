@@ -154,6 +154,20 @@ export const DatasetsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const { downloadingId, download } = useDatasetDownload(setError);
 
+  // `?create=1`, from the menu's New: the form, at once.
+  useEffect(() => {
+    if (params.get('create') !== '1' || !isAuthenticated) return;
+    setCreating(true);
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete('create');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [params, isAuthenticated, setParams]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(searchInput.trim());

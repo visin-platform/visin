@@ -5,13 +5,14 @@ import { Loader } from '@visin/frontend-core';
 import LoginRedirect from '../components/LoginRedirect';
 import { RemoteBoundary } from '../components/RemoteBoundary';
 import { useAuth } from '../contexts/AuthContext';
+import { ExplorePage } from '../pages/ExplorePage';
 import { HomePage } from '../pages/HomePage';
 import { APPS, appForPath } from '../apps';
 import { forgetRemote, remoteComponent } from '../remotes';
 
 /**
- * A signed-in session opens on its home page. A visitor has none: Vision's
- * public projects are what there is to see without an account.
+ * A signed-in session opens on its own home page; a visitor has none, so the
+ * front page is Explore: what people have made public.
  */
 function Home() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -19,7 +20,17 @@ function Home() {
   if (isLoading) {
     return <Loader fullHeight={false} />;
   }
-  return isAuthenticated ? <HomePage userName={user?.name} /> : <Navigate to="/projects" replace />;
+  return isAuthenticated ? <HomePage userName={user?.name} /> : <ExplorePage />;
+}
+
+/** A member's second tab. A visitor's Explore is the front page itself, so there is one address for it. */
+function Explore() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <Loader fullHeight={false} />;
+  }
+  return isAuthenticated ? <ExplorePage /> : <Navigate to="/" replace />;
 }
 
 const NotFound = () => (
@@ -71,6 +82,7 @@ function ShellRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/explore" element={<Explore />} />
       <Route path="/login" element={<LoginRedirect />} />
       {/* vision-front keeps this old address alive by forwarding to label-front's
           domain; here Labeling is a route of the same page. */}

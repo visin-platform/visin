@@ -72,13 +72,16 @@ const LoginPage: React.FC = () => {
 
       // A fresh deployment has no users and no way to make one, so the first
       // visitor is offered setup rather than a login that could never succeed.
+      // `?mode=register`, from another front's "Sign up": the sign-up form rather than sign-in.
+      const wantsRegister = urlParams.get('mode') === 'register';
       try {
         const status = await authApi.getSetupStatus();
-        setMode(status.needsSetup ? 'setup' : 'login');
+        setMode(status.needsSetup ? 'setup' : wantsRegister ? 'register' : 'login');
         setGoogleEnabled(status.googleEnabled && Boolean(config.GOOGLE_CLIENT_ID));
       } catch {
         // auth-service unreachable: still show the login form, so the failure
         // surfaces on submit with a real message rather than as a blank page.
+        if (wantsRegister) setMode('register');
         setGoogleEnabled(Boolean(config.GOOGLE_CLIENT_ID));
       }
       setPhase('form');

@@ -129,7 +129,8 @@ export function createAuthService({ authServiceUrl, authFrontUrl }: AuthServiceO
     }
   }
 
-  function redirectToLogin(returnUrl?: string): void {
+  /** `register` opens auth-front on its sign-up form rather than the sign-in one. */
+  function redirectToLogin(returnUrl?: string, options: { mode?: 'register' } = {}): void {
     const loginUrl = authFrontUrl();
     if (!loginUrl) {
       // With no auth-front address the target would be `?redirect_uri=…` on this
@@ -139,7 +140,8 @@ export function createAuthService({ authServiceUrl, authFrontUrl }: AuthServiceO
       return;
     }
     const currentUrl = returnUrl || window.location.href;
-    window.location.href = `${loginUrl}?redirect_uri=${encodeURIComponent(currentUrl)}`;
+    const mode = options.mode ? `&mode=${options.mode}` : '';
+    window.location.href = `${loginUrl}?redirect_uri=${encodeURIComponent(currentUrl)}${mode}`;
   }
 
   return { checkAuth, getCurrentUser, getProfile, isAuthenticated, logout, redirectToLogin };
