@@ -10,6 +10,7 @@ import { projectService } from '../services/projectService';
 import { useAuth } from '../contexts/AuthContext';
 
 // New components
+import CitedInPapers from '../components/project/CitedInPapers';
 import ProjectHeader from '../components/project/ProjectHeader';
 import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
 import { CostingProvider } from '../costing/CostingProvider';
@@ -213,6 +214,8 @@ const ProjectDashboardPage: React.FC = () => {
           />
 
           <ProjectHeader project={project} onEdit={handleEditProject} onDelete={() => setDeleteDialogOpen(true)} />
+
+          <CitedInPapers projectId={project._id} />
 
           <ProjectTabs
             tabValue={tabValue}

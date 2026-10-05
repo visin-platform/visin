@@ -13,6 +13,7 @@ import modelRoutes from './modelRoutes';
 import discoveryRoutes from './discoveryRoutes';
 import suiteRoutes from './suiteRoutes';
 import evaluationRoutes from './evaluationRoutes';
+import paperRoutes from './paperRoutes';
 import publicRoutes from './publicRoutes';
 
 export interface ApiRouteGroup {
@@ -64,5 +65,7 @@ export const API_ROUTE_GROUPS: ApiRouteGroup[] = [
   // Written conclusions. Its own scope domain, so an assistant can be granted
   // "read my experiments and record what you conclude" without also being able to
   // rename projects or retag runs.
-  { path: '/api/findings', guards: [projectKeyAuth('analysis')], router: findingRoutes }
+  { path: '/api/findings', guards: [projectKeyAuth('analysis')], router: findingRoutes },
+  // Papers are people's to curate, so no key reaches them: with no guard, a key simply does not authenticate here.
+  { path: '/api/papers', guards: [], router: paperRoutes }
 ];

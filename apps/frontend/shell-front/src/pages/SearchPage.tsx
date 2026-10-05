@@ -8,7 +8,7 @@ import { exploreApi } from '../services/exploreApi';
 import { cardGridSx } from '../components/explore/cardGrid';
 import { CardSkeletons, DatasetCard, ProjectCard } from '../components/explore/cards';
 import { HomeSection, SectionBody } from '../components/home/HomeSection';
-import { GroupRow, PersonRow } from '../components/profile/DirectoryRows';
+import { GroupRow, PaperRow, PersonRow } from '../components/profile/DirectoryRows';
 
 /** Results per kind: a taste, with a link to all of it. */
 const SHOWN = 6;
@@ -96,6 +96,12 @@ export function SearchPage({ now }: { now?: Date }) {
     enabled: ready && datasetsOn
   });
 
+  const paperResults = useQuery({
+    queryKey: ['search', 'papers', q],
+    queryFn: () => exploreApi.publicPapers({ search: q, page: 1, limit: SHOWN }),
+    enabled: ready && vision
+  });
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setParams(typed.trim() ? { q: typed.trim() } : {}, { replace: true });
@@ -111,7 +117,7 @@ export function SearchPage({ now }: { now?: Date }) {
           type="search"
           value={typed}
           onChange={(event) => setTyped(event.target.value)}
-          placeholder="Search people, groups, projects and datasets"
+          placeholder="Search people, groups, projects, datasets and papers"
           slotProps={{
             htmlInput: { 'aria-label': 'Search Visin' },
             input: {
@@ -130,7 +136,7 @@ export function SearchPage({ now }: { now?: Date }) {
 
       {!ready ? (
         <Typography sx={{ color: 'text.secondary' }}>
-          {q ? `Type at least ${MIN_LENGTH} characters to search.` : 'Search for people, groups, projects and datasets.'}
+          {q ? `Type at least ${MIN_LENGTH} characters to search.` : 'Search for people, groups, projects, datasets and papers.'}
           {(people || groups) && (
             <>
               {' '}
@@ -178,6 +184,19 @@ export function SearchPage({ now }: { now?: Date }) {
             >
               {projectResults.data?.projects.map((project) => <ProjectCard key={project._id} project={project} now={today} />)}
             </Shelf>
+          )}
+
+          {vision && (
+            <HomeSection id="search-papers" title="Papers" seeAll={paperResults.data?.papers.length === SHOWN ? { to: `/papers?${new URLSearchParams({ q })}`, label: 'See all papers' } : undefined}>
+              <SectionBody
+                query={paperResults}
+                items={paperResults.data?.papers}
+                empty={`No public papers match “${q}”.`}
+                error="Could not search papers."
+              >
+                {(paper) => <PaperRow key={paper.id} paper={paper} />}
+              </SectionBody>
+            </HomeSection>
           )}
 
           {datasetsOn && (

@@ -1809,6 +1809,165 @@
           }
         }
       },
+      "PaperAuthor": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "description": "One name on a paper's author list, as the paper prints it.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "pending"
+            ],
+            "description": "Present when the name is linked to a Visin account. `confirmed`: that person accepted. `pending`: they have not\nanswered yet, which only the paper's managers and that person are told.\n"
+          },
+          "user": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "description": "The linked account, as far as its owner agreed to be shown. Only an id when their profile is hidden.",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{24}$"
+              },
+              "handle": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "picture": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "PaperPermissions": {
+        "type": "object",
+        "required": [
+          "read",
+          "contribute",
+          "manage",
+          "own"
+        ],
+        "properties": {
+          "read": {
+            "type": "boolean"
+          },
+          "contribute": {
+            "type": "boolean"
+          },
+          "manage": {
+            "type": "boolean"
+          },
+          "own": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaperCard": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "authors",
+          "tags",
+          "owner",
+          "visibility",
+          "createdAt",
+          "updatedAt",
+          "results"
+        ],
+        "description": "A paper as a list shows it.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "abstract": {
+            "type": "string",
+            "description": "The start of the abstract."
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaperAuthor"
+            }
+          },
+          "venue": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "arxivId": {
+            "type": "string"
+          },
+          "doi": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "owner": {
+            "$ref": "#/components/schemas/ResourceOwner"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "trashedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/PaperPermissions"
+          },
+          "results": {
+            "type": "object",
+            "required": [
+              "cited",
+              "available"
+            ],
+            "properties": {
+              "cited": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "available": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many of them are public now."
+              }
+            }
+          }
+        }
+      },
       "ActivityProject": {
         "type": "object",
         "required": [
@@ -11062,6 +11221,130 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/public/papers": {
+      "get": {
+        "tags": [
+          "Public catalogue"
+        ],
+        "summary": "List the public papers",
+        "operationId": "getPublicPapers",
+        "description": "Papers anyone can open, a page at a time. The same for everyone who asks, so a signed-in author's drafts never mix\nin. A person's list holds only the papers they have confirmed they wrote. Anonymous, never cached, and rate limited\nby client address.\n",
+        "security": [
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Words in the title, abstract, authors, tags or venue; or an arXiv id or a DOI, in any spelling.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "user",
+            "in": "query",
+            "description": "A person's id. Only papers that person has confirmed they wrote.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "description": "A project's id. Only papers citing a result in it.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "`created` (default): newest added first. `year`: newest publication year first.",
+            "schema": {
+              "default": "created",
+              "type": "string",
+              "enum": [
+                "created",
+                "year"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Papers per page (default 12, at most 50).",
+            "schema": {
+              "default": 12,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of public papers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "papers",
+                        "pagination"
+                      ],
+                      "properties": {
+                        "papers": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PaperCard"
+                          }
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/Pagination"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
           },
           "default": {
             "$ref": "#/components/responses/Error"

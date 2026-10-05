@@ -12,7 +12,7 @@ vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalC
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
 vi.mock('../services/exploreApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/exploreApi')>()),
-  exploreApi: { user: vi.fn(), projects: vi.fn(), datasets: vi.fn(), activity: vi.fn() },
+  exploreApi: { user: vi.fn(), projects: vi.fn(), datasets: vi.fn(), activity: vi.fn(), publicPapers: vi.fn() },
 }));
 
 import { clearVisits, readVisits } from '@visin/frontend-core';
@@ -41,6 +41,8 @@ const datasets = [
   { _id: 'd1', name: 'Harbour frames', visibility: 'public' as const, owner, imageCount: 12, groups: [], updatedAt: hoursAgo(5) },
 ];
 
+const paper = { id: 'pa1', title: 'Night segmentation', authors: [{ name: 'Ann Lee' }], year: 2025, results: { cited: 1, available: 1 } };
+
 const Where = () => {
   const { pathname, search } = useLocation();
   return <div data-testid="where">{pathname + search}</div>;
@@ -66,6 +68,7 @@ beforeEach(() => {
   api.user.mockResolvedValue(ann);
   api.projects.mockResolvedValue(projects);
   api.datasets.mockResolvedValue(datasets);
+  api.publicPapers.mockResolvedValue({ papers: [paper], pagination: { page: 1, limit: 50, total: 3, pages: 1 } });
   api.activity.mockResolvedValue([
     { kind: 'project.created', at: hoursAgo(3), project: { id: 'p1', name: 'Window ablations', slug: 'window-ablations' } },
   ]);
@@ -158,6 +161,32 @@ describe('ProfilePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Projects/ }));
     expect(await screen.findByText('Window ablations')).toBeInTheDocument();
     expect(screen.getByTestId('where')).toHaveTextContent('/u/ann-lee?tab=projects');
+  });
+
+  it('lists the papers they have confirmed they wrote, counting all of them rather than the page', async () => {
+    renderAt('/u/ann-lee?tab=papers');
+
+    const link = await screen.findByRole('link', { name: /Night segmentation/ });
+    expect(link).toHaveAttribute('href', '/papers/pa1');
+    expect(api.publicPapers).toHaveBeenCalledWith({ user: 'u9', page: 1, limit: 50 });
+    expect(screen.getByRole('button', { name: 'Papers 3' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('says when they have no papers yet', async () => {
+    api.publicPapers.mockResolvedValue({ papers: [], pagination: { page: 1, limit: 50, total: 0, pages: 0 } });
+    renderAt('/u/ann-lee?tab=papers');
+
+    expect(await screen.findByText('No public papers yet.')).toBeInTheDocument();
+  });
+
+  it('shares the page itself, not a preview page that sends people on to it', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    renderAt();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Share/ }));
+
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/u/ann-lee`);
   });
 
   it('opens on the activity of the person, which is what they have been up to', async () => {

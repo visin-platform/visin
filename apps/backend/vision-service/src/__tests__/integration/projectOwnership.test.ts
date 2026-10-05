@@ -329,14 +329,14 @@ describe('project ownership with in-memory MongoDB', () => {
       const waiting = await teamProject({ name: 'Waiting', trashedAt: new Date() });
       const inWaiting = String((await Training.create({ name: 'In waiting', uuid: 'waiting', projectId: waiting, deletedAt: month }))._id);
 
-      expect(await purgeExpiredTrash()).toEqual({ projects: 1, trainings: 1, evaluations: 0 });
+      expect(await purgeExpiredTrash()).toEqual({ projects: 1, trainings: 1, evaluations: 0, papers: 0 });
       expect(await Project.exists({ _id: expired })).toBeNull();
       expect(await Training.exists({ _id: old })).toBeNull();
       expect(await Training.exists({ _id: recent })).not.toBeNull();
       // Its project decides: it goes when the project does.
       expect(await Training.exists({ _id: inWaiting })).not.toBeNull();
       expect(await Epoch.countDocuments()).toBe(0);
-      expect(await purgeExpiredTrash()).toEqual({ projects: 0, trainings: 0, evaluations: 0 });
+      expect(await purgeExpiredTrash()).toEqual({ projects: 0, trainings: 0, evaluations: 0, papers: 0 });
     });
   });
 

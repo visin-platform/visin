@@ -1,4 +1,6 @@
 import { appLink, excerpt, NotFoundError, type SharePage } from '@visin/backend-core';
+import { isValidObjectId } from 'mongoose';
+import Paper from '../models/Paper';
 import Project from '../models/Project';
 import Suite from '../models/Suite';
 import { lookupOwnerIdentities } from '../clients/ownerIdentityClient';
@@ -43,6 +45,20 @@ export async function projectSharePage(identifier: string): Promise<SharePage> {
   };
 }
 
+/** A paper's preview: its title, its authors as the paper prints them, and the start of its abstract. */
+export async function paperSharePage(id: string): Promise<SharePage> {
+  const url = appLink(`/papers/${encodeURIComponent(id)}`);
+  const paper = url && isValidObjectId(id) ? await Paper.findOne({ _id: id, visibility: 'public', trashedAt: null }) : null;
+  if (!url || !paper) throw new NotFoundError(NOT_THERE);
+  const by = paper.authors.map((author) => author.name).join(', ');
+  return {
+    url,
+    title: paper.title,
+    description: [paper.abstract ? excerpt(paper.abstract) : '', by].filter(Boolean).join(' · ') || 'A paper on Visin',
+    image: appLink('/og-image.jpg')
+  };
+}
+
 const SITEMAP_LIMIT = 5000;
 
 /**
@@ -60,6 +76,10 @@ export async function projectSitemap(): Promise<string> {
     .sort({ updatedAt: -1 })
     .limit(SITEMAP_LIMIT)
     .select('slug version projectId updatedAt');
+  const papers = await Paper.find({ visibility: 'public', trashedAt: null })
+    .sort({ updatedAt: -1 })
+    .limit(SITEMAP_LIMIT)
+    .select('updatedAt');
   const liveIds = new Set(
     (
       await Project.find({
@@ -85,6 +105,9 @@ export async function projectSitemap(): Promise<string> {
     `  <url><loc>${xml(front)}</loc></url>`,
     ...rows,
     ...boards,
+    ...papers.map(
+      (paper) => `  <url><loc>${xml(appLink(`/papers/${paper._id}`)!)}</loc><lastmod>${paper.updatedAt.toISOString()}</lastmod></url>`
+    ),
     '</urlset>',
     ''
   ].join('\n');

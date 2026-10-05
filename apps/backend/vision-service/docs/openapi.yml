@@ -50,6 +50,8 @@ tags:
     description: Project management for organizing experiments
   - name: Findings
     description: Written conclusions about runs, by people or assistants
+  - name: Papers
+    description: Research papers that cite results recorded on Visin, with their authors linked to Visin accounts
   - name: Suites
     description: Immutable evaluation protocols that results are ranked on
   - name: Evaluations
@@ -937,6 +939,106 @@ components:
           }
         runs: { type: integer, minimum: 0, description: Runs in the project }
         lastRunAt: { type: string, format: date-time, description: When the latest run started; absent with no runs }
+    PaperAuthor:
+      type: object
+      required: [name]
+      description: One name on a paper's author list, as the paper prints it.
+      properties:
+        name: { type: string }
+        status:
+          type: string
+          enum: [confirmed, pending]
+          description: |
+            Present when the name is linked to a Visin account. `confirmed`: that person accepted. `pending`: they have not
+            answered yet, which only the paper's managers and that person are told.
+        user:
+          type: object
+          required: [id]
+          description: The linked account, as far as its owner agreed to be shown. Only an id when their profile is hidden.
+          properties:
+            id: { type: string, pattern: '^[0-9a-fA-F]{24}$' }
+            handle: { type: string }
+            name: { type: string }
+            picture: { type: string }
+    PaperResult:
+      type: object
+      required: [kind, available]
+      description: |
+        A result the paper cites. When it is no longer public, `available` is false and nothing about it is shown, except
+        to the paper's managers, who also get its `ref`.
+      properties:
+        kind: { type: string, enum: [project, training, leaderboard] }
+        available: { type: boolean }
+        ref: { type: string, description: 'A project id, a run id, or `slug@version` for a leaderboard.' }
+        name: { type: string }
+        note: { type: string, description: 'Where in the paper it is used: "Table 2".' }
+        project: { $ref: '#/components/schemas/ActivityProject' }
+    PaperPermissions:
+      type: object
+      required: [read, contribute, manage, own]
+      properties:
+        read: { type: boolean }
+        contribute: { type: boolean }
+        manage: { type: boolean }
+        own: { type: boolean }
+    PaperCard:
+      type: object
+      required: [id, title, authors, tags, owner, visibility, createdAt, updatedAt, results]
+      description: A paper as a list shows it.
+      properties:
+        id: { type: string }
+        title: { type: string }
+        abstract: { type: string, description: The start of the abstract. }
+        authors:
+          type: array
+          items: { $ref: '#/components/schemas/PaperAuthor' }
+        venue: { type: string }
+        year: { type: integer }
+        arxivId: { type: string }
+        doi: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        owner: { $ref: '#/components/schemas/ResourceOwner' }
+        visibility: { type: string, enum: [private, public] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        trashedAt: { type: string, format: date-time }
+        permissions: { $ref: '#/components/schemas/PaperPermissions' }
+        results:
+          type: object
+          required: [cited, available]
+          properties:
+            cited: { type: integer, minimum: 0 }
+            available: { type: integer, minimum: 0, description: How many of them are public now. }
+    Paper:
+      type: object
+      required: [id, title, authors, tags, owner, visibility, createdAt, updatedAt, results]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        abstract: { type: string }
+        authors:
+          type: array
+          items: { $ref: '#/components/schemas/PaperAuthor' }
+        venue: { type: string }
+        year: { type: integer }
+        arxivId: { type: string, description: 'Without a version, e.g. `2401.01234`.' }
+        doi: { type: string, description: Lowercase, without `https://doi.org/`. }
+        url: { type: string, format: uri }
+        pdfUrl: { type: string, format: uri }
+        tags:
+          type: array
+          items: { type: string }
+        owner: { $ref: '#/components/schemas/ResourceOwner' }
+        visibility: { type: string, enum: [private, public] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        trashedAt: { type: string, format: date-time }
+        permissions: { $ref: '#/components/schemas/PaperPermissions' }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/PaperResult' }
     ActivityProject:
       type: object
       required: [id, name]
@@ -4823,6 +4925,343 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         default: { $ref: '#/components/responses/Error' }
 
+  /papers:
+    get:
+      tags: [Papers]
+      summary: Your papers
+      operationId: listMyPapers
+      x-internal: true
+      description: |
+        The papers you own or can contribute to through a group, drafts included, most recently changed first. With
+        `scope=trash`, the ones in the trash that you manage. Needs a signed-in session: no API key reaches papers.
+      security:
+        - { SessionCookie: [] }
+      parameters:
+        - name: scope
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/MyPapersQuery/properties/scope }
+      responses:
+        '200':
+          description: Your papers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PaperCard' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Papers]
+      summary: Add a paper
+      operationId: createPaper
+      x-internal: true
+      description: |
+        It belongs to you, or with `owner` to a group you are in. Authors may be linked to Visin accounts with `userId`;
+        a link to anyone but yourself waits for that person to confirm it. A public paper needs an arXiv id, a DOI or a
+        link to the paper, and must cite at least one result that is public on Visin.
+      security:
+        - { SessionCookie: [] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: ./generated/request-schemas.json#/CreatePaperBody }
+      responses:
+        '201':
+          description: The paper
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    $ref: '#/components/schemas/Paper'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /papers/authorship-requests:
+    get:
+      tags: [Papers]
+      summary: Papers that name you as an author and wait for your answer
+      operationId: listAuthorshipRequests
+      x-internal: true
+      security:
+        - { SessionCookie: [] }
+      responses:
+        '200':
+          description: Public papers that link an author name to your account, which you have not confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PaperCard' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /papers/{id}:
+    get:
+      tags: [Papers]
+      summary: Get a paper
+      operationId: getPaper
+      x-internal: true
+      description: A public paper is open to anyone, and a draft to its owner. Anything else reads as not found.
+      security:
+        - { SessionCookie: [] }
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The paper
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    $ref: '#/components/schemas/Paper'
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Papers]
+      summary: Change a paper
+      operationId: updatePaper
+      x-internal: true
+      description: |
+        What is sent replaces what was there, and `null` clears an optional field. Changing who can see it takes owning it.
+        Results it already cited are kept as they were; only new ones are checked against what you may read.
+      security:
+        - { SessionCookie: [] }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: ./generated/request-schemas.json#/UpdatePaperBody }
+      responses:
+        '200':
+          description: The paper
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    $ref: '#/components/schemas/Paper'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Papers]
+      summary: Move a paper to the trash
+      operationId: trashPaper
+      x-internal: true
+      description: Restorable by its owner for 30 days.
+      security:
+        - { SessionCookie: [] }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Moved to the trash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, const: true }
+                  message: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /papers/{id}/restore:
+    post:
+      tags: [Papers]
+      summary: Restore a paper from the trash
+      operationId: restorePaper
+      x-internal: true
+      security:
+        - { SessionCookie: [] }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The paper
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    $ref: '#/components/schemas/Paper'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /papers/{id}/authorship:
+    put:
+      tags: [Papers]
+      summary: Confirm or remove your name on a paper
+      operationId: answerAuthorship
+      x-internal: true
+      description: |
+        `linked: true` confirms that an author name on a public paper is you, which puts the paper on your page.
+        `linked: false` removes the link, now or later, and stops the paper's owner from linking you again.
+      security:
+        - { SessionCookie: [] }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: ./generated/request-schemas.json#/AuthorshipBody }
+      responses:
+        '200':
+          description: Your answer was recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [id, linked]
+                    properties:
+                      id: { type: string }
+                      linked: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/papers:
+    get:
+      tags: [Public catalogue]
+      summary: List the public papers
+      operationId: getPublicPapers
+      description: |
+        Papers anyone can open, a page at a time. The same for everyone who asks, so a signed-in author's drafts never mix
+        in. A person's list holds only the papers they have confirmed they wrote. Anonymous, never cached, and rate limited
+        by client address.
+      security:
+        - {}
+      parameters:
+        - name: search
+          in: query
+          description: Words in the title, abstract, authors, tags or venue; or an arXiv id or a DOI, in any spelling.
+          schema: { $ref: ./generated/request-schemas.json#/PublicPapersQuery/properties/search }
+        - name: user
+          in: query
+          description: A person's id. Only papers that person has confirmed they wrote.
+          schema: { $ref: ./generated/request-schemas.json#/PublicPapersQuery/properties/user }
+        - name: project
+          in: query
+          description: A project's id. Only papers citing a result in it.
+          schema: { $ref: ./generated/request-schemas.json#/PublicPapersQuery/properties/project }
+        - name: sort
+          in: query
+          description: '`created` (default): newest added first. `year`: newest publication year first.'
+          schema: { $ref: ./generated/request-schemas.json#/PublicPapersQuery/properties/sort }
+        - name: page
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/PublicPapersQuery/properties/page }
+        - name: limit
+          in: query
+          description: Papers per page (default 12, at most 50).
+          schema: { $ref: ./generated/request-schemas.json#/PublicPapersQuery/properties/limit }
+      responses:
+        '200':
+          description: One page of public papers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [papers, pagination]
+                    properties:
+                      papers:
+                        type: array
+                        items: { $ref: '#/components/schemas/PaperCard' }
+                      pagination: { $ref: '#/components/schemas/Pagination' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/share/papers/{id}:
+    get:
+      tags: [Public catalogue]
+      summary: The preview page for a link to a public paper
+      operationId: getPaperSharePage
+      x-internal: true
+      description: |
+        Like the project's: a tiny HTML page with Open Graph tags that sends a person on to the paper in the app. A private,
+        trashed or unknown paper answers 404.
+      security:
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The preview page
+          content:
+            text/html:
+              schema: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+
   /public/share/projects/{id}:
     get:
       tags: [Public catalogue]
@@ -4883,11 +5322,11 @@ paths:
   /public/sitemap.xml:
     get:
       tags: [Public catalogue]
-      summary: Public project and leaderboard addresses for search engines
+      summary: Public project, leaderboard and paper addresses for search engines
       operationId: getPublicSitemap
       x-internal: true
       description: |
-        A sitemap of public projects and public leaderboards whose projects remain public and live, at most 5,000 per kind.
+        A sitemap of public projects, public papers and public leaderboards whose projects remain public and live, at most 5,000 per kind.
         The shell advertises this API endpoint in robots.txt. 404 where this deployment has no `SHELL_FRONT_URL`.
       security:
         - {}

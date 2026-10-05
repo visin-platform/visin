@@ -8,7 +8,7 @@ const { config } = vi.hoisted(() => ({ config: {} as Record<string, string | und
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalConfig: () => config }));
 vi.mock('../services/exploreApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/exploreApi')>()),
-  exploreApi: { searchPeople: vi.fn(), searchGroups: vi.fn(), publicProjects: vi.fn(), publicDatasets: vi.fn() },
+  exploreApi: { searchPeople: vi.fn(), searchGroups: vi.fn(), publicProjects: vi.fn(), publicDatasets: vi.fn(), publicPapers: vi.fn() },
 }));
 
 import { SearchPage } from './SearchPage';
@@ -28,6 +28,7 @@ const groups = [
 ];
 const projectRow = { _id: 'p1', name: 'Window ablations', slug: 'window-ablations', visibility: 'public' as const, owner: { kind: 'user' as const, id: 'u1' }, updatedAt: hoursAgo(3) };
 const datasetRow = { _id: 'd1', name: 'Harbour frames', visibility: 'public' as const, owner: { kind: 'user' as const, id: 'u1' }, imageCount: 12, groups: [], updatedAt: hoursAgo(5) };
+const paperRow = { id: 'pa1', title: 'Night segmentation', authors: [{ name: 'Mia Roe' }, { name: 'Bo Wu' }], venue: 'CVPR', year: 2025, results: { cited: 2, available: 2 } };
 const pagination = { page: 1, limit: 6, total: 1, pages: 1 };
 
 const Where = () => {
@@ -57,6 +58,7 @@ beforeEach(() => {
   api.searchGroups.mockResolvedValue(groups);
   api.publicProjects.mockResolvedValue({ projects: [projectRow], pagination });
   api.publicDatasets.mockResolvedValue({ datasets: [datasetRow], pagination });
+  api.publicPapers.mockResolvedValue({ papers: [paperRow], pagination });
 });
 
 describe('SearchPage', () => {
@@ -73,6 +75,27 @@ describe('SearchPage', () => {
     expect(screen.getByRole('link', { name: /Road two/ })).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: 'Window ablations' })).toHaveAttribute('href', '/projects/window-ablations');
     expect(await screen.findByRole('link', { name: 'Harbour frames' })).toHaveAttribute('href', '/datasets/d1');
+  });
+
+  it('finds papers, with who wrote them, where, and how many Visin results they cite', async () => {
+    renderAt();
+
+    const paper = await screen.findByRole('link', { name: /Night segmentation/ });
+    expect(paper).toHaveAttribute('href', '/papers/pa1');
+    expect(within(paper).getByText('Mia Roe, Bo Wu · CVPR 2025 · 2 Visin results')).toBeInTheDocument();
+    expect(api.publicPapers).toHaveBeenCalledWith({ search: 'ann', page: 1, limit: 6 });
+  });
+
+  it('offers all papers for the words only where a full handful came back, and says when none match', async () => {
+    api.publicPapers.mockResolvedValue({ papers: Array.from({ length: 6 }, (_, index) => ({ ...paperRow, id: `pa${index}`, title: `Paper ${index}`, results: { cited: 1, available: 1 } })), pagination });
+    const { unmount } = renderAt();
+    expect(await screen.findByRole('link', { name: 'See all papers' })).toHaveAttribute('href', '/papers?q=ann');
+    expect(screen.getAllByRole('link', { name: /^Paper \d/ })).toHaveLength(6);
+    unmount();
+
+    api.publicPapers.mockResolvedValue({ papers: [], pagination });
+    renderAt();
+    expect(await screen.findByText('No public papers match “ann”.')).toBeInTheDocument();
   });
 
   it('asks each service for the words, a handful of results at a time', async () => {
@@ -127,7 +150,7 @@ describe('SearchPage', () => {
   it('invites a search when there is nothing yet to look for', () => {
     renderAt('/search');
 
-    expect(screen.getByText(/Search for people, groups, projects and datasets\./)).toBeInTheDocument();
+    expect(screen.getByText(/Search for people, groups, projects, datasets and papers\./)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'browse everyone' })).toHaveAttribute('href', '/people');
     expect(api.searchPeople).not.toHaveBeenCalled();
   });

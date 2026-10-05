@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  Article,
   Assessment,
   Assignment,
   Checklist,
@@ -109,6 +110,12 @@ const NAV_GROUPS: NavGroup[] = [
       { app: 'vision', text: 'Suites', icon: <Checklist />, path: '/suites' },
       { app: 'vision', text: 'Evaluations', icon: <Assessment />, path: '/evaluations' }
     ]
+  },
+  {
+    label: 'Papers',
+    icon: <Article />,
+    // Research that cites results recorded here; open to visitors, like Explore and Leaderboards.
+    sections: [{ app: 'vision', text: 'Papers', icon: <Article />, path: '/papers' }]
   },
   {
     label: 'Labels',

@@ -49,7 +49,8 @@ export const APPS: Record<ShellApp, ShellAppDefinition> = {
       '/models',
       '/evaluations',
       '/suites',
-      '/leaderboards'
+      '/leaderboards',
+      '/papers'
     ],
     // Vision's pages render their own titles alongside per-page actions.
     layout: () => ({ maxContentWidth: 1600, showPageHeader: false })

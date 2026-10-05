@@ -3,6 +3,7 @@ import { ConfigProvider } from '../config/ConfigProvider';
 import { AuthProvider } from '../contexts/AuthContext';
 import AppRoutes from '../routes';
 import { queryClient } from '../queryClient';
+import { EmbeddedContext } from './EmbeddedContext';
 
 /**
  * Vision as shell-front renders it: the module this app exposes over module
@@ -16,7 +17,9 @@ export default function RemoteApp() {
     <ConfigProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <AppRoutes />
+          <EmbeddedContext.Provider value>
+            <AppRoutes />
+          </EmbeddedContext.Provider>
         </AuthProvider>
       </QueryClientProvider>
     </ConfigProvider>

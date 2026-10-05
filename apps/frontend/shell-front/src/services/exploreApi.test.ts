@@ -116,6 +116,17 @@ describe('exploreApi', () => {
       expect(get).toHaveBeenLastCalledWith('https://dataset-api.test/api/datasets?visibility=public&page=3&limit=5', { skipAuthRedirect: true });
     });
 
+    it('reads a page of public papers, by words or by the person who wrote them', async () => {
+      const data = { papers: [{ id: 'pa1' }], pagination: { page: 1, limit: 6, total: 1, pages: 1 } };
+      get.mockResolvedValue({ success: true, data });
+
+      await expect(exploreApi.publicPapers({ search: 'night', user: 'u1', page: 1, limit: 6 })).resolves.toEqual(data);
+      expect(get).toHaveBeenCalledWith('https://vision-api.test/api/public/papers?page=1&limit=6&search=night&user=u1', { skipAuthRedirect: true });
+
+      await exploreApi.publicPapers({ page: 2, limit: 5 });
+      expect(get).toHaveBeenLastCalledWith('https://vision-api.test/api/public/papers?page=2&limit=5', { skipAuthRedirect: true });
+    });
+
     it('reads the latest findings of public projects', async () => {
       const rows = [{ id: 'f1', title: 'x' }];
       get.mockResolvedValue({ success: true, data: rows });

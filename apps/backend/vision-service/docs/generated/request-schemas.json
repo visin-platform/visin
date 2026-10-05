@@ -18,6 +18,17 @@
       }
     }
   },
+  "AuthorshipBody": {
+    "type": "object",
+    "properties": {
+      "linked": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "linked"
+    ]
+  },
   "BestRunQuery": {
     "type": "object",
     "properties": {
@@ -631,6 +642,140 @@
       "project",
       "title",
       "body"
+    ]
+  },
+  "CreatePaperBody": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      },
+      "abstract": {
+        "type": "string",
+        "maxLength": 5000
+      },
+      "authors": {
+        "minItems": 1,
+        "maxItems": 50,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "userId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "venue": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "year": {
+        "type": "integer",
+        "minimum": 1900,
+        "maximum": 2100
+      },
+      "arxivId": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "doi": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "url": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "pdfUrl": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "tags": {
+        "default": [],
+        "maxItems": 10,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        }
+      },
+      "results": {
+        "default": [],
+        "maxItems": 30,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "project",
+                "training",
+                "leaderboard"
+              ]
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "kind",
+            "ref"
+          ]
+        }
+      },
+      "owner": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{24}$"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
+      },
+      "visibility": {
+        "default": "private",
+        "type": "string",
+        "enum": [
+          "private",
+          "public"
+        ]
+      }
+    },
+    "required": [
+      "title",
+      "authors"
     ]
   },
   "CreateProjectBody": {
@@ -2477,6 +2622,19 @@
       "revision"
     ]
   },
+  "MyPapersQuery": {
+    "type": "object",
+    "properties": {
+      "scope": {
+        "default": "mine",
+        "type": "string",
+        "enum": [
+          "mine",
+          "trash"
+        ]
+      }
+    }
+  },
   "PromoteEvaluationBody": {
     "type": "object",
     "properties": {
@@ -2623,6 +2781,42 @@
       "slug",
       "version"
     ]
+  },
+  "PublicPapersQuery": {
+    "type": "object",
+    "properties": {
+      "search": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "user": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{24}$"
+      },
+      "project": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{24}$"
+      },
+      "sort": {
+        "default": "created",
+        "type": "string",
+        "enum": [
+          "created",
+          "year"
+        ]
+      },
+      "page": {
+        "default": 1,
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "limit": {
+        "default": 12,
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 50
+      }
+    }
   },
   "PublicProjectsQuery": {
     "type": "object",
@@ -2861,6 +3055,162 @@
         "type": "number"
       },
       "metadata": {}
+    }
+  },
+  "UpdatePaperBody": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      },
+      "abstract": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 5000
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "authors": {
+        "minItems": 1,
+        "maxItems": 50,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "userId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{24}$"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "venue": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 200
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "year": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "arxivId": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 200
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "doi": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 200
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "url": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 500
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pdfUrl": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 500
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "tags": {
+        "maxItems": 10,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        }
+      },
+      "results": {
+        "maxItems": 30,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "project",
+                "training",
+                "leaderboard"
+              ]
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "kind",
+            "ref"
+          ]
+        }
+      },
+      "visibility": {
+        "type": "string",
+        "enum": [
+          "private",
+          "public"
+        ]
+      }
     }
   },
   "UpdateProjectBody": {

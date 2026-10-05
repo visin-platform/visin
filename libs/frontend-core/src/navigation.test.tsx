@@ -19,13 +19,14 @@ describe('createVisinNavigation', () => {
       ['All projects', 'Trainings'],
       ['Datasets'],
       ['Leaderboards', 'Models', 'Suites', 'Evaluations'],
+      ['Papers'],
       ['Jobs']
     ];
 
     // Crossing apps must not change what the menu contains.
     for (const local of ['shell', 'vision', 'label', 'account', null] as const) {
       const nav = createVisinNavigation(local, urls);
-      expect(labels(nav)).toEqual(['Home', 'Projects', 'Data', 'Leaderboards', 'Labels']);
+      expect(labels(nav)).toEqual(['Home', 'Projects', 'Data', 'Leaderboards', 'Papers', 'Labels']);
       expect(texts(nav)).toEqual(expected);
     }
   });
@@ -38,7 +39,7 @@ describe('createVisinNavigation', () => {
 
   it('keeps the current app sections as internal routes', () => {
     const [projects] = createVisinNavigation('vision', urls).groups[1].items;
-    const [jobs] = createVisinNavigation('label', urls).groups[4].items;
+    const [jobs] = createVisinNavigation('label', urls).groups[5].items;
 
     expect(projects.path).toBe('/projects');
     expect(projects.href).toBeUndefined();
@@ -49,10 +50,12 @@ describe('createVisinNavigation', () => {
   it('links the other app sections straight to that section', () => {
     const nav = createVisinNavigation('label', urls);
     const [datasets] = nav.groups[2].items;
-    const [jobs] = nav.groups[4].items;
+    const [papers] = nav.groups[4].items;
+    const [jobs] = nav.groups[5].items;
 
     expect(datasets.href).toBe('https://vision.test/datasets');
     expect(datasets.path).toBeUndefined();
+    expect(papers.href).toBe('https://vision.test/papers');
     expect(jobs.path).toBe('/jobs');
     expect(jobs.href).toBeUndefined();
   });
@@ -68,7 +71,8 @@ describe('createVisinNavigation', () => {
     expect(texts(createVisinNavigation('vision', {}))).toEqual([
       ['All projects', 'Trainings'],
       ['Datasets'],
-      ['Leaderboards', 'Models', 'Suites', 'Evaluations']
+      ['Leaderboards', 'Models', 'Suites', 'Evaluations'],
+      ['Papers']
     ]);
     expect(texts(createVisinNavigation('label', {}))).toEqual([['Jobs']]);
     expect(labels(createVisinNavigation(null, { label: 'https://label.test' }))).toEqual(['Labels']);
@@ -101,7 +105,7 @@ describe('for a visitor', () => {
   it('leaves out what needs an account, so no entry leads to a sign-in wall', () => {
     const nav = createVisinNavigation('shell', urls, visitor);
 
-    expect(labels(nav)).toEqual(['Explore', 'Projects', 'Data', 'Leaderboards']);
+    expect(labels(nav)).toEqual(['Explore', 'Projects', 'Data', 'Leaderboards', 'Papers']);
     expect(texts(nav).flat()).not.toContain('Jobs');
     expect(texts(nav).flat()).not.toContain('For you');
   });

@@ -25,6 +25,9 @@ vi.mock('../pages/SuitePage', () => ({ default: () => <div>SuitePage</div> }));
 vi.mock('../pages/PublicLeaderboardsPage', () => ({ default: () => <div>PublicLeaderboardsPage</div> }));
 vi.mock('../pages/PublicLeaderboardPage', () => ({ default: () => <div>PublicLeaderboardPage</div> }));
 vi.mock('../pages/PublicEvaluationPage', () => ({ default: () => <div>PublicEvaluationPage</div> }));
+vi.mock('../pages/PapersPage', () => ({ default: () => <div>PapersPage</div> }));
+vi.mock('../pages/PaperDetailPage', () => ({ default: () => <div>PaperDetailPage</div> }));
+vi.mock('../pages/PaperEditPage', () => ({ default: () => <div>PaperEditPage</div> }));
 vi.mock('../pages/ProjectsPage', () => ({ default: () => <div>ProjectsPage</div> }));
 vi.mock('../pages/ProjectDashboardPage', () => ({ default: () => <div>ProjectDashboardPage</div> }));
 
@@ -67,6 +70,10 @@ describe('AppRoutes', () => {
     ['/leaderboards', 'PublicLeaderboardsPage'],
     ['/leaderboards/road-test/1', 'PublicLeaderboardPage'],
     ['/leaderboards/road-test/1/e1', 'PublicEvaluationPage'],
+    ['/papers', 'PapersPage'],
+    ['/papers/new', 'PaperEditPage'],
+    ['/papers/pa1', 'PaperDetailPage'],
+    ['/papers/pa1/edit', 'PaperEditPage'],
   ])('renders %s at %s', async (path, expectedText) => {
     renderAt(path);
     expect(await screen.findByText(expectedText)).toBeInTheDocument();

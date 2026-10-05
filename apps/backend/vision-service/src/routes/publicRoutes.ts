@@ -7,10 +7,12 @@ import {
   getPublicLeaderboards
 } from '../controllers/publicLeaderboardController';
 import { getPublicActivity } from '../controllers/publicActivityController';
-import { getLeaderboardShare, getProjectShare, getSitemap } from '../controllers/publicShareController';
+import { getLeaderboardShare, getPaperShare, getProjectShare, getSitemap } from '../controllers/publicShareController';
+import { getPublicPapers } from '../controllers/paperController';
 import { getPublicFindings, getPublicProjects } from '../controllers/publicExploreController';
 import { publicFindingsQuerySchema, publicProjectsQuerySchema } from '../validation/exploreSchemas';
 import { activityQuerySchema } from '../validation/activitySchemas';
+import { publicPapersQuerySchema } from '../validation/paperSchemas';
 import {
   publicBadgeParamsSchema,
   publicBadgeQuerySchema,
@@ -54,9 +56,12 @@ router.get(
   validateRequest({ params: publicLeaderboardParamsSchema }),
   getLeaderboardShare
 );
+router.get('/share/papers/:id', getPaperShare);
 router.get('/sitemap.xml', getSitemap);
 // The public project catalogue behind Explore: paged, with owners and run counts, the same for everyone.
 router.get('/projects', validateRequest({ query: publicProjectsQuerySchema }), getPublicProjects);
+// The public papers: a search, a person's or a project's, a page. The same for everyone who asks.
+router.get('/papers', validateRequest({ query: publicPapersQuerySchema }), getPublicPapers);
 // The latest findings in public projects, for the same page's side panel.
 router.get('/findings', validateRequest({ query: publicFindingsQuerySchema }), getPublicFindings);
 // What a person or a group has been doing in public, derived on each request (so never stale, and a project made

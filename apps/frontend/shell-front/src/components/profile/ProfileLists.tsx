@@ -7,14 +7,18 @@ import { exploreApi, type OwnerFilter } from '../../services/exploreApi';
 import { cardGridSx } from '../explore/cardGrid';
 import { ActivityFeed } from './ActivityFeed';
 import { CardSkeletons, DatasetCard, ProjectCard } from '../explore/cards';
+import { PaperRow } from './DirectoryRows';
+import { panelSx } from '../home/panel';
 import { formatCount } from '../home/formatting';
 
 const DATASETS_FETCHED = 48;
+const PAPERS_FETCHED = 50;
 
 const TABS = [
   { value: 'activity', label: 'Activity' },
   { value: 'projects', label: 'Projects' },
-  { value: 'datasets', label: 'Datasets' }
+  { value: 'datasets', label: 'Datasets' },
+  { value: 'papers', label: 'Papers' }
 ] as const;
 type Tab = (typeof TABS)[number]['value'];
 
@@ -39,8 +43,16 @@ export function ProfileLists({ owner, cacheKey, showActivity = true, now }: Prof
   const vision = Boolean(config.VISION_API_URL);
   const datasetsOn = Boolean(config.DATASET_API_URL);
   // A tab exists only where something can feed it.
+  // Papers are listed by author, which a group has none of: only a person's page has the tab.
+  const papersOn = vision && owner.user !== undefined;
   const available = TABS.filter((option) =>
-    option.value === 'activity' ? showActivity && (vision || datasetsOn) : option.value === 'projects' ? vision : datasetsOn
+    option.value === 'activity'
+      ? showActivity && (vision || datasetsOn)
+      : option.value === 'projects'
+        ? vision
+        : option.value === 'datasets'
+          ? datasetsOn
+          : papersOn
   );
   const requested = params.get('tab');
   // Activity first, where there is one; else the first tab there is.
@@ -57,12 +69,21 @@ export function ProfileLists({ owner, cacheKey, showActivity = true, now }: Prof
     enabled: datasetsOn
   });
 
+  const papers = useQuery({
+    queryKey: ['profile', cacheKey, 'papers'],
+    queryFn: () => exploreApi.publicPapers({ user: owner.user, page: 1, limit: PAPERS_FETCHED }),
+    enabled: papersOn
+  });
+
   if (available.length === 0) {
     return null;
   }
 
-  const list = tab === 'datasets' ? datasets : projects;
-  const count = (query: typeof projects | typeof datasets) => (query.data ? ` ${formatCount(query.data.length)}` : '');
+  const list = tab === 'datasets' ? datasets : tab === 'papers' ? papers : projects;
+  const countOf = (value: Tab): number | undefined =>
+    value === 'papers' ? papers.data?.pagination.total : value === 'projects' ? projects.data?.length : value === 'datasets' ? datasets.data?.length : undefined;
+  const listCount = tab === 'papers' ? papers.data?.papers.length : countOf(tab);
+  const count = (value: Tab) => (countOf(value) === undefined ? '' : ` ${formatCount(countOf(value)!)}`);
 
   return (
     <>
@@ -70,7 +91,7 @@ export function ProfileLists({ owner, cacheKey, showActivity = true, now }: Prof
         {available.map((option) => (
           <Chip
             key={option.value}
-            label={option.value === 'activity' ? option.label : `${option.label}${count(option.value === 'projects' ? projects : datasets)}`}
+            label={`${option.label}${count(option.value)}`}
             clickable
             color={option.value === tab ? 'primary' : 'default'}
             variant={option.value === tab ? 'filled' : 'outlined'}
@@ -88,10 +109,16 @@ export function ProfileLists({ owner, cacheKey, showActivity = true, now }: Prof
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           Could not load {tab}.
         </Typography>
-      ) : list.data.length === 0 ? (
+      ) : listCount === 0 ? (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           No public {tab} yet.
         </Typography>
+      ) : tab === 'papers' ? (
+        <Box sx={panelSx}>
+          {papers.data!.papers.map((paper) => (
+            <PaperRow key={paper.id} paper={paper} />
+          ))}
+        </Box>
       ) : (
         <Box sx={cardGridSx}>
           {tab === 'projects'

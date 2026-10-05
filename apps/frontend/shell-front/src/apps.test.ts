@@ -16,6 +16,8 @@ describe('appForPath', () => {
     ['/suites/road-test/1', 'vision'],
     ['/leaderboards', 'vision'],
     ['/leaderboards/road-test/1/e1', 'vision'],
+    ['/papers', 'vision'],
+    ['/papers/p1', 'vision'],
     ['/jobs', 'label'],
     ['/jobs/new', 'label'],
     ['/jobs/j1/work', 'label'],

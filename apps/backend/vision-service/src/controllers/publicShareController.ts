@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { sendSharePage } from '@visin/backend-core';
-import { leaderboardSharePage, projectSharePage, projectSitemap } from '../services/shareService';
+import { leaderboardSharePage, paperSharePage, projectSharePage, projectSitemap } from '../services/shareService';
 
 /** The page a link to a public project unfurls from, which sends people on to the app. */
 export const getProjectShare = async (req: Request, res: Response): Promise<void> => {
@@ -17,4 +17,9 @@ export const getSitemap = async (_req: Request, res: Response): Promise<void> =>
 
 export const getLeaderboardShare = async (req: Request, res: Response): Promise<void> => {
   sendSharePage(res, await leaderboardSharePage(String(req.params.slug), Number(req.params.version)));
+};
+
+/** The page a link to a public paper unfurls from. */
+export const getPaperShare = async (req: Request, res: Response): Promise<void> => {
+  sendSharePage(res, await paperSharePage(String(req.params.id)));
 };

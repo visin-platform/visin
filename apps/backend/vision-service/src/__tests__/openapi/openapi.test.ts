@@ -20,6 +20,7 @@ import * as evaluationSchemas from '../../validation/evaluationSchemas';
 import * as exploreSchemas from '../../validation/exploreSchemas';
 import * as findingSchemas from '../../validation/findingSchemas';
 import * as modelRegistrySchemas from '../../validation/modelRegistrySchemas';
+import * as paperSchemas from '../../validation/paperSchemas';
 import * as projectSchemas from '../../validation/projectSchemas';
 import * as suiteSchemas from '../../validation/suiteSchemas';
 import * as trainingSchemas from '../../validation/trainingSchemas';
@@ -49,6 +50,7 @@ const nameOf = schemaNamer([
   exploreSchemas,
   findingSchemas,
   modelRegistrySchemas,
+  paperSchemas,
   projectSchemas,
   suiteSchemas,
   trainingSchemas,

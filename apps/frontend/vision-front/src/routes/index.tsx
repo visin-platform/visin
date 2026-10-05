@@ -28,6 +28,9 @@ const SuiteComparePage = lazy(() => import('../pages/SuiteComparePage'));
 const PublicLeaderboardsPage = lazy(() => import('../pages/PublicLeaderboardsPage'));
 const PublicLeaderboardPage = lazy(() => import('../pages/PublicLeaderboardPage'));
 const PublicEvaluationPage = lazy(() => import('../pages/PublicEvaluationPage'));
+const PapersPage = lazy(() => import('../pages/PapersPage'));
+const PaperDetailPage = lazy(() => import('../pages/PaperDetailPage'));
+const PaperEditPage = lazy(() => import('../pages/PaperEditPage'));
 const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
 const ProjectDashboardPage = lazy(() => import('../pages/ProjectDashboardPage'));
 
@@ -62,6 +65,10 @@ function AppRoutes() {
         <Route path="/leaderboards" element={<PublicLeaderboardsPage />} />
         <Route path="/leaderboards/:slug/:version" element={<PublicLeaderboardPage />} />
         <Route path="/leaderboards/:slug/:version/:id" element={<PublicEvaluationPage />} />
+        <Route path="/papers" element={<PapersPage />} />
+        <Route path="/papers/new" element={<PaperEditPage />} />
+        <Route path="/papers/:id" element={<PaperDetailPage />} />
+        <Route path="/papers/:id/edit" element={<PaperEditPage />} />
       </Routes>
     </Suspense>
   );

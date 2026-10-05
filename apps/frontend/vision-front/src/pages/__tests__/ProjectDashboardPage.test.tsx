@@ -22,6 +22,7 @@ vi.mock('../../services/projectService', () => ({
   }
 }));
 
+vi.mock('../../components/project/CitedInPapers', () => ({ default: ({ projectId }: { projectId: string }) => <div>Cited in for {projectId}</div> }));
 vi.mock('../../components/project/ProjectHeader', () => ({
   default: (props: any) => (
     <div data-testid="project-header">

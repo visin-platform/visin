@@ -55,6 +55,17 @@ beforeEach(() => {
 });
 
 describe('GroupProfilePage', () => {
+  it('shares the page itself, and has no tab of papers, which are listed by author', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    renderAt();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Share/ }));
+
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/g/road-lab`);
+    expect(screen.queryByRole('button', { name: /^Papers/ })).not.toBeInTheDocument();
+  });
+
   it('notes the group as visited once its page has loaded', async () => {
     clearVisits();
     renderAt();

@@ -1,4 +1,3 @@
-import { useConfig } from '../config/ConfigProvider';
 import { useParams } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -23,7 +22,6 @@ const shell = {
  */
 export function GroupProfilePage({ now }: { now?: Date }) {
   const { handle = '' } = useParams();
-  const config = useConfig();
   const group = useQuery({ queryKey: ['group-profile', handle], queryFn: () => exploreApi.group(handle) });
   const page = group.data ?? undefined;
   usePageMeta(
@@ -72,11 +70,7 @@ export function GroupProfilePage({ now }: { now?: Date }) {
   return (
     <Box sx={shell}>
       <ProfileHeader
-        shareUrl={
-          config.GROUP_SERVICE_URL
-            ? `${config.GROUP_SERVICE_URL.replace(/\/$/, '')}/api/public/share/groups/${encodeURIComponent(page.handle)}`
-            : undefined
-        }
+        shareUrl={`${window.location.origin}/g/${encodeURIComponent(page.handle)}`}
         name={page.name}
         handle={page.handle}
         picture={page.picture}

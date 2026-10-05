@@ -1,4 +1,3 @@
-import { useConfig } from '../config/ConfigProvider';
 import { useParams } from 'react-router-dom';
 import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -25,7 +24,6 @@ const shell = {
  */
 export function ProfilePage({ now }: { now?: Date }) {
   const { handle = '' } = useParams();
-  const config = useConfig();
   const { user: me } = useAuth();
   const profile = useQuery({ queryKey: ['profile', handle], queryFn: () => exploreApi.user(handle) });
   const person = profile.data ?? undefined;
@@ -76,11 +74,7 @@ export function ProfilePage({ now }: { now?: Date }) {
   return (
     <Box sx={shell}>
       <ProfileHeader
-        shareUrl={
-          config.AUTH_SERVICE_URL
-            ? `${config.AUTH_SERVICE_URL.replace(/\/$/, '')}/auth/share/users/${encodeURIComponent(person.handle)}`
-            : undefined
-        }
+        shareUrl={`${window.location.origin}/u/${encodeURIComponent(person.handle)}`}
         name={person.name}
         handle={person.handle}
         picture={person.picture}

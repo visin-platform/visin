@@ -135,6 +135,16 @@ export interface ExploreDataset {
   updatedAt: string;
 }
 
+/** A paper as a list shows it: the fields of vision-service's public paper catalogue the rows read. */
+export interface ExplorePaper {
+  id: string;
+  title: string;
+  authors: { name: string }[];
+  venue?: string;
+  year?: number;
+  results: { cited: number; available: number };
+}
+
 /** One row of the recorded leaderboard, as vision-service sends it anonymously. */
 export interface LeaderboardEntry {
   rank: number;
@@ -283,6 +293,21 @@ export const exploreApi = {
   async searchGroups(query: string, limit: number): Promise<GroupResult[]> {
     const params = new URLSearchParams({ q: query, limit: String(limit) });
     return (await groupApi.get<Envelope<GroupResult[]>>(`/public/groups?${params}`, { skipAuthRedirect: true })).data;
+  },
+
+  /**
+   * The public papers, a page at a time. `user` keeps only the papers that person has confirmed they wrote, which is
+   * what a profile lists.
+   */
+  async publicPapers(query: { search?: string; user?: string; page: number; limit: number }): Promise<{ papers: ExplorePaper[]; pagination: Pagination }> {
+    const params = new URLSearchParams({ page: String(query.page), limit: String(query.limit) });
+    if (query.search) params.set('search', query.search);
+    if (query.user) params.set('user', query.user);
+    return (
+      await visionApi.get<Envelope<{ papers: ExplorePaper[]; pagination: Pagination }>>(`/public/papers?${params}`, {
+        skipAuthRedirect: true
+      })
+    ).data;
   },
 
   /** The latest findings in public projects. */

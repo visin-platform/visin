@@ -12,6 +12,7 @@ import Benchmark from '../models/Benchmark';
 import EpochVisualization from '../models/EpochVisualization';
 import Comparison from '../models/Comparison';
 import Finding from '../models/Finding';
+import Paper from '../models/Paper';
 import Config from '../models/Config';
 import { deleteFiles } from '../clients/fileServiceClient';
 
@@ -84,11 +85,11 @@ export async function purgeProject(project: IProject): Promise<void> {
 }
 
 /**
- * The sweeper's run: delete projects, trainings and evaluations trashed more than
+ * The sweeper's run: delete projects, trainings, evaluations and papers trashed more than
  * `TRASH_DAYS` ago. A training in a trashed project waits for its project.
  * Idempotent, so a missed or repeated run does no harm.
  */
-export async function purgeExpiredTrash(now = new Date()): Promise<{ projects: number; trainings: number; evaluations: number }> {
+export async function purgeExpiredTrash(now = new Date()): Promise<{ projects: number; trainings: number; evaluations: number; papers: number }> {
   const cutoff = new Date(now.getTime() - TRASH_DAYS * DAY_MS);
   const found = await Project.find({ trashedAt: { $lte: cutoff } });
   // One project that cannot be purged (a suite name with conflicting past owners) must not stop the sweep: it is
@@ -111,8 +112,11 @@ export async function purgeExpiredTrash(now = new Date()): Promise<{ projects: n
   const evaluations = (await Evaluation.deleteMany({ deletedAt: { $lte: cutoff } })).deletedCount ?? 0;
   if (evaluations > 0) invalidatePublic();
 
-  if (projects.length + trainings.length + evaluations > 0) {
-    logger.info('Purged expired items from the trash', { projects: projects.length, trainings: trainings.length, evaluations });
+  // A paper is only an address card, so there is nothing under it to delete first.
+  const papers = (await Paper.deleteMany({ trashedAt: { $lte: cutoff } })).deletedCount ?? 0;
+
+  if (projects.length + trainings.length + evaluations + papers > 0) {
+    logger.info('Purged expired items from the trash', { projects: projects.length, trainings: trainings.length, evaluations, papers });
   }
-  return { projects: projects.length, trainings: trainings.length, evaluations };
+  return { projects: projects.length, trainings: trainings.length, evaluations, papers };
 }
