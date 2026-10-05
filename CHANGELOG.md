@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.34.0](https://github.com/visin-platform/visin/compare/v1.33.0...v1.34.0) (2026-10-05)
+
+
+### Features
+
+* add licences to data models ([a355e28](https://github.com/visin-platform/visin/commit/a355e2857afc593cb5100ff1016aced033886532))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.13.0 ([92e5d50](https://github.com/visin-platform/visin/commit/92e5d5013fae3ce28354518709698c9b7da95ed7))
+
 ## [1.33.0](https://github.com/visin-platform/visin/compare/v1.32.0...v1.33.0) (2026-10-05)
 
 
