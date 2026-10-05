@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import {
   validateToken,
   getSetupStatus,
@@ -21,13 +21,14 @@ import {
   lookupPublicUsers,
   searchPublicUsers
 } from '../controllers/publicUserController';
+import { getPicture, removePicture, uploadPicture } from '../controllers/pictureController';
 import { linkGoogle } from '../controllers/googleLinkController';
 import { listSessions, revokeSession, revokeOtherSessions } from '../controllers/sessionController';
 import { createKey, listKeys, revealKey, revokeKey, removeKey } from '../controllers/apiKeyController';
 import { getToolCalls, getToolUsage } from '../controllers/auditController';
 import { authenticateToken, requireRole } from '../middleware/authMiddleware';
 import { requireInternalServiceToken } from '../middleware/internalServiceAuth';
-import { createRateLimiter, validateRequest } from '@visin/backend-core';
+import { createRateLimiter, MAX_AVATAR_BYTES, validateRequest } from '@visin/backend-core';
 import {
   validateTokenBodySchema,
   linkGoogleBodySchema,
@@ -80,6 +81,20 @@ router.post('/logout', authenticateToken, logout);
 // Protected routes
 router.get('/profile', authenticateToken, getProfile);
 router.post('/profile/google', authenticateToken, validateRequest({ body: linkGoogleBodySchema }), linkGoogle);
+// The picture is the request body itself, a few hundred pixels at most (the app shrinks it first). A budget of its own:
+// each upload is a write and a re-signed session.
+const pictureLimiter = createRateLimiter({ windowMs: 60 * 60_000, max: 30 });
+router.put(
+  '/profile/picture',
+  pictureLimiter,
+  authenticateToken,
+  express.raw({ type: () => true, limit: MAX_AVATAR_BYTES }),
+  uploadPicture
+);
+router.delete('/profile/picture', pictureLimiter, authenticateToken, removePicture);
+// What a public page's `<img>` loads: anyone, so a budget of its own like the other public reads.
+router.get('/avatars/:userId', createRateLimiter({ max: 600 }), getPicture);
+
 router.put('/profile', authenticateToken, validateRequest({ body: updateProfileBodySchema }), updateProfile);
 router.post(
   '/profile/password',

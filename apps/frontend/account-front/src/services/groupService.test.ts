@@ -198,3 +198,38 @@ describe('groupService: "Add member" and invitations to an account', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('http://group-api.test/api/groups/invitations/i1/decline');
   });
 });
+
+describe('groupService pictures', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn(), clear: vi.fn() });
+  });
+
+  it('PUTs the image itself to the group, as what it is, and returns the picture address', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { picture: 'https://group.example.test/api/public/avatars/g1?v=1' } }), { status: 200 })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const image = new Blob(['pixels'], { type: 'image/webp' });
+
+    const picture = await groupService.uploadPicture('g1', image);
+
+    expect(picture).toBe('https://group.example.test/api/public/avatars/g1?v=1');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toMatch(/\/api\/groups\/g1\/picture$/);
+    expect(init.method).toBe('PUT');
+    expect(init.body).toBe(image);
+    expect(init.headers['Content-Type']).toBe('image/webp');
+  });
+
+  it('DELETEs the group\'s picture', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await groupService.removePicture('g1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toMatch(/\/api\/groups\/g1\/picture$/);
+    expect(init.method).toBe('DELETE');
+  });
+});

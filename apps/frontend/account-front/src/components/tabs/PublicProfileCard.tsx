@@ -1,7 +1,8 @@
 import React from 'react';
 import { Box, FormControlLabel, Link, Paper, Switch, TextField, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
-import { MAX_BIO, MAX_LINKS, parseLinks, type PublicProfileValues } from './publicProfile';
+import LinksField from '../LinksField';
+import { MAX_BIO, type PublicProfileValues } from './publicProfile';
 
 interface PublicProfileCardProps {
   values: PublicProfileValues;
@@ -16,7 +17,6 @@ interface PublicProfileCardProps {
  */
 const PublicProfileCard: React.FC<PublicProfileCardProps> = ({ values, savedHandle, onChange }) => {
   const set = <K extends keyof PublicProfileValues>(key: K, value: PublicProfileValues[K]) => onChange({ ...values, [key]: value });
-  const links = parseLinks(values.linksText);
 
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 4 }, borderRadius: '16px' }}>
@@ -59,20 +59,10 @@ const PublicProfileCard: React.FC<PublicProfileCardProps> = ({ values, savedHand
           slotProps={{ htmlInput: { maxLength: MAX_BIO } }}
           helperText={`${values.bio.length}/${MAX_BIO}`}
         />
-        <TextField
-          fullWidth
-          size="small"
-          label="Links"
-          multiline
-          minRows={2}
-          value={values.linksText}
-          onChange={(event) => set('linksText', event.target.value)}
-          error={links.length > MAX_LINKS}
-          helperText={
-            links.length > MAX_LINKS
-              ? `At most ${MAX_LINKS} links.`
-              : `One address per line, starting with https:// (up to ${MAX_LINKS}).`
-          }
+        <LinksField
+          value={values.links}
+          onChange={(links) => set('links', links)}
+          examples={['github:your-name', 'linkedin:your-name', 'orcid:0000-0002-1825-0097', 'your-site.example.com']}
         />
         <FormControlLabel
           control={<Switch checked={values.profilePublic} onChange={(event) => set('profilePublic', event.target.checked)} />}

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { BadRequestError, UnauthorizedError } from '@visin/backend-core';
+import { BadRequestError, checkAvatar, UnauthorizedError } from '@visin/backend-core';
 import { InternalServiceRequest } from '../middleware/internalServiceAuth';
 import * as svc from '../services/groupService';
 import { GroupRole } from '../models/Group';
@@ -151,4 +151,25 @@ export const acceptAccountInvitation = async (req: InternalServiceRequest, res: 
 export const declineAccountInvitation = async (req: Request, res: Response): Promise<void> => {
   await svc.declineAccountInvitation(req.params.invitationId as string, actorId(req));
   res.status(204).send();
+};
+
+/**
+ * Sets the group's picture: the body is the image itself (JPEG, PNG or WebP, which the app has already shrunk),
+ * checked by its bytes. 501 where this deployment has no public address for the service to hand out.
+ */
+export const uploadPicture = async (req: InternalServiceRequest, res: Response): Promise<void> => {
+  const picture = await svc.setGroupPicture(req.params.id as string, actorId(req), checkAvatar(req.body));
+  if (!picture) {
+    res.status(501).json({
+      success: false,
+      message: "Group pictures need GROUP_SERVICE_URL set to this service's public address"
+    });
+    return;
+  }
+  res.json({ success: true, data: { picture } });
+};
+
+export const removePicture = async (req: InternalServiceRequest, res: Response): Promise<void> => {
+  await svc.removeGroupPicture(req.params.id as string, actorId(req));
+  res.json({ success: true, data: {} });
 };

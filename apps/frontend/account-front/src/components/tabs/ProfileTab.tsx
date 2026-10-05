@@ -4,21 +4,20 @@ import {
   Typography,
   TextField,
   Button,
-  Avatar,
   Alert,
   CircularProgress,
   Grid,
   Paper,
-  Fade,
-  useTheme
+  Fade
 } from '@mui/material';
-import { ApiError, livePalette } from '@visin/frontend-core';
+import { ApiError } from '@visin/frontend-core';
 import { Person, Save } from '@mui/icons-material';
 import { profileService } from '../../services/profileService';
 import { useQueryClient } from '@tanstack/react-query';
 import PasswordCard from './PasswordCard';
+import AvatarEditor from './AvatarEditor';
 import PublicProfileCard from './PublicProfileCard';
-import { MAX_LINKS, parseLinks, type PublicProfileValues } from './publicProfile';
+import { cleanLinks, type PublicProfileValues } from './publicProfile';
 import SessionsCard from './SessionsCard';
 import AppearanceCard from './AppearanceCard';
 import { sessionKeys } from '../../hooks/useSessions';
@@ -29,7 +28,7 @@ import { User } from '../../types';
 const publicValuesOf = (user: User): PublicProfileValues => ({
   handle: user.handle ?? '',
   bio: user.bio ?? '',
-  linksText: (user.links ?? []).join('\n'),
+  links: user.links ?? [],
   profilePublic: user.profilePublic !== false,
   showActivity: user.showActivity !== false
 });
@@ -39,7 +38,7 @@ const samePublicValues = (a: PublicProfileValues, b: PublicProfileValues): boole
   a.bio === b.bio &&
   a.profilePublic === b.profilePublic &&
   a.showActivity === b.showActivity &&
-  parseLinks(a.linksText).join('\n') === parseLinks(b.linksText).join('\n');
+  cleanLinks(a.links).join('\n') === cleanLinks(b.links).join('\n');
 
 const ProfileTab: React.FC = () => {
   const { data: user = null, isLoading: loading, error: loadError } = useProfile();
@@ -49,7 +48,7 @@ const ProfileTab: React.FC = () => {
   const [publicProfile, setPublicProfile] = useState<PublicProfileValues>({
     handle: '',
     bio: '',
-    linksText: '',
+    links: [],
     profilePublic: true,
     showActivity: true
   });
@@ -57,7 +56,6 @@ const ProfileTab: React.FC = () => {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const queryClient = useQueryClient();
-  const theme = useTheme();
 
   const updateCachedProfile = (update: (current: User | null) => User | null) =>
     queryClient.setQueryData<User | null>(profileKeys.mine, (current) => update(current ?? null));
@@ -92,11 +90,7 @@ const ProfileTab: React.FC = () => {
 
   const handleSave = async () => {
     if (!user || !hasChanges) return;
-    const links = parseLinks(publicProfile.linksText);
-    if (links.length > MAX_LINKS) {
-      setMessage({ type: 'error', text: `At most ${MAX_LINKS} links.` });
-      return;
-    }
+    const links = cleanLinks(publicProfile.links);
     setSaving(true);
     setMessage(null);
 
@@ -175,21 +169,14 @@ const ProfileTab: React.FC = () => {
           <Grid size={12}>
             <Paper variant="outlined" sx={{ p: { xs: 2.5, md: 4 }, borderRadius: '16px' }}>
               {/* Who this is, the way a phone's account screen opens: face, name, address. */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                <Avatar
-                  src={user?.picture}
-                  alt=""
-                  sx={{
-                    width: 64,
-                    height: 64,
-                    fontSize: '1.5rem',
-                    fontWeight: 700,
-                    bgcolor: theme.alpha(livePalette(theme).primary.main, 0.12),
-                    color: 'primary.main'
-                  }}
-                >
-                  {(firstName || email).charAt(0).toUpperCase() || <Person sx={{ fontSize: 32 }} />}
-                </Avatar>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
+                <AvatarEditor
+                  picture={user?.picture}
+                  upload={profileService.uploadPicture}
+                  remove={profileService.removePicture}
+                  initial={(firstName || email).charAt(0).toUpperCase() || <Person sx={{ fontSize: 40 }} />}
+                  onChange={(picture) => updateCachedProfile((current) => (current ? { ...current, picture } : current))}
+                />
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="h6" noWrap sx={{ lineHeight: 1.3 }}>
                     {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || email}

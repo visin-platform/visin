@@ -37,6 +37,12 @@ export { createGroupServiceClient, groupServiceUrl } from './clients/groupServic
 export type { GroupRole, GroupMembership, MyGroup, GroupServiceClient } from './clients/groupService';
 export { fileServiceUrl, fileServiceAuthHeaders } from './clients/fileService';
 
+// Profile pages: the links a person or a group lists, and the picture they upload
+export { expandLink, profileLinksSchema, MAX_PROFILE_LINKS, SHORTHAND_NAMES } from './profile/socialLinks';
+export type { ExpandedLink } from './profile/socialLinks';
+export { sniffAvatarType, checkAvatar, avatarUrl, MAX_AVATAR_BYTES } from './profile/avatar';
+export type { AvatarType } from './profile/avatar';
+
 // Logging
 export { logger } from './logging/logger';
 export { currentRequestId, REQUEST_ID_HEADER } from './logging/requestContext';

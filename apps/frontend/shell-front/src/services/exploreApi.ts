@@ -21,6 +21,9 @@ export interface PublicGroup {
   handle: string;
   name: string;
   description?: string;
+  /** The group's own sites, as https addresses. */
+  links: string[];
+  picture?: string;
   createdAt: string;
 }
 
@@ -38,6 +41,7 @@ export interface GroupResult {
   handle: string;
   name: string;
   description?: string;
+  picture?: string;
 }
 
 /** What anyone may see of an account (auth-service's public page); never the email. */

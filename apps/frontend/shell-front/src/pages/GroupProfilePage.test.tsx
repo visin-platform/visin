@@ -19,7 +19,15 @@ const api = vi.mocked(exploreApi);
 const now = new Date(2026, 8, 15, 20, 0);
 const hoursAgo = (hours: number) => new Date(now.getTime() - hours * 3600 * 1000).toISOString();
 
-const lab = { id: 'g7', handle: 'road-lab', name: 'Road lab', description: 'Segmentation under bad weather', createdAt: '2025-03-02T10:00:00Z' };
+const lab = {
+  id: 'g7',
+  handle: 'road-lab',
+  name: 'Road lab',
+  description: 'Segmentation under bad weather',
+  links: ['https://road-lab.example.test/', 'https://github.com/road-lab'],
+  picture: 'https://group.example.test/api/public/avatars/g7?v=1',
+  createdAt: '2025-03-02T10:00:00Z',
+};
 const owner = { kind: 'group' as const, id: 'g7', name: 'Road lab', handle: 'road-lab' };
 const projects = [{ _id: 'p1', name: 'Window ablations', slug: 'window-ablations', visibility: 'public' as const, owner, updatedAt: hoursAgo(3) }];
 
@@ -73,6 +81,16 @@ describe('GroupProfilePage', () => {
     renderAt('/g/nobody');
     await screen.findByRole('heading', { level: 1, name: 'No such group' });
     expect(document.head.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex');
+  });
+
+  it('shows the group\'s picture and its own sites, with the platforms it knows by name', async () => {
+    renderAt();
+
+    await screen.findByRole('heading', { level: 1, name: 'Road lab' });
+    expect(document.querySelector('img[src="https://group.example.test/api/public/avatars/g7?v=1"]')).not.toBeNull();
+    const links = screen.getAllByRole('link', { name: /road-lab/ }).filter((link) => link.getAttribute('rel')?.includes('nofollow'));
+    expect(links.map((link) => link.textContent)).toEqual(['road-lab.example.test', 'GitHub road-lab']);
+    expect(links[1]).toHaveAttribute('href', 'https://github.com/road-lab');
   });
 
   it('shows the group as it describes itself, and nothing about who is in it', async () => {

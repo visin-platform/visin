@@ -28,9 +28,9 @@ export const useDeletedGroups = (enabled: boolean) => {
  * the other, a restore moves it back), so they all invalidate both rather than
  * each guessing which half it touched.
  */
-const useGroupMutation = <TArgs>(
-  mutationFn: (args: TArgs) => Promise<unknown>
-): UseMutationResult<unknown, Error, TArgs> => {
+const useGroupMutation = <TArgs, TResult = unknown>(
+  mutationFn: (args: TArgs) => Promise<TResult>
+): UseMutationResult<TResult, Error, TArgs> => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
@@ -50,6 +50,11 @@ export const useUpdateGroupPage = () =>
   useGroupMutation(({ groupId, page }: { groupId: string; page: GroupPageUpdate }) =>
     groupService.updatePage(groupId, page)
   );
+
+export const useUploadGroupPicture = () =>
+  useGroupMutation(({ groupId, image }: { groupId: string; image: Blob }) => groupService.uploadPicture(groupId, image));
+
+export const useRemoveGroupPicture = () => useGroupMutation((groupId: string) => groupService.removePicture(groupId));
 
 export const useDeleteGroup = () => useGroupMutation((groupId: string) => groupService.remove(groupId));
 

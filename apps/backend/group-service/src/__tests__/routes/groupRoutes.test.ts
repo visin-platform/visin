@@ -44,7 +44,7 @@ describe('groupRoutes', () => {
     expect(find('get', '/invitations/mine')).toBeDefined();
     expect(find('post', '/invitations/:invitationId/accept')).toBeDefined();
     expect(find('post', '/invitations/:invitationId/decline')).toBeDefined();
-    expect(routes).toHaveLength(21);
+    expect(routes).toHaveLength(23);
   });
 
   it('gates every route behind allowUserOrInternalService', () => {

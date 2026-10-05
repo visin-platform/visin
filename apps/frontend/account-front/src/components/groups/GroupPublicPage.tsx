@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { Alert, Box, Button, FormControlLabel, Link, Switch, TextField, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { ApiError } from '@visin/frontend-core';
-import { useUpdateGroupPage } from '../../hooks/useGroups';
+import { useRemoveGroupPicture, useUpdateGroupPage, useUploadGroupPicture } from '../../hooks/useGroups';
+import AvatarEditor from '../tabs/AvatarEditor';
+import LinksField from '../LinksField';
+import { cleanLinks } from '../tabs/publicProfile';
 import { Group } from '../../types/group';
 
 const MAX_DESCRIPTION = 280;
@@ -12,13 +15,25 @@ const MAX_DESCRIPTION = 280;
  * existence are private by default, and the page shows nothing about its members.
  */
 const GroupPublicPage: React.FC<{ group: Group }> = ({ group }) => {
-  const saved = { handle: group.handle ?? '', description: group.description ?? '', profilePublic: Boolean(group.profilePublic) };
+  const saved = {
+    handle: group.handle ?? '',
+    description: group.description ?? '',
+    links: group.links ?? [],
+    profilePublic: Boolean(group.profilePublic)
+  };
   const [values, setValues] = useState(saved);
   const [error, setError] = useState<string | null>(null);
   const update = useUpdateGroupPage();
+  const uploadPicture = useUploadGroupPicture();
+  const removePicture = useRemoveGroupPicture();
 
+  const links = cleanLinks(values.links);
+  const linksChanged = links.join('\n') !== cleanLinks(saved.links).join('\n');
   const changed =
-    values.handle !== saved.handle || values.description !== saved.description || values.profilePublic !== saved.profilePublic;
+    values.handle !== saved.handle ||
+    values.description !== saved.description ||
+    linksChanged ||
+    values.profilePublic !== saved.profilePublic;
   // The page needs a handle, so it cannot be switched on without one.
   const missingHandle = values.profilePublic && !values.handle;
 
@@ -31,6 +46,8 @@ const GroupPublicPage: React.FC<{ group: Group }> = ({ group }) => {
           // Only what changed: sending the handle it already has would still ask the server to claim it.
           ...(values.handle !== saved.handle && values.handle ? { handle: values.handle } : {}),
           description: values.description.trim(),
+          // Only when changed too: what was typed is for the service to make into addresses.
+          ...(linksChanged ? { links } : {}),
           profilePublic: values.profilePublic
         }
       },
@@ -68,6 +85,16 @@ const GroupPublicPage: React.FC<{ group: Group }> = ({ group }) => {
         </Alert>
       )}
 
+      {/* The picture is sent at once, like the owner's other one-off actions: it is not held back by Save. */}
+      <Box sx={{ mb: 2 }}>
+        <AvatarEditor
+          picture={group.picture}
+          initial={group.name.charAt(0).toUpperCase()}
+          upload={(image) => uploadPicture.mutateAsync({ groupId: group._id, image })}
+          remove={() => removePicture.mutateAsync(group._id)}
+        />
+      </Box>
+
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 480 }}>
         <TextField
           size="small"
@@ -88,6 +115,12 @@ const GroupPublicPage: React.FC<{ group: Group }> = ({ group }) => {
           onChange={(event) => setValues({ ...values, description: event.target.value })}
           slotProps={{ htmlInput: { maxLength: MAX_DESCRIPTION } }}
           helperText={`${values.description.length}/${MAX_DESCRIPTION}`}
+        />
+        <LinksField
+          value={values.links}
+          disabled={update.isPending}
+          onChange={(links) => setValues({ ...values, links })}
+          examples={['your-organisation.example.com', 'github:your-organisation', 'linkedin:company-name']}
         />
         <FormControlLabel
           control={

@@ -272,13 +272,13 @@
         "maxLength": 280
       },
       "links": {
-        "maxItems": 5,
+        "maxItems": 8,
         "type": "array",
         "items": {
           "type": "string",
-          "maxLength": 300,
-          "format": "uri"
-        }
+          "maxLength": 300
+        },
+        "description": "Up to 8 links, stored as https addresses. Each may be written as an address, a bare domain (`example.com`), or a shorthand: github:, gitlab:, linkedin:, orcid:, scholar:, hf:, kaggle:, x:, bluesky:, youtube:, researchgate:, mastodon:."
       },
       "profilePublic": {
         "type": "boolean"

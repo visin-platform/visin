@@ -1,4 +1,4 @@
-import { z } from '@visin/backend-core';
+import { z, profileLinksSchema } from '@visin/backend-core';
 import { isValidHandle } from '../services/handle';
 
 const GROUP_ROLES = ['owner', 'admin', 'member'] as const;
@@ -22,6 +22,7 @@ export const updateGroupBodySchema = z
     name: z.string().trim().min(1, 'name required').optional(),
     handle: groupHandle.optional(),
     description: z.string().trim().max(280).optional(),
+    links: profileLinksSchema.optional(),
     profilePublic: z.boolean().optional()
   })
   .refine((body) => Object.values(body).some((value) => value !== undefined), 'Nothing to change');

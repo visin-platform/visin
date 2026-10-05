@@ -134,7 +134,8 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
   // it is kept, for the avatar on what the account owns).
   await User.updateOne(
     { _id: dbUser._id },
-    { $set: { lastLoginAt: new Date(), ...(googleUser.picture ? { picture: googleUser.picture } : {}) } }
+    // A picture the person uploaded is theirs, and Google's never replaces it.
+    { $set: { lastLoginAt: new Date(), ...(googleUser.picture && !dbUser.avatarUpdatedAt ? { picture: googleUser.picture } : {}) } }
   );
   await ensureHandle(dbUser);
 

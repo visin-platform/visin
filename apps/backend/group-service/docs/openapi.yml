@@ -60,6 +60,15 @@ components:
         description:
           type: string
           maxLength: 280
+        links:
+          type: array
+          maxItems: 8
+          items: { type: string, format: uri }
+          description: The group's own sites (organisation, lab, repositories), as https addresses. Shown on its public page.
+        picture:
+          type: string
+          format: uri
+          description: The address of the group's uploaded picture, served from /api/public/avatars/{groupId}.
         profilePublic:
           type: boolean
           description: Whether the group has a public page, and shows its name on what it owns to people who are not members. Off until the owner turns it on.
@@ -257,7 +266,7 @@ components:
 
     UpdateGroupRequest:
       type: object
-      description: Anything to change. The name is for an owner or an admin; the public page (handle, description, profilePublic) is the owner's alone.
+      description: Anything to change. The name is for an owner or an admin; the public page (handle, description, links, profilePublic) is the owner's alone.
       minProperties: 1
       properties:
         name:
@@ -271,13 +280,21 @@ components:
           type: string
           maxLength: 280
           description: An empty string clears it.
+        links:
+          type: array
+          maxItems: 8
+          items: { type: string, maxLength: 300 }
+          description: >-
+            Up to 8 links, stored as https addresses. Each may be written as an address, a bare domain (`example.com`),
+            or a shorthand: github:, gitlab:, linkedin:, orcid:, scholar:, hf:, kaggle:, x:, bluesky:, youtube:,
+            researchgate: or mastodon:. An empty list clears them.
         profilePublic:
           type: boolean
           description: Needs a handle.
     PublicGroup:
       type: object
       description: What anyone may know of a group that turned its public page on. Never its members.
-      required: [id, handle, name, createdAt]
+      required: [id, handle, name, links, createdAt]
       properties:
         id:
           type: string
@@ -287,6 +304,12 @@ components:
           type: string
         description:
           type: string
+        links:
+          type: array
+          items: { type: string, format: uri }
+        picture:
+          type: string
+          format: uri
         createdAt:
           type: string
           format: date-time
@@ -401,12 +424,40 @@ paths:
                           type: string
                         description:
                           type: string
+                        picture:
+                          type: string
+                          format: uri
         '400':
           description: A query that is too short or too long
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /api/public/avatars/{groupId}:
+    get:
+      tags: [Public pages]
+      summary: A group's uploaded picture
+      description: |
+        What a group's public page `<img>` loads. A group with no public page, with no picture of its own, a deleted
+        group and an unknown id all answer the same 404. Always revalidated (`ETag`, `Cache-Control: no-cache`), so a
+        picture is not left standing after the page is turned off. Served as an image only: `nosniff`, and a CSP that
+        allows nothing.
+      security: []
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The picture
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '304': { description: Unchanged since the `ETag` sent in `If-None-Match` }
+        '404': { description: No such picture }
 
   /api/public/directory:
     get:
@@ -447,6 +498,7 @@ paths:
                             handle: { type: string }
                             name: { type: string }
                             description: { type: string }
+                            picture: { type: string, format: uri }
                       pagination:
                         type: object
                         required: [page, limit, total, pages]
@@ -952,6 +1004,64 @@ paths:
         - internalAuth: []
 
   # Group Restoration Endpoints
+  /api/groups/{id}/picture:
+    put:
+      tags: [Groups]
+      summary: Set the group's picture
+      description: |
+        The request body is the image itself: a JPEG, PNG or WebP of at most 256 KB (the app shrinks it to a few hundred
+        pixels first). The type is taken from the bytes, not from `Content-Type`. The group's `picture` becomes this
+        service's address for it. The owner's alone, like the rest of the public page. 501 where the deployment has no
+        `GROUP_SERVICE_URL`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          image/jpeg: { schema: { type: string, format: binary } }
+          image/png: { schema: { type: string, format: binary } }
+          image/webp: { schema: { type: string, format: binary } }
+      responses:
+        '200':
+          description: The picture is set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [picture]
+                    properties:
+                      picture: { type: string, format: uri }
+        '400': { description: Not a JPEG, PNG or WebP image }
+        '403': { description: Only the group's owner can change its public page }
+        '404': { description: No such group }
+        '413': { description: The picture is over 256 KB }
+        '501': { description: This deployment has no public address configured for picture links }
+    delete:
+      tags: [Groups]
+      summary: Remove the group's picture
+      description: The owner's alone.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: The picture is removed }
+        '403': { description: Only the group's owner can change its public page }
+        '404': { description: No such group }
+
   /api/groups/{id}/restore:
     post:
       tags: [Groups]

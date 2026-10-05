@@ -32,9 +32,21 @@ export function GroupRow({ group }: { group: GroupResult }) {
     <ListRow
       to={`/g/${group.handle}`}
       leading={
-        <RowIcon color={livePalette(theme).primary.main}>
-          <Groups fontSize="small" />
-        </RowIcon>
+        group.picture ? (
+          <Avatar
+            src={group.picture}
+            alt=""
+            variant="rounded"
+            slotProps={{ img: { referrerPolicy: 'no-referrer' } }}
+            sx={{ width: 40, height: 40, borderRadius: '12px' }}
+          >
+            <Groups fontSize="small" />
+          </Avatar>
+        ) : (
+          <RowIcon color={livePalette(theme).primary.main}>
+            <Groups fontSize="small" />
+          </RowIcon>
+        )
       }
       title={group.name}
       secondary={group.description ? `@${group.handle} · ${group.description}` : `@${group.handle}`}

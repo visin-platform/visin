@@ -1,8 +1,17 @@
 import { randomBytes, createHash } from 'crypto';
-import { BadRequestError, ConflictError, ForbiddenError, listResourceEvents, NotFoundError } from '@visin/backend-core';
+import {
+  avatarUrl,
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  listResourceEvents,
+  NotFoundError,
+  type AvatarType
+} from '@visin/backend-core';
 import { isValidObjectId } from 'mongoose';
 import { Error as MongooseError } from 'mongoose';
 import { Group, IGroup, IGroupInvitation, GroupRole } from '../models/Group';
+import { GroupAvatar } from '../models/GroupAvatar';
 import { searchUsers } from '../clients/authUsersClient';
 import { ownedByGroup, type Owned } from '../clients/ownedResourcesClient';
 
@@ -80,6 +89,7 @@ export interface GroupUpdates {
   name?: string;
   handle?: string;
   description?: string;
+  links?: string[];
   profilePublic?: boolean;
 }
 
@@ -94,10 +104,16 @@ export async function updateGroup(groupId: string, actingId: string, updates: Gr
   }
 
   // The public page is the owner's: it decides what strangers may know about the group.
-  if (updates.handle !== undefined || updates.description !== undefined || updates.profilePublic !== undefined) {
+  if (
+    updates.handle !== undefined ||
+    updates.description !== undefined ||
+    updates.links !== undefined ||
+    updates.profilePublic !== undefined
+  ) {
     if (myRole !== 'owner') throw new ForbiddenError("Only the group's owner can change its public page");
     if (updates.handle !== undefined) group.handle = updates.handle;
     if (updates.description !== undefined) group.description = updates.description || undefined;
+    if (updates.links !== undefined) group.links = updates.links.length ? updates.links : undefined;
     if (updates.profilePublic !== undefined) group.profilePublic = updates.profilePublic;
     if (group.profilePublic && !group.handle) throw new BadRequestError('Choose a handle before showing the public page');
   }
@@ -118,14 +134,27 @@ export interface PublicGroup {
   handle: string;
   name: string;
   description?: string;
+  /** The group's own sites, as https addresses. */
+  links: string[];
+  /** The address of its uploaded picture. */
+  picture?: string;
   createdAt: string;
 }
 
-const toPublicGroup = (group: IGroup): PublicGroup => ({
+/** What a list of groups needs of each: enough to name, picture and link it. */
+export type ListedGroup = Pick<PublicGroup, 'id' | 'handle' | 'name' | 'description' | 'picture'>;
+
+const toListedGroup = (group: IGroup): ListedGroup => ({
   id: group._id.toString(),
   handle: group.handle as string,
   name: group.name,
   ...(group.description ? { description: group.description } : {}),
+  ...(group.picture ? { picture: group.picture } : {})
+});
+
+const toPublicGroup = (group: IGroup): PublicGroup => ({
+  ...toListedGroup(group),
+  links: group.links ?? [],
   createdAt: group.createdAt.toISOString()
 });
 
@@ -142,7 +171,7 @@ export async function getPublicGroup(handle: string): Promise<PublicGroup> {
  * Groups with a public page by the start of their handle or name, for the app's search. A group without one is not
  * found, whatever it is called, and nothing about its members is ever in the answer.
  */
-export async function searchPublicGroups(q: string, limit: number): Promise<Pick<PublicGroup, 'id' | 'handle' | 'name' | 'description'>[]> {
+export async function searchPublicGroups(q: string, limit: number): Promise<ListedGroup[]> {
   const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const groups = await Group.find({
     ...PUBLIC,
@@ -150,12 +179,7 @@ export async function searchPublicGroups(q: string, limit: number): Promise<Pick
   })
     .sort({ handle: 1 })
     .limit(limit);
-  return groups.map((group) => ({
-    id: group._id.toString(),
-    handle: group.handle as string,
-    name: group.name,
-    ...(group.description ? { description: group.description } : {})
-  }));
+  return groups.map(toListedGroup);
 }
 
 /**
@@ -166,7 +190,7 @@ export async function listPublicGroups(
   page: number,
   limit: number
 ): Promise<{
-  groups: Pick<PublicGroup, 'id' | 'handle' | 'name' | 'description'>[];
+  groups: ListedGroup[];
   pagination: { page: number; limit: number; total: number; pages: number };
 }> {
   const [groups, total] = await Promise.all([
@@ -177,12 +201,7 @@ export async function listPublicGroups(
     Group.countDocuments(PUBLIC)
   ]);
   return {
-    groups: groups.map((group) => ({
-      id: group._id.toString(),
-      handle: group.handle as string,
-      name: group.name,
-      ...(group.description ? { description: group.description } : {})
-    })),
+    groups: groups.map(toListedGroup),
     pagination: { page, limit, total, pages: Math.ceil(total / limit) }
   };
 }
@@ -193,13 +212,62 @@ export async function listPublicGroupHandles(limit: number): Promise<string[]> {
   return groups.map((group) => group.handle as string);
 }
 
+/** Where a group's picture is served from; the version moves with each upload. */
+export const groupPictureUrl = (groupId: string, version: Date): string | undefined =>
+  avatarUrl(`/api/public/avatars/${groupId}`, version, ['GROUP_SERVICE_URL']);
+
+/**
+ * Sets a group's picture. Like the rest of its public page, the owner's alone. Returns the address it is served from,
+ * or undefined where this deployment has no public address for the service to hand out (nothing is stored then).
+ */
+export async function setGroupPicture(
+  groupId: string,
+  actingId: string,
+  image: { data: Buffer; contentType: AvatarType }
+): Promise<string | undefined> {
+  const group = await Group.findOne({ _id: groupId, ...NOT_DELETED });
+  if (!group) throw new NotFoundError();
+  if (memberRole(group, actingId) !== 'owner') throw new ForbiddenError("Only the group's owner can change its public page");
+  const now = new Date();
+  const picture = groupPictureUrl(groupId, now);
+  if (!picture) return undefined;
+
+  await GroupAvatar.findOneAndUpdate({ groupId }, { $set: { ...image, updatedAt: now } }, { upsert: true });
+  // Not a save of the whole group: a picture must not lose a concurrent edit of the page, nor make one fail.
+  await Group.updateOne({ _id: groupId }, { $set: { picture, avatarUpdatedAt: now } });
+  return picture;
+}
+
+/** Removes a group's picture. The owner's alone. */
+export async function removeGroupPicture(groupId: string, actingId: string): Promise<void> {
+  const group = await Group.findOne({ _id: groupId, ...NOT_DELETED });
+  if (!group) throw new NotFoundError();
+  if (memberRole(group, actingId) !== 'owner') throw new ForbiddenError("Only the group's owner can change its public page");
+  await GroupAvatar.deleteOne({ groupId });
+  await Group.updateOne({ _id: groupId }, { $unset: { picture: '', avatarUpdatedAt: '' } });
+}
+
+/** A group's picture for its public page, or not found: a group with no page, none of its own, or that is gone. */
+export async function getGroupPicture(groupId: string): Promise<{ data: Buffer; contentType: AvatarType; updatedAt: Date }> {
+  if (!isValidObjectId(groupId)) throw new NotFoundError('No such picture');
+  const group = await Group.findOne({ ...PUBLIC, _id: groupId, avatarUpdatedAt: { $ne: null } }).select('_id');
+  const avatar = group && (await GroupAvatar.findOne({ groupId }));
+  if (!avatar) throw new NotFoundError('No such picture');
+  return { data: avatar.data, contentType: avatar.contentType, updatedAt: avatar.updatedAt };
+}
+
 /**
  * The name and handle of the groups with a public page, for vision- and dataset-service to show beside what
  * a group owns. A group without one is simply absent: not even its existence is told.
  */
-export async function lookupPublicGroups(ids: string[]): Promise<Pick<PublicGroup, 'id' | 'handle' | 'name'>[]> {
+export async function lookupPublicGroups(ids: string[]): Promise<Pick<PublicGroup, 'id' | 'handle' | 'name' | 'picture'>[]> {
   const groups = await Group.find({ ...PUBLIC, _id: { $in: ids } });
-  return groups.map((group) => ({ id: group._id.toString(), handle: group.handle as string, name: group.name }));
+  return groups.map((group) => ({
+    id: group._id.toString(),
+    handle: group.handle as string,
+    name: group.name,
+    ...(group.picture ? { picture: group.picture } : {})
+  }));
 }
 
 export async function deleteGroup(groupId: string, actingId: string): Promise<void> {
@@ -258,6 +326,7 @@ export async function permanentlyDeleteGroup(groupId: string, actingId: string):
     __v: revisionFilter(group)
   });
   if (!deleted) throw new ConflictError(CONCURRENT_CHANGE);
+  await GroupAvatar.deleteOne({ groupId });
 }
 
 export function memberRole(group: IGroup, userId: string): GroupRole | undefined {

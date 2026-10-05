@@ -21,17 +21,31 @@ describe('the public page a person edits', () => {
     ).toEqual({ handle: 'ann', bio: 'Road scenes', links: ['https://ann.example.test/me'], profilePublic: false, showActivity: false });
   });
 
-  it('keeps a bio to a tweet and links to five', () => {
+  it('keeps a bio to a tweet and links to eight', () => {
     expect(updateProfileBodySchema.safeParse({ bio: 'x'.repeat(281) }).success).toBe(false);
     const link = 'https://ann.example.test';
-    expect(updateProfileBodySchema.safeParse({ links: Array(5).fill(link) }).success).toBe(true);
-    expect(updateProfileBodySchema.safeParse({ links: Array(6).fill(link) }).success).toBe(false);
+    expect(updateProfileBodySchema.safeParse({ links: Array(8).fill(link) }).success).toBe(true);
+    expect(updateProfileBodySchema.safeParse({ links: Array(9).fill(link) }).success).toBe(false);
   });
 
   it('shows strangers only https links, so javascript: and plain http never get in', () => {
     for (const link of ['javascript:alert(1)', 'http://ann.example.test', 'ftp://ann.example.test', 'not a url', 'data:text/html,x']) {
       expect(updateProfileBodySchema.safeParse({ links: [link] }).success).toBe(false);
     }
+  });
+
+  it('expands shorthands and bare domains to https addresses, and says what is wrong with one it cannot', () => {
+    expect(
+      updateProfileBodySchema.parse({ links: ['github:ann-lee', 'orcid:0000-0002-1825-0097', 'ann.example.test', ' https://a.example.test '] }).links
+    ).toEqual([
+      'https://github.com/ann-lee',
+      'https://orcid.org/0000-0002-1825-0097',
+      'https://ann.example.test',
+      'https://a.example.test'
+    ]);
+    const bad = updateProfileBodySchema.safeParse({ links: ['orcid:12'] });
+    expect(bad.success).toBe(false);
+    expect(JSON.stringify(bad.error?.issues)).toContain('ORCID iD');
   });
 
   it('lowercases the handle in an address and bounds it', () => {

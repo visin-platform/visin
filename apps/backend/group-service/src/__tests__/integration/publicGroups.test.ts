@@ -141,7 +141,7 @@ describe('group public pages against in-memory MongoDB', () => {
       const { status, body } = await get('road-lab');
 
       expect(status).toBe(200);
-      expect(Object.keys(body.data!).sort()).toEqual(['createdAt', 'description', 'handle', 'id', 'name']);
+      expect(Object.keys(body.data!).sort()).toEqual(['createdAt', 'description', 'handle', 'id', 'links', 'name']);
       expect(body.data).toMatchObject({ id, handle: 'road-lab', name: 'Road lab', description: 'Segmentation under bad weather' });
       expect(JSON.stringify(body)).not.toMatch(new RegExp(`${OWNER}|${ADMIN}|${MEMBER}|members`));
     });
@@ -153,7 +153,7 @@ describe('group public pages against in-memory MongoDB', () => {
       const { status, body } = await get('QUIET');
 
       expect(status).toBe(200);
-      expect(Object.keys(body.data!).sort()).toEqual(['createdAt', 'handle', 'id', 'name']);
+      expect(Object.keys(body.data!).sort()).toEqual(['createdAt', 'handle', 'id', 'links', 'name']);
     });
 
     it('answers the same 404 for a page that is off, a group that was deleted and one that never was', async () => {

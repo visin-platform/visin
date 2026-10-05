@@ -15,6 +15,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       # The web app's address: where the preview pages for shared links send people on to. Blank: no previews.
       - SHELL_FRONT_URL=${SHELL_FRONT_URL:-}
+      # This service's own address, as a browser reaches it: where group pictures are served from. Blank: no uploads.
+      - GROUP_SERVICE_URL=${GROUP_SERVICE_URL:-}
       - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - VISION_SERVICE_URL=${VISION_SERVICE_URL}

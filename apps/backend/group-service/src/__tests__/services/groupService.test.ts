@@ -1,5 +1,7 @@
 const ownedByGroup = jest.fn();
 jest.mock('../../clients/ownedResourcesClient', () => ({ ownedByGroup: (groupId: string) => ownedByGroup(groupId) }));
+const deleteAvatar = jest.fn();
+jest.mock('../../models/GroupAvatar', () => ({ GroupAvatar: { deleteOne: (filter: unknown) => deleteAvatar(filter) } }));
 jest.mock('../../models/Group', () => ({
   Group: {
     create: jest.fn(),
@@ -289,6 +291,8 @@ describe('permanentlyDeleteGroup', () => {
     });
     // Only soft-deleted groups are eligible; a live group must not be hard-deleted.
     expect(mockedGroup.findOne).toHaveBeenCalledWith({ _id: 'g1', deletedAt: { $ne: null } });
+    // Its picture goes with it.
+    expect(deleteAvatar).toHaveBeenCalledWith({ groupId: 'g1' });
   });
 
   it('returns a conflict when the authorized revision no longer matches', async () => {
@@ -296,6 +300,8 @@ describe('permanentlyDeleteGroup', () => {
     mockedGroup.findOneAndDelete.mockResolvedValue(null);
 
     await expect(permanentlyDeleteGroup('g1', 'owner@x.com')).rejects.toMatchObject({ statusCode: 409 });
+    // Nothing was deleted, so the picture stays.
+    expect(deleteAvatar).not.toHaveBeenCalled();
   });
 
   it('conditionally deletes imported groups without a version key', async () => {

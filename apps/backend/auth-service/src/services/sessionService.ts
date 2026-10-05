@@ -152,7 +152,8 @@ export const startSession = async (
     res,
     session,
     { id: dbUser._id.toString(), email: dbUser.email, tokenVersion: dbUser.tokenVersion },
-    { name: identity.name ?? displayName(dbUser), picture: identity.picture }
+    // The picture the person uploaded is the one their token carries, whatever the sign-in method offered.
+    { name: identity.name ?? displayName(dbUser), picture: dbUser.avatarUpdatedAt ? dbUser.picture : identity.picture }
   );
 };
 

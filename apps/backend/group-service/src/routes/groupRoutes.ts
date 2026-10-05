@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { validateInternalServiceToken, allowUserOrInternalService, type InternalServiceRequest } from '../middleware/internalServiceAuth';
 import * as ctrl from '../controllers/groupController';
-import { createRateLimiter, validateRequest } from '@visin/backend-core';
+import { createRateLimiter, MAX_AVATAR_BYTES, validateRequest } from '@visin/backend-core';
 import {
   createGroupBodySchema,
   updateGroupBodySchema,
@@ -55,6 +55,21 @@ router.get(
 );
 router.get('/:id', allowUserOrInternalService, ctrl.getOne);
 router.patch('/:id', allowUserOrInternalService, validateRequest({ body: updateGroupBodySchema }), ctrl.updateGroup);
+// The picture is the request body itself, a few hundred pixels at most (the app shrinks it first). A budget of its own:
+// each upload is a write.
+const pictureLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => (req as InternalServiceRequest).user?.id ?? 'internal-service'
+});
+router.put(
+  '/:id/picture',
+  allowUserOrInternalService,
+  pictureLimiter,
+  express.raw({ type: () => true, limit: MAX_AVATAR_BYTES }),
+  ctrl.uploadPicture
+);
+router.delete('/:id/picture', allowUserOrInternalService, pictureLimiter, ctrl.removePicture);
 router.delete('/:id', allowUserOrInternalService, ctrl.deleteGroup);
 router.post('/:id/restore', allowUserOrInternalService, ctrl.restoreGroup);
 router.delete('/:id/permanent', allowUserOrInternalService, ctrl.permanentlyDeleteGroup);

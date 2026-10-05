@@ -50,3 +50,39 @@ describe('profileService.updateProfile', () => {
     vi.doUnmock('../config/ConfigProvider');
   });
 });
+
+describe('profileService pictures', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn(), clear: vi.fn() });
+  });
+
+  it('PUTs the image itself, as what it is, and returns the picture address', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { picture: 'https://auth.example.test/auth/avatars/u1?v=1' } }), { status: 200 })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const image = new Blob(['pixels'], { type: 'image/webp' });
+
+    const picture = await profileService.uploadPicture(image);
+
+    expect(picture).toBe('https://auth.example.test/auth/avatars/u1?v=1');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://auth-api.test/auth/profile/picture');
+    expect(init.method).toBe('PUT');
+    expect(init.credentials).toBe('include');
+    expect(init.body).toBe(image);
+    expect(init.headers['Content-Type']).toBe('image/webp');
+  });
+
+  it('DELETEs the picture', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await profileService.removePicture();
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://auth-api.test/auth/profile/picture');
+    expect(init.method).toBe('DELETE');
+  });
+});

@@ -149,6 +149,8 @@ services:
       DATASET_SERVICE_URL: http://dataset-service:5010
       # The web app's address: where the preview pages for shared links send people on to.
       SHELL_FRONT_URL: ${PUBLIC_HOST:-http://localhost}:3010
+      # This service's own address, as a browser reaches it: where group pictures are served from.
+      GROUP_SERVICE_URL: ${PUBLIC_HOST:-http://localhost}:5006
 
   vision-service:
     build: ./apps/backend/vision-service

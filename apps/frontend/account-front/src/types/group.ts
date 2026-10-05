@@ -14,6 +14,10 @@ export interface Group {
   /** The address of the group's public page, `/g/{handle}`. */
   handle?: string;
   description?: string;
+  /** The group's own sites, as https addresses. */
+  links?: string[];
+  /** The address of its uploaded picture. */
+  picture?: string;
   /** Whether the group has a public page, and shows its name on what it owns to non-members. Off by default. */
   profilePublic?: boolean;
   createdBy: string;

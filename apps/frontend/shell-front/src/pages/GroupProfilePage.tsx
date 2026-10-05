@@ -79,7 +79,9 @@ export function GroupProfilePage({ now }: { now?: Date }) {
         }
         name={page.name}
         handle={page.handle}
+        picture={page.picture}
         bio={page.description}
+        links={page.links}
         meta={`Group since ${created}`}
       />
       <ProfileLists owner={{ owner: page.id }} cacheKey={`group:${handle}`} now={now} />

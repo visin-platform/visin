@@ -7,6 +7,10 @@ import ProfileTab from './ProfileTab';
 
 // The devices list has its own suite (SessionsCard.test.tsx).
 vi.mock('./SessionsCard', () => ({ default: () => null }));
+vi.mock('../../utils/resizeImage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../utils/resizeImage')>()),
+  resizeToAvatar: vi.fn().mockResolvedValue(new Blob(['x'], { type: 'image/webp' })),
+}));
 
 const renderTab = () =>
   render(
@@ -21,7 +25,7 @@ vi.mock('../../services/authService', () => ({
   authService: { getProfile: vi.fn() },
 }));
 vi.mock('../../services/profileService', () => ({
-  profileService: { updateProfile: vi.fn(), changePassword: vi.fn() },
+  profileService: { updateProfile: vi.fn(), changePassword: vi.fn(), uploadPicture: vi.fn(), removePicture: vi.fn() },
 }));
 
 import { authService } from '../../services/authService';
@@ -263,20 +267,25 @@ describe('ProfileTab public profile', () => {
 
     expect(screen.getByLabelText('Handle')).toHaveValue('ada');
     expect(screen.getByLabelText('Bio')).toHaveValue('Analytical engines');
-    expect(screen.getByLabelText('Links')).toHaveValue('https://ada.example.test');
+    expect(screen.getByLabelText('Link 1')).toHaveValue('https://ada.example.test');
+    expect(screen.queryByLabelText('Link 2')).not.toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Show my public page' })).toBeChecked();
     expect(screen.getByRole('link', { name: 'View your page' })).toHaveAttribute('href', '/u/ada');
     expect(screen.getByText(/Your page is \/u\/ada/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
-  it('saves a new handle, bio and links, one link per line, lowercased and trimmed', async () => {
+  it('saves a new handle, bio and links, each in a box of its own, lowercased and trimmed', async () => {
     await open();
     mockedUpdateProfile.mockResolvedValue({ success: true, user: { ...profile, handle: 'ada-l', bio: 'Notes' , links: ['https://a.test', 'https://b.test'] } });
 
     fireEvent.change(screen.getByLabelText('Handle'), { target: { value: 'Ada-L' } });
     fireEvent.change(screen.getByLabelText('Bio'), { target: { value: '  Notes ' } });
-    fireEvent.change(screen.getByLabelText('Links'), { target: { value: ' https://a.test \n\nhttps://b.test\n' } });
+    fireEvent.change(screen.getByLabelText('Link 1'), { target: { value: ' https://a.test ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+    fireEvent.change(screen.getByLabelText('Link 3'), { target: { value: 'https://b.test' } });
+    // Link 2 is left blank: it is not a link.
     save();
 
     await waitFor(() => expect(screen.getByText('Profile updated successfully')).toBeInTheDocument());
@@ -290,7 +299,9 @@ describe('ProfileTab public profile', () => {
       showActivity: true,
     });
     // The form now shows what was saved, so there is nothing left to save.
-    expect(screen.getByLabelText('Links')).toHaveValue('https://a.test\nhttps://b.test');
+    expect(screen.getByLabelText('Link 1')).toHaveValue('https://a.test');
+    expect(screen.getByLabelText('Link 2')).toHaveValue('https://b.test');
+    expect(screen.queryByLabelText('Link 3')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
@@ -349,17 +360,54 @@ describe('ProfileTab public profile', () => {
     expect(screen.queryByText('stack trace')).not.toBeInTheDocument();
   });
 
-  it('stops at six links before asking the server', async () => {
+  it('shows an uploaded picture at once and without asking to save, and drops it again on removal', async () => {
+    await open();
+    const picture = 'https://auth.example.test/auth/avatars/u1?v=1';
+    vi.mocked(profileService.uploadPicture).mockResolvedValue(picture);
+    vi.mocked(profileService.removePicture).mockResolvedValue();
+
+    fireEvent.change(screen.getByTestId('picture-input'), { target: { files: [new File(['x'], 'me.png', { type: 'image/png' })] } });
+
+    await waitFor(() => expect(document.querySelector(`img[src="${picture}"]`)).not.toBeNull());
+    expect(screen.getByRole('button', { name: /Save Changes/ })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(document.querySelector(`img[src="${picture}"]`)).toBeNull());
+  });
+
+  it('adds and removes link boxes, and offers no ninth', async () => {
     await open();
 
-    fireEvent.change(screen.getByLabelText('Links'), {
-      target: { value: Array.from({ length: 6 }, (_, index) => `https://${index}.test`).join('\n') },
-    });
-    expect(screen.getByText('At most 5 links.')).toBeInTheDocument();
+    for (let count = 1; count < 8; count++) fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+    expect(screen.getByLabelText('Link 8')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add link' })).toBeDisabled();
+    expect(screen.getByText(/That is the most \(8\)/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove link 8' }));
+    expect(screen.queryByLabelText('Link 8')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add link' })).toBeEnabled();
+  });
+
+  it('clears the links when the last one is removed', async () => {
+    await open();
+    mockedUpdateProfile.mockResolvedValue({ success: true, user: { ...profile, links: [] } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove link 1' }));
+    // A single empty box stays, so there is always somewhere to type; it has nothing left to remove.
+    expect(screen.getByLabelText('Link 1')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Remove link 1' })).toBeDisabled();
     save();
 
-    expect(await screen.findAllByText('At most 5 links.')).toHaveLength(2);
-    expect(mockedUpdateProfile).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockedUpdateProfile).toHaveBeenCalled());
+    expect(mockedUpdateProfile.mock.calls[0][0]).toMatchObject({ links: [] });
+  });
+
+  it('does not count a box left blank as a change', async () => {
+    await open();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 
   it('puts the saved page back on cancel', async () => {

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { appLink, escapeHtml, excerpt, NotFoundError, sendSharePage } from '@visin/backend-core';
 import {
+  getGroupPicture,
   getPublicGroup,
   listPublicGroupHandles,
   listPublicGroups,
@@ -41,7 +42,7 @@ export const getShare = async (req: Request, res: Response): Promise<void> => {
     url,
     title: group.name,
     description: group.description ? excerpt(group.description) : 'A group on Visin',
-    image: appLink('/og-image.jpg')
+    image: group.picture ?? appLink('/og-image.jpg')
   });
 };
 
@@ -77,4 +78,27 @@ export const getSitemap = async (_req: Request, res: Response): Promise<void> =>
         ''
       ].join('\n')
     );
+};
+
+/**
+ * A group's picture, for anyone: what an `<img>` on its public page loads. A group with no public page, with no picture
+ * or that is gone all answer the same 404. Always revalidated (an ETag, so an unchanged picture is a 304), and so never
+ * left standing in a browser or proxy after the page is turned off.
+ */
+export const getPicture = async (req: Request, res: Response): Promise<void> => {
+  const { data, contentType, updatedAt } = await getGroupPicture(String(req.params.groupId));
+  const etag = `"${updatedAt.getTime()}"`;
+  res.set({
+    'Cache-Control': 'no-cache',
+    ETag: etag,
+    // Served from this service's own origin, so it can only ever be an image: no sniffing, and nothing it could run.
+    'Content-Type': contentType,
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; sandbox"
+  });
+  if (req.headers['if-none-match'] === etag) {
+    res.status(304).end();
+    return;
+  }
+  res.status(200).send(data);
 };

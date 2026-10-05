@@ -1131,6 +1131,109 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /auth/profile/picture:
+    put:
+      tags: [People]
+      summary: Set your profile picture
+      operationId: setProfilePicture
+      x-internal: true
+      description: |
+        The request body is the image itself: a JPEG, PNG or WebP of at most 256 KB (the app shrinks it to a few hundred
+        pixels first). The type is taken from the bytes, not from `Content-Type`. The account's `picture` becomes this
+        service's address for it, and the session cookie is re-signed to carry it. A Google sign-in never replaces an
+        uploaded picture. 501 where the deployment has no `AUTH_SERVICE_PUBLIC_URL`.
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          image/jpeg: { schema: { type: string, format: binary } }
+          image/png: { schema: { type: string, format: binary } }
+          image/webp: { schema: { type: string, format: binary } }
+      responses:
+        '200':
+          description: The picture is set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [picture]
+                    properties:
+                      picture: { type: string, format: uri }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: The picture is over 256 KB
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '501':
+          description: This deployment has no public address configured for picture links
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [People]
+      summary: Remove your profile picture
+      operationId: removeProfilePicture
+      x-internal: true
+      description: Removes the uploaded picture. The account then has none until Google shows one at the next sign-in.
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: The picture is removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean, enum: [true] }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/avatars/{userId}:
+    get:
+      tags: [People]
+      summary: A person's uploaded picture
+      operationId: getAvatar
+      x-internal: true
+      description: |
+        What a public page's `<img>` loads. A hidden page, an account with no uploaded picture and an unknown account all
+        answer the same 404. Always revalidated (`ETag`, `Cache-Control: no-cache`), so a hidden page's picture is not
+        left standing in a browser or proxy. Served as an image only: `nosniff`, and a CSP that allows nothing.
+      security: [{}]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The picture
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '304':
+          description: Unchanged since the `ETag` sent in `If-None-Match`
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/Error'
+
   /auth/directory:
     get:
       tags: [People]

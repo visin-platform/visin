@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createRateLimiter, validateRequest } from '@visin/backend-core';
-import { getPublic, getShare, getSitemap, listPublic, searchPublic } from '../controllers/publicGroupController';
+import { getPublic, getShare, getPicture, getSitemap, listPublic, searchPublic } from '../controllers/publicGroupController';
 import { directoryQuerySchema, groupsSearchQuerySchema, handleParamsSchema } from '../validation/groupSchemas';
 
 const router = Router();
@@ -9,6 +9,8 @@ const router = Router();
 const publicLimiter = createRateLimiter({ max: 120 });
 
 router.get('/directory', publicLimiter, validateRequest({ query: directoryQuerySchema }), listPublic);
+// What a public page's `<img>` loads: anyone, so a budget of its own like the other public reads.
+router.get('/avatars/:groupId', createRateLimiter({ max: 600 }), getPicture);
 router.get('/sitemap.xml', publicLimiter, getSitemap);
 router.get('/groups', publicLimiter, validateRequest({ query: groupsSearchQuerySchema }), searchPublic);
 router.get('/share/groups/:handle', publicLimiter, validateRequest({ params: handleParamsSchema }), getShare);

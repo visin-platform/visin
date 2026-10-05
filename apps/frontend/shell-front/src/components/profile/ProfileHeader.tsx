@@ -1,18 +1,9 @@
 import { ShareButton } from '@visin/frontend-core';
 import { Link as RouterLink } from 'react-router-dom';
 import { Avatar, Box, Button, Link, Typography } from '@mui/material';
-import { Edit, Link as LinkIcon } from '@mui/icons-material';
+import { Edit } from '@mui/icons-material';
 import { panelSx } from '../home/panel';
-
-/** `example.com/path` for `https://example.com/path/`: what a person's link says it is. */
-const linkLabel = (url: string): string => {
-  try {
-    const { host, pathname } = new URL(url);
-    return `${host}${pathname === '/' ? '' : pathname.replace(/\/$/, '')}`;
-  } catch {
-    return url;
-  }
-};
+import { describeLink } from './socialLinks';
 
 interface ProfileHeaderProps {
   name: string;
@@ -64,20 +55,31 @@ export function ProfileHeader({ name, handle, picture, bio, links = [], meta, ed
             aria-label="Links"
             sx={{ listStyle: 'none', m: 0, mt: 1.5, p: 0, display: 'flex', flexWrap: 'wrap', gap: 2 }}
           >
-            {links.map((url) => (
-              <li key={url}>
-                {/* Written by the person and shown to strangers: no referrer, and no endorsement. */}
-                <Link
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow ugc"
-                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-                >
-                  <LinkIcon fontSize="small" />
-                  {linkLabel(url)}
-                </Link>
-              </li>
-            ))}
+            {links.map((url) => {
+              const { label, detail, icon } = describeLink(url);
+              return (
+                <li key={url}>
+                  {/* Written by the person and shown to strangers: no referrer, and no endorsement. */}
+                  <Link
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow ugc"
+                    sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, overflowWrap: 'anywhere' }}
+                  >
+                    {icon}
+                    <span>{label}</span>
+                    {detail && (
+                      <>
+                        {/* A space for a screen reader: the flex layout draws none. */}{' '}
+                        <Box component="span" sx={{ color: 'text.secondary' }}>
+                          {detail}
+                        </Box>
+                      </>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
           </Box>
         )}
         <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 1.5 }}>

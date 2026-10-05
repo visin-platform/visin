@@ -120,7 +120,7 @@ describe('ProfilePage', () => {
     renderAt();
 
     const links = within(await screen.findByRole('list', { name: 'Links' })).getAllByRole('link');
-    expect(links.map((link) => link.textContent)).toEqual(['ann.example.test', 'github.com/ann-lee']);
+    expect(links.map((link) => link.textContent)).toEqual(['ann.example.test', 'GitHub ann-lee']);
     for (const link of links) {
       expect(link).toHaveAttribute('target', '_blank');
       expect(link.getAttribute('rel')).toBe('noopener noreferrer nofollow ugc');

@@ -21,6 +21,15 @@ describe('groupSchemas', () => {
     expect(updateGroupBodySchema.safeParse({}).success).toBe(false);
   });
 
+  it('updateGroupBodySchema takes the group\'s links, expanding shorthands and refusing what is not https', () => {
+    expect(updateGroupBodySchema.parse({ links: ['github:road-lab', ' road-lab.example.test '] })).toEqual({
+      links: ['https://github.com/road-lab', 'https://road-lab.example.test'],
+    });
+    expect(updateGroupBodySchema.parse({ links: [] })).toEqual({ links: [] });
+    expect(updateGroupBodySchema.safeParse({ links: ['http://road-lab.example.test'] }).success).toBe(false);
+    expect(updateGroupBodySchema.safeParse({ links: Array(9).fill('a.example.test') }).success).toBe(false);
+  });
+
   it('updateGroupBodySchema takes the public page: handle, description, visibility', () => {
     expect(
       updateGroupBodySchema.parse({ handle: ' Road-Lab ', description: '  Segmentation ', profilePublic: true })

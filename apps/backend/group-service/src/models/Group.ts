@@ -34,6 +34,15 @@ export interface IGroup extends Document {
    */
   handle?: string;
   description?: string;
+  /** https links to the group's own sites (organisation, lab, repositories), shown on its public page. */
+  links?: string[];
+  /**
+   * The address of the group's uploaded picture (see `avatarUpdatedAt`). An address, so what lists the group as an
+   * owner reads it like any other picture.
+   */
+  picture?: string;
+  /** When the picture was set. */
+  avatarUpdatedAt?: Date;
   /**
    * Whether the group has a public page, and shows its name on what it owns to people who
    * are not members. Off until the owner turns it on: a group's name and existence are
@@ -53,6 +62,9 @@ const GroupSchema = new Schema<IGroup>(
     name: { type: String, required: true, trim: true, maxlength: 120 },
     handle: { type: String, lowercase: true, trim: true },
     description: { type: String, trim: true, maxlength: 280 },
+    links: { type: [String], default: undefined },
+    picture: { type: String },
+    avatarUpdatedAt: { type: Date },
     profilePublic: { type: Boolean, default: false },
     createdBy: { type: String, required: true, index: true },
     members: [

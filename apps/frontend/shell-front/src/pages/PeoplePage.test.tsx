@@ -74,6 +74,17 @@ describe('PeoplePage', () => {
     expect(api.directoryPeople).not.toHaveBeenCalled();
   });
 
+  it('shows a group\'s picture in its row where it has one', async () => {
+    api.directoryGroups.mockResolvedValue({
+      groups: [{ ...lab, picture: 'https://group.example.test/api/public/avatars/g1?v=1' }],
+      pagination: pagination(1, 1, 1),
+    });
+    renderAt('/people/groups');
+
+    await screen.findByRole('link', { name: /Road lab/ });
+    expect(document.querySelector('img[src="https://group.example.test/api/public/avatars/g1?v=1"]')).not.toBeNull();
+  });
+
   it('moves between the two with links', async () => {
     renderAt();
 

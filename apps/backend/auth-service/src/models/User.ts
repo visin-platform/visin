@@ -25,8 +25,13 @@ export interface IUser extends Document {
   bio?: string;
   /** https links shown on the public profile. */
   links?: string[];
-  /** From the Google account that last signed in; passwords have none. */
+  /**
+   * The picture shown for the account: the one uploaded (see `avatarUpdatedAt`), else the one Google last showed for
+   * it. An address, so everything that lists an owner reads it the same way.
+   */
   picture?: string;
+  /** When the uploaded picture was set. Present, it is the account's own and a Google sign-in leaves it alone. */
+  avatarUpdatedAt?: Date;
   /**
    * False hides the public page, and the name and picture on what the account owns:
    * what is shown is then only that someone owns it. Defaults to shown.
@@ -58,6 +63,7 @@ const UserSchema = new Schema<IUser>(
     bio: { type: String, trim: true, maxlength: 280 },
     links: { type: [String], default: undefined },
     picture: { type: String },
+    avatarUpdatedAt: { type: Date },
     profilePublic: { type: Boolean, default: true },
     showActivity: { type: Boolean, default: true },
     bootstrapSlot: { type: String, enum: ['initial-admin'], immutable: true, select: false },

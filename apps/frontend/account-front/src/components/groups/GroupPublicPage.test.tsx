@@ -6,7 +6,11 @@ import { ApiError } from '@visin/frontend-core';
 import GroupPublicPage from './GroupPublicPage';
 import type { Group } from '../../types/group';
 
-const service = vi.hoisted(() => ({ updatePage: vi.fn() }));
+const service = vi.hoisted(() => ({ updatePage: vi.fn(), uploadPicture: vi.fn(), removePicture: vi.fn() }));
+vi.mock('../../utils/resizeImage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../utils/resizeImage')>()),
+  resizeToAvatar: vi.fn().mockResolvedValue(new Blob(['x'], { type: 'image/webp' })),
+}));
 vi.mock('../../services/groupService', () => ({ groupService: service }));
 
 const base: Group = { _id: 'g1', name: 'Road lab', createdBy: 'u1', members: [], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' };
@@ -25,6 +29,8 @@ const save = () => fireEvent.click(screen.getByRole('button', { name: 'Save publ
 beforeEach(() => {
   vi.clearAllMocks();
   service.updatePage.mockResolvedValue(live);
+  service.uploadPicture.mockResolvedValue('https://group.example.test/api/public/avatars/g1?v=1');
+  service.removePicture.mockResolvedValue(undefined);
 });
 
 describe('GroupPublicPage', () => {
@@ -99,5 +105,58 @@ describe('GroupPublicPage', () => {
     expect(screen.queryByText('stack trace')).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/close/i));
     expect(screen.queryByText('Could not save the public page')).not.toBeInTheDocument();
+  });
+
+  it('lists the group\'s own sites, each in a box, and sends them only when they changed', async () => {
+    renderPage({ ...live, links: ['https://road-lab.example.test'] });
+    expect(screen.getByLabelText('Link 1')).toHaveValue('https://road-lab.example.test');
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Show the public page' }));
+    save();
+    await waitFor(() => expect(service.updatePage).toHaveBeenCalledTimes(1));
+    expect(service.updatePage.mock.calls[0][1]).not.toHaveProperty('links');
+
+    fireEvent.change(screen.getByLabelText('Link 1'), { target: { value: 'github:road-lab' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+    fireEvent.change(screen.getByLabelText('Link 2'), { target: { value: ' road-lab.example.test ' } });
+    save();
+    await waitFor(() => expect(service.updatePage).toHaveBeenCalledTimes(2));
+    expect(service.updatePage.mock.calls[1][1]).toMatchObject({ links: ['github:road-lab', 'road-lab.example.test'] });
+  });
+
+  it('clears the links when they are all removed', async () => {
+    renderPage({ ...live, links: ['https://road-lab.example.test'] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove link 1' }));
+    save();
+
+    await waitFor(() => expect(service.updatePage).toHaveBeenCalled());
+    expect(service.updatePage.mock.calls[0][1]).toMatchObject({ links: [] });
+  });
+
+  it('offers a box to add, up to the most a page shows', () => {
+    renderPage(live);
+
+    for (let count = 1; count < 8; count++) fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
+
+    expect(screen.getByLabelText('Link 8')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add link' })).toBeDisabled();
+  });
+
+  it('sets the group\'s picture at once, for this group, without waiting for Save', async () => {
+    renderPage(live);
+
+    fireEvent.change(screen.getByTestId('picture-input'), { target: { files: [new File(['x'], 'lab.png', { type: 'image/png' })] } });
+
+    await waitFor(() => expect(service.uploadPicture).toHaveBeenCalledWith('g1', expect.any(Blob)), { timeout: 5000 });
+    expect(screen.getByRole('button', { name: 'Save public page' })).toBeDisabled();
+  });
+
+  it('removes the group\'s picture', async () => {
+    renderPage({ ...live, picture: 'https://group.example.test/api/public/avatars/g1?v=1' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(service.removePicture).toHaveBeenCalledWith('g1'));
   });
 });

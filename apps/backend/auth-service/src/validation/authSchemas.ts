@@ -1,4 +1,4 @@
-import { z, API_KEY_SCOPES } from '@visin/backend-core';
+import { z, API_KEY_SCOPES, profileLinksSchema } from '@visin/backend-core';
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '../services/passwordService';
 import { isValidHandle } from '../services/handleService';
 
@@ -52,18 +52,7 @@ export const updateProfileBodySchema = z.object({
   lastName: z.string().optional(),
   handle: handle.optional(),
   bio: z.string().trim().max(280).optional(),
-  // https only: a profile link is shown to strangers, so `javascript:` and its kin never get in.
-  links: z
-    .array(
-      z
-        .string()
-        .trim()
-        .max(300)
-        .url('Links must be web addresses')
-        .refine((link) => link.startsWith('https://'), 'Links must start with https://')
-    )
-    .max(5)
-    .optional(),
+  links: profileLinksSchema.optional(),
   profilePublic: z.boolean().optional(),
   showActivity: z.boolean().optional()
 });

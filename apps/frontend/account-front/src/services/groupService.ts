@@ -17,6 +17,8 @@ const groupApi = createApiClient({
 export interface GroupPageUpdate {
   handle?: string;
   description?: string;
+  /** What was typed, one per line: the service makes them https addresses. An empty list clears them. */
+  links?: string[];
   profilePublic?: boolean;
 }
 
@@ -38,6 +40,20 @@ export const groupService = {
   /** The public page: the owner's alone. */
   updatePage: async (groupId: string, page: GroupPageUpdate): Promise<Group> =>
     unwrap(await groupApi.patch<ApiResponse<Group>>(`/api/groups/${groupId}`, page)),
+
+  /** Sets the group's picture: the image itself is the body. The owner's alone. */
+  uploadPicture: async (groupId: string, image: Blob): Promise<string> =>
+    (
+      await groupApi.request<ApiResponse<{ picture: string }>>(`/api/groups/${groupId}/picture`, {
+        method: 'PUT',
+        body: image,
+        headers: { 'Content-Type': image.type }
+      })
+    ).data.picture,
+
+  removePicture: async (groupId: string): Promise<void> => {
+    await groupApi.delete(`/api/groups/${groupId}/picture`);
+  },
 
   remove: (groupId: string): Promise<void> => groupApi.delete<void>(`/api/groups/${groupId}`),
 
