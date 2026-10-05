@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.32.0](https://github.com/visin-platform/visin/compare/v1.31.0...v1.32.0) (2026-10-05)
+
+
+### Features
+
+* improve public profile options ([c5129ac](https://github.com/visin-platform/visin/commit/c5129ac65269e4a05a895200d22a75e4d949c69b))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.12.0 ([e0d56ec](https://github.com/visin-platform/visin/commit/e0d56ec479bcb7fab581c9a5afcf2056bcced81e))
+
 ## [1.31.0](https://github.com/visin-platform/visin/compare/v1.30.0...v1.31.0) (2026-10-05)
 
 
