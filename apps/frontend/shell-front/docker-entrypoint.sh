@@ -19,5 +19,7 @@ EOF
   printf 'User-agent: *\nAllow: /\n'
   [ -z "$VISION_API_URL" ] || printf 'Sitemap: %s/api/public/sitemap.xml\n' "${VISION_API_URL%/}"
   [ -z "$DATASET_API_URL" ] || printf 'Sitemap: %s/api/datasets/sitemap.xml\n' "${DATASET_API_URL%/}"
+  [ -z "$AUTH_SERVICE_URL" ] || printf 'Sitemap: %s/auth/sitemap.xml\n' "${AUTH_SERVICE_URL%/}"
+  [ -z "$GROUP_SERVICE_URL" ] || printf 'Sitemap: %s/api/public/sitemap.xml\n' "${GROUP_SERVICE_URL%/}"
 } > /usr/share/nginx/html/robots.txt
 exec "$@"

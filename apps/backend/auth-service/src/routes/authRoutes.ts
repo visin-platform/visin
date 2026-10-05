@@ -13,7 +13,14 @@ import {
   searchUsers
 } from '../controllers/authController';
 import { getProfile, updateProfile, changePassword } from '../controllers/profileController';
-import { getPublicUser, getUserShare, lookupPublicUsers, searchPublicUsers } from '../controllers/publicUserController';
+import {
+  getPublicUser,
+  getSitemap,
+  listPublicUsers,
+  getUserShare,
+  lookupPublicUsers,
+  searchPublicUsers
+} from '../controllers/publicUserController';
 import { linkGoogle } from '../controllers/googleLinkController';
 import { listSessions, revokeSession, revokeOtherSessions } from '../controllers/sessionController';
 import { createKey, listKeys, revealKey, revokeKey, removeKey } from '../controllers/apiKeyController';
@@ -27,6 +34,7 @@ import {
   invalidateUserTokensBodySchema,
   searchUsersQuerySchema,
   handleParamsSchema,
+  directoryQuerySchema,
   peopleSearchQuerySchema,
   publicUsersBodySchema,
   updateProfileBodySchema,
@@ -123,6 +131,12 @@ router.delete('/api-keys/:id', authenticateToken, removeKey);
 
 // Finding people for the app's search. Public, like the pages it finds.
 router.get('/users', publicLimiter, validateRequest({ query: peopleSearchQuerySchema }), searchPublicUsers);
+
+// Everyone with a public page, a page at a time: the app's People directory.
+router.get('/directory', publicLimiter, validateRequest({ query: directoryQuerySchema }), listPublicUsers);
+
+// The public pages' addresses, which the app's robots.txt points search engines at.
+router.get('/sitemap.xml', publicLimiter, getSitemap);
 
 // What a chat or a feed unfurls for a link to a person's page.
 router.get('/share/users/:handle', publicLimiter, validateRequest({ params: handleParamsSchema }), getUserShare);

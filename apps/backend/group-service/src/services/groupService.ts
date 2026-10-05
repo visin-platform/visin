@@ -159,6 +159,41 @@ export async function searchPublicGroups(q: string, limit: number): Promise<Pick
 }
 
 /**
+ * Groups with a public page, a page at a time in handle order, for the app's directory. What a listing needs and no
+ * more: never who is in a group.
+ */
+export async function listPublicGroups(
+  page: number,
+  limit: number
+): Promise<{
+  groups: Pick<PublicGroup, 'id' | 'handle' | 'name' | 'description'>[];
+  pagination: { page: number; limit: number; total: number; pages: number };
+}> {
+  const [groups, total] = await Promise.all([
+    Group.find(PUBLIC)
+      .sort({ handle: 1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+    Group.countDocuments(PUBLIC)
+  ]);
+  return {
+    groups: groups.map((group) => ({
+      id: group._id.toString(),
+      handle: group.handle as string,
+      name: group.name,
+      ...(group.description ? { description: group.description } : {})
+    })),
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+  };
+}
+
+/** Handles of the groups with a public page, in order, for the sitemap. Nothing else about a group leaves with them. */
+export async function listPublicGroupHandles(limit: number): Promise<string[]> {
+  const groups = await Group.find(PUBLIC).sort({ handle: 1 }).limit(limit).select('handle');
+  return groups.map((group) => group.handle as string);
+}
+
+/**
  * The name and handle of the groups with a public page, for vision- and dataset-service to show beside what
  * a group owns. A group without one is simply absent: not even its existence is told.
  */

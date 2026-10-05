@@ -1,14 +1,14 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
-import { Avatar, Box, Button, InputAdornment, Link, TextField, Typography, useTheme } from '@mui/material';
-import { Groups, Search } from '@mui/icons-material';
-import { livePalette } from '@visin/frontend-core';
+import { Box, Button, InputAdornment, Link, TextField, Typography } from '@mui/material';
+import { Search } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { useConfig } from '../config/ConfigProvider';
 import { exploreApi } from '../services/exploreApi';
 import { cardGridSx } from '../components/explore/cardGrid';
 import { CardSkeletons, DatasetCard, ProjectCard } from '../components/explore/cards';
-import { HomeSection, ListRow, RowIcon, SectionBody } from '../components/home/HomeSection';
+import { HomeSection, SectionBody } from '../components/home/HomeSection';
+import { GroupRow, PersonRow } from '../components/profile/DirectoryRows';
 
 /** Results per kind: a taste, with a link to all of it. */
 const SHOWN = 6;
@@ -71,7 +71,6 @@ function Shelf({
  */
 export function SearchPage({ now }: { now?: Date }) {
   const config = useConfig();
-  const theme = useTheme();
   const [params, setParams] = useSearchParams();
   const q = params.get('q')?.trim() ?? '';
   const [typed, setTyped] = useState(q);
@@ -102,7 +101,6 @@ export function SearchPage({ now }: { now?: Date }) {
     setParams(typed.trim() ? { q: typed.trim() } : {}, { replace: true });
   };
   const exploreMore = (type: 'projects' | 'datasets') => `/explore?${new URLSearchParams({ q, type })}`;
-  const primary = livePalette(theme).primary.main;
 
   return (
     <Box sx={{ width: '100%', maxWidth: 1000, mx: 'auto', display: 'flex', flexDirection: 'column', gap: { xs: 3, md: 4 } }}>
@@ -133,6 +131,12 @@ export function SearchPage({ now }: { now?: Date }) {
       {!ready ? (
         <Typography sx={{ color: 'text.secondary' }}>
           {q ? `Type at least ${MIN_LENGTH} characters to search.` : 'Search for people, groups, projects and datasets.'}
+          {(people || groups) && (
+            <>
+              {' '}
+              Or <Link component={RouterLink} to="/people">browse everyone</Link>.
+            </>
+          )}
         </Typography>
       ) : (
         <>
@@ -144,24 +148,7 @@ export function SearchPage({ now }: { now?: Date }) {
                 empty={`No people match “${q}”.`}
                 error="Could not search people."
               >
-                {(person) => (
-                  <ListRow
-                    key={person.id}
-                    to={`/u/${person.handle}`}
-                    leading={
-                      <Avatar
-                        src={person.picture}
-                        alt=""
-                        slotProps={{ img: { referrerPolicy: 'no-referrer' } }}
-                        sx={{ width: 40, height: 40, bgcolor: 'secondary.main' }}
-                      >
-                        {person.name.charAt(0).toUpperCase()}
-                      </Avatar>
-                    }
-                    title={person.name}
-                    secondary={`@${person.handle}`}
-                  />
-                )}
+                {(person) => <PersonRow key={person.id} person={person} />}
               </SectionBody>
             </HomeSection>
           )}
@@ -174,19 +161,7 @@ export function SearchPage({ now }: { now?: Date }) {
                 empty={`No groups match “${q}”.`}
                 error="Could not search groups."
               >
-                {(group) => (
-                  <ListRow
-                    key={group.id}
-                    to={`/g/${group.handle}`}
-                    leading={
-                      <RowIcon color={primary}>
-                        <Groups fontSize="small" />
-                      </RowIcon>
-                    }
-                    title={group.name}
-                    secondary={group.description ? `@${group.handle} · ${group.description}` : `@${group.handle}`}
-                  />
-                )}
+                {(group) => <GroupRow key={group.id} group={group} />}
               </SectionBody>
             </HomeSection>
           )}

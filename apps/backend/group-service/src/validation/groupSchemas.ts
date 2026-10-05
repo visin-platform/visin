@@ -32,6 +32,12 @@ export const groupsSearchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(8)
 });
 
+/** The directory of public group pages: a page at a time, in handle order. */
+export const directoryQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  limit: z.coerce.number().int().min(1).max(48).default(24)
+});
+
 export const handleParamsSchema = z.object({
   handle: z.string().trim().toLowerCase().min(1).max(60)
 });

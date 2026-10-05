@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ExplorePage } from '../pages/ExplorePage';
 import { HomePage } from '../pages/HomePage';
 import { GroupProfilePage } from '../pages/GroupProfilePage';
+import { PeoplePage } from '../pages/PeoplePage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { SearchPage } from '../pages/SearchPage';
 import { APPS, appForPath } from '../apps';
@@ -91,6 +92,9 @@ function ShellRoutes() {
       <Route path="/" element={<Home />} />
       <Route path="/explore" element={<Explore />} />
       <Route path="/search" element={<SearchPage />} />
+      {/* Everyone with a public page, a page at a time: the way in for a visitor and a crawler. */}
+      <Route path="/people" element={<PeoplePage />} />
+      <Route path="/people/groups" element={<PeoplePage />} />
       {/* A person's public page. Shell-owned, like Explore: it spans Vision's projects and the datasets. */}
       <Route path="/u/:handle" element={<ProfilePage />} />
       <Route path="/g/:handle" element={<GroupProfilePage />} />

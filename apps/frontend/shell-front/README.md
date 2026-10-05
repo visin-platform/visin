@@ -46,7 +46,16 @@ changing `favicon.svg`, re-render the PNGs from it (e.g. with `sharp`, flattened
 
 The public project, dataset, profile, group and leaderboard pages have Share buttons that copy HTML preview links
 from the owning API. Each API needs `SHELL_FRONT_URL` pointing to this shell; without it a preview returns 404.
-The shell serves `/og-image.jpg` and a plain-text `/robots.txt`. At startup, the existing `VISION_API_URL` and
-`DATASET_API_URL` settings supply the sitemap links. The services check current public visibility on every request
-and never cache the response. Unconfigured services have no sitemap link. Local Vite development serves the static
+The shell serves `/og-image.jpg` and a plain-text `/robots.txt`. At startup, the existing `VISION_API_URL`,
+`DATASET_API_URL`, `AUTH_SERVICE_URL` (public profiles) and `GROUP_SERVICE_URL` (public groups) settings supply the
+sitemap links. The services check current public visibility on every request and never cache the response.
+Unconfigured services have no sitemap link.
+
+`/people` and `/people/groups` are the directory of every public profile and group, a page at a time (`?page=N`, in
+handle order) with plain links for rows and page numbers, so a crawler can walk to every page. Explore and Search link
+to it, and the sitemaps list it. It reads `/auth/directory` and `/api/public/directory`, and omits a kind whose service
+is not configured.
+
+Profile and group pages set their own `<title>`, description and self-referencing canonical (`usePageMeta`), which
+Googlebot reads once the page has rendered. The share previews are `noindex` and name the app page as canonical. Local Vite development serves the static
 robots.txt without deployment sitemap links.

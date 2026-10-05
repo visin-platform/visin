@@ -267,6 +267,114 @@ describe('handles and public users with in-memory MongoDB', () => {
     });
   });
 
+  describe('GET /auth/sitemap.xml', () => {
+    const savedApp = process.env.SHELL_FRONT_URL;
+    const sitemap = async () => {
+      const response = await fetch(`${base}/sitemap.xml`);
+      return { status: response.status, headers: response.headers, text: await response.text() };
+    };
+
+    beforeEach(() => {
+      process.env.SHELL_FRONT_URL = 'https://app.example.test';
+    });
+    afterAll(() => {
+      if (savedApp === undefined) delete process.env.SHELL_FRONT_URL;
+      else process.env.SHELL_FRONT_URL = savedApp;
+    });
+
+    it('lists the address of each public page, and nothing else about the person', async () => {
+      await account('ann@example.test', { firstName: 'Ann', lastName: 'Lee', handle: 'ann-lee' });
+      await account('bob@example.test', { handle: 'bob', profilePublic: true });
+
+      const { status, headers, text } = await sitemap();
+
+      expect(status).toBe(200);
+      expect(headers.get('content-type')).toContain('application/xml');
+      expect(headers.get('cache-control')).toBe('no-store');
+      expect(text).toContain('<loc>https://app.example.test/people</loc>');
+      expect(text).toContain('<loc>https://app.example.test/u/ann-lee</loc>');
+      expect(text).toContain('<loc>https://app.example.test/u/bob</loc>');
+      expect(text).not.toContain('Ann');
+      expect(text).not.toContain('@example.test');
+    });
+
+    it('leaves out a hidden page and an account with no handle yet, and drops a page the moment it is hidden', async () => {
+      await account('hidden@example.test', { handle: 'hidden', profilePublic: false });
+      await account('new@example.test');
+      await account('shown@example.test', { handle: 'shown' });
+
+      const before = (await sitemap()).text;
+      expect(before).toContain('/u/shown<');
+      expect(before).not.toContain('/u/hidden');
+      expect((before.match(/<url>/g) ?? []).length).toBe(2);
+
+      await User.updateOne({ handle: 'shown' }, { profilePublic: false });
+      expect((await sitemap()).text).not.toContain('/u/shown');
+    });
+
+    it('is not there where the deployment has no address for the app', async () => {
+      await account('ann@example.test', { handle: 'ann' });
+      delete process.env.SHELL_FRONT_URL;
+
+      expect((await sitemap()).status).toBe(404);
+    });
+  });
+
+  describe('GET /auth/directory', () => {
+    const list = async (query = '') => {
+      const response = await fetch(`${base}/directory${query}`);
+      return {
+        status: response.status,
+        headers: response.headers,
+        body: (await response.json()) as {
+          data?: { people: Record<string, unknown>[]; pagination: Record<string, number> };
+        }
+      };
+    };
+
+    it('lists the people with a public page in handle order, with only what a listing needs', async () => {
+      await account('bea@example.test', { firstName: 'Bea', handle: 'bea', bio: 'Private thoughts', links: ['https://bea.example.test/'] });
+      await account('ann@example.test', { firstName: 'Ann', lastName: 'Lee', handle: 'ann-lee', picture: 'https://pics.example.test/ann.jpg' });
+
+      const { status, body } = await list();
+
+      expect(status).toBe(200);
+      expect(body.data!.people).toEqual([
+        { id: expect.any(String), handle: 'ann-lee', name: 'Ann Lee', picture: 'https://pics.example.test/ann.jpg' },
+        { id: expect.any(String), handle: 'bea', name: 'Bea' }
+      ]);
+      expect(body.data!.pagination).toEqual({ page: 1, limit: 24, total: 2, pages: 1 });
+      expect(JSON.stringify(body)).not.toMatch(/bea\.example\.test|Private thoughts|@example/);
+    });
+
+    it('leaves out a hidden page and an account with no handle yet, in the count too', async () => {
+      await account('hidden@example.test', { handle: 'hidden', profilePublic: false });
+      await account('new@example.test');
+      await account('shown@example.test', { handle: 'shown' });
+
+      const { body } = await list();
+
+      expect(body.data!.people.map((person) => person.handle)).toEqual(['shown']);
+      expect(body.data!.pagination.total).toBe(1);
+    });
+
+    it('pages through everyone, and is never kept by anyone', async () => {
+      for (const handle of ['aaa', 'bbb', 'ccc']) await account(`${handle}@example.test`, { handle });
+
+      const second = await list('?page=2&limit=2');
+
+      expect(second.body.data!.people.map((person) => person.handle)).toEqual(['ccc']);
+      expect(second.body.data!.pagination).toEqual({ page: 2, limit: 2, total: 3, pages: 2 });
+      expect((await list('?page=3&limit=2')).body.data!.people).toEqual([]);
+      expect(second.headers.get('cache-control')).toBe('no-store');
+    });
+
+    it('refuses a page that makes no sense', async () => {
+      expect((await list('?page=0')).status).toBe(400);
+      expect((await list('?limit=500')).status).toBe(400);
+    });
+  });
+
   describe('GET /auth/users?q=', () => {
     const find = async (query: string) => {
       const response = await fetch(`${base}/users?${query}`);

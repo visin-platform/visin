@@ -119,7 +119,7 @@ describe('SearchPage', () => {
   it('asks nothing of anyone for less than two characters, and says so', async () => {
     renderAt('/search?q=a');
 
-    expect(screen.getByText('Type at least 2 characters to search.')).toBeInTheDocument();
+    expect(screen.getByText(/Type at least 2 characters to search\./)).toBeInTheDocument();
     expect(api.searchPeople).not.toHaveBeenCalled();
     expect(api.publicProjects).not.toHaveBeenCalled();
   });
@@ -127,7 +127,8 @@ describe('SearchPage', () => {
   it('invites a search when there is nothing yet to look for', () => {
     renderAt('/search');
 
-    expect(screen.getByText('Search for people, groups, projects and datasets.')).toBeInTheDocument();
+    expect(screen.getByText(/Search for people, groups, projects and datasets\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'browse everyone' })).toHaveAttribute('href', '/people');
     expect(api.searchPeople).not.toHaveBeenCalled();
   });
 

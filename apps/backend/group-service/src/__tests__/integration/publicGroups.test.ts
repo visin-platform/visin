@@ -247,6 +247,112 @@ describe('group public pages against in-memory MongoDB', () => {
     });
   });
 
+  describe('GET /api/public/sitemap.xml', () => {
+    const savedApp = process.env.SHELL_FRONT_URL;
+    const sitemap = async () => {
+      const response = await fetch(`${base}/public/sitemap.xml`);
+      return { status: response.status, headers: response.headers, text: await response.text() };
+    };
+
+    beforeEach(() => {
+      process.env.SHELL_FRONT_URL = 'https://app.example.test';
+    });
+    afterAll(() => {
+      if (savedApp === undefined) delete process.env.SHELL_FRONT_URL;
+      else process.env.SHELL_FRONT_URL = savedApp;
+    });
+
+    it('lists the address of each public group page, and nothing else about the group', async () => {
+      await publish(await team());
+
+      const { status, headers, text } = await sitemap();
+
+      expect(status).toBe(200);
+      expect(headers.get('content-type')).toContain('application/xml');
+      expect(headers.get('cache-control')).toBe('no-store');
+      expect(text).toContain('<loc>https://app.example.test/people/groups</loc>');
+      expect(text).toContain('<loc>https://app.example.test/g/road-lab</loc>');
+      expect(text).not.toContain('Road lab');
+      expect(text).not.toMatch(new RegExp(`${OWNER}|${ADMIN}|${MEMBER}`));
+    });
+
+    it('leaves out a page that is off and a group that was deleted', async () => {
+      const off = await team();
+      await updateGroup(off, OWNER, { handle: 'off-page' });
+      const gone = await createGroup(OWNER, 'Gone lab');
+      await updateGroup(gone._id.toString(), OWNER, { handle: 'gone-lab', profilePublic: true });
+      await deleteGroup(gone._id.toString(), OWNER);
+
+      const { text } = await sitemap();
+
+      expect(text).not.toContain('/g/');
+      expect(text).toContain('/people/groups');
+    });
+
+    it('is not there where the deployment has no address for the app', async () => {
+      await publish(await team());
+      delete process.env.SHELL_FRONT_URL;
+
+      expect((await sitemap()).status).toBe(404);
+    });
+  });
+
+  describe('GET /api/public/directory', () => {
+    const list = async (query = '') => {
+      const response = await fetch(`${base}/public/directory${query}`);
+      return {
+        status: response.status,
+        cache: response.headers.get('cache-control'),
+        body: (await response.json()) as {
+          data?: { groups: Record<string, unknown>[]; pagination: Record<string, number> };
+        }
+      };
+    };
+
+    it('lists the groups with a public page in handle order, naming no member', async () => {
+      await publish(await team());
+      const plain = await createGroup(OWNER, 'Alpha lab');
+      await updateGroup(plain._id.toString(), OWNER, { handle: 'alpha', profilePublic: true });
+
+      const { status, cache, body } = await list();
+
+      expect(status).toBe(200);
+      expect(body.data!.groups).toEqual([
+        { id: expect.any(String), handle: 'alpha', name: 'Alpha lab' },
+        { id: expect.any(String), handle: 'road-lab', name: 'Road lab', description: 'Segmentation under bad weather' }
+      ]);
+      expect(body.data!.pagination).toEqual({ page: 1, limit: 24, total: 2, pages: 1 });
+      expect(cache).toBe('no-store');
+      expect(JSON.stringify(body)).not.toMatch(new RegExp(`${OWNER}|${ADMIN}|${MEMBER}`));
+    });
+
+    it('leaves out a page that is off and a group that was deleted, in the count too', async () => {
+      const off = await team();
+      await updateGroup(off, OWNER, { handle: 'off-page' });
+      const gone = await createGroup(OWNER, 'Gone lab');
+      await updateGroup(gone._id.toString(), OWNER, { handle: 'gone-lab', profilePublic: true });
+      await deleteGroup(gone._id.toString(), OWNER);
+
+      const { body } = await list();
+
+      expect(body.data!.groups).toEqual([]);
+      expect(body.data!.pagination.total).toBe(0);
+    });
+
+    it('pages, and refuses a page that makes no sense', async () => {
+      for (const handle of ['aaa', 'bbb', 'ccc']) {
+        const group = await createGroup(OWNER, `Group ${handle}`);
+        await updateGroup(group._id.toString(), OWNER, { handle, profilePublic: true });
+      }
+
+      const second = await list('?page=2&limit=2');
+
+      expect(second.body.data!.groups.map((group) => group.handle)).toEqual(['ccc']);
+      expect(second.body.data!.pagination.pages).toBe(2);
+      expect((await list('?page=0')).status).toBe(400);
+    });
+  });
+
   describe('GET /api/public/groups?q=', () => {
     const find = async (query: string) => {
       const response = await fetch(`${base}/public/groups?${query}`);

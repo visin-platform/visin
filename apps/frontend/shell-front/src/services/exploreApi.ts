@@ -255,6 +255,26 @@ export const exploreApi = {
     return (await authApi.get<Envelope<PersonResult[]>>(`/users?${params}`, { skipAuthRedirect: true })).data;
   },
 
+  /** Everyone with a public page, a page at a time in handle order: the People directory. */
+  async directoryPeople(page: number, limit: number): Promise<{ people: PersonResult[]; pagination: Pagination }> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    return (
+      await authApi.get<Envelope<{ people: PersonResult[]; pagination: Pagination }>>(`/directory?${params}`, {
+        skipAuthRedirect: true
+      })
+    ).data;
+  },
+
+  /** Every group with a public page, a page at a time in handle order. */
+  async directoryGroups(page: number, limit: number): Promise<{ groups: GroupResult[]; pagination: Pagination }> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    return (
+      await groupApi.get<Envelope<{ groups: GroupResult[]; pagination: Pagination }>>(`/public/directory?${params}`, {
+        skipAuthRedirect: true
+      })
+    ).data;
+  },
+
   /** Groups with a public page whose handle or name starts with `query`. */
   async searchGroups(query: string, limit: number): Promise<GroupResult[]> {
     const params = new URLSearchParams({ q: query, limit: String(limit) });

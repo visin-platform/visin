@@ -1131,6 +1131,87 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /auth/directory:
+    get:
+      tags: [People]
+      summary: Everyone with a public page, a page at a time
+      operationId: listPublicUsers
+      x-internal: true
+      description: |
+        The app's People directory: accounts with a public page, in handle order, with only what a listing needs (never
+        the email, a bio or links). Accounts that hid their page, or have no handle yet, are not listed. No sign-in
+        needed; rate limited by client address; never cached.
+      security: [{}]
+      parameters:
+        - name: page
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/DirectoryQuery/properties/page }
+        - name: limit
+          in: query
+          schema: { $ref: ./generated/request-schemas.json#/DirectoryQuery/properties/limit }
+      responses:
+        '200':
+          description: One page of people
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  data:
+                    type: object
+                    required: [people, pagination]
+                    properties:
+                      people:
+                        type: array
+                        items:
+                          type: object
+                          required: [id, handle, name]
+                          properties:
+                            id: { type: string }
+                            handle: { type: string }
+                            name: { type: string }
+                            picture: { type: string, format: uri }
+                      pagination:
+                        type: object
+                        required: [page, limit, total, pages]
+                        properties:
+                          page: { type: integer }
+                          limit: { type: integer }
+                          total: { type: integer }
+                          pages: { type: integer }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/sitemap.xml:
+    get:
+      tags: [People]
+      summary: Public profile addresses for search engines
+      operationId: getUserSitemap
+      x-internal: true
+      description: |
+        The People directory and up to 5,000 public profile addresses, ordered by handle. Accounts that hid their page or have no handle yet
+        are left out; nothing but the address is listed. Never cached; 404 without `SHELL_FRONT_URL`. The app
+        advertises this endpoint in robots.txt.
+      security: [{}]
+      responses:
+        '200':
+          description: Profile sitemap
+          content:
+            application/xml:
+              schema: { type: string }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        default:
+          $ref: '#/components/responses/Error'
+
   /auth/share/users/{handle}:
     get:
       tags: [People]

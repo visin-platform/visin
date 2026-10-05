@@ -4,6 +4,7 @@ import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useTrackVisit } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
+import { usePageMeta } from '../hooks/usePageMeta';
 import { exploreApi } from '../services/exploreApi';
 import { ProfileHeader } from '../components/profile/ProfileHeader';
 import { ProfileLists } from '../components/profile/ProfileLists';
@@ -28,6 +29,18 @@ export function ProfilePage({ now }: { now?: Date }) {
   const { user: me } = useAuth();
   const profile = useQuery({ queryKey: ['profile', handle], queryFn: () => exploreApi.user(handle) });
   const person = profile.data ?? undefined;
+  usePageMeta(
+    person
+      ? {
+          title: `${person.name} (@${person.handle}) on Visin`,
+          description:
+            person.bio?.trim() ||
+            `${person.name}'s profile on Visin: projects, datasets and activity they have made public.`
+        }
+      : profile.isSuccess
+        ? { title: 'No such person · Visin', noindex: true }
+        : null
+  );
   useTrackVisit(person ? { kind: 'person', id: person.id, name: person.name, path: `/u/${person.handle}` } : null);
 
   if (profile.isPending) {

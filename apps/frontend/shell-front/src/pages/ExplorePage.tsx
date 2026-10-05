@@ -261,6 +261,11 @@ export function ExplorePage({ now }: ExplorePageProps) {
               }}
               sx={{ width: { xs: '100%', sm: 280 } }}
             />
+            {(config.AUTH_SERVICE_URL || config.GROUP_SERVICE_URL) && (
+              <Link component={RouterLink} to="/people" underline="none" sx={{ fontSize: 14, fontWeight: 600 }}>
+                Browse people
+              </Link>
+            )}
           </Box>
 
           {showProjects && (

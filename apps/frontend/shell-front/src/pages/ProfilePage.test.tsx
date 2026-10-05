@@ -85,6 +85,27 @@ describe('ProfilePage', () => {
     expect(readVisits()).toEqual([]);
   });
 
+  it('gives the page its own title, description and canonical for a search engine, and noindex where nobody is', async () => {
+    const { unmount } = renderAt();
+    await screen.findByRole('heading', { level: 1, name: 'Ann Lee' });
+    expect(document.title).toBe('Ann Lee (@ann-lee) on Visin');
+    expect(document.head.querySelector('meta[name="description"]')).toHaveAttribute(
+      'content',
+      'Segmentation under bad weather'
+    );
+    expect(document.head.querySelector('link[rel="canonical"]')).toHaveAttribute(
+      'href',
+      `${window.location.origin}/u/ann-lee`
+    );
+    expect(document.head.querySelector('meta[name="robots"]')).toBeNull();
+    unmount();
+
+    api.user.mockResolvedValue(null);
+    renderAt('/u/nobody');
+    await screen.findByRole('heading', { level: 1, name: 'No such person' });
+    expect(document.head.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex');
+  });
+
   it('shows who the person is, as they wrote it', async () => {
     renderAt();
 

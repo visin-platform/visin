@@ -102,6 +102,16 @@ beforeEach(() => {
 });
 
 describe('ExplorePage', () => {
+  it('links to the People directory where there is a service to list them', async () => {
+    renderPage();
+    await screen.findByRole('link', { name: 'Window ablations' });
+    expect(screen.queryByRole('link', { name: 'Browse people' })).not.toBeInTheDocument();
+
+    config.AUTH_SERVICE_URL = 'https://auth.test';
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'Browse people' })).toHaveAttribute('href', '/people');
+  });
+
   it('shows public projects and datasets as cards that open them', async () => {
     renderPage();
 

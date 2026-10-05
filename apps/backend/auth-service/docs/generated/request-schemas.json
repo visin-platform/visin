@@ -56,6 +56,23 @@
       "scopes"
     ]
   },
+  "DirectoryQuery": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "default": 1,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10000
+      },
+      "limit": {
+        "default": 24,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 48
+      }
+    }
+  },
   "HandleParams": {
     "type": "object",
     "properties": {

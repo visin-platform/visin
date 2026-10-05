@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { appLink, excerpt, NotFoundError, sendSharePage } from '@visin/backend-core';
+import { appLink, escapeHtml, excerpt, NotFoundError, sendSharePage } from '@visin/backend-core';
 import { User, type IUser } from '../models/User';
 import { ensureHandle } from '../services/handleService';
 import { escapeRegex } from '../utils/escapeRegex';
@@ -98,4 +98,64 @@ export const getUserShare = async (req: Request, res: Response): Promise<void> =
     description: bio ? excerpt(bio) : `@${handle} on Visin`,
     image: picture && /^https?:\/\//i.test(picture) ? picture : appLink('/og-image.jpg')
   });
+};
+
+/** Accounts with a handle and a public page: the ones a visitor can be sent to. */
+const LISTED = { profilePublic: { $ne: false }, handle: { $type: 'string' } } as const;
+
+/**
+ * Everyone with a public page, a page at a time in handle order, for the app's People directory: what a search engine
+ * follows from the app to each page. Only what a listing needs (never the email, a bio or links), and checked on
+ * every request, so someone who hides their page is gone from it at once.
+ */
+export const listPublicUsers = async (req: Request, res: Response): Promise<void> => {
+  const { page, limit } = req.query as unknown as { page: number; limit: number };
+  const [users, total] = await Promise.all([
+    User.find(LISTED)
+      .select(PUBLIC_FIELDS)
+      .sort({ handle: 1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+    User.countDocuments(LISTED)
+  ]);
+  res.set('Cache-Control', 'no-store').json({
+    success: true,
+    data: {
+      people: users.map((user) => {
+        const { id, handle, name, picture } = toPublicUser(user);
+        return { id, handle, name, ...(picture ? { picture } : {}) };
+      }),
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    }
+  });
+};
+
+const SITEMAP_LIMIT = 5000;
+
+/**
+ * The addresses of public profiles and of the People directory, for the sitemap the app's robots.txt points search engines at. Only accounts that
+ * have a handle and a public page are listed, and only their address: no name, and no date, because an account's
+ * `updatedAt` moves with every sign-in and says nothing about the page. Checked on every request and never kept, so a
+ * page that is turned off is gone from it at once. 404 where the deployment has no app address.
+ */
+export const getSitemap = async (_req: Request, res: Response): Promise<void> => {
+  if (!appLink('/')) throw new NotFoundError('Nothing to share here');
+  const users = await User.find(LISTED).sort({ handle: 1 }).limit(SITEMAP_LIMIT).select('handle');
+  const addresses = [
+    appLink('/people')!,
+    ...users.map((user) => appLink(`/u/${encodeURIComponent(user.handle as string)}`)!)
+  ];
+  const rows = addresses.map((address) => `  <url><loc>${escapeHtml(address)}</loc></url>`);
+  res
+    .status(200)
+    .set({ 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-store' })
+    .send(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        ...rows,
+        '</urlset>',
+        ''
+      ].join('\n')
+    );
 };

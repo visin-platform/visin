@@ -55,6 +55,26 @@ describe('GroupProfilePage', () => {
     expect(readVisits()).toMatchObject([{ kind: 'group', id: 'g7', name: 'Road lab', path: '/g/road-lab' }]);
   });
 
+  it('gives the page its own title, description and canonical for a search engine, and noindex where there is no group', async () => {
+    const { unmount } = renderAt();
+    await screen.findByRole('heading', { level: 1, name: 'Road lab' });
+    expect(document.title).toBe('Road lab (@road-lab) on Visin');
+    expect(document.head.querySelector('meta[name="description"]')).toHaveAttribute(
+      'content',
+      'Segmentation under bad weather'
+    );
+    expect(document.head.querySelector('link[rel="canonical"]')).toHaveAttribute(
+      'href',
+      `${window.location.origin}/g/road-lab`
+    );
+    unmount();
+
+    api.group.mockResolvedValue(null);
+    renderAt('/g/nobody');
+    await screen.findByRole('heading', { level: 1, name: 'No such group' });
+    expect(document.head.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex');
+  });
+
   it('shows the group as it describes itself, and nothing about who is in it', async () => {
     renderAt();
 

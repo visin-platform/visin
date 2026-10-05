@@ -1,6 +1,12 @@
 import { Request, Response } from 'express';
-import { appLink, excerpt, NotFoundError, sendSharePage } from '@visin/backend-core';
-import { getPublicGroup, lookupPublicGroups, searchPublicGroups } from '../services/groupService';
+import { appLink, escapeHtml, excerpt, NotFoundError, sendSharePage } from '@visin/backend-core';
+import {
+  getPublicGroup,
+  listPublicGroupHandles,
+  listPublicGroups,
+  lookupPublicGroups,
+  searchPublicGroups
+} from '../services/groupService';
 
 /** A group's public page, for anyone. */
 export const getPublic = async (req: Request, res: Response): Promise<void> => {
@@ -37,4 +43,38 @@ export const getShare = async (req: Request, res: Response): Promise<void> => {
     description: group.description ? excerpt(group.description) : 'A group on Visin',
     image: appLink('/og-image.jpg')
   });
+};
+
+/** Every group with a public page, a page at a time: the app's directory of groups. */
+export const listPublic = async (req: Request, res: Response): Promise<void> => {
+  const { page, limit } = req.query as unknown as { page: number; limit: number };
+  res.set('Cache-Control', 'no-store').json({ success: true, data: await listPublicGroups(page, limit) });
+};
+
+const SITEMAP_LIMIT = 5000;
+
+/**
+ * The addresses of public group pages, for the sitemap the app's robots.txt points search engines at. Checked on every
+ * request and never kept, so a page that is turned off is gone from it at once. 404 where there is no app address.
+ */
+export const getSitemap = async (_req: Request, res: Response): Promise<void> => {
+  if (!appLink('/')) throw new NotFoundError('Nothing to share here');
+  const handles = await listPublicGroupHandles(SITEMAP_LIMIT);
+  const addresses = [
+    appLink('/people/groups')!,
+    ...handles.map((handle) => appLink(`/g/${encodeURIComponent(handle)}`)!)
+  ];
+  const rows = addresses.map((address) => `  <url><loc>${escapeHtml(address)}</loc></url>`);
+  res
+    .status(200)
+    .set({ 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-store' })
+    .send(
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        ...rows,
+        '</urlset>',
+        ''
+      ].join('\n')
+    );
 };
