@@ -1,4 +1,22 @@
 # Visin Changelog
+## [1.35.0](https://github.com/visin-platform/visin/compare/v1.34.0...v1.35.0) (2026-10-05)
+
+
+### Features
+
+* improve menu bars ([d206495](https://github.com/visin-platform/visin/commit/d206495d53a247eed40bb62706af5f51872bc2c8))
+* update licence ([49a301a](https://github.com/visin-platform/visin/commit/49a301a3d56eb7e675173a61a167e7665edb7bd5))
+
+
+### Bug Fixes
+
+* docs generator ([44c94a3](https://github.com/visin-platform/visin/commit/44c94a30a17f82241cd224b3c43798cf08a89e99))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.14.0 ([caafbfa](https://github.com/visin-platform/visin/commit/caafbfaba367cc6249164c2737ba72c106c3ea1d))
+
 ## [1.34.0](https://github.com/visin-platform/visin/compare/v1.33.0...v1.34.0) (2026-10-05)
 
 
