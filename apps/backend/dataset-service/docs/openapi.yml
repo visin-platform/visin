@@ -647,6 +647,10 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/DatasetLicense'
+        '429':
+          description: Too many requests
+        default:
+          description: Request failed
 
   /datasets/trash:
     get:

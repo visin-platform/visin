@@ -1371,6 +1371,12 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Too many requests"
+          },
+          "default": {
+            "description": "Request failed"
           }
         }
       }

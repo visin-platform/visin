@@ -26,14 +26,31 @@ npm test --workspace=vision-service  # scope any script to one workspace
 
 ## Before finishing a change
 
-Don't report work as done until these pass for every workspace the change touches. A change to a lib touches every
-workspace that depends on it: rebuild the lib first (`npm run build` in it), then check those workspaces too.
+Don't report work as done until these pass. Work in two tiers, so iterating stays fast and the final check stays honest:
+
+- **While working:** run only the tests that cover what you are editing (`npm test --workspace=<ws> -- <pattern>`).
+- **Before reporting done:** the full list below, once, for the workspace that owns the change.
+
+A change to a lib also touches every workspace that depends on it: rebuild the lib first (`npm run build` in it). The
+lib itself gets the full list. Each consumer gets a lighter one, because CI runs every consumer's full suite when a lib
+changes:
+
+- a consumer that **uses what changed** (grep for the export, prop or route): `lint`, `typecheck`, `npm test` (no
+  coverage) and `build`. A behaviour change (menu, theme, a component's output) breaks a consumer's tests without
+  breaking its types, so its tests do run;
+- every other consumer: `typecheck` and `build`, which catch a broken export or prop;
+- consumers' coverage floors and `test:e2e` are left to CI. Say so in the report; don't count them as passed.
 
 1. `npm run lint --workspace=<ws>` (zero warnings)
 2. `npm run typecheck --workspace=<ws>`
 3. `npm run test:coverage --workspace=<ws>` (includes the MongoMemoryServer integration suites and coverage floors)
 4. `npm run build --workspace=<ws>` (what the Dockerfile runs; also catches bundling/federation errors)
 5. `npm run test:e2e --workspace=<ws>` for a front with an `e2e/` suite (account, auth, label, landing, vision)
+6. `npm run check:repo` once, at the end, for **every** change, even one that touches no spec or diagram. It runs the
+   repo-wide checks CI runs outside any workspace (lib pins, lockfiles, doc links, architecture diagrams, `openapi:lint`,
+   published API specs), in under a second. They are separate CI jobs, so a green workspace run says nothing about them,
+   and the OpenAPI lint (every operation needs a `4XX`, a summary, an `operationId`) has failed CI after work was reported
+   done. After a spec edit, run `npm run openapi:bundle` first so the published copy is current.
 
 Run the workspaces one after another, never in parallel (no `&`, no concurrent background jobs). One test run takes up
 to ~5 GB: each test config caps its workers (Jest ≤4, Vitest ≤16) and scales them down with free memory. Parallel
