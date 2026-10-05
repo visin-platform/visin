@@ -1,4 +1,21 @@
 # Visin Changelog
+## [1.33.0](https://github.com/visin-platform/visin/compare/v1.32.0...v1.33.0) (2026-10-05)
+
+
+### Features
+
+* add research paper reference sections ([71b84cb](https://github.com/visin-platform/visin/commit/71b84cbd31884f32defba0d548723bae15b9d29d))
+
+
+### Bug Fixes
+
+* documentation description ([cc81aaf](https://github.com/visin-platform/visin/commit/cc81aaf6fdfb504d3ff9c9d6379924eb68ff2764))
+
+
+### Chores
+
+* release frontend-core 1.15.0 ([114e919](https://github.com/visin-platform/visin/commit/114e9199f787e8c70f053393297bcea86235021c))
+
 ## [1.32.0](https://github.com/visin-platform/visin/compare/v1.31.0...v1.32.0) (2026-10-05)
 
 
