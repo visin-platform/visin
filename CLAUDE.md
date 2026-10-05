@@ -161,6 +161,17 @@ including any failures.
 - **Mixed currencies** in a total report `currency: 'MIXED'`.
 - **Format money with `Intl.NumberFormat`**, never a hard-coded symbol.
 
+### Data licences
+
+- **Visin holds references, not other people's data.** A dataset's licence (`Dataset.license`, `credit`) and a suite's
+  `dataTerms` are the publisher's declaration, shown beside the data and never checked or inferred. The listed ids and
+  the `licenseSchema` live in backend-core (`licenses/`); stored as the id alone, with the name and link resolved on
+  read. Fronts get the choices from `GET /api/datasets/licenses`, never a copy of the table.
+- **Unstated is shown as unstated**, on cards, pages and in the MCP text. It is not "free to use", and nothing
+  defaults a licence. A Hub card's licence is offered ("Declare this licence") but never copied silently.
+- **`dataTerms` is not protocol.** It is not hashed, a correction makes no new version, and a new version does not
+  inherit it: a licence shown for the wrong data is worse than none.
+
 ### Backend layering and errors
 
 - **Layers:** `routes/` → `controllers/` → `services/` → `models/`.

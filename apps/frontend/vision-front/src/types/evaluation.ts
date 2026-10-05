@@ -1,4 +1,5 @@
 import type { Checkpoint, SuiteData, SuiteDataKind } from './providers';
+import type { DataTerms } from './license';
 
 export type ValidationState = 'eligible' | 'incomplete' | 'incompatible' | 'exploratory' | 'legacy-unverified';
 
@@ -139,6 +140,8 @@ export interface Suite {
   visibility: 'private' | 'public';
   /** who may publish results to its public leaderboard */
   submissions: SubmissionPolicy;
+  /** what the publisher says the evaluated data is licensed under; absent means unstated */
+  dataTerms?: DataTerms;
   createdBy: string;
   protocol: SuiteProtocol;
   digest: string;
@@ -204,6 +207,8 @@ export interface PublicSuite {
   task: string;
   split: string;
   data: { kind: SuiteDataKind; repo?: string; commit?: string; label?: string };
+  /** absent means the publisher has not said what the data may be used for */
+  dataTerms?: DataTerms;
   conditions: { name: string; sampleCount: number }[];
   headline: { key: string; direction: 'max' | 'min'; unit?: string };
   aggregation: 'equal-mean-of-conditions' | 'sample-weighted-mean' | 'pooled';

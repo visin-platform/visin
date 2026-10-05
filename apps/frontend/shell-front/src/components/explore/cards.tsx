@@ -143,6 +143,8 @@ export function DatasetCard({ dataset, now }: { dataset: ExploreDataset; now: Da
       footer={[
         `${formatCount(dataset.imageCount)} ${dataset.imageCount === 1 ? 'image' : 'images'}`,
         groups > 0 ? `${groups} ${groups === 1 ? 'group' : 'groups'}` : null,
+        // Said either way: a dataset whose licence nobody stated is not one anybody may assume is free.
+        dataset.license ? dataset.license.name : 'Licence not stated',
         formatRelative(dataset.updatedAt, now)
       ]
         .filter(Boolean)

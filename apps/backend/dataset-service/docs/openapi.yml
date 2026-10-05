@@ -28,6 +28,24 @@ components:
       in: cookie
       name: access_token
   schemas:
+    DatasetLicense:
+      type: object
+      description: What the publisher declares the data is licensed under. Visin shows it and does not interpret it;
+        a dataset without one has not said, which is not permission to use it. Absent means unstated.
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: A listed licence id (the Hugging Face Hub's spelling), or `other`.
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+          description: The licence text. Always set for a listed licence; optional for `other`.
+        commercial:
+          type: boolean
+          description: false when the licence forbids commercial use. Absent for `other`.
     Dataset:
       type: object
       required:
@@ -71,6 +89,11 @@ components:
           enum:
             - private
             - public
+        license:
+          $ref: '#/components/schemas/DatasetLicense'
+        credit:
+          type: string
+          description: The credit line or citation the licence or the data's authors ask for, as the publisher wrote it.
         source:
           type: object
           description: Set when the dataset lives on the Hugging Face Hub. Visin keeps only this pointer; the zip
@@ -598,6 +621,33 @@ paths:
       security:
         - BearerCredential: []
         - SessionCookie: []
+  /datasets/licenses:
+    get:
+      tags: [Datasets]
+      summary: List Licenses
+      operationId: listDatasetLicenses
+      description: |
+        The licences a dataset can declare, in the order a form offers them, ending with `other`. Declare one by
+        `{ "id": "cc-by-4.0" }`, or `{ "id": "other", "name": "…", "url": "…" }` for a licence that is not listed.
+      security:
+        - {}
+      responses:
+        '200':
+          description: Request completed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DatasetLicense'
+
   /datasets/trash:
     get:
       tags:

@@ -211,6 +211,32 @@ describe('publishing and the public leaderboards, with in-memory MongoDB', () =>
     });
   });
 
+  describe('the terms of the evaluated data', () => {
+    it('are shown beside the board, as the publisher wrote them, and only while the suite is public', async () => {
+      const id = await project();
+      await publishSuite(id, {
+        dataTerms: { license: { id: 'cc-by-4.0' }, sourceUrl: 'https://data.example.test/roads', credit: 'Road Lab, 2025' }
+      });
+      const evaluation = await record(id, 'A', 0.8, 0.6);
+      await publish(evaluation);
+      const shown = (await board()).body.data.suite.dataTerms;
+      expect(shown).toEqual({
+        license: { id: 'cc-by-4.0', name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/', commercial: true },
+        sourceUrl: 'https://data.example.test/roads',
+        credit: 'Road Lab, 2025'
+      });
+      expect((await call('/public/leaderboards', { user: ANONYMOUS })).body.data.leaderboards[0].dataTerms).toEqual(shown);
+      expect((await call(`/public/evaluations/${evaluation}`, { user: ANONYMOUS })).body.data.suite.dataTerms).toEqual(shown);
+    });
+
+    it('are absent when nothing was declared, rather than guessed', async () => {
+      const id = await project();
+      await publishSuite(id);
+      await publish(await record(id, 'A', 0.8, 0.6));
+      expect((await board()).body.data.suite).not.toHaveProperty('dataTerms');
+    });
+  });
+
   describe('badges', () => {
     const keyOf = (name: string) => `sha256:${sha(name)}`;
     const badge = (key: string, version = 1, slug = 'road-test', projectRef = lastProject) =>

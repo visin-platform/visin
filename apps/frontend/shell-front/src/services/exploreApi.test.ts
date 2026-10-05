@@ -45,19 +45,15 @@ describe('exploreApi', () => {
     expect(get).toHaveBeenCalledWith('https://vision-api.test/api/projects?sortBy=updatedAt&sortOrder=desc', undefined);
   });
 
-  it("drops a member's own private datasets from the public catalogue", async () => {
-    get.mockResolvedValue({
-      success: true,
-      data: {
-        datasets: [
-          { _id: 'd1', visibility: 'private' },
-          { _id: 'd2', visibility: 'public' },
-        ],
-      },
-    });
+  it('asks the server for a profile’s public datasets, a page at a time, rather than filtering what came back', async () => {
+    const page = { datasets: [{ _id: 'd2', visibility: 'public' }], pagination: { page: 2, limit: 24, total: 30, pages: 2 } };
+    get.mockResolvedValue({ success: true, data: page });
 
-    await expect(exploreApi.datasets(24)).resolves.toEqual([{ _id: 'd2', visibility: 'public' }]);
-    expect(get).toHaveBeenCalledWith('https://dataset-api.test/api/datasets?limit=24', undefined);
+    await expect(exploreApi.publicDatasets({ page: 2, limit: 24 }, { user: 'u9' })).resolves.toEqual(page);
+    expect(get).toHaveBeenCalledWith('https://dataset-api.test/api/datasets?visibility=public&page=2&limit=24&user=u9', { skipAuthRedirect: true });
+
+    await exploreApi.publicDatasets({ page: 1, limit: 24 }, { owner: 'g1' });
+    expect(get).toHaveBeenLastCalledWith('https://dataset-api.test/api/datasets?visibility=public&page=1&limit=24&owner=g1', { skipAuthRedirect: true });
   });
 
   it('searches people with a public page, by the start of a handle or name', async () => {
@@ -197,8 +193,8 @@ describe('exploreApi', () => {
     expect(get).toHaveBeenLastCalledWith('https://vision-api.test/api/projects?sortBy=updatedAt&sortOrder=desc&user=u1', undefined);
 
     get.mockResolvedValue({ success: true, data: { datasets: [] } });
-    await exploreApi.datasets(48, { user: 'u1' });
-    expect(get).toHaveBeenLastCalledWith('https://dataset-api.test/api/datasets?limit=48&user=u1', undefined);
+    await exploreApi.publicDatasets({ page: 1, limit: 24 }, { user: 'u1' });
+    expect(get).toHaveBeenLastCalledWith('https://dataset-api.test/api/datasets?visibility=public&page=1&limit=24&user=u1', { skipAuthRedirect: true });
   });
 
   it("lists a group's public projects and datasets by the group's id", async () => {
@@ -207,8 +203,8 @@ describe('exploreApi', () => {
     expect(get).toHaveBeenLastCalledWith('https://vision-api.test/api/projects?sortBy=updatedAt&sortOrder=desc&owner=g1', undefined);
 
     get.mockResolvedValue({ success: true, data: { datasets: [] } });
-    await exploreApi.datasets(48, { owner: 'g1' });
-    expect(get).toHaveBeenLastCalledWith('https://dataset-api.test/api/datasets?limit=48&owner=g1', undefined);
+    await exploreApi.publicDatasets({ page: 1, limit: 24 }, { owner: 'g1' });
+    expect(get).toHaveBeenLastCalledWith('https://dataset-api.test/api/datasets?visibility=public&page=1&limit=24&owner=g1', { skipAuthRedirect: true });
   });
 
   it("reads a group's public page by handle, and reads none where the group has none", async () => {
@@ -256,9 +252,9 @@ describe('exploreApi without configured services', () => {
     delete (config as Record<string, unknown>).DATASET_API_URL;
     get.mockResolvedValue({ success: true, data: { datasets: [], direction: 'max', entries: [] } });
     try {
-      await exploreApi.datasets(1);
+      await exploreApi.publicDatasets({ page: 1, limit: 1 });
       await exploreApi.leaderboard(1);
-      expect(get).toHaveBeenNthCalledWith(1, '/api/datasets?limit=1', undefined);
+      expect(get).toHaveBeenNthCalledWith(1, '/api/datasets?visibility=public&page=1&limit=1', { skipAuthRedirect: true });
       expect(get).toHaveBeenNthCalledWith(2, '/api/evaluations/leaderboard?verification=all&limit=1', undefined);
     } finally {
       Object.assign(config, saved);

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Box, Chip, Typography } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { Box, Button, Chip, Typography } from '@mui/material';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useConfig } from '../../config/ConfigProvider';
 import { exploreApi, type OwnerFilter } from '../../services/exploreApi';
 import { cardGridSx } from '../explore/cardGrid';
@@ -11,7 +11,7 @@ import { PaperRow } from './DirectoryRows';
 import { panelSx } from '../home/panel';
 import { formatCount } from '../home/formatting';
 
-const DATASETS_FETCHED = 48;
+const DATASETS_PAGE = 24;
 const PAPERS_FETCHED = 50;
 
 const TABS = [
@@ -63,11 +63,16 @@ export function ProfileLists({ owner, cacheKey, showActivity = true, now }: Prof
     queryFn: () => exploreApi.projects(owner),
     enabled: vision
   });
-  const datasets = useQuery({
+  // The server pages public datasets of this owner, so the count is the real one and a private dataset
+  // never takes a place on a page.
+  const datasets = useInfiniteQuery({
     queryKey: ['profile', cacheKey, 'datasets'],
-    queryFn: () => exploreApi.datasets(DATASETS_FETCHED, owner),
+    queryFn: ({ pageParam }) => exploreApi.publicDatasets({ page: pageParam, limit: DATASETS_PAGE }, owner),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.pagination.page < last.pagination.pages ? last.pagination.page + 1 : undefined),
     enabled: datasetsOn
   });
+  const datasetRows = datasets.data?.pages.flatMap((page) => page.datasets) ?? [];
 
   const papers = useQuery({
     queryKey: ['profile', cacheKey, 'papers'],
@@ -81,8 +86,14 @@ export function ProfileLists({ owner, cacheKey, showActivity = true, now }: Prof
 
   const list = tab === 'datasets' ? datasets : tab === 'papers' ? papers : projects;
   const countOf = (value: Tab): number | undefined =>
-    value === 'papers' ? papers.data?.pagination.total : value === 'projects' ? projects.data?.length : value === 'datasets' ? datasets.data?.length : undefined;
-  const listCount = tab === 'papers' ? papers.data?.papers.length : countOf(tab);
+    value === 'papers'
+      ? papers.data?.pagination.total
+      : value === 'projects'
+        ? projects.data?.length
+        : value === 'datasets'
+          ? datasets.data?.pages[0]?.pagination.total
+          : undefined;
+  const listCount = tab === 'papers' ? papers.data?.papers.length : tab === 'datasets' ? datasetRows.length : countOf(tab);
   const count = (value: Tab) => (countOf(value) === undefined ? '' : ` ${formatCount(countOf(value)!)}`);
 
   return (
@@ -120,11 +131,20 @@ export function ProfileLists({ owner, cacheKey, showActivity = true, now }: Prof
           ))}
         </Box>
       ) : (
-        <Box sx={cardGridSx}>
-          {tab === 'projects'
-            ? projects.data!.map((project) => <ProjectCard key={project._id} project={project} now={today} />)
-            : datasets.data!.map((dataset) => <DatasetCard key={dataset._id} dataset={dataset} now={today} />)}
-        </Box>
+        <>
+          <Box sx={cardGridSx}>
+            {tab === 'projects'
+              ? projects.data!.map((project) => <ProjectCard key={project._id} project={project} now={today} />)
+              : datasetRows.map((dataset) => <DatasetCard key={dataset._id} dataset={dataset} now={today} />)}
+          </Box>
+          {tab === 'datasets' && datasets.hasNextPage && (
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <Button variant="outlined" disabled={datasets.isFetchingNextPage} onClick={() => void datasets.fetchNextPage()}>
+                {datasets.isFetchingNextPage ? 'Loading…' : 'Show more'}
+              </Button>
+            </Box>
+          )}
+        </>
       )}
     </>
   );

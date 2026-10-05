@@ -60,6 +60,21 @@ describe('reading recorded analysis', () => {
     expect(screen.getByText('Draws on 2 runs')).toBeInTheDocument();
   });
 
+  it('renders the body as Markdown, with raw HTML left as text and no remote images', async () => {
+    mockedService.list.mockResolvedValue([
+      finding({
+        body: '**Window16** wins:\n\n- ZOD +1.2 mAP\n- WAYMO reverses\n\n<script>alert(1)</script>\n\n![tracker](https://evil.test/p.png)'
+      })
+    ]);
+    const { container } = renderTab();
+
+    expect(await screen.findByText('Window16')).toContainHTML('Window16');
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(expect.arrayContaining(['ZOD +1.2 mAP', 'WAYMO reverses']));
+    expect(screen.getByText('<script>alert(1)</script>')).toBeInTheDocument();
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+  });
+
   it('names the runs it drew on, and links to each', async () => {
     // The gap this closes: the card said "draws on 2 runs" and stopped, so a
     // reader could not tell which two — the one thing a citation is for.

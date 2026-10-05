@@ -6,6 +6,7 @@ import {
   ConflictError,
   ForbiddenError,
   getUploadPolicy,
+  licenseView,
   logger,
   NotFoundError,
   recordResourceEvent,
@@ -75,6 +76,8 @@ export const toDatasetView = (
   owner: { kind: dataset.owner.kind, id: dataset.owner.id, ...ownerIdentity },
   createdBy: dataset.createdBy,
   visibility: dataset.visibility,
+  license: licenseView(dataset.license),
+  credit: dataset.credit,
   trashedAt: dataset.trashedAt,
   source: dataset.source ? sourceView(dataset.source) : undefined,
   archive: dataset.archive ? { filename: dataset.archive.filename, size: dataset.archive.size, uploadedAt: dataset.archive.uploadedAt } : undefined,
@@ -195,13 +198,15 @@ export const createDataset = async (access: DatasetAccess, body: CreateDatasetBo
     description: body.description || undefined,
     visibility: body.visibility ?? 'private',
     source: body.source,
+    license: body.license,
+    credit: body.credit || undefined,
     storagePrefix: datasetStoragePrefix(_id)
   });
   logger.info('Dataset created', { datasetId: _id.toString(), owner, createdBy: userId });
   return viewFor(access, dataset);
 };
 
-/** Name and description need `manage`; who can see it needs `own`. */
+/** Name, description and licence need `manage`; who can see it needs `own`. */
 export const updateDataset = async (access: DatasetAccess, id: string, body: UpdateDatasetBody) => {
   const dataset = await requireDataset(access, id, 'manage');
   if (body.visibility !== undefined && body.visibility !== dataset.visibility) {
@@ -212,6 +217,8 @@ export const updateDataset = async (access: DatasetAccess, id: string, body: Upd
   if (body.name !== undefined) dataset.name = body.name;
   if (body.description !== undefined) dataset.description = body.description || undefined;
   if (body.source !== undefined) dataset.source = body.source ?? undefined;
+  if (body.license !== undefined) dataset.license = body.license ?? undefined;
+  if (body.credit !== undefined) dataset.credit = body.credit || undefined;
   await dataset.save();
   return viewFor(access, dataset);
 };

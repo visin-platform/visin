@@ -12,7 +12,7 @@ vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalC
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
 vi.mock('../services/exploreApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/exploreApi')>()),
-  exploreApi: { user: vi.fn(), projects: vi.fn(), datasets: vi.fn(), activity: vi.fn(), publicPapers: vi.fn() },
+  exploreApi: { user: vi.fn(), projects: vi.fn(), publicDatasets: vi.fn(), activity: vi.fn(), publicPapers: vi.fn() },
 }));
 
 import { clearVisits, readVisits } from '@visin/frontend-core';
@@ -41,6 +41,11 @@ const datasets = [
   { _id: 'd1', name: 'Harbour frames', visibility: 'public' as const, owner, imageCount: 12, groups: [], updatedAt: hoursAgo(5) },
 ];
 
+const datasetPage = (rows: typeof datasets, page = 1, pages = 1, total = rows.length) => ({
+  datasets: rows,
+  pagination: { page, limit: 24, total, pages }
+});
+
 const paper = { id: 'pa1', title: 'Night segmentation', authors: [{ name: 'Ann Lee' }], year: 2025, results: { cited: 1, available: 1 } };
 
 const Where = () => {
@@ -67,7 +72,7 @@ beforeEach(() => {
   authState.user = null;
   api.user.mockResolvedValue(ann);
   api.projects.mockResolvedValue(projects);
-  api.datasets.mockResolvedValue(datasets);
+  api.publicDatasets.mockResolvedValue(datasetPage(datasets));
   api.publicPapers.mockResolvedValue({ papers: [paper], pagination: { page: 1, limit: 50, total: 3, pages: 1 } });
   api.activity.mockResolvedValue([
     { kind: 'project.created', at: hoursAgo(3), project: { id: 'p1', name: 'Window ablations', slug: 'window-ablations' } },
@@ -156,7 +161,7 @@ describe('ProfilePage', () => {
     expect(await screen.findByRole('link', { name: 'Harbour frames' })).toBeInTheDocument();
     expect(screen.queryByText('Window ablations')).not.toBeInTheDocument();
     expect(screen.getByTestId('where')).toHaveTextContent('/u/ann-lee?tab=datasets');
-    expect(api.datasets).toHaveBeenCalledWith(48, { user: 'u9' });
+    expect(api.publicDatasets).toHaveBeenCalledWith({ page: 1, limit: 24 }, { user: 'u9' });
 
     fireEvent.click(screen.getByRole('button', { name: /^Projects/ }));
     expect(await screen.findByText('Window ablations')).toBeInTheDocument();
@@ -208,6 +213,22 @@ describe('ProfilePage', () => {
     expect(screen.getByRole('button', { name: /^Projects/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('counts every public dataset the server has, shows a page of them, and loads the rest on request', async () => {
+    api.publicDatasets
+      .mockResolvedValueOnce(datasetPage(datasets, 1, 2, 30))
+      .mockResolvedValueOnce(datasetPage([{ ...datasets[0], _id: 'd2', name: 'Second set' }], 2, 2, 30));
+    renderAt('/u/ann-lee?tab=datasets');
+
+    expect(await screen.findByRole('link', { name: 'Harbour frames' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Datasets 30' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Second set' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    expect(await screen.findByRole('link', { name: 'Second set' })).toBeInTheDocument();
+    expect(api.publicDatasets).toHaveBeenLastCalledWith({ page: 2, limit: 24 }, { user: 'u9' });
+    expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+  });
+
   it('opens on the tab the address asks for', async () => {
     renderAt('/u/ann-lee?tab=datasets');
 
@@ -216,7 +237,7 @@ describe('ProfilePage', () => {
 
   it('says when they have made nothing public yet', async () => {
     api.projects.mockResolvedValue([]);
-    api.datasets.mockResolvedValue([]);
+    api.publicDatasets.mockResolvedValue(datasetPage([]));
     renderAt();
 
     expect(await screen.findByText('No public projects yet.')).toBeInTheDocument();
@@ -266,7 +287,7 @@ describe('ProfilePage', () => {
     renderAt();
 
     await screen.findByText('Window ablations');
-    expect(api.datasets).not.toHaveBeenCalled();
+    expect(api.publicDatasets).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /^Datasets/ })).not.toBeInTheDocument();
   });
 

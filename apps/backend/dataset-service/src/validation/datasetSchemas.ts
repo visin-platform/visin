@@ -1,4 +1,4 @@
-import { resourceOwnerSchema, visibilitySchema, z } from '@visin/backend-core';
+import { licenseSchema, resourceOwnerSchema, visibilitySchema, z } from '@visin/backend-core';
 import { datasetSourceSchema } from '../providers';
 
 export const resolveDatasetBodySchema = z.object({
@@ -18,7 +18,9 @@ export const createDatasetBodySchema = z.object({
   description: z.string().trim().max(10000).optional(),
   owner: resourceOwnerSchema.optional(),
   visibility: visibilitySchema.optional(),
-  source: datasetSourceSchema.optional()
+  source: datasetSourceSchema.optional(),
+  license: licenseSchema.optional(),
+  credit: z.string().trim().max(1000).optional()
 });
 export type CreateDatasetBody = z.infer<typeof createDatasetBodySchema>;
 
@@ -27,7 +29,11 @@ export const updateDatasetBodySchema = z.object({
   description: z.string().trim().max(10000).optional(),
   visibility: visibilitySchema.optional(),
   /** null goes back to the zip kept here */
-  source: datasetSourceSchema.nullable().optional()
+  source: datasetSourceSchema.nullable().optional(),
+  /** null takes the declaration back: the licence is then unstated */
+  license: licenseSchema.nullable().optional(),
+  /** empty clears it */
+  credit: z.string().trim().max(1000).optional()
 });
 export type UpdateDatasetBody = z.infer<typeof updateDatasetBodySchema>;
 

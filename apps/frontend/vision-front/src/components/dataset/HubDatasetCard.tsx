@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
 import { Alert, Box, Chip, CircularProgress, Collapse, Link, Paper, Stack, Typography, Button } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { getHubInfo, type DatasetSource } from '../../services/datasetService';
+import { getHubInfo, listLicenses, type DatasetSource } from '../../services/datasetService';
 import { formatBytes } from '../../utils/datasetMapping';
 import { hubDatasetUrl, shortRevision } from '../../utils/hubLinks';
 
 interface HubDatasetCardProps {
   datasetId: string;
   source: DatasetSource;
+  /** the licence this dataset declares; the Hub card's is shown beside it, never copied over it */
+  declaredLicenseId?: string;
+  /** given to someone who may edit the dataset: declares the Hub card's licence as this dataset's */
+  onUseLicense?: (licenseId: string) => void;
+  busy?: boolean;
 }
 
 const FILES_SHOWN = 20;
@@ -18,13 +23,17 @@ const FILES_SHOWN = 20;
  * API at the pinned commit and nothing is copied, so a private repo, which the
  * server cannot read, shows only why.
  */
-const HubDatasetCard: React.FC<HubDatasetCardProps> = ({ datasetId, source }) => {
+const HubDatasetCard: React.FC<HubDatasetCardProps> = ({ datasetId, source, declaredLicenseId, onUseLicense, busy }) => {
   const [showFiles, setShowFiles] = useState(false);
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['dataset-hub', datasetId, source.repo, source.revision],
     queryFn: () => getHubInfo(datasetId),
     retry: false
   });
+  // Only a licence Visin lists can be declared from the card; the Hub has others, and `other` says nothing.
+  const listed = useQuery({ queryKey: ['dataset-licenses'], queryFn: listLicenses, staleTime: Infinity, enabled: Boolean(onUseLicense) });
+  const hubLicense = data?.license?.toLowerCase();
+  const usable = Boolean(hubLicense && hubLicense !== 'other' && listed.data?.some((choice) => choice.id === hubLicense));
 
   return (
     <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, mb: 3, borderRadius: 2 }}>
@@ -42,13 +51,30 @@ const HubDatasetCard: React.FC<HubDatasetCardProps> = ({ datasetId, source }) =>
       {data && (
         <>
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}>
-            {data.license && <Chip size="small" label={`Licence: ${data.license}`} />}
+            {data.license && <Chip size="small" label={`Hub card licence: ${data.license}`} />}
             {data.gated && <Chip size="small" color="warning" label="Gated: access must be requested" />}
             <Chip size="small" label={`${data.fileCount.toLocaleString()} files · ${formatBytes(data.totalBytes)}`} />
             {data.taskCategories?.map((task) => <Chip key={task} size="small" variant="outlined" label={task} />)}
             {data.sizeCategories?.map((size) => <Chip key={size} size="small" variant="outlined" label={size} />)}
             {data.tags.slice(0, 8).map((tag) => <Chip key={tag} size="small" variant="outlined" label={tag} />)}
           </Stack>
+          {hubLicense && hubLicense !== declaredLicenseId && (
+            <Alert
+              severity={declaredLicenseId ? 'warning' : 'info'}
+              sx={{ mb: 2 }}
+              action={
+                onUseLicense && usable ? (
+                  <Button color="inherit" size="small" disabled={busy} onClick={() => onUseLicense(hubLicense)}>
+                    Declare this licence
+                  </Button>
+                ) : undefined
+              }
+            >
+              {declaredLicenseId
+                ? `The Hub card says ${data.license}, which differs from the licence declared for this dataset. Check which is right.`
+                : `The Hub card says ${data.license}. Visin does not copy it for you: this dataset still has no declared licence.`}
+            </Alert>
+          )}
           {data.folders.length > 0 && (
             <Box component="ul" sx={{ m: 0, mb: 1, pl: 2.5 }} aria-label="Top-level folders">
               {data.folders.map((folder) => (

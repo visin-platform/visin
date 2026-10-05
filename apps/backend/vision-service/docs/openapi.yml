@@ -444,6 +444,25 @@ components:
           description: Only on a single evaluation. Submitter-reported; nothing here is verified.
           additionalProperties: true
 
+    DataTerms:
+      type: object
+      description: |
+        What the publisher says about the data a suite scores. A declaration shown beside the results, not part of the
+        protocol, so it is not hashed and a wrong one is corrected in place. Visin holds no copy of the data, and a
+        licence listed here is the publisher's word, not something Visin has checked. Absent on a suite means unstated,
+        which is not permission to use the data.
+      properties:
+        license:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, description: 'A listed licence id (the Hugging Face Hub spelling), or `other`.' }
+            name: { type: string }
+            url: { type: string, format: uri, description: 'The licence text. Always set for a listed licence.' }
+            commercial: { type: boolean, description: 'false when the licence forbids commercial use. Absent for `other`.' }
+        sourceUrl: { type: string, format: uri, description: 'Where the data lives and its own terms are accepted.' }
+        credit: { type: string, description: 'The credit line or citation the data asks for.' }
+
     PublicSuite:
       type: object
       description: |
@@ -466,6 +485,7 @@ components:
             repo: { type: string }
             commit: { type: string }
             label: { type: string }
+        dataTerms: { $ref: '#/components/schemas/DataTerms' }
         conditions:
           type: array
           items:
@@ -720,6 +740,7 @@ components:
             Who may publish results to its public leaderboard. `open`: a manager of any public project. `members`: only
             the project that owns the suite. `approval`: any public project; managers review unverified submissions.
             Verification is a label and does not control visibility.
+        dataTerms: { $ref: '#/components/schemas/DataTerms' }
         createdBy: { type: string }
         protocol: { $ref: '#/components/schemas/SuiteProtocol' }
         digest:
@@ -5879,6 +5900,11 @@ paths:
         insertion. Names cannot be reassigned. Existing suites acquire reservations lazily; conflicting historical
         ownership returns `409` and requires operator resolution without rewriting published protocols.
 
+        `dataTerms` says what the evaluated data is licensed under, where it lives and how to credit it. Say it
+        for data you did not make: Visin shows it on the leaderboard beside the scores and holds no copy of the data.
+        A new version does not inherit it from the last, because the data may have changed; a retried publish of an
+        existing version leaves the stored one alone (correct it with `PATCH`).
+
         Creating a private version needs `contribute` on the project. Creating a public version needs `manage`,
         whether `visibility: public` is explicit or inherited. The first version defaults to private; a new version
         inherits the highest existing version's visibility unless specified. A contributor can explicitly choose
@@ -6047,7 +6073,8 @@ paths:
       summary: Rename, reword, share or archive a suite
       operationId: updateSuite
       description: |
-        The protocol cannot change. Archiving stops new evaluations and keeps every result readable. Needs `manage`
+        The protocol cannot change. `dataTerms` (the licence, source and credit of the evaluated data) can, because it
+        describes the data rather than how it is scored; `null` takes it back. Archiving stops new evaluations and keeps every result readable. Needs `manage`
         on the project, or `contribute` on a suite the caller published; changing `visibility` or `submissions` needs
         `manage`. Making a suite private ends the publication of every result on it, so making it public again does not
         publish them afresh; changing `submissions` leaves what is published as it is.

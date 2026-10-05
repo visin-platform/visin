@@ -131,6 +131,8 @@ export interface ExploreDataset {
   owner: ExploreOwner;
   imageCount: number;
   groups: { name: string; images: number }[];
+  /** what the publisher declares the data is licensed under; absent means they have not said */
+  license?: { id: string; name: string; commercial?: boolean };
   coverUrl?: string;
   updatedAt: string;
 }
@@ -203,14 +205,6 @@ export const exploreApi = {
     return data.filter((project) => project.visibility === 'public');
   },
 
-  async datasets(limit: number, options: Partial<OwnerFilter> = {}): Promise<ExploreDataset[]> {
-    const query = new URLSearchParams({ limit: String(limit) });
-    if (options.user) query.set('user', options.user);
-    if (options.owner) query.set('owner', options.owner);
-    const { data } = await datasetApi.get<Envelope<{ datasets: ExploreDataset[] }>>(`?${query}`);
-    return data.datasets.filter((dataset) => dataset.visibility === 'public');
-  },
-
   /**
    * What a person or a group has been doing in public, newest first, from Vision (projects, findings, runs,
    * results) and the dataset service (datasets made). Either may be unconfigured or down: the feed is then what the
@@ -254,10 +248,19 @@ export const exploreApi = {
     };
   },
 
-  /** The public datasets, a page at a time, newest change first. */
-  async publicDatasets(query: CatalogueQuery): Promise<{ datasets: ExploreDataset[]; pagination: Pagination }> {
+  /**
+   * The public datasets, a page at a time, newest change first; of one person or group when `owner` says whose.
+   * Visibility is settled by the server before it pages, so a page never holds fewer public datasets than there are
+   * and `pagination.total` counts public ones only.
+   */
+  async publicDatasets(
+    query: CatalogueQuery,
+    owner: Partial<OwnerFilter> = {}
+  ): Promise<{ datasets: ExploreDataset[]; pagination: Pagination }> {
     const params = new URLSearchParams({ visibility: 'public', page: String(query.page), limit: String(query.limit) });
     if (query.search) params.set('search', query.search);
+    if (owner.user) params.set('user', owner.user);
+    if (owner.owner) params.set('owner', owner.owner);
     return (
       await datasetApi.get<Envelope<{ datasets: ExploreDataset[]; pagination: Pagination }>>(`?${params}`, { skipAuthRedirect: true })
     ).data;

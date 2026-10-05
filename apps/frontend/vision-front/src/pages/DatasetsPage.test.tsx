@@ -7,6 +7,7 @@ const service = vi.hoisted(() => ({
   uploadArchive: vi.fn(),
   getDownloadUrl: vi.fn(),
   listMyGroups: vi.fn(),
+  listLicenses: vi.fn(),
   listTrash: vi.fn(),
   restoreDataset: vi.fn(),
   deleteDatasetForever: vi.fn()
@@ -48,6 +49,7 @@ describe('DatasetsPage', () => {
       pagination: { page: 1, limit: 24, total: 30, pages: 2 }
     });
     service.listMyGroups.mockResolvedValue([{ id: 'g1', name: 'Team', role: 'admin' }]);
+    service.listLicenses.mockResolvedValue([{ id: 'mit', name: 'MIT' }, { id: 'other', name: 'Other' }]);
   });
 
   it('lists datasets with size, images, owner and import state', async () => {

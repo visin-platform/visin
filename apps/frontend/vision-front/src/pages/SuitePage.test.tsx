@@ -121,6 +121,28 @@ describe('SuitePage', () => {
     service.leaderboard.mockResolvedValue(board());
   });
 
+  it('says the data’s licence is not stated when the publisher has not said, rather than leaving it out', async () => {
+    renderSuite();
+    expect(await screen.findByLabelText('Terms of the evaluated data')).toHaveTextContent('Data licenceLicence not stated');
+  });
+
+  it('shows what the publisher says about the data: its licence, where to get it, and the credit', async () => {
+    service.get.mockResolvedValue(
+      suite({
+        dataTerms: {
+          license: { id: 'cc-by-4.0', name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/', commercial: true },
+          sourceUrl: 'https://data.example.test/roads',
+          credit: 'Road Lab, 2025'
+        }
+      })
+    );
+    renderSuite();
+    const terms = await screen.findByLabelText('Terms of the evaluated data');
+    expect(within(terms).getByRole('link', { name: 'CC BY 4.0' })).toHaveAttribute('href', 'https://creativecommons.org/licenses/by/4.0/');
+    expect(within(terms).getByRole('link', { name: 'Where to get the data' })).toHaveAttribute('href', 'https://data.example.test/roads');
+    expect(terms).toHaveTextContent('Credit: Road Lab, 2025');
+  });
+
   it('pages ranked and unranked checkpoints independently and preserves global rank', async () => {
     service.leaderboard.mockImplementation(async (_slug, _version, { page, unrankedPage }) =>
       board({

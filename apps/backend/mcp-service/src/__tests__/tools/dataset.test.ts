@@ -87,7 +87,7 @@ describe('get_dataset', () => {
     const { text } = await call('get_dataset', { dataset: 'd1' });
 
     expect(mocked.get).toHaveBeenCalledWith('vsn_live_abc', 'd1');
-    expect(text).toContain('VLM\nMask review set\nvlm.zip, 2.0 KB; 8,220 images imported; last import failed.');
+    expect(text).toContain('VLM\nMask review set\nLicence: not stated by the publisher (that is not permission to use it).\nvlm.zip, 2.0 KB; 8,220 images imported; last import failed.');
     expect(text).toContain('  verify: 8,220 images, 4,110 JSON sidecars');
     expect(text).toContain('  frames: 4,110 images\n');
     expect(text).toContain('Zip contents: 16,440 files, 512 B uncompressed.');
@@ -98,7 +98,9 @@ describe('get_dataset', () => {
 
   it('keeps a bare dataset short and caps a long folder list', async () => {
     mocked.get.mockResolvedValueOnce({ _id: 'd1', name: 'Empty', imageCount: 0, groups: [] });
-    expect((await call('get_dataset', { dataset: 'd1' })).text).toBe('Empty\nno zip uploaded yet; 0 images imported.');
+    expect((await call('get_dataset', { dataset: 'd1' })).text).toBe(
+      'Empty\nLicence: not stated by the publisher (that is not permission to use it).\nno zip uploaded yet; 0 images imported.'
+    );
 
     mocked.get.mockResolvedValueOnce({
       _id: 'd2', name: 'Sequences', imageCount: 0, groups: [], import: { status: 'done' },
@@ -108,6 +110,17 @@ describe('get_dataset', () => {
     expect(text).toContain('…and 5 more folders');
     expect(text).not.toContain('by type');
     expect(text).not.toContain('last import');
+  });
+
+  it('states the declared licence, its limits and the credit, and that a Hub dataset is a pointer', async () => {
+    mocked.get.mockResolvedValue({
+      _id: 'd3', name: 'Pets', imageCount: 0, groups: [], credit: 'Parkhi et al., 2012',
+      license: { id: 'cc-by-nc-4.0', name: 'CC BY-NC 4.0', url: 'https://creativecommons.org/licenses/by-nc/4.0/', commercial: false },
+      source: { provider: 'hf', repo: 'acme/pets', revision: '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433' }
+    });
+    const { text } = await call('get_dataset', { dataset: 'd3' });
+    expect(text).toContain('Licence: CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/; no commercial use; credit: Parkhi et al., 2012).');
+    expect(text).toContain('Kept on Hugging Face: acme/pets at commit 3f2a1c9d8e7b (a pointer; Visin holds no copy).');
   });
 
   it('turns a failed lookup into an error the model can read', async () => {

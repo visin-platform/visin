@@ -14,6 +14,7 @@ const service = vi.hoisted(() => ({
   getHubInfo: vi.fn(),
   listItems: vi.fn(),
   listMyGroups: vi.fn(),
+  listLicenses: vi.fn(),
   scanArchive: vi.fn(),
   discardUpload: vi.fn(),
   setCover: vi.fn(),
@@ -53,6 +54,11 @@ describe('DatasetDetailPage', () => {
     service.getDataset.mockResolvedValue(dataset());
     service.listItems.mockResolvedValue({ items: [], pagination: { page: 1, limit: 60, total: 0, pages: 0 } });
     service.listMyGroups.mockResolvedValue([]);
+    service.listLicenses.mockResolvedValue([
+      { id: 'mit', name: 'MIT', url: 'https://opensource.org/license/mit', commercial: true },
+      { id: 'cc-by-nc-4.0', name: 'CC BY-NC 4.0', url: 'https://creativecommons.org/licenses/by-nc/4.0/', commercial: false },
+      { id: 'other', name: 'Other' }
+    ]);
   });
 
   it('shows the dataset, its contents and its images', async () => {
@@ -85,7 +91,7 @@ describe('DatasetDetailPage', () => {
     expect(await within(dialog).findByText('Not allowed')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await screen.findByRole('heading', { name: 'VLM v2' })).toBeInTheDocument();
-    expect(service.updateDataset).toHaveBeenLastCalledWith('d1', { name: 'VLM v2', description: 'Mask review set', visibility: 'public' });
+    expect(service.updateDataset).toHaveBeenLastCalledWith('d1', { name: 'VLM v2', description: 'Mask review set', visibility: 'public', license: null, credit: '' });
   });
 
   it('shows where a Hub dataset lives and lets a manager point it elsewhere or back to the zip', async () => {
@@ -97,7 +103,7 @@ describe('DatasetDetailPage', () => {
     const chip = await screen.findByRole('link', { name: 'acme/zod-png @ 3f2a1c9' });
     expect(chip).toHaveAttribute('href', `https://huggingface.co/datasets/acme/zod-png/tree/${COMMIT}`);
     expect(screen.getByText(/On Hugging Face · 0 images/)).toBeInTheDocument();
-    expect(await screen.findByText('Licence: mit')).toBeInTheDocument();
+    expect(await screen.findByText('Hub card licence: mit')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Download zip' })).not.toBeInTheDocument();
 
     service.updateDataset.mockResolvedValueOnce(dataset({ archive: undefined, contents: undefined }));
@@ -171,6 +177,38 @@ describe('DatasetDetailPage', () => {
       expect(screen.getByRole('button', { name })).toBeDisabled();
     }
     expect(screen.getByRole('button', { name: 'Move to trash' })).toBeEnabled();
+  });
+
+  it('says plainly when no licence is declared, and shows the one that is, with its credit', async () => {
+    renderPage();
+    expect(await screen.findByText('Licence not stated')).toBeInTheDocument();
+    expect(screen.queryByText(/^Credit:/)).not.toBeInTheDocument();
+  });
+
+  it('shows a declared licence as a link, flags a non-commercial one, and shows the credit line', async () => {
+    service.getDataset.mockResolvedValue(
+      dataset({
+        license: { id: 'cc-by-nc-4.0', name: 'CC BY-NC 4.0', url: 'https://creativecommons.org/licenses/by-nc/4.0/', commercial: false },
+        credit: 'Krizhevsky, 2009'
+      })
+    );
+    renderPage();
+    const chip = await screen.findByRole('link', { name: 'CC BY-NC 4.0 · non-commercial' });
+    expect(chip).toHaveAttribute('href', 'https://creativecommons.org/licenses/by-nc/4.0/');
+    expect(screen.getByText('Credit: Krizhevsky, 2009')).toBeInTheDocument();
+    expect(screen.queryByText('Licence not stated')).not.toBeInTheDocument();
+  });
+
+  it('lets a manager declare the Hub card’s licence, and nobody else', async () => {
+    const COMMIT = '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433';
+    const source = { provider: 'hf', repo: 'acme/zod-png', revision: COMMIT };
+    service.getHubInfo.mockResolvedValue({ repo: 'acme/zod-png', revision: COMMIT, license: 'mit', tags: [], fileCount: 3, totalBytes: 2048, folders: [], files: [], truncated: false });
+    service.getDataset.mockResolvedValue(dataset({ source, archive: undefined, contents: undefined, groups: [], imageCount: 0 }));
+    service.updateDataset.mockResolvedValue(dataset({ source, license: { id: 'mit', name: 'MIT' } }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Declare this licence' }));
+    await waitFor(() => expect(service.updateDataset).toHaveBeenCalledWith('d1', { license: { id: 'mit' } }));
+    expect(await screen.findByText('MIT')).toBeInTheDocument();
   });
 
   it('moves to the trash after confirmation', async () => {

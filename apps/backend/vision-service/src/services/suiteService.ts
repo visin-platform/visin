@@ -18,6 +18,7 @@ import { normalizeProtocol, protocolDigest } from './suiteProtocol';
 import { reserveSuiteSlug } from './suiteSlugService';
 import { invalidatePublic } from './publicCache';
 import { clearPublications } from './publications';
+import { dataTermsView, type DataTermsView } from './suiteDataTerms';
 
 const MAX_PAGE = 100;
 
@@ -30,6 +31,7 @@ export interface SuiteView {
   projectId: string;
   visibility: 'private' | 'public';
   submissions: ISuite['submissions'];
+  dataTerms?: DataTermsView;
   createdBy: string;
   protocol: ISuite['protocol'];
   digest: string;
@@ -47,6 +49,7 @@ const toView = (suite: ISuite): SuiteView => ({
   projectId: suite.projectId,
   visibility: suite.visibility,
   submissions: suite.submissions ?? 'open',
+  ...(suite.dataTerms ? { dataTerms: dataTermsView(suite.dataTerms) } : {}),
   createdBy: suite.createdBy,
   protocol: suite.protocol,
   digest: suite.digest,
@@ -189,6 +192,7 @@ export async function createSuite(userId: string | undefined, body: CreateSuiteB
       // A new version inherits the highest existing version's visibility; a first one is private.
       visibility,
       submissions: body.submissions ?? earlier?.submissions ?? 'open',
+      dataTerms: body.dataTerms,
       createdBy: actor,
       protocol: body.protocol,
       digest
@@ -227,7 +231,7 @@ async function resolveExisting(existing: ISuite, projectId: string, digest: stri
 }
 
 /**
- * Rename, reword, change visibility, or archive/unarchive. The protocol is not here: it cannot change. Archiving
+ * Rename, reword, correct what is declared about the data, change visibility, or archive/unarchive. The protocol is not here: it cannot change. Archiving
  * stops new evaluations and keeps everything already recorded readable. Needs `manage`, or `contribute` on a suite
  * the caller published.
  */
@@ -249,6 +253,7 @@ export async function updateSuite(slug: string, version: number, userId: string 
   if (body.description !== undefined) suite.description = body.description === null ? undefined : body.description;
   if (body.visibility !== undefined) suite.visibility = body.visibility;
   if (body.submissions !== undefined) suite.submissions = body.submissions;
+  if (body.dataTerms !== undefined) suite.dataTerms = body.dataTerms ?? undefined;
   if (body.archived !== undefined) suite.archivedAt = body.archived ? (suite.archivedAt ?? new Date()) : undefined;
   await suite.save();
   // A suite that goes private takes its published results with it: making it public again does not republish them.

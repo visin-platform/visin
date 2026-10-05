@@ -783,6 +783,46 @@
           }
         }
       },
+      "DataTerms": {
+        "type": "object",
+        "description": "What the publisher says about the data a suite scores. A declaration shown beside the results, not part of the\nprotocol, so it is not hashed and a wrong one is corrected in place. Visin holds no copy of the data, and a\nlicence listed here is the publisher's word, not something Visin has checked. Absent on a suite means unstated,\nwhich is not permission to use the data.\n",
+        "properties": {
+          "license": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "A listed licence id (the Hugging Face Hub spelling), or `other`."
+              },
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "The licence text. Always set for a listed licence."
+              },
+              "commercial": {
+                "type": "boolean",
+                "description": "false when the licence forbids commercial use. Absent for `other`."
+              }
+            }
+          },
+          "sourceUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Where the data lives and its own terms are accepted."
+          },
+          "credit": {
+            "type": "string",
+            "description": "The credit line or citation the data asks for."
+          }
+        }
+      },
       "PublicSuite": {
         "type": "object",
         "description": "A suite as an anonymous reader sees it. A Visin dataset is reported only as `{ kind: visin }`: its id and digest\nbelong to the deployment and are not shown.\n",
@@ -834,6 +874,9 @@
                 "type": "string"
               }
             }
+          },
+          "dataTerms": {
+            "$ref": "#/components/schemas/DataTerms"
           },
           "conditions": {
             "type": "array",
@@ -1438,6 +1481,9 @@
               "approval"
             ],
             "description": "Who may publish results to its public leaderboard. `open`: a manager of any public project. `members`: only\nthe project that owns the suite. `approval`: any public project; managers review unverified submissions.\nVerification is a label and does not control visibility.\n"
+          },
+          "dataTerms": {
+            "$ref": "#/components/schemas/DataTerms"
           },
           "createdBy": {
             "type": "string"
@@ -4103,6 +4149,81 @@
               "approval"
             ]
           },
+          "dataTerms": {
+            "type": "object",
+            "properties": {
+              "license": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "enum": [
+                          "cc0-1.0",
+                          "cc-by-4.0",
+                          "cc-by-sa-4.0",
+                          "cc-by-nd-4.0",
+                          "cc-by-nc-4.0",
+                          "cc-by-nc-sa-4.0",
+                          "cc-by-nc-nd-4.0",
+                          "cc-by-3.0",
+                          "cc-by-sa-3.0",
+                          "odc-by",
+                          "odbl",
+                          "pddl",
+                          "cdla-permissive-2.0",
+                          "cdla-sharing-1.0",
+                          "apache-2.0",
+                          "mit",
+                          "bsd-2-clause",
+                          "bsd-3-clause",
+                          "gpl-3.0"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "const": "other"
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "sourceUrl": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "credit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            },
+            "additionalProperties": false
+          },
           "protocol": {
             "type": "object",
             "properties": {
@@ -4700,6 +4821,88 @@
               "open",
               "members",
               "approval"
+            ]
+          },
+          "dataTerms": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "license": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "cc0-1.0",
+                              "cc-by-4.0",
+                              "cc-by-sa-4.0",
+                              "cc-by-nd-4.0",
+                              "cc-by-nc-4.0",
+                              "cc-by-nc-sa-4.0",
+                              "cc-by-nc-nd-4.0",
+                              "cc-by-3.0",
+                              "cc-by-sa-3.0",
+                              "odc-by",
+                              "odbl",
+                              "pddl",
+                              "cdla-permissive-2.0",
+                              "cdla-sharing-1.0",
+                              "apache-2.0",
+                              "mit",
+                              "bsd-2-clause",
+                              "bsd-3-clause",
+                              "gpl-3.0"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "const": "other"
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "url": {
+                            "type": "string",
+                            "maxLength": 500
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "sourceUrl": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "credit": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "archived": {
@@ -12435,7 +12638,7 @@
         ],
         "summary": "Publish a suite version",
         "operationId": "createSuite",
-        "description": "Publish a scoring protocol. A published version never changes, so a score on `slug@version` always means\nthe same thing.\n\nPublishing the same protocol again returns the stored suite with `200`, so a pipeline's setup script can\nrun every time. A different protocol under a version that exists is `409`: publish it as the next version.\nA `slug` is one name per deployment. Ownership is reserved atomically before inserting a version, so\nconcurrent publishes by different projects return `409` for the losing project even at different versions.\nThe reservation survives insertion failures and project purges; only the original project may retry a failed\ninsertion. Names cannot be reassigned. Existing suites acquire reservations lazily; conflicting historical\nownership returns `409` and requires operator resolution without rewriting published protocols.\n\nCreating a private version needs `contribute` on the project. Creating a public version needs `manage`,\nwhether `visibility: public` is explicit or inherited. The first version defaults to private; a new version\ninherits the highest existing version's visibility unless specified. A contributor can explicitly choose\n`visibility: private`; inherited public visibility otherwise returns `403`.\n\nExisting-version retries return the stored metadata, including visibility, without changing it or recording\nanother disclosure event. Initial public creation is recorded as a visibility event.\nA key limited to one project can publish to that project only. With write scope, it may create a public suite\nthere when its actor has `manage`; the key itself grants no extra sharing permission.\n",
+        "description": "Publish a scoring protocol. A published version never changes, so a score on `slug@version` always means\nthe same thing.\n\nPublishing the same protocol again returns the stored suite with `200`, so a pipeline's setup script can\nrun every time. A different protocol under a version that exists is `409`: publish it as the next version.\nA `slug` is one name per deployment. Ownership is reserved atomically before inserting a version, so\nconcurrent publishes by different projects return `409` for the losing project even at different versions.\nThe reservation survives insertion failures and project purges; only the original project may retry a failed\ninsertion. Names cannot be reassigned. Existing suites acquire reservations lazily; conflicting historical\nownership returns `409` and requires operator resolution without rewriting published protocols.\n\n`dataTerms` says what the evaluated data is licensed under, where it lives and how to credit it. Say it\nfor data you did not make: Visin shows it on the leaderboard beside the scores and holds no copy of the data.\nA new version does not inherit it from the last, because the data may have changed; a retried publish of an\nexisting version leaves the stored one alone (correct it with `PATCH`).\n\nCreating a private version needs `contribute` on the project. Creating a public version needs `manage`,\nwhether `visibility: public` is explicit or inherited. The first version defaults to private; a new version\ninherits the highest existing version's visibility unless specified. A contributor can explicitly choose\n`visibility: private`; inherited public visibility otherwise returns `403`.\n\nExisting-version retries return the stored metadata, including visibility, without changing it or recording\nanother disclosure event. Initial public creation is recorded as a visibility event.\nA key limited to one project can publish to that project only. With write scope, it may create a public suite\nthere when its actor has `manage`; the key itself grants no extra sharing permission.\n",
         "security": [
           {
             "BearerCredential": []
@@ -12780,7 +12983,7 @@
         ],
         "summary": "Rename, reword, share or archive a suite",
         "operationId": "updateSuite",
-        "description": "The protocol cannot change. Archiving stops new evaluations and keeps every result readable. Needs `manage`\non the project, or `contribute` on a suite the caller published; changing `visibility` or `submissions` needs\n`manage`. Making a suite private ends the publication of every result on it, so making it public again does not\npublish them afresh; changing `submissions` leaves what is published as it is.\n",
+        "description": "The protocol cannot change. `dataTerms` (the licence, source and credit of the evaluated data) can, because it\ndescribes the data rather than how it is scored; `null` takes it back. Archiving stops new evaluations and keeps every result readable. Needs `manage`\non the project, or `contribute` on a suite the caller published; changing `visibility` or `submissions` needs\n`manage`. Making a suite private ends the publication of every result on it, so making it public again does not\npublish them afresh; changing `submissions` leaves what is published as it is.\n",
         "security": [
           {
             "BearerCredential": []

@@ -150,6 +150,12 @@ const PUBLIC_SUITE = {
   task: 'semantic-segmentation',
   split: 'test',
   data: { kind: 'external', label: 'ZOD test splits' },
+  // A licence that limits use, so the page is checked with its warning colour in both schemes.
+  dataTerms: {
+    license: { id: 'cc-by-nc-sa-4.0', name: 'CC BY-NC-SA 4.0', url: 'https://creativecommons.org/licenses/by-nc-sa/4.0/', commercial: false },
+    sourceUrl: 'https://zod.example.test/',
+    credit: 'Zenseact, 2023'
+  },
   conditions: CONDITIONS,
   headline: { key: 'mIoU_foreground', direction: 'max', unit: 'ratio' },
   aggregation: 'equal-mean-of-conditions',

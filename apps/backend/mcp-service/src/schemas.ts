@@ -301,6 +301,11 @@ export const benchmarksResponseSchema = z
  * A dataset as dataset-service describes it: a zip to download, a summary of
  * what the zip holds, and the image groups imported out of it.
  */
+/** What a publisher declares the data is licensed under; the server fills in the name, link and commercial use. */
+export const licenseSchema = z
+  .object({ id: z.string(), name: z.string(), url: z.string().optional(), commercial: z.boolean().optional() })
+  .loose();
+
 export const datasetSchema = z
   .object({
     _id: z.string(),
@@ -310,6 +315,10 @@ export const datasetSchema = z
     owner: z.object({ kind: z.enum(['user', 'group']), id: z.string(), name: z.string().optional() }).loose().optional(),
     /** `private` or `public` */
     visibility: z.string().optional(),
+    license: licenseSchema.optional().catch(undefined),
+    credit: z.string().optional(),
+    /** set when the dataset lives on the Hugging Face Hub: a pointer, never a copy */
+    source: z.object({ provider: z.string(), repo: z.string(), revision: z.string() }).loose().optional().catch(undefined),
     archive: z.object({ filename: z.string(), size: z.number() }).loose().optional(),
     contents: z
       .object({
@@ -526,6 +535,12 @@ export const suiteSchema = z
     visibility: z.enum(['private', 'public']).catch('private'),
     digest: z.string().optional(),
     archivedAt: z.string().optional(),
+    /** what the publisher says about the evaluated data; absent means unstated */
+    dataTerms: z
+      .object({ license: licenseSchema.optional(), sourceUrl: z.string().optional(), credit: z.string().optional() })
+      .loose()
+      .optional()
+      .catch(undefined),
     protocol: z
       .object({
         task: z.string().optional(),

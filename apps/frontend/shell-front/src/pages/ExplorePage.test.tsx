@@ -16,7 +16,7 @@ vi.mock('../services/exploreApi', async (importOriginal) => ({
 }));
 
 import { ExplorePage } from './ExplorePage';
-import { exploreApi, type ExploreProject, type Pagination } from '../services/exploreApi';
+import { exploreApi, type ExploreDataset, type ExploreProject, type Pagination } from '../services/exploreApi';
 
 const api = vi.mocked(exploreApi);
 const now = new Date(2026, 8, 15, 20, 0);
@@ -68,7 +68,7 @@ const findings = [
 
 const page = (number: number, pages: number, total: number, limit = 12): Pagination => ({ page: number, limit, total, pages });
 const projectPage = (rows: ExploreProject[], number = 1, pages = 1) => ({ projects: rows, pagination: page(number, pages, rows.length) });
-const datasetPage = (rows: typeof datasets, number = 1, pages = 1) => ({ datasets: rows, pagination: page(number, pages, rows.length) });
+const datasetPage = (rows: ExploreDataset[], number = 1, pages = 1) => ({ datasets: rows, pagination: page(number, pages, rows.length) });
 
 const Where = () => {
   const { pathname, search } = useLocation();
@@ -123,6 +123,20 @@ describe('ExplorePage', () => {
     const dataset = screen.getByRole('link', { name: 'Harbour frames' });
     expect(dataset).toHaveAttribute('href', '/datasets/d1');
     expect(within(dataset.closest('article')!).getByText(/4,110 images · 1 group/)).toBeInTheDocument();
+  });
+
+  it('says what licence a dataset is declared under, or that none is stated', async () => {
+    api.publicDatasets.mockResolvedValue(
+      datasetPage([
+        { ...datasets[0], license: { id: 'cc-by-4.0', name: 'CC BY 4.0', commercial: true } },
+        { ...datasets[0], _id: 'd2', name: 'Unlabelled set' }
+      ])
+    );
+    renderPage();
+
+    const card = async (name: string) => (await screen.findByRole('link', { name })).closest('article')!;
+    expect(within(await card('Harbour frames')).getByText(/1 group · CC BY 4\.0 · /)).toBeInTheDocument();
+    expect(within(await card('Unlabelled set')).getByText(/1 group · Licence not stated · /)).toBeInTheDocument();
   });
 
   it('says how alive a project is: its runs and the last one, else when it was last edited', async () => {

@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { MobileListRow } from '../components/common/MobileList';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import DataTermsNote from '../components/licensing/DataTermsNote';
 import { checkpointLabel, formatFixed, publicDataText } from '../components/evaluations/verdict';
 import VerificationMark from '../components/evaluations/VerificationMark';
 import LeaderboardPagination from '../components/evaluations/LeaderboardPagination';
@@ -108,6 +109,7 @@ const PublicLeaderboardPage: React.FC = () => {
         share a rank. Data: {publicDataText(suite.data)}, split {suite.split}. Updated{' '}
         {formatDateTime(data.generatedAt)}.
       </Typography>
+      <DataTermsNote terms={suite.dataTerms} />
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
         <ObservedSwitch checked={observed} onChange={setObserved} />
         <LeaderboardExport table={tableFromPublic(data)} />

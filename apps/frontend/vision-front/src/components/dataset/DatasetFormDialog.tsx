@@ -15,9 +15,12 @@ import {
 import { UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
 import { OwnerPicker, VisibilitySwitch, type OwnerGroup, type OwnerRef, type OwnerRole } from '@visin/frontend-core';
-import { DatasetFields, DatasetVisibility, listMyGroups } from '../../services/datasetService';
+import { DatasetFields, DatasetVisibility, listLicenses, listMyGroups } from '../../services/datasetService';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatBytes } from '../../utils/datasetMapping';
+import { declaredLicenseOf, EMPTY_LICENSE_DRAFT, licenseDraftOf, type LicenseDraft } from '../../utils/licenseDraft';
+import type { DataLicense } from '../../types/license';
+import LicenseFields from './LicenseFields';
 
 export interface DatasetFormValues extends DatasetFields {
   file?: File;
@@ -26,7 +29,7 @@ export interface DatasetFormValues extends DatasetFields {
 interface DatasetFormDialogProps {
   open: boolean;
   mode: 'create' | 'edit' | 'replace';
-  initial?: Partial<DatasetFields>;
+  initial?: Partial<Omit<DatasetFields, 'license'>> & { license?: DataLicense };
   busy: boolean;
   error?: string | null;
   /** replace mode, for an interrupted upload: the file to choose again to continue it */
@@ -52,6 +55,8 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
   const me: OwnerRef = { kind: 'user', id: user?.id ?? '' };
   const [visibility, setVisibility] = useState<DatasetVisibility>('private');
   const [owner, setOwner] = useState<OwnerRef>(me);
+  const [licenseDraft, setLicenseDraft] = useState<LicenseDraft>(EMPTY_LICENSE_DRAFT);
+  const [credit, setCredit] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [validation, setValidation] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
@@ -65,12 +70,15 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
       setDescription(initial?.description ?? '');
       setVisibility(initial?.visibility ?? 'private');
       setOwner(initial?.owner ?? { kind: 'user', id: user?.id ?? '' });
+      setLicenseDraft(licenseDraftOf(initial?.license));
+      setCredit(initial?.credit ?? '');
       setFile(null);
       setValidation('');
     }
   }, [open, initial, user?.id]);
 
   const groups = useQuery({ queryKey: ['dataset-groups'], queryFn: listMyGroups, enabled: open && mode === 'create' });
+  const licenses = useQuery({ queryKey: ['dataset-licenses'], queryFn: listLicenses, enabled: open && mode !== 'replace', staleTime: Infinity });
   const ownerGroups: OwnerGroup[] = (groups.data ?? []).map((group) => ({ id: group.id, name: group.name, role: group.role as OwnerRole }));
   // Making it public takes owning it: yours, or a group's whose owner you are.
   const canMakePublic =
@@ -91,10 +99,15 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
     if (needsFile && !file) return setValidation('Choose a .zip file');
     if (file && !/\.zip$/i.test(file.name)) return setValidation('Datasets are uploaded as .zip archives');
     if (showDetails && !name.trim()) return setValidation('A name is required');
+    const declared = declaredLicenseOf(licenseDraft);
+    if ('error' in declared) return setValidation(declared.error);
     setValidation('');
     onSubmit({
       name: name.trim(),
       description: description.trim(),
+      // Editing says it either way, so clearing the choice takes a declaration back; a new dataset says nothing.
+      ...(mode === 'edit' ? { license: declared.license, credit: credit.trim() } : {}),
+      ...(mode === 'create' ? { ...(declared.license ? { license: declared.license } : {}), ...(credit.trim() ? { credit: credit.trim() } : {}) } : {}),
       // Someone who may edit but not share leaves it as it was, public or not.
       visibility: mode === 'edit' && !canShare ? (initial?.visibility ?? 'private') : canMakePublic ? visibility : 'private',
       ...(mode === 'create' ? { owner } : {}),
@@ -138,6 +151,15 @@ const DatasetFormDialog: React.FC<DatasetFormDialogProps> = ({ open, mode, initi
                   onChange={setVisibility}
                   canMakePublic={canMakePublic}
                   disabled={busy || (mode === 'edit' && !canShare)}
+                />
+                <LicenseFields
+                  choices={licenses.data ?? []}
+                  loading={licenses.isLoading}
+                  draft={licenseDraft}
+                  credit={credit}
+                  disabled={busy}
+                  onDraft={setLicenseDraft}
+                  onCredit={setCredit}
                 />
               </>
             )}

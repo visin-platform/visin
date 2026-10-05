@@ -98,6 +98,70 @@
           "repo",
           "revision"
         ]
+      },
+      "license": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "enum": [
+                  "cc0-1.0",
+                  "cc-by-4.0",
+                  "cc-by-sa-4.0",
+                  "cc-by-nd-4.0",
+                  "cc-by-nc-4.0",
+                  "cc-by-nc-sa-4.0",
+                  "cc-by-nc-nd-4.0",
+                  "cc-by-3.0",
+                  "cc-by-sa-3.0",
+                  "odc-by",
+                  "odbl",
+                  "pddl",
+                  "cdla-permissive-2.0",
+                  "cdla-sharing-1.0",
+                  "apache-2.0",
+                  "mit",
+                  "bsd-2-clause",
+                  "bsd-3-clause",
+                  "gpl-3.0"
+                ]
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "const": "other"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "url": {
+                "type": "string",
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "credit": {
+        "type": "string",
+        "maxLength": 1000
       }
     },
     "required": [
@@ -307,6 +371,77 @@
             "type": "null"
           }
         ]
+      },
+      "license": {
+        "anyOf": [
+          {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "enum": [
+                      "cc0-1.0",
+                      "cc-by-4.0",
+                      "cc-by-sa-4.0",
+                      "cc-by-nd-4.0",
+                      "cc-by-nc-4.0",
+                      "cc-by-nc-sa-4.0",
+                      "cc-by-nc-nd-4.0",
+                      "cc-by-3.0",
+                      "cc-by-sa-3.0",
+                      "odc-by",
+                      "odbl",
+                      "pddl",
+                      "cdla-permissive-2.0",
+                      "cdla-sharing-1.0",
+                      "apache-2.0",
+                      "mit",
+                      "bsd-2-clause",
+                      "bsd-3-clause",
+                      "gpl-3.0"
+                    ]
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "const": "other"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "url": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "credit": {
+        "type": "string",
+        "maxLength": 1000
       }
     }
   }

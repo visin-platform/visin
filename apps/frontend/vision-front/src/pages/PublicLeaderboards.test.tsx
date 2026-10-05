@@ -111,6 +111,30 @@ describe('PublicLeaderboardPage', () => {
     service.get.mockResolvedValue(board());
   });
 
+  it('puts the licence of the evaluated data above the ranking, or says none was stated', async () => {
+    renderBoard();
+    expect(await screen.findByLabelText('Terms of the evaluated data')).toHaveTextContent('Licence not stated');
+  });
+
+  it('shows a non-commercial data licence as such, with where the data is and how to credit it', async () => {
+    service.get.mockResolvedValue(
+      board({
+        suite: suite({
+          dataTerms: {
+            license: { id: 'cc-by-nc-4.0', name: 'CC BY-NC 4.0', url: 'https://creativecommons.org/licenses/by-nc/4.0/', commercial: false },
+            sourceUrl: 'https://data.example.test/roads',
+            credit: 'Road Lab, 2025'
+          }
+        })
+      })
+    );
+    renderBoard();
+    const terms = await screen.findByLabelText('Terms of the evaluated data');
+    expect(within(terms).getByRole('link', { name: 'CC BY-NC 4.0 · non-commercial' })).toBeInTheDocument();
+    expect(within(terms).getByRole('link', { name: 'Where to get the data' })).toHaveAttribute('href', 'https://data.example.test/roads');
+    expect(terms).toHaveTextContent('Credit: Road Lab, 2025');
+  });
+
   it('is a list on a phone, each model with its headline, worst condition and gap, leading to its evidence', async () => {
     layout.compact = true;
     renderBoard();

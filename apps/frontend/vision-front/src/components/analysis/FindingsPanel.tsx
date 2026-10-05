@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import { Article, AutoAwesome, Check, ContentCopy, Delete, Person, PostAdd, Science } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
+import { Markdown, MAX_MARKDOWN_LENGTH } from '@visin/frontend-core';
 import { useCreateFinding, useDeleteFinding, useExportFinding, useFindings } from '../../hooks/useFindings';
 import { Finding, FindingExport } from '../../types/finding';
 
@@ -104,12 +105,8 @@ const FindingCard: React.FC<{
       </Stack>
     </Box>
 
-    <Typography
-      variant="body2"
-      sx={{ whiteSpace: 'pre-wrap', color: 'text.primary', lineHeight: 1.7 }}
-    >
-      {finding.body}
-    </Typography>
+    {/* Written by whoever recorded it, often an assistant: Markdown, never raw HTML or remote images. */}
+    <Markdown>{finding.body}</Markdown>
 
     {finding.recommendations && (
       <Box
@@ -365,6 +362,7 @@ const FindingsPanel: React.FC<FindingsPanelProps> = ({ projectId, trainingId, is
               size="small"
               label="What you found"
               placeholder="State the evidence, not only the verdict."
+              helperText={`Markdown: lists, tables, links and code. ${body.length.toLocaleString()} / ${MAX_MARKDOWN_LENGTH.toLocaleString()}. Images are not shown, and raw HTML is shown as text.`}
               value={body}
               disabled={createFinding.isPending}
               onChange={event => setBody(event.target.value)}

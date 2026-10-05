@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { datasets } from '../datasets';
 import type { Dataset } from '../schemas';
-import { Caller, ToolModule, capped, count, explain, ok } from './module';
+import { Caller, ToolModule, capped, count, explain, licenseSentence, ok } from './module';
 
 /**
  * The data a model was trained on.
@@ -33,6 +33,8 @@ const MAX_EXTENSIONS = 10;
 function describeDataset(dataset: Dataset): string[] {
   const lines = [dataset.name];
   if (dataset.description) lines.push(dataset.description);
+  lines.push(licenseSentence(dataset.license, dataset.credit));
+  if (dataset.source) lines.push(`Kept on Hugging Face: ${dataset.source.repo} at commit ${dataset.source.revision.slice(0, 12)} (a pointer; Visin holds no copy).`);
 
   const facts = [
     dataset.archive ? `${dataset.archive.filename}, ${bytes(dataset.archive.size)}` : 'no zip uploaded yet',

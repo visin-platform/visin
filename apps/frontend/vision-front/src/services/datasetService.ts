@@ -2,6 +2,7 @@ import type { OwnerRef, Visibility } from '@visin/frontend-core';
 import { datasetApi } from '../config/datasetApi';
 import type { HubDatasetSource } from '../providers/huggingFace';
 import { uploadToSignedUrl } from '../utils/chunkedUpload';
+import type { DataLicense, DeclaredLicense } from '../types/license';
 
 export type DatasetVisibility = Visibility;
 
@@ -93,6 +94,10 @@ export interface Dataset {
   owner: OwnerRef & { name?: string };
   createdBy: string;
   visibility: DatasetVisibility;
+  /** what the publisher declares the data is licensed under; absent means they have not said */
+  license?: DataLicense;
+  /** the credit line or citation the licence or the data's authors ask for */
+  credit?: string;
   /** set while it is in the trash */
   trashedAt?: string;
   /** set when the dataset lives on the Hub; the zip, if any, is the local copy */
@@ -167,6 +172,9 @@ export const listDatasets = async (params: { search?: string; page?: number; lim
 
 export const getDataset = async (id: string) => (await datasetApi.get<Envelope<Dataset>>(`/${id}`)).data;
 
+/** The licences a dataset can declare, in the order a form offers them; `other` is last. */
+export const listLicenses = async () => (await datasetApi.get<Envelope<DataLicense[]>>('/licenses')).data;
+
 export const listMyGroups = async () => (await datasetApi.get<Envelope<DatasetGroupOption[]>>('/groups')).data;
 
 export interface DatasetFields {
@@ -177,6 +185,10 @@ export interface DatasetFields {
   owner?: OwnerRef;
   /** null goes back to the zip kept on Visin */
   source?: DatasetSource | null;
+  /** null takes the declaration back */
+  license?: DeclaredLicense | null;
+  /** empty clears it */
+  credit?: string;
 }
 
 export const createDataset = async (fields: DatasetFields) => (await datasetApi.post<Envelope<Dataset>>('', fields)).data;

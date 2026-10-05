@@ -46,6 +46,7 @@ import DatasetItemDialog from '../components/dataset/DatasetItemDialog';
 import UseThisDialog from '../components/common/UseThisDialog';
 import BestRunCard from '../components/common/BestRunCard';
 import HubDatasetCard from '../components/dataset/HubDatasetCard';
+import LicenseChip from '../components/licensing/LicenseChip';
 import HubSourceDialog from '../components/dataset/HubSourceDialog';
 import ImportMappingDialog from '../components/dataset/ImportMappingDialog';
 import ImportStatusPanel from '../components/dataset/ImportStatusPanel';
@@ -169,10 +170,12 @@ const DatasetDetailPage: React.FC = () => {
         ? {
             name: dataset.name,
             description: dataset.description,
-            visibility: dataset.visibility
+            visibility: dataset.visibility,
+            license: dataset.license,
+            credit: dataset.credit
           }
         : undefined,
-    [dataset?.name, dataset?.description, dataset?.visibility] // eslint-disable-line react-hooks/exhaustive-deps
+    [dataset?.name, dataset?.description, dataset?.visibility, dataset?.license?.id, dataset?.license?.name, dataset?.license?.url, dataset?.credit] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Names the owning group on the chip, and lists where a transfer can go.
@@ -222,8 +225,12 @@ const DatasetDetailPage: React.FC = () => {
   const handleSource = (source: Parameters<typeof updateDataset>[1]['source']) =>
     run(async () => refresh(await updateDataset(id, { source })), 'Failed to save the source');
 
-  const handleEdit = ({ name, description, visibility }: DatasetFormValues) =>
-    run(async () => refresh(await updateDataset(id, { name, description, visibility })), 'Failed to save');
+  const handleEdit = ({ name, description, visibility, license, credit }: DatasetFormValues) =>
+    run(async () => refresh(await updateDataset(id, { name, description, visibility, license, credit })), 'Failed to save');
+
+  /** Take the Hub card's licence as this dataset's declaration, once someone who may edit it has chosen to. */
+  const handleUseHubLicense = (licenseId: string) =>
+    run(async () => refresh(await updateDataset(id, { license: { id: licenseId } })), 'Failed to save the licence');
 
   const handleTransfer = (owner: OwnerRef) =>
     run(async () => {
@@ -342,8 +349,14 @@ const DatasetDetailPage: React.FC = () => {
                 label={`${dataset.source.repo} @ ${shortRevision(dataset.source.revision)}`}
               />
             )}
+            <LicenseChip license={dataset.license} of="dataset" />
             {held && <Chip size="small" color="secondary" label={heldReason} />}
           </Stack>
+          {dataset.credit && (
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1, overflowWrap: 'anywhere' }}>
+              Credit: {dataset.credit}
+            </Typography>
+          )}
         </Box>
         <Box sx={{ flexShrink: 0 }}>
           {dataset.visibility === 'public' && datasetApiOrigin() && (
@@ -545,7 +558,15 @@ const DatasetDetailPage: React.FC = () => {
       )}
 
       <BestRunCard datasetId={dataset._id} showProject />
-      {dataset.source && <HubDatasetCard datasetId={dataset._id} source={dataset.source} />}
+      {dataset.source && (
+        <HubDatasetCard
+          datasetId={dataset._id}
+          source={dataset.source}
+          declaredLicenseId={dataset.license?.id}
+          onUseLicense={dataset.permissions.manage ? handleUseHubLicense : undefined}
+          busy={busy}
+        />
+      )}
 
       {dataset.contents && <DatasetContentsCard contents={dataset.contents} />}
 

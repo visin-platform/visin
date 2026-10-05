@@ -208,6 +208,24 @@ export async function resolveTrainingUuid(
   return run.uuid;
 }
 
+/**
+ * The licence a publisher declared for some data, in a sentence. Said plainly when there is none: an assistant that
+ * reads silence as "free to use" would tell someone they may do what the data's owner never allowed.
+ */
+export function licenseSentence(
+  license: { name: string; url?: string; commercial?: boolean } | undefined,
+  credit?: string,
+  label = 'Licence'
+): string {
+  if (!license) return `${label}: not stated by the publisher (that is not permission to use it).`;
+  const details = [
+    license.url,
+    license.commercial === false ? 'no commercial use' : undefined,
+    credit ? `credit: ${credit}` : undefined
+  ].filter(Boolean);
+  return `${label}: ${license.name}${details.length ? ` (${details.join('; ')})` : ''}.`;
+}
+
 /** A count with separators: "7484 epochs" is a number to decode, not to read. */
 export const count = (value: number): string => value.toLocaleString('en-US');
 

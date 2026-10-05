@@ -1,6 +1,7 @@
-import { z } from '@visin/backend-core';
+import { licenseSchema, z } from '@visin/backend-core';
 import { hubDataSchema } from '../services/huggingFace';
 import { SUBMISSION_POLICIES } from '../models/Suite';
+import { parseHttpUrl } from '../services/paperIdentifiers';
 import { paginationSchema, sortOrderSchema } from './common';
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -24,6 +25,25 @@ export const suiteDataSchema = z.discriminatedUnion('kind', [
   hubDataSchema,
   z.strictObject({ kind: z.literal('external'), label: text(200), manifestSha256: sha256 })
 ]);
+
+/**
+ * What the publisher says about the data: its licence, where it lives and the credit it asks for. Not part of the
+ * protocol, so it is not hashed and can be corrected later. It is never copied from a previous version: a licence
+ * shown for the wrong data is worse than none.
+ */
+export const dataTermsSchema = z
+  .strictObject({
+    license: licenseSchema.optional(),
+    sourceUrl: z
+      .string()
+      .trim()
+      .max(500)
+      .refine(value => parseHttpUrl(value) !== undefined, 'Expected an http(s) address')
+      .optional(),
+    credit: text(1000).optional()
+  })
+  .refine(terms => Object.keys(terms).length > 0, 'Give a licence, a source address or a credit line');
+export type DataTermsInput = z.infer<typeof dataTermsSchema>;
 
 const conditionSchema = z.strictObject({
   /** the key the results carry for it: `day`, `night`, one per test set */
@@ -114,6 +134,8 @@ export const createSuiteBodySchema = z.object({
   visibility: z.enum(['private', 'public']).optional(),
   /** who may publish results to its public leaderboard; `open` when left out */
   submissions: z.enum(SUBMISSION_POLICIES).optional(),
+  /** what the evaluated data is licensed under; unstated when left out, and not inherited from an earlier version */
+  dataTerms: dataTermsSchema.optional(),
   protocol: suiteProtocolSchema
 });
 export type CreateSuiteBody = z.infer<typeof createSuiteBodySchema>;
@@ -130,6 +152,8 @@ export const updateSuiteBodySchema = z
     visibility: z.enum(['private', 'public']).optional(),
     /** who may publish results to its public leaderboard; changing it leaves what is published as it is */
     submissions: z.enum(SUBMISSION_POLICIES).optional(),
+    /** replaces what is declared about the evaluated data; `null` takes it back */
+    dataTerms: dataTermsSchema.nullable().optional(),
     /** stops new evaluations; the suite and its results stay readable */
     archived: z.boolean().optional()
   })

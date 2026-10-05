@@ -433,6 +433,68 @@ describe('suites with in-memory MongoDB', () => {
       expect(stored.protocol.split).toBe('test');
     });
 
+    describe('what the publisher says about the evaluated data', () => {
+      const terms = { license: { id: 'cc-by-nc-4.0' }, sourceUrl: 'https://data.example.test/roads', credit: 'Road Lab, 2025' };
+      const patch = (body: unknown, user = OWNER) => call('/suites/road-test/1', { method: 'PATCH', user, body });
+
+      it('is unstated unless given, and shown with the licence’s name and link from the table', async () => {
+        const id = await project();
+        expect((await publish(id)).body.data).not.toHaveProperty('dataTerms');
+        await Suite.deleteMany({});
+        const created = await publish(id, { dataTerms: terms });
+        expect(created.body.data.dataTerms).toEqual({
+          license: { id: 'cc-by-nc-4.0', name: 'CC BY-NC 4.0', url: 'https://creativecommons.org/licenses/by-nc/4.0/', commercial: false },
+          sourceUrl: 'https://data.example.test/roads',
+          credit: 'Road Lab, 2025'
+        });
+        expect((await Suite.findOne({ slug: 'road-test' }).lean())?.dataTerms?.license).toEqual({ id: 'cc-by-nc-4.0' });
+      });
+
+      it('is not part of the protocol, so correcting it leaves the digest and the version alone', async () => {
+        const id = await project();
+        const created = await publish(id, { dataTerms: terms });
+        const corrected = await patch({ dataTerms: { license: { id: 'other', name: 'Road Lab terms', url: 'https://roadlab.test/terms' } } });
+        expect(corrected.body.data.dataTerms).toEqual({ license: { id: 'other', name: 'Road Lab terms', url: 'https://roadlab.test/terms' } });
+        expect(corrected.body.data.digest).toBe(created.body.data.digest);
+        expect((await patch({ dataTerms: null })).body.data).not.toHaveProperty('dataTerms');
+        // A retried publish of the same protocol is harmless and says nothing new about the data.
+        expect((await publish(id, { dataTerms: terms })).body.data).not.toHaveProperty('dataTerms');
+      });
+
+      it('is not inherited by a later version, whose data may be another', async () => {
+        const id = await project();
+        await publish(id, { dataTerms: terms });
+        const next = await publish(id, { version: 2, protocol: protocol({ split: 'val' }) });
+        expect(next.status).toBe(201);
+        expect(next.body.data).not.toHaveProperty('dataTerms');
+      });
+
+      it('may be changed by whoever may reword the suite, and by no one else', async () => {
+        const id = await project();
+        await publish(id, {}, MEMBER);
+        expect((await patch({ dataTerms: terms }, MEMBER)).status).toBe(200);
+        // A private suite is not confirmed to a stranger.
+        expect((await patch({ dataTerms: terms }, STRANGER)).status).toBe(404);
+      });
+
+      it('refuses what is not a declaration', async () => {
+        const id = await project();
+        await publish(id);
+        for (const dataTerms of [
+          {},
+          { license: { id: 'not-listed' } },
+          { license: { id: 'other' } },
+          { sourceUrl: 'javascript:alert(1)' },
+          { sourceUrl: 'https://user:pw@data.example.test/' },
+          { credit: '' },
+          { note: 'extra' }
+        ]) {
+          expect((await patch({ dataTerms })).status).toBe(400);
+          expect((await publish(id, { slug: 'other-suite', dataTerms })).status).toBe(400);
+        }
+      });
+    });
+
     it('archives a suite out of the default views and out of latest, and brings it back', async () => {
       const id = await project();
       await publish(id);

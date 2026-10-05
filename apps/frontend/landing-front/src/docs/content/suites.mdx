@@ -143,6 +143,33 @@ Suites published before reservations were introduced acquire them on their next 
 versions already belong to different projects, an operator must resolve the ownership conflict before further
 publishing or purging. Existing protocols are preserved.
 
+## The data's licence
+
+A suite scores models on data that Visin does not hold: only its pin (a Hub commit, a Visin dataset's digest, or a
+manifest digest) and the scores. So the suite is where a reader learns what they may do with that data. Say it with
+`dataTerms`, at publish time or later with `PATCH`:
+
+```json
+{
+  "dataTerms": {
+    "license": { "id": "cc-by-nc-4.0" },
+    "sourceUrl": "https://example.com/road-frames",
+    "credit": "Road Lab, 2025. Road frames, v2."
+  }
+}
+```
+
+- `license.id` is one of the ids listed by `GET /api/datasets/licenses` on the dataset service (the Hugging Face Hub's
+  spellings, so a Hub card's licence is taken over as it is). For anything else, send
+  `{ "id": "other", "name": "Road Lab terms", "url": "https://example.com/terms" }`.
+- It is your declaration. Visin shows it with the licence's name and link on the leaderboard and in the suite, and does
+  not check it. A suite with no `dataTerms` is shown as "licence not stated", which is not permission to use the data.
+- It is not part of the protocol, so it is not hashed: correcting a wrong licence does not make a new version. For the
+  same reason a new version does not inherit it. The data may have changed, and a licence shown for the wrong data is
+  worse than none.
+- Scores are facts about a model, not the data, but a licence may still ask for credit or forbid commercial use of what
+  the data produces. Declare what the data's owners say, and link to where they say it.
+
 ## Who can see it
 
 A suite follows its project: anyone who can read the project can read the suite, and a stranger gets `404`, the

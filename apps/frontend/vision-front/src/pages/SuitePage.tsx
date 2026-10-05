@@ -22,6 +22,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { MobileListRow } from '../components/common/MobileList';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import DataTermsNote from '../components/licensing/DataTermsNote';
 import VerdictChip from '../components/evaluations/VerdictChip';
 import { checkpointLabel, formatFixed, reasonText } from '../components/evaluations/verdict';
 import { describeData } from '../components/evaluations/sources';
@@ -49,6 +50,7 @@ const ProtocolSummary: React.FC<{ suite: Suite }> = ({ suite }) => {
   const rows: [string, React.ReactNode][] = [
     ['Task', protocol.task],
     ['Data', `${describeData(protocol.data)} · split ${protocol.split}`],
+    ['Data terms', <DataTermsNote key="terms" terms={suite.dataTerms} />],
     ['Conditions', protocol.conditions.map(condition => `${condition.name} (${condition.sampleCount})`).join(', ')],
     ['Headline', headline ? `${headline.key} · ${headline.direction === 'max' ? 'higher' : 'lower'} is better${headline.unit ? ` · ${headline.unit}` : ''}` : '-'],
     ['Other metrics', protocol.metrics.filter(metric => !metric.headline).map(metric => metric.key).join(', ') || 'None'],

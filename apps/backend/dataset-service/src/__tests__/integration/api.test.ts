@@ -1337,6 +1337,88 @@ describe('datasets kept on the Hugging Face Hub', () => {
   });
 });
 
+describe('the licence a dataset declares', () => {
+  const patch = (id: string, body: Record<string, unknown>, user = OWNER) =>
+    call(`/api/datasets/${id}`, { method: 'PATCH', user, body });
+
+  it('is unstated until the publisher says, and is never guessed from the Hub', async () => {
+    const id = await createDataset({
+      name: 'Hub set',
+      visibility: 'public',
+      source: { provider: 'hf', repo: 'acme/zod-png', revision: '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433' }
+    });
+    const dataset = (await call(`/api/datasets/${id}`)).body.data;
+    expect(dataset.license).toBeUndefined();
+    expect(dataset.credit).toBeUndefined();
+    expect(fetchDatasetInfo).not.toHaveBeenCalled();
+  });
+
+  it('is declared with a listed id, whose name, link and commercial use come from the table', async () => {
+    const id = await createDataset({
+      name: 'Licensed',
+      visibility: 'public',
+      license: { id: 'cc-by-nc-4.0' },
+      credit: '  Krizhevsky, 2009  '
+    });
+    const dataset = (await call(`/api/datasets/${id}`)).body.data;
+    expect(dataset.license).toEqual({
+      id: 'cc-by-nc-4.0',
+      name: 'CC BY-NC 4.0',
+      url: 'https://creativecommons.org/licenses/by-nc/4.0/',
+      commercial: false
+    });
+    expect(dataset.credit).toBe('Krizhevsky, 2009');
+    // Stored as the id alone, so a corrected table corrects every dataset.
+    expect((await Dataset.findById(id).lean())?.license).toEqual({ id: 'cc-by-nc-4.0' });
+  });
+
+  it('takes a licence that is not listed by the name the publisher gives it', async () => {
+    const id = await createDataset();
+    const response = await patch(id, { license: { id: 'other', name: 'Acme research terms', url: 'https://acme.test/terms' } });
+    expect(response.body.data.license).toEqual({ id: 'other', name: 'Acme research terms', url: 'https://acme.test/terms' });
+    expect(response.body.data.license).not.toHaveProperty('commercial');
+  });
+
+  it('changes with manage, and is taken back with null', async () => {
+    const id = await groupDataset();
+    expect((await patch(id, { license: { id: 'mit' } }, MEMBER)).status).toBe(403);
+    expect((await patch(id, { license: { id: 'mit' }, credit: 'Ann' }, ADMIN)).body.data).toMatchObject({
+      license: { id: 'mit', name: 'MIT' },
+      credit: 'Ann'
+    });
+    // Saving the form without touching the licence leaves it as it is.
+    expect((await patch(id, { name: 'Renamed' }, ADMIN)).body.data.license.id).toBe('mit');
+    const cleared = (await patch(id, { license: null, credit: '' }, ADMIN)).body.data;
+    expect(cleared.license).toBeUndefined();
+    expect(cleared.credit).toBeUndefined();
+  });
+
+  it('refuses an id that is not listed, an unnamed other, extra fields and a link that is not http(s)', async () => {
+    const id = await createDataset();
+    for (const license of [
+      { id: 'wtfpl-ish' },
+      { id: 'other' },
+      { id: 'other', name: '  ' },
+      { id: 'other', name: 'X', url: 'not a link' },
+      { id: 'other', name: 'X', url: 'javascript:alert(1)' },
+      { id: 'other', name: 'X', url: 'https://user:pw@acme.test/terms' },
+      { id: 'mit', name: 'Not MIT really' }
+    ]) {
+      expect((await patch(id, { license })).status).toBe(400);
+      expect((await call('/api/datasets', { method: 'POST', user: OWNER, body: { name: 'Bad', license } })).status).toBe(400);
+    }
+  });
+
+  it('lists the choices to anyone, ending with other', async () => {
+    const response = await call('/api/datasets/licenses');
+    expect(response.status).toBe(200);
+    const ids = response.body.data.map((choice: { id: string }) => choice.id);
+    expect(ids).toContain('cc-by-4.0');
+    expect(ids[ids.length - 1]).toBe('other');
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
 describe('who owns a dataset', () => {
   const identities = new Map([
     [OWNER, { id: OWNER, handle: 'ann-lee', name: 'Ann Lee', picture: 'https://p.test/ann.jpg' }],

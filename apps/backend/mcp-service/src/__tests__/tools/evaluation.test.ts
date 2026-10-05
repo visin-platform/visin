@@ -57,6 +57,19 @@ describe('list_suites', () => {
     expect(text).toContain('conditions: day (1,200), night (800)');
   });
 
+  it('says what licence the evaluated data carries, or that none was stated', async () => {
+    mocked.listSuites.mockResolvedValue({
+      suites: [
+        suite({ dataTerms: { license: { id: 'mit', name: 'MIT', url: 'https://opensource.org/license/mit' }, sourceUrl: 'https://data.example.test/roads' } }),
+        suite({ slug: 'bare', name: 'Bare' })
+      ]
+    });
+    const { text } = await call('list_suites');
+    expect(text).toContain('Data licence: MIT (https://opensource.org/license/mit).');
+    expect(text).toContain('data source: https://data.example.test/roads');
+    expect(text).toContain('Data licence: not stated by the publisher (that is not permission to use it).');
+  });
+
   it('passes the project and the archive choice to the API and filters by name or slug', async () => {
     mocked.listSuites.mockResolvedValue({ suites: [suite(), suite({ slug: 'depth', name: 'Depth frames', archivedAt: '2026-01-01' })] });
     const { text } = await call('list_suites', { project: 'road-seg', include_archived: true, search: 'DEPTH' });

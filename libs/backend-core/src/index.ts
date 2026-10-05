@@ -172,3 +172,7 @@ export type { CreateHealthCheckHandlerOptions } from './health/createHealthCheck
 
 export { getUploadPolicy } from './uploads/policy';
 export type { UploadPolicy, UploadFormat } from './uploads/policy';
+
+// Licences the data behind a dataset or a suite is declared to carry
+export { LICENSES, KNOWN_LICENSE_IDS, OTHER_LICENSE, licenseSchema, licenseView, licenseChoices } from './licenses/licenses';
+export type { DeclaredLicense, KnownLicenseId, LicenseInfo, LicenseView } from './licenses/licenses';

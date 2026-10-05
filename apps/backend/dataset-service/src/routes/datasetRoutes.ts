@@ -25,6 +25,8 @@ router.get('/activity', validateRequest({ query: activityQuerySchema }), ctrl.ge
 // What a chat or a feed unfurls for a link to a public dataset.
 router.get('/share/:id', ctrl.getShare);
 router.get('/sitemap.xml', ctrl.getSitemap);
+// The licences a form offers; the same for everyone.
+router.get('/licenses', ctrl.listLicenses);
 router.get('/groups', authenticateToken, ctrl.listMyGroups);
 router.get('/trash', authenticateToken, ctrl.listTrash);
 router.get('/:id', ctrl.getDataset);

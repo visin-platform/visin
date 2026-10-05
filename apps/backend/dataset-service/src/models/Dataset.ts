@@ -1,5 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose';
-import { VISIBILITIES, type ResourceOwner, type Visibility } from '@visin/backend-core';
+import { VISIBILITIES, type DeclaredLicense, type ResourceOwner, type Visibility } from '@visin/backend-core';
 import { DATASET_SOURCE_PATHS, DATASET_SOURCE_PROVIDERS, type DatasetSource } from '../providers';
 
 export type DatasetVisibility = Visibility;
@@ -105,6 +105,10 @@ export interface IDataset extends Document {
   name: string;
   description?: string;
   visibility: DatasetVisibility;
+  /** what the publisher declares the data is licensed under; absent means they have not said, which is not "free to use" */
+  license?: DeclaredLicense;
+  /** the credit line or citation the licence or the data's authors ask for */
+  credit?: string;
   /** every file of this dataset lives under this file-service prefix */
   storagePrefix: string;
   /** set when the dataset lives on the Hugging Face Hub; the zip below, if any, is the local copy */
@@ -150,6 +154,9 @@ const DatasetSchema = new Schema<IDataset>(
     name: { type: String, required: true, trim: true, maxlength: 200 },
     description: { type: String, trim: true, maxlength: 10000 },
     visibility: { type: String, enum: VISIBILITIES, default: 'private' },
+    // Validated on the way in (`licenseSchema`); a listed id carries nothing else, and its name is looked up on read.
+    license: { type: new Schema({ id: { type: String, required: true }, name: String, url: String }, { _id: false }), default: undefined },
+    credit: { type: String, trim: true, maxlength: 1000 },
     storagePrefix: { type: String, required: true },
     source: {
       type: {

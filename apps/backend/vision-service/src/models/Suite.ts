@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import type { SuiteProtocol } from '../validation/suiteSchemas';
+import type { DeclaredLicense } from '@visin/backend-core';
 
 /**
  * Who may put results on a suite's public leaderboard. `open`: a manager of any public project. `members`: only the
@@ -8,6 +9,18 @@ import type { SuiteProtocol } from '../validation/suiteSchemas';
  */
 export const SUBMISSION_POLICIES = ['open', 'members', 'approval'] as const;
 export type SubmissionPolicy = (typeof SUBMISSION_POLICIES)[number];
+
+/**
+ * What the publisher says about the data a suite scores: its licence, where it lives, and the credit it asks for.
+ * A declaration shown beside the results, never part of the protocol: it has no bearing on what a score means, so
+ * fixing a wrong one does not make a new version. Visin holds no copy of the data, only these words about it.
+ */
+export interface SuiteDataTerms {
+  license?: DeclaredLicense;
+  /** the data's own home: where a reader gets it, and agrees to its terms */
+  sourceUrl?: string;
+  credit?: string;
+}
 
 /**
  * One published version of an evaluation suite: a scoring protocol that is frozen once it exists.
@@ -29,6 +42,8 @@ export interface ISuite extends Document {
   submissions: SubmissionPolicy;
   /** who published it: attribution, and what lets a contributor change their own */
   createdBy: string;
+  /** what the publisher says the evaluated data is licensed under; absent means unstated */
+  dataTerms?: SuiteDataTerms;
   /** immutable once published; its `digest` is the identity of the protocol */
   protocol: SuiteProtocol;
   /** SHA-256 of the canonical protocol, so two suites with one digest score identically */
@@ -49,6 +64,8 @@ const SuiteSchema = new Schema<ISuite>(
     visibility: { type: String, enum: ['private', 'public'], default: 'private', index: true },
     submissions: { type: String, enum: SUBMISSION_POLICIES, default: 'open' },
     createdBy: { type: String, required: true, immutable: true },
+    // Validated on the way in (`dataTermsSchema`); nothing queries inside it.
+    dataTerms: { type: Schema.Types.Mixed },
     protocol: { type: Schema.Types.Mixed, required: true, immutable: true },
     digest: { type: String, required: true, immutable: true },
     archivedAt: { type: Date }

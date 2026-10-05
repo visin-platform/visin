@@ -3,7 +3,7 @@ import { createDatasetAccess } from '../services/accessService';
 import * as groups from '../clients/groupServiceClient';
 import * as datasets from '../services/datasetService';
 import * as items from '../services/itemService';
-import { sendSharePage } from '@visin/backend-core';
+import { licenseChoices, sendSharePage } from '@visin/backend-core';
 import { listDatasetActivity } from '../services/activityService';
 import { datasetSharePage, datasetSitemap } from '../services/shareService';
 import type {
@@ -36,6 +36,11 @@ export const getShare = async (req: Request, res: Response): Promise<void> => {
 /** What a person or a group has made in public, for a profile; the same for everyone who asks. */
 export const getActivity = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await listDatasetActivity(req.query as unknown as ActivityQuery) });
+};
+
+/** The licences a dataset can declare, for a form's picker. */
+export const listLicenses = async (_req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: licenseChoices() });
 };
 
 /** The caller's groups — what a dataset can be shared with. */

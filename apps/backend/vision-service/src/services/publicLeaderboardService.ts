@@ -4,6 +4,7 @@ import Evaluation from '../models/Evaluation';
 import Project from '../models/Project';
 import Suite, { type ISuite } from '../models/Suite';
 import { publicCheckpoint, publicSuiteData } from './sourceRegistry';
+import { dataTermsView } from './suiteDataTerms';
 import { renderBadge } from './badgeSvg';
 import { cachedPublic } from './publicCache';
 import { buildLeaderboard, type Candidate } from './leaderboardProjection';
@@ -39,6 +40,7 @@ const publicSuite = (suite: ISuite) => {
     task: suite.protocol.task,
     split: suite.protocol.split,
     data: publicSuiteData(suite.protocol.data),
+    ...(suite.dataTerms ? { dataTerms: dataTermsView(suite.dataTerms) } : {}),
     conditions: suite.protocol.conditions.map((condition) => ({
       name: condition.name,
       sampleCount: condition.sampleCount

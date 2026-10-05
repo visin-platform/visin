@@ -8,7 +8,7 @@ const { config } = vi.hoisted(() => ({ config: {} as Record<string, string | und
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalConfig: () => config }));
 vi.mock('../services/exploreApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/exploreApi')>()),
-  exploreApi: { group: vi.fn(), projects: vi.fn(), datasets: vi.fn(), activity: vi.fn() },
+  exploreApi: { group: vi.fn(), projects: vi.fn(), publicDatasets: vi.fn(), activity: vi.fn() },
 }));
 
 import { clearVisits, readVisits } from '@visin/frontend-core';
@@ -48,7 +48,7 @@ beforeEach(() => {
   Object.assign(config, { VISION_API_URL: 'https://vision-api.test', DATASET_API_URL: 'https://dataset-api.test' });
   api.group.mockResolvedValue(lab);
   api.projects.mockResolvedValue(projects);
-  api.datasets.mockResolvedValue([]);
+  api.publicDatasets.mockResolvedValue({ datasets: [], pagination: { page: 1, limit: 24, total: 0, pages: 0 } });
   api.activity.mockResolvedValue([
     { kind: 'project.created', at: hoursAgo(3), project: { id: 'p1', name: 'Window ablations', slug: 'window-ablations' } },
   ]);

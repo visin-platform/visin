@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
 
-const service = vi.hoisted(() => ({ getHubInfo: vi.fn() }));
+const service = vi.hoisted(() => ({ getHubInfo: vi.fn(), listLicenses: vi.fn() }));
 vi.mock('../../services/datasetService', () => service);
 
 import HubDatasetCard from './HubDatasetCard';
@@ -17,12 +17,18 @@ const info = {
 };
 
 describe('HubDatasetCard', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    service.listLicenses.mockResolvedValue([
+      { id: 'cc-by-sa-4.0', name: 'CC BY-SA 4.0' },
+      { id: 'other', name: 'Other' }
+    ]);
+  });
 
   it('shows the licence, size, tags and folders read from the Hub, and links the repo at its commit', async () => {
     service.getHubInfo.mockResolvedValue(info);
     renderWithClient(<HubDatasetCard datasetId="d1" source={source} />);
-    expect(await screen.findByText('Licence: cc-by-sa-4.0')).toBeInTheDocument();
+    expect(await screen.findByText('Hub card licence: cc-by-sa-4.0')).toBeInTheDocument();
     expect(screen.getByText('3,000 files · 5.0 GB')).toBeInTheDocument();
     expect(screen.getByText('image-segmentation')).toBeInTheDocument();
     expect(screen.getByText('zod')).toBeInTheDocument();
@@ -55,5 +61,42 @@ describe('HubDatasetCard', () => {
     renderWithClient(<HubDatasetCard datasetId="d1" source={source} />);
     expect(await screen.findByText(/or it is private/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'acme/zod-png' })).toBeInTheDocument();
+  });
+
+  describe('the licence the Hub card states', () => {
+    it('is never copied over: with none declared it says so, and offers to declare it to someone who may edit', async () => {
+      service.getHubInfo.mockResolvedValue(info);
+      const onUseLicense = vi.fn();
+      renderWithClient(<HubDatasetCard datasetId="d1" source={source} onUseLicense={onUseLicense} />);
+      expect(await screen.findByText(/this dataset still has no declared licence/)).toBeInTheDocument();
+      fireEvent.click(await screen.findByRole('button', { name: 'Declare this licence' }));
+      expect(onUseLicense).toHaveBeenCalledWith('cc-by-sa-4.0');
+    });
+
+    it('offers nothing to someone who may not edit, and nothing for a licence Visin does not list', async () => {
+      service.getHubInfo.mockResolvedValue(info);
+      const first = renderWithClient(<HubDatasetCard datasetId="d1" source={source} />);
+      expect(await screen.findByText(/this dataset still has no declared licence/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Declare this licence' })).not.toBeInTheDocument();
+      first.unmount();
+
+      service.getHubInfo.mockResolvedValue({ ...info, license: 'gemma' });
+      renderWithClient(<HubDatasetCard datasetId="d1" source={source} onUseLicense={vi.fn()} />);
+      expect(await screen.findByText(/The Hub card says gemma/)).toBeInTheDocument();
+      expect(service.listLicenses).toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Declare this licence' })).not.toBeInTheDocument();
+    });
+
+    it('warns when it differs from the declared one, and is quiet when they agree', async () => {
+      service.getHubInfo.mockResolvedValue(info);
+      const differing = renderWithClient(<HubDatasetCard datasetId="d1" source={source} declaredLicenseId="mit" />);
+      expect(await screen.findByText(/differs from the licence declared for this dataset/)).toBeInTheDocument();
+      differing.unmount();
+
+      renderWithClient(<HubDatasetCard datasetId="d1" source={source} declaredLicenseId="cc-by-sa-4.0" />);
+      expect(await screen.findByText('Hub card licence: cc-by-sa-4.0')).toBeInTheDocument();
+      expect(screen.queryByText(/differs from/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/still has no declared licence/)).not.toBeInTheDocument();
+    });
   });
 });

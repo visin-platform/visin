@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { vision } from '../vision';
 import type { EvaluationRecord, Leaderboard, Suite } from '../schemas';
-import { Caller, ToolModule, capped, count, explain, fail, metric, ok } from './module';
+import { Caller, ToolModule, capped, count, explain, fail, licenseSentence, metric, ok } from './module';
 
 /**
  * Suites, and how models rank on them.
@@ -98,7 +98,9 @@ function describeSuite(suite: Suite): string {
     `- ${suite.slug}@${suite.version} — ${suite.name} [${suite.visibility}${suite.archivedAt ? ', archived' : ''}]`,
     headline ? `  ranks by ${headline.key} (${better(headline.direction)} is better)` : undefined,
     suite.protocol.task ? `  task: ${suite.protocol.task}` : undefined,
-    conditions ? `  conditions: ${conditions}` : undefined
+    conditions ? `  conditions: ${conditions}` : undefined,
+    `  ${licenseSentence(suite.dataTerms?.license, suite.dataTerms?.credit, 'Data licence')}`,
+    suite.dataTerms?.sourceUrl ? `  data source: ${suite.dataTerms.sourceUrl}` : undefined
   ];
   return parts.filter(Boolean).join('\n');
 }
