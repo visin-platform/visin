@@ -1024,7 +1024,7 @@ components:
         venue: { type: string }
         year: { type: integer }
         arxivId: { type: string, description: 'Without a version, e.g. `2401.01234`.' }
-        doi: { type: string, description: Lowercase, without `https://doi.org/`. }
+        doi: { type: string, description: 'Lowercase, without `https://doi.org/`.' }
         url: { type: string, format: uri }
         pdfUrl: { type: string, format: uri }
         tags:
