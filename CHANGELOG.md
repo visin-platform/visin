@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.31.0](https://github.com/visin-platform/visin/compare/v1.30.0...v1.31.0) (2026-10-05)
+
+
+### Features
+
+* add people discovery ([d094341](https://github.com/visin-platform/visin/commit/d094341d09a051e154b6071b40f5b4020689b19e))
+
 ## [1.30.0](https://github.com/visin-platform/visin/compare/v1.29.0...v1.30.0) (2026-10-04)
 
 
