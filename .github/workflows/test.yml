@@ -266,7 +266,8 @@ jobs:
 
       - name: Run test shard ${{ matrix.shard }}/4
         working-directory: apps/frontend/vision-front
-        run: npx vitest run --coverage --reporter=blob --shard=${{ matrix.shard }}/4 --no-coverage.thresholds
+        # `default` beside `blob`: the blob reporter prints nothing, so without it a failing test never reaches the log.
+        run: npx vitest run --coverage --reporter=blob --reporter=default --shard=${{ matrix.shard }}/4 --no-coverage.thresholds
 
       - name: Upload blob report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
