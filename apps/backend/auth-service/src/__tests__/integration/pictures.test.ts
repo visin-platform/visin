@@ -59,7 +59,7 @@ describe('profile pictures with in-memory MongoDB', () => {
   });
 
   const account = (extra: Record<string, unknown> = {}) =>
-    User.create({ email: `${new mongoose.Types.ObjectId()}@example.test`, signupMethod: 'password', roles: [], handle: `h${Math.random().toString(36).slice(2, 8)}`, ...extra });
+    User.create({ email: `${new mongoose.Types.ObjectId()}@example.test`, signupMethod: 'password', roles: [], profilePublic: true, handle: `h${Math.random().toString(36).slice(2, 8)}`, ...extra });
   const tokenFor = (user: { id: string; email: string; tokenVersion: number }) =>
     signSessionToken({ id: user.id, email: user.email, name: 'Ann', tokenVersion: user.tokenVersion }, user.id);
   const put = async (user: { id: string; email: string; tokenVersion: number }, body: Buffer | string, type = 'application/octet-stream') =>

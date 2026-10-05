@@ -1,7 +1,13 @@
 import { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Add, AddTask, Key, PhotoLibrary } from '@mui/icons-material';
-import { AppLayout, createVisinNavigation, useRecentVisits, type AppLayoutNavItem } from '@visin/frontend-core';
+import { Add, AddTask, GitHub, MenuBook, PhotoLibrary } from '@mui/icons-material';
+import {
+  AppLayout,
+  createVisinNavigation,
+  useRecentVisits,
+  type AppLayoutNavItem,
+  type AppLayoutSiteLink
+} from '@visin/frontend-core';
 import { useConfig } from '../config/ConfigProvider';
 import { useAuth } from '../contexts/AuthContext';
 import { APPS, appForPath } from '../apps';
@@ -18,6 +24,9 @@ const APP_LIST = ['shell', 'vision', 'label', 'account'] as const;
 const MEMBER_NAVIGATION = createVisinNavigation(APP_LIST, {});
 const VISITOR_NAVIGATION = createVisinNavigation(APP_LIST, {}, { isAuthenticated: false });
 
+/** The project's source, which is the same for every deployment of it. */
+const GITHUB_URL = 'https://github.com/visin-platform';
+
 /** How many recent places the search box offers. */
 const RECENT_OFFERED = 6;
 
@@ -25,9 +34,7 @@ const RECENT_OFFERED = 6;
 const CREATE_ITEMS: AppLayoutNavItem[] = [
   { text: 'Project', icon: <Add />, path: '/projects?create=1' },
   { text: 'Dataset', icon: <PhotoLibrary />, path: '/datasets?create=1' },
-  { text: 'Labeling job', icon: <AddTask />, path: '/jobs/new' },
-  // A pipeline reports its runs with a key; the keys live in Account.
-  { text: 'API key', icon: <Key />, path: '/account/api-keys' }
+  { text: 'Labeling job', icon: <AddTask />, path: '/jobs/new' }
 ];
 
 /**
@@ -55,14 +62,19 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       path: visit.path
     }));
 
-  // Docs and About live on the landing site; without its address there is nothing to link to.
+  // Docs and About live on the landing site; without its address there is nothing to link to. They are icons in the
+  // top bar. A visitor also gets the pitch page, in words: an "i" icon does not say it is the answer to "what is
+  // this?", and a member, who has found out, does not need it.
   const landing = config.LANDING_FRONT_URL?.replace(/\/$/, '');
-  const visitorLinks = landing
-    ? [
-        { text: 'Docs', href: `${landing}/docs` },
-        { text: 'About', href: `${landing}/about` }
-      ]
-    : [];
+  const siteLinks: AppLayoutSiteLink[] = [
+    ...(landing
+      ? [
+          { text: 'Docs', href: `${landing}/docs`, icon: <MenuBook /> },
+          ...(isAuthenticated ? [] : [{ text: 'What is Visin?', href: `${landing}/about` }])
+        ]
+      : []),
+    { text: 'GitHub', href: GITHUB_URL, icon: <GitHub />, newTab: true }
+  ];
 
   return (
     <AppLayout
@@ -80,7 +92,7 @@ const ShellLayout: React.FC<{ children: ReactNode }> = ({ children }) => {
       searchPlaceholder="Search Visin…"
       recent={recent}
       createItems={CREATE_ITEMS}
-      visitorLinks={visitorLinks}
+      siteLinks={siteLinks}
       maxContentWidth={layout.maxContentWidth}
       showPageHeader={layout.showPageHeader}
     >

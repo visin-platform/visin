@@ -29,7 +29,7 @@ const publicValuesOf = (user: User): PublicProfileValues => ({
   handle: user.handle ?? '',
   bio: user.bio ?? '',
   links: user.links ?? [],
-  profilePublic: user.profilePublic !== false,
+  profilePublic: user.profilePublic === true,
   showActivity: user.showActivity !== false
 });
 
@@ -49,7 +49,7 @@ const ProfileTab: React.FC = () => {
     handle: '',
     bio: '',
     links: [],
-    profilePublic: true,
+    profilePublic: false,
     showActivity: true
   });
   const [saving, setSaving] = useState(false);

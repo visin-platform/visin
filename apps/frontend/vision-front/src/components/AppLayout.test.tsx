@@ -55,13 +55,12 @@ describe('AppLayout', () => {
     expect(screen.getByText('page content')).toBeInTheDocument();
   });
 
-  it('shows the shared Projects, Data and Leaderboards groups, and Labels once signed in', () => {
+  it('shows the shared Projects and Data groups, and Labels once signed in', () => {
     signedIn();
     renderLayout();
 
     expect(main().getByRole('link', { name: 'Projects' })).toHaveAttribute('href', '/projects');
     expect(main().getByRole('link', { name: 'Data' })).toHaveAttribute('href', '/datasets');
-    expect(main().getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('href', '/leaderboards');
     // The menu is identical in every app, so following a link across does not swap it out.
     expect(main().getByRole('link', { name: 'Labels' })).toHaveAttribute('href', 'https://label.example.com/jobs');
   });
@@ -71,7 +70,15 @@ describe('AppLayout', () => {
     renderLayout();
 
     expect(main().queryByRole('link', { name: 'Labels' })).not.toBeInTheDocument();
-    expect(main().getByRole('link', { name: 'Leaderboards' })).toBeInTheDocument();
+  });
+
+  it('lists the leaderboards in the top bar rather than the rail', () => {
+    mockedGetGlobalConfig.mockReturnValue({ SHELL_FRONT_URL: 'https://app.example.com' } as any);
+    anonymous();
+    renderLayout('/leaderboards');
+
+    expect(main().queryByRole('link', { name: 'Leaderboards' })).not.toBeInTheDocument();
+    expect(sectionBar('Explore').getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('lists the Projects sections while in a training', () => {

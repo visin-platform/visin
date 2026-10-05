@@ -85,7 +85,7 @@ describe('getProfile', () => {
         handle: undefined,
         bio: undefined,
         links: [],
-        profilePublic: true,
+        profilePublic: false,
         showActivity: true,
       },
     });
@@ -200,7 +200,7 @@ describe('updateProfile public page', () => {
     );
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      user: expect.objectContaining({ handle: 'ann', links: ['https://ann.example.test'], profilePublic: true, showActivity: true }),
+      user: expect.objectContaining({ handle: 'ann', links: ['https://ann.example.test'], profilePublic: false, showActivity: true }),
     });
   });
 

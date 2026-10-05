@@ -22,6 +22,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { groups, accountItems } = createVisinNavigation(
     'vision',
     {
+      shell: config.SHELL_FRONT_URL,
       label: config.LABEL_FRONT_URL,
       account: config.ACCOUNT_FRONT_URL
     },

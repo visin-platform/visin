@@ -90,7 +90,7 @@ describe('ProfileTab', () => {
       lastName: 'Lovelace',
       bio: '',
       links: [],
-      profilePublic: true,
+      profilePublic: false,
       showActivity: true
     });
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
@@ -111,7 +111,7 @@ describe('ProfileTab', () => {
       lastName: 'Lovelace',
       bio: '',
       links: [],
-      profilePublic: true,
+      profilePublic: false,
       showActivity: true
     })
     );
@@ -333,7 +333,7 @@ describe('ProfileTab public profile', () => {
 
     fireEvent.click(screen.getByRole('switch', { name: 'Show my public page' }));
 
-    expect(screen.getByText(/your page is gone/i)).toBeInTheDocument();
+    expect(screen.getByText(/no place in search or the People directory/i)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View your page' })).not.toBeInTheDocument();
     save();
     await waitFor(() => expect(mockedUpdateProfile).toHaveBeenCalledWith(expect.objectContaining({ profilePublic: false })));
@@ -434,11 +434,12 @@ describe('ProfileTab public profile', () => {
     await waitFor(() => expect(screen.getByRole('switch', { name: 'Show my recent activity on my page' })).not.toBeChecked());
   });
 
-  it('starts an account that predates handles empty and visible, with no page to view yet', async () => {
+  it('starts an account that predates handles empty and hidden, with no page to view yet', async () => {
     await open(user);
 
     expect(screen.getByLabelText('Handle')).toHaveValue('');
-    expect(screen.getByRole('switch', { name: 'Show my public page' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Show my public page' })).not.toBeChecked();
+    expect(screen.getByText(/no place in search or the People directory/i)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'View your page' })).not.toBeInTheDocument();
     expect(screen.getByText(/Your page is \/u\/handle/)).toBeInTheDocument();
   });

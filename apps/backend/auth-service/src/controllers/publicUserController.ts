@@ -29,7 +29,7 @@ export const toPublicUser = (user: IUser) => ({
  */
 export const getPublicUser = async (req: Request, res: Response): Promise<void> => {
   const user = await User.findOne({ handle: req.params.handle }).select(PUBLIC_FIELDS);
-  if (!user || user.profilePublic === false) {
+  if (!user || user.profilePublic !== true) {
     throw new NotFoundError('No such user');
   }
   res.json({ success: true, data: toPublicUser(user) });
@@ -45,7 +45,7 @@ export const lookupPublicUsers = async (req: Request, res: Response): Promise<vo
   const users = await User.find({ _id: { $in: ids } }).select(PUBLIC_FIELDS);
   const data = await Promise.all(
     users.map(async (user) => {
-      if (user.profilePublic === false) return { id: user._id.toString() };
+      if (user.profilePublic !== true) return { id: user._id.toString() };
       // Reading is what gives a pre-handle account its handle, so its page can be linked.
       await ensureHandle(user);
       const { id, handle, name, picture } = toPublicUser(user);
@@ -64,7 +64,7 @@ export const searchPublicUsers = async (req: Request, res: Response): Promise<vo
   const { q, limit } = req.query as unknown as { q: string; limit: number };
   const text = new RegExp(`^${escapeRegex(q)}`, 'i');
   const users = await User.find({
-    profilePublic: { $ne: false },
+    profilePublic: true,
     handle: { $type: 'string' },
     $or: [{ handle: new RegExp(`^${escapeRegex(q.toLowerCase())}`) }, { firstName: text }, { lastName: text }]
   })
@@ -88,7 +88,7 @@ export const getUserShare = async (req: Request, res: Response): Promise<void> =
   const handle = String(req.params.handle);
   const user = await User.findOne({ handle }).select(PUBLIC_FIELDS);
   const url = appLink(`/u/${encodeURIComponent(handle)}`);
-  if (!url || !user || user.profilePublic === false) {
+  if (!url || !user || user.profilePublic !== true) {
     throw new NotFoundError('Nothing to share here');
   }
   const { name, bio, picture } = toPublicUser(user);
@@ -101,7 +101,7 @@ export const getUserShare = async (req: Request, res: Response): Promise<void> =
 };
 
 /** Accounts with a handle and a public page: the ones a visitor can be sent to. */
-const LISTED = { profilePublic: { $ne: false }, handle: { $type: 'string' } } as const;
+const LISTED = { profilePublic: true, handle: { $type: 'string' } } as const;
 
 /**
  * Everyone with a public page, a page at a time in handle order, for the app's People directory: what a search engine

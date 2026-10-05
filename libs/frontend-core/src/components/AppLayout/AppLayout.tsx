@@ -79,6 +79,16 @@ export interface AppLayoutRecent {
   path: string;
 }
 
+/** A link out of the app: the docs, the project's source. Always absolute. */
+export interface AppLayoutSiteLink {
+  text: string;
+  href: string;
+  /** What the bar shows in place of the name, which stays as the button's label. Left out, the name is shown. */
+  icon?: ReactNode;
+  /** Opens beside the app instead of replacing it, for a site that is not Visin's own. */
+  newTab?: boolean;
+}
+
 export interface AppLayoutUser {
   name?: string;
   email?: string;
@@ -135,8 +145,8 @@ export interface AppLayoutProps {
   onSignup?: () => void;
   /** The "New" menu of a signed-in user: the things they can create. Empty, no menu. */
   createItems?: AppLayoutNavItem[];
-  /** Plain links a visitor gets beside Sign in (Docs, About). Always absolute: they leave the app. */
-  visitorLinks?: { text: string; href: string }[];
+  /** Links out of the app (Docs, About, GitHub), in the top bar of a desktop for visitors and members alike. */
+  siteLinks?: AppLayoutSiteLink[];
 }
 
 const ownsPath = (prefix: string, pathname: string): boolean =>
@@ -178,7 +188,7 @@ export function AppLayout({
   recent = [],
   onSignup,
   createItems = [],
-  visitorLinks = []
+  siteLinks = []
 }: AppLayoutProps) {
   const { pathname } = useLocation();
   const theme = useTheme();
@@ -449,19 +459,37 @@ export function AppLayout({
       </IconButton>
     ));
 
+  // Out of the app, for anyone: a desktop bar has room for them, a phone's does not.
+  const siteLinkButtons =
+    !mobile &&
+    siteLinks.map((link) =>
+      link.icon ? (
+        <IconButton
+          key={link.href}
+          component="a"
+          href={link.href}
+          {...(link.newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          aria-label={link.text}
+          title={link.text}
+          sx={{ color: chrome.inkMuted, '&:hover': { color: chrome.ink } }}
+        >
+          {link.icon}
+        </IconButton>
+      ) : (
+        <MuiLink
+          key={link.href}
+          href={link.href}
+          {...(link.newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          underline="none"
+          sx={{ flexShrink: 0, fontWeight: 500, color: chrome.inkMuted, '&:hover': { color: chrome.ink } }}
+        >
+          {link.text}
+        </MuiLink>
+      )
+    );
+
   const visitorActions = !isAuthenticated && (
     <>
-      {!mobile &&
-        visitorLinks.map((link) => (
-          <MuiLink
-            key={link.href}
-            href={link.href}
-            underline="none"
-            sx={{ flexShrink: 0, fontWeight: 500, color: chrome.inkMuted, '&:hover': { color: chrome.ink } }}
-          >
-            {link.text}
-          </MuiLink>
-        ))}
       <Button onClick={onLogin} size="small" sx={{ flexShrink: 0, height: 36, color: chrome.ink }}>
         Sign in
       </Button>
@@ -491,6 +519,7 @@ export function AppLayout({
   const headerActions = (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: mobile ? 0.5 : 1.5, flexShrink: 0, ml: 'auto' }}>
       {searchTrigger}
+      {siteLinkButtons}
       {themeButton}
       {!authPending && visitorActions}
       {!authPending && createMenu}

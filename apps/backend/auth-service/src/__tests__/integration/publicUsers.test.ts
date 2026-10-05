@@ -41,7 +41,8 @@ describe('handles and public users with in-memory MongoDB', () => {
   });
 
   const account = (email: string, extra: Record<string, unknown> = {}) =>
-    User.create({ email, signupMethod: 'password', roles: [], ...extra });
+    // A public page unless a test says otherwise: a new account's own default is hidden, and is tested as such below.
+    User.create({ email, signupMethod: 'password', roles: [], profilePublic: true, ...extra });
 
   describe('choosing a handle', () => {
     it('starts from the name, with accents and spacing made plain', async () => {
@@ -284,7 +285,7 @@ describe('handles and public users with in-memory MongoDB', () => {
 
     it('lists the address of each public page, and nothing else about the person', async () => {
       await account('ann@example.test', { firstName: 'Ann', lastName: 'Lee', handle: 'ann-lee' });
-      await account('bob@example.test', { handle: 'bob', profilePublic: true });
+      await account('bob@example.test', { handle: 'bob' });
 
       const { status, headers, text } = await sitemap();
 
@@ -477,6 +478,73 @@ describe('handles and public users with in-memory MongoDB', () => {
       expect((await lookup({ ids: [] })).status).toBe(400);
       expect((await lookup({ ids: ['not-an-id'] })).status).toBe(400);
       expect((await lookup({ ids: Array.from({ length: 101 }, () => 'a'.repeat(24)) })).status).toBe(400);
+    });
+  });
+
+  describe('an account that never chose', () => {
+    // A new account takes the model's default; an older one has no field at all. Neither has agreed to be found.
+    const unchosen = async () => {
+      const fresh = await User.create({ email: 'fresh@example.test', signupMethod: 'password', roles: [], firstName: 'Fresh', handle: 'fresh' });
+      await User.collection.insertOne({
+        email: 'old@example.test',
+        signupMethod: 'password',
+        roles: [],
+        firstName: 'Fresh',
+        handle: 'fresh-old',
+        tokenVersion: 1,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      return fresh;
+    };
+
+    it('starts with its public page off', async () => {
+      const fresh = await unchosen();
+
+      expect(fresh.profilePublic).toBe(false);
+    });
+
+    it('is not found by search, not in the directory, and not in the sitemap', async () => {
+      process.env.SHELL_FRONT_URL = 'https://app.example.test';
+      await unchosen();
+
+      const found = (await (await fetch(`${base}/users?q=fresh`)).json()) as { data: unknown[] };
+      const directory = (await (await fetch(`${base}/directory`)).json()) as { data: { people: unknown[]; pagination: { total: number } } };
+      const sitemap = await (await fetch(`${base}/sitemap.xml`)).text();
+
+      expect(found.data).toEqual([]);
+      expect(directory.data.people).toEqual([]);
+      expect(directory.data.pagination.total).toBe(0);
+      expect(sitemap).not.toContain('/u/fresh');
+      delete process.env.SHELL_FRONT_URL;
+    });
+
+    it('has no page, no share card and no picture, and shows as a bare id beside what it owns', async () => {
+      process.env.SHELL_FRONT_URL = 'https://app.example.test';
+      const fresh = await unchosen();
+      const old = (await User.collection.findOne({ handle: 'fresh-old' }))!;
+
+      expect((await fetch(`${base}/users/fresh`)).status).toBe(404);
+      expect((await fetch(`${base}/users/fresh-old`)).status).toBe(404);
+      expect((await fetch(`${base}/share/users/fresh`)).status).toBe(404);
+      expect((await fetch(`${base}/share/users/fresh-old`)).status).toBe(404);
+      const lookup = await fetch(`${base}/internal/users/public`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-internal-token': 'internal-test-token' },
+        body: JSON.stringify({ ids: [fresh.id, old._id.toString()] })
+      });
+      expect(((await lookup.json()) as { data: unknown[] }).data).toEqual([{ id: fresh.id }, { id: old._id.toString() }]);
+      delete process.env.SHELL_FRONT_URL;
+    });
+
+    it('is shown once the person turns the page on, and gone again when they turn it off', async () => {
+      await unchosen();
+
+      await User.updateOne({ handle: 'fresh' }, { profilePublic: true });
+      expect((await fetch(`${base}/users/fresh`)).status).toBe(200);
+
+      await User.updateOne({ handle: 'fresh' }, { profilePublic: false });
+      expect((await fetch(`${base}/users/fresh`)).status).toBe(404);
     });
   });
 });

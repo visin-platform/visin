@@ -42,14 +42,14 @@ beforeEach(() => {
 });
 
 describe('ShellLayout', () => {
-  it('groups every app into Home, Projects, Data, Leaderboards and Labels, routed inside the page', () => {
+  it('groups every app into Home, Projects, Data, Papers and Labels, routed inside the page', () => {
     renderAt('/projects');
 
     for (const [name, href] of [
       ['Home', '/'],
       ['Projects', '/projects'],
       ['Data', '/datasets'],
-      ['Leaderboards', '/leaderboards'],
+      ['Papers', '/papers'],
       ['Labels', '/jobs'],
     ]) {
       expect(main().getByRole('link', { name })).toHaveAttribute('href', href);
@@ -59,8 +59,8 @@ describe('ShellLayout', () => {
   it('opens a signed-in session at Home, first in the menu', () => {
     renderAt('/');
 
-    const groups = main().getAllByRole('link', { name: /^(Home|Projects|Data|Leaderboards|Labels)$/ });
-    expect(groups.map((link) => link.textContent)).toEqual(['Home', 'Projects', 'Data', 'Leaderboards', 'Labels']);
+    const groups = main().getAllByRole('link', { name: /^(Home|Projects|Data|Leaderboards|Papers|Labels)$/ });
+    expect(groups.map((link) => link.textContent)).toEqual(['Home', 'Projects', 'Data', 'Papers', 'Labels']);
     expect(main().getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'true');
     expect(sectionBar('Home').getByRole('link', { name: 'For you' })).toHaveAttribute('aria-current', 'page');
   });
@@ -84,20 +84,30 @@ describe('ShellLayout', () => {
     authState.isAuthenticated = false;
     renderAt('/');
 
-    const groups = main().getAllByRole('link', { name: /^(Explore|Home|Projects|Data|Leaderboards|Labels)$/ });
-    expect(groups.map((link) => link.textContent)).toEqual(['Explore', 'Projects', 'Data', 'Leaderboards']);
+    const groups = main().getAllByRole('link', { name: /^(Explore|Home|Projects|Data|Leaderboards|Papers|Labels)$/ });
+    expect(groups.map((link) => link.textContent)).toEqual(['Explore', 'Projects', 'Data', 'Papers']);
     expect(main().getByRole('link', { name: 'Explore' })).toHaveAttribute('aria-current', 'true');
     expect(main().queryByRole('link', { name: 'Labels' })).not.toBeInTheDocument();
   });
 
-  it('lists the public sections under Leaderboards', () => {
+  it('puts the public results in the top bar beside Explore, not in the rail', () => {
     renderAt('/leaderboards');
 
+    expect(main().queryByRole('link', { name: 'Leaderboards' })).not.toBeInTheDocument();
+    expect(main().getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'true');
     expect(
-      within(screen.getByRole('navigation', { name: 'Leaderboards' }))
+      sectionBar('Home')
         .getAllByRole('link')
         .map((link) => link.textContent)
-    ).toEqual(['Leaderboards', 'Models', 'Suites', 'Evaluations']);
+    ).toEqual(['For you', 'Explore', 'Leaderboards']);
+    expect(sectionBar('Home').getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps the Home tab lit on a leaderboard\'s own pages', () => {
+    renderAt('/leaderboards/road-test/1/e1');
+
+    expect(main().getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'true');
+    expect(sectionBar('Home').getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('marks the labeling group current, with no section bar for its single section', () => {
@@ -176,7 +186,8 @@ describe('ShellLayout', () => {
       expect(authState.login).toHaveBeenCalledTimes(1);
       expect(authState.signup).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', 'https://landing.test/docs');
-      expect(screen.getByRole('link', { name: 'About' })).toHaveAttribute('href', 'https://landing.test/about');
+      expect(screen.getByRole('link', { name: 'What is Visin?' })).toHaveAttribute('href', 'https://landing.test/about');
+      expect(screen.getByRole('link', { name: 'What is Visin?' })).toHaveTextContent('What is Visin?');
     });
 
     it('links to no docs without a landing address, rather than guessing one', () => {
@@ -184,6 +195,49 @@ describe('ShellLayout', () => {
       renderAt('/projects');
 
       expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
+    });
+
+    it('shows the docs and GitHub as icons in the bar for a member, and the pitch page in words as well for a visitor', () => {
+      config.LANDING_FRONT_URL = 'https://landing.test';
+      const { unmount } = renderAt('/projects');
+
+      for (const [name, href] of [
+        ['Docs', 'https://landing.test/docs'],
+        ['GitHub', 'https://github.com/visin-platform']
+      ]) {
+        const link = screen.getByRole('link', { name });
+        expect(link).toHaveAttribute('href', href);
+        expect(link).toHaveAttribute('title', name);
+        expect(link).not.toHaveTextContent(name);
+      }
+      expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('target', '_blank');
+      expect(screen.queryByRole('link', { name: 'What is Visin?' })).not.toBeInTheDocument();
+      unmount();
+
+      authState.isAuthenticated = false;
+      renderAt('/projects');
+      expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/visin-platform');
+      expect(screen.getByRole('link', { name: 'Docs' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'What is Visin?' })).toHaveAttribute('href', 'https://landing.test/about');
+      expect(screen.getByRole('link', { name: 'What is Visin?' })).toHaveTextContent('What is Visin?');
+    });
+
+    it('does not repeat them in the account menu', () => {
+      config.LANDING_FRONT_URL = 'https://landing.test';
+      renderAt('/projects');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+
+      for (const name of ['Docs', 'About', 'What is Visin?', 'GitHub']) {
+        expect(screen.queryByRole('menuitem', { name })).not.toBeInTheDocument();
+      }
+    });
+
+    it('still offers GitHub where there is no landing site to link the docs to', () => {
+      renderAt('/projects');
+
+      expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'GitHub' })).toBeInTheDocument();
     });
 
     it('shows neither Sign in nor the account menu while the session is checked', () => {
@@ -203,7 +257,7 @@ describe('ShellLayout', () => {
       expect(screen.getByRole('menuitem', { name: 'Project' })).toHaveAttribute('href', '/projects?create=1');
       expect(screen.getByRole('menuitem', { name: 'Dataset' })).toHaveAttribute('href', '/datasets?create=1');
       expect(screen.getByRole('menuitem', { name: 'Labeling job' })).toHaveAttribute('href', '/jobs/new');
-      expect(screen.getByRole('menuitem', { name: 'API key' })).toHaveAttribute('href', '/account/api-keys');
+      expect(screen.queryByRole('menuitem', { name: 'API key' })).not.toBeInTheDocument();
     });
 
     it('searches everything from the box, and from Ctrl+K, on the search page', () => {

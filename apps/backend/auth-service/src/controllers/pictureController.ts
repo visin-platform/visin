@@ -57,7 +57,7 @@ export const getPicture = async (req: Request, res: Response): Promise<void> => 
   const id = String(req.params.userId);
   if (!mongoose.isValidObjectId(id)) throw new NotFoundError('No such picture');
   const user = await User.findById(id).select('profilePublic avatarUpdatedAt');
-  if (!user || user.profilePublic === false || !user.avatarUpdatedAt) throw new NotFoundError('No such picture');
+  if (!user || user.profilePublic !== true || !user.avatarUpdatedAt) throw new NotFoundError('No such picture');
   const avatar = await Avatar.findOne({ userId: id });
   if (!avatar) throw new NotFoundError('No such picture');
 

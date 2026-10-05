@@ -25,8 +25,9 @@ const PublicProfileCard: React.FC<PublicProfileCardProps> = ({ values, savedHand
           Public profile
         </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          What anyone can see, signed in or not: your name, handle and what you write here, beside the projects and
-          datasets you make public. Your email is never shown.
+          Off until you turn it on. Shown, anyone can see your name, handle and what you write here, find you in
+          search and the People directory, and see your name beside the projects and datasets you make public. Your
+          email is never shown.
           {savedHandle && values.profilePublic && (
             <>
               {' '}
@@ -70,8 +71,8 @@ const PublicProfileCard: React.FC<PublicProfileCardProps> = ({ values, savedHand
         />
         {!values.profilePublic && (
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: -1 }}>
-            Hidden: your page is gone, and what you own shows no name or picture. The projects and datasets you made
-            public stay public.
+            Hidden: no page, no place in search or the People directory, and what you own shows no name or picture.
+            Projects and datasets you make public stay public, shown as owned by another person.
           </Typography>
         )}
         <FormControlLabel

@@ -15,10 +15,9 @@ const texts = (nav: ReturnType<typeof createVisinNavigation>) =>
 describe('createVisinNavigation', () => {
   it('gives every app the same groups, in the same order', () => {
     const expected = [
-      ['For you', 'Explore'],
+      ['For you', 'Explore', 'Leaderboards'],
       ['All projects', 'Trainings'],
       ['Datasets'],
-      ['Leaderboards', 'Models', 'Suites', 'Evaluations'],
       ['Papers'],
       ['Jobs']
     ];
@@ -26,7 +25,7 @@ describe('createVisinNavigation', () => {
     // Crossing apps must not change what the menu contains.
     for (const local of ['shell', 'vision', 'label', 'account', null] as const) {
       const nav = createVisinNavigation(local, urls);
-      expect(labels(nav)).toEqual(['Home', 'Projects', 'Data', 'Leaderboards', 'Papers', 'Labels']);
+      expect(labels(nav)).toEqual(['Home', 'Projects', 'Data', 'Papers', 'Labels']);
       expect(texts(nav)).toEqual(expected);
     }
   });
@@ -39,7 +38,7 @@ describe('createVisinNavigation', () => {
 
   it('keeps the current app sections as internal routes', () => {
     const [projects] = createVisinNavigation('vision', urls).groups[1].items;
-    const [jobs] = createVisinNavigation('label', urls).groups[5].items;
+    const [jobs] = createVisinNavigation('label', urls).groups[4].items;
 
     expect(projects.path).toBe('/projects');
     expect(projects.href).toBeUndefined();
@@ -50,8 +49,8 @@ describe('createVisinNavigation', () => {
   it('links the other app sections straight to that section', () => {
     const nav = createVisinNavigation('label', urls);
     const [datasets] = nav.groups[2].items;
-    const [papers] = nav.groups[4].items;
-    const [jobs] = nav.groups[5].items;
+    const [papers] = nav.groups[3].items;
+    const [jobs] = nav.groups[4].items;
 
     expect(datasets.href).toBe('https://vision.test/datasets');
     expect(datasets.path).toBeUndefined();
@@ -69,9 +68,9 @@ describe('createVisinNavigation', () => {
   it('omits sections, and then groups, whose app has no URL configured', () => {
     // Dead links into the current origin would 404; an absent entry is honest.
     expect(texts(createVisinNavigation('vision', {}))).toEqual([
+      ['Leaderboards'],
       ['All projects', 'Trainings'],
       ['Datasets'],
-      ['Leaderboards', 'Models', 'Suites', 'Evaluations'],
       ['Papers']
     ]);
     expect(texts(createVisinNavigation('label', {}))).toEqual([['Jobs']]);
@@ -105,7 +104,7 @@ describe('for a visitor', () => {
   it('leaves out what needs an account, so no entry leads to a sign-in wall', () => {
     const nav = createVisinNavigation('shell', urls, visitor);
 
-    expect(labels(nav)).toEqual(['Explore', 'Projects', 'Data', 'Leaderboards', 'Papers']);
+    expect(labels(nav)).toEqual(['Explore', 'Projects', 'Data', 'Papers']);
     expect(texts(nav).flat()).not.toContain('Jobs');
     expect(texts(nav).flat()).not.toContain('For you');
   });
@@ -113,14 +112,14 @@ describe('for a visitor', () => {
   it('opens on Explore at the front page rather than behind /explore', () => {
     const [explore] = createVisinNavigation('shell', urls, visitor).groups;
 
-    expect(explore.items).toMatchObject([{ text: 'Explore', path: '/' }]);
+    expect(explore.items.slice(0, 1)).toMatchObject([{ text: 'Explore', path: '/' }]);
   });
 
   it('gives a signed-in session its own page first and Explore one tab over', () => {
     const [home] = createVisinNavigation('shell', urls).groups;
 
     expect(home.label).toBe('Home');
-    expect(home.items).toMatchObject([
+    expect(home.items.slice(0, 2)).toMatchObject([
       { text: 'For you', path: '/' },
       { text: 'Explore', path: '/explore' }
     ]);
@@ -129,7 +128,7 @@ describe('for a visitor', () => {
   it('links Explore across to the shell from another app', () => {
     const [explore] = createVisinNavigation('vision', urls, visitor).groups;
 
-    expect(explore.items).toMatchObject([{ href: 'https://app.test/' }]);
+    expect(explore.items.slice(0, 1)).toMatchObject([{ href: 'https://app.test/' }]);
   });
 });
 

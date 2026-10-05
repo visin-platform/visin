@@ -33,8 +33,9 @@ export interface IUser extends Document {
   /** When the uploaded picture was set. Present, it is the account's own and a Google sign-in leaves it alone. */
   avatarUpdatedAt?: Date;
   /**
-   * False hides the public page, and the name and picture on what the account owns:
-   * what is shown is then only that someone owns it. Defaults to shown.
+   * Only true shows the public page, the account in search and the People directory, and the name and picture on
+   * what it owns; otherwise all that is shown is that someone owns it. Off until the person turns it on, so an
+   * account that never chose, or that predates the setting, stays out of sight.
    */
   profilePublic?: boolean;
   /**
@@ -64,7 +65,7 @@ const UserSchema = new Schema<IUser>(
     links: { type: [String], default: undefined },
     picture: { type: String },
     avatarUpdatedAt: { type: Date },
-    profilePublic: { type: Boolean, default: true },
+    profilePublic: { type: Boolean, default: false },
     showActivity: { type: Boolean, default: true },
     bootstrapSlot: { type: String, enum: ['initial-admin'], immutable: true, select: false },
     lastLoginAt: { type: Date },

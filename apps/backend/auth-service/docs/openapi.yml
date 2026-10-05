@@ -161,7 +161,7 @@ components:
         handle: { type: string, description: 'The address of the public page, /u/{handle}', example: ann-example }
         bio: { type: string }
         links: { type: array, items: { type: string, format: uri } }
-        profilePublic: { type: boolean, description: 'False hides the public page and the name shown on what the account owns' }
+        profilePublic: { type: boolean, description: 'True shows the public page, lists the account in search and the People directory, and shows its name on what it owns. Off by default.' }
         showActivity: { type: boolean, description: 'Whether the public page lists what the account has been doing' }
     PublicUser:
       type: object

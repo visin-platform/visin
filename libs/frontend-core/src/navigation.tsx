@@ -1,10 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   Article,
-  Assessment,
   Assignment,
-  Checklist,
-  EmojiEvents,
   Explore,
   Folder,
   FolderCopy,
@@ -14,7 +11,6 @@ import {
   Key,
   Label,
   Link as LinkIcon,
-  Memory,
   ModelTraining,
   Person,
   PhotoLibrary,
@@ -79,7 +75,11 @@ const NAV_GROUPS: NavGroup[] = [
       // A visitor's front page is Explore itself; a signed-in session opens on its own
       // dashboard and keeps Explore one tab over.
       { app: 'shell', text: 'For you', icon: <Home />, path: '/', signedInOnly: true },
-      { app: 'shell', text: 'Explore', icon: <Explore />, path: '/explore', signedOutPath: '/' }
+      { app: 'shell', text: 'Explore', icon: <Explore />, path: '/explore', signedOutPath: '/' },
+      // Public results, the other half of what Explore shows: they sit beside it in the bar rather than taking a
+      // place in the rail of their own. Models, Suites and Evaluations are still routes of vision-front, just not
+      // offered here for now.
+      { app: 'vision', text: 'Leaderboards', icon: <Scoreboard />, path: '/leaderboards' }
     ]
   },
   {
@@ -100,16 +100,6 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Data',
     icon: <Storage />,
     sections: [{ app: 'vision', text: 'Datasets', icon: <PhotoLibrary />, path: '/datasets' }]
-  },
-  {
-    label: 'Leaderboards',
-    icon: <EmojiEvents />,
-    sections: [
-      { app: 'vision', text: 'Leaderboards', icon: <Scoreboard />, path: '/leaderboards' },
-      { app: 'vision', text: 'Models', icon: <Memory />, path: '/models' },
-      { app: 'vision', text: 'Suites', icon: <Checklist />, path: '/suites' },
-      { app: 'vision', text: 'Evaluations', icon: <Assessment />, path: '/evaluations' }
-    ]
   },
   {
     label: 'Papers',

@@ -327,7 +327,7 @@ describe('AppLayout', () => {
 
     it('gets the links to the docs beside Sign in, and no New menu', () => {
       visitor({
-        visitorLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }],
+        siteLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }],
         createItems: [{ text: 'Project', icon: null, path: '/projects?new=1' }]
       });
 
@@ -343,11 +343,39 @@ describe('AppLayout', () => {
       expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
     });
 
-    it('gets no Sign in or links while signed in', () => {
-      renderAt('/projects', undefined, { visitorLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }] });
+    it('gets no Sign in while signed in, but still the links in the bar', () => {
+      renderAt('/projects', undefined, { siteLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }] });
 
       expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: 'Docs' })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', 'https://docs.test/docs');
+    });
+
+    it('shows a link that has an icon as the icon, named for the screen reader and the tooltip', () => {
+      renderAt('/projects', undefined, {
+        siteLinks: [{ text: 'GitHub', href: 'https://github.test/visin', icon: <i data-testid="gh" />, newTab: true }]
+      });
+
+      const link = screen.getByRole('link', { name: 'GitHub' });
+      expect(link).toHaveAttribute('title', 'GitHub');
+      expect(link).toContainElement(screen.getByTestId('gh'));
+      expect(link).not.toHaveTextContent('GitHub');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    });
+
+    it('keeps the links out of the account menu, which has the sections and Logout only', () => {
+      renderAt('/projects', undefined, { siteLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }] });
+
+      openAccount();
+      const items = within(screen.getByRole('menu', { name: 'Account' })).getAllByRole('menuitem');
+
+      expect(items.map((item) => item.textContent)).toEqual(['TTest Usertest@example.com', 'Profile', 'Groups', 'Logout']);
+    });
+
+    it('shows the same links to a visitor', () => {
+      visitor({ siteLinks: [{ text: 'GitHub', href: 'https://github.test/visin', icon: <i />, newTab: true }] });
+
+      expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('target', '_blank');
     });
   });
 
@@ -694,7 +722,7 @@ describe('AppLayout', () => {
       renderAt('/projects', null, {
         isAuthenticated: false,
         onSignup: vi.fn(),
-        visitorLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }]
+        siteLinks: [{ text: 'Docs', href: 'https://docs.test/docs' }]
       });
 
       expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();

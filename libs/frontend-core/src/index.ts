@@ -18,6 +18,7 @@ export type {
   AppLayoutInternalNavItem,
   AppLayoutExternalNavItem,
   AppLayoutRecent,
+  AppLayoutSiteLink,
   AppLayoutUser
 } from './components/AppLayout';
 export {

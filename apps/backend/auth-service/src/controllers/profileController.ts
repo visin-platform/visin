@@ -11,7 +11,7 @@ const profileFields = (user: IUser) => ({
   handle: user.handle,
   bio: user.bio,
   links: user.links ?? [],
-  profilePublic: user.profilePublic !== false,
+  profilePublic: user.profilePublic === true,
   showActivity: user.showActivity !== false
 });
 
