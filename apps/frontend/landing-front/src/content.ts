@@ -113,7 +113,7 @@ export interface OpenSourcePoint {
 export const OPEN_SOURCE_POINTS: OpenSourcePoint[] = [
   { title: 'Runs on your hardware', body: 'One Docker Compose file.' },
   { title: 'Your images stay yours', body: 'On disk, on machines you control.' },
-  { title: 'MIT licensed', body: 'No seats, no quota, no licence key.' }
+  { title: 'AGPL licensed', body: 'No seats, no quota, no licence key.' }
 ];
 
 /**

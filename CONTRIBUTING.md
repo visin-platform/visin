@@ -37,6 +37,12 @@ docs: update local development setup
 - If your change touches a backend service, verify the relevant endpoints still work locally.
 - If your change touches a frontend, verify it in a browser against the local dev server.
 
+## Licence of contributions
+
+By opening a pull request you agree that your contribution is licensed under the same licence as the part of the
+repository it changes: the AGPL-3.0 for services and web apps, the MIT licence for `libs/*` (see the README). You keep
+your copyright. Add your name to nothing; the history records who wrote what.
+
 ## Code style
 
 - TypeScript strict mode is enabled — no `any` unless unavoidable.

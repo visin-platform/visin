@@ -1,7 +1,7 @@
 <h1><img src="apps/frontend/landing-front/public/logo.svg" width="36" alt="" /> Visin</h1>
 
 **A clear view of your computer vision work.** Track training runs, compare results, label images, and review the
-data behind each decision. Visin runs on your hardware, is MIT licensed, and can connect to an AI assistant.
+data behind each decision. Visin runs on your hardware, is open source under the AGPL-3.0, and can connect to an AI assistant.
 
 <img src="docs/media/tour.webp" alt="A tour of Visin: a project's training runs, one opened with its curves and per-class scores, then nine runs compared at their best epoch and exported as LaTeX" width="100%" />
 
@@ -226,4 +226,15 @@ set `COOKIE_DOMAIN` to their shared parent domain.
 ## Contributing
 
 [CONTRIBUTING.md](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) · Security issues:
-[SECURITY.md](SECURITY.md), not a public issue · [Changelog](CHANGELOG.md) · MIT — [LICENSE](LICENSE)
+[SECURITY.md](SECURITY.md), not a public issue · [Changelog](CHANGELOG.md) · [Licence](#licence)
+
+## Licence
+
+Visin's services and web apps are free software under the [GNU Affero General Public License v3.0](LICENSE). If you
+run a modified Visin as a service, the AGPL asks you to offer your users the source of your modifications. The shared
+libraries (`libs/*`, published to npm as `@visin/backend-core` and `@visin/frontend-core`) stay under the
+[MIT licence](libs/backend-core/LICENSE), so they are easy to build on.
+
+The [NOTICE](NOTICE.md) lists the copyright, the attribution a copy has to keep (AGPL section 7), and what the name
+"Visin" and its logo may be used for. Releases before the switch to the AGPL stay under the MIT licence for anyone who
+already has them.

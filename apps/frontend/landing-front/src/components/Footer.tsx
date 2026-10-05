@@ -72,7 +72,7 @@ export default function Footer({ appUrl }: FooterProps) {
         <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', mb: 3 }} />
 
         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-          © {new Date().getFullYear()} Visin. Open source under the MIT License.
+          © {new Date().getFullYear()} Visin. Open source under the AGPL-3.0 licence.
         </Typography>
       </Container>
     </Box>

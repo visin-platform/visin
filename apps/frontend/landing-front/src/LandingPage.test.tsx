@@ -335,7 +335,7 @@ describe('LandingPage claims', () => {
   it('states the licence and the current year in the footer', () => {
     render(<LandingPage />);
 
-    expect(screen.getByText(new RegExp(`${new Date().getFullYear()}.*MIT`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${new Date().getFullYear()}.*AGPL`))).toBeInTheDocument();
   });
 
   it('does not load imagery from a third-party host', () => {

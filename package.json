@@ -10,7 +10,7 @@
     "node": ">=26"
   },
   "author": "Toomas Tahves",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "workspaces": [
     "apps/frontend/*",
     "apps/backend/*",

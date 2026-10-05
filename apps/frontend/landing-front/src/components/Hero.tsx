@@ -5,7 +5,7 @@ import { BrowserFrame, PhoneFrame } from './Frames';
 import { GITHUB_URL } from '../content';
 import { INK } from '../theme';
 
-const BADGES = ['Open source, MIT', 'Runs on your hardware', 'Connects to AI tools'];
+const BADGES = ['Open source, AGPL-3.0', 'Runs on your hardware', 'Connects to AI tools'];
 
 const outlinedOnInk = {
   borderRadius: 2,

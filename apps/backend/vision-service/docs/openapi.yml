@@ -21,8 +21,8 @@ info:
   contact:
     name: Visin Team
   license:
-    name: MIT
-    identifier: MIT
+    name: AGPL-3.0-only
+    identifier: AGPL-3.0-only
 servers:
   - url: http://localhost:4010/api
     description: Development server
