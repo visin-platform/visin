@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.37.0](https://github.com/visin-platform/visin/compare/v1.36.0...v1.37.0) (2026-10-12)
+
+
+### Features
+
+* add search users by email ([0e8ab30](https://github.com/visin-platform/visin/commit/0e8ab3065269f481be6f3619bb3edcbcd235964e))
+
 ## [1.36.0](https://github.com/visin-platform/visin/compare/v1.35.0...v1.36.0) (2026-10-12)
 
 
