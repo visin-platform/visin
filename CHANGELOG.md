@@ -1,4 +1,17 @@
 # Visin Changelog
+## [1.38.0](https://github.com/visin-platform/visin/compare/v1.37.0...v1.38.0) (2026-10-12)
+
+
+### Features
+
+* store model checkpoints in Visin and offer them for download ([7e026c6](https://github.com/visin-platform/visin/commit/7e026c67c057503e9fc940538b7225fcaa6169c1))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.15.0 ([097d0b4](https://github.com/visin-platform/visin/commit/097d0b47c5991a09416e85e234f1980796fa054c))
+* **release:** @visin/frontend-core 1.17.0 ([3549285](https://github.com/visin-platform/visin/commit/3549285474f09dca4723a556f08a6f68957a6a88))
+
 ## [1.37.0](https://github.com/visin-platform/visin/compare/v1.36.0...v1.37.0) (2026-10-12)
 
 
