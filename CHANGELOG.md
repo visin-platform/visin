@@ -1,4 +1,12 @@
 # Visin Changelog
+## [1.36.0](https://github.com/visin-platform/visin/compare/v1.35.0...v1.36.0) (2026-10-12)
+
+
+### Features
+
+* add default reporter to test runner ([b2f86fd](https://github.com/visin-platform/visin/commit/b2f86fd03b19f4a4c0361c40bf628c8d957e279f))
+* stream dataset archives with resumable downloads ([168bd6c](https://github.com/visin-platform/visin/commit/168bd6c9b1c4ea48dbda72da49d48d2297f65b55))
+
 ## [1.35.0](https://github.com/visin-platform/visin/compare/v1.34.0...v1.35.0) (2026-10-05)
 
 
