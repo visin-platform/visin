@@ -2,6 +2,7 @@ jest.mock('../../clients/projectServiceClient', () => ({
   projectDatasetOwner: jest.fn(async () => ({ kind: 'user', id: '000000000000000000000001' }))
 }));
 import { createServer, type Server } from 'http';
+import { Readable } from 'stream';
 import type { AddressInfo } from 'net';
 import { createHmac } from 'crypto';
 import express from 'express';
@@ -788,6 +789,180 @@ describe('archive upload, download and import', () => {
     expect(started.status).toBe(202);
     expect(removeQueuedImport).toHaveBeenCalledWith('dead');
     expect(started.body.data.import.mapping.manifest).toBe('m.csv');
+  });
+});
+
+describe('the zip streamed in the response (a dataspace connector)', () => {
+  const licensed = (body: Record<string, unknown> = {}) =>
+    createDataset({ name: 'Sample', visibility: 'public', license: { id: 'cc-by-4.0' }, ...body });
+  const withArchive = async (id: string, data: Buffer, filename = 'iseauto sample.zip') => {
+    fileStore.stored.set('archive', data);
+    await Dataset.updateOne({ _id: id }, { $set: { archive: { fileId: 'archive', filename, size: data.length, uploadedAt: new Date('2026-10-12T09:27:04Z') } } });
+  };
+  const fetchArchive = (id: string, authorization?: string) =>
+    fetch(`${baseUrl}/api/datasets/${id}/archive`, { headers: authorization ? { Authorization: authorization } : {} });
+
+  it('sends the bytes themselves, named and sized, to an anonymous caller of a public dataset', async () => {
+    const id = await licensed();
+    const data = zip([{ path: 'labeled/day_fair/camera/1.png', data: Buffer.from('frame') }]);
+    await withArchive(id, data);
+
+    const response = await fetchArchive(id);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/zip');
+    expect(response.headers.get('content-disposition')).toBe('attachment; filename="iseauto_sample.zip"');
+    expect(response.headers.get('content-length')).toBe(String(data.length));
+    expect(response.headers.get('last-modified')).toBe('Mon, 12 Oct 2026 09:27:04 GMT');
+    expect(Buffer.from(await response.arrayBuffer()).equals(data)).toBe(true);
+  });
+
+  it('serves a private dataset to its owner’s API key and to no one else', async () => {
+    const id = await licensed({ visibility: 'private' });
+    await withArchive(id, Buffer.from('zip bytes'));
+    const { token } = await createApiKey({
+      userId: OWNER,
+      userEmail: `${OWNER}@example.test`,
+      userName: 'Owner',
+      name: 'connector',
+      scopes: ['dataset:read']
+    });
+
+    const response = await fetchArchive(id, `Bearer ${token}`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('zip bytes');
+    expect((await fetchArchive(id, `Bearer ${tokenFor(STRANGER)}`)).status).toBe(403);
+    expect((await fetchArchive(id)).status).toBe(401);
+  });
+
+  it('sends an archive with no recorded size whole and chunked, even when a range is asked for', async () => {
+    const id = await licensed();
+    fileStore.stored.set('archive', Buffer.from('zip bytes'));
+    await Dataset.updateOne({ _id: id }, { $set: { archive: { fileId: 'archive', filename: 'set.zip', uploadedAt: new Date() } } });
+
+    const response = await fetch(`${baseUrl}/api/datasets/${id}/archive`, { headers: { Range: 'bytes=4-' } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-length')).toBeNull();
+    expect(response.headers.get('accept-ranges')).toBeNull();
+    expect(await response.text()).toBe('zip bytes');
+  });
+
+  describe('resuming', () => {
+    const data = Buffer.from(Array.from({ length: 1024 }, (_, index) => index % 251));
+    const ranged = (id: string, headers: Record<string, string>, method = 'GET') =>
+      fetch(`${baseUrl}/api/datasets/${id}/archive`, { method, headers });
+
+    it('sends the rest of the zip from where a client stopped, or any one range of it', async () => {
+      const id = await licensed();
+      await withArchive(id, data);
+
+      const rest = await ranged(id, { Range: 'bytes=100-' });
+      expect(rest.status).toBe(206);
+      expect(rest.headers.get('content-range')).toBe('bytes 100-1023/1024');
+      expect(rest.headers.get('content-length')).toBe('924');
+      expect(rest.headers.get('accept-ranges')).toBe('bytes');
+      expect(Buffer.from(await rest.arrayBuffer()).equals(data.subarray(100))).toBe(true);
+      expect(fileStore.client.getFileRange).toHaveBeenCalledWith('archive', 100, 1023);
+      expect(fileStore.client.getFileStream).not.toHaveBeenCalled();
+
+      const middle = await ranged(id, { Range: 'bytes=10-19' });
+      expect(middle.headers.get('content-range')).toBe('bytes 10-19/1024');
+      expect(Buffer.from(await middle.arrayBuffer()).equals(data.subarray(10, 20))).toBe(true);
+      const tail = await ranged(id, { Range: 'bytes=-24' });
+      expect(Buffer.from(await tail.arrayBuffer()).equals(data.subarray(1000))).toBe(true);
+    });
+
+    it('resumes only the same upload: a replaced zip is sent whole, never spliced onto the old one', async () => {
+      const id = await licensed();
+      await withArchive(id, data);
+      const first = await fetchArchive(id);
+      const tag = first.headers.get('etag')!;
+      const lastModified = first.headers.get('last-modified')!;
+      await first.arrayBuffer();
+
+      expect((await ranged(id, { Range: 'bytes=100-', 'If-Range': tag })).status).toBe(206);
+      expect((await ranged(id, { Range: 'bytes=100-', 'If-Range': lastModified })).status).toBe(206);
+
+      await Dataset.updateOne({ _id: id }, { $set: { 'archive.uploadedAt': new Date('2026-10-13T00:00:00Z') } });
+      const replaced = await ranged(id, { Range: 'bytes=100-', 'If-Range': tag });
+      expect(replaced.status).toBe(200);
+      expect(replaced.headers.get('etag')).not.toBe(tag);
+      expect(Buffer.from(await replaced.arrayBuffer()).equals(data)).toBe(true);
+    });
+
+    it('sends the whole zip for several ranges or a header it cannot read, and refuses one past the end', async () => {
+      const id = await licensed();
+      await withArchive(id, data);
+
+      for (const header of ['bytes=0-9,20-29', 'bytes=abc', 'lines=1-2']) {
+        const whole = await ranged(id, { Range: header });
+        expect(whole.status).toBe(200);
+        expect((await whole.arrayBuffer()).byteLength).toBe(1024);
+      }
+
+      const past = await ranged(id, { Range: 'bytes=2000-' });
+      expect(past.status).toBe(416);
+      expect(past.headers.get('content-range')).toBe('bytes */1024');
+      expect(fileStore.client.getFileRange).not.toHaveBeenCalled();
+    });
+
+    it('answers HEAD with the headers alone, reading nothing from storage', async () => {
+      const id = await licensed();
+      await withArchive(id, data);
+
+      const head = await ranged(id, {}, 'HEAD');
+      expect(head.status).toBe(200);
+      expect(head.headers.get('content-length')).toBe('1024');
+      expect(head.headers.get('etag')).toBeTruthy();
+      const partial = await ranged(id, { Range: 'bytes=1000-' }, 'HEAD');
+      expect(partial.status).toBe(206);
+      expect(partial.headers.get('content-range')).toBe('bytes 1000-1023/1024');
+      expect(fileStore.client.getFileStream).not.toHaveBeenCalled();
+      expect(fileStore.client.getFileRange).not.toHaveBeenCalled();
+    });
+
+    it('answers 502 when storage cannot read the range', async () => {
+      const id = await licensed();
+      await withArchive(id, data);
+      jest.mocked(fileStore.client.getFileRange).mockRejectedValueOnce(new Error('file-service ignored a Range request'));
+
+      expect((await ranged(id, { Range: 'bytes=100-' })).status).toBe(502);
+    });
+  });
+
+  it('refuses a dataset with no zip, or one that declares no licence', async () => {
+    const empty = await licensed();
+    expect((await call(`/api/datasets/${empty}/archive`)).status).toBe(404);
+
+    const unstated = await createDataset({ name: 'Unstated', visibility: 'public' });
+    await withArchive(unstated, Buffer.from('zip bytes'));
+    const refused = await call(`/api/datasets/${unstated}/archive`);
+    expect(refused.status).toBe(409);
+    expect(refused.body.message).toMatch(/licence/);
+    expect(fileStore.client.getFileStream).not.toHaveBeenCalled();
+  });
+
+  it('answers 502 when storage cannot be read, before any byte is sent', async () => {
+    const id = await licensed();
+    await withArchive(id, Buffer.from('zip bytes'));
+    jest.mocked(fileStore.client.getFileStream).mockRejectedValueOnce(new Error('file-service get failed (404)'));
+
+    expect((await call(`/api/datasets/${id}/archive`)).status).toBe(502);
+  });
+
+  it('cuts the response short when storage fails part way, rather than end it as if whole', async () => {
+    const id = await licensed();
+    await withArchive(id, Buffer.alloc(1024));
+    jest.mocked(fileStore.client.getFileStream).mockResolvedValueOnce(
+      new Readable({
+        read() {
+          this.push(Buffer.alloc(100));
+          this.destroy(new Error('storage went away'));
+        }
+      })
+    );
+
+    // Whether the client has seen the 200 by then is a race; it never gets a body that ends cleanly.
+    await expect(fetchArchive(id).then((response) => response.arrayBuffer())).rejects.toThrow();
   });
 });
 

@@ -2950,6 +2950,249 @@ paths:
         - BearerCredential: []
         - SessionCookie: []
         - {}
+  /datasets/{id}/archive:
+    get:
+      tags:
+        - Datasets
+      summary: Stream Archive
+      operationId: streamArchive
+      description: |
+        The dataset's zip in the response body, for a caller that takes one response as the data and follows no link
+        inside it, such as a dataspace connector's data plane. `/download` hands out a signed link instead. Served only
+        for a dataset that declares its licence (409 otherwise). A read that fails part way cuts the response short of
+        its `Content-Length`; it never ends as if whole.
+
+        Resumable: send `Range: bytes=<from>-` (one range) to get the rest as a 206, with `If-Range` set to the `ETag`
+        or `Last-Modified` you saw, so that a zip replaced in between is sent whole instead of spliced. Several ranges,
+        an unreadable header, or an archive whose size was never recorded get the whole zip; a range starting past
+        the end is a 416. HEAD returns the headers alone.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+            example: bytes=1048576-
+        - name: If-Range
+          in: header
+          required: false
+          description: The `ETag` or `Last-Modified` of the response being resumed
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The zip
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: '`attachment` with the archive''s file name'
+            Content-Length:
+              schema:
+                type: integer
+            Last-Modified:
+              schema:
+                type: string
+              description: When this archive was uploaded - its revision
+            ETag:
+              schema:
+                type: string
+              description: Names this upload of the archive; changes when the zip is replaced
+            Accept-Ranges:
+              schema:
+                type: string
+                const: bytes
+              description: Present when the archive's size is known, which is what a range needs
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: The requested range of the zip
+          headers:
+            Content-Range:
+              schema:
+                type: string
+                example: bytes 1048576-9417973422/9417973423
+            Content-Length:
+              schema:
+                type: integer
+            ETag:
+              schema:
+                type: string
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '401':
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '403':
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '404':
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '409':
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '416':
+          description: The range starts past the end of the zip; `Content-Range` gives its size
+          headers:
+            Content-Range:
+              schema:
+                type: string
+                example: bytes */9417973423
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '502':
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '503':
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+        default:
+          description: Request refused
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                  message:
+                    type: string
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
   /datasets/{id}/hub:
     get:
       tags:

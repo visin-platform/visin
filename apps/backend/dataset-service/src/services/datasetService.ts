@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { QueryFilter, Types } from 'mongoose';
 import {
+  BadGatewayError,
   BadRequestError,
   canTransfer,
   ConflictError,
@@ -524,6 +525,32 @@ export const getArchiveDownload = async (access: DatasetAccess, id: string) => {
   return { ...(source ? { source } : {}), downloadUrl: urls[dataset.archive.fileId], filename: dataset.archive.filename,
     size: dataset.archive.size, revision: source?.revision ?? dataset.archive.uploadedAt.toISOString(),
     archiveRevision: dataset.archive.uploadedAt.toISOString(), expiresAt: new Date(expiresMs).toISOString() };
+};
+
+/**
+ * The zip itself, for a caller that takes one response as the data: a dataspace connector's data plane forwards the
+ * body it gets and follows nothing inside it, so a signed link would send its consumer around the contract. Served
+ * only for a dataset that declares its licence, so whatever leaves this way carries its terms.
+ */
+export const servableArchive = async (access: DatasetAccess, id: string) => {
+  const dataset = await readableDataset(access, id);
+  if (!dataset.archive) throw new NotFoundError('This dataset has no zip');
+  if (!dataset.license) throw new ConflictError('This dataset declares no licence; state one before serving its zip');
+  const { fileId, filename, size, uploadedAt } = dataset.archive;
+  return { datasetId: id, fileId, filename: sanitizeFilename(filename), size, uploadedAt };
+};
+
+/** The archive's bytes from storage: all of them, or the inclusive `range` a resuming client asked for. */
+export const readArchive = async (
+  archive: { datasetId: string; fileId: string },
+  range?: { start: number; end: number }
+) => {
+  try {
+    return range ? await files.getFileRange(archive.fileId, range.start, range.end) : await files.getFileStream(archive.fileId);
+  } catch (err) {
+    logger.error('Could not read a dataset zip from storage', { datasetId: archive.datasetId, error: (err as Error).message });
+    throw new BadGatewayError('The zip could not be read from storage');
+  }
 };
 
 export const startImport = async (access: DatasetAccess, id: string, mapping: ImportMapping) => {

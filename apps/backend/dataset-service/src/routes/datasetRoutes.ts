@@ -45,6 +45,8 @@ router.post('/:id/archive/complete', authenticateToken, ctrl.completeArchiveUplo
 router.delete('/:id/archive/upload', authenticateToken, ctrl.discardArchiveUpload);
 router.post('/:id/archive/scan', authenticateToken, ctrl.rescanArchive);
 router.get('/:id/download', ctrl.downloadArchive);
+// The zip's bytes, for a caller that cannot follow `/download`'s signed link (a dataspace connector).
+router.get('/:id/archive', ctrl.streamArchive);
 router.get('/:id/hub', ctrl.hubInfo);
 
 router.post('/:id/import', authenticateToken, validateRequest({ body: startImportBodySchema }), ctrl.startImport);
