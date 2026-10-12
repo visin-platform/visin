@@ -12,11 +12,11 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { modelService } from '../../services/modelService';
-import type { ModelReference } from '../../types/training';
+import type { HubModelReference } from '../../types/training';
 
 interface ModelCardDialogProps {
   trainingId: string;
-  model: ModelReference;
+  model: HubModelReference;
   onClose: () => void;
 }
 

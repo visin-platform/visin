@@ -40,6 +40,7 @@ import {
 } from '@visin/frontend-core';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DatasetContentsCard from '../components/dataset/DatasetContentsCard';
+import DatasetModels from '../components/dataset/DatasetModels';
 import DatasetFormDialog, { DatasetFormValues } from '../components/dataset/DatasetFormDialog';
 import DatasetImageGrid from '../components/dataset/DatasetImageGrid';
 import DatasetItemDialog from '../components/dataset/DatasetItemDialog';
@@ -558,6 +559,7 @@ const DatasetDetailPage: React.FC = () => {
       )}
 
       <BestRunCard datasetId={dataset._id} showProject />
+      <DatasetModels datasetId={dataset._id} />
       {dataset.source && (
         <HubDatasetCard
           datasetId={dataset._id}

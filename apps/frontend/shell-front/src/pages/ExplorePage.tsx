@@ -9,6 +9,7 @@ import { exploreApi, type Pagination } from '../services/exploreApi';
 import type { HomeFinding } from '../services/homeApi';
 import { cardGridSx } from '../components/explore/cardGrid';
 import { CardSkeletons, DatasetCard, ProjectCard } from '../components/explore/cards';
+import { ModelCard } from '../components/explore/ModelCard';
 import { LeaderboardPanel } from '../components/explore/LeaderboardPanel';
 import { VisitorBanner } from '../components/explore/VisitorBanner';
 import { FindingsSection } from '../components/home/FindingsSection';
@@ -24,7 +25,8 @@ const SEARCH_DELAY_MS = 300;
 const KINDS = [
   { value: 'all', label: 'All' },
   { value: 'projects', label: 'Projects' },
-  { value: 'datasets', label: 'Datasets' }
+  { value: 'datasets', label: 'Datasets' },
+  { value: 'models', label: 'Models' }
 ] as const;
 type Kind = (typeof KINDS)[number]['value'];
 
@@ -61,12 +63,24 @@ function Shelf({ id, title, seeAll, query, count, empty, error, more, children }
         <Typography
           id={id}
           component="h2"
-          sx={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}
+          sx={{
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: 'text.secondary'
+          }}
         >
           {title}
         </Typography>
         {seeAll && (
-          <Link component={RouterLink} to={seeAll} underline="none" aria-label={`See all ${title.toLowerCase()}`} sx={{ fontSize: 14, fontWeight: 600 }}>
+          <Link
+            component={RouterLink}
+            to={seeAll}
+            underline="none"
+            aria-label={`See all ${title.toLowerCase()}`}
+            sx={{ fontSize: 14, fontWeight: 600 }}
+          >
             See all
           </Link>
         )}
@@ -157,6 +171,13 @@ export function ExplorePage({ now }: ExplorePageProps) {
     getNextPageParam: (last) => (last.pagination.page < last.pagination.pages ? last.pagination.page + 1 : undefined),
     enabled: datasetsOn
   });
+  const models = useInfiniteQuery({
+    queryKey: ['explore', 'models', search],
+    queryFn: ({ pageParam }) => exploreApi.publicModels({ search, page: pageParam, limit: PAGE_SIZE }),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.pagination.page < last.pagination.pages ? last.pagination.page + 1 : undefined),
+    enabled: vision
+  });
   const leaderboard = useQuery({
     queryKey: ['explore', 'leaderboard'],
     queryFn: () => exploreApi.leaderboard(LEADERBOARD_SHOWN),
@@ -188,17 +209,40 @@ export function ExplorePage({ now }: ExplorePageProps) {
     [latestFindings.data]
   );
 
-  const showProjects = vision && kind !== 'datasets';
-  const showDatasets = datasetsOn && kind !== 'projects';
+  const showProjects = vision && (kind === 'all' || kind === 'projects');
+  const showDatasets = datasetsOn && (kind === 'all' || kind === 'datasets');
+  const showModels = vision && (kind === 'all' || kind === 'models');
   const everything = kind !== 'all';
-  const projectCards = (projects.data?.pages.flatMap((page) => page.projects) ?? []).slice(0, everything ? Infinity : OVERVIEW_COUNT);
-  const datasetCards = (datasets.data?.pages.flatMap((page) => page.datasets) ?? []).slice(0, everything ? Infinity : OVERVIEW_COUNT);
+  const projectCards = (projects.data?.pages.flatMap((page) => page.projects) ?? []).slice(
+    0,
+    everything ? Infinity : OVERVIEW_COUNT
+  );
+  const datasetCards = (datasets.data?.pages.flatMap((page) => page.datasets) ?? []).slice(
+    0,
+    everything ? Infinity : OVERVIEW_COUNT
+  );
+  const modelCards = (models.data?.pages.flatMap((page) => page.models) ?? []).slice(
+    0,
+    everything ? Infinity : OVERVIEW_COUNT
+  );
   const landing = config.LANDING_FRONT_URL?.replace(/\/$/, '');
   const seeAll = (value: Kind) => `?${new URLSearchParams({ ...(search ? { q: search } : {}), type: value })}`;
-  const none = search ? (what: string) => `No public ${what} match “${search}”.` : (what: string) => `No public ${what} yet.`;
+  const none = search
+    ? (what: string) => `No public ${what} match “${search}”.`
+    : (what: string) => `No public ${what} yet.`;
 
   return (
-    <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto', display: 'flex', flexDirection: 'column', gap: { xs: 3, md: 4 }, minWidth: 0 }}>
+    <Box
+      sx={{
+        width: '100%',
+        maxWidth: 1200,
+        mx: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: { xs: 3, md: 4 },
+        minWidth: 0
+      }}
+    >
       {/* Not while the session is still being checked: it would flash for someone signed in. */}
       {!isLoading && !isAuthenticated && (
         <VisitorBanner onSignup={signup} aboutUrl={landing ? `${landing}/about` : undefined} />
@@ -215,7 +259,9 @@ export function ExplorePage({ now }: ExplorePageProps) {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 3, md: 4 }, minWidth: 0 }}>
           <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
             <Box role="group" aria-label="Show" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flexGrow: 1 }}>
-              {KINDS.filter((option) => option.value === 'all' || (option.value === 'projects' ? vision : datasetsOn)).map((option) => (
+              {KINDS.filter(
+                (option) => option.value === 'all' || (option.value === 'datasets' ? datasetsOn : vision)
+              ).map((option) => (
                 <Chip
                   key={option.value}
                   label={option.label}
@@ -233,7 +279,9 @@ export function ExplorePage({ now }: ExplorePageProps) {
                 size="small"
                 label="Sort projects"
                 value={sort}
-                onChange={(event) => update({ sort: event.target.value === 'updated' ? undefined : event.target.value })}
+                onChange={(event) =>
+                  update({ sort: event.target.value === 'updated' ? undefined : event.target.value })
+                }
                 sx={{ minWidth: 190 }}
               >
                 {SORTS.map((option) => (
@@ -246,7 +294,7 @@ export function ExplorePage({ now }: ExplorePageProps) {
             <TextField
               size="small"
               type="search"
-              placeholder="Search projects and datasets"
+              placeholder="Search projects, datasets and models"
               value={typed}
               onChange={(event) => setTyped(event.target.value)}
               slotProps={{
@@ -279,7 +327,11 @@ export function ExplorePage({ now }: ExplorePageProps) {
               error="Could not load projects."
               more={
                 everything
-                  ? { available: hasMore(projects.data?.pages), loading: projects.isFetchingNextPage, load: () => void projects.fetchNextPage() }
+                  ? {
+                      available: hasMore(projects.data?.pages),
+                      loading: projects.isFetchingNextPage,
+                      load: () => void projects.fetchNextPage()
+                    }
                   : undefined
               }
             >
@@ -300,7 +352,11 @@ export function ExplorePage({ now }: ExplorePageProps) {
               error="Could not load datasets."
               more={
                 everything
-                  ? { available: hasMore(datasets.data?.pages), loading: datasets.isFetchingNextPage, load: () => void datasets.fetchNextPage() }
+                  ? {
+                      available: hasMore(datasets.data?.pages),
+                      loading: datasets.isFetchingNextPage,
+                      load: () => void datasets.fetchNextPage()
+                    }
                   : undefined
               }
             >
@@ -310,7 +366,32 @@ export function ExplorePage({ now }: ExplorePageProps) {
             </Shelf>
           )}
 
-          {!showProjects && !showDatasets && (
+          {showModels && (
+            <Shelf
+              id="explore-models"
+              title="Models"
+              seeAll={everything ? undefined : seeAll('models')}
+              query={models}
+              count={modelCards.length}
+              empty={none('models')}
+              error="Could not load models."
+              more={
+                everything
+                  ? {
+                      available: hasMore(models.data?.pages),
+                      loading: models.isFetchingNextPage,
+                      load: () => void models.fetchNextPage()
+                    }
+                  : undefined
+              }
+            >
+              {modelCards.map((row) => (
+                <ModelCard key={`${row.training._id}:${row.model._id}`} row={row} />
+              ))}
+            </Shelf>
+          )}
+
+          {!showProjects && !showDatasets && !showModels && (
             <Typography sx={{ color: 'text.secondary' }}>Nothing to browse here yet.</Typography>
           )}
         </Box>

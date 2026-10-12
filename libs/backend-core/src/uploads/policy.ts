@@ -1,6 +1,9 @@
 import { BadRequestError } from '../errors/HttpError';
 
-export type UploadFormat = 'zip' | 'gzip' | 'tar' | 'png' | 'jpeg' | 'gif' | 'webp' | 'mp4' | 'mov' | 'pdf';
+export type UploadFormat = 'zip' | 'gzip' | 'tar' | 'png' | 'jpeg' | 'gif' | 'webp' | 'mp4' | 'mov' | 'pdf' | 'pth' | 'onnx';
+export type UploadKind = 'archive' | 'image' | 'visualization' | 'checkpoint';
+/** What a trained model's weights are stored as. */
+const CHECKPOINT_FORMATS: UploadFormat[] = ['pth', 'onnx'];
 export interface UploadPolicy { format: UploadFormat; maxBytes: number }
 const MiB = 1024 ** 2;
 // Browsers take these from the OS MIME database: Linux reports .tar.gz/.tgz as
@@ -19,11 +22,15 @@ const formats: Record<string, { format: UploadFormat; mime: string[]; maxBytes: 
   webp: { format: 'webp', mime: ['image/webp'], maxBytes: 50 * MiB },
   mp4: { format: 'mp4', mime: ['video/mp4'], maxBytes: 1024 * MiB },
   mov: { format: 'mov', mime: ['video/quicktime'], maxBytes: 1024 * MiB },
-  pdf: { format: 'pdf', mime: ['application/pdf'], maxBytes: 50 * MiB }
+  pdf: { format: 'pdf', mime: ['application/pdf'], maxBytes: 50 * MiB },
+  // A service narrows this when it reserves the upload (vision-service allows a checkpoint 4 GiB); this is the most
+  // any caller may ask for.
+  pth: { format: 'pth', mime: ['application/octet-stream', 'application/x-pytorch'], maxBytes: 10 * 1024 ** 3 },
+  onnx: { format: 'onnx', mime: ['application/octet-stream', 'application/onnx'], maxBytes: 10 * 1024 ** 3 }
 };
 
 /** Application-owned ceilings; a caller may reserve less, never enlarge these. */
-export function getUploadPolicy(fileId: string, mimetype = 'application/octet-stream', kind?: 'archive' | 'image' | 'visualization'): UploadPolicy {
+export function getUploadPolicy(fileId: string, mimetype = 'application/octet-stream', kind?: UploadKind): UploadPolicy {
   const extension = fileId.split('.').pop()!.toLowerCase();
   const policy = Object.hasOwn(formats, extension) ? formats[extension] : undefined;
   if (!policy || (mimetype !== 'application/octet-stream' && !policy.mime.includes(mimetype))) {
@@ -31,6 +38,7 @@ export function getUploadPolicy(fileId: string, mimetype = 'application/octet-st
   }
   if (kind === 'archive' && !['zip', 'gzip', 'tar'].includes(policy.format)) throw new BadRequestError('An archive is required');
   if (kind === 'image' && !['png', 'jpeg', 'gif', 'webp'].includes(policy.format)) throw new BadRequestError('A raster image is required');
-  if (kind === 'visualization' && ['zip', 'gzip', 'tar'].includes(policy.format)) throw new BadRequestError('Unsupported visualization type');
+  if (kind === 'visualization' && ['zip', 'gzip', 'tar', ...CHECKPOINT_FORMATS].includes(policy.format)) throw new BadRequestError('Unsupported visualization type');
+  if (kind === 'checkpoint' && !CHECKPOINT_FORMATS.includes(policy.format)) throw new BadRequestError('A model checkpoint (.pth or .onnx) is required');
   return { format: policy.format, maxBytes: policy.maxBytes };
 }

@@ -1,6 +1,7 @@
 import { BadRequestError, ForbiddenError } from '@visin/backend-core';
 import { getComparisonById } from './comparisonService';
 import { getTrainingSummary } from './trainingSummaryService';
+import { modelLinkSummary } from './sourceRegistry';
 import { toCsv, toXlsx, type Cell, type Table } from '../utils/tableExport';
 
 export type ExportFormat = 'csv' | 'xlsx';
@@ -38,7 +39,7 @@ export async function comparisonTable(id: string, userId: string | undefined): P
     training.status,
     training.dataset?.name ?? training.datasetId,
     epochCount,
-    models.map(model => `${model.repo}@${model.revision.slice(0, 7)}`).join('; '),
+    models.map(modelLinkSummary).join('; '),
     ...paths.flatMap(path => {
       const metric = metrics.find(candidate => candidate.path === path);
       return metric

@@ -7,7 +7,7 @@ import { tokenProjectId } from '../middleware/projectTokenContext';
 import type { ListModelsQuery } from '../validation/modelRegistrySchemas';
 import { checkpointAddress, evaluationsByCheckpoint } from './checkpointEvaluations';
 import { evaluationScope } from './evaluationScope';
-import { modelLinkKey, modelLinkLabel } from './sourceRegistry';
+import { modelLinkKey, modelLinkLabel, modelLinkStored } from './sourceRegistry';
 import { checkProjectAccess, getVisibleProjectIds, resolveProject } from './projectAccessService';
 import { metricLeaves } from './resultMetrics';
 
@@ -35,7 +35,7 @@ export async function latestEpochs(trainingIds: string[]): Promise<{ results: Re
     { $sort: { epoch: -1 } },
     { $group: { _id: '$trainingId', results: { $first: '$results' } } }
   ]);
-  return rows.map(row => ({ results: row.results ?? {} }));
+  return rows.map((row) => ({ results: row.results ?? {} }));
 }
 
 /**
@@ -45,7 +45,7 @@ export async function latestEpochs(trainingIds: string[]): Promise<{ results: Re
  */
 export async function resolveSegments(trainingIds: string[], metric: string): Promise<string[]> {
   for (const { results } of await latestEpochs(trainingIds)) {
-    const leaf = metricLeaves(results).find(candidate => candidate.path === metric);
+    const leaf = metricLeaves(results).find((candidate) => candidate.path === metric);
     if (leaf) return leaf.segments;
   }
   return metric.split('.');
@@ -67,7 +67,10 @@ export async function bestByRun(
   direction: 'max' | 'min',
   segments: string[] = metric.split('.')
 ): Promise<Map<string, Best>> {
-  const value = segments.reduce<unknown>((input, key) => ({ $getField: { field: { $literal: key }, input } }), '$results');
+  const value = segments.reduce<unknown>(
+    (input, key) => ({ $getField: { field: { $literal: key }, input } }),
+    '$results'
+  );
   const rows = await Epoch.aggregate<{ _id: string; value: number; epoch: number }>([
     { $match: { trainingId: { $in: trainingIds }, deletedAt: null } },
     { $project: { trainingId: 1, epoch: 1, value } },
@@ -75,7 +78,7 @@ export async function bestByRun(
     { $sort: { value: direction === 'max' ? -1 : 1, epoch: 1 } },
     { $group: { _id: '$trainingId', value: { $first: '$value' }, epoch: { $first: '$epoch' } } }
   ]);
-  return new Map(rows.map(row => [row._id, { metric, direction, value: row.value, epoch: row.epoch }]));
+  return new Map(rows.map((row) => [row._id, { metric, direction, value: row.value, epoch: row.epoch }]));
 }
 
 /**
@@ -87,13 +90,16 @@ export async function valuesAtEpochs(
   segments: string[]
 ): Promise<Map<string, number>> {
   if (pairs.length === 0) return new Map();
-  const wanted = new Set(pairs.map(pair => `${pair.trainingId}:${pair.epoch}`));
-  const value = segments.reduce<unknown>((input, key) => ({ $getField: { field: { $literal: key }, input } }), '$results');
+  const wanted = new Set(pairs.map((pair) => `${pair.trainingId}:${pair.epoch}`));
+  const value = segments.reduce<unknown>(
+    (input, key) => ({ $getField: { field: { $literal: key }, input } }),
+    '$results'
+  );
   const rows = await Epoch.aggregate<{ trainingId: string; epoch: number; value: number }>([
     {
       $match: {
-        trainingId: { $in: [...new Set(pairs.map(pair => pair.trainingId))] },
-        epoch: { $in: [...new Set(pairs.map(pair => pair.epoch))] },
+        trainingId: { $in: [...new Set(pairs.map((pair) => pair.trainingId))] },
+        epoch: { $in: [...new Set(pairs.map((pair) => pair.epoch))] },
         deletedAt: null
       }
     },
@@ -113,12 +119,13 @@ export async function scopedProjectIds(userId: string | undefined, projectId: st
   if (projectId) {
     const project = await resolveProject(projectId);
     if (!project) throw new NotFoundError('Project not found');
-    if (!(await checkProjectAccess(userId, project._id.toString()))) throw new ForbiddenError('Access denied to project');
+    if (!(await checkProjectAccess(userId, project._id.toString())))
+      throw new ForbiddenError('Access denied to project');
     return [project._id.toString()];
   }
   const visible = await getVisibleProjectIds(userId);
   const confined = tokenProjectId();
-  return confined ? visible.filter(id => id === confined) : visible;
+  return confined ? visible.filter((id) => id === confined) : visible;
 }
 
 /**
@@ -127,19 +134,19 @@ export async function scopedProjectIds(userId: string | undefined, projectId: st
  */
 export async function listModels(userId: string | undefined, query: ListModelsQuery) {
   const projectIds = await scopedProjectIds(userId, query.projectId);
-  const filter: QueryFilter<ITraining> = { deletedAt: null, projectId: { $in: projectIds }, 'models.0': { $exists: true } };
+  const filter: QueryFilter<ITraining> = {
+    deletedAt: null,
+    projectId: { $in: projectIds },
+    'models.0': { $exists: true }
+  };
   if (query.datasetId) filter.$or = [{ datasetId: query.datasetId }, { 'dataset.id': query.datasetId }];
   const trainings = await Training.find(filter).sort({ createdAt: -1 }).limit(MAX_RUNS).lean();
 
   const needle = query.search?.toLowerCase();
   const matches = (text: string) => text.toLowerCase().includes(needle!);
-  const rows = trainings.flatMap(training =>
-    (training.models ?? [])
-      .filter(model => !needle || matches(training.name) || matches(modelLinkLabel(model)))
-      .map(model => ({ training, model }))
-  );
+  const rows = trainings.flatMap((training) => (training.models ?? []).map((model) => ({ training, model })));
 
-  const runIds = [...new Set(rows.map(row => row.training._id.toString()))];
+  const runIds = [...new Set(rows.map((row) => row.training._id.toString()))];
   const segments = query.metric ? await resolveSegments(runIds, query.metric) : [];
   const best = query.metric
     ? await bestByRun(runIds, query.metric, query.direction, segments)
@@ -147,7 +154,7 @@ export async function listModels(userId: string | undefined, query: ListModelsQu
   // A checkpoint saved at an epoch is scored by that epoch, not by where its run peaked.
   const atEpoch = query.metric
     ? await valuesAtEpochs(
-        rows.flatMap(row =>
+        rows.flatMap((row) =>
           row.model.epoch === undefined ? [] : [{ trainingId: row.training._id.toString(), epoch: row.model.epoch }]
         ),
         segments
@@ -155,7 +162,7 @@ export async function listModels(userId: string | undefined, query: ListModelsQu
     : new Map<string, number>();
   const direction = query.order;
   const ranked = rows
-    .map(row => {
+    .map((row) => {
       const trainingId = row.training._id.toString();
       const value = row.model.epoch === undefined ? undefined : atEpoch.get(`${trainingId}:${row.model.epoch}`);
       const checkpoint: Best | undefined =
@@ -176,16 +183,39 @@ export async function listModels(userId: string | undefined, query: ListModelsQu
       return (a.model.addedAt.getTime() - b.model.addedAt.getTime()) * direction;
     });
 
-  const total = ranked.length;
-  const page = ranked.slice((query.page - 1) * query.limit, query.page * query.limit);
-  const shown = [...new Set(page.map(row => row.training.projectId))].filter((id): id is string => isValidObjectId(id));
-  const projects = await Project.find({ _id: { $in: shown.map(id => new Types.ObjectId(id)) } }).select('name slug').lean();
-  const named = new Map(projects.map(project => [project._id.toString(), { _id: project._id.toString(), name: project.name, slug: project.slug }]));
+  // Page checkpoints, keeping their formats together. A boundary must never hide one of a row's downloads.
+  const grouped = new Map<string, typeof ranked>();
+  for (const row of ranked) {
+    const key = modelLinkStored(row.model) ? `${row.training._id}:${modelLinkKey(row.model)}` : String(row.model._id);
+    const formats = grouped.get(key) ?? [];
+    formats.push(row);
+    grouped.set(key, formats);
+  }
+  const checkpoints = [...grouped.values()].filter(
+    (formats) =>
+      !needle || formats.some(({ training, model }) => matches(training.name) || matches(modelLinkLabel(model)))
+  );
+  const total = checkpoints.length;
+  const page = checkpoints.slice((query.page - 1) * query.limit, query.page * query.limit).flat();
+  const shown = [...new Set(page.map((row) => row.training.projectId))].filter((id): id is string =>
+    isValidObjectId(id)
+  );
+  const projects = await Project.find({ _id: { $in: shown.map((id) => new Types.ObjectId(id)) } })
+    .select('name slug')
+    .lean();
+  const named = new Map(
+    projects.map((project) => [
+      project._id.toString(),
+      { _id: project._id.toString(), name: project.name, slug: project.slug }
+    ])
+  );
 
   // What each shown checkpoint scored on suites: matched by canonical key, in one query for the whole page.
   const keyOf = modelLinkKey;
   const evaluated = await evaluationsByCheckpoint(
-    page.flatMap(row => (row.training.projectId ? [{ projectId: row.training.projectId, checkpointKey: keyOf(row.model) }] : [])),
+    page.flatMap((row) =>
+      row.training.projectId ? [{ projectId: row.training.projectId, checkpointKey: keyOf(row.model) }] : []
+    ),
     await evaluationScope(userId)
   );
   const evaluationsOf = (training: { projectId?: string }, model: Parameters<typeof keyOf>[0]) =>

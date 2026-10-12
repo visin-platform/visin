@@ -137,6 +137,23 @@ export interface ExploreDataset {
   updatedAt: string;
 }
 
+/** A linked model in a public run; enough to name its store and open the run's downloads. */
+export interface ExploreModel {
+  model: {
+    _id: string;
+    provider: 'hf' | 'visin';
+    repo?: string;
+    revision?: string;
+    filename?: string;
+    format?: 'pth' | 'onnx';
+    status?: 'verifying' | 'ready' | 'failed';
+    license?: { id: string; name?: string };
+    addedAt: string;
+  };
+  training: { _id: string; name: string };
+  project?: { _id: string; name: string; slug?: string };
+}
+
 /** A paper as a list shows it: the fields of vision-service's public paper catalogue the rows read. */
 export interface ExplorePaper {
   id: string;
@@ -192,6 +209,17 @@ const authApi = createApiClient({
 });
 
 export const exploreApi = {
+  /** Omit the session so the member-aware registry lists only public projects, even for a signed-in visitor. */
+  async publicModels(query: CatalogueQuery): Promise<{ models: ExploreModel[]; pagination: Pagination }> {
+    const params = new URLSearchParams({ page: String(query.page), limit: String(query.limit) });
+    if (query.search) params.set('search', query.search);
+    return (
+      await visionApi.get<Envelope<{ models: ExploreModel[]; pagination: Pagination }>>(`/models?${params}`, {
+        credentials: 'omit',
+        skipAuthRedirect: true
+      })
+    ).data;
+  },
   /**
    * Projects anyone can open, most recently updated first. Explore is the public
    * catalogue, so the viewer's own private projects (which the list also returns
@@ -233,7 +261,9 @@ export const exploreApi = {
   },
 
   /** The public projects, a page at a time, with owners, run counts and when the latest run started. */
-  async publicProjects(query: CatalogueQuery & { sort: 'updated' | 'created' }): Promise<{ projects: ExploreProject[]; pagination: Pagination }> {
+  async publicProjects(
+    query: CatalogueQuery & { sort: 'updated' | 'created' }
+  ): Promise<{ projects: ExploreProject[]; pagination: Pagination }> {
     const params = new URLSearchParams({ sort: query.sort, page: String(query.page), limit: String(query.limit) });
     if (query.search) params.set('search', query.search);
     const { data } = await visionApi.get<
@@ -262,7 +292,9 @@ export const exploreApi = {
     if (owner.user) params.set('user', owner.user);
     if (owner.owner) params.set('owner', owner.owner);
     return (
-      await datasetApi.get<Envelope<{ datasets: ExploreDataset[]; pagination: Pagination }>>(`?${params}`, { skipAuthRedirect: true })
+      await datasetApi.get<Envelope<{ datasets: ExploreDataset[]; pagination: Pagination }>>(`?${params}`, {
+        skipAuthRedirect: true
+      })
     ).data;
   },
 
@@ -302,7 +334,12 @@ export const exploreApi = {
    * The public papers, a page at a time. `user` keeps only the papers that person has confirmed they wrote, which is
    * what a profile lists.
    */
-  async publicPapers(query: { search?: string; user?: string; page: number; limit: number }): Promise<{ papers: ExplorePaper[]; pagination: Pagination }> {
+  async publicPapers(query: {
+    search?: string;
+    user?: string;
+    page: number;
+    limit: number;
+  }): Promise<{ papers: ExplorePaper[]; pagination: Pagination }> {
     const params = new URLSearchParams({ page: String(query.page), limit: String(query.limit) });
     if (query.search) params.set('search', query.search);
     if (query.user) params.set('user', query.user);
@@ -315,7 +352,9 @@ export const exploreApi = {
 
   /** The latest findings in public projects. */
   async publicFindings(limit: number): Promise<PublicFinding[]> {
-    return (await visionApi.get<Envelope<PublicFinding[]>>(`/public/findings?limit=${limit}`, { skipAuthRedirect: true })).data;
+    return (
+      await visionApi.get<Envelope<PublicFinding[]>>(`/public/findings?limit=${limit}`, { skipAuthRedirect: true })
+    ).data;
   },
 
   /** A person's public page, or null where there is none: no such handle, or the person hid theirs. */
@@ -334,7 +373,9 @@ export const exploreApi = {
   async group(handle: string): Promise<PublicGroup | null> {
     try {
       return (
-        await groupApi.get<Envelope<PublicGroup>>(`/public/groups/${encodeURIComponent(handle)}`, { skipAuthRedirect: true })
+        await groupApi.get<Envelope<PublicGroup>>(`/public/groups/${encodeURIComponent(handle)}`, {
+          skipAuthRedirect: true
+        })
       ).data;
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) return null;
@@ -344,7 +385,8 @@ export const exploreApi = {
 
   /** The best recorded results across public projects, whoever verified them. */
   async leaderboard(limit: number): Promise<Leaderboard> {
-    return (await visionApi.get<Envelope<Leaderboard>>(`/evaluations/leaderboard?verification=all&limit=${limit}`)).data;
+    return (await visionApi.get<Envelope<Leaderboard>>(`/evaluations/leaderboard?verification=all&limit=${limit}`))
+      .data;
   }
 };
 

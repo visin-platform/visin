@@ -29,6 +29,8 @@ export { sharedSecretMatches } from './auth/sharedSecret';
 // HTTP client
 export { fetchWithTimeout, DEFAULT_FETCH_TIMEOUT_MS, TRANSFER_FETCH_TIMEOUT_MS } from './http/fetchWithTimeout';
 export type { FetchWithTimeoutInit } from './http/fetchWithTimeout';
+export { sendStoredFile, storedFileTag } from './http/sendStoredFile';
+export type { StoredFile } from './http/sendStoredFile';
 export { appLink, escapeHtml, excerpt, shellFrontUrl, renderSharePage, sendSharePage } from './http/sharePage';
 export type { SharePage } from './http/sharePage';
 
@@ -171,7 +173,7 @@ export { createHealthCheckHandler } from './health/createHealthCheckHandler';
 export type { CreateHealthCheckHandlerOptions } from './health/createHealthCheckHandler';
 
 export { getUploadPolicy } from './uploads/policy';
-export type { UploadPolicy, UploadFormat } from './uploads/policy';
+export type { UploadPolicy, UploadFormat, UploadKind } from './uploads/policy';
 
 // Licences the data behind a dataset or a suite is declared to carry
 export { LICENSES, KNOWN_LICENSE_IDS, OTHER_LICENSE, licenseSchema, licenseView, licenseChoices } from './licenses/licenses';

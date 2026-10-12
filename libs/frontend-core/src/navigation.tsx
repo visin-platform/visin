@@ -11,6 +11,7 @@ import {
   Key,
   Label,
   Link as LinkIcon,
+  Memory,
   ModelTraining,
   Person,
   PhotoLibrary,
@@ -77,8 +78,8 @@ const NAV_GROUPS: NavGroup[] = [
       { app: 'shell', text: 'For you', icon: <Home />, path: '/', signedInOnly: true },
       { app: 'shell', text: 'Explore', icon: <Explore />, path: '/explore', signedOutPath: '/' },
       // Public results, the other half of what Explore shows: they sit beside it in the bar rather than taking a
-      // place in the rail of their own. Models, Suites and Evaluations are still routes of vision-front, just not
-      // offered here for now.
+      // place in the rail of their own. Suites and Evaluations are still routes of vision-front, just not offered
+      // here for now; Models have a group of their own, below.
       { app: 'vision', text: 'Leaderboards', icon: <Scoreboard />, path: '/leaderboards' }
     ]
   },
@@ -100,6 +101,12 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Data',
     icon: <Storage />,
     sections: [{ app: 'vision', text: 'Datasets', icon: <PhotoLibrary />, path: '/datasets' }]
+  },
+  {
+    label: 'Models',
+    icon: <Memory />,
+    // The checkpoints runs published, to download: open to visitors for the public ones, like Papers and Explore.
+    sections: [{ app: 'vision', text: 'Models', icon: <Memory />, path: '/models' }]
   },
   {
     label: 'Papers',

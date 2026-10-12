@@ -17,6 +17,8 @@ import { latestResultsByRun, type RunResultSummary } from './resultAggregation';
 import { checkProjectAccess, createProjectAccessChecker, getVisibleProjectIds } from './projectAccessService';
 import { costOf, costingByProject, costingFor } from './costingService';
 import { touchProjectActivity } from './projectActivity';
+import EpochVisualization from '../models/EpochVisualization';
+import { summarizeMetrics } from './trainingSummaryService';
 import type { TrainingSortField } from '../validation/trainingSchemas';
 
 interface TrainingMetrics {
@@ -112,15 +114,16 @@ async function idsOrderedByMetric(
           { $addFields: { unpriced: { $cond: [priced, 0, 1] } } }
         ]),
     {
-      $sort: sortBy === 'epochCount' || sortBy === 'totalTime'
-        ? { [sortBy]: order, _id: order }
-        : { unpriced: 1, [sortBy]: order, _id: order }
+      $sort:
+        sortBy === 'epochCount' || sortBy === 'totalTime'
+          ? { [sortBy]: order, _id: order }
+          : { unpriced: 1, [sortBy]: order, _id: order }
     },
     { $skip: skip },
     { $limit: limit },
     { $project: { _id: 1 } }
   ]);
-  return rows.map(row => row._id);
+  return rows.map((row) => row._id);
 }
 
 interface TrainingFilters {
@@ -214,9 +217,9 @@ export const trainingService = {
       query.status = status as ITraining['status'];
     }
 
-    // Filter by dataset
+    // Filter by dataset: a run that names it by id (`datasetId`, older runs) or by reference (`dataset.id`, new ones)
     if (datasetId) {
-      query.datasetId = datasetId;
+      query.$and = [...(query.$and ?? []), { $or: [{ datasetId }, { 'dataset.id': datasetId }] }];
     }
 
     // Filter by project
@@ -239,7 +242,7 @@ export const trainingService = {
 
     if (ids) {
       // As ObjectIds, so the same filter works in an aggregation, which does not cast.
-      query._id = { $in: ids.filter(id => isValidObjectId(id)).map(id => new Types.ObjectId(id)) };
+      query._id = { $in: ids.filter((id) => isValidObjectId(id)).map((id) => new Types.ObjectId(id)) };
     }
 
     // Filter by tags: every wanted tag present, and none of the excluded ones.
@@ -265,9 +268,9 @@ export const trainingService = {
         Training.countDocuments(query)
       ]);
       const byId = new Map<string, ITraining>(
-        (await Training.find({ _id: { $in: pageIds } })).map(t => [t._id.toString(), t])
+        (await Training.find({ _id: { $in: pageIds } })).map((t) => [t._id.toString(), t])
       );
-      fetchedTrainings = pageIds.flatMap(id => byId.get(id.toString()) ?? []);
+      fetchedTrainings = pageIds.flatMap((id) => byId.get(id.toString()) ?? []);
       total = count;
     } else {
       [fetchedTrainings, total] = await Promise.all([
@@ -286,7 +289,7 @@ export const trainingService = {
 
     // Get metrics using aggregation for better performance
     if (trainings.length > 0) {
-      const trainingIds = trainings.map(t => t._id);
+      const trainingIds = trainings.map((t) => t._id);
       const metricsAggregation = await Training.aggregate([
         { $match: { _id: { $in: trainingIds } } },
         {
@@ -294,7 +297,12 @@ export const trainingService = {
             from: 'training_epoches',
             let: { trainingId: '$_id' },
             pipeline: [
-              { $match: { $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] }, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] } }
+              {
+                $match: {
+                  $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] },
+                  $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
+                }
+              }
             ],
             as: 'epochs'
           }
@@ -319,16 +327,16 @@ export const trainingService = {
 
       // Create a map of metrics by training ID
       const metricsMap = new Map<string, TrainingMetrics>();
-      metricsAggregation.forEach(item => {
+      metricsAggregation.forEach((item) => {
         metricsMap.set(item._id.toString(), item.metrics);
       });
 
       // A page can span projects, and a training need not belong to one at all,
       // so costs are applied per row at that project's rates rather than by one
       // constant baked into the pipeline.
-      const byProject = await costingByProject(trainings.map(t => t.projectId));
+      const byProject = await costingByProject(trainings.map((t) => t.projectId));
 
-      trainingsOutput = trainings.map(training => {
+      trainingsOutput = trainings.map((training) => {
         const base = metricsMap.get(training._id.toString());
         const cost = costOf(base?.totalTime ?? 0, costingFor(byProject, training.projectId));
         return {
@@ -346,6 +354,51 @@ export const trainingService = {
           }
         };
       });
+    }
+
+    // Dataset participants need the linked models, output kinds and best readings in one request.
+    // The page was scoped above; only those runs' live epochs and output types enter this answer.
+    if (datasetId && trainings.length) {
+      const runIds = trainings.map((training) => String(training._id));
+      const [epochs, projects] = await Promise.all([
+        Epoch.find({ trainingId: { $in: runIds }, deletedAt: null })
+          .select('trainingId epoch epoch_uuid results')
+          .sort({ epoch: 1 })
+          .lean(),
+        Project.find({
+          _id: {
+            $in: trainings
+              .map((training) => training.projectId)
+              .filter((id): id is string => Boolean(id && isValidObjectId(id)))
+          }
+        })
+          .select('taxonomy.metrics')
+          .lean()
+      ]);
+      const types = await EpochVisualization.aggregate<{ _id: string; types: string[] }>([
+        { $match: { epoch_uuid: { $in: epochs.map((epoch) => epoch.epoch_uuid) } } },
+        { $group: { _id: '$epoch_uuid', types: { $addToSet: '$type' } } }
+      ]);
+      const byEpoch = new Map(types.map((row) => [row._id, row.types]));
+      const byRun = new Map<string, typeof epochs>();
+      for (const epoch of epochs) {
+        const rows = byRun.get(epoch.trainingId) ?? [];
+        rows.push(epoch);
+        byRun.set(epoch.trainingId, rows);
+      }
+      const taxonomy = new Map(projects.map((project) => [String(project._id), project.taxonomy?.metrics]));
+      return {
+        trainings: trainingsOutput.map((training, index) => {
+          const original = trainings[index];
+          const recorded = byRun.get(String(original._id)) ?? [];
+          return {
+            ...training,
+            visualizationTypes: [...new Set(recorded.flatMap((epoch) => byEpoch.get(epoch.epoch_uuid) ?? []))].sort(),
+            bestMetrics: summarizeMetrics(recorded, taxonomy.get(original.projectId ?? ''))
+          };
+        }),
+        pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / Number(limit)) }
+      };
     }
 
     return {
@@ -413,13 +466,7 @@ export const trainingService = {
     return training;
   },
 
-  async getTrainingWithEpochs(
-    id: string,
-    userId: string | undefined,
-    sortBy: string,
-    order: 1 | -1,
-    sample?: number
-  ) {
+  async getTrainingWithEpochs(id: string, userId: string | undefined, sortBy: string, order: 1 | -1, sample?: number) {
     const training = await Training.findOne({ _id: id, deletedAt: null });
 
     if (!training) {
@@ -446,21 +493,21 @@ export const trainingService = {
     // Keyed on `_id` rather than epoch number so it stays correct whatever the
     // rows are sorted by.
     const ids = await Epoch.find(query).select('_id').sort(sort);
-    const picked = evenlySpaced(ids, sample).map(row => row._id);
+    const picked = evenlySpaced(ids, sample).map((row) => row._id);
 
     const epochs = await Epoch.find({ ...query, _id: { $in: picked } }).sort(sort);
     return { training, epochs, totalEpochs: ids.length };
   },
 
- /**
+  /**
    * Every training has a project: the one a project-limited credential names,
    * or `projectId` (an id or a slug). One the caller cannot see reads as not
    * found, so a private project's name is not confirmed to outsiders.
    */
   async createTraining(userId: string, data: CreateTrainingData) {
-    const { 
-      name, 
-      description, 
+    const {
+      name,
+      description,
       datasetId,
       configId,
       projectId,
@@ -468,7 +515,7 @@ export const trainingService = {
       tags,
       startTime,
       endTime,
-      metadata 
+      metadata
     } = data;
 
     if (!name || name.trim().length === 0) {
@@ -477,11 +524,13 @@ export const trainingService = {
 
     const ownerId = requireActor(userId);
     if (!projectId) {
-      throw new BadRequestError('A training needs a project: pass projectId, the project\'s id or slug');
+      throw new BadRequestError("A training needs a project: pass projectId, the project's id or slug");
     }
     const project = await resolveProject(projectId);
     if (!project || !(await this.checkProjectAccess(userId, projectId))) {
-      throw new NotFoundError(`Project "${projectId}" not found. Create it at /projects?new=1 in Visin, or check the name.`);
+      throw new NotFoundError(
+        `Project "${projectId}" not found. Create it at /projects?new=1 in Visin, or check the name.`
+      );
     }
     const resolvedProjectId = project._id.toString();
     await assertResourceWrite({ projectId: resolvedProjectId, ownerId }, userId);
@@ -491,7 +540,12 @@ export const trainingService = {
     // Generate UUID if not provided
     const uuid = data.uuid || uuidv4();
 
-    const dataset = await resolveDatasetReference(data.dataset, datasetId, userId, tokenProjectId() ? project.owner : undefined);
+    const dataset = await resolveDatasetReference(
+      data.dataset,
+      datasetId,
+      userId,
+      tokenProjectId() ? project.owner : undefined
+    );
     requireDatasetStorage(project, dataset);
 
     const training = new Training({
@@ -539,17 +593,7 @@ export const trainingService = {
       throw new ForbiddenError();
     }
 
-    const {
-      name, 
-      description, 
-      datasetId,
-      configId,
-      status,
-      tags,
-      startTime,
-      endTime,
-      metadata 
-    } = data;
+    const { name, description, datasetId, configId, status, tags, startTime, endTime, metadata } = data;
 
     await requireProjectConfig(configId, training.projectId);
 
@@ -559,7 +603,12 @@ export const trainingService = {
     if (data.notes !== undefined) training.notes = data.notes.trim() || undefined;
     if (data.dataset !== undefined || datasetId !== undefined) {
       const project = training.projectId ? await resolveProject(training.projectId) : undefined;
-      const dataset = await resolveDatasetReference(data.dataset, datasetId, userId, tokenProjectId() ? project?.owner : undefined);
+      const dataset = await resolveDatasetReference(
+        data.dataset,
+        datasetId,
+        userId,
+        tokenProjectId() ? project?.owner : undefined
+      );
       requireDatasetStorage(project, dataset);
       training.dataset = dataset;
       training.datasetId = training.dataset?.source === 'visin' ? training.dataset.id : datasetId;
@@ -600,7 +649,7 @@ export const trainingService = {
     }
 
     const now = new Date();
-    
+
     // Mark training as deleted
     training.deletedAt = now;
     await training.save();
@@ -617,10 +666,13 @@ export const trainingService = {
     // historical references; deleting a training does not grant their ownership.
     const editableProjects = await getEditableProjectIds(userId);
     await Comparison.updateMany(
-      { itemIds: id, $or: [
-        { projectId: { $in: editableProjects } },
-        ...(!tokenProjectId() ? [{ projectId: null, ownerId: userId }] : [])
-      ] },
+      {
+        itemIds: id,
+        $or: [
+          { projectId: { $in: editableProjects } },
+          ...(!tokenProjectId() ? [{ projectId: null, ownerId: userId }] : [])
+        ]
+      },
       { $pull: { itemIds: id }, updatedAt: now }
     );
 
@@ -648,7 +700,7 @@ export const trainingService = {
       deletedAt: { $ne: null },
       $or: [
         { projectId: { $in: contributed }, ownerId: userId },
-        { projectId: { $in: managed.map(project => project._id.toString()) } }
+        { projectId: { $in: managed.map((project) => project._id.toString()) } }
       ]
     };
 
@@ -745,7 +797,12 @@ export const trainingService = {
           from: 'training_epoches',
           let: { trainingId: '$_id' },
           pipeline: [
-            { $match: { $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] }, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] } }
+            {
+              $match: {
+                $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] },
+                $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
+              }
+            }
           ],
           as: 'epochs'
         }
@@ -770,7 +827,9 @@ export const trainingService = {
       {
         $addFields: {
           totalHours: { $divide: ['$totalTime', 3600] },
-          avgEpochTime: { $cond: { if: { $gt: ['$totalEpochs', 0] }, then: { $divide: ['$totalTime', '$totalEpochs'] }, else: 0 } }
+          avgEpochTime: {
+            $cond: { if: { $gt: ['$totalEpochs', 0] }, then: { $divide: ['$totalTime', '$totalEpochs'] }, else: 0 }
+          }
         }
       }
     ];
@@ -792,7 +851,12 @@ export const trainingService = {
           from: 'training_epoches',
           let: { trainingId: '$_id' },
           pipeline: [
-            { $match: { $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] }, $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] } },
+            {
+              $match: {
+                $expr: { $eq: ['$trainingId', { $toString: '$$trainingId' }] },
+                $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
+              }
+            },
             { $group: { _id: null, time: { $sum: '$epoch_time' } } }
           ],
           as: 'epochStats'
@@ -807,7 +871,7 @@ export const trainingService = {
       }
     ]);
 
-    const byProject = await costingByProject(perProject.map(row => row._id));
+    const byProject = await costingByProject(perProject.map((row) => row._id));
     const totalsByCurrency = new Map<string, CurrencyCostTotal>();
     const costCoverage = { pricedTrainings: 0, unpricedTrainings: 0, pricedTime: 0, unpricedTime: 0 };
     for (const row of perProject) {
@@ -821,15 +885,17 @@ export const trainingService = {
       costCoverage.pricedTime += row.totalTime;
       const cost = costOf(row.totalTime, rates);
       const subtotal = totalsByCurrency.get(rates.currency) ?? {
-        currency: rates.currency, totalCpuCost: 0, totalGpuCost: 0, totalCost: 0,
+        currency: rates.currency,
+        totalCpuCost: 0,
+        totalGpuCost: 0,
+        totalCost: 0
       };
       subtotal.totalCpuCost += cost.cpuCost!;
       subtotal.totalGpuCost += cost.gpuCost!;
       subtotal.totalCost += cost.totalCost!;
       totalsByCurrency.set(rates.currency, subtotal);
     }
-    const costTotalsByCurrency = [...totalsByCurrency.values()]
-      .sort((a, b) => a.currency.localeCompare(b.currency));
+    const costTotalsByCurrency = [...totalsByCurrency.values()].sort((a, b) => a.currency.localeCompare(b.currency));
 
     // Retain scalar fields for single-currency clients only. These are estimates
     // at current project rates; no exchange rates or historical billing implied.
@@ -864,70 +930,76 @@ export const trainingService = {
         trainings.push(training);
       }
     }
-    const foundTrainingIds = trainings.map(t => t._id.toString());
-    const epochs = await Epoch.find({ trainingId: { $in: foundTrainingIds }, deletedAt: null })
-      .sort({ trainingId: 1, epoch: 1 });
+    const foundTrainingIds = trainings.map((t) => t._id.toString());
+    const epochs = await Epoch.find({ trainingId: { $in: foundTrainingIds }, deletedAt: null }).sort({
+      trainingId: 1,
+      epoch: 1
+    });
 
     // Get all epoch UUIDs for fetching benchmarks
-    const epochUuids = epochs.map(e => e.epoch_uuid);
+    const epochUuids = epochs.map((e) => e.epoch_uuid);
 
     // Get aggregated test results for these trainings
     const aggregatedTestResults = await latestResultsByRun(userId, foundTrainingIds);
 
     // Get all benchmarks for these trainings
-    const benchmarks = await Benchmark.find({ 
-      $or: [
-        { training_id: { $in: foundTrainingIds } },
-        { epoch_uuid: { $in: epochUuids } }
-      ], 
-      deletedAt: null 
+    const benchmarks = await Benchmark.find({
+      $or: [{ training_id: { $in: foundTrainingIds } }, { epoch_uuid: { $in: epochUuids } }],
+      deletedAt: null
     }).populate('training_id', 'name uuid');
 
     // Group epochs by training ID
-    const epochsByTraining: Record<string, IEpoch[]> = epochs.reduce((acc, epoch) => {
-      const trainingId = epoch.trainingId.toString();
-      if (!acc[trainingId]) {
-        acc[trainingId] = [];
-      }
-      acc[trainingId].push(epoch);
-      return acc;
-    }, {} as Record<string, IEpoch[]>);
-
-    // Group benchmarks by training ID
-    const benchmarksByTraining: Record<string, IBenchmark[]> = benchmarks.reduce((acc, benchmark) => {
-      let trainingId: string | null = null;
-      const populatedTrainingRef = benchmark.training_id as unknown as PopulatedTrainingRef | Types.ObjectId | string | null;
-      if (populatedTrainingRef && typeof populatedTrainingRef === 'object' && '_id' in populatedTrainingRef) {
-        trainingId = populatedTrainingRef._id.toString();
-      } else if (typeof benchmark.training_id === 'string') {
-        trainingId = benchmark.training_id;
-      } else {
-        // Try to find via epoch_uuid
-        const epoch = epochs.find(e => e.epoch_uuid === benchmark.epoch_uuid);
-        if (epoch) {
-          trainingId = epoch.trainingId.toString();
-        }
-      }
-
-      if (trainingId) {
+    const epochsByTraining: Record<string, IEpoch[]> = epochs.reduce(
+      (acc, epoch) => {
+        const trainingId = epoch.trainingId.toString();
         if (!acc[trainingId]) {
           acc[trainingId] = [];
         }
-        acc[trainingId].push(benchmark);
-      }
-      return acc;
-    }, {} as Record<string, IBenchmark[]>);
+        acc[trainingId].push(epoch);
+        return acc;
+      },
+      {} as Record<string, IEpoch[]>
+    );
+
+    // Group benchmarks by training ID
+    const benchmarksByTraining: Record<string, IBenchmark[]> = benchmarks.reduce(
+      (acc, benchmark) => {
+        let trainingId: string | null = null;
+        const populatedTrainingRef = benchmark.training_id as unknown as
+          PopulatedTrainingRef | Types.ObjectId | string | null;
+        if (populatedTrainingRef && typeof populatedTrainingRef === 'object' && '_id' in populatedTrainingRef) {
+          trainingId = populatedTrainingRef._id.toString();
+        } else if (typeof benchmark.training_id === 'string') {
+          trainingId = benchmark.training_id;
+        } else {
+          // Try to find via epoch_uuid
+          const epoch = epochs.find((e) => e.epoch_uuid === benchmark.epoch_uuid);
+          if (epoch) {
+            trainingId = epoch.trainingId.toString();
+          }
+        }
+
+        if (trainingId) {
+          if (!acc[trainingId]) {
+            acc[trainingId] = [];
+          }
+          acc[trainingId].push(benchmark);
+        }
+        return acc;
+      },
+      {} as Record<string, IBenchmark[]>
+    );
 
     // Compared trainings often come from different projects, so each one's costs
     // use its own project's rates.
-    const byProject = await costingByProject(trainings.map(t => t.projectId));
+    const byProject = await costingByProject(trainings.map((t) => t.projectId));
 
     // Calculate comparison data for each training
-    const comparisonData = trainings.map(training => {
+    const comparisonData = trainings.map((training) => {
       const trainingId = training._id.toString();
       const trainingEpochs = epochsByTraining[trainingId] || [];
-      const trainingAggregatedResults: TrainingComparisonItem | undefined = aggregatedTestResults.comparison.find((item) =>
-        item.training._id.toString() === trainingId
+      const trainingAggregatedResults: TrainingComparisonItem | undefined = aggregatedTestResults.comparison.find(
+        (item) => item.training._id.toString() === trainingId
       );
       let trainingBenchmarks = benchmarksByTraining[trainingId] || [];
       // if there are multiple benchmarks keep only the most recent one (by timestamp)
@@ -969,11 +1041,13 @@ export const trainingService = {
             currency
           }
         },
-        lastEpoch: lastEpoch ? {
-          epoch: lastEpoch.epoch,
-          results: lastEpoch.results,
-          timestamp: lastEpoch.timestamp
-        } : null,
+        lastEpoch: lastEpoch
+          ? {
+              epoch: lastEpoch.epoch,
+              results: lastEpoch.results,
+              timestamp: lastEpoch.timestamp
+            }
+          : null,
         epochs: trainingEpochs.map((epoch) => ({
           epoch: epoch.epoch,
           results: epoch.results,
@@ -990,9 +1064,9 @@ export const trainingService = {
       comparison: comparisonData,
       summary: {
         totalTrainings: trainings.length,
-        trainingsWithEpochs: comparisonData.filter(c => c.epochs.length > 0).length,
-        trainingsWithTestResults: comparisonData.filter(c => c.aggregatedTestResults !== null).length,
-        trainingsWithBenchmarks: comparisonData.filter(c => c.benchmarks.length > 0).length
+        trainingsWithEpochs: comparisonData.filter((c) => c.epochs.length > 0).length,
+        trainingsWithTestResults: comparisonData.filter((c) => c.aggregatedTestResults !== null).length,
+        trainingsWithBenchmarks: comparisonData.filter((c) => c.benchmarks.length > 0).length
       }
     };
   }

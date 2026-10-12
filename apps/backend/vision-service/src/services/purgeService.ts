@@ -33,7 +33,12 @@ export async function purgeTrainings(trainingIds: string[]): Promise<void> {
   if (trainingIds.length === 0) return;
   const epochUuids = (await Epoch.find({ trainingId: { $in: trainingIds } }).select('epoch_uuid')).map(epoch => epoch.epoch_uuid);
   const visualizations = await EpochVisualization.find({ epoch_uuid: { $in: epochUuids } }).select('fileId');
-  await deleteFiles(visualizations.map(visualization => visualization.fileId));
+  // The model files a run kept on this deployment go with it; a pointer to a Hub repo has none.
+  const kept = await Training.find({ _id: { $in: trainingIds } }).select('models').lean();
+  const modelFiles = kept.flatMap(training =>
+    (training.models ?? []).flatMap(model => (model.provider === 'visin' && model.fileId ? [model.fileId] : []))
+  );
+  await deleteFiles([...visualizations.map(visualization => visualization.fileId), ...modelFiles]);
 
   await EpochVisualization.deleteMany({ epoch_uuid: { $in: epochUuids } });
   await purgeRunEvaluations({ trainingIds, epochUuids });

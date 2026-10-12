@@ -14,6 +14,9 @@ import {
   getTrainingStats,
   compareTrainings,
   addTrainingModel,
+  createTrainingModelUpload,
+  downloadModelBundle,
+  downloadTrainingModel,
   removeTrainingModel,
   setTrainingModelDemo,
   getModelCard,
@@ -24,7 +27,7 @@ import { getConfigsByTraining } from '../controllers/configController';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '@visin/backend-core';
 import { bestRunQuerySchema } from '../validation/bestRunSchemas';
-import { modelCardQuerySchema, modelDemoBodySchema, modelLinkSchema } from '../validation/artifactSchemas';
+import { modelBundleQuerySchema, modelCardQuerySchema, modelDemoBodySchema, modelLinkSchema, modelUploadBodySchema } from '../validation/artifactSchemas';
 import {
   getDeletedTrainingsQuerySchema,
   getTrainingsQuerySchema,
@@ -60,7 +63,11 @@ router.post('/', authMiddleware, validateRequest({ body: createTrainingBodySchem
 router.put('/:id', authMiddleware, validateRequest({ body: updateTrainingBodySchema }), updateTraining);
 router.delete('/:id', authMiddleware, deleteTraining);
 router.post('/:id/heartbeat', authMiddleware, heartbeatTraining);
+// A model file is uploaded first, then claimed by the link; a link to a Hub repo is only the second call.
+router.post('/:id/models/upload-url', authMiddleware, validateRequest({ body: modelUploadBodySchema }), createTrainingModelUpload);
 router.post('/:id/models', authMiddleware, validateRequest({ body: modelLinkSchema }), addTrainingModel);
+router.get('/:id/models/:modelId/file', optionalAuthMiddleware, downloadTrainingModel);
+router.get('/:id/models/:modelId/bundle', optionalAuthMiddleware, validateRequest({ query: modelBundleQuerySchema }), downloadModelBundle);
 router.patch('/:id/models/:modelId', authMiddleware, validateRequest({ body: modelDemoBodySchema }), setTrainingModelDemo);
 router.delete('/:id/models/:modelId', authMiddleware, removeTrainingModel);
 router.post('/:id/restore', authMiddleware, restoreTraining);

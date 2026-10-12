@@ -1,5 +1,5 @@
 import { getGlobalConfig } from '../config/ConfigProvider';
-import type { ModelReference } from '../types';
+import type { HubModelReference } from '../types/training';
 
 const PUBLIC_HUB = 'https://huggingface.co';
 
@@ -21,7 +21,7 @@ const hubOrigin = (): string => {
  * The repo as it stood at the pinned commit, so the link keeps working after the repo moves on.
  * A model that is a file or folder inside the repo opens there: `blob` for a name with an extension, `tree` otherwise.
  */
-export const hubModelUrl = (model: Pick<ModelReference, 'repo' | 'revision' | 'path'>): string => {
+export const hubModelUrl = (model: Pick<HubModelReference, 'repo' | 'revision' | 'path'>): string => {
   const base = `${hubOrigin()}/${model.repo}`;
   if (!model.path) return `${base}/tree/${model.revision}`;
   const inside = model.path.split('/').filter(Boolean).map(encodeURIComponent).join('/');

@@ -20,7 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { evaluationService, suiteService } from '../../services/evaluationService';
 import { trainingService } from '../../services/trainingService';
 import type { Checkpoint, Evaluation, Suite } from '../../types/evaluation';
-import { checkpointFormComplete, checkpointForms, modelLinkCheckpoints } from './checkpointForms';
+import { checkpointFormComplete, checkpointForms, linkCheckpoint, linkCheckpointAnswers, linkCheckpointKind } from './checkpointForms';
 import { checkpointLabel } from './sources';
 
 interface PromoteDialogProps {
@@ -59,10 +59,9 @@ const PromoteDialog: React.FC<PromoteDialogProps> = ({ evaluationId, source, onC
   const evidenced = (run.data?.models ?? []).filter(link => link.epoch === source?.epoch);
 
   const choose = (link: (typeof evidenced)[number]) => {
-    const stands = modelLinkCheckpoints[link.provider];
     setLinkId(link._id);
-    setKind(stands.kind);
-    setAnswers(previous => ({ ...previous, ...stands.answers(link) }));
+    setKind(linkCheckpointKind(link));
+    setAnswers(previous => ({ ...previous, ...linkCheckpointAnswers(link) }));
   };
   useEffect(() => {
     if (prefilled.current || evidenced.length !== 1) return;
@@ -117,7 +116,7 @@ const PromoteDialog: React.FC<PromoteDialogProps> = ({ evaluationId, source, onC
               </Alert>
               <RadioGroup value={linkId} onChange={(_event, id) => { const link = evidenced.find(item => item._id === id); if (link) choose(link); }}>
                 {evidenced.map(link => (
-                  <FormControlLabel key={link._id} value={link._id} control={<Radio size="small" />} label={checkpointLabel(modelLinkCheckpoints[link.provider].checkpoint(link))} />
+                  <FormControlLabel key={link._id} value={link._id} control={<Radio size="small" />} label={checkpointLabel(linkCheckpoint(link))} />
                 ))}
               </RadioGroup>
             </Box>

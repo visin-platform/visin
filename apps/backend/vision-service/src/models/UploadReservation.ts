@@ -5,7 +5,7 @@ import mongoose, { Schema } from 'mongoose';
 const schema = new Schema({
   fileId: { type: String, required: true, unique: true },
   ownerId: { type: String, required: true },
-  kind: { type: String, enum: ['archive', 'image', 'visualization'], required: true },
+  kind: { type: String, enum: ['archive', 'image', 'visualization', 'checkpoint'], required: true },
   parentId: { type: String, required: true },
   allocationId: { type: String, required: true },
   mimetype: { type: String, required: true },

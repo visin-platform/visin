@@ -194,7 +194,8 @@ describe('getTrainings', () => {
       expect.objectContaining({
         $text: { $search: 'resnet' },
         status: 'running',
-        datasetId: 'd1',
+        // a run names its dataset by id (older runs) or by reference (new ones)
+        $and: expect.arrayContaining([{ $or: [{ datasetId: 'd1' }, { 'dataset.id': 'd1' }] }]),
         tags: { $in: ['a'] },
       })
     );

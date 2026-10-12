@@ -127,7 +127,7 @@ assertion uses the already-shared `JWT_SECRET`; it is not a session credential.
 Continue the existing upload-URL → file upload → resource creation/completion flow.
 New stored-file references require a persisted reservation matching the uploader,
 resource family, and parent. First attachment expires after 24 hours; signed upload
-URLs still expire after 15 minutes. Attachment verifies the stored file's size and,
+URLs expire after 15 minutes for visualizations or 240 minutes for model checkpoints. Attachment verifies the stored file's size and,
 when supplied by visualization clients, its declared size and reserved media
 type. A reservation cannot be transferred to another record. These checks do not
 inspect content bytes for actual MIME type or enforce storage quotas.
@@ -135,6 +135,40 @@ inspect content bytes for actual MIME type or enforce storage quotas.
 Historical file references without verified reservations are retained during
 record deletion for explicit operator cleanup. Broader upload
 limits and cleanup reconciliation still require operator planning.
+
+## Stored model checkpoints
+
+Runs can keep checkpoints in Visin as well as link Hugging Face models. Reserve a file with
+`POST /api/trainings/:id/models/upload-url` (`format: pth | onnx`, optional `size`), upload its bytes to the
+signed URL, then claim it with `POST /api/trainings/:id/models` (`provider: visin`, `fileId`, `format`,
+`epoch`, optional `sha256`, `license`, `credit`, `modelInfo`). The limit is 4 GiB; large uploads use
+file-service's chunked `Content-Range` protocol. Project-confined `vision:write` keys can reserve and claim.
+
+The claim returns immediately with `status: verifying`. A worker reads the stored file and records its
+size and SHA-256; an incorrect declared digest fails verification and deletes the bytes. A startup/periodic
+sweep retries unfinished verification. Retries of the same file are idempotent. Another file at the same
+epoch and format requires an explicit unlink, including after failed verification. Unlinking and purging
+the run remove its model files. ONNX claims must include `sourceSha256` (the source weights' SHA-256) and
+can include measured `parity`, so both formats share a checkpoint identity.
+
+`GET /api/trainings/:id/models/:modelId/file` serves licensed, ready checkpoints directly, with `HEAD`,
+`Range`, `If-Range`, `ETag`, and `Repr-Digest`. Every request checks project access; deleted runs return 404.
+`GET /api/models` lists both stores and pages whole checkpoints, keeping their formats together.
+`GET /api/trainings?dataset=<id>` lists visible runs linked to that dataset with their models,
+visualization types, and best/last metric readings.
+
+`GET /api/trainings/:id/models/:modelId/bundle` generates an outputs zip for that checkpoint's epoch.
+It includes `metrics.json`, `manifest.json`, masks, colourized predictions, and confidence maps. This
+stream has no fixed length, stable validator, or resume support. Metrics follow evaluation visibility,
+so public readers cannot retrieve unpublished suite results through a bundle.
+
+The manifest separates `trainedOn` from `predictedOn`, which groups prediction dataset references and
+input frame names. To identify outputs on a sample dataset, visualization clients send
+`metadata.prediction: { dataset: { source: 'visin', id, archiveRevision }, frame, width, height,
+confidenceEncoding: 'uint8' | 'uint16' }`. These are publisher-reported values. Older uploads remain
+unattributed (`dataset: null`, encoding `unknown`). Geometry is reported per file; the manifest documents
+bilinear resizing of logits back to input-image size before softmax and argmax (use log probabilities for ONNX), and confidence encodings
+`round(255 * p)` / `round(65535 * p)`. See [the API contract](docs/openapi.yml) for all fields.
 
 ## Finding pagination
 

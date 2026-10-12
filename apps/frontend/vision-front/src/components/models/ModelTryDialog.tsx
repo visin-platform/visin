@@ -15,13 +15,13 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import CodeSnippet from '../project/CodeSnippet';
 import { modelService } from '../../services/modelService';
-import type { ModelReference } from '../../types/training';
+import type { HubModelReference } from '../../types/training';
 import { hubSpaceUrl, parseSpace } from '../../utils/hubLinks';
 import { loadSnippet, predictSnippet, spaceSnippet } from '../../utils/modelSnippets';
 
 interface ModelTryDialogProps {
   trainingId: string;
-  model: ModelReference;
+  model: HubModelReference;
   onClose: () => void;
 }
 

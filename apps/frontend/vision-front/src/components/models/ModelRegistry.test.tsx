@@ -12,6 +12,7 @@ vi.mock('@visin/frontend-core', async importOriginal => ({
 import ModelRegistry from './ModelRegistry';
 import { renderWithClient } from '../../test/renderWithClient';
 import type { RegistryModel } from '../../types/modelRegistry';
+import type { HubModelReference, StoredModelReference } from '../../types/training';
 
 const COMMIT = '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433';
 const row = (id: string, overrides: Partial<RegistryModel> = {}, repo = 'acme/clft'): RegistryModel => ({
@@ -20,6 +21,30 @@ const row = (id: string, overrides: Partial<RegistryModel> = {}, repo = 'acme/cl
   project: { _id: 'p1', name: 'Road', slug: 'road' },
   ...overrides
 });
+const PTH_SHA = 'a'.repeat(64);
+/** A checkpoint this deployment keeps: the `.pth` unless `format` says otherwise, ready and licensed unless overridden. */
+const stored = (id: string, overrides: Partial<StoredModelReference> = {}, trainingOverrides: Partial<RegistryModel> = {}): RegistryModel =>
+  row(id, {
+    model: {
+      _id: id,
+      provider: 'visin',
+      kind: 'model',
+      fileId: `models/t-1/${id}.pth`,
+      filename: 'ISEAUTO_CLFT-epoch99.pth',
+      format: 'pth',
+      epoch: 99,
+      size: 1_288_490_189,
+      sha256: PTH_SHA,
+      status: 'ready',
+      license: { id: 'cc-by-4.0', name: 'CC BY 4.0' },
+      credit: 'TalTech',
+      modelInfo: { transforms: { resize: 384, image_mean: [0.485, 0.456, 0.406], image_std: [0.229, 0.224, 0.225] } },
+      addedAt: '2026-03-01T00:00:00.000Z',
+      ...overrides
+    },
+    training: { ...row(id).training, _id: 't-1' },
+    ...trainingOverrides
+  });
 const page = (models: RegistryModel[], total = models.length) => ({ models, pagination: { page: 1, limit: 30, total, pages: 1 } });
 
 describe('ModelRegistry', () => {
@@ -29,7 +54,7 @@ describe('ModelRegistry', () => {
   });
 
   it('lists each model with its pinned commit, run, project and dataset', async () => {
-    service.list.mockResolvedValue(page([row('1', { model: { ...row('1').model, path: 'best.pt', epoch: 12 } })]));
+    service.list.mockResolvedValue(page([row('1', { model: { ...(row('1').model as HubModelReference), path: 'best.pt', epoch: 12 } })]));
     renderWithClient(<ModelRegistry />);
     const hub = await screen.findByRole('link', { name: 'acme/clft @ 3f2a1c9' });
     expect(hub).toHaveAttribute('href', `https://huggingface.co/acme/clft/blob/${COMMIT}/best.pt`);
@@ -75,7 +100,7 @@ describe('ModelRegistry', () => {
   });
 
   it('links straight to a model’s demo Space', async () => {
-    service.list.mockResolvedValue(page([row('1', { model: { ...row('1').model, space: 'acme/clft-demo' } })]));
+    service.list.mockResolvedValue(page([row('1', { model: { ...(row('1').model as HubModelReference), space: 'acme/clft-demo' } })]));
     renderWithClient(<ModelRegistry />);
     expect(await screen.findByRole('link', { name: 'Open demo' })).toHaveAttribute('href', 'https://huggingface.co/spaces/acme/clft-demo');
   });
@@ -174,5 +199,74 @@ describe('ModelRegistry', () => {
     expect(screen.getByText('Run 1 · Road')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /acme\/clft @ 3f2a1c9/ })).toHaveAttribute('href', '/trainings/t-1');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  describe('models Visin keeps', () => {
+    const origin = 'http://localhost:4010/api/trainings/t-1/models';
+
+    it('shows one row for the .pth and its ONNX export, each downloadable, with licence and preprocessing', async () => {
+      service.list.mockResolvedValue(
+        page([
+          stored('m1'),
+          stored('m2', { format: 'onnx', fileId: 'models/t-1/m2.onnx', filename: 'ISEAUTO_CLFT-epoch99.onnx', size: 644_245_094, sha256: 'b'.repeat(64), sourceSha256: PTH_SHA })
+        ])
+      );
+      renderWithClient(<ModelRegistry />);
+      expect(await screen.findByText('ISEAUTO_CLFT-epoch99.pth')).toBeInTheDocument();
+      expect(screen.getAllByRole('row')).toHaveLength(2); // the header and one model
+
+      expect(screen.getByRole('link', { name: 'Download ISEAUTO_CLFT-epoch99.pth (pth)' })).toHaveAttribute('href', `${origin}/m1/file`);
+      expect(screen.getByRole('link', { name: 'Download ISEAUTO_CLFT-epoch99.onnx (onnx)' })).toHaveAttribute('href', `${origin}/m2/file`);
+      expect(screen.getByText('.pth · 1.2 GB')).toBeInTheDocument();
+      expect(screen.getByText('.onnx · 614.4 MB')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Download the outputs of ISEAUTO_CLFT-epoch99.pth as a zip' })).toHaveAttribute('href', `${origin}/m1/bundle`);
+      expect(screen.getByText('Licence CC BY 4.0 · TalTech')).toBeInTheDocument();
+      expect(screen.getByText('input 384 px · camera mean 0.485, 0.456, 0.406 · std 0.229, 0.224, 0.225')).toBeInTheDocument();
+      expect(screen.getByText('epoch 99')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Try it' })).not.toBeInTheDocument();
+    });
+
+    it('keeps two different checkpoints of one run apart', async () => {
+      service.list.mockResolvedValue(page([stored('m1'), stored('m2', { sha256: 'c'.repeat(64), filename: 'other.pth' })]));
+      renderWithClient(<ModelRegistry />);
+      await screen.findByText('other.pth');
+      expect(screen.getAllByRole('row')).toHaveLength(3);
+    });
+
+    it('offers no link for a model that cannot be served, and says why', async () => {
+      service.list.mockResolvedValue(
+        page([
+          stored('m1', { license: undefined, credit: undefined }),
+          stored('m2', { status: 'verifying', sha256: undefined, filename: 'verifying.pth' }),
+          stored('m3', { status: 'failed', verifyError: 'The file does not match the SHA-256 that was declared', sha256: 'd'.repeat(64), filename: 'failed.pth' })
+        ])
+      );
+      renderWithClient(<ModelRegistry />);
+      expect(await screen.findByText('.pth · 1.2 GB · Licence not stated')).toBeInTheDocument();
+      expect(screen.getByText('.pth · 1.2 GB · Being verified')).toBeInTheDocument();
+      expect(screen.getByText('.pth · 1.2 GB · Failed verification: The file does not match the SHA-256 that was declared')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /Download/ })).not.toBeInTheDocument();
+      expect(screen.getByText('Licence not stated')).toBeInTheDocument();
+    });
+
+    it('offers each format from the row menu on a phone', async () => {
+      layout.compact = true;
+      service.list.mockResolvedValue(
+        page([stored('m1'), stored('m2', { format: 'onnx', fileId: 'models/t-1/m2.onnx', size: 10, sha256: 'b'.repeat(64), sourceSha256: PTH_SHA })])
+      );
+      renderWithClient(<ModelRegistry />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Actions for ISEAUTO_CLFT-epoch99.pth' }));
+      expect(await screen.findByRole('menuitem', { name: 'Download .pth' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'Download .onnx' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Try it' })).not.toBeInTheDocument();
+    });
+
+    it('lists them beside the Hub models', async () => {
+      service.list.mockResolvedValue(page([row('h1'), stored('m1')]));
+      renderWithClient(<ModelRegistry />);
+      expect(await screen.findByRole('link', { name: 'acme/clft @ 3f2a1c9' })).toBeInTheDocument();
+      expect(screen.getByText('ISEAUTO_CLFT-epoch99.pth')).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'Try it' })).toHaveLength(1);
+    });
   });
 });

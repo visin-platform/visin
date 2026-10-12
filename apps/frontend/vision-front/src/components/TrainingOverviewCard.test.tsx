@@ -130,3 +130,29 @@ describe('TrainingOverviewCard model card', () => {
     expect(screen.getByRole('link', { name: 'Open demo' })).toHaveAttribute('href', 'https://huggingface.co/spaces/acme/clft-demo');
   });
 });
+
+describe('TrainingOverviewCard models Visin keeps', () => {
+  const pth = {
+    _id: 'm1', provider: 'visin' as const, kind: 'model' as const, fileId: 'models/t1/a.pth', filename: 'my-run-epoch99.pth',
+    format: 'pth' as const, epoch: 99, size: 1_073_741_824, sha256: 'a'.repeat(64), status: 'ready' as const,
+    license: { id: 'cc-by-4.0', name: 'CC BY 4.0' }, addedAt: '2026-03-01T00:00:00.000Z'
+  };
+  const onnx = { ...pth, _id: 'm2', fileId: 'models/t1/a.onnx', filename: 'my-run-epoch99.onnx', format: 'onnx' as const, size: 536_870_912, sha256: 'b'.repeat(64), sourceSha256: 'a'.repeat(64) };
+
+  it('offers both formats of one checkpoint together, with its licence and epoch', () => {
+    render(<TrainingOverviewCard training={{ ...baseTraining, models: [pth, onnx] }} epochs={[]} />);
+    expect(screen.getByText('Model')).toBeInTheDocument();
+    expect(screen.getByText('my-run-epoch99.pth · epoch 99')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Download my-run-epoch99.pth (pth)' })).toHaveAttribute('href', 'http://localhost:4010/api/trainings/t1/models/m1/file');
+    expect(screen.getByRole('link', { name: 'Download my-run-epoch99.onnx (onnx)' })).toHaveAttribute('href', 'http://localhost:4010/api/trainings/t1/models/m2/file');
+    expect(screen.getByText('Licence CC BY 4.0')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try it' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Model card' })).not.toBeInTheDocument();
+  });
+
+  it('says why a model cannot be downloaded, rather than link to a refusal', () => {
+    render(<TrainingOverviewCard training={{ ...baseTraining, models: [{ ...pth, license: undefined }] }} epochs={[]} />);
+    expect(screen.getByText('.pth · 1.0 GB · Licence not stated')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Download/ })).not.toBeInTheDocument();
+  });
+});

@@ -10,7 +10,7 @@ const ModelsPage: React.FC = () => {
     <Container maxWidth="xl" sx={{ pb: 4 }}>
       <PageHeader
         title="Models"
-        subtitle="Models your runs published to Hugging Face. Rank them by a result to find the one to use."
+        subtitle="Checkpoints your runs published, kept on Visin to download or linked on the Hugging Face Hub. Rank them by a result to find the one to use."
       />
       <ModelRegistry />
     </Container>

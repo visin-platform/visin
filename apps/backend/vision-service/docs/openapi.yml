@@ -459,7 +459,8 @@ components:
             id: { type: string, description: 'A listed licence id (the Hugging Face Hub spelling), or `other`.' }
             name: { type: string }
             url: { type: string, format: uri, description: 'The licence text. Always set for a listed licence.' }
-            commercial: { type: boolean, description: 'false when the licence forbids commercial use. Absent for `other`.' }
+            commercial:
+              { type: boolean, description: 'false when the licence forbids commercial use. Absent for `other`.' }
         sourceUrl: { type: string, format: uri, description: 'Where the data lives and its own terms are accepted.' }
         credit: { type: string, description: 'The credit line or citation the data asks for.' }
 
@@ -774,6 +775,17 @@ components:
             reason: { type: string }
 
     ModelReference:
+      description: A model linked to a run, either a pointer to a Hugging Face repo or a file this deployment keeps.
+      oneOf:
+        - $ref: '#/components/schemas/HubModelReference'
+        - $ref: '#/components/schemas/StoredModelReference'
+      discriminator:
+        propertyName: provider
+        mapping:
+          hf: '#/components/schemas/HubModelReference'
+          visin: '#/components/schemas/StoredModelReference'
+
+    HubModelReference:
       type: object
       required: [_id, provider, kind, repo, revision, addedAt]
       properties:
@@ -805,6 +817,73 @@ components:
           type: string
           description: A demo Space on the Hub where anyone can try the model, `org/name`. Set with
             `PATCH /trainings/{id}/models/{modelId}`.
+        addedAt:
+          type: string
+          format: date-time
+
+    StoredModelReference:
+      type: object
+      required: [_id, provider, kind, fileId, format, addedAt]
+      description: A checkpoint this deployment keeps. It is served (`GET /trainings/{id}/models/{modelId}/file`) once
+        `status` is `ready` and a `license` is stated.
+      properties:
+        _id:
+          type: string
+        provider:
+          type: string
+          enum: [visin]
+        kind:
+          type: string
+          enum: [model]
+        fileId:
+          type: string
+          description: The stored file, as `POST /trainings/{id}/models/upload-url` returned it.
+        filename:
+          type: string
+        format:
+          type: string
+          enum: [pth, onnx]
+        epoch:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          description: Bytes.
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: The digest of the stored file, recorded when `status` becomes `ready`.
+        sourceSha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: For an ONNX export, the digest of the `.pth` it was made from. Both formats of one checkpoint
+            are the same model to evaluations and leaderboards.
+        status:
+          type: string
+          enum: [verifying, ready, failed]
+          description: '`verifying` until the file has been read once; `failed` says why in `verifyError`.'
+        verifyError:
+          type: string
+        license:
+          type: object
+          description: What the publisher declares the model is licensed under. Absent means not stated, and the file
+            is not served.
+        credit:
+          type: string
+        modelInfo:
+          type: object
+          description: What the weights record about the network and its input (backbone, classes, resize,
+            normalisation). Kept as sent.
+        parity:
+          type: object
+          description: For an ONNX export, how far it is from the `.pth` it came from, on the frames it was checked on.
+          properties:
+            maxAbsDiff: { type: number }
+            argmaxMismatchFraction: { type: number }
+            frames: { type: integer }
+        verifiedAt:
+          type: string
+          format: date-time
         addedAt:
           type: string
           format: date-time
@@ -1598,6 +1677,10 @@ paths:
     get:
       tags: [Trainings]
       summary: Get all trainings
+      description: |
+        Lists only runs the caller may read. Filter by a Visin dataset using `dataset` (or `datasetId`).
+        Dataset-filtered rows include `models`, `visualizationTypes`, and `bestMetrics` (best and last value with
+        their epochs and metric direction), in addition to the usual run fields and timing metrics.
       operationId: getTrainings
       security:
         - { BearerCredential: [] }
@@ -1619,6 +1702,10 @@ paths:
         - name: datasetId
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/datasetId }
+        - name: dataset
+          in: query
+          description: Alias for datasetId. Matches both the legacy datasetId and dataset.id references.
+          schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/dataset }
         - name: projectId
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetTrainingsQuery/properties/projectId }
@@ -4132,14 +4219,22 @@ paths:
     post:
       tags:
         - Trainings
-      summary: Link a Hugging Face model to a training
+      summary: Link a model to a training
       description: |
-        Records a pointer to a model on the Hub, pinned to the commit a run produced. Visin stores the reference,
-        not the checkpoint: upload it where it was trained, with your own Hugging Face token, then report it here.
+        Links a model to a run, as one of two providers (`provider`).
 
-        Repeating the same repo, commit and path is a no-op that returns `200`, so a pipeline can retry freely.
-        The project's storage must be set to `hf` (project settings); a `visin` project answers `409`. A run links
-        at most 50 models. Needs write access to the run.
+        **`hf`** records a pointer to a model on the Hub, pinned to the commit a run produced. Visin stores the
+        reference, not the checkpoint: upload it where it was trained, with your own Hugging Face token, then report
+        it here. The project's storage must be set to `hf` (project settings); a `visin` project answers `409`.
+
+        **`visin`** claims a file uploaded through `POST /trainings/{id}/models/upload-url`. It answers at once with
+        `status: verifying`; the file is read in the background, which records its `sha256` and checks the one you
+        declared (a mismatch ends as `failed` and the file is deleted). One file per format and epoch: claiming the
+        same file again is a no-op that returns `200`, a different file for the same format and epoch is a `409`
+        until the first is unlinked (a `failed` one is replaced). Any project may link one.
+
+        Repeating a link is a no-op that returns `200`, so a pipeline can retry freely. A run links at most 50 models.
+        Needs write access to the run.
       operationId: addTrainingModel
       security:
         - BearerCredential: []
@@ -4179,6 +4274,278 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /trainings/{id}/models/upload-url:
+    post:
+      tags:
+        - Trainings
+      summary: Reserve an upload for a model file
+      description: |
+        The first of three calls that store a checkpoint here: reserve, send the bytes, claim.
+
+        1. `POST` this with the format (and the size, to be refused early). The answer is a `fileId` and a signed
+           `uploadUrl`, valid for `expiresInMinutes`.
+        2. `PUT` the file to `uploadUrl`, in chunks with `Content-Range` if it is large (a proxy in front of Visin
+           commonly limits one request to about 100 MB).
+        3. `POST /trainings/{id}/models` with `{ "provider": "visin", "fileId": …, "format": …, "license": … }`.
+
+        A file is at most `maxBytes` (4 GiB). Needs write access to the run.
+      operationId: createTrainingModelUpload
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./generated/request-schemas.json#/ModelUploadBody
+      responses:
+        '201':
+          description: Reserved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required: [uploadUrl, fileId, maxBytes, expiresInMinutes]
+                    properties:
+                      uploadUrl:
+                        type: string
+                        format: uri
+                      fileId:
+                        type: string
+                      maxBytes:
+                        type: integer
+                      expiresInMinutes:
+                        type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /trainings/{id}/models/{modelId}/file:
+    get:
+      tags:
+        - Trainings
+      summary: Download a stored model
+      description: |
+        The checkpoint's bytes in the response, for a caller that takes one response as the data and follows no link
+        inside it, such as a dataspace connector's data plane. Readable by anyone who may read the run.
+
+        Resumable: send `Range: bytes=<from>-` (one range), with `If-Range` set to the `ETag` or `Last-Modified` you
+        saw. Several ranges or an unreadable header get the whole file; a range starting past the end is a `416`.
+        `HEAD` returns the headers alone. `Repr-Digest` carries the file's SHA-256 (RFC 9530), also on a `206`.
+
+        A model is served only when its `status` is `ready` and its `license` is stated; otherwise `409` says which.
+        A link to a Hub repo has no file here (`404`).
+      operationId: downloadTrainingModel
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          description: The `_id` of the link, from the training's `models`.
+          schema:
+            type: string
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+            example: bytes=1048576-
+        - name: If-Range
+          in: header
+          required: false
+          description: The `ETag` or `Last-Modified` of the response being resumed
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The file
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+            Content-Length:
+              schema:
+                type: integer
+            Last-Modified:
+              schema:
+                type: string
+              description: When the file was verified
+            ETag:
+              schema:
+                type: string
+              description: Names this version of the file
+            Accept-Ranges:
+              schema:
+                type: string
+                const: bytes
+            Repr-Digest:
+              schema:
+                type: string
+                example: 'sha-256=:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=:'
+              description: The file's SHA-256 (RFC 9530)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: The requested range of the file
+          headers:
+            Content-Range:
+              schema:
+                type: string
+                example: bytes 1048576-9437183/9437184
+            Content-Length:
+              schema:
+                type: integer
+            Repr-Digest:
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '416':
+          description: The range starts past the end of the file; `Content-Range` gives its size
+          headers:
+            Content-Range:
+              schema:
+                type: string
+                example: bytes */9437184
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /trainings/{id}/models/{modelId}/bundle:
+    get:
+      tags:
+        - Trainings
+      summary: Download what a stored model produced
+      description: |
+        One zip of what the model produced on the frames its run was evaluated on, for a caller that takes one response
+        as the data (a dataspace connector's data plane). Readable by anyone who may read the run, and refused on the
+        same terms as the weights (`409` unless the model is `ready` and its `license` is stated).
+
+        - `mask/<frame>.png`: the predicted class of every pixel, as pixel values (class indices in `modelInfo`).
+        - `segment/<frame>.png`: the prediction in the class colours.
+        - `confidence/<frame>.png`: the maximum class probability (`p_max`), in [1/C, 1]. Each file's
+          `confidenceEncoding` is `uint8` (`round(255 × p)`), `uint16` (`round(65535 × p)`), or `unknown` for older uploads.
+        - `metrics.json`: what the model's epoch reported and the tests visible to the caller in this project,
+          per condition and class. A public reader sees published suite results and the run's unsuited tests.
+        - `manifest.json`: written last. The run, the model (digest, epoch, licence, credit, `modelInfo`), the other
+          format of the same checkpoint, `checkpoint` (epoch and weights SHA-256), `trainedOn` (the training dataset
+          and revision), `predictedOn` (prediction datasets and frame lists), `outputGeometry`, `confidence`,
+          and each file's size and SHA-256. A prediction dataset missing from the upload metadata is `null`;
+          it is never assumed to be the training dataset.
+
+        Visualization uploads can report `metadata.prediction` with `dataset: { source: 'visin', id, revision,
+        archiveRevision }`, `frame` (input frame name), `width`, `height`, and `confidenceEncoding`. Geometry is
+        reported per file: predictions use input-image coordinates (e.g. 1363×768 for Iseauto), and ONNX produces
+        probabilities at its square input size without preserving aspect ratio. Resize logits bilinearly
+        to input-image size before softmax and argmax. Predictor interpolates logits; for an ONNX graph's
+        probabilities, interpolate log probabilities instead to preserve the same decoder. The model's
+        `modelInfo.transforms` carries preprocessing.
+
+        The zip is built as it is sent: it has no `Content-Length`, stable ETag or ranges, and uses `Cache-Control: no-store`.
+        It is not resumable, so fetch it again whole. A
+        read that fails part way ends the response early, leaving a zip with no central directory, never one that
+        looks complete. The weights are the separate `/file` download. At most 5,000 outputs and 2 GiB (`413`).
+      operationId: downloadModelBundle
+      security:
+        - BearerCredential: []
+        - SessionCookie: []
+        - {}
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          description: The `_id` of the link, from the training's `models`.
+          schema:
+            type: string
+        - name: folders
+          in: query
+          required: false
+          description: Which folders to include, comma-separated; all three when absent.
+          schema: { $ref: ./generated/request-schemas.json#/ModelBundleQuery/properties/folders }
+      responses:
+        '200':
+          description: The zip
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: More outputs than a bundle may hold
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
 
@@ -4274,7 +4641,8 @@ paths:
       summary: Model registry
       operationId: getModels
       description: |
-        Every Hugging Face Hub model linked to a run the caller may see, one row per link. This is what to open to
+        Every Hub link and stored Visin model in runs the caller may see. Stored formats of the same checkpoint
+        stay on the same page: pagination counts checkpoints, and a page can contain both the `.pth` and `.onnx` links. This is what to open to
         answer "which model should I use": filter by project or dataset, and rank by how well each run did on a
         result of your choice.
 

@@ -9,8 +9,9 @@ import {
   deleteFile,
   deleteFiles,
   getFileMetadata,
+  getFileStream,
 } from '../../clients/fileServiceClient';
-import { GatewayTimeoutError } from '@visin/backend-core';
+import { BadGatewayError, GatewayTimeoutError, NotFoundError } from '@visin/backend-core';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
@@ -158,5 +159,55 @@ describe('file-service address', () => {
     } finally {
       delete process.env.FILE_SERVICE_INTERNAL_URL;
     }
+  });
+});
+
+describe('getFileStream', () => {
+  const body = (text: string) =>
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(text));
+        controller.close();
+      }
+    });
+  const read = async (stream: AsyncIterable<Buffer>) => {
+    const parts: Buffer[] = [];
+    for await (const part of stream) parts.push(Buffer.from(part));
+    return Buffer.concat(parts).toString();
+  };
+
+  it('streams the whole file, authenticated, from file-service', async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 200, body: body('weights') });
+
+    expect(await read(await getFileStream('models/t/a.pth'))).toBe('weights');
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe('http://files:5002/internal/files/models/t/a.pth');
+    expect(init.headers).toMatchObject({ 'x-internal-api-key': 'key' });
+    expect(init.headers.Range).toBeUndefined();
+  });
+
+  it('asks for an inclusive byte range and takes only a 206 for it', async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 206, body: body('eig') });
+
+    expect(await read(await getFileStream('f', { start: 2, end: 4 }))).toBe('eig');
+    expect(mockFetch.mock.calls[0][1].headers.Range).toBe('bytes=2-4');
+
+    // A server that ignores Range would send the file whole: not what was asked for.
+    mockFetch.mockResolvedValue({ ok: true, status: 200, body: body('weights') });
+    await expect(getFileStream('f', { start: 2, end: 4 })).rejects.toBeInstanceOf(BadGatewayError);
+  });
+
+  it('names a missing file, a storage refusal and a failed request as what they are', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+    await expect(getFileStream('f')).rejects.toBeInstanceOf(NotFoundError);
+
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+    await expect(getFileStream('f')).rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('500') });
+
+    mockFetch.mockResolvedValue({ ok: true, status: 200, body: null });
+    await expect(getFileStream('f')).rejects.toBeInstanceOf(BadGatewayError);
+
+    mockFetch.mockRejectedValue(new TypeError('fetch failed'));
+    await expect(getFileStream('f')).rejects.toMatchObject({ statusCode: 502, message: 'File read failed' });
   });
 });

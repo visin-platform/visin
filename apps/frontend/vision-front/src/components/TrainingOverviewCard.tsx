@@ -28,10 +28,14 @@ import {
 } from '@mui/icons-material';
 import { livePalette, tint } from '@visin/frontend-core';
 import { Training, Epoch } from '../types';
+import type { HubModelReference } from '../types/training';
 import { trainingStatusLabel } from '../utils/trainingStatus';
 import ModelCardDialog from './models/ModelCardDialog';
 import ModelTryDialog from './models/ModelTryDialog';
-import { hubModelUrl, hubSpaceUrl, shortRevision } from '../utils/hubLinks';
+import StoredModelDownloads from './models/StoredModelDownloads';
+import { hubModelUrl, hubSpaceUrl } from '../utils/hubLinks';
+import { isHubModel, isStoredModel, modelTitle } from '../utils/modelLinks';
+import { storedCheckpointKey } from '../providers/visin';
 import { costOf } from '../costing/costing';
 import { useCosting, useFormatCost } from '../costing/useCosting';
 
@@ -40,13 +44,23 @@ interface TrainingOverviewCardProps {
   epochs: Epoch[];
 }
 
+/** The stored models of a run, one group per checkpoint: a `.pth` and the ONNX export made from it go together. */
+const storedCheckpoints = (models: NonNullable<Training['models']>) => {
+  const groups = new Map<string, Array<Extract<NonNullable<Training['models']>[number], { provider: 'visin' }>>>();
+  for (const model of models.filter(isStoredModel)) {
+    const key = storedCheckpointKey(model);
+    groups.set(key, [...(groups.get(key) ?? []), model]);
+  }
+  return [...groups.values()];
+};
+
 const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
   training,
   epochs,
 }) => {
   const theme = useTheme();
-  const [cardFor, setCardFor] = useState<NonNullable<Training['models']>[number] | null>(null);
-  const [tryFor, setTryFor] = useState<NonNullable<Training['models']>[number] | null>(null);
+  const [cardFor, setCardFor] = useState<HubModelReference | null>(null);
+  const [tryFor, setTryFor] = useState<HubModelReference | null>(null);
   const costing = useCosting();
   const formatCost = useFormatCost();
 
@@ -251,30 +265,41 @@ const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
                 {training.models && training.models.length > 0 && (
                   <InfoItem
                     icon={<ModelIcon fontSize="small" />}
-                    label={training.models.length > 1 ? 'Models' : 'Model'}
-                    value={training.models.map(model => (
-                      <Box key={model._id} component="span" sx={{ display: 'block' }}>
-                        <Link href={hubModelUrl(model)} target="_blank" rel="noopener noreferrer">
-                          {model.repo} @ {shortRevision(model.revision)}
-                        </Link>
-                        {model.space ? (
-                          <Link href={hubSpaceUrl(model.space)} target="_blank" rel="noopener noreferrer" variant="caption" sx={{ ml: 1 }}>
-                            Open demo
+                    label={training.models.filter(isHubModel).length + storedCheckpoints(training.models).length > 1 ? 'Models' : 'Model'}
+                    value={<>
+                      {training.models.filter(isHubModel).map(model => (
+                        <Box key={model._id} component="span" sx={{ display: 'block' }}>
+                          <Link href={hubModelUrl(model)} target="_blank" rel="noopener noreferrer">
+                            {modelTitle(model)}
                           </Link>
-                        ) : null}
-                        <Link component="button" type="button" variant="caption" onClick={() => setTryFor(model)} sx={{ ml: 1 }}>
-                          Try it
-                        </Link>
-                        <Link component="button" type="button" variant="caption" onClick={() => setCardFor(model)} sx={{ ml: 1 }}>
-                          Model card
-                        </Link>
-                        {(model.path || model.epoch !== undefined) && (
-                          <Typography variant="caption" component="span" sx={{ display: 'block' }}>
-                            {[model.path, model.epoch !== undefined ? `epoch ${model.epoch}` : undefined].filter(Boolean).join(' · ')}
+                          {model.space ? (
+                            <Link href={hubSpaceUrl(model.space)} target="_blank" rel="noopener noreferrer" variant="caption" sx={{ ml: 1 }}>
+                              Open demo
+                            </Link>
+                          ) : null}
+                          <Link component="button" type="button" variant="caption" onClick={() => setTryFor(model)} sx={{ ml: 1 }}>
+                            Try it
+                          </Link>
+                          <Link component="button" type="button" variant="caption" onClick={() => setCardFor(model)} sx={{ ml: 1 }}>
+                            Model card
+                          </Link>
+                          {(model.path || model.epoch !== undefined) && (
+                            <Typography variant="caption" component="span" sx={{ display: 'block' }}>
+                              {[model.path, model.epoch !== undefined ? `epoch ${model.epoch}` : undefined].filter(Boolean).join(' · ')}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
+                      {storedCheckpoints(training.models).map(group => (
+                        <Box key={group[0]._id} component="span" sx={{ display: 'block', mt: 0.5 }}>
+                          <Typography variant="body2" component="span" sx={{ display: 'block' }}>
+                            {modelTitle(group[0])}
+                            {group[0].epoch !== undefined ? ` · epoch ${group[0].epoch}` : ''}
                           </Typography>
-                        )}
-                      </Box>
-                    ))}
+                          <StoredModelDownloads trainingId={training._id} models={group} />
+                        </Box>
+                      ))}
+                    </>}
                   />
                 )}
                 <InfoItem 

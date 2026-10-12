@@ -18,6 +18,7 @@ describe('createVisinNavigation', () => {
       ['For you', 'Explore', 'Leaderboards'],
       ['All projects', 'Trainings'],
       ['Datasets'],
+      ['Models'],
       ['Papers'],
       ['Jobs']
     ];
@@ -25,7 +26,7 @@ describe('createVisinNavigation', () => {
     // Crossing apps must not change what the menu contains.
     for (const local of ['shell', 'vision', 'label', 'account', null] as const) {
       const nav = createVisinNavigation(local, urls);
-      expect(labels(nav)).toEqual(['Home', 'Projects', 'Data', 'Papers', 'Labels']);
+      expect(labels(nav)).toEqual(['Home', 'Projects', 'Data', 'Models', 'Papers', 'Labels']);
       expect(texts(nav)).toEqual(expected);
     }
   });
@@ -38,7 +39,7 @@ describe('createVisinNavigation', () => {
 
   it('keeps the current app sections as internal routes', () => {
     const [projects] = createVisinNavigation('vision', urls).groups[1].items;
-    const [jobs] = createVisinNavigation('label', urls).groups[4].items;
+    const [jobs] = createVisinNavigation('label', urls).groups[5].items;
 
     expect(projects.path).toBe('/projects');
     expect(projects.href).toBeUndefined();
@@ -49,11 +50,14 @@ describe('createVisinNavigation', () => {
   it('links the other app sections straight to that section', () => {
     const nav = createVisinNavigation('label', urls);
     const [datasets] = nav.groups[2].items;
-    const [papers] = nav.groups[3].items;
-    const [jobs] = nav.groups[4].items;
+    const [models] = nav.groups[3].items;
+    const [papers] = nav.groups[4].items;
+    const [jobs] = nav.groups[5].items;
 
     expect(datasets.href).toBe('https://vision.test/datasets');
     expect(datasets.path).toBeUndefined();
+    expect(models.href).toBe('https://vision.test/models');
+    expect(models.path).toBeUndefined();
     expect(papers.href).toBe('https://vision.test/papers');
     expect(jobs.path).toBe('/jobs');
     expect(jobs.href).toBeUndefined();
@@ -71,6 +75,7 @@ describe('createVisinNavigation', () => {
       ['Leaderboards'],
       ['All projects', 'Trainings'],
       ['Datasets'],
+      ['Models'],
       ['Papers']
     ]);
     expect(texts(createVisinNavigation('label', {}))).toEqual([['Jobs']]);
@@ -104,7 +109,8 @@ describe('for a visitor', () => {
   it('leaves out what needs an account, so no entry leads to a sign-in wall', () => {
     const nav = createVisinNavigation('shell', urls, visitor);
 
-    expect(labels(nav)).toEqual(['Explore', 'Projects', 'Data', 'Papers']);
+    // Public models are downloadable without an account, like Papers and Leaderboards.
+    expect(labels(nav)).toEqual(['Explore', 'Projects', 'Data', 'Models', 'Papers']);
     expect(texts(nav).flat()).not.toContain('Jobs');
     expect(texts(nav).flat()).not.toContain('For you');
   });

@@ -18,6 +18,15 @@ import {
   type PublicHubCheckpoint,
   type PublicHubData
 } from './huggingFace';
+import {
+  VISIN,
+  visinLinkCheckpoint,
+  visinModelLinkIdentity,
+  visinModelLinkLabel,
+  visinModelLinkPaths,
+  storedModelFilename,
+  type VisinModelLink
+} from './visinModels';
 
 /**
  * What the platform does with each kind of place something can live: a project's storage, a checkpoint, a model linked
@@ -41,7 +50,7 @@ export const DATASET_SOURCES = ['visin', HUB, 'other'] as const;
 export type DatasetSourceKind = (typeof DATASET_SOURCES)[number];
 
 /** The stores a model can be linked from. */
-export const MODEL_LINK_PROVIDERS = [HUB] as const;
+export const MODEL_LINK_PROVIDERS = [HUB, VISIN] as const;
 export type ModelLinkProvider = (typeof MODEL_LINK_PROVIDERS)[number];
 
 /** What a checkpoint an evaluation scored can be. */
@@ -128,26 +137,47 @@ export function requireCheckpointStorage(project: Pick<IProject, 'storage'> | nu
 
 // ---- a model linked to a run
 
-/** A pointer to a model kept on a store, pinned to the exact revision a run produced. */
-export type ModelLink = HubModelLink;
+/** A pointer to a model kept on a store, pinned to the exact revision a run produced, or a model kept here. */
+export type ModelLink = HubModelLink | VisinModelLink;
 
 export interface ModelLinkSource<L extends ModelLink> {
   /** the filter that finds a link to the same bytes, so linking twice changes nothing */
   identity(link: L): Record<string, unknown>;
   /** how it is named to a person, and what a search matches it by */
   label(link: L): string;
+  /** one line saying which model it is, with its pin, for a table or an export */
+  summary(link: L): string;
   /** the checkpoint an evaluation of this model scores: how a linked model joins the evaluations of its bytes */
   checkpoint(link: L): Checkpoint;
-  /** storage the project must have to link this kind */
-  needs: StorageNeed;
+  /** storage the project must have to link this kind; absent when any project may */
+  needs?: StorageNeed;
+  /** the bytes this deployment keeps for the link, when it does: the upload a claim attaches; absent for a pointer */
+  stored?(link: L): { fileId: string };
+  /** the link as stored once its bytes have arrived, with what Visin found out about them */
+  adopt?(link: L, arrived: { size: number; runName: string }): L;
 }
 
 export const modelLinkSources: { [K in ModelLinkProvider]: ModelLinkSource<Extract<ModelLink, { provider: K }>> } = {
-  [HUB]: { identity: hubModelLinkIdentity, label: hubModelLinkLabel, checkpoint: hubLinkCheckpoint, needs: { storage: HUB, what: 'link Hub models' } }
+  [HUB]: {
+    identity: hubModelLinkIdentity,
+    label: hubModelLinkLabel,
+    summary: (link) => `${link.repo}@${link.revision.slice(0, 7)}`,
+    checkpoint: hubLinkCheckpoint,
+    needs: { storage: HUB, what: 'link Hub models' }
+  },
+  // Bytes on this deployment's own servers are what any project's storage setting allows.
+  [VISIN]: {
+    identity: visinModelLinkIdentity,
+    label: visinModelLinkLabel,
+    summary: (link) => `${visinModelLinkLabel(link)}${link.sha256 ? `@${link.sha256.slice(0, 7)}` : ''}`,
+    checkpoint: visinLinkCheckpoint,
+    stored: (link) => ({ fileId: link.fileId }),
+    adopt: (link, { size, runName }) => ({ ...link, size, filename: storedModelFilename(runName, link), status: 'verifying' })
+  }
 };
 
 /** The stored fields each provider adds to a model link (a Mongoose schema definition); a new provider spreads its own. */
-export const MODEL_LINK_PATHS = { ...hubModelLinkPaths };
+export const MODEL_LINK_PATHS = { ...hubModelLinkPaths, ...visinModelLinkPaths };
 
 const modelLinkSource = (link: ModelLink) => modelLinkSources[link.provider] as ModelLinkSource<ModelLink>;
 
@@ -155,12 +185,21 @@ export const modelLinkIdentity = (link: ModelLink): Record<string, unknown> => m
 
 export const modelLinkLabel = (link: ModelLink): string => modelLinkSource(link).label(link);
 
+export const modelLinkSummary = (link: ModelLink): string => modelLinkSource(link).summary(link);
+
 /** Whether two links point at the same bytes. */
 export const sameModelLink = (a: ModelLink, b: ModelLink): boolean =>
   JSON.stringify(modelLinkIdentity(a)) === JSON.stringify(modelLinkIdentity(b));
 
 /** The canonical key of the checkpoint a linked model stands for: how it is matched with evaluations. */
 export const modelLinkKey = (link: ModelLink): string => checkpointKey(modelLinkSource(link).checkpoint(link));
+
+/** The bytes a link keeps on this deployment, or `undefined` for a pointer to somewhere else. */
+export const modelLinkStored = (link: ModelLink): { fileId: string } | undefined => modelLinkSource(link).stored?.(link);
+
+/** The link as it is stored, once its bytes have arrived; a pointer is stored as given. */
+export const adoptModelLink = (link: ModelLink, arrived: { size: number; runName: string }): ModelLink =>
+  modelLinkSource(link).adopt?.(link, arrived) ?? link;
 
 /** Refuses a link the project's storage cannot hold. */
 export function requireModelLinkStorage(project: Pick<IProject, 'storage'> | null | undefined, link: ModelLink): void {

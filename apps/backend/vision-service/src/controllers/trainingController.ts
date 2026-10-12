@@ -1,11 +1,21 @@
 import { heartbeatTraining as recordHeartbeat } from '../services/trainingHeartbeatService';
 import { Request, Response } from 'express';
-import { addModelReference, removeModelReference, setModelDemo } from '../services/trainingModelService';
+import { logger, sendStoredFile } from '@visin/backend-core';
+import {
+  addModelReference,
+  createModelUpload,
+  removeModelReference,
+  servableModel,
+  setModelDemo
+} from '../services/trainingModelService';
+import { reprDigest } from '../services/visinModels';
+import { getFileStream } from '../clients/fileServiceClient';
 import { getBestRun } from '../services/bestRunService';
 import type { BestRunQuery } from '../validation/bestRunSchemas';
 import { getTrainingSummary } from '../services/trainingSummaryService';
 import { buildModelCard } from '../services/modelCardService';
-import type { ModelCardQuery } from '../validation/artifactSchemas';
+import type { ModelBundleQuery, ModelCardQuery, ModelUploadBody } from '../validation/artifactSchemas';
+import { openModelBundle } from '../services/modelBundleService';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { trainingService } from '../services/trainingService';
 import type {
@@ -18,12 +28,12 @@ import type {
 // Get all trainings
 export const getTrainings = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
-  const { page, limit, search, status, datasetId, projectId, access, tags, excludeTags, ids, sortBy, order } =
+  const { page, limit, search, status, datasetId, dataset, projectId, access, tags, excludeTags, ids, sortBy, order } =
     req.query as unknown as GetTrainingsQuery;
 
   const result = await trainingService.getTrainings(
     userId,
-    { search, status, datasetId, projectId, access, tags, excludeTags, ids },
+    { search, status, datasetId: datasetId ?? dataset, projectId, access, tags, excludeTags, ids },
     { page, limit, sortBy, order }
   );
 
@@ -185,9 +195,71 @@ export const addTrainingModel = async (req: Request, res: Response): Promise<voi
   res.status(created ? 201 : 200).json({ success: true, data: models });
 };
 
+// Reserve an upload for a model file of this run
+export const createTrainingModelUpload = async (req: Request, res: Response): Promise<void> => {
+  const data = await createModelUpload(String(req.params.id), req.user?.id, req.body as ModelUploadBody);
+  res.status(201).json({ success: true, data });
+};
+
+/**
+ * A stored model's file as the response, resumable, for a caller that takes one response as the data (a dataspace
+ * connector's data plane) and follows no link inside it.
+ */
+export const downloadTrainingModel = async (req: AuthRequest, res: Response): Promise<void> => {
+  const training = await trainingService.getTrainingById(String(req.params.id), req.user?.id);
+  const model = servableModel(training, String(req.params.modelId));
+  // A resume is not a second download: count the request that starts at the beginning.
+  if (req.method === 'GET' && (!req.headers.range || /^bytes=0-/.test(req.headers.range))) {
+    logger.info('Model downloaded', {
+      trainingId: String(training._id),
+      modelId: String(model._id),
+      format: model.format,
+      userId: req.user?.id,
+      keyId: req.apiKey?.keyId,
+      bytes: model.size
+    });
+  }
+  await sendStoredFile(req, res, {
+    filename: model.filename ?? `model.${model.format}`,
+    contentType: 'application/octet-stream',
+    size: model.size,
+    version: model.verifiedAt ?? training.updatedAt,
+    headers: { 'Repr-Digest': reprDigest(model.sha256!) },
+    open: (range) => getFileStream(model.fileId, range),
+    logContext: { trainingId: String(training._id), modelId: String(model._id) }
+  });
+};
+
+/**
+ * What a stored model produced on its frames, as one zip, for a caller that takes one response as the data. Built as
+ * it is sent, so it has no size and no ranges; the weights are the separate `file` download.
+ */
+export const downloadModelBundle = async (req: AuthRequest, res: Response): Promise<void> => {
+  const training = await trainingService.getTrainingById(String(req.params.id), req.user?.id);
+  const { folders } = req.query as unknown as ModelBundleQuery;
+  const bundle = await openModelBundle(training, String(req.params.modelId), folders, req.user?.id);
+  if (req.method === 'GET') {
+    logger.info('Model outputs downloaded', {
+      trainingId: String(training._id),
+      modelId: String(bundle.model._id),
+      userId: req.user?.id
+    });
+  }
+  await sendStoredFile(req, res, {
+    filename: bundle.filename,
+    contentType: 'application/zip',
+    headers: { 'Cache-Control': 'no-store' },
+    open: async () => bundle.stream(),
+    logContext: { trainingId: String(training._id), modelId: String(bundle.model._id) }
+  });
+};
+
 // Unlink a model from a run
 export const removeTrainingModel = async (req: Request, res: Response): Promise<void> => {
-  res.json({ success: true, data: await removeModelReference(String(req.params.id), req.user?.id, String(req.params.modelId)) });
+  res.json({
+    success: true,
+    data: await removeModelReference(String(req.params.id), req.user?.id, String(req.params.modelId))
+  });
 };
 
 // The README for a Hub model repo, written from what this run recorded
@@ -198,7 +270,10 @@ export const getModelCard = async (req: Request, res: Response): Promise<void> =
 
 // Link, or unlink, a model's demo Space
 export const setTrainingModelDemo = async (req: Request, res: Response): Promise<void> => {
-  res.json({ success: true, data: await setModelDemo(String(req.params.id), req.user?.id, String(req.params.modelId), req.body.space) });
+  res.json({
+    success: true,
+    data: await setModelDemo(String(req.params.id), req.user?.id, String(req.params.modelId), req.body.space)
+  });
 };
 
 // How a run did, in one call

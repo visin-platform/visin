@@ -249,6 +249,22 @@ describe('get_training with a summary', () => {
     expect(text).toContain('Started from commit abcdef0 on main, with uncommitted changes');
   });
 
+  it('says which models Visin keeps, in what format, and whether they are offered for download', async () => {
+    mocked.getTrainingSummary.mockResolvedValue(
+      summary({
+        models: [
+          { provider: 'visin', format: 'pth', filename: 'run-epoch99.pth', size: 1_288_490_189, epoch: 99, status: 'ready', license: { id: 'cc-by-4.0', name: 'CC BY 4.0' } },
+          { provider: 'visin', format: 'onnx', size: 644_245_094, status: 'verifying' },
+          { repo: 'acme/other', revision: '1234567890abcdef' }
+        ]
+      })
+    );
+    const { text } = await call('get_training', { training: 't1' });
+    expect(text).toContain('Model kept on Visin: run-epoch99.pth (pth, 1.20 GB, epoch 99), licence CC BY 4.0.');
+    expect(text).toContain('Model kept on Visin: onnx checkpoint (onnx, 0.60 GB, verifying), licence not stated, so it is not offered for download.');
+    expect(text).toContain('Model on Hugging Face: acme/other @ 1234567.');
+  });
+
   it('states a clean commit without a warning, and a run with no branch', async () => {
     mocked.getTrainingSummary.mockResolvedValue(summary({ provenance: { git: { commit: 'abcdef0123456789', dirty: false } } }));
     const { text } = await call('get_training', { training: 't1' });

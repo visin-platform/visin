@@ -1,4 +1,5 @@
 import { HUB, type HubCheckpoint, type HubData } from '../providers/huggingFace';
+import { VISIN } from '../providers/visin';
 
 /**
  * The kinds of each place something can live, one list per concept. The same lists as vision-service's
@@ -16,7 +17,7 @@ export const DATASET_SOURCES = ['visin', HUB, 'other'] as const;
 export type DatasetSourceKind = (typeof DATASET_SOURCES)[number];
 
 /** The stores a model can be linked from. */
-export const MODEL_LINK_PROVIDERS = [HUB] as const;
+export const MODEL_LINK_PROVIDERS = [HUB, VISIN] as const;
 export type ModelLinkProvider = (typeof MODEL_LINK_PROVIDERS)[number];
 
 /** What a checkpoint an evaluation scored can be. */

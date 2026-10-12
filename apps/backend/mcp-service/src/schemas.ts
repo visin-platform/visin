@@ -126,6 +126,24 @@ export const epochSchema = z
  * epoch beside its last, in the direction the project set (`directionFrom: 'taxonomy'`) or
  * guessed from the result's name (`'default'`), so a caller can say which it is relying on.
  */
+const hubRunModelSchema = z.object({ repo: z.string(), revision: z.string(), space: z.string().optional() }).loose();
+const storedRunModelSchema = z
+  .object({
+    provider: z.literal('visin'),
+    format: z.string(),
+    filename: z.string().optional(),
+    size: z.number().optional(),
+    status: z.string().optional(),
+    epoch: z.number().optional(),
+    license: z.object({ id: z.string(), name: z.string().optional() }).loose().optional()
+  })
+  .loose();
+const runModelSchema = z.union([hubRunModelSchema, storedRunModelSchema]);
+export type RunModel = z.infer<typeof runModelSchema>;
+export type HubRunModel = z.infer<typeof hubRunModelSchema>;
+/** Whether a linked model is a pointer to a Hub repo, as opposed to a checkpoint Visin keeps. */
+export const isHubRunModel = (model: RunModel): model is HubRunModel => typeof (model as HubRunModel).repo === 'string';
+
 export const trainingSummarySchema = z
   .object({
     epochCount: z.number(),
@@ -143,7 +161,15 @@ export const trainingSummarySchema = z
           .loose()
       )
       .catch([]),
-    models: z.array(z.object({ repo: z.string(), revision: z.string(), space: z.string().optional() }).loose()).catch([]),
+    // A pointer to a Hub repo, or a checkpoint Visin keeps itself. Each model is read on its own terms: one that does
+    // not fit is left out, never the whole list.
+    models: z
+      .array(z.unknown())
+      .transform((items) => items.flatMap((item) => {
+        const parsed = runModelSchema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      }))
+      .catch([]),
     provenance: z
       .object({
         git: z.object({ commit: z.string(), branch: z.string().optional(), dirty: z.boolean().optional() }).loose().optional(),

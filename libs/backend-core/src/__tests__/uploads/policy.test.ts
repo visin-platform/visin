@@ -16,7 +16,10 @@ describe('upload policy', () => {
     ['a.webp', 'image/webp', 'webp', 50 * 1024 ** 2],
     ['a.mp4', 'video/mp4', 'mp4', 1024 ** 3],
     ['a.mov', 'video/quicktime', 'mov', 1024 ** 3],
-    ['a.pdf', 'application/pdf', 'pdf', 50 * 1024 ** 2]
+    ['a.pdf', 'application/pdf', 'pdf', 50 * 1024 ** 2],
+    ['model.pth', 'application/octet-stream', 'pth', 10 * 1024 ** 3],
+    ['model.pth', 'application/x-pytorch', 'pth', 10 * 1024 ** 3],
+    ['model.ONNX', 'application/onnx', 'onnx', 10 * 1024 ** 3]
   ])('selects a server ceiling for %s', (file, mime, format, maxBytes) => {
     expect(getUploadPolicy(file, mime)).toEqual({ format, maxBytes });
   });
@@ -36,5 +39,18 @@ describe('upload policy', () => {
     expect(() => getUploadPolicy('a.png', 'image/png', 'archive')).toThrow('archive');
     expect(() => getUploadPolicy('a.zip', 'application/zip', 'image')).toThrow('raster');
     expect(() => getUploadPolicy('a.zip', 'application/zip', 'visualization')).toThrow('visualization');
+  });
+  it('lets only a checkpoint kind be a model file, and a checkpoint be nothing else', () => {
+    expect(getUploadPolicy('m.pth', 'application/octet-stream', 'checkpoint').format).toBe('pth');
+    expect(getUploadPolicy('m.onnx', 'application/onnx', 'checkpoint').format).toBe('onnx');
+    expect(() => getUploadPolicy('a.png', 'image/png', 'checkpoint')).toThrow('checkpoint');
+    expect(() => getUploadPolicy('a.zip', 'application/zip', 'checkpoint')).toThrow('checkpoint');
+    for (const kind of ['archive', 'image', 'visualization'] as const) {
+      expect(() => getUploadPolicy('m.pth', 'application/octet-stream', kind)).toThrow();
+      expect(() => getUploadPolicy('m.onnx', 'application/onnx', kind)).toThrow();
+    }
+  });
+  it('refuses a model file declared as an image', () => {
+    expect(() => getUploadPolicy('m.pth', 'image/png')).toThrow('mismatch');
   });
 });

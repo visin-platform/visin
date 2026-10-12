@@ -241,10 +241,19 @@ describe('strict ranges and content signatures', () => {
     ['zip', '504b0304'], ['zip', '504b0506'], ['gzip', '1f8b08'], ['png', '89504e470d0a1a0a'], ['jpeg', 'ffd8ff'],
     ['gif', Buffer.from('GIF87a').toString('hex')], ['gif', Buffer.from('GIF89a').toString('hex')],
     ['webp', Buffer.from('RIFFxxxxWEBP').toString('hex')], ['mp4', Buffer.from('xxxxftyp').toString('hex')],
-    ['mov', Buffer.from('xxxxmoov').toString('hex')], ['pdf', Buffer.from('%PDF-').toString('hex')]
+    ['mov', Buffer.from('xxxxmoov').toString('hex')], ['pdf', Buffer.from('%PDF-').toString('hex')],
+    ['pth', '504b0304'], ['pth', '8002'], ['pth', '8005'], ['onnx', '0809'], ['onnx', '080a1200']
   ] as const)('accepts the reserved %s signature', (format, hex) => {
     const file = path.join(directory, 'candidate'); fs.writeFileSync(file, Buffer.from(hex, 'hex'));
     expect(() => validateContent(file, { format, maxBytes: 100 })).not.toThrow();
+  });
+  it.each([
+    ['pth', 'not a checkpoint'.split('').map(c => c.charCodeAt(0).toString(16)).join('')],
+    ['pth', '8001'], ['pth', '8006'], ['pth', '504b0506'],
+    ['onnx', '0800'], ['onnx', '08ff'], ['onnx', '12'], ['onnx', '89504e47'], ['onnx', '08']
+  ] as const)('refuses a %s that does not start like one: %s', (format, hex) => {
+    const file = path.join(directory, 'candidate'); fs.writeFileSync(file, Buffer.from(hex, 'hex'));
+    expect(() => validateContent(file, { format, maxBytes: 100 })).toThrow('content');
   });
   it('accepts tar headers while rejecting arbitrary bytes', async () => {
     const file = path.join(directory, 'candidate'); const tar = Buffer.alloc(512); tar.write('ustar', 257); fs.writeFileSync(file, tar);

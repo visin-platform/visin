@@ -4,12 +4,17 @@ import UploadReservation from '../models/UploadReservation';
 import { deleteFile, getFileMetadata } from '../clients/fileServiceClient';
 import { requireActor } from './writeAccessService';
 
-// Datasets (archives, images) moved to dataset-service; visualizations are what remain here.
-type UploadKind = 'visualization';
-type ResourceKind = 'visualization';
+// Datasets (archives, images) moved to dataset-service; visualizations and model checkpoints are what remain here.
+type UploadKind = 'visualization' | 'checkpoint';
+type ResourceKind = 'visualization' | 'checkpoint';
 
-export async function reserveUpload(fileId: string, kind: UploadKind, parentId: string, mimetype: string, userId?: string, allocationId = new Types.ObjectId().toString()) {
+/**
+ * `maxBytes` narrows the policy's ceiling for this one upload (a deployment's checkpoint limit); it can never enlarge
+ * it. The reservation outlives the signed URL, so a slow upload that started in time is still claimed.
+ */
+export async function reserveUpload(fileId: string, kind: UploadKind, parentId: string, mimetype: string, userId?: string, allocationId = new Types.ObjectId().toString(), maxBytes?: number) {
   const policy = getUploadPolicy(fileId, mimetype, kind);
+  if (maxBytes !== undefined) policy.maxBytes = Math.min(policy.maxBytes, maxBytes);
   try { return await UploadReservation.create({ fileId, kind, parentId, mimetype, maxBytes: policy.maxBytes,
     ownerId: requireActor(userId), allocationId, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
   } catch (error) {

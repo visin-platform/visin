@@ -96,7 +96,11 @@ export function validateContent(stage: string, policy: UploadPolicy): void {
     webp: text(0, 4) === 'RIFF' && text(8, 12) === 'WEBP',
     mp4: text(4, 8) === 'ftyp',
     mov: ['ftyp', 'moov', 'mdat', 'wide'].includes(text(4, 8)),
-    pdf: text(0, 5) === '%PDF-'
+    pdf: text(0, 5) === '%PDF-',
+    // torch.save writes a zip (PK\x03\x04) since 1.6 and a pickle (protocol 2-5) before that.
+    pth: starts('504b0304') || (data[0] === 0x80 && data[1] >= 2 && data[1] <= 5),
+    // A ModelProto always begins with its ir_version: field 1, a varint, so tag 0x08 and then a small number.
+    onnx: length >= 2 && data[0] === 0x08 && data[1] > 0 && data[1] < 0x80
   };
   if (!allowed[policy.format]) throw new BadRequestError('Uploaded content does not match its reserved format');
 }

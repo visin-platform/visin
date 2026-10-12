@@ -7,6 +7,7 @@ import {
   projectsResponseSchema,
   runEvaluationsResponseSchema,
   testResultOf,
+  trainingSummarySchema,
   trainingWithEpochsSchema,
   trainingsResponseSchema
 } from '../schemas';
@@ -241,5 +242,32 @@ describe('tolerating what the API actually sends', () => {
 
     expect(parsed.comparison[0].epochs).toHaveLength(2);
     expect(parsed.comparison[0].epochs[0].results).toEqual({ loss: 0.2 });
+  });
+});
+
+describe('trainingSummarySchema models', () => {
+  const run = { epochCount: 3, lastEpoch: 3, metrics: [] };
+
+  it('reads a Hub pointer and a checkpoint Visin keeps side by side, and drops neither', () => {
+    const parsed = parseResponse(trainingSummarySchema, '/trainings/t1/summary', {
+      ...run,
+      models: [
+        { provider: 'hf', repo: 'acme/clft', revision: 'a'.repeat(40) },
+        { provider: 'visin', fileId: 'models/t1/a.pth', format: 'pth', filename: 'run.pth', size: 1_073_741_824, status: 'ready', license: { id: 'cc-by-4.0', name: 'CC BY 4.0' } }
+      ]
+    });
+
+    expect(parsed.models).toHaveLength(2);
+    expect(parsed.models[0]).toMatchObject({ repo: 'acme/clft' });
+    expect(parsed.models[1]).toMatchObject({ provider: 'visin', format: 'pth', filename: 'run.pth' });
+  });
+
+  it('leaves out only a model that fits neither, never the rest', () => {
+    const parsed = parseResponse(trainingSummarySchema, '/trainings/t1/summary', {
+      ...run,
+      models: [{ repo: 'acme/clft', revision: 'a'.repeat(40) }, { provider: 'somewhere-new' }]
+    });
+
+    expect(parsed.models).toEqual([expect.objectContaining({ repo: 'acme/clft' })]);
   });
 });

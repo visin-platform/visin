@@ -1,7 +1,7 @@
-import type { ModelReference } from '../types/training';
+import type { HubModelReference } from '../types/training';
 import { shellArgument } from './snippetQuotes';
 
-type Checkpoint = Pick<ModelReference, 'repo' | 'revision' | 'path'>;
+type Checkpoint = Pick<HubModelReference, 'repo' | 'revision' | 'path'>;
 
 /** `hf://org/name@commit[/path]`: the exact checkpoint visin-fusion should read. */
 export const hubReference = (model: Checkpoint): string =>

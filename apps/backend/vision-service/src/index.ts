@@ -1,4 +1,5 @@
 import { stallSilentTrainings } from './services/trainingHeartbeatService';
+import { verifyPendingModels } from './services/modelVerificationService';
 import express from 'express';
 import { jsonBody } from './middleware/bodyLimit';
 import { identityContextMiddleware } from './middleware/requestIdentityContext';
@@ -54,7 +55,9 @@ connectDb({ serviceName: 'vision-service' })
     // Projects and trainings trashed more than 30 days ago are deleted: hourly, and once now.
     const trashSweeper = startSweeper({ name: 'vision-trash-purge', run: async () => void (await purgeExpiredTrash()) });
     const runSweeper = startSweeper({ name: 'vision-stalled-runs', everyMs: 60_000, run: async () => void (await stallSilentTrainings()) });
-    serve(app, { port: PORT, serviceName: 'vision-service', onShutdown: async () => { await trashSweeper.stop(); await runSweeper.stop(); } });
+    // Reads the stored models whose verification never finished (a restart, a worker that died holding a lease).
+    const modelSweeper = startSweeper({ name: 'vision-model-verify', everyMs: 60_000, run: async () => void (await verifyPendingModels()) });
+    serve(app, { port: PORT, serviceName: 'vision-service', onShutdown: async () => { await trashSweeper.stop(); await runSweeper.stop(); await modelSweeper.stop(); } });
   })
   .catch((err: Error) => {
     logger.error('Failed to start vision-service', { error: err.message, stack: err.stack });

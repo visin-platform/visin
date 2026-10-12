@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { vision } from '../vision';
 import type { Benchmark, ComparisonEntry, Epoch, TestResult, Training, TrainingSummary } from '../schemas';
+import { isHubRunModel } from '../schemas';
 import {
   Caller,
   ToolModule,
@@ -487,7 +488,17 @@ function registerReadTools(server: McpServer, caller: Caller): void {
         }
 
         for (const model of summary?.models ?? []) {
-          lines.push('', `Model on Hugging Face: ${model.repo} @ ${model.revision.slice(0, 7)}${model.space ? `, demo space ${model.space}` : ''}.`);
+          if (isHubRunModel(model)) {
+            lines.push('', `Model on Hugging Face: ${model.repo} @ ${model.revision.slice(0, 7)}${model.space ? `, demo space ${model.space}` : ''}.`);
+            continue;
+          }
+          const size = model.size === undefined ? '' : `, ${(model.size / 1024 ** 3).toFixed(2)} GB`;
+          const licence = model.license ? `licence ${model.license.name ?? model.license.id}` : 'licence not stated, so it is not offered for download';
+          const state = model.status && model.status !== 'ready' ? `, ${model.status}` : '';
+          lines.push(
+            '',
+            `Model kept on Visin: ${model.filename ?? `${model.format} checkpoint`} (${model.format}${size}${model.epoch === undefined ? '' : `, epoch ${model.epoch}`}${state}), ${licence}.`
+          );
         }
         const git = summary?.provenance?.git;
         if (git) {

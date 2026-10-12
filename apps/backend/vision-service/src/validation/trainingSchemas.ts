@@ -4,8 +4,10 @@ import { accessFilterSchema } from './projectSchemas';
 import { MAX_PAGE_SIZE, sortOrderSchema } from './common';
 
 export const datasetReferenceSchema = z.object({
-  source: z.enum(DATASET_SOURCES), id: z.string().min(1).optional(),
-  name: z.string().min(1), revision: z.string().min(1).optional(),
+  source: z.enum(DATASET_SOURCES),
+  id: z.string().min(1).optional(),
+  name: z.string().min(1),
+  revision: z.string().min(1).optional(),
   archiveRevision: z.string().min(1).optional()
 });
 
@@ -34,7 +36,7 @@ export const provenanceSchema = z.object({
   command: z.string().max(4000).optional(),
   packages: z
     .record(z.string().min(1).max(100), z.string().max(100))
-    .refine(packages => Object.keys(packages).length <= 300, 'At most 300 packages')
+    .refine((packages) => Object.keys(packages).length <= 300, 'At most 300 packages')
     .optional(),
   host: z
     .object({
@@ -56,10 +58,10 @@ const EPOCH_SORT_FIELDS = ['epoch', 'createdAt', 'updatedAt', 'timestamp'] as co
 const tagsFilterSchema = z
   .union([z.string(), z.array(z.string())])
   .optional()
-  .transform(v => {
+  .transform((v) => {
     if (v === undefined) return undefined;
     const arr = Array.isArray(v) ? v : v.split(',');
-    const cleaned = arr.map(t => t.trim()).filter(t => t.length > 0);
+    const cleaned = arr.map((t) => t.trim()).filter((t) => t.length > 0);
     return cleaned.length > 0 ? cleaned : undefined;
   });
 
@@ -68,16 +70,24 @@ const tagsFilterSchema = z
 const idsFilterSchema = z
   .union([z.string(), z.array(z.string())])
   .optional()
-  .transform(v => {
+  .transform((v) => {
     if (v === undefined) return undefined;
-    const ids = (Array.isArray(v) ? v : v.split(',')).map(id => id.trim()).filter(id => id.length > 0);
+    const ids = (Array.isArray(v) ? v : v.split(',')).map((id) => id.trim()).filter((id) => id.length > 0);
     return ids.length > 0 ? ids : undefined;
   })
-  .refine(ids => ids === undefined || ids.length <= 100, 'At most 100 ids');
+  .refine((ids) => ids === undefined || ids.length <= 100, 'At most 100 ids');
 
 /** Columns the trainings list sorts by. The last five are computed per run. */
 export const TRAINING_SORT_FIELDS = [
-  'name', 'status', 'createdAt', 'updatedAt', 'epochCount', 'totalTime', 'cpuCost', 'gpuCost', 'totalCost'
+  'name',
+  'status',
+  'createdAt',
+  'updatedAt',
+  'epochCount',
+  'totalTime',
+  'cpuCost',
+  'gpuCost',
+  'totalCost'
 ] as const;
 export type TrainingSortField = (typeof TRAINING_SORT_FIELDS)[number];
 
@@ -87,6 +97,8 @@ export const getTrainingsQuerySchema = z.object({
   search: z.string().optional(),
   status: z.string().optional(),
   datasetId: z.string().optional(),
+  /** Alias used by dataset participants to find linked runs. */
+  dataset: z.string().min(1).optional(),
   projectId: z.string().optional(),
   /** `contribute`: only runs in projects the caller may write to. */
   access: accessFilterSchema,

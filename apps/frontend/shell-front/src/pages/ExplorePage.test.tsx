@@ -5,14 +5,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const { config, authState } = vi.hoisted(() => ({
   config: {} as Record<string, string | undefined>,
-  authState: { isAuthenticated: false, isLoading: false, signup: vi.fn() },
+  authState: { isAuthenticated: false, isLoading: false, signup: vi.fn() }
 }));
 
 vi.mock('../config/ConfigProvider', () => ({ useConfig: () => config, getGlobalConfig: () => config }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => authState }));
 vi.mock('../services/exploreApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/exploreApi')>()),
-  exploreApi: { publicProjects: vi.fn(), publicDatasets: vi.fn(), publicFindings: vi.fn(), leaderboard: vi.fn() },
+  exploreApi: {
+    publicModels: vi.fn(),
+    publicProjects: vi.fn(),
+    publicDatasets: vi.fn(),
+    publicFindings: vi.fn(),
+    leaderboard: vi.fn()
+  }
 }));
 
 import { ExplorePage } from './ExplorePage';
@@ -32,9 +38,17 @@ const projects: ExploreProject[] = [
     owner: { kind: 'user', id: 'u9', name: 'Ann Lee', handle: 'ann-lee', picture: 'https://p.test/ann.jpg' },
     updatedAt: hoursAgo(3),
     runs: 9,
-    lastRunAt: hoursAgo(5),
+    lastRunAt: hoursAgo(5)
   },
-  { _id: 'p2', name: 'Night driving', visibility: 'public', owner: { kind: 'user', id: 'u1' }, updatedAt: hoursAgo(96), lastActivityAt: hoursAgo(48), runs: 0 },
+  {
+    _id: 'p2',
+    name: 'Night driving',
+    visibility: 'public',
+    owner: { kind: 'user', id: 'u1' },
+    updatedAt: hoursAgo(96),
+    lastActivityAt: hoursAgo(48),
+    runs: 0
+  }
 ];
 const datasets = [
   {
@@ -45,15 +59,22 @@ const datasets = [
     imageCount: 4110,
     groups: [{ name: 'train', images: 4000 }],
     coverUrl: 'https://files.test/cover.jpg',
-    updatedAt: hoursAgo(24),
-  },
+    updatedAt: hoursAgo(24)
+  }
 ];
 const leaderboard = {
   metric: 'mean_iou',
   direction: 'max' as const,
   entries: [
-    { rank: 1, evaluationId: 'e1', checkpoint: { kind: 'local' as const, label: 'segformer-b2' }, project: { name: 'Window ablations' }, value: 0.8123, verified: true },
-  ],
+    {
+      rank: 1,
+      evaluationId: 'e1',
+      checkpoint: { kind: 'local' as const, label: 'segformer-b2' },
+      project: { name: 'Window ablations' },
+      value: 0.8123,
+      verified: true
+    }
+  ]
 };
 const findings = [
   {
@@ -62,13 +83,24 @@ const findings = [
     authorKind: 'assistant' as const,
     authorLabel: 'Claude',
     createdAt: hoursAgo(2),
-    project: { id: 'p1', name: 'Window ablations', slug: 'window-ablations' },
-  },
+    project: { id: 'p1', name: 'Window ablations', slug: 'window-ablations' }
+  }
 ];
 
-const page = (number: number, pages: number, total: number, limit = 12): Pagination => ({ page: number, limit, total, pages });
-const projectPage = (rows: ExploreProject[], number = 1, pages = 1) => ({ projects: rows, pagination: page(number, pages, rows.length) });
-const datasetPage = (rows: ExploreDataset[], number = 1, pages = 1) => ({ datasets: rows, pagination: page(number, pages, rows.length) });
+const page = (number: number, pages: number, total: number, limit = 12): Pagination => ({
+  page: number,
+  limit,
+  total,
+  pages
+});
+const projectPage = (rows: ExploreProject[], number = 1, pages = 1) => ({
+  projects: rows,
+  pagination: page(number, pages, rows.length)
+});
+const datasetPage = (rows: ExploreDataset[], number = 1, pages = 1) => ({
+  datasets: rows,
+  pagination: page(number, pages, rows.length)
+});
 
 const Where = () => {
   const { pathname, search } = useLocation();
@@ -92,16 +124,61 @@ beforeEach(() => {
   Object.assign(config, {
     VISION_API_URL: 'https://vision-api.test',
     DATASET_API_URL: 'https://dataset-api.test',
-    LANDING_FRONT_URL: 'https://landing.test/',
+    LANDING_FRONT_URL: 'https://landing.test/'
   });
   Object.assign(authState, { isAuthenticated: false, isLoading: false });
   api.publicProjects.mockResolvedValue(projectPage(projects));
   api.publicDatasets.mockResolvedValue(datasetPage(datasets));
   api.leaderboard.mockResolvedValue(leaderboard);
   api.publicFindings.mockResolvedValue(findings);
+  api.publicModels.mockResolvedValue({ models: [], pagination: page(1, 0, 0) });
 });
 
 describe('ExplorePage', () => {
+  it('opens a Models tab that searches and pages public models from both stores', async () => {
+    const stored = {
+      model: {
+        _id: 'm1',
+        provider: 'visin' as const,
+        filename: 'clft.pth',
+        format: 'pth' as const,
+        status: 'verifying' as const,
+        addedAt: hoursAgo(1)
+      },
+      training: { _id: 't1', name: 'CLFT run' }
+    };
+    api.publicModels
+      .mockResolvedValueOnce({ models: [stored], pagination: page(1, 2, 2) })
+      .mockResolvedValueOnce({
+        models: [
+          {
+            model: { _id: 'm2', provider: 'hf', repo: 'team/clft', revision: 'abcdef123456', addedAt: hoursAgo(2) },
+            training: { _id: 't2', name: 'Hub run' }
+          }
+        ],
+        pagination: page(2, 2, 2)
+      });
+    renderPage('/?type=models&q=clft');
+    expect(await screen.findByRole('link', { name: 'clft.pth' })).toHaveAttribute('href', '/trainings/t1');
+    expect(screen.getByRole('button', { name: 'Models' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('progressbar', { name: 'Verifying model' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Projects' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Datasets' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    expect(await screen.findByRole('link', { name: 'team/clft @ abcdef1' })).toHaveAttribute('href', '/trainings/t2');
+    expect(api.publicModels).toHaveBeenLastCalledWith({ search: 'clft', page: 2, limit: 12 });
+  });
+
+  it('keeps a failed Models catalogue useful with an error and hides its tab without Vision', async () => {
+    api.publicModels.mockRejectedValue(new Error('offline'));
+    const view = renderPage('/?type=models');
+    expect(await screen.findByText('Could not load models.')).toBeInTheDocument();
+    view.unmount();
+    delete config.VISION_API_URL;
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Models' })).not.toBeInTheDocument();
+  });
+
   it('links to the People directory where there is a service to list them', async () => {
     renderPage();
     await screen.findByRole('link', { name: 'Window ablations' });
@@ -176,7 +253,7 @@ describe('ExplorePage', () => {
     api.publicProjects.mockResolvedValue(
       projectPage([
         { ...projects[0], owner: { kind: 'group', id: 'g1', name: 'Road lab' } },
-        { ...projects[1], owner: { kind: 'group', id: 'g2', name: 'Harbour team', handle: 'harbour' } },
+        { ...projects[1], owner: { kind: 'group', id: 'g2', name: 'Harbour team', handle: 'harbour' } }
       ])
     );
     renderPage();
@@ -207,7 +284,11 @@ describe('ExplorePage', () => {
 
   describe('paging and "See all"', () => {
     const many = (count: number, prefix = 'Project') =>
-      Array.from({ length: count }, (_, index) => ({ ...projects[1], _id: `${prefix}-${index}`, name: `${prefix} ${index}` }));
+      Array.from({ length: count }, (_, index) => ({
+        ...projects[1],
+        _id: `${prefix}-${index}`,
+        name: `${prefix} ${index}`
+      }));
 
     it('shows a taste of each in All, with See all to its full list', async () => {
       api.publicProjects.mockResolvedValue(projectPage(many(12), 1, 3));
@@ -223,7 +304,10 @@ describe('ExplorePage', () => {
     it('keeps the search in a See all link', async () => {
       renderPage('/?q=swin');
 
-      expect(await screen.findByRole('link', { name: 'See all projects' })).toHaveAttribute('href', '/?q=swin&type=projects');
+      expect(await screen.findByRole('link', { name: 'See all projects' })).toHaveAttribute(
+        'href',
+        '/?q=swin&type=projects'
+      );
     });
 
     it('pages through one kind with Show more, until there is no more', async () => {
@@ -260,7 +344,10 @@ describe('ExplorePage', () => {
     it('pages datasets the same way', async () => {
       api.publicDatasets
         .mockResolvedValueOnce({ datasets: [datasets[0]], pagination: page(1, 2, 2) })
-        .mockResolvedValueOnce({ datasets: [{ ...datasets[0], _id: 'd2', name: 'Second set' }], pagination: page(2, 2, 2) });
+        .mockResolvedValueOnce({
+          datasets: [{ ...datasets[0], _id: 'd2', name: 'Second set' }],
+          pagination: page(2, 2, 2)
+        });
       renderPage('/?type=datasets');
 
       await screen.findByText('Harbour frames');
@@ -299,10 +386,14 @@ describe('ExplorePage', () => {
       api.publicProjects.mockResolvedValue(projectPage([projects[0]]));
       api.publicDatasets.mockResolvedValue(datasetPage([]));
 
-      fireEvent.change(screen.getByRole('searchbox', { name: 'Search the catalogue' }), { target: { value: ' swin ' } });
+      fireEvent.change(screen.getByRole('searchbox', { name: 'Search the catalogue' }), {
+        target: { value: ' swin ' }
+      });
 
       await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/?q=swin'));
-      await waitFor(() => expect(api.publicProjects).toHaveBeenLastCalledWith({ search: 'swin', sort: 'updated', page: 1, limit: 12 }));
+      await waitFor(() =>
+        expect(api.publicProjects).toHaveBeenLastCalledWith({ search: 'swin', sort: 'updated', page: 1, limit: 12 })
+      );
       expect(api.publicDatasets).toHaveBeenLastCalledWith({ search: 'swin', page: 1, limit: 12 });
       expect(await screen.findByText('No public datasets match “swin”.')).toBeInTheDocument();
     });
@@ -325,7 +416,9 @@ describe('ExplorePage', () => {
       fireEvent.click(await screen.findByRole('option', { name: 'Newest' }));
 
       await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/?sort=created'));
-      await waitFor(() => expect(api.publicProjects).toHaveBeenLastCalledWith({ search: '', sort: 'created', page: 1, limit: 12 }));
+      await waitFor(() =>
+        expect(api.publicProjects).toHaveBeenLastCalledWith({ search: '', sort: 'created', page: 1, limit: 12 })
+      );
 
       fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Sort projects' }));
       fireEvent.click(await screen.findByRole('option', { name: 'Recently updated' }));

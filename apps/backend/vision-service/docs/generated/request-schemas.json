@@ -2175,6 +2175,10 @@
       "datasetId": {
         "type": "string"
       },
+      "dataset": {
+        "type": "string",
+        "minLength": 1
+      },
       "projectId": {
         "type": "string"
       },
@@ -2631,6 +2635,14 @@
       }
     }
   },
+  "ModelBundleQuery": {
+    "type": "object",
+    "properties": {
+      "folders": {
+        "type": "string"
+      }
+    }
+  },
   "ModelCardQuery": {
     "type": "object",
     "properties": {
@@ -2664,38 +2676,201 @@
     ]
   },
   "ModelLink": {
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "hf"
+          },
+          "kind": {
+            "default": "model",
+            "type": "string",
+            "const": "model"
+          },
+          "repo": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "epoch": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "provider",
+          "repo",
+          "revision"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "visin"
+          },
+          "kind": {
+            "default": "model",
+            "type": "string",
+            "const": "model"
+          },
+          "fileId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "pth",
+              "onnx"
+            ]
+          },
+          "epoch": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "enum": [
+                      "cc0-1.0",
+                      "cc-by-4.0",
+                      "cc-by-sa-4.0",
+                      "cc-by-nd-4.0",
+                      "cc-by-nc-4.0",
+                      "cc-by-nc-sa-4.0",
+                      "cc-by-nc-nd-4.0",
+                      "cc-by-3.0",
+                      "cc-by-sa-3.0",
+                      "odc-by",
+                      "odbl",
+                      "pddl",
+                      "cdla-permissive-2.0",
+                      "cdla-sharing-1.0",
+                      "apache-2.0",
+                      "mit",
+                      "bsd-2-clause",
+                      "bsd-3-clause",
+                      "gpl-3.0"
+                    ]
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "const": "other"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "url": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "credit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "sourceSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "modelInfo": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "parity": {
+            "type": "object",
+            "properties": {
+              "maxAbsDiff": {
+                "type": "number",
+                "minimum": 0
+              },
+              "argmaxMismatchFraction": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "frames": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "maxAbsDiff",
+              "argmaxMismatchFraction",
+              "frames"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "provider",
+          "fileId",
+          "format"
+        ]
+      }
+    ]
+  },
+  "ModelUploadBody": {
     "type": "object",
     "properties": {
-      "provider": {
+      "format": {
         "type": "string",
-        "const": "hf"
+        "enum": [
+          "pth",
+          "onnx"
+        ]
       },
-      "kind": {
-        "default": "model",
-        "type": "string",
-        "const": "model"
-      },
-      "repo": {
-        "type": "string",
-        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\\/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
-      },
-      "revision": {
-        "type": "string"
-      },
-      "path": {
-        "type": "string",
-        "maxLength": 500
-      },
-      "epoch": {
+      "size": {
         "type": "integer",
-        "minimum": 0
+        "exclusiveMinimum": 0
       }
     },
     "required": [
-      "provider",
-      "repo",
-      "revision"
-    ]
+      "format"
+    ],
+    "additionalProperties": false
   },
   "MyPapersQuery": {
     "type": "object",

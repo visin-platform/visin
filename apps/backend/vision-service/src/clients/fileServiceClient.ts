@@ -2,6 +2,7 @@
  * File Service Client
  * All file storage goes through the local file-service API (disk-backed).
  */
+import { Readable } from 'stream';
 import {
   logger,
   fetchWithTimeout,
@@ -87,7 +88,8 @@ export const getSignedUrl = async (
 export const getUploadSignedUrl = async (
   fileId: string,
   mimetype: string,
-  expiresInMinutes: number = 15
+  expiresInMinutes: number = 15,
+  maxBytes?: number
 ): Promise<string> => {
   try {
     const response = await fetchWithTimeout(`${fileServiceUrl()}/internal/upload-url`, {
@@ -96,7 +98,7 @@ export const getUploadSignedUrl = async (
         ...fileServiceAuthHeaders(),
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ fileId, expiresInMinutes, mimetype }),
+      body: JSON.stringify({ fileId, expiresInMinutes, mimetype, ...(maxBytes === undefined ? {} : { maxBytes }) }),
       serviceName: 'file-service'
     });
 
@@ -201,3 +203,30 @@ export const getFileMetadata = async (fileId: string): Promise<FileMetadata> => 
   }
 };
 
+
+/**
+ * A stored file's bytes as a stream, all of them or an inclusive byte range. The deadline covers getting the
+ * response, not reading it: a model takes minutes to send, and a read that then stalls ends the stream with an error
+ * for whoever is consuming it. A range file-service ignores is an error rather than a fallback, because a client that
+ * asked for ten bytes and was sent gigabytes would be told the wrong thing.
+ */
+export const getFileStream = async (fileId: string, range?: { start: number; end: number }): Promise<Readable> => {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${fileServiceUrl()}/internal/files/${fileId}`, {
+      headers: { ...fileServiceAuthHeaders(), ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}) },
+      timeoutMs: TRANSFER_FETCH_TIMEOUT_MS,
+      streamBody: true,
+      serviceName: 'file-service'
+    });
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new BadGatewayError('File read failed');
+  }
+  if (response.status === 404) throw new NotFoundError('File not found');
+  const expected = range ? 206 : 200;
+  if (response.status !== expected || !response.body) {
+    throw new BadGatewayError(`File read failed: file-service answered ${response.status}`);
+  }
+  return Readable.fromWeb(response.body as import('stream/web').ReadableStream);
+};

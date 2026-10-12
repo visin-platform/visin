@@ -12,8 +12,11 @@ import {
   dataSources,
   MODEL_LINK_PROVIDERS,
   modelLinkKey,
+  adoptModelLink,
   modelLinkLabel,
   modelLinkSources,
+  modelLinkStored,
+  modelLinkSummary,
   publicCheckpoint,
   publicSuiteData,
   requireCheckpointStorage,
@@ -27,7 +30,8 @@ import {
 } from '../../services/sourceRegistry';
 
 const COMMIT = '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433';
-const kindsOf = (union: { options: { shape: { kind: { value: string } } }[] }) => union.options.map((option) => option.shape.kind.value).sort();
+const kindsOf = (union: { options: { shape: { kind: { value: string } } }[] }) =>
+  union.options.map((option) => option.shape.kind.value).sort();
 
 describe('the source registries', () => {
   it('know every kind the schemas accept, so a new kind cannot be added without saying what it means', () => {
@@ -38,10 +42,13 @@ describe('the source registries', () => {
     expect([...DATASET_SOURCES].sort()).toEqual(Object.keys(datasetSources).sort());
     expect([...STORAGE_PROVIDERS].sort()).toEqual(Object.keys(storageProviders).sort());
     expect([...MODEL_LINK_PROVIDERS].sort()).toEqual(Object.keys(modelLinkSources).sort());
-    const providersOf = (union: { options: { shape: { provider: { value: string } } }[] }) => union.options.map((option) => option.shape.provider.value).sort();
+    const providersOf = (union: { options: { shape: { provider: { value: string } } }[] }) =>
+      union.options.map((option) => option.shape.provider.value).sort();
     expect(providersOf(projectStorageSchema as never)).toEqual([...STORAGE_PROVIDERS].sort());
-    expect([modelLinkSchema.shape.provider.value]).toEqual([...MODEL_LINK_PROVIDERS].sort());
-    const observed = (evidenceSchema.shape.data as unknown as { unwrap(): { options: { shape: { kind: { value: string } } }[] } }).unwrap();
+    expect(providersOf(modelLinkSchema as never)).toEqual([...MODEL_LINK_PROVIDERS].sort());
+    const observed = (
+      evidenceSchema.shape.data as unknown as { unwrap(): { options: { shape: { kind: { value: string } } }[] } }
+    ).unwrap();
     expect(kindsOf(observed as never)).toEqual(Object.keys(dataSources).sort());
   });
 
@@ -74,7 +81,9 @@ describe('checkpoints', () => {
   it('need the storage their kind needs, and no other kind needs any', () => {
     const visin = { storage: { provider: 'visin' as const } };
     const hf = { storage: { provider: 'hf' as const } };
-    expect(() => requireCheckpointStorage(visin, hub)).toThrow(/keeps its files on Visin.*Switch its storage to Hugging Face.*record evaluations of Hub models/);
+    expect(() => requireCheckpointStorage(visin, hub)).toThrow(
+      /keeps its files on Visin.*Switch its storage to Hugging Face.*record evaluations of Hub models/
+    );
     expect(() => requireCheckpointStorage(undefined, hub)).toThrow(/keeps its files on Visin/);
     expect(() => requireCheckpointStorage(hf, hub)).not.toThrow();
     expect(() => requireCheckpointStorage(visin, local)).not.toThrow();
@@ -120,8 +129,70 @@ describe('storage', () => {
     expect(sameModelLink(link, { ...link })).toBe(true);
     expect(sameModelLink(link, { ...link, path: undefined })).toBe(false);
     expect(sameModelLink({ ...link, path: undefined }, { ...link, path: null as unknown as undefined })).toBe(true);
-    expect(() => requireModelLinkStorage({ storage: { provider: 'visin' } }, link)).toThrow(/Switch its storage to Hugging Face.*link Hub models/);
+    expect(() => requireModelLinkStorage({ storage: { provider: 'visin' } }, link)).toThrow(
+      /Switch its storage to Hugging Face.*link Hub models/
+    );
     expect(() => requireModelLinkStorage({ storage: { provider: 'hf' } }, link)).not.toThrow();
+  });
+
+  describe('a model kept on this deployment', () => {
+    const pth = 'b'.repeat(64);
+    const link = { provider: 'visin', kind: 'model', fileId: 'models/run/a.pth', format: 'pth', epoch: 99 } as const;
+
+    it('requires the weights digest for ONNX and refuses export-only fields on weights', () => {
+      expect(modelLinkSchema.safeParse({ ...link, format: 'onnx' }).success).toBe(false);
+      expect(modelLinkSchema.safeParse({ ...link, format: 'onnx', sourceSha256: pth }).success).toBe(true);
+      expect(modelLinkSchema.safeParse({ ...link, sourceSha256: pth }).success).toBe(false);
+      expect(
+        modelLinkSchema.safeParse({ ...link, parity: { frames: 48, maxAbsDiff: 0, argmaxMismatchFraction: 0 } }).success
+      ).toBe(false);
+      expect(modelLinkSchema.safeParse({ ...link, modelInfo: { comment: '雪'.repeat(23000) } }).success).toBe(false);
+    });
+
+    it('is one file per format and epoch, whatever file it is', () => {
+      expect(sameModelLink(link, { ...link, fileId: 'models/run/other.pth' })).toBe(true);
+      expect(sameModelLink(link, { ...link, format: 'onnx' })).toBe(false);
+      expect(sameModelLink(link, { ...link, epoch: 100 })).toBe(false);
+      expect(sameModelLink({ ...link, epoch: undefined }, { ...link, epoch: null as unknown as undefined })).toBe(true);
+    });
+
+    it('needs no particular project storage, and says which bytes it keeps', () => {
+      expect(() => requireModelLinkStorage({ storage: { provider: 'visin' } }, link)).not.toThrow();
+      expect(() => requireModelLinkStorage({ storage: { provider: 'hf' } }, link)).not.toThrow();
+      expect(modelLinkStored(link)).toEqual({ fileId: 'models/run/a.pth' });
+      expect(modelLinkStored({ provider: 'hf', kind: 'model', repo: 'a/b', revision: COMMIT })).toBeUndefined();
+    });
+
+    it('is stored as verifying, named for its run', () => {
+      expect(adoptModelLink(link, { size: 10, runName: 'ISEAUTO CLFT: Large/RGB' })).toMatchObject({
+        size: 10,
+        filename: 'ISEAUTO_CLFT_Large_RGB-epoch99.pth',
+        status: 'verifying'
+      });
+      expect(adoptModelLink({ ...link, epoch: undefined, format: 'onnx' }, { size: 1, runName: '///' })).toMatchObject({
+        filename: 'model.onnx'
+      });
+      const hub = { provider: 'hf', kind: 'model', repo: 'a/b', revision: COMMIT } as const;
+      expect(adoptModelLink(hub, { size: 10, runName: 'run' })).toBe(hub);
+    });
+
+    it('is the .pth’s digest from both formats, and no digest an evaluation could have until it is read', () => {
+      expect(modelLinkKey({ ...link, sha256: pth })).toBe(`sha256:${pth}`);
+      expect(modelLinkKey({ ...link, format: 'onnx', sha256: 'c'.repeat(64), sourceSha256: pth })).toBe(
+        `sha256:${pth}`
+      );
+      expect(modelLinkKey({ ...link, format: 'onnx', sha256: 'c'.repeat(64) })).toBe('sha256:pending-models/run/a.pth');
+      expect(modelLinkKey(link)).toBe('sha256:pending-models/run/a.pth');
+    });
+
+    it('is named by its file, and summarised with the start of its digest', () => {
+      expect(modelLinkLabel({ ...link, filename: 'run-epoch99.pth' })).toBe('run-epoch99.pth');
+      expect(modelLinkLabel(link)).toBe('pth checkpoint');
+      expect(modelLinkSummary({ ...link, filename: 'run.pth', sha256: pth })).toBe('run.pth@bbbbbbb');
+      expect(modelLinkSummary({ provider: 'hf', kind: 'model', repo: 'Acme/Clft', revision: COMMIT })).toBe(
+        'Acme/Clft@3f2a1c9'
+      );
+    });
   });
 
   it('lets a training use a dataset whose source needs nothing, and refuses a Hub one on a Visin project', () => {
