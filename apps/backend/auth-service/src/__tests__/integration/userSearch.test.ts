@@ -27,7 +27,9 @@ describe('internal user search with in-memory MongoDB', () => {
     await User.create([
       { email: 'mari.tamm@taltech.ee', firstName: 'Mari', lastName: 'Tamm', signupMethod: 'password', roles: [] },
       { email: 'jaan@example.test', firstName: 'Jaan', lastName: 'Maripuu', signupMethod: 'password', roles: [] },
-      { email: 'a.b+c@example.test', signupMethod: 'google', roles: [] }
+      { email: 'a.b+c@example.test', signupMethod: 'google', roles: [] },
+      { email: 'bellonemauro@example.test', firstName: 'Mauro', lastName: 'Bellone', signupMethod: 'google', roles: [] },
+      { email: 'pieter@example.test', firstName: 'Pieter', lastName: 'van der Berg', signupMethod: 'password', roles: [] }
     ]);
   }, 120_000);
 
@@ -45,12 +47,29 @@ describe('internal user search with in-memory MongoDB', () => {
   };
   const emails = async (query: string) => ((await search(query)).body.data ?? []).map(user => user.email);
 
-  it('matches the start of an email, a first name or a last name, in any case', async () => {
+  it('matches an email before its "@", a first name or a last name, in any case', async () => {
     expect(await emails('q=mari')).toEqual(['jaan@example.test', 'mari.tamm@taltech.ee']);
     expect(await emails('q=TAMM')).toEqual(['mari.tamm@taltech.ee']);
     expect(await emails('q=jaan%40example.test')).toEqual(['jaan@example.test']);
-    // A prefix, not a substring: "tech" is inside an address but starts none.
+    // Anywhere in the name part of an address...
+    expect(await emails('q=lonemau')).toEqual(['bellonemauro@example.test']);
+    // An account with no name on it is still found by its address.
+    expect(await emails('q=b%2Bc')).toEqual(['a.b+c@example.test']);
+    // ...but never the domain: "tech" is only in one, and "example" would list everyone.
     expect(await emails('q=tech')).toEqual([]);
+    expect(await emails('q=example')).toEqual([]);
+  });
+
+  it('finds a whole name, and any word of a name', async () => {
+    expect(await emails('q=Mauro%20Bellone')).toEqual(['bellonemauro@example.test']);
+    expect(await emails('q=bellone%20mauro')).toEqual(['bellonemauro@example.test']);
+    expect(await emails('q=mauro')).toEqual(['bellonemauro@example.test']);
+    expect(await emails('q=lone')).toEqual(['bellonemauro@example.test']);
+    expect(await emails('q=berg')).toEqual(['pieter@example.test']);
+    expect(await emails('q=pieter%20van%20der')).toEqual(['pieter@example.test']);
+    // Every word must be in the name: an email is not searched word by word.
+    expect(await emails('q=mauro%20tamm')).toEqual([]);
+    expect(await emails('q=bellonemauro%20x')).toEqual([]);
   });
 
   it('reads the query as text, not as a pattern', async () => {

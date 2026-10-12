@@ -143,6 +143,26 @@ describe('validateToken', () => {
     expect(verifyJWT(body.token).email).toBe('test@example.com');
   });
 
+  it("fills in Google's names where the account has none, never over the person's own", async () => {
+    const named = { ...googlePayload, given_name: 'Mauro', family_name: 'Bellone' };
+    mockedVerifyGoogleToken.mockResolvedValue(named);
+    mockedUser.updateOne.mockResolvedValue({});
+
+    mockedSignIn.mockResolvedValue(dbUser);
+    await validateToken(makeReq({ body: { idToken: 'x' } }), makeRes());
+    expect(mockedUser.updateOne).toHaveBeenLastCalledWith(
+      { _id: dbUser._id },
+      { $set: { lastLoginAt: expect.any(Date), picture: 'pic.png', firstName: 'Mauro', lastName: 'Bellone' } }
+    );
+
+    mockedSignIn.mockResolvedValue({ ...dbUser, firstName: 'Prof. Mauro', lastName: 'Bellone' });
+    await validateToken(makeReq({ body: { idToken: 'x' } }), makeRes());
+    expect(mockedUser.updateOne).toHaveBeenLastCalledWith(
+      { _id: dbUser._id },
+      { $set: { lastLoginAt: expect.any(Date), picture: 'pic.png' } }
+    );
+  });
+
   it('defaults tokenVersion to 1 when the db user has none', async () => {
     mockedVerifyGoogleToken.mockResolvedValue(googlePayload);
     mockedSignIn.mockResolvedValue({ ...dbUser, tokenVersion: undefined });

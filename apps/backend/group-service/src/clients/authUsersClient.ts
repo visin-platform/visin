@@ -20,7 +20,7 @@ const authServiceUrl = (): string =>
   ).replace(/\/$/, '');
 
 /**
- * Accounts whose email, first name or last name starts with `query`. Any
+ * Accounts matching `query` by email or name (auth-service decides how). Any
  * failure is auth-service's: a 502, or the 504 a timeout already is.
  */
 export async function searchUsers(query: string, limit: number): Promise<UserMatch[]> {

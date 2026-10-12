@@ -1506,10 +1506,11 @@ paths:
   /auth/internal/users/search:
     get:
       tags: [Internal]
-      summary: Find accounts by the start of their email or name
+      summary: Find accounts by email or name
       description: |
         For group-service's "Add member" search, which decides who may search, leaves out people already in the group
-        and masks the emails it shows. Matches the start of the email, first name or last name, in any case.
+        and masks the emails it shows. One word matches anywhere in an email before its "@" (never the domain), or the
+        start of any word of the first or last name; several words match names that have them all. Any case.
       operationId: searchUsers
       x-internal: true
       security: [{ InternalToken: [] }]

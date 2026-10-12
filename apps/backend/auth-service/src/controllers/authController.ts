@@ -134,8 +134,17 @@ export const validateToken = async (req: Request, res: Response): Promise<void> 
   // it is kept, for the avatar on what the account owns).
   await User.updateOne(
     { _id: dbUser._id },
-    // A picture the person uploaded is theirs, and Google's never replaces it.
-    { $set: { lastLoginAt: new Date(), ...(googleUser.picture && !dbUser.avatarUpdatedAt ? { picture: googleUser.picture } : {}) } }
+    {
+      $set: {
+        lastLoginAt: new Date(),
+        // A picture the person uploaded is theirs, and Google's never replaces it.
+        ...(googleUser.picture && !dbUser.avatarUpdatedAt ? { picture: googleUser.picture } : {}),
+        // Accounts Google signed up before names were kept have none, and so could not be found by name to be
+        // added to a group. Google's fills only a missing name, never one the person set.
+        ...(googleUser.given_name && !dbUser.firstName ? { firstName: googleUser.given_name } : {}),
+        ...(googleUser.family_name && !dbUser.lastName ? { lastName: googleUser.family_name } : {})
+      }
+    }
   );
   await ensureHandle(dbUser);
 
@@ -157,15 +166,26 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
 };
 
 
+/** A name with a word starting with `word`: "berg" finds "van der Berg", "jose" finds "Maria-Jose". */
+const nameWord = (word: string): RegExp => new RegExp(`(^|[\\s-])${escapeRegex(word)}`, 'i');
+
 /**
- * Accounts whose email, first name or last name starts with `q`, for
- * group-service's "Add member" search. Internal only: group-service decides who
- * may search, drops people already in the group, and masks the emails it shows.
+ * Accounts for group-service's "Add member" search: one word finds an email
+ * with it anywhere before the "@" ("mauro" finds bellonemauro@…; never a whole
+ * domain), or a first or last name with a word starting with it; several words
+ * ("Mari Tamm") find the names that have them all. Internal only:
+ * group-service decides who may search, drops people already in the group, and
+ * masks the emails it shows.
  */
 export const searchUsers = async (req: Request, res: Response): Promise<void> => {
   const { q, limit } = req.query as unknown as { q: string; limit: number };
-  const prefix = new RegExp(`^${escapeRegex(q)}`, 'i');
-  const users = await User.find({ $or: [{ email: prefix }, { firstName: prefix }, { lastName: prefix }] })
+  const words = q.split(/\s+/);
+  const inName = (word: string) => ({ $or: [{ firstName: nameWord(word) }, { lastName: nameWord(word) }] });
+  const filter =
+    words.length === 1
+      ? { $or: [{ email: new RegExp(`^[^@]*${escapeRegex(q)}`, 'i') }, ...inName(q).$or] }
+      : { $and: words.map(inName) };
+  const users = await User.find(filter)
     .select('email firstName lastName')
     .sort({ email: 1 })
     .limit(limit);
