@@ -84,9 +84,44 @@ describe('TrainingsTable', () => {
     expect(screen.getAllByTestId('DeleteIcon')).toHaveLength(1);
   });
 
-  it('renders a loading spinner when isLoading is true', () => {
-    const { container } = renderTable({ isLoading: true });
-    expect(container.querySelector('.MuiCircularProgress-root')).toBeInTheDocument();
+  describe('grouped by project', () => {
+    const grouped = [
+      { ...trainings[0], _id: 'a1', name: 'A newest', projectId: 'pa' },
+      { ...trainings[1], _id: 'b1', name: 'B newer', projectId: 'pb' },
+      { ...trainings[1], _id: 'a2', name: 'A older', projectId: 'pa' },
+      { ...trainings[1], _id: 'n1', name: 'Loose run' }
+    ] as Training[];
+    const names = { pa: 'Alpha', pb: 'Beta' };
+
+    it('puts runs under their project, the one with the latest run first', () => {
+      renderTable({ trainings: grouped, projectNames: names });
+
+      const order = screen
+        .getAllByRole('row')
+        .map((row) => row.textContent ?? '')
+        .filter((text) => /Alpha|Beta|No project|A newest|B newer|A older|Loose run/.test(text))
+        .map((text) => text.match(/Alpha|Beta|No project|A newest|B newer|A older|Loose run/)![0]);
+      expect(order).toEqual(['Alpha', 'A newest', 'A older', 'Beta', 'B newer', 'No project', 'Loose run']);
+      expect(screen.getByRole('link', { name: 'Alpha' })).toHaveAttribute('href', '/projects/pa');
+    });
+
+    it('stays a flat list when sorted by something other than recency', () => {
+      renderTable({ trainings: grouped, projectNames: names, sortBy: 'name' });
+
+      expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+    });
+
+    it('stays a flat list until the project names have loaded', () => {
+      renderTable({ trainings: grouped });
+
+      expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows the shape of the list while it loads, not an empty page', () => {
+    renderTable({ isLoading: true });
+    expect(screen.getByRole('status', { name: 'Loading trainings' })).toBeInTheDocument();
+    expect(screen.queryByText('No training runs available')).not.toBeInTheDocument();
   });
 
   it('renders empty state with search hint when no trainings and a search term is set', () => {

@@ -202,6 +202,18 @@ describe('ExplorePage', () => {
     expect(within(dataset.closest('article')!).getByText(/4,110 images · 1 group/)).toBeInTheDocument();
   });
 
+  it('shows a project\'s picture on its card where it has one, else the folder tile', async () => {
+    api.publicProjects.mockResolvedValue(
+      projectPage([{ ...projects[0], coverUrl: 'https://files.example.test/cover.jpg' }, projects[1]])
+    );
+    renderPage();
+
+    const withPicture = (await screen.findByRole('link', { name: 'Window ablations' })).closest('article')!;
+    expect(withPicture.querySelector('img')).toHaveAttribute('src', 'https://files.example.test/cover.jpg');
+    const plain = screen.getByRole('link', { name: 'Night driving' }).closest('article')!;
+    expect(plain.querySelector('img')).toBeNull();
+  });
+
   it('says what licence a dataset is declared under, or that none is stated', async () => {
     api.publicDatasets.mockResolvedValue(
       datasetPage([

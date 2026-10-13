@@ -68,8 +68,8 @@ export const discoverClassMetrics = (testResults: TestResult[]): string[] => {
         if (RESERVED_CLASS_KEYS.has(classKey) || !isRecord(classValue)) {
           return;
         }
-        Object.entries(classValue).forEach(([metricKey, metricValue]) => {
-          if (typeof metricValue === 'number') {
+        Object.keys(classValue).forEach((metricKey) => {
+          if (readMetric(classValue, metricKey) !== undefined) {
             found.add(metricKey);
           }
         });

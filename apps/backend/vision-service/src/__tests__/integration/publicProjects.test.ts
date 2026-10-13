@@ -10,8 +10,15 @@ import Suite from '../../models/Suite';
 import Training from '../../models/Training';
 import { Finding } from '../../models/Finding';
 import { lookupOwnerIdentities } from '../../clients/ownerIdentityClient';
+import { fetchDatasetCovers } from '../../clients/datasetCoversClient';
+import { getSignedUrl } from '../../clients/fileServiceClient';
 
 jest.mock('../../clients/ownerIdentityClient', () => ({ lookupOwnerIdentities: jest.fn() }));
+jest.mock('../../clients/datasetCoversClient', () => ({ fetchDatasetCovers: jest.fn() }));
+jest.mock('../../clients/fileServiceClient', () => ({
+  ...jest.requireActual('../../clients/fileServiceClient'),
+  getSignedUrl: jest.fn()
+}));
 
 const ANN = '000000000000000000000001';
 const HIDDEN = '000000000000000000000002';
@@ -91,6 +98,8 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
 
   beforeEach(async () => {
     await Promise.all([Project, Training, Finding, Suite].map((model) => model.deleteMany({})));
+    jest.mocked(fetchDatasetCovers).mockReset().mockResolvedValue({});
+    jest.mocked(getSignedUrl).mockReset().mockResolvedValue(null);
     jest.mocked(lookupOwnerIdentities).mockReset();
     jest
       .mocked(lookupOwnerIdentities)
@@ -185,6 +194,50 @@ describe('the public project catalogue, with in-memory MongoDB', () => {
     expect(cards[2]).toMatchObject({ runs: 0, owner: { kind: 'user', id: HIDDEN } });
     expect(cards[2]).not.toHaveProperty('lastRunAt');
     expect(cards[1].owner).toEqual({ kind: 'group', id: GROUP, handle: 'road-lab', name: 'Road lab' });
+  });
+
+  it('gives a card the picture its owner chose, else its dataset cover as anyone may see it', async () => {
+    jest.mocked(getSignedUrl).mockResolvedValue({ signedUrl: 'https://files.example.test/chosen.png', expiresAt: 'later', expiresInMinutes: 60 });
+    jest.mocked(fetchDatasetCovers).mockResolvedValue({ 'ds-public': 'https://files.example.test/dataset.jpg' });
+    await Project.collection.updateOne(
+      { _id: new mongoose.Types.ObjectId(ids['Window ablations']) },
+      { $set: { cover: { visualizationUuid: 'viz-1', fileId: 'files/chosen.png' } } }
+    );
+    await run('Team harbour', '2026-09-03T08:00:00.000Z', { dataset: { source: 'visin', id: 'ds-public', name: 'Harbour' } });
+
+    try {
+      const cards = (await list()).body.data.projects;
+      const byName = (name: string) => cards.find((card) => card.name === name)!;
+
+      expect(byName('Window ablations').coverUrl).toBe('https://files.example.test/chosen.png');
+      expect(byName('Team harbour').coverUrl).toBe('https://files.example.test/dataset.jpg');
+      expect(byName('Night driving')).not.toHaveProperty('coverUrl');
+      // Anyone: Explore is the same for everyone, so no reader is asked as.
+      expect(fetchDatasetCovers).toHaveBeenCalledWith(expect.arrayContaining(['ds-public']), undefined);
+      expect(JSON.stringify(cards)).not.toContain('files/chosen.png');
+    } finally {
+      await Project.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(ids['Window ablations']) },
+        { $unset: { cover: '' } }
+      );
+      await Training.collection.deleteMany({ 'dataset.id': 'ds-public' });
+    }
+  });
+
+  it('uses legacy dataset references, while ignoring stale ids on external-source runs and trashed runs', async () => {
+    jest.mocked(fetchDatasetCovers).mockResolvedValue({ 'ds-legacy': 'https://files.example.test/legacy.jpg' });
+    await run('Team harbour', '2026-09-03T08:00:00.000Z', { datasetId: 'ds-legacy' });
+    await run('Night driving', '2026-09-03T08:00:00.000Z', {
+      datasetId: 'ds-stale',
+      dataset: { source: 'hf', id: 'lab/night', name: 'Night' }
+    });
+    await run('Night driving', '2026-09-03T08:00:00.000Z', { datasetId: 'ds-trashed', deletedAt: at('2026-09-08') });
+
+    const cards = (await list()).body.data.projects;
+
+    expect(cards.find((card) => card.name === 'Team harbour')?.coverUrl).toBe('https://files.example.test/legacy.jpg');
+    expect(cards.find((card) => card.name === 'Night driving')).not.toHaveProperty('coverUrl');
+    expect(fetchDatasetCovers).toHaveBeenCalledWith(['ds-legacy'], undefined);
   });
 
   it("asks for the page's owners once, and never leaks who created a project", async () => {

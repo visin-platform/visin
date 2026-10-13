@@ -3,10 +3,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
 import { trainingService } from '../services/trainingService';
 import { testResultService } from '../services/testResultService';
-import { visualizationService } from '../services/visualizationService';
 import { benchmarkService } from '../services/benchmarkService';
 
-type TrainingSortColumn = 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
+type TrainingSortColumn =
+  'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
+
+/** The most test results the project's Tests tab loads, newest first. */
+const PROJECT_TESTS_LIMIT = 500;
+/** The same, for benchmarks, which the tab groups by device. */
+const PROJECT_BENCHMARKS_LIMIT = 500;
 
 export const useProjectDashboard = (projectId: string | undefined, tabValue: number) => {
   const queryClient = useQueryClient();
@@ -16,14 +21,6 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [sortBy, setSortBy] = useState<TrainingSortColumn>('updatedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-
-  // Pagination state for Tests tab
-  const [testsPage, setTestsPage] = useState(0);
-  const [testsRowsPerPage, setTestsRowsPerPage] = useState(50);
-
-  // Pagination state for Benchmarks tab
-  const [benchmarksPage, setBenchmarksPage] = useState(0);
-  const [benchmarksRowsPerPage, setBenchmarksRowsPerPage] = useState(50);
 
   // Project query
   const {
@@ -37,79 +34,55 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
   });
 
   // Stats query
-  const {
-    data: statsResponse,
-    isLoading: isStatsLoading
-  } = useQuery({
+  const { data: statsResponse, isLoading: isStatsLoading } = useQuery({
     queryKey: ['project-stats', projectId],
     queryFn: () => trainingService.getTrainingStats({ projectId: projectResponse?.data?._id }),
     enabled: !!projectResponse?.data
   });
 
   // Dashboard stats query
-  const {
-    data: dashboardStatsResponse,
-    isLoading: isDashboardStatsLoading
-  } = useQuery({
+  const { data: dashboardStatsResponse, isLoading: isDashboardStatsLoading } = useQuery({
     queryKey: ['project-dashboard-stats', projectId],
     queryFn: () => projectService.getProjectDashboardStats(projectResponse!.data!._id),
     enabled: !!projectResponse?.data
   });
 
   // Full trainings query
-  const {
-    data: fullTrainingsResponse,
-    isLoading: isFullTrainingsLoading
-  } = useQuery({
+  const { data: fullTrainingsResponse, isLoading: isFullTrainingsLoading } = useQuery({
     queryKey: ['project-trainings-full', projectId, page, rowsPerPage, sortBy, sortOrder],
-    queryFn: () => trainingService.getTrainings({
-      projectId: projectResponse?.data?._id,
-      page: page + 1,
-      limit: rowsPerPage,
-      sortBy,
-      order: sortOrder
-    }),
+    queryFn: () =>
+      trainingService.getTrainings({
+        projectId: projectResponse?.data?._id,
+        page: page + 1,
+        limit: rowsPerPage,
+        sortBy,
+        order: sortOrder
+      }),
     enabled: !!projectResponse?.data && tabValue === 1
   });
 
-  // Test results query
-  const {
-    data: testResultsResponse,
-    isLoading: isTestResultsLoading
-  } = useQuery({
-    queryKey: ['project-test-results', projectId, testsPage, testsRowsPerPage],
-    queryFn: () => testResultService.getTestResults({
-      projectId: projectResponse?.data?._id,
-      page: testsPage + 1,
-      limit: testsRowsPerPage
-    }),
+  // Test results query: every test of the project, up to a cap, because the tab ranks runs by their
+  // best test and a page of them cannot say which run that is.
+  const { data: testResultsResponse, isLoading: isTestResultsLoading } = useQuery({
+    queryKey: ['project-test-results', projectId],
+    queryFn: () =>
+      testResultService.getTestResults({
+        projectId: projectResponse?.data?._id,
+        page: 1,
+        limit: PROJECT_TESTS_LIMIT
+      }),
     enabled: !!projectResponse?.data && tabValue === 2
   });
 
-  // Visualizations query
-  const {
-    data: visualizationsResponse,
-    isLoading: isVisualizationsLoading
-  } = useQuery({
-    queryKey: ['project-visualizations', projectId],
-    queryFn: () => visualizationService.getVisualizationsByTraining('', {
-      projectId: projectResponse?.data?._id,
-      includeUrls: false
-    }),
-    enabled: !!projectResponse?.data && tabValue === 3
-  });
-
   // Benchmarks query
-  const {
-    data: benchmarksResponse,
-    isLoading: isBenchmarksLoading
-  } = useQuery({
-    queryKey: ['project-benchmarks', projectId, benchmarksPage, benchmarksRowsPerPage],
-    queryFn: () => benchmarkService.getBenchmarks({
-      projectId: projectResponse?.data?._id,
-      page: benchmarksPage + 1,
-      limit: benchmarksRowsPerPage
-    }),
+  const { data: benchmarksResponse, isLoading: isBenchmarksLoading } = useQuery({
+    queryKey: ['project-benchmarks', projectId],
+    queryFn: () =>
+      benchmarkService.getBenchmarks({
+        projectId: projectResponse?.data?._id,
+        page: 1,
+        limit: PROJECT_BENCHMARKS_LIMIT
+      }),
     enabled: !!projectResponse?.data && tabValue === 4
   });
 
@@ -121,24 +94,6 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
   const handleRowsPerPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
-  };
-
-  const handleTestsPageChange = (_event: unknown, newPage: number) => {
-    setTestsPage(newPage);
-  };
-
-  const handleTestsRowsPerPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setTestsRowsPerPage(parseInt(event.target.value, 10));
-    setTestsPage(0);
-  };
-
-  const handleBenchmarksPageChange = (_event: unknown, newPage: number) => {
-    setBenchmarksPage(newPage);
-  };
-
-  const handleBenchmarksRowsPerPageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setBenchmarksRowsPerPage(parseInt(event.target.value, 10));
-    setBenchmarksPage(0);
   };
 
   const handleSort = (column: TrainingSortColumn) => {
@@ -159,7 +114,6 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     dashboardStats: dashboardStatsResponse?.data,
     fullTrainings: fullTrainingsResponse?.data,
     testResults: testResultsResponse,
-    visualizations: visualizationsResponse,
     benchmarks: benchmarksResponse,
 
     // Loading states
@@ -168,7 +122,6 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     isDashboardStatsLoading,
     isFullTrainingsLoading,
     isTestResultsLoading,
-    isVisualizationsLoading,
     isBenchmarksLoading,
 
     // Errors
@@ -179,18 +132,10 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     rowsPerPage,
     sortBy,
     sortOrder,
-    testsPage,
-    testsRowsPerPage,
-    benchmarksPage,
-    benchmarksRowsPerPage,
 
     // Pagination handlers
     handlePageChange,
     handleRowsPerPageChange,
-    handleTestsPageChange,
-    handleTestsRowsPerPageChange,
-    handleBenchmarksPageChange,
-    handleBenchmarksRowsPerPageChange,
     handleSort,
 
     // Utilities

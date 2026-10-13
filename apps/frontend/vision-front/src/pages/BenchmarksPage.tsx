@@ -1,6 +1,6 @@
 import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
-import { PageHeader, useCompactLayout, livePalette, tint } from '@visin/frontend-core';
+import { PageHeader, useCompactLayout, livePalette, tint, ConfirmDialog } from '@visin/frontend-core';
 import { MobileListRow } from '../components/common/MobileList';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -18,11 +18,6 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
   Collapse,
   useTheme,
   Container
@@ -35,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import { Benchmark } from '@/types';
 import { benchmarkService } from '@/services/benchmarkService';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 /** One benchmark's figures, averaged over the devices it ran on. */
 const summarizeBenchmark = (benchmark: Benchmark) => {
@@ -79,6 +75,7 @@ const benchmarkTrainingName = (benchmark: Benchmark) =>
     : benchmark.training_uuid ? 'Unknown Training' : 'Standalone';
 
 const BenchmarksPage: React.FC = () => {
+  usePageTitle('Benchmarks - Vision');
   const [error, setError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [benchmarkToDelete, setBenchmarkToDelete] = useState<string | null>(null);
@@ -281,6 +278,8 @@ const BenchmarksPage: React.FC = () => {
                     <TableCell>
                       <IconButton
                         size="small"
+                        aria-label={`${isExpanded ? 'Hide' : 'Show'} details of ${benchmarkTrainingName(benchmark)}`}
+                        aria-expanded={isExpanded}
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleRowExpanded(benchmark._id);
@@ -392,20 +391,17 @@ const BenchmarksPage: React.FC = () => {
         </Box>
       )}
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={handleCancelDelete}>
-        <DialogTitle>Delete Benchmark</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete this benchmark? This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelDelete}>Cancel</Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Delete Benchmark"
+        confirmLabel="Delete"
+        busyLabel="Deleting..."
+        busy={deleteMutation.isPending}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      >
+        Are you sure you want to delete this benchmark? This action cannot be undone.
+      </ConfirmDialog>
     </Container>
   );
 };

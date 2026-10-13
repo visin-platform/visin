@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 
 vi.mock('../services/jobService', () => ({
   getJob: vi.fn(),
@@ -74,6 +74,13 @@ const chooseAction = async (name: string) => {
 };
 
 describe('JobDetailPage', () => {
+  it('names the browser tab after the job', async () => {
+    renderPage();
+
+    await screen.findByText('Mask check');
+    await waitFor(() => expect(document.title).toBe('Mask check - Labeling'));
+  });
+
   it('shows progress, stats, per-user and per-stratum tables', async () => {
     renderPage();
 
@@ -148,31 +155,46 @@ describe('JobDetailPage transitions', () => {
     expect(await screen.findByText('Export failed (500)')).toBeInTheDocument();
   });
   it('hard-deletes the job once confirmed and returns to the list', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     canManage = true;
     mockedGetJob.mockResolvedValue(job());
     mockedDelete.mockResolvedValue({ tasks: 4135, answers: 7 });
     renderPage();
 
     await chooseAction('Delete');
-
-    await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('j1'));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete this job?' });
     // The 4 collected answers are named in the prompt: they are the labeling
     // effort, and archiving used to be the only option that kept them.
-    expect(confirmSpy.mock.calls[0][0]).toContain('4 collected answer(s)');
-    confirmSpy.mockRestore();
+    expect(dialog).toHaveTextContent('4 collected answer(s)');
+    expect(mockedDelete).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete job' }));
+
+    await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('j1'));
   });
 
   it('does not delete when the confirmation is declined', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     canManage = true;
     mockedGetJob.mockResolvedValue(job());
     renderPage();
 
     await chooseAction('Delete');
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }));
 
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(mockedDelete).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
+  });
+
+  it('keeps the dialog open with the reason when the delete is refused', async () => {
+    canManage = true;
+    mockedGetJob.mockResolvedValue(job());
+    mockedDelete.mockRejectedValue(new Error('A labeler has the job open'));
+    renderPage();
+
+    await chooseAction('Delete');
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete job' }));
+
+    expect(await within(dialog).findByText('A labeler has the job open')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
 

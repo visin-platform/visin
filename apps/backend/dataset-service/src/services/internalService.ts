@@ -1,9 +1,10 @@
-import type { ResolveDatasetBody } from '../validation/datasetSchemas';
+import type { CoversBody, ResolveDatasetBody } from '../validation/datasetSchemas';
 import { QueryFilter } from 'mongoose';
 import { BadRequestError, NotFoundError, type Permission } from '@visin/backend-core';
 import { Dataset } from '../models/Dataset';
 import { DatasetItem, IDatasetItem } from '../models/DatasetItem';
 import { createDatasetAccess, findDataset } from './accessService';
+import * as files from '../clients/fileServiceClient';
 import type { InternalItemsQuery, JsonFieldsQuery } from '../validation/datasetSchemas';
 
 /**
@@ -41,6 +42,26 @@ export const idsFor = async (userId: string | undefined, min: Permission = 'read
 /** What an account may do with one live dataset; a trashed one is not found. */
 export const permissionFor = async (id: string, userId: string | undefined): Promise<Permission> =>
   createDatasetAccess(userId).permission(await findDataset(id));
+
+const COVER_URL_MINUTES = 60;
+
+/**
+ * The cover picture of each named dataset the reader may see, by dataset id. A dataset the reader may not read, a
+ * trashed one and one with no cover are left out rather than reported, so asking says nothing about what exists.
+ */
+export const coversFor = async ({ ids, userId }: CoversBody): Promise<Record<string, string>> => {
+  const access = createDatasetAccess(userId);
+  const datasets = await Dataset.find({ $and: [await access.filter('read'), { _id: { $in: ids } }] }, { coverFileId: 1 }).lean();
+  const withCover = datasets.filter((dataset) => dataset.coverFileId);
+  if (withCover.length === 0) return {};
+  const { urls } = await files.getDownloadUrls(withCover.map((dataset) => dataset.coverFileId as string), COVER_URL_MINUTES);
+  return Object.fromEntries(
+    withCover.flatMap((dataset) => {
+      const url = urls[dataset.coverFileId as string];
+      return url ? [[dataset._id.toString(), url]] : [];
+    })
+  );
+};
 
 export const getDatasetSummary = async (id: string) => summary(await findDataset(id));
 

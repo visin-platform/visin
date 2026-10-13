@@ -95,6 +95,8 @@ export interface ExploreProject {
   /** Runs in it and when the latest started: only the public catalogue says. */
   runs?: number;
   lastRunAt?: string;
+  /** A picture for its card: the one its owner chose, else a dataset's cover. Absent when there is neither. */
+  coverUrl?: string;
 }
 
 export interface Pagination {

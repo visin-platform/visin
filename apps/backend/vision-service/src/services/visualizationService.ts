@@ -209,7 +209,18 @@ interface VisualizationsByTrainingUuidResult {
 }
 
 interface VisualizationsByProjectResult {
-  trainings: { training_uuid: string; training_name: string; visualizations: unknown[] }[];
+  /** With `perTraining`: which page of the project's runs this is, newest first, `limit` runs a page. */
+  pagination?: { page: number; limit: number; total: number; pages: number };
+  trainings: {
+    training_id: string;
+    training_uuid: string;
+    training_name: string;
+    visualizations: unknown[];
+    /** how many visualizations match the type filter, before `perTraining` cuts the list */
+    visualization_count: number;
+    /** the run's visualizations by type, whatever the type filter, so a gallery can offer the types there are */
+    type_counts: Record<string, number>;
+  }[];
   total: number;
 }
 
@@ -220,7 +231,7 @@ export const getVisualizationsByTraining = async (
   filters: GetVisualizationsByTrainingQuery,
   userId: string | undefined
 ): Promise<VisualizationsByTrainingResult> => {
-  const { type, limit, page, projectId, includeUrls } = filters;
+  const { type, limit, page, projectId, includeUrls, perTraining } = filters;
   const shouldIncludeUrls = includeUrls === 'true';
 
   // If specific training_uuid is provided, return flat list for that training
@@ -278,12 +289,18 @@ export const getVisualizationsByTraining = async (
     const project = await resolveProject(projectId);
     if (!project) throw new NotFoundError('Project not found');
 
-    const trainings = await Training.find({ projectId: project._id.toString(), deletedAt: null })
-      .select('uuid name')
-      .sort({ createdAt: -1 });
+    const runFilter = { projectId: project._id.toString(), deletedAt: null };
+    // A gallery signs a URL for every frame it shows, so it takes the project's runs a page at a time; without
+    // `perTraining` the answer is every run, as it always was.
+    const runQuery = Training.find(runFilter).select('uuid name').sort({ createdAt: -1 });
+    const [trainings, totalRuns] = perTraining
+      ? await Promise.all([runQuery.skip((page - 1) * limit).limit(limit), Training.countDocuments(runFilter)])
+      : [await runQuery, undefined];
+    const runPages =
+      totalRuns === undefined ? {} : { pagination: { page, limit, total: totalRuns, pages: Math.ceil(totalRuns / limit) } };
 
     if (trainings.length === 0) {
-      return { trainings: [], total: 0 };
+      return { trainings: [], total: 0, ...runPages };
     }
 
     const trainingsData = await Promise.all(
@@ -294,15 +311,24 @@ export const getVisualizationsByTraining = async (
         const epochUuids = epochs.map((e) => e.epoch_uuid);
 
         if (epochUuids.length === 0) {
-          return { training_uuid: training.uuid, training_name: training.name, visualizations: [] };
+          return {
+            training_id: training._id.toString(),
+            training_uuid: training.uuid,
+            training_name: training.name,
+            visualizations: [],
+            visualization_count: 0,
+            type_counts: {}
+          };
         }
 
-        const query: QueryFilter<IEpochVisualization> = { epoch_uuid: { $in: epochUuids } };
-        if (type) {
-          query.type = type;
-        }
+        // Every visualization of the run, newest first: the counts by type are the run's own whatever
+        // the filter, so a gallery can offer the types there are while it shows one of them.
+        const all = await EpochVisualization.find({ epoch_uuid: { $in: epochUuids } }).sort({ uploadedAt: -1 });
+        const typeCounts: Record<string, number> = Object.create(null);
+        for (const viz of all) typeCounts[viz.type] = (typeCounts[viz.type] ?? 0) + 1;
 
-        const visualizations = await EpochVisualization.find(query).sort({ uploadedAt: -1 });
+        const matching = type ? all.filter((viz) => viz.type === type) : all;
+        const visualizations = perTraining ? matching.slice(0, perTraining) : matching;
 
         const visualizationsWithUrls = await Promise.all(
           visualizations.map(async (viz) => {
@@ -317,13 +343,21 @@ export const getVisualizationsByTraining = async (
           })
         );
 
-        return { training_uuid: training.uuid, training_name: training.name, visualizations: visualizationsWithUrls };
+        return {
+          training_id: training._id.toString(),
+          training_uuid: training.uuid,
+          training_name: training.name,
+          visualizations: visualizationsWithUrls,
+          visualization_count: matching.length,
+          type_counts: typeCounts
+        };
       })
     );
 
     return {
       trainings: trainingsData,
-      total: trainingsData.reduce((sum, t) => sum + t.visualizations.length, 0)
+      total: trainingsData.reduce((sum, t) => sum + t.visualization_count, 0),
+      ...runPages
     };
   }
 

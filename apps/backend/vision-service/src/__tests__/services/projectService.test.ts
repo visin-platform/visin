@@ -16,6 +16,11 @@ jest.mock('../../models/Benchmark', () => ({
   __esModule: true,
   default: { countDocuments: jest.fn() },
 }));
+jest.mock('../../services/projectCoverService', () => ({
+  __esModule: true,
+  coverUrlsFor: jest.fn().mockResolvedValue(new Map()),
+  chooseCover: jest.fn(),
+}));
 jest.mock('../../clients/projectGroupsClient', () => ({ getUserGroups: jest.fn().mockResolvedValue([]) }));
 
 import {
@@ -29,6 +34,7 @@ import Training from '../../models/Training';
 import Epoch from '../../models/Epoch';
 import Evaluation from '../../models/Evaluation';
 import Benchmark from '../../models/Benchmark';
+import { chooseCover, coverUrlsFor } from '../../services/projectCoverService';
 
 const mockedProject = Project as unknown as jest.Mock & Record<string, jest.Mock>;
 const mockedEvaluation = Evaluation as unknown as Record<string, jest.Mock>;
@@ -74,6 +80,55 @@ const projectDoc = (overrides: AnyDoc = {}): AnyDoc => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedEvaluation.countDocuments.mockResolvedValue(0);
+});
+
+describe('project covers', () => {
+  it('shows the picture a card uses, and the visualization behind it but not its storage id', async () => {
+    mockedProject.findOne.mockResolvedValue(null);
+    mockedProject.findById.mockResolvedValue(
+      projectDoc({ cover: { visualizationUuid: 'viz-1', fileId: 'files/secret-path.png' } })
+    );
+    jest.mocked(coverUrlsFor).mockResolvedValueOnce(new Map([[ID, 'https://files.example.test/cover.png']]));
+
+    const view = await getProjectByIdOrSlug('p1', 'u1');
+
+    expect(view).toMatchObject({ coverUrl: 'https://files.example.test/cover.png', cover: { visualizationUuid: 'viz-1' } });
+    expect(JSON.stringify(view)).not.toContain('secret-path');
+  });
+
+  it('has no coverUrl when there is no picture', async () => {
+    mockedProject.findOne.mockResolvedValue(null);
+    mockedProject.findById.mockResolvedValue(projectDoc());
+
+    expect(await getProjectByIdOrSlug('p1', 'u1')).not.toHaveProperty('coverUrl');
+  });
+
+  it('chooses a cover from the project\'s own visualizations, and clears it with null', async () => {
+    const doc = projectDoc({ owner: { kind: 'user', id: 'u1' } });
+    mockedProject.findOne.mockResolvedValue(null);
+    mockedProject.findById.mockResolvedValue(doc);
+    jest.mocked(chooseCover).mockResolvedValueOnce({ visualizationUuid: 'viz-1', fileId: 'f1' });
+
+    await updateProject('p1', 'u1', { cover: { visualizationUuid: 'viz-1' } });
+    expect(chooseCover).toHaveBeenCalledWith(doc, 'viz-1');
+    expect(doc.cover).toEqual({ visualizationUuid: 'viz-1', fileId: 'f1' });
+
+    jest.mocked(chooseCover).mockResolvedValueOnce(undefined);
+    await updateProject('p1', 'u1', { cover: null });
+    expect(chooseCover).toHaveBeenLastCalledWith(doc, null);
+    expect(doc.cover).toBeUndefined();
+  });
+
+  it('leaves the cover alone when an update does not mention it', async () => {
+    const doc = projectDoc({ owner: { kind: 'user', id: 'u1' }, cover: { visualizationUuid: 'v', fileId: 'f' } });
+    mockedProject.findOne.mockResolvedValue(null);
+    mockedProject.findById.mockResolvedValue(doc);
+
+    await updateProject('p1', 'u1', { name: 'Renamed' });
+
+    expect(chooseCover).not.toHaveBeenCalled();
+    expect(doc.cover).toEqual({ visualizationUuid: 'v', fileId: 'f' });
+  });
 });
 
 describe('project lookups', () => {

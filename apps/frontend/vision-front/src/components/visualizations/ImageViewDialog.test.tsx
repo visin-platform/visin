@@ -42,4 +42,11 @@ describe('ImageViewDialog', () => {
     fireEvent.click(screen.getByText('Close'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('has a labelled close button', () => {
+    const onClose = vi.fn();
+    render(<ImageViewDialog open={true} onClose={onClose} selectedImage={image} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(onClose).toHaveBeenCalled();
+  });
 });

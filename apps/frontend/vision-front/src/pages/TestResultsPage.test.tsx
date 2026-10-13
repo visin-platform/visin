@@ -89,12 +89,12 @@ describe('TestResultsPage', () => {
     useAuthMock.mockReturnValue({ user: { id: 'u1', groupRoles: ['owner'] }, isAuthenticated: true });
   });
 
-  it('shows a loading spinner while test results are loading', () => {
+  it('shows the shape of the list while test results are loading', () => {
     testResultServiceMock.getTestResults.mockReturnValue(new Promise(() => {}));
 
-    const { container } = renderPage();
+    renderPage();
 
-    expect(container.querySelector('.MuiCircularProgress-root')).toBeTruthy();
+    expect(screen.getByRole('status', { name: 'Loading test results' })).toBeInTheDocument();
   });
 
   it('shows an empty message when there are no test results', async () => {

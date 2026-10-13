@@ -85,9 +85,14 @@ const ImportMappingDialog: React.FC<ImportMappingDialogProps> = ({ open, content
 
   return (
     <Dialog open={open} onClose={busy ? undefined : onCancel} fullWidth maxWidth="md">
-      <DialogTitle>Choose image groups</DialogTitle>
+      <DialogTitle>Import image groups</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          <Alert severity="info">
+            This copies the images in the folders you tick out of the zip into Visin, with a thumbnail of each, so you can
+            browse them here and label them. The zip itself is left as it is, and importing again replaces the groups of the
+            last import.
+          </Alert>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {contents
               ? `${contents.entries.toLocaleString()} files, ${formatBytes(contents.totalBytes)}. Tick the folders to show as images and name the group each goes into — folders given the same name fill one group. Files that share a name across groups (0001.png, 0001.ids.png) are shown together.`

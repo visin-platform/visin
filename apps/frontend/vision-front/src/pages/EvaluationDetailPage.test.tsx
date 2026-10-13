@@ -70,7 +70,7 @@ describe('EvaluationDetailPage', () => {
 
   it('traces the number to its evidence: the suite and protocol, the checkpoint, the samples and the times', async () => {
     renderPage();
-    await screen.findByText('Evidence');
+    await screen.findByText('About this result');
     expect(screen.getByRole('link', { name: 'road-test@1' })).toHaveAttribute('href', '/suites/road-test/1');
     expect(screen.getByText('protocol abcdef012345')).toBeInTheDocument();
     expect(screen.getByText(/Held outside Visin · sha256 a{64}/)).toBeInTheDocument();
@@ -113,7 +113,8 @@ describe('EvaluationDetailPage', () => {
       }
     }));
     renderPage();
-    expect(await screen.findByRole('heading', { name: 'What the evaluator reported' })).toBeInTheDocument();
+    // Behind its own disclosure: the proof is one click away, not between a reader and the numbers.
+    expect(await screen.findByRole('button', { name: 'What the evaluator reported' })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('Observed')).toBeInTheDocument();
     expect(screen.getByText(/Visin has not verified it/)).toBeInTheDocument();
     expect(screen.getByText(`Sample manifest ${'b'.repeat(64)}`)).toBeInTheDocument();
@@ -160,34 +161,42 @@ describe('EvaluationDetailPage', () => {
     expect(screen.getByText('Reported')).toBeInTheDocument();
   });
 
-  it('tabulates whatever conditions, classes and metrics the result reports, apart from the ranked scores', async () => {
+  it('lays the reported result out by condition, with a column for each class under each metric it reports', async () => {
     service.get.mockResolvedValue(evaluation({
       results: {
-        day: { overall: { mIoU: 0.8 }, vehicle: { iou: 0.84, f1: 0.9 } },
+        day: { overall: { mIoU: 0.8 }, vehicle: { iou: 0.84, f1: 0.9 }, person: { iou: 0.5 } },
         night: { overall: { mIoU: 0 }, vehicle: { iou: 0 } },
         overall: { mIoU: 0.55 }
       }
     }));
     renderPage();
-    expect(await screen.findByRole('heading', { name: 'Results by condition and class' })).toBeInTheDocument();
-    const table = within(screen.getByRole('table', { name: 'Reported results' }));
-    expect(table.getAllByRole('columnheader').map(header => header.textContent)).toEqual(['Condition', 'Class', 'mIoU', 'iou', 'f1']);
-    const rows = table.getAllByRole('row').slice(1).map(row => Array.from(row.querySelectorAll('th, td')).map(cell => cell.textContent));
-    expect(rows).toEqual([
-      ['day', 'overall (as reported)', '0.8000', '-', '-'],
-      ['day', 'vehicle', '-', '0.8400', '0.9000'],
-      ['night', 'overall (as reported)', '0.0000', '-', '-'],
-      ['night', 'vehicle', '-', '0.0000', '-'],
-      ['Whole test (as reported)', '', '0.5500', '-', '-']
-    ]);
+    expect(await screen.findByRole('heading', { name: 'Results by condition' })).toBeInTheDocument();
+    const section = within(screen.getByRole('heading', { name: 'Results by condition' }).closest('section')!);
+    // The metrics it reports, not a fixed four: IoU and F1 here, with no empty precision, recall or AP blocks.
+    const heads = section.getAllByRole('columnheader').map(header => header.textContent);
+    expect(heads).toEqual(expect.arrayContaining(['Condition', 'IoU', 'F1']));
+    expect(heads).not.toContain('Recall');
+    expect(heads).not.toContain('AP');
+    const day = section.getByRole('row', { name: /^Day/ });
+    expect(within(day).getAllByRole('cell').map(cell => cell.textContent)).toContain('0.8400');
+    expect(within(day).getAllByRole('cell').map(cell => cell.textContent)).toContain('0.8000');
+    // An overall of 0 is a result, not a blank.
+    expect(within(section.getByRole('row', { name: /^Night/ })).getAllByRole('cell').map(cell => cell.textContent)).toContain('0.0000');
+    expect(section.getByRole('row', { name: /^All/ })).toHaveTextContent('0.5500');
     expect(screen.getByText(/not the overall that is ranked/)).toBeInTheDocument();
+  });
+
+  it('shows no confusion-matrix heading over a result that carries none', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: 'Results by condition' });
+    expect(screen.queryByText('Confusion Matrices')).not.toBeInTheDocument();
   });
 
   it('says so when the result has no numbers to tabulate', async () => {
     service.get.mockResolvedValue(evaluation({ results: { note: 'text' } }));
     renderPage();
     expect(await screen.findByText(/holds no numbers to tabulate/)).toBeInTheDocument();
-    expect(screen.queryByRole('table', { name: 'Reported results' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/not the overall that is ranked/)).not.toBeInTheDocument();
   });
 
   it('links an unranked result\'s reasons to the guide on the configured docs site, and only that', async () => {
@@ -229,13 +238,19 @@ describe('EvaluationDetailPage', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Unknown checkpoint' })).toBeInTheDocument();
     expect(screen.getByText('Not recorded')).toBeInTheDocument();
     expect(screen.queryByRole('table', { name: 'Scores' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Provenance' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Provenance' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Results by condition' })).not.toBeInTheDocument();
   });
+
+  const chooseTrash = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'More actions for this evaluation' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Move to trash' }));
+  };
 
   it('moves it to the trash after a confirmation, and returns to the list', async () => {
     service.trash.mockResolvedValue(evaluation());
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Move to trash' }));
+    await chooseTrash();
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Move to trash' }));
     await waitFor(() => expect(service.trash).toHaveBeenCalledWith('e1'));
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/evaluations'));
@@ -244,7 +259,7 @@ describe('EvaluationDetailPage', () => {
   it('shows the server\'s refusal and stays, and lets the dialog be cancelled', async () => {
     service.trash.mockRejectedValue(new Error('Write permission is required for this evaluation'));
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Move to trash' }));
+    await chooseTrash();
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Move to trash' }));
     expect(await screen.findByText('Write permission is required for this evaluation')).toBeInTheDocument();
     expect(navigateMock).not.toHaveBeenCalled();
@@ -255,8 +270,9 @@ describe('EvaluationDetailPage', () => {
   it('offers no trash button to someone who is not signed in', async () => {
     auth.isAuthenticated = false;
     renderPage();
-    await screen.findByText('Evidence');
+    await screen.findByText('About this result');
     expect(screen.queryByRole('button', { name: 'Move to trash' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More actions for this evaluation' })).not.toBeInTheDocument();
   });
 
   it('says it is not found, as for one that is private or gone', async () => {
@@ -321,10 +337,24 @@ describe('EvaluationDetailPage', () => {
     expect(screen.getByRole('link', { name: 'See the correction' })).toHaveAttribute('href', '/evaluations/e9');
   });
 
+  it('names the browser tab after the checkpoint', async () => {
+    renderPage();
+    await screen.findByRole('heading', { level: 1, name: 'clftv2-epoch-40' });
+    expect(document.title).toBe('clftv2-epoch-40 - Evaluation');
+  });
+
+  it('keeps the trash behind the menu for a result that is not ranked too', async () => {
+    service.get.mockResolvedValue(evaluation({ validation: { version: 1, state: 'incomplete', reasons: [{ code: 'no-checkpoint' }], warnings: [] } }));
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'Mark verified' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Move to trash' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More actions for this evaluation' })).toBeInTheDocument();
+  });
+
   it('offers no publish button for a result that is not ranked', async () => {
     service.get.mockResolvedValue(evaluation({ validation: { version: 1, state: 'incomplete', reasons: [{ code: 'no-checkpoint' }], warnings: [] } }));
     renderPage();
-    await screen.findByText('Evidence');
+    await screen.findByText('About this result');
     expect(screen.queryByRole('button', { name: /public leaderboard/ })).not.toBeInTheDocument();
   });
 });

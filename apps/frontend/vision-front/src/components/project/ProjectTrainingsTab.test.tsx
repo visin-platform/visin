@@ -197,4 +197,17 @@ describe('ProjectTrainingsTab', () => {
 
     expect(screen.queryByText('editing-training')).not.toBeInTheDocument();
   });
+
+  it('keeps the delete dialog open and says why when the delete fails', async () => {
+    mockedTraining.deleteTraining.mockRejectedValue(new Error('Training is running'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderTab({ trainings: [makeTraining('t1')] });
+
+    fireEvent.click(screen.getByText('delete-t1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(await screen.findByText('Training is running')).toBeInTheDocument();
+    expect(screen.getByText('Delete Training')).toBeInTheDocument();
+    consoleError.mockRestore();
+  });
 });

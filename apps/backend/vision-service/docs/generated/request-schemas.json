@@ -2338,6 +2338,11 @@
       "includeUrls": {
         "default": "true",
         "type": "string"
+      },
+      "perTraining": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "maximum": 24
       }
     }
   },
@@ -3700,6 +3705,26 @@
               "provider"
             ],
             "additionalProperties": false
+          }
+        ]
+      },
+      "cover": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "visualizationUuid": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "visualizationUuid"
+            ]
+          },
+          {
+            "type": "null"
           }
         ]
       }

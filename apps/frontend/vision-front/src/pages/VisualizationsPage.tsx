@@ -304,6 +304,8 @@ export const VisualizationsPage: React.FC = () => {
                         size="small" 
                         onClick={() => !compareMode && toggleTraining(training._id)}
                         disabled={compareMode}
+                        aria-expanded={isExpanded}
+                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${training.name}`}
                       >
                         {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                       </IconButton>
@@ -406,6 +408,7 @@ export const VisualizationsPage: React.FC = () => {
       >
         <DialogContent sx={{ p: 0, position: 'relative', height: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <IconButton
+            aria-label="Close image"
             onClick={handleCloseImageModal}
             sx={{
               position: 'absolute',

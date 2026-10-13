@@ -35,7 +35,7 @@ const ImageViewDialog: React.FC<ImageViewDialogProps> = ({
     >
       <DialogTitle sx={{ color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="subtitle1" component="span">{selectedImage?.filename}</Typography>
-        <IconButton onClick={onClose} sx={{ color: 'white' }}>
+        <IconButton onClick={onClose} aria-label="Close dialog" sx={{ color: 'white' }}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>

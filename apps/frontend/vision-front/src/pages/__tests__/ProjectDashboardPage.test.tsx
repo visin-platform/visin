@@ -93,23 +93,14 @@ const baseHookReturn = (overrides: Record<string, unknown> = {}) => ({
   isDashboardStatsLoading: false,
   isFullTrainingsLoading: false,
   isTestResultsLoading: false,
-  isVisualizationsLoading: false,
   isBenchmarksLoading: false,
   projectError: null,
   page: 0,
   rowsPerPage: 25,
   sortBy: 'createdAt',
   sortOrder: 'desc',
-  testsPage: 0,
-  testsRowsPerPage: 25,
-  benchmarksPage: 0,
-  benchmarksRowsPerPage: 25,
   handlePageChange: vi.fn(),
   handleRowsPerPageChange: vi.fn(),
-  handleTestsPageChange: vi.fn(),
-  handleTestsRowsPerPageChange: vi.fn(),
-  handleBenchmarksPageChange: vi.fn(),
-  handleBenchmarksRowsPerPageChange: vi.fn(),
   handleSort: vi.fn(),
   invalidateProjectQueries: vi.fn(),
   ...overrides
@@ -175,6 +166,11 @@ describe('ProjectDashboardPage', () => {
     useProjectDashboardMock.mockReturnValue(baseHookReturn());
     renderPage();
     expect(readVisits()).toMatchObject([{ path: '/projects/p1' }]);
+  });
+
+  it('names the browser tab after the project', () => {
+    renderPage();
+    expect(document.title).toBe('My Project - Vision');
   });
 
   it('uses server permissions even when the current user did not create the project', () => {

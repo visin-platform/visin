@@ -36,7 +36,7 @@ const CompareVisualizationsDialog: React.FC<CompareVisualizationsDialogProps> = 
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h6" component="span">Compare Visualizations</Typography>
-        <IconButton onClick={onClose}>
+        <IconButton onClick={onClose} aria-label="Close dialog">
           <CloseIcon />
         </IconButton>
       </DialogTitle>

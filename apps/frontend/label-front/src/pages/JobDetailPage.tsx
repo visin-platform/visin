@@ -16,7 +16,7 @@ import {
   TableRow,
   Typography
 } from '@mui/material';
-import { Loader, OwnerChip, ResponsiveActions, type OwnerRole, type ResponsiveAction } from '@visin/frontend-core';
+import { ConfirmDialog, Loader, OwnerChip, ResponsiveActions, type OwnerRole, type ResponsiveAction } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import {
   JobAction,
@@ -28,6 +28,7 @@ import {
   transitionJob,
   setJobVisibility
 } from '../services/jobService';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 const STATUS_COLORS: Record<string, 'default' | 'success' | 'warning' | 'info'> = {
   draft: 'default',
@@ -43,8 +44,10 @@ const JobDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data: job, isLoading, error: jobError } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
+  usePageTitle(job ? `${job.name} - Labeling` : 'Job - Labeling');
   const { data: stats } = useQuery({ queryKey: ['job-stats', jobId], queryFn: () => getJobStats(jobId) });
   // Running the job is managing its dataset; the server says which it is for this caller.
   const isAdmin = Boolean(job?.canManage);
@@ -63,8 +66,8 @@ const JobDetailPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       navigate('/jobs');
-    },
-    onError: (err) => setActionError((err as Error).message)
+    }
+    // A refusal is shown in the dialog that asked, where the person is looking.
   });
 
   const visibility = useMutation({
@@ -79,12 +82,11 @@ const JobDetailPage: React.FC = () => {
   // Nothing below this is recoverable, and the answers are the labeling effort
   // itself — so the count goes in the prompt rather than a bare "are you sure".
   const confirmDelete = (): void => {
-    const collected = job?.progress?.completed ?? 0;
-    const warning = collected > 0 ? ` and ${collected} collected answer(s)` : '';
-    if (window.confirm(`Delete "${job?.name}"? This removes the job, its tasks${warning}. Export first — this cannot be undone.`)) {
-      remove.mutate();
-    }
+    remove.reset();
+    setDeleteOpen(true);
   };
+  const collected = job?.progress?.completed ?? 0;
+  const deleteWarning = collected > 0 ? ` and ${collected} collected answer(s)` : '';
 
   if (jobError) return <Alert severity="error">{jobError.message}</Alert>;
   if (isLoading || !job) {
@@ -185,6 +187,19 @@ const JobDetailPage: React.FC = () => {
           Turning it off stops new image links; links already issued expire within one hour.
         </Typography>}
       </Paper>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete this job?"
+        confirmLabel="Delete job"
+        busyLabel="Deleting..."
+        busy={remove.isPending}
+        error={remove.error ? (remove.error as Error).message : null}
+        onConfirm={() => remove.mutate()}
+        onCancel={() => setDeleteOpen(false)}
+      >
+        Delete "{job.name}"? This removes the job, its tasks{deleteWarning}. Export first — this cannot be undone.
+      </ConfirmDialog>
 
       {stats && (
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: '16px' }}>

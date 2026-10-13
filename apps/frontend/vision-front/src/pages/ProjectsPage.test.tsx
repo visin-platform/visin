@@ -136,6 +136,18 @@ describe('ProjectsPage', () => {
     expect(screen.getByText('Private')).toBeInTheDocument();
   });
 
+  it('shows a project\'s picture beside its name where it has one', async () => {
+    projectServiceMock.getProjects.mockResolvedValue({
+      data: [{ ...project1, coverUrl: 'https://files.example.test/cover.jpg' }, project2]
+    });
+
+    renderPage();
+
+    await screen.findByText('Project One');
+    const pictures = document.querySelectorAll('img[src="https://files.example.test/cover.jpg"]');
+    expect(pictures).toHaveLength(1);
+  });
+
   it('only shows edit/delete actions for projects owned by the current user', async () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [project1, project2] });
 

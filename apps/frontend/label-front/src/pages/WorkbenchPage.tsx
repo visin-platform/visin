@@ -34,6 +34,7 @@ import { DecodedImage, loadLayerPixels, loadMaskIndex } from '../workbench/idmap
 import { MaskIndex } from '../workbench/maskIndex';
 import { Viewport, focusBbox } from '../workbench/viewport';
 import FrameViewer from '../workbench/FrameViewer';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 /** Gap left under the viewer so the page itself never scrolls. */
 const BOTTOM_GUTTER_PX = 8;
@@ -44,6 +45,7 @@ const WorkbenchPage: React.FC = () => {
   const location = useLocation();
   const { isAuthenticated, isLoading: authLoading, login } = useAuth();
   const { data: job, error: jobError } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
+  usePageTitle(job ? `Labeling ${job.name}` : 'Labeling');
   // Read once: the param is rewritten as the labeler advances, and re-reading it
   // would restart the queue on every frame.
   const [startTaskId] = useState(() => searchParams.get('task'));

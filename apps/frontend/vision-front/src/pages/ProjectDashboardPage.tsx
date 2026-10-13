@@ -15,13 +15,13 @@ import ProjectHeader from '../components/project/ProjectHeader';
 import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
 import { CostingProvider } from '../costing/CostingProvider';
 import ProjectTabs from '../components/project/ProjectTabs';
-import type { VisualizationsGroupedResult } from '../components/project/ProjectVisualizationsTab';
 import EditProjectDialog from '../components/project/EditProjectDialog';
 import DeleteProjectDialog from '../components/project/DeleteProjectDialog';
 
 // Custom hook
 import { useProjectDashboard } from '../hooks/useProjectDashboard';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 // In ProjectTabs' order. Analysis once had no entry here while Settings kept
 // its old index, so `?tab=settings` opened Analysis and neither tab could be
@@ -83,33 +83,25 @@ const ProjectDashboardPage: React.FC = () => {
     dashboardStats,
     fullTrainings,
     testResults,
-    visualizations,
     benchmarks,
     isProjectLoading,
     isStatsLoading,
     isDashboardStatsLoading,
     isFullTrainingsLoading,
     isTestResultsLoading,
-    isVisualizationsLoading,
     isBenchmarksLoading,
     projectError,
     page,
     rowsPerPage,
     sortBy,
     sortOrder,
-    testsPage,
-    testsRowsPerPage,
-    benchmarksPage,
-    benchmarksRowsPerPage,
     handlePageChange,
     handleRowsPerPageChange,
-    handleTestsPageChange,
-    handleTestsRowsPerPageChange,
-    handleBenchmarksPageChange,
-    handleBenchmarksRowsPerPageChange,
     handleSort,
     invalidateProjectQueries
   } = useProjectDashboard(id, tabValue);
+
+  usePageTitle(project ? `${project.name} - Vision` : 'Project - Vision');
 
   // So it is one of the places the search box offers next time.
   useTrackVisit(
@@ -238,18 +230,8 @@ const ProjectDashboardPage: React.FC = () => {
             onSort={handleSort}
             testResultsResponse={testResults}
             isTestResultsLoading={isTestResultsLoading}
-            testsPage={testsPage}
-            testsRowsPerPage={testsRowsPerPage}
-            onTestsPageChange={handleTestsPageChange}
-            onTestsRowsPerPageChange={handleTestsRowsPerPageChange}
-            visualizationsResponse={visualizations as VisualizationsGroupedResult | undefined}
-            isVisualizationsLoading={isVisualizationsLoading}
             benchmarksResponse={benchmarks}
             isBenchmarksLoading={isBenchmarksLoading}
-            benchmarksPage={benchmarksPage}
-            benchmarksRowsPerPage={benchmarksRowsPerPage}
-            onBenchmarksPageChange={handleBenchmarksPageChange}
-            onBenchmarksRowsPerPageChange={handleBenchmarksRowsPerPageChange}
             project={project}
           />
 

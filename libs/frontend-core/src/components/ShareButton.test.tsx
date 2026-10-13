@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { ShareButton } from './ShareButton';
 
@@ -13,10 +13,26 @@ describe('ShareButton', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     render(<ShareButton url="https://api.example.test/share/project" />);
     fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-    expect(await screen.findByRole('button', { name: 'Link copied' })).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent('Link copied');
     expect(writeText).toHaveBeenCalledWith('https://api.example.test/share/project');
-    fireEvent.blur(screen.getByRole('button', { name: 'Link copied' }));
-    expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument();
+    fireEvent.blur(screen.getByRole('button', { name: 'Share' }));
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('drops the tag by itself after a moment', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } });
+      render(<ShareButton url="https://api.example.test/share/project" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+      await screen.findByRole('status');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.queryByRole('status')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('offers a selectable link if clipboard access fails, and lets the reader close it', async () => {
@@ -39,9 +55,9 @@ describe('ShareButton', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     const view = render(<ShareButton url="https://api.example.test/share/first" />);
     fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-    await screen.findByRole('button', { name: 'Link copied' });
+    await screen.findByRole('status');
     view.rerender(<ShareButton url="https://api.example.test/share/second" />);
-    expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('closes a manual-copy dialog belonging to the previous page', async () => {

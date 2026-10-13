@@ -65,4 +65,9 @@ describe('EditComparisonDialog', () => {
     expect(screen.queryByText('Update')).not.toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
+
+  it('shows why saving failed', () => {
+    render(<EditComparisonDialog {...baseProps} error="Name already taken" />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Name already taken');
+  });
 });

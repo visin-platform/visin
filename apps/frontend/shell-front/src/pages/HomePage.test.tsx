@@ -179,7 +179,7 @@ describe('HomePage', () => {
     const shortcuts = within(screen.getByRole('navigation', { name: 'Shortcuts' }));
     expect(shortcuts.getByRole('link', { name: 'Leaderboards' })).toHaveAttribute('href', '/leaderboards');
     expect(shortcuts.getByRole('link', { name: 'Trainings' })).toHaveAttribute('href', '/trainings');
-    expect(shortcuts.getByRole('link', { name: 'New job' })).toHaveAttribute('href', '/jobs/new');
+    expect(shortcuts.queryByRole('link', { name: 'New job' })).not.toBeInTheDocument();
   });
 
   it('sums up projects, trainings, running runs and the tasks left to label', async () => {
@@ -269,7 +269,6 @@ describe('HomePage', () => {
     await section('Recent trainings').findByRole('link', { name: /Detector v2/ });
     expect(screen.queryByRole('region', { name: 'Labeling' })).not.toBeInTheDocument();
     expect(screen.queryByText('Tasks to label')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'New job' })).not.toBeInTheDocument();
     expect(api.jobs).not.toHaveBeenCalled();
   });
 

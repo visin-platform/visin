@@ -58,10 +58,16 @@ describe('ModelRegistry', () => {
     renderWithClient(<ModelRegistry />);
     const hub = await screen.findByRole('link', { name: 'acme/clft @ 3f2a1c9' });
     expect(hub).toHaveAttribute('href', `https://huggingface.co/acme/clft/blob/${COMMIT}/best.pt`);
-    expect(screen.getByText('best.pt · epoch 12')).toBeInTheDocument();
+    expect(screen.getByText('Hugging Face')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Run 1' })).toHaveAttribute('href', '/trainings/t-1');
     expect(screen.getByRole('link', { name: 'Road' })).toHaveAttribute('href', '/projects/road');
+    // The line is the model, its run and project; the dataset and checkpoint are behind its toggle.
+    expect(screen.queryByText('ZOD')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for acme/clft @ 3f2a1c9' }));
     expect(screen.getByText('ZOD')).toBeInTheDocument();
+    expect(screen.getByText('best.pt · epoch 12')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide details for acme/clft @ 3f2a1c9' }));
+    expect(screen.queryByText('ZOD')).not.toBeInTheDocument();
     expect(service.list).toHaveBeenCalledWith({ page: 1, limit: 30 });
   });
 
@@ -172,6 +178,8 @@ describe('ModelRegistry', () => {
     ];
     service.list.mockResolvedValue(page([row('1', { evaluations }), row('2')]));
     renderWithClient(<ModelRegistry />);
+    const toggles = await screen.findAllByRole('button', { name: /^Show details for/ });
+    fireEvent.click(toggles[0]);
     const first = await screen.findByRole('link', { name: 'road-test@2 mIoU 0.7351' });
     expect(first).toHaveAttribute('href', '/evaluations/e2');
     expect(screen.getByRole('link', { name: 'road-test@1 mIoU 0.6' })).toHaveAttribute('href', '/evaluations/e1');
@@ -222,6 +230,7 @@ describe('ModelRegistry', () => {
       expect(screen.getByRole('link', { name: 'Download the outputs of ISEAUTO_CLFT-epoch99.pth as a zip' })).toHaveAttribute('href', `${origin}/m1/bundle`);
       expect(screen.getByText('Licence CC BY 4.0 · TalTech')).toBeInTheDocument();
       expect(screen.getByText('input 384 px · camera mean 0.485, 0.456, 0.406 · std 0.229, 0.224, 0.225')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /^Show details for/ }));
       expect(screen.getByText('epoch 99')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Try it' })).not.toBeInTheDocument();
     });

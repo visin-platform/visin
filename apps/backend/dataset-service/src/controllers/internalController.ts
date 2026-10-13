@@ -53,3 +53,7 @@ export const getOwnedByGroup = async (req: Request, res: Response): Promise<void
 export const resolveDataset = async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await internal.resolveDatasetReference(req.body) });
 };
+
+export const datasetCovers = async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await internal.coversFor(req.body) });
+};

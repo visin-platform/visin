@@ -2,12 +2,7 @@ import { useWriteCapabilities } from '../../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
 import {
   Box,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Typography
+  Button
 } from '@mui/material';
 import { Compare as CompareIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -19,6 +14,7 @@ import { trainingService } from '../../services/trainingService';
 import { projectService } from '../../services/projectService';
 import { useTrainingTags } from '../../hooks/useTrainingTags';
 import { Training } from '../../types';
+import { ConfirmDialog } from '@visin/frontend-core';
 
 export type TrainingSortColumn = 'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
 
@@ -86,6 +82,7 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
   const [deleteTrainingDialogOpen, setDeleteTrainingDialogOpen] = useState(false);
   const [deleteTrainingId, setDeleteTrainingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteTrainingError, setDeleteTrainingError] = useState<string | null>(null);
 
   const handleSelectTraining = (trainingId: string) => {
     const newSelected = new Set(selectedTrainingIds);
@@ -152,6 +149,7 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
   };
 
   const handleDeleteTrainingClick = (trainingId: string) => {
+    setDeleteTrainingError(null);
     setDeleteTrainingId(trainingId);
     setDeleteTrainingDialogOpen(true);
   };
@@ -168,6 +166,8 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
       queryClient.invalidateQueries({ queryKey: ['project-dashboard-stats', projectId] });
     } catch (err) {
       console.error('Failed to delete training:', err);
+      // The dialog stays open with the reason, rather than a button that quietly did nothing.
+      setDeleteTrainingError(err instanceof Error ? err.message : 'Failed to delete the training');
     } finally {
       setIsDeleting(false);
     }
@@ -247,26 +247,18 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
         loadingProjects={loadingProjects}
       />
 
-      {/* Delete Training Dialog */}
-      <Dialog open={deleteTrainingDialogOpen} onClose={() => setDeleteTrainingDialogOpen(false)}>
-        <DialogTitle>Delete Training</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete this training? This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTrainingDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleConfirmDeleteTraining}
-            color="error"
-            variant="contained"
-            disabled={isDeleting}
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={deleteTrainingDialogOpen}
+        title="Delete Training"
+        confirmLabel="Delete"
+        busyLabel="Deleting..."
+        busy={isDeleting}
+        error={deleteTrainingError}
+        onConfirm={handleConfirmDeleteTraining}
+        onCancel={() => setDeleteTrainingDialogOpen(false)}
+      >
+        Are you sure you want to delete this training? This action cannot be undone.
+      </ConfirmDialog>
     </Box>
   );
 };

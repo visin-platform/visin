@@ -8,6 +8,7 @@ import {
   DialogTitle,
   TextField
 } from '@mui/material';
+import { ConfirmDialog as SharedConfirmDialog } from '@visin/frontend-core';
 
 interface CreateGroupDialogProps {
   open: boolean;
@@ -82,18 +83,14 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onCancel,
   onConfirm
 }) => (
-  <Dialog open={open} onClose={onCancel} fullWidth maxWidth="xs">
-    <DialogTitle>{title}</DialogTitle>
-    <DialogContent>
-      <DialogContentText>{message}</DialogContentText>
-    </DialogContent>
-    <DialogActions>
-      <Button onClick={onCancel} disabled={busy}>
-        Cancel
-      </Button>
-      <Button color="error" variant="contained" onClick={onConfirm} disabled={busy}>
-        {confirmLabel}
-      </Button>
-    </DialogActions>
-  </Dialog>
+  <SharedConfirmDialog
+    open={open}
+    title={title}
+    confirmLabel={confirmLabel}
+    busy={busy}
+    onCancel={onCancel}
+    onConfirm={onConfirm}
+  >
+    {message}
+  </SharedConfirmDialog>
 );

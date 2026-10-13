@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -25,6 +26,8 @@ interface EditComparisonDialogProps {
   onTrainingToggle: (trainingId: string) => void;
   isTrainingsLoading: boolean;
   updating: boolean;
+  /** why the last save failed */
+  error?: string | null;
 }
 
 const EditComparisonDialog: React.FC<EditComparisonDialogProps> = ({
@@ -39,7 +42,8 @@ const EditComparisonDialog: React.FC<EditComparisonDialogProps> = ({
   editSelectedIds,
   onTrainingToggle,
   isTrainingsLoading,
-  updating
+  updating,
+  error
 }) => (
   <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
     <DialogTitle>Edit Comparison</DialogTitle>
@@ -73,6 +77,11 @@ const EditComparisonDialog: React.FC<EditComparisonDialogProps> = ({
           maxSelections={20}
           isLoading={isTrainingsLoading}
         />
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
       </Box>
     </DialogContent>
     <DialogActions>

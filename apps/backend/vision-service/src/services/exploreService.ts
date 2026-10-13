@@ -4,6 +4,7 @@ import Training from '../models/Training';
 import { Finding } from '../models/Finding';
 import { publicProjectsAmong, type ActivityProject } from './activityService';
 import { lookupOwnerIdentities } from '../clients/ownerIdentityClient';
+import { coverUrlsFor } from './projectCoverService';
 import type { PublicFindingsQuery, PublicProjectsQuery } from '../validation/exploreSchemas';
 
 /** A public project as a card shows it. Never who else took part, and nothing that needs a sign-in. */
@@ -21,6 +22,8 @@ export interface PublicProjectCard {
   /** Runs in it, and when the latest started. */
   runs: number;
   lastRunAt?: string;
+  /** A picture for the card: the one its owner chose, else its dataset's cover when that is public. */
+  coverUrl?: string;
 }
 
 /**
@@ -53,8 +56,10 @@ export async function listPublicProjects({ search, sort, page, limit }: PublicPr
   const projects = order.flatMap((row) => byId.get(String(row._id)) ?? []);
 
   const ids = projects.map((project) => String(project._id));
-  const [owners, runs] = await Promise.all([
+  const [owners, covers, runs] = await Promise.all([
     lookupOwnerIdentities(projects.map((project) => project.owner)),
+    // No reader: Explore is the same for everyone, so only a dataset anyone may see supplies a cover.
+    coverUrlsFor(projects, undefined),
     Training.aggregate<{ _id: string; runs: number; lastRunAt: Date }>([
       { $match: { projectId: { $in: ids }, deletedAt: null } },
       { $group: { _id: '$projectId', runs: { $sum: 1 }, lastRunAt: { $max: '$createdAt' } } }
@@ -75,7 +80,8 @@ export async function listPublicProjects({ search, sort, page, limit }: PublicPr
       updatedAt: project.updatedAt.toISOString(),
       lastActivityAt: (project.lastActivityAt ?? project.updatedAt).toISOString(),
       runs: counted?.runs ?? 0,
-      ...(counted ? { lastRunAt: counted.lastRunAt.toISOString() } : {})
+      ...(counted ? { lastRunAt: counted.lastRunAt.toISOString() } : {}),
+      ...(covers.get(String(project._id)) ? { coverUrl: covers.get(String(project._id)) } : {})
     };
   });
 

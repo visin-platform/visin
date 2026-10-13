@@ -29,6 +29,8 @@ export {
   SectionHeading,
   EmptyState,
   ResponsiveActions,
+  ConfirmDialog,
+  ListSkeleton,
   TAB_BAR_HEIGHT,
   useCompactLayout
 } from './components/Page';
@@ -40,7 +42,9 @@ export type {
   SectionHeadingProps,
   EmptyStateProps,
   ResponsiveAction,
-  ResponsiveActionsProps
+  ResponsiveActionsProps,
+  ConfirmDialogProps,
+  ListSkeletonProps
 } from './components/Page';
 export {
   createVisinTheme,

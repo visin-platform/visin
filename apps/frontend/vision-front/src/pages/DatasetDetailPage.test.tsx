@@ -114,14 +114,20 @@ describe('DatasetDetailPage', () => {
     await waitFor(() => expect(service.updateDataset).toHaveBeenCalledWith('d1', { source: null }));
   });
 
-  it('shows how to download the dataset, to a reader too', async () => {
+  it('offers no download code for a dataset with nothing to download yet', async () => {
+    service.getDataset.mockResolvedValue(dataset({ archive: undefined, source: undefined, contents: undefined, groups: [], imageCount: 0 }));
+    renderPage();
+    await screen.findByText(/No zip uploaded/);
+    expect(screen.queryByRole('region', { name: 'Use in Python' })).not.toBeInTheDocument();
+  });
+
+  it('shows how to download the dataset in a panel, to a reader too', async () => {
     service.getDataset.mockResolvedValue(dataset({ permissions: READ }));
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Use this' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Use this dataset' });
-    expect(within(dialog).getByText('visin download d1')).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Use this dataset' })).not.toBeInTheDocument());
+    const panel = await screen.findByRole('region', { name: 'Use in Python' });
+    expect(within(panel).queryByText('visin download d1')).not.toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: /Use in Python/ }));
+    expect(await within(panel).findByText('visin download d1')).toBeInTheDocument();
   });
 
   it('replaces the zip, then goes on to choosing image groups and importing', async () => {
@@ -131,7 +137,7 @@ describe('DatasetDetailPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Replace zip' }));
     fireEvent.change(await screen.findByTestId('dataset-zip-input'), { target: { files: [new File(['z'], 'new.zip')] } });
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
-    expect(await screen.findByText('Choose image groups')).toBeInTheDocument();
+    expect(await screen.findByText('Import image groups')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Import 1 group' }));
     await waitFor(() => expect(service.startImport).toHaveBeenCalledWith('d1', { groups: [{ folder: 'frames', group: 'frames' }] }));
   });
@@ -139,12 +145,12 @@ describe('DatasetDetailPage', () => {
   it('opens group choice straight after creation', async () => {
     service.getDataset.mockResolvedValue(dataset({ imageCount: 0, groups: [] }));
     renderPage({ chooseGroups: true });
-    expect(await screen.findByText('Choose image groups')).toBeInTheDocument();
+    expect(await screen.findByText('Import image groups')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(await screen.findByText(/No images shown yet/)).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByText('Choose image groups')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Import image groups')).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Choose folders' }));
-    expect(await screen.findByText('Choose image groups')).toBeInTheDocument();
+    expect(await screen.findByText('Import image groups')).toBeInTheDocument();
   });
 
   it('shows an upload that failed after the dataset was created', async () => {
@@ -160,7 +166,7 @@ describe('DatasetDetailPage', () => {
     service.cancelImport.mockResolvedValue(dataset({ import: { id: 'i', status: 'cancelled', mapping: { groups: [] }, processed: 5, skipped: 0, errors: [], stale: false } }));
     renderPage();
     expect(await screen.findByText(/Importing images… 5 stored/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Image groups' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Import image groups…' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(await screen.findByText('The last import was cancelled. The 5 files it stored are kept.')).toBeInTheDocument();
   });
@@ -173,7 +179,7 @@ describe('DatasetDetailPage', () => {
     expect(await screen.findByText('Used by 2 labeling jobs')).toBeInTheDocument();
     expect(screen.getByText('Private')).toBeInTheDocument();
     expect(await screen.findByLabelText('Owner: Team')).toBeInTheDocument();
-    for (const name of ['Replace zip', 'Image groups']) {
+    for (const name of ['Replace zip', 'Import image groups…']) {
       expect(screen.getByRole('button', { name })).toBeDisabled();
     }
     expect(screen.getByRole('button', { name: 'Move to trash' })).toBeEnabled();
@@ -285,9 +291,9 @@ describe('DatasetDetailPage', () => {
     fireEvent.change(await screen.findByTestId('dataset-zip-input'), { target: { files: [new File(['z'], 'new.zip')] } });
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
     expect(await screen.findByText(/you can leave this page/)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Image groups' })).toBeDisabled());
-    expect(screen.queryByText('Choose image groups')).not.toBeInTheDocument();
-    expect(await screen.findByText('Choose image groups', undefined, { timeout: 5000 })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Import image groups…' })).toBeDisabled());
+    expect(screen.queryByText('Import image groups')).not.toBeInTheDocument();
+    expect(await screen.findByText('Import image groups', undefined, { timeout: 5000 })).toBeInTheDocument();
   }, 10_000);
 
   it('offers another scan when reading the zip failed', async () => {
@@ -297,7 +303,7 @@ describe('DatasetDetailPage', () => {
     expect(await screen.findByText('The zip could not be read: not a zip')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Scan again' }));
     expect(await screen.findByText(/you can leave this page/)).toBeInTheDocument();
-    expect(screen.queryByText('Choose image groups')).not.toBeInTheDocument();
+    expect(screen.queryByText('Import image groups')).not.toBeInTheDocument();
   });
 
   it('resumes an interrupted upload with the same zip', async () => {

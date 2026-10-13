@@ -14,7 +14,7 @@ import ProjectOverviewTab, {
 } from './ProjectOverviewTab';
 import ProjectTrainingsTab, { type TrainingSortColumn } from './ProjectTrainingsTab';
 import ProjectTestsTab from './ProjectTestsTab';
-import ProjectVisualizationsTab, { type VisualizationsGroupedResult } from './ProjectVisualizationsTab';
+import ProjectVisualizationsTab from './ProjectVisualizationsTab';
 import ProjectBenchmarksTab from './ProjectBenchmarksTab';
 import ProjectComparisonsTab from './ProjectComparisonsTab';
 import ModelRegistry from '../models/ModelRegistry';
@@ -24,6 +24,20 @@ import ProjectSettings from '../ProjectSettings';
 import { discoverClasses, discoverConditions } from '../../taxonomy/discover';
 import { Training, TestResultsPaginatedResponse, BenchmarksPaginatedResponse } from '../../types';
 import { Project } from '../../types/Project';
+
+/** A tab's name, with how much is behind it once there is any. */
+const withCount = (label: string, count?: number) =>
+  count ? (
+    // One element: a Tab lays its children out as a column, which put the count under the name.
+    <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+      {label}{' '}
+      <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+        {count}
+      </Box>
+    </Box>
+  ) : (
+    label
+  );
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -70,20 +84,10 @@ interface ProjectTabsProps {
   // Tests tab props
   testResultsResponse: TestResultsPaginatedResponse | undefined;
   isTestResultsLoading: boolean;
-  testsPage: number;
-  testsRowsPerPage: number;
-  onTestsPageChange: (event: unknown, newPage: number) => void;
-  onTestsRowsPerPageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   // Visualizations tab props
-  visualizationsResponse: VisualizationsGroupedResult | undefined;
-  isVisualizationsLoading: boolean;
   // Benchmarks tab props
   benchmarksResponse: BenchmarksPaginatedResponse | undefined;
   isBenchmarksLoading: boolean;
-  benchmarksPage: number;
-  benchmarksRowsPerPage: number;
-  onBenchmarksPageChange: (event: unknown, newPage: number) => void;
-  onBenchmarksRowsPerPageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   // Project for settings
   project: Project;
 }
@@ -109,18 +113,8 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
   onSort,
   testResultsResponse,
   isTestResultsLoading,
-  testsPage,
-  testsRowsPerPage,
-  onTestsPageChange,
-  onTestsRowsPerPageChange,
-  visualizationsResponse,
-  isVisualizationsLoading,
   benchmarksResponse,
   isBenchmarksLoading,
-  benchmarksPage,
-  benchmarksRowsPerPage,
-  onBenchmarksPageChange,
-  onBenchmarksRowsPerPageChange,
   project
 }) => {
   // Conditions and classes this project's results already use, so the settings
@@ -164,9 +158,9 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
         >
           <Tab label="Overview" />
           <Tab label="Trainings" />
-          <Tab label="Tests" />
-          <Tab label="Visualizations" />
-          <Tab label="Benchmarks" />
+          <Tab label={withCount('Tests', dashboardStats?.testResultsCount)} />
+          <Tab label={withCount('Visualizations', dashboardStats?.visualizationsCount)} />
+          <Tab label={withCount('Benchmarks', dashboardStats?.benchmarksCount)} />
           <Tab label="Comparisons" />
           <Tab label="Analysis" />
           <Tab label="Models" />
@@ -181,12 +175,7 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
         {project.permissions.contribute && !canManage && <PipelineKeys projectId={project._id} />}
         <ProjectReadme project={project} />
         <BestRunCard projectId={project._id} />
-        <ProjectOverviewTab
-          stats={stats}
-          dashboardStats={dashboardStats}
-          isAuthenticated={isAuthenticated}
-          user={user}
-        />
+        <ProjectOverviewTab stats={stats} isAuthenticated={isAuthenticated} user={user} />
       </TabPanel>
 
       {/* Trainings Tab */}
@@ -213,20 +202,12 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
           projectId={projectId}
           testResultsResponse={testResultsResponse}
           isLoading={isTestResultsLoading}
-          page={testsPage}
-          rowsPerPage={testsRowsPerPage}
-          onPageChange={onTestsPageChange}
-          onRowsPerPageChange={onTestsRowsPerPageChange}
         />
       </TabPanel>
 
       {/* Visualizations Tab */}
       <TabPanel value={tabValue} index={3}>
-        <ProjectVisualizationsTab
-          projectId={projectId}
-          visualizationsResponse={visualizationsResponse}
-          isLoading={isVisualizationsLoading}
-        />
+        <ProjectVisualizationsTab projectId={project._id} />
       </TabPanel>
 
       {/* Benchmarks Tab */}
@@ -234,10 +215,6 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
         <ProjectBenchmarksTab
           benchmarksResponse={benchmarksResponse}
           isLoading={isBenchmarksLoading}
-          page={benchmarksPage}
-          rowsPerPage={benchmarksRowsPerPage}
-          onPageChange={onBenchmarksPageChange}
-          onRowsPerPageChange={onBenchmarksRowsPerPageChange}
           isOwner={canWrite(project._id)}
         />
       </TabPanel>

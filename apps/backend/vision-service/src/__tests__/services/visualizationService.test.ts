@@ -39,7 +39,7 @@ jest.mock('../../models/Epoch', () => ({
 }));
 jest.mock('../../models/Training', () => ({
   __esModule: true,
-  default: { find: jest.fn(), findOne: jest.fn(), findById: jest.fn() },
+  default: { find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() },
 }));
 jest.mock('../../clients/fileServiceClient', () => ({
   getSignedUrl: jest.fn(),
@@ -331,9 +331,63 @@ describe('getVisualizationsByTraining', () => {
     )) as AnyDoc;
 
     expect(result.trainings).toHaveLength(2);
+    // The id a run's page is opened by, beside the uuid the pipeline knows it by.
+    expect(result.trainings.map((t: AnyDoc) => t.training_id)).toEqual(['t1', 't2']);
     expect(result.trainings[0].visualizations[0].signedUrl).toBeUndefined();
     expect(result.trainings[1].visualizations).toEqual([]);
     expect(result.total).toBe(1);
+  });
+
+  it('shows a few frames per run, a page of runs at a time, keeping each run\'s own counts by type whatever the filter', async () => {
+    const limit = jest.fn().mockResolvedValue([{ _id: 't1', uuid: 'uuid-t1', name: 'T1' }]);
+    const skip = jest.fn().mockReturnValue({ limit });
+    const sort = jest.fn().mockReturnValue({ skip });
+    mockedTraining.find.mockReturnValue({ select: jest.fn().mockReturnValue({ sort }) });
+    mockedTraining.countDocuments.mockResolvedValue(25);
+    mockedEpoch.find.mockReturnValue({ select: jest.fn().mockResolvedValue([epochDoc('e1')]) });
+    const frame = (id: string, type: string) => ({ ...vizDoc(id), type, toObject: () => ({ _id: id, type, fileId: 'f', epoch_uuid: 'e1' }) });
+    mockVizFindChain([frame('v1', 'overlay'), frame('v2', 'overlay'), frame('v3', 'mask'), frame('v4', 'overlay')]);
+
+    const result = (await getVisualizationsByTraining(
+      undefined,
+      { ...filters, limit: 12, page: 2, projectId: 'p1', type: 'overlay', perTraining: 2 },
+      'u1'
+    )) as AnyDoc;
+
+    const [run] = result.trainings;
+    expect(run.visualizations.map((v: AnyDoc) => v._id)).toEqual(['v1', 'v2']);
+    expect(run.visualization_count).toBe(3);
+    expect(run.type_counts).toEqual({ overlay: 3, mask: 1 });
+    expect(result.total).toBe(3);
+    expect(skip).toHaveBeenCalledWith(12);
+    expect(limit).toHaveBeenCalledWith(12);
+    expect(result.pagination).toEqual({ page: 2, limit: 12, total: 25, pages: 3 });
+  });
+
+  it('counts visualization types whose names overlap object properties', async () => {
+    const sort = jest.fn().mockResolvedValue([{ _id: 't1', uuid: 'uuid-t1', name: 'T1' }]);
+    mockedTraining.find.mockReturnValue({ select: jest.fn().mockReturnValue({ sort }) });
+    mockEpochSelect([epochDoc('e1')]);
+    mockVizFindChain([
+      vizDoc('v1', { type: '__proto__' }),
+      vizDoc('v2', { type: 'constructor' }),
+      vizDoc('v3', { type: '__proto__' })
+    ]);
+
+    const result = await getVisualizationsByTraining(undefined, { ...filters, projectId: 'p1' }, 'u1') as AnyDoc;
+
+    expect(JSON.parse(JSON.stringify(result.trainings[0].type_counts))).toEqual(
+      Object.fromEntries([['__proto__', 2], ['constructor', 1]])
+    );
+  });
+
+  it('answers every run, unpaged, when no gallery asked', async () => {
+    const sort = jest.fn().mockResolvedValue([]);
+    mockedTraining.find.mockReturnValue({ select: jest.fn().mockReturnValue({ sort }) });
+
+    const result = (await getVisualizationsByTraining(undefined, { ...filters, projectId: 'p1' }, 'u1')) as AnyDoc;
+
+    expect(result).toEqual({ trainings: [], total: 0 });
   });
 
   it('resolves a slug filter to the project id trainings are stored under', async () => {

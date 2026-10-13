@@ -39,6 +39,7 @@ const LatexCodeDialog: React.FC<LatexCodeDialogProps> = ({
         LaTeX Table Code
         <IconButton
           onClick={onClose}
+          aria-label="Close dialog"
           sx={{ position: 'absolute', right: 8, top: 8 }}
         >
           <CloseIcon />

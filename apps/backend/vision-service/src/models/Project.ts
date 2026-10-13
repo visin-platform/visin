@@ -33,6 +33,12 @@ export interface IProject extends Document {
   /** where its big files live; absent means `visin` (this deployment's own storage) */
   storage?: { provider: StorageProvider; settings?: Record<string, unknown> };
   stallAfterMinutes?: number;
+  /**
+   * The picture its card shows, chosen by someone who manages it from the visualizations its own runs rendered. Absent
+   * means the card falls back to the cover of the dataset the runs trained on. The file id is kept beside the
+   * visualization's uuid so a card can be drawn without looking the visualization up.
+   */
+  cover?: { visualizationUuid: string; fileId: string };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -88,6 +94,13 @@ const ProjectSchema: Schema = new Schema(
       required: false
     },
     stallAfterMinutes: { type: Number, default: 30, min: 1, max: 10080 },
+    cover: {
+      type: new Schema({
+        visualizationUuid: { type: String, required: true },
+        fileId: { type: String, required: true }
+      }, { _id: false }),
+      required: false
+    },
     costing: {
       type: CostingSchema,
       required: false

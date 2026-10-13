@@ -1405,6 +1405,45 @@ describe('resolving the dataset actually used by a training', () => {
   });
 });
 
+describe('cover pictures for another service', () => {
+  const covers = (ids: string[], userId?: string) =>
+    call('/internal/datasets/covers', { internal: true, method: 'POST', body: { ids, ...(userId ? { userId } : {}) } });
+  const withCover = async (name: string, visibility?: 'public') => {
+    const id = await createDataset({ name, ...(visibility ? { visibility } : {}) });
+    await Dataset.updateOne({ _id: id }, { $set: { coverFileId: `cover-${name}` } });
+    return id;
+  };
+
+  it('returns the covers a reader may see, and says nothing of the rest', async () => {
+    const open = await withCover('open', 'public');
+    const hidden = await withCover('hidden');
+    const bare = await createDataset({ name: 'bare', visibility: 'public' });
+
+    expect((await covers([open, hidden, bare])).body.data).toEqual({ [open]: 'signed:cover-open' });
+    expect((await covers([open, hidden, bare], STRANGER)).body.data).toEqual({ [open]: 'signed:cover-open' });
+    expect((await covers([open, hidden, bare], OWNER)).body.data).toEqual({
+      [open]: 'signed:cover-open',
+      [hidden]: 'signed:cover-hidden'
+    });
+  });
+
+  it('has nothing for datasets with no cover, and for a cover whose address could not be made', async () => {
+    const bare = await createDataset({ name: 'plain', visibility: 'public' });
+    expect((await covers([bare])).body.data).toEqual({});
+
+    const unsigned = await withCover('unsigned', 'public');
+    const { getDownloadUrls } = jest.requireMock('../../clients/fileServiceClient') as { getDownloadUrls: jest.Mock };
+    getDownloadUrls.mockResolvedValueOnce({ urls: {}, expiresMs: Date.now() + 60_000 });
+    expect((await covers([unsigned])).body.data).toEqual({});
+  });
+
+  it('is for services only, and takes a list of ids', async () => {
+    expect((await call('/internal/datasets/covers', { method: 'POST', body: { ids: [OWNER] } })).status).toBe(401);
+    expect((await covers([])).status).toBe(400);
+    expect((await covers(['not-an-id'])).status).toBe(400);
+  });
+});
+
 describe('datasets kept on the Hugging Face Hub', () => {
   const COMMIT = '3f2a1c9d8e7b6a5f4e3d2c1b0a99887766554433';
   const source = { provider: 'hf', repo: 'acme/zod-png', revision: COMMIT };

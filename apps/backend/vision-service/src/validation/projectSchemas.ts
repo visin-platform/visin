@@ -51,7 +51,9 @@ export const updateProjectBodySchema = z.object({
   stallAfterMinutes: z.number().int().min(1).max(10080).optional(),
   costing: costingSchema.nullable().optional(),
   // Replaces the whole setting: leaving hfNamespace out clears it.
-  storage: projectStorageSchema.optional()
+  storage: projectStorageSchema.optional(),
+  /** A visualization one of the project's runs rendered; null returns the card to its dataset's cover. */
+  cover: z.object({ visualizationUuid: z.string().min(1).max(200) }).nullable().optional()
 });
 
 export const transferProjectBodySchema = z.object({ owner: resourceOwnerSchema });

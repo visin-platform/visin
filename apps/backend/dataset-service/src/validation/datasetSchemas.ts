@@ -8,6 +8,13 @@ export const resolveDatasetBodySchema = z.object({
 });
 export type ResolveDatasetBody = z.infer<typeof resolveDatasetBodySchema>;
 
+/** Cover pictures for a list of datasets, as one reader may see them: `userId` absent means anyone. */
+export const coversBodySchema = z.object({
+  ids: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/, 'Must be a 24-character id')).min(1).max(100),
+  userId: z.string().min(1).optional()
+});
+export type CoversBody = z.infer<typeof coversBodySchema>;
+
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Must be a 24-character id');
 
 export type { DatasetSource } from '../providers';

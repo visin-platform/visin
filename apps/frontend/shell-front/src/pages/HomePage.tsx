@@ -131,7 +131,7 @@ export function HomePage({ userName, now }: HomePageProps) {
     <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto', ...column }}>
       <GreetingHeader name={userName} now={today} />
 
-      <QuickActions apps={{ vision: Boolean(config.VISION_FRONT_URL), label: Boolean(config.LABEL_FRONT_URL) }} />
+      <QuickActions apps={{ vision: Boolean(config.VISION_FRONT_URL) }} />
 
       <InvitationsCard query={invitations} />
 

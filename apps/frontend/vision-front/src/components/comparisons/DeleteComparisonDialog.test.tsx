@@ -27,4 +27,15 @@ describe('DeleteComparisonDialog', () => {
     fireEvent.click(screen.getByText('Delete'));
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
+
+  it('says why a delete failed, and holds the buttons while it runs', () => {
+    const { rerender } = render(
+      <DeleteComparisonDialog open={true} onClose={vi.fn()} onConfirm={vi.fn()} error="Comparison is locked" />
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Comparison is locked');
+
+    rerender(<DeleteComparisonDialog open={true} onClose={vi.fn()} onConfirm={vi.fn()} deleting />);
+    expect(screen.getByRole('button', { name: 'Deleting...' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  });
 });

@@ -43,4 +43,11 @@ describe('LatexModal', () => {
     fireEvent.click(buttons[0]);
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('has a labelled close button', () => {
+    const onClose = vi.fn();
+    render(<LatexModal open={true} onClose={onClose} title="Title" code="x" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(onClose).toHaveBeenCalled();
+  });
 });

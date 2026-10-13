@@ -1,124 +1,90 @@
 import React from 'react';
-import {
-  Box,
-  Typography,
-  Grid,
-  Card,
-  CardContent,
-  Button,
-  SvgIconProps
-} from '@mui/material';
-import {
-  Timeline as TimelineIcon,
-  AttachMoney as CostIcon,
-  AccessTime as TimeIcon,
-  Speed as SpeedIcon,
-  Assessment as AssessmentIcon,
-  Image as ImageIcon,
-  BarChart as BarChartIcon,
-  Add as AddIcon
-} from '@mui/icons-material';
+import { Box, Button, Paper, Typography } from '@mui/material';
+import { Add as AddIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { tint, type AuthUser } from '@visin/frontend-core';
+import type { AuthUser } from '@visin/frontend-core';
 import { TrainingStats } from '../../services/trainingService';
 import { ProjectDashboardStats } from '../../services/projectService';
-import { useFormatCost } from '../../costing/useCosting';
+import { useCosting, useFormatCost } from '../../costing/useCosting';
 
 export type ProjectOverviewStats = Pick<TrainingStats, 'totalTrainings' | 'totalTime' | 'totalCost' | 'avgEpochTime'> & { currency?: string };
 export type ProjectOverviewDashboardStats = Pick<ProjectDashboardStats, 'testResultsCount' | 'visualizationsCount' | 'benchmarksCount'>;
 
 interface ProjectOverviewTabProps {
   stats: ProjectOverviewStats | undefined;
-  dashboardStats: ProjectOverviewDashboardStats | undefined;
   isAuthenticated: boolean;
   user: AuthUser | null;
 }
 
-interface StatTile {
+interface Figure {
   label: string;
   value: string | number;
-  icon: React.ReactElement<SvgIconProps>;
-  /** Palette family for the icon chip: `.main` on a tint of itself. */
-  color: string;
-  /** Column width from the `sm` breakpoint up; phones always show two per row. */
-  width: number;
 }
 
-const StatCard: React.FC<{ tile: StatTile }> = ({ tile }) => (
-  <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
-    <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 0.75, sm: 2 } }}>
-        <Box
-          sx={{
-            display: 'flex',
-            p: { xs: 0.5, sm: 1 },
-            borderRadius: 1,
-            bgcolor: tint(`var(--mui-palette-${tile.color}-main)`, 0.12),
-            color: `${tile.color}.main`,
-            mr: { xs: 1, sm: 2 },
-            '& .MuiSvgIcon-root': { fontSize: { xs: '1rem', sm: '1.5rem' } }
-          }}
-        >
-          {tile.icon}
-        </Box>
-        <Typography
-          variant="subtitle2"
-          sx={{
-            color: 'text.secondary',
-            fontSize: { xs: '0.75rem', sm: '0.875rem' },
-            lineHeight: 1.3
-          }}>
-          {tile.label}
-        </Typography>
-      </Box>
-      <Typography
-        sx={{
-          fontWeight: 'bold',
-          // A count and a "2h 3m" have to fit the same narrow tile.
-          fontSize: { xs: '1.25rem', sm: '2.125rem' },
-          lineHeight: 1.2
-        }}>
-        {tile.value}
-      </Typography>
-    </CardContent>
-  </Card>
-);
-
-const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({
-  stats,
-  dashboardStats,
-  isAuthenticated,
-  user
-}) => {
+/**
+ * What the project has used, in one strip. The counts of tests, visualizations
+ * and benchmarks live on their own tabs, and what the best run reached is
+ * the card above this.
+ */
+const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({ stats, isAuthenticated, user }) => {
   const navigate = useNavigate();
+  const costing = useCosting();
   const formatCost = useFormatCost();
 
+  // Hours and minutes, without a leading "0h": an epoch of two minutes reads "2m", not "0h 2m".
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m`;
+    return `${Math.round(seconds)}s`;
   };
 
-  const tiles: StatTile[] = [
-    { label: 'Total Trainings', value: stats?.totalTrainings || 0, icon: <TimelineIcon />, color: 'primary', width: 3 },
-    { label: 'Total Training Time', value: formatTime(stats?.totalTime || 0), icon: <TimeIcon />, color: 'info', width: 3 },
-    { label: 'Total Cost', value: formatCost(stats?.totalCost || 0, stats?.currency), icon: <CostIcon />, color: 'warning', width: 3 },
-    { label: 'Avg. Epoch Time', value: stats?.avgEpochTime ? formatTime(stats.avgEpochTime) : '-', icon: <SpeedIcon />, color: 'success', width: 3 },
-    { label: 'Test Results', value: dashboardStats?.testResultsCount || 0, icon: <AssessmentIcon />, color: 'secondary', width: 4 },
-    { label: 'Visualizations', value: dashboardStats?.visualizationsCount || 0, icon: <ImageIcon />, color: 'error', width: 4 },
-    { label: 'Benchmarks', value: dashboardStats?.benchmarksCount || 0, icon: <BarChartIcon />, color: 'orange', width: 4 }
+  const figures: Figure[] = [
+    { label: 'Trainings', value: stats?.totalTrainings || 0 },
+    { label: 'Training time', value: formatTime(stats?.totalTime || 0) },
+    { label: 'Avg. epoch time', value: stats?.avgEpochTime ? formatTime(stats.avgEpochTime) : '-' },
+    // A project with no rates has no cost to show, rather than a cost of nothing.
+    ...(costing || stats?.currency
+      ? [{ label: 'Cost', value: formatCost(stats?.totalCost || 0, stats?.currency) }]
+      : [])
   ];
 
   return (
     <>
-      {/* Stats Cards */}
-      <Grid container spacing={{ xs: 1.5, sm: 3 }} sx={{ mb: { xs: 2, sm: 4 } }}>
-        {tiles.map((tile) => (
-          <Grid key={tile.label} size={{ xs: 6, sm: 6, md: tile.width }}>
-            <StatCard tile={tile} />
-          </Grid>
+      <Paper
+        component="dl"
+        elevation={0}
+        aria-label="Project totals"
+        sx={{
+          border: '1px solid',
+          borderColor: 'divider',
+          m: 0,
+          mb: { xs: 2, sm: 3 },
+          display: 'grid',
+          gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: `repeat(${figures.length}, minmax(0, 1fr))` },
+          gap: 0
+        }}
+      >
+        {figures.map((figure, index) => (
+          <Box
+            key={figure.label}
+            sx={{
+              px: 2,
+              py: 1.5,
+              borderLeft: { sm: index === 0 ? 'none' : '1px solid' },
+              borderColor: 'divider'
+            }}
+          >
+            <Typography component="dt" variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              {figure.label}
+            </Typography>
+            <Typography component="dd" sx={{ m: 0, fontWeight: 700, fontSize: { xs: '1.1rem', sm: '1.35rem' }, lineHeight: 1.3 }}>
+              {figure.value}
+            </Typography>
+          </Box>
         ))}
-      </Grid>
+      </Paper>
       {!isAuthenticated && (
         <Box sx={{ px: { xs: 0, sm: 3 }, py: { xs: 2, sm: 4 } }}>
           <Box sx={{ textAlign: 'center' }}>

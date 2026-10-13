@@ -19,8 +19,8 @@ describe('CitedInPapers', () => {
 
     expect(await screen.findByText('Cited in 2 papers')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Paper a' })).toHaveAttribute('href', '/papers/a');
-    expect(screen.getByText(/Ann Lee, Bo Wu · 2025/)).toBeInTheDocument();
-    expect(service.listPublic).toHaveBeenCalledWith({ project: 'p1', limit: 5 });
+    expect(screen.getByRole('link', { name: 'Paper a' })).toHaveAttribute('title', 'Ann Lee, Bo Wu · 2025');
+    expect(service.listPublic).toHaveBeenCalledWith({ project: 'p1', limit: 3 });
     expect(screen.queryByText(/more$/)).not.toBeInTheDocument();
   });
 

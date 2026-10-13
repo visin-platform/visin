@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import { ExpandMore as ExpandIcon } from '@mui/icons-material';
 import { Chip } from '@mui/material';
-import { PageHeader } from '@visin/frontend-core';
+import { PageHeader, ResponsiveActions, type ResponsiveAction } from '@visin/frontend-core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
@@ -27,16 +27,17 @@ import ReasonList from '../components/evaluations/ReasonList';
 import ScoresTable from '../components/evaluations/ScoresTable';
 import EvidenceChip from '../components/evaluations/EvidenceChip';
 import EvidencePanel from '../components/evaluations/EvidencePanel';
-import ResultsTable from '../components/evaluations/ResultsTable';
+import ResultBreakdown from '../components/training/ResultBreakdown';
 import VerificationMark from '../components/evaluations/VerificationMark';
-import VerdictChip from '../components/evaluations/VerdictChip';
 import { checkpointLabel } from '../components/evaluations/verdict';
 import { checkpointSource } from '../components/evaluations/sources';
 import { useAuth } from '../contexts/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { evaluationService } from '../services/evaluationService';
 import type { Evaluation } from '../types/evaluation';
+import type { TestResultData } from '../types';
 import { formatDateTime } from '../utils/dateUtils';
+import { resultTable } from '../utils/resultTable';
 
 const Facts: React.FC<{ rows: [string, React.ReactNode][] }> = ({ rows }) => (
   <Box component="dl" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '180px 1fr' }, gap: 1, m: 0 }}>
@@ -78,12 +79,11 @@ const EvaluationDetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
   const [confirm, setConfirm] = useState(false);
-  usePageTitle('Evaluation');
-
   const { data: evaluation, isLoading, isError, error } = useQuery({
     queryKey: ['evaluation', id],
     queryFn: () => evaluationService.get(id)
   });
+  usePageTitle(evaluation ? `${checkpointLabel(evaluation.checkpoint)} - Evaluation` : 'Evaluation');
   const publication = useMutation({
     mutationFn: (publish: boolean) => (publish ? evaluationService.publish(id) : evaluationService.withdraw(id)),
     onSuccess: updated => {
@@ -122,6 +122,28 @@ const EvaluationDetailPage: React.FC = () => {
   const suite = evaluation.suite;
   const promoted = evaluation.provenance?.promoted as { evaluationId?: string } | undefined;
   const { provenance, results } = evaluation;
+  const publicPage = evaluation.publishedAt && !evaluation.hidden && suite;
+
+  // The one thing this page is for stays a button; the chores go behind ⋮, and the destructive one last.
+  const actions: ResponsiveAction[] = isAuthenticated
+    ? [
+        ...(evaluation.validation.state === 'eligible'
+          ? [{
+              label: evaluation.publishedAt ? 'Withdraw from public leaderboard' : 'Publish to public leaderboard',
+              onClick: () => publication.mutate(!evaluation.publishedAt),
+              disabled: publication.isPending,
+              primary: !evaluation.publishedAt
+            }]
+          : []),
+        {
+          label: evaluation.verifiedAt ? 'Remove verification' : 'Mark verified',
+          onClick: () => verification.mutate(!evaluation.verifiedAt),
+          disabled: verification.isPending
+        },
+        { label: 'Move to trash', onClick: () => setConfirm(true), danger: true }
+      ]
+    : [];
+
   return (
     <Container maxWidth="lg" sx={{ pb: 4 }}>
       <PageBreadcrumbs items={[{ label: 'Evaluations', href: '/evaluations' }, { label: checkpointLabel(evaluation.checkpoint), current: true }]} />
@@ -129,30 +151,18 @@ const EvaluationDetailPage: React.FC = () => {
         title={checkpointLabel(evaluation.checkpoint)}
         subtitle={suite ? `Scored on ${suite.slug}@${suite.version}` : 'Not scored on a suite'}
         actions={
-          isAuthenticated ? (
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flexDirection: { xs: 'column', sm: 'row' } }}>
-              <Button variant="outlined" disabled={verification.isPending} onClick={() => verification.mutate(!evaluation.verifiedAt)}>
-                {evaluation.verifiedAt ? 'Remove verification' : 'Mark verified'}
-              </Button>
-              {evaluation.validation.state === 'eligible' && (
-                <Button
-                  variant="outlined"
-                  onClick={() => publication.mutate(!evaluation.publishedAt)}
-                  disabled={publication.isPending}
-                >
-                  {evaluation.publishedAt ? 'Withdraw from public leaderboard' : 'Publish to public leaderboard'}
-                </Button>
-              )}
-              <Button color="error" variant="outlined" onClick={() => setConfirm(true)}>Move to trash</Button>
-            </Box>
+          actions.length > 0 ? (
+            // Everything but the trash stays a button on desktop: the destructive one is always behind ⋮.
+            <ResponsiveActions actions={actions} keepOnPhone={1} keepOnDesktop={actions.length - 1} menuLabel="More actions for this evaluation" />
           ) : undefined
         }
       />
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 3 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2.5 }}>
         {publication.isError && (
           <Alert severity="error">{publication.error instanceof Error ? publication.error.message : 'Failed to change publication'}</Alert>
         )}
+        {verification.isError && <Alert severity="error">{verification.error instanceof Error ? verification.error.message : 'Could not change verification'}</Alert>}
         {evaluation.hidden && (
           <Alert severity="warning">
             A manager of the suite hid this result from its leaderboard{evaluation.hidden.reason ? `: ${evaluation.hidden.reason}` : '.'} It cannot be published again until they show it.
@@ -163,24 +173,24 @@ const EvaluationDetailPage: React.FC = () => {
             A correction replaces this result. It is no longer ranked, and cannot be published.
           </Alert>
         )}
-        {evaluation.publishedAt && !evaluation.hidden && suite && (
-          <Alert severity="info" action={<Button color="inherit" size="small" component={RouterLink} to={`/leaderboards/${suite.slug}/${suite.version}/${evaluation._id}`}>See public page</Button>}>
-            <Chip size="small" label="Public" sx={{ mr: 1 }} />
-            Published {formatDateTime(evaluation.publishedAt)}. Anyone can see this result’s scores, checkpoint and sample counts, and nothing else from it.
-          </Alert>
-        )}
-        {verification.isError && <Alert severity="error">{verification.error instanceof Error ? verification.error.message : 'Could not change verification'}</Alert>}
-        <Box><VerificationMark verified={Boolean(evaluation.verifiedAt)} />{evaluation.verifiedAt && <Typography variant="caption" sx={{ ml: 1 }}>{formatDateTime(evaluation.verifiedAt)}</Typography>}</Box>
-        <section aria-labelledby="verdict-heading">
-          <Typography id="verdict-heading" variant="h6" gutterBottom>
-            Verdict <VerdictChip validation={evaluation.validation} /> <EvidenceChip level={evaluation.validation.evidence} />
-          </Typography>
-          <ReasonList validation={evaluation.validation} />
-        </section>
 
-        <section aria-labelledby="reported-heading">
-          <Typography id="reported-heading" variant="h6" gutterBottom>What the evaluator reported</Typography>
-          <EvidencePanel evaluation={evaluation} />
+        {/* Where it stands, in a line: the verdict says if it is ranked and why, the chips say how far to trust it. */}
+        <section aria-label="Standing">
+          <ReasonList validation={evaluation.validation} />
+          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mt: 1.5 }}>
+            <EvidenceChip level={evaluation.validation.evidence} />
+            <VerificationMark verified={Boolean(evaluation.verifiedAt)} />
+            {evaluation.verifiedAt && <Typography variant="caption">{formatDateTime(evaluation.verifiedAt)}</Typography>}
+            {publicPage && (
+              <>
+                <Chip size="small" color="success" variant="outlined" label="Public" />
+                <Typography variant="caption" color="text.secondary">
+                  Published {formatDateTime(evaluation.publishedAt!)}. Anyone can see this result’s scores, checkpoint and sample counts, and nothing else from it.
+                </Typography>
+                <Link component={RouterLink} variant="caption" to={`/leaderboards/${suite.slug}/${suite.version}/${evaluation._id}`}>See public page</Link>
+              </>
+            )}
+          </Box>
         </section>
 
         {evaluation.validation.scores && (
@@ -190,8 +200,26 @@ const EvaluationDetailPage: React.FC = () => {
           </section>
         )}
 
+        {results && (
+          <section aria-labelledby="reported-results-heading">
+            <Typography id="reported-results-heading" variant="h6" gutterBottom>Results by condition</Typography>
+            {resultTable(results).rows.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">The result holds no numbers to tabulate. The raw JSON is below.</Typography>
+            ) : (
+              <>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  As the evaluator reported them. An “overall” here is the evaluator’s own figure, not the overall that is ranked, which Visin forms from the suite’s conditions.
+                </Typography>
+                <Paper elevation={0} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                  <ResultBreakdown results={results as TestResultData} classMetrics="discover" />
+                </Paper>
+              </>
+            )}
+          </section>
+        )}
+
         <section aria-labelledby="evidence-heading">
-          <Typography id="evidence-heading" variant="h6" gutterBottom>Evidence</Typography>
+          <Typography id="evidence-heading" variant="h6" gutterBottom>About this result</Typography>
           <Paper elevation={0} sx={{ p: 2, border: '1px solid', borderColor: 'divider' }}>
             <Facts
               rows={[
@@ -221,33 +249,40 @@ const EvaluationDetailPage: React.FC = () => {
           </Paper>
         </section>
 
-        {provenance && (
-          <section aria-labelledby="provenance-heading">
-            <Typography id="provenance-heading" variant="h6" gutterBottom>Provenance</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Reported by whoever submitted this result. Visin checks that results fit the suite; it cannot prove which checkpoint or data were used.
-            </Typography>
-            <Json value={provenance} label="Provenance" />
-          </section>
-        )}
-
-        {results && (
-          <section aria-labelledby="reported-results-heading">
-            <Typography id="reported-results-heading" variant="h6" gutterBottom>Results by condition and class</Typography>
-            <ResultsTable results={results} />
-          </section>
-        )}
-
-        {results && (
-          <Accordion disableGutters elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
+        {/* The proof and the plumbing: one click away, not in the way of the numbers. */}
+        <Box>
+          <Accordion disableGutters elevation={0} sx={{ border: '1px solid', borderColor: 'divider', '&:not(:last-child)': { borderBottom: 0 } }}>
             <AccordionSummary expandIcon={<ExpandIcon />}>
-              <Typography variant="subtitle1">Raw results</Typography>
+              <Typography variant="subtitle1">What the evaluator reported</Typography>
             </AccordionSummary>
             <AccordionDetails>
-              <Json value={results} label="Raw results" />
+              <EvidencePanel evaluation={evaluation} />
             </AccordionDetails>
           </Accordion>
-        )}
+          {provenance && (
+            <Accordion disableGutters elevation={0} sx={{ border: '1px solid', borderColor: 'divider', '&:not(:last-child)': { borderBottom: 0 } }}>
+              <AccordionSummary expandIcon={<ExpandIcon />}>
+                <Typography variant="subtitle1">Provenance</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  Reported by whoever submitted this result. Visin checks that results fit the suite; it cannot prove which checkpoint or data were used.
+                </Typography>
+                <Json value={provenance} label="Provenance" />
+              </AccordionDetails>
+            </Accordion>
+          )}
+          {results && (
+            <Accordion disableGutters elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
+              <AccordionSummary expandIcon={<ExpandIcon />}>
+                <Typography variant="subtitle1">Raw results</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Json value={results} label="Raw results" />
+              </AccordionDetails>
+            </Accordion>
+          )}
+        </Box>
       </Box>
 
       <Dialog open={confirm} onClose={() => setConfirm(false)}>

@@ -27,14 +27,21 @@ export interface VisualizationSummary {
 }
 
 export interface TrainingVisualizations {
+  training_id: string;
   training_uuid: string;
   training_name: string;
   visualizations: Visualization[];
+  /** how many match the type asked for, before a per-run limit cut the list */
+  visualization_count?: number;
+  /** the run's visualizations by type, whatever type was asked for */
+  type_counts?: Record<string, number>;
 }
 
 export interface VisualizationsGroupedResponse {
   trainings: TrainingVisualizations[];
   total: number;
+  /** with a per-run limit, which page of the project's runs this is */
+  pagination?: { page: number; limit: number; total: number; pages: number };
 }
 
 export interface CreateVisualizationData {

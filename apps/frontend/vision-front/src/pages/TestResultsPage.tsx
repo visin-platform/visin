@@ -1,13 +1,10 @@
 import { useWriteCapabilities } from '../hooks/useWriteCapabilities';
 import React, { useState } from 'react';
-import { PageHeader, useCompactLayout, livePalette, tint } from '@visin/frontend-core';
+import { PageHeader, useCompactLayout, livePalette, tint, ConfirmDialog, ListSkeleton } from '@visin/frontend-core';
 import { MobileListHeader, MobileListRow } from '../components/common/MobileList';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  Box,
-  Button,
-  CircularProgress,
   Alert,
   Typography,
   Container,
@@ -18,10 +15,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   IconButton,
   Tooltip,
   Checkbox,
@@ -33,17 +26,15 @@ import {
   Scoreboard as PromoteIcon
 } from '@mui/icons-material';
 import { testResultService } from '../services/testResultService';
-import { TestResult, TestResultData } from '../types';
-import { isRecord, readMetric } from '../taxonomy/discover';
-import { RESERVED_CLASS_KEYS, RESERVED_CONDITION_KEYS } from '../taxonomy/reserved';
+import { TestResult } from '../types';
+import { AVERAGED_METRICS, averageAcrossConditions, overallMeans } from '../utils/testResultMetrics';
 import { useTaxonomyFor } from '../taxonomy/useTaxonomy';
 import MetricName from '../components/common/MetricName';
 import PromoteDialog from '../components/evaluations/PromoteDialog';
-
-/** Per-class metrics this listing averages into one column each. */
-const AVERAGED_METRICS = ['iou', 'precision', 'recall', 'f1_score'];
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export const TestResultsPage: React.FC = () => {
+  usePageTitle('Test results - Vision');
   const navigate = useNavigate();
   const theme = useTheme();
   const compact = useCompactLayout();
@@ -108,63 +99,7 @@ export const TestResultsPage: React.FC = () => {
     return '-';
   };
 
-  /**
-   * Mean of one metric across every class in a condition. Classes come from the
-   * payload, so a project with its own vocabulary averages over its own classes.
-   */
-  const getAverageMetric = (conditionData: unknown, metric: string): number | undefined => {
-    if (!isRecord(conditionData)) return undefined;
-
-    const values = Object.entries(conditionData)
-      .filter(([key]) => !RESERVED_CLASS_KEYS.has(key))
-      .map(([, classData]) => readMetric(classData, metric))
-      .filter((value): value is number => value !== undefined);
-
-    if (values.length === 0) return undefined;
-    return values.reduce((sum, value) => sum + value, 0) / values.length;
-  };
-
-  /**
-   * Mean of one metric across every condition of a result. The old version tried
-   * three named conditions in turn and took the first truthy answer, so `snow` and
-   * `night_rain` never counted and a genuine 0 fell through to the next condition.
-   */
-  const getAverageAcrossConditions = (testResults: TestResultData, metric: string): number | undefined => {
-    if (!isRecord(testResults)) return undefined;
-
-    const values = Object.entries(testResults)
-      .filter(([key]) => !RESERVED_CONDITION_KEYS.has(key))
-      .map(([, conditionData]) => getAverageMetric(conditionData, metric))
-      .filter((value): value is number => value !== undefined);
-
-    if (values.length === 0) return undefined;
-    return values.reduce((sum, value) => sum + value, 0) / values.length;
-  };
-
-  /** Mean of each summary metric across the conditions that report an `overall`. */
-  const getOverallMetrics = (testResults: TestResultData): Record<string, number | undefined> => {
-    if (!isRecord(testResults)) return {};
-
-    const blocks = Object.entries(testResults)
-      .filter(([key]) => !RESERVED_CONDITION_KEYS.has(key))
-      .map(([, conditionData]) => (isRecord(conditionData) ? conditionData.overall : undefined))
-      .filter(isRecord);
-
-    // fall back to the top-level `overall` when no condition carries one
-    const sources = blocks.length > 0 ? blocks : [testResults.overall].filter(isRecord);
-
-    return Object.fromEntries(
-      taxonomy.overallMetrics.map(metric => {
-        const values = sources
-          .map(block => readMetric(block, metric.key))
-          .filter((value): value is number => value !== undefined);
-        return [
-          metric.key,
-          values.length === 0 ? undefined : values.reduce((sum, v) => sum + v, 0) / values.length
-        ];
-      })
-    );
-  };
+  const overallKeys = taxonomy.overallMetrics.map(metric => metric.key);
 
   const handleSelectTestResult = (testResultId: string, checked: boolean) => {
     const newSelected = new Set(selectedTestResults);
@@ -236,9 +171,7 @@ export const TestResultsPage: React.FC = () => {
       )}
       {/* Test Results Table */}
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress />
-        </Box>
+        <ListSkeleton rows={6} label="Loading test results" />
       ) : testResults.length === 0 ? (
         <Typography color="textSecondary">
           No test results found. Either nothing matches your filters, or the runs have not reported any yet: a run reports them from its test stage, after training.
@@ -254,8 +187,8 @@ export const TestResultsPage: React.FC = () => {
               }}
             />
             {testResults.map((testResult) => {
-              const averages = AVERAGED_METRICS.map(metric => getAverageAcrossConditions(testResult.test_results, metric));
-              const overallMetrics = getOverallMetrics(testResult.test_results);
+              const averages = AVERAGED_METRICS.map(metric => averageAcrossConditions(testResult.test_results, metric));
+              const overallMetrics = overallMeans(testResult.test_results, overallKeys);
               const name = testResult.training?.name || 'Unknown Training';
               return (
                 <MobileListRow
@@ -338,14 +271,15 @@ export const TestResultsPage: React.FC = () => {
                 <TableBody>
                   {testResults.map((testResult) => {
                     const averages = AVERAGED_METRICS.map(metric =>
-                      getAverageAcrossConditions(testResult.test_results, metric)
+                      averageAcrossConditions(testResult.test_results, metric)
                     );
-                    const overallMetrics = getOverallMetrics(testResult.test_results);
+                    const overallMetrics = overallMeans(testResult.test_results, overallKeys);
 
                     return (
                       <TableRow 
                         key={testResult._id}
-                        hover 
+                        hover
+                        onClick={testResult.training ? () => navigate(`/trainings/${testResult.training!._id}?tab=test-results`) : undefined}
                         sx={{ cursor: testResult.training ? 'pointer' : 'default' }}
                       >
                         <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
@@ -356,8 +290,9 @@ export const TestResultsPage: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           {testResult.training ? (
-                            <Link 
+                            <Link
                               to={`/trainings/${testResult.training._id}?tab=test-results`}
+                              onClick={(event) => event.stopPropagation()}
                               style={{ textDecoration: 'none', color: 'inherit' }}
                             >
                               {testResult.training.name || 'Unknown Training'}
@@ -412,25 +347,22 @@ export const TestResultsPage: React.FC = () => {
         />
       )}
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>
-        <DialogTitle>Delete Test Result</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete this test result? This action cannot be undone.
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete Test Result"
+        confirmLabel="Delete"
+        busyLabel="Deleting..."
+        busy={deleteMutation.isPending}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteOpen(false)}
+      >
+        Are you sure you want to delete this test result? This action cannot be undone.
+        {deleteTarget && (
+          <Typography variant="body2" component="span" sx={{ display: 'block', mt: 1, fontFamily: 'monospace' }}>
+            Test UUID: {deleteTarget.test_uuid}
           </Typography>
-          {deleteTarget && (
-            <Typography variant="body2" sx={{ mt: 1, fontFamily: 'monospace' }}>
-              Test UUID: {deleteTarget.test_uuid}
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteOpen(false)}>Cancel</Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+        )}
+      </ConfirmDialog>
     </Container>
   );
 };

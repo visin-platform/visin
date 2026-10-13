@@ -21,25 +21,36 @@ const stats = {
   avgEpochTime: 120
 };
 
-const dashboardStats = {
-  testResultsCount: 3,
-  visualizationsCount: 8,
-  benchmarksCount: 2
-};
-
 describe('ProjectOverviewTab', () => {
-  it('renders stats cards with formatted values', () => {
+  it('renders the totals strip with formatted values', () => {
     render(
       <MemoryRouter>
-        <ProjectOverviewTab stats={stats} dashboardStats={dashboardStats} isAuthenticated={true} user={{ id: 'u1', email: 'u1@test.dev', name: 'User One' }} />
+        <ProjectOverviewTab stats={stats} isAuthenticated={true} user={{ id: 'u1', email: 'u1@test.dev', name: 'User One' }} />
       </MemoryRouter>
     );
     expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.getByText('2h 3m')).toBeInTheDocument();
     expect(screen.getByText(formatCost(12.5, 'EUR'))).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('8')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('reads short times without a leading zero hour', () => {
+    render(
+      <MemoryRouter>
+        <ProjectOverviewTab stats={{ ...stats, totalTime: 125, avgEpochTime: 42 }} isAuthenticated={true} user={null} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('2m')).toBeInTheDocument();
+    expect(screen.getByText('42s')).toBeInTheDocument();
+  });
+
+  it('leaves the cost out for a project with no rates', () => {
+    render(
+      <MemoryRouter>
+        <ProjectOverviewTab stats={{ ...stats, currency: undefined }} isAuthenticated={true} user={null} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Training time')).toBeInTheDocument();
+    expect(screen.queryByText('Cost')).not.toBeInTheDocument();
   });
 
   it('shows "-" for avg epoch time when not provided', () => {
@@ -47,7 +58,7 @@ describe('ProjectOverviewTab', () => {
       <MemoryRouter>
         <ProjectOverviewTab
           stats={{ ...stats, avgEpochTime: 0 }}
-          dashboardStats={dashboardStats}
+
           isAuthenticated={true}
           user={null}
         />
@@ -59,16 +70,16 @@ describe('ProjectOverviewTab', () => {
   it('shows defaults of 0 when stats are missing', () => {
     render(
       <MemoryRouter>
-        <ProjectOverviewTab stats={undefined} dashboardStats={undefined} isAuthenticated={true} user={null} />
+        <ProjectOverviewTab stats={undefined} isAuthenticated={true} user={null} />
       </MemoryRouter>
     );
-    expect(screen.getByText('0h 0m')).toBeInTheDocument();
+    expect(screen.getByText('0s')).toBeInTheDocument();
   });
 
   it('shows the unauthenticated overview message and, when a user is present, a start training CTA', () => {
     render(
       <MemoryRouter>
-        <ProjectOverviewTab stats={stats} dashboardStats={dashboardStats} isAuthenticated={false} user={{ id: 'u1', email: 'u1@test.dev', name: 'User One' }} />
+        <ProjectOverviewTab stats={stats} isAuthenticated={false} user={{ id: 'u1', email: 'u1@test.dev', name: 'User One' }} />
       </MemoryRouter>
     );
     expect(screen.getByText('Project Overview')).toBeInTheDocument();
@@ -80,7 +91,7 @@ describe('ProjectOverviewTab', () => {
   it('does not show the overview CTA when authenticated', () => {
     render(
       <MemoryRouter>
-        <ProjectOverviewTab stats={stats} dashboardStats={dashboardStats} isAuthenticated={true} user={{ id: 'u1', email: 'u1@test.dev', name: 'User One' }} />
+        <ProjectOverviewTab stats={stats} isAuthenticated={true} user={{ id: 'u1', email: 'u1@test.dev', name: 'User One' }} />
       </MemoryRouter>
     );
     expect(screen.queryByText('Project Overview')).not.toBeInTheDocument();
@@ -89,7 +100,7 @@ describe('ProjectOverviewTab', () => {
   it('does not show the CTA button when unauthenticated and no user is present', () => {
     render(
       <MemoryRouter>
-        <ProjectOverviewTab stats={stats} dashboardStats={dashboardStats} isAuthenticated={false} user={null} />
+        <ProjectOverviewTab stats={stats} isAuthenticated={false} user={null} />
       </MemoryRouter>
     );
     expect(screen.queryByText('Start New Training')).not.toBeInTheDocument();

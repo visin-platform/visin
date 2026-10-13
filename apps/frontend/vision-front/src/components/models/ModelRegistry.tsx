@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
-  CircularProgress,
+  Chip,
+  IconButton,
   Link,
   MenuItem,
   Paper,
@@ -16,8 +17,8 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { Memory as ModelIcon } from '@mui/icons-material';
-import { EmptyState, useCompactLayout } from '@visin/frontend-core';
+import { ExpandMore as ExpandIcon, Memory as ModelIcon } from '@mui/icons-material';
+import { EmptyState, ListSkeleton, useCompactLayout } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router-dom';
 import ModelTryDialog from './ModelTryDialog';
@@ -94,6 +95,14 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(30);
   const [tryFor, setTryFor] = useState<{ trainingId: string; model: HubModelReference } | null>(null);
+  // Which rows are open to their detail: dataset, path and epoch, evaluations.
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const toggleOpened = (id: string) =>
+    setOpened((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
   const wanted = useDebounced(search).trim();
   const ranking = useDebounced(metric).trim();
   const query: RegistryQuery = {
@@ -135,7 +144,7 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
           setMetric(event.target.value);
           setPage(0);
         }}
-        helperText="A result your runs report, such as val.mean_iou. Leave empty for newest first."
+        title="A result your runs report, such as val.mean_iou. Leave empty for newest first."
         sx={{ flex: '1 1 220px' }}
       />
       <TextField
@@ -164,6 +173,7 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
         <>
           <Typography variant="body2" component="div">
             {modelTitle(model)}
+            <Chip size="small" variant="outlined" label="Visin" sx={{ ml: 1 }} />
           </Typography>
           <StoredModelDownloads trainingId={row.training._id} models={stored} />
         </>
@@ -174,6 +184,7 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
         <Link href={hubModelUrl(model)} target="_blank" rel="noopener noreferrer">
           {modelTitle(model)}
         </Link>
+        <Chip size="small" variant="outlined" label="Hugging Face" sx={{ ml: 1 }} />
         {model.space && (
           <Link
             href={hubSpaceUrl(model.space)}
@@ -213,7 +224,7 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
 
   let content: React.ReactNode;
   if (isLoading) {
-    content = <CircularProgress />;
+    content = <ListSkeleton rows={6} label="Loading models" />;
   } else if (isError) {
     content = <Alert severity="error">{error instanceof Error ? error.message : 'Failed to load models'}</Alert>;
   } else if (rows.length === 0) {
@@ -273,10 +284,10 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox" />
               <TableCell>Model</TableCell>
               <TableCell>Run</TableCell>
               {!projectId && <TableCell>Project</TableCell>}
-              <TableCell>Dataset</TableCell>
               {ranked && <TableCell align="right">{query.metric}</TableCell>}
               <TableCell>Linked</TableCell>
             </TableRow>
@@ -284,71 +295,100 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
           <TableBody>
             {rows.map((grouped) => {
               const { row } = grouped;
+              const isOpen = opened.has(row.model._id);
+              const columns = 4 + (projectId ? 0 : 1) + (ranked ? 1 : 0);
+              const where = [
+                isHubModel(row.model) ? row.model.path : undefined,
+                row.model.epoch !== undefined ? `epoch ${row.model.epoch}` : undefined
+              ]
+                .filter(Boolean)
+                .join(' · ');
               return (
-                <TableRow key={row.model._id} hover>
-                  <TableCell>
-                    {modelCell(grouped)}
-                    {row.evaluations && (
-                      <Typography
-                        variant="caption"
-                        component="div"
-                        sx={{ color: 'text.secondary' }}
-                        aria-label="Evaluations"
+                <React.Fragment key={row.model._id}>
+                  <TableRow hover sx={{ '& > td': { borderBottom: isOpen ? 'none' : undefined } }}>
+                    <TableCell padding="checkbox">
+                      <IconButton
+                        size="small"
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? 'Hide' : 'Show'} details for ${modelTitle(row.model)}`}
+                        onClick={() => toggleOpened(row.model._id)}
                       >
-                        Evaluated:{' '}
-                        {row.evaluations.map((evaluation, index) => (
-                          <React.Fragment key={evaluation.evaluationId}>
-                            {index > 0 && ' · '}
-                            <Link component={RouterLink} to={`/evaluations/${evaluation.evaluationId}`}>
-                              {evaluationText(evaluation)}
-                            </Link>
-                            {evaluation.evidence === 'reported' || evaluation.evidence === 'attested'
-                              ? ` (${evaluation.evidence})`
-                              : ''}
-                          </React.Fragment>
-                        ))}
-                      </Typography>
-                    )}
-                    {((isHubModel(row.model) && row.model.path) || row.model.epoch !== undefined) && (
-                      <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                        {[
-                          isHubModel(row.model) ? row.model.path : undefined,
-                          row.model.epoch !== undefined ? `epoch ${row.model.epoch}` : undefined
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Link component={RouterLink} to={`/trainings/${row.training._id}`}>
-                      {row.training.name}
-                    </Link>
-                  </TableCell>
-                  {!projectId && (
+                        <ExpandIcon
+                          fontSize="small"
+                          sx={{ transition: 'transform .2s', transform: isOpen ? 'rotate(180deg)' : 'none' }}
+                        />
+                      </IconButton>
+                    </TableCell>
+                    <TableCell>{modelCell(grouped)}</TableCell>
                     <TableCell>
-                      {row.project ? (
-                        <Link component={RouterLink} to={`/projects/${row.project.slug ?? row.project._id}`}>
-                          {row.project.name}
-                        </Link>
-                      ) : (
-                        '-'
-                      )}
+                      <Link component={RouterLink} to={`/trainings/${row.training._id}`}>
+                        {row.training.name}
+                      </Link>
                     </TableCell>
+                    {!projectId && (
+                      <TableCell>
+                        {row.project ? (
+                          <Link component={RouterLink} to={`/projects/${row.project.slug ?? row.project._id}`}>
+                            {row.project.name}
+                          </Link>
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
+                    )}
+                    {ranked && (
+                      <TableCell align="right">
+                        {scoreOf(row).text}
+                        {scoreOf(row).note && (
+                          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                            {scoreOf(row).note}
+                          </Typography>
+                        )}
+                      </TableCell>
+                    )}
+                    <TableCell>{formatDate(row.model.addedAt)}</TableCell>
+                  </TableRow>
+                  {isOpen && (
+                    <TableRow>
+                      <TableCell colSpan={columns} sx={{ py: 0 }}>
+                        <Box sx={{ pb: 1.5, pl: 5, display: 'grid', gap: 0.5 }}>
+                          <Typography variant="body2">
+                            <Box component="span" sx={{ color: 'text.secondary' }}>
+                              Dataset:{' '}
+                            </Box>
+                            {datasetName(row)}
+                          </Typography>
+                          {where && (
+                            <Typography variant="body2">
+                              <Box component="span" sx={{ color: 'text.secondary' }}>
+                                Checkpoint:{' '}
+                              </Box>
+                              {where}
+                            </Typography>
+                          )}
+                          {row.evaluations && (
+                            <Typography variant="body2" aria-label="Evaluations">
+                              <Box component="span" sx={{ color: 'text.secondary' }}>
+                                Evaluated:{' '}
+                              </Box>
+                              {row.evaluations.map((evaluation, index) => (
+                                <React.Fragment key={evaluation.evaluationId}>
+                                  {index > 0 && ' · '}
+                                  <Link component={RouterLink} to={`/evaluations/${evaluation.evaluationId}`}>
+                                    {evaluationText(evaluation)}
+                                  </Link>
+                                  {evaluation.evidence === 'reported' || evaluation.evidence === 'attested'
+                                    ? ` (${evaluation.evidence})`
+                                    : ''}
+                                </React.Fragment>
+                              ))}
+                            </Typography>
+                          )}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
                   )}
-                  <TableCell>{datasetName(row)}</TableCell>
-                  {ranked && (
-                    <TableCell align="right">
-                      {scoreOf(row).text}
-                      {scoreOf(row).note && (
-                        <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                          {scoreOf(row).note}
-                        </Typography>
-                      )}
-                    </TableCell>
-                  )}
-                  <TableCell>{formatDate(row.model.addedAt)}</TableCell>
-                </TableRow>
+                </React.Fragment>
               );
             })}
           </TableBody>

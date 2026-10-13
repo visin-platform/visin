@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PageHeader, onImage } from '@visin/frontend-core';
+import { PageHeader, ShareButton, onImage } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
@@ -95,11 +95,6 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
     }
   }, [availableTypes, selectedType]);
 
-  const copyShareUrl = () => {
-    navigator.clipboard.writeText(window.location.href);
-    alert('Link copied to clipboard!');
-  };
-
   const handleImageClick = (image: Visualization) => {
     setSelectedImage(image);
     setImageModalOpen(true);
@@ -124,11 +119,7 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
     <Container maxWidth="xl" sx={{ pb: 4 }}>
       <PageHeader
         title="Training Visualizations Comparison"
-        actions={
-          <Button variant="outlined" onClick={copyShareUrl} size="small">
-            Copy Share Link
-          </Button>
-        }
+        actions={<ShareButton url={window.location.href} />}
       />
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -297,6 +288,7 @@ export const TrainingVisualizationsComparisonPage: React.FC = () => {
       >
         <DialogContent sx={{ p: 0, position: 'relative', height: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <IconButton
+            aria-label="Close image"
             onClick={handleCloseImageModal}
             sx={{
               position: 'absolute',

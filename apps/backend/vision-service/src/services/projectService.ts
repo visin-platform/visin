@@ -32,6 +32,7 @@ import type { GetProjectsQuery } from '../validation/projectSchemas';
 import { requireUserCredential } from '../middleware/projectTokenContext';
 import { callerGroups, membershipOf, projectFilter, projectPermission, resolveProject } from './projectAccessService';
 import { purgeProject, TRASH_DAYS } from './purgeService';
+import { chooseCover, coverUrlsFor } from './projectCoverService';
 import { invalidatePublic } from './publicCache';
 import { clearPublications } from './publications';
 
@@ -68,7 +69,9 @@ export async function toProjectView(
   owners?: Map<string, OwnerIdentity>
 ): Promise<ProjectView> {
   const held = permission ?? (await projectPermission(project, userId, { trashed: true }));
-  const { ownerId: _ownerId, isPublic: _isPublic, __v: _v, ...fields } = project.toObject() as Record<string, unknown>;
+  const { ownerId: _ownerId, isPublic: _isPublic, __v: _v, cover, ...fields } = project.toObject() as Record<string, unknown> & {
+    cover?: { visualizationUuid: string };
+  };
   // What the owner agreed to show anyone; a group's members also see its name when it has no public page.
   const { id: _id, ...shown } = (owners ?? (await lookupOwnerIdentities([project.owner]))).get(project.owner.id) ?? { id: '' };
   let identity: Partial<OwnerIdentity> = shown;
@@ -78,9 +81,20 @@ export async function toProjectView(
   }
   return {
     ...fields,
+    // The visualization chosen, not the storage id behind it.
+    ...(cover ? { cover: { visualizationUuid: cover.visualizationUuid } } : {}),
     owner: { kind: project.owner.kind, id: project.owner.id, ...identity },
     permissions: permissionsOf(held)
   };
+}
+
+/** The views with each card's picture added as `coverUrl`, where there is one. */
+async function withCovers<T extends ProjectView>(projects: IProject[], views: T[], userId: string | undefined): Promise<T[]> {
+  const covers = await coverUrlsFor(projects, userId);
+  return views.map((view, index) => {
+    const url = covers.get(String(projects[index]._id));
+    return url ? { ...view, coverUrl: url } : view;
+  });
 }
 
 /** The project, when the caller may do at least `min` with it: 404 when it does not exist, 403 otherwise. */
@@ -114,11 +128,15 @@ export const listProjects = async (userId: string | undefined, filters: GetProje
   // Without readmes: each can be 20,000 characters, and a list shows none of them.
   const projects = await Project.find(query).select('-readme').sort({ [sortBy]: sortOrder });
   const owners = await lookupOwnerIdentities(projects.map(project => project.owner));
-  return Promise.all(projects.map(project => toProjectView(project, userId, undefined, owners)));
+  const views = await Promise.all(projects.map(project => toProjectView(project, userId, undefined, owners)));
+  return withCovers(projects, views, userId);
 };
 
-export const getProjectByIdOrSlug = async (identifier: string, userId: string | undefined): Promise<ProjectView> =>
-  toProjectView(await requireProject(identifier, userId), userId);
+export const getProjectByIdOrSlug = async (identifier: string, userId: string | undefined): Promise<ProjectView> => {
+  const project = await requireProject(identifier, userId);
+  const [view] = await withCovers([project], [await toProjectView(project, userId)], userId);
+  return view;
+};
 
 interface CreateProjectData {
   name: string;
@@ -193,6 +211,8 @@ interface UpdateProjectData {
   costing?: IProjectCosting | null;
   storage?: IProject['storage'];
   stallAfterMinutes?: number;
+  /** a visualization of one of its runs; null clears it */
+  cover?: { visualizationUuid: string } | null;
 }
 
 /** Settings need `manage`; who can see it needs `own`. */
@@ -247,12 +267,14 @@ export const updateProject = async (id: string, userId: string, data: UpdateProj
     project.costing = costing === null ? undefined : costing;
   }
   if (data.storage !== undefined) project.storage = data.storage;
+  if (data.cover !== undefined) project.cover = await chooseCover(project, data.cover?.visualizationUuid ?? null);
 
   // Changing a project is something happening in it.
   project.lastActivityAt = new Date();
   await project.save();
   invalidatePublic();
-  return toProjectView(project, userId);
+  const [view] = await withCovers([project], [await toProjectView(project, userId)], userId);
+  return view;
 };
 
 const recordEvent = (

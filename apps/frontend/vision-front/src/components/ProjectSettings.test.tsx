@@ -18,6 +18,9 @@ vi.mock('../services/projectService', () => ({
   }
 }));
 
+// The cover's own tests cover it; here it only has to be there.
+vi.mock('./project/ProjectCoverPicker', () => ({ default: () => <div>cover-picker</div> }));
+
 const mockedProjectService = vi.mocked(projectService);
 
 Object.assign(navigator, {
@@ -75,11 +78,50 @@ describe('ProjectSettings', () => {
     );
   });
 
+  it('lists its sections in a rail, with one Save for the whole page', () => {
+    renderComponent();
+
+    const rail = screen.getByRole('navigation', { name: 'Settings sections' });
+    expect(Array.from(rail.querySelectorAll('[role="button"], button')).map((item) => item.textContent)).toEqual([
+      'Details',
+      'Cover',
+      'Access and keys',
+      'Result labels',
+      'Run monitoring',
+      'Compute costs',
+      'Storage',
+      'Ownership'
+    ]);
+    expect(screen.getAllByRole('button', { name: /^save$/i })).toHaveLength(1);
+    expect(screen.getByRole('region', { name: 'Storage' })).toBeInTheDocument();
+  });
+
+  it('leaves Ownership out for someone who does not own the project', () => {
+    renderComponent({ ...project, permissions: { read: true, contribute: true, manage: true, own: false } });
+
+    expect(screen.queryByRole('button', { name: 'Ownership' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Transfer ownership' })).not.toBeInTheDocument();
+  });
+
+  it('scrolls to a section from the rail', () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    renderComponent();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Storage' }));
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
   it('renders project fields pre-filled from the project prop', async () => {
     renderComponent();
     expect(screen.getByDisplayValue('My Project')).toBeInTheDocument();
     expect(screen.getByDisplayValue('my-project')).toBeInTheDocument();
     expect(screen.getByDisplayValue('A project')).toBeInTheDocument();
+  });
+
+  it('has a Cover section', () => {
+    renderComponent();
+    expect(screen.getByRole('region', { name: 'Cover' })).toHaveTextContent('cover-picker');
   });
 
   it('shows pipeline keys', () => {
@@ -101,6 +143,15 @@ describe('ProjectSettings', () => {
         expect.objectContaining({ name: 'Renamed Project' })
       );
     });
+  });
+
+  it('says it saved, beside the button that saved it', async () => {
+    mockedProjectService.updateProject.mockResolvedValue({ data: project } as any);
+    renderComponent();
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
   });
 
   it('shows an error alert when saving the project fails', async () => {

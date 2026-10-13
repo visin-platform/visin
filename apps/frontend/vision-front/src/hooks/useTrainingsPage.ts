@@ -58,6 +58,20 @@ export const useTrainingsPage = () => {
   );
   const projects = availableProjects.filter((project) => canEditProject(project._id));
 
+  // Names for the project headings the list is grouped under: the runs carry only their project's id.
+  const { data: projectNameList } = useQuery({
+    queryKey: ['projects', 'names'],
+    queryFn: () => projectService.getProjects(),
+    staleTime: 5 * 60 * 1000
+  });
+  const projectNames = useMemo(
+    () =>
+      projectNameList?.data
+        ? Object.fromEntries(projectNameList.data.map((project) => [project._id, project.name]))
+        : undefined,
+    [projectNameList]
+  );
+
   // Initialize selectedTags and excludedTags from URL parameters
   useEffect(() => {
     const tagsParam = searchParams.get('tags');
@@ -340,6 +354,7 @@ export const useTrainingsPage = () => {
     trainingTags,
     setTrainingTags,
     projects,
+    projectNames,
     loadingProjects,
     creating,
     createError,

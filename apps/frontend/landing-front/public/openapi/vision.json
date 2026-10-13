@@ -1977,6 +1977,10 @@
             "type": "string",
             "format": "date-time",
             "description": "When the latest run started; absent with no runs"
+          },
+          "coverUrl": {
+            "type": "string",
+            "description": "A picture for the card, short-lived. The one the owner chose, else the cover of the public dataset most of its runs trained on. Absent when there is neither."
           }
         }
       },
@@ -2386,6 +2390,22 @@
             "minimum": 1,
             "maximum": 10080,
             "default": 30
+          },
+          "cover": {
+            "type": "object",
+            "required": [
+              "visualizationUuid"
+            ],
+            "description": "The visualization of one of the project's runs its card shows. Absent means the card falls back to a dataset's cover. Changing it takes `manage`.",
+            "properties": {
+              "visualizationUuid": {
+                "type": "string"
+              }
+            }
+          },
+          "coverUrl": {
+            "type": "string",
+            "description": "The picture its card shows, short-lived: from `cover`, or else the cover of the dataset most of its runs trained on as the caller may see it. Absent when there is neither."
           },
           "storage": {
             "type": "object",
@@ -3788,6 +3808,26 @@
                   "provider"
                 ],
                 "additionalProperties": false
+              }
+            ]
+          },
+          "cover": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "visualizationUuid": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "visualizationUuid"
+                ]
+              },
+              {
+                "type": "null"
               }
             ]
           }
@@ -8315,6 +8355,15 @@
               "default": "true",
               "type": "string"
             }
+          },
+          {
+            "name": "perTraining",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 24
+            }
           }
         ],
         "responses": {
@@ -8396,11 +8445,26 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "training_id": {
+                                "type": "string",
+                                "description": "The id a training is opened by."
+                              },
                               "training_uuid": {
                                 "type": "string"
                               },
                               "training_name": {
                                 "type": "string"
+                              },
+                              "visualization_count": {
+                                "type": "integer",
+                                "description": "How many of the run's visualizations match `type`, before `perTraining` cuts the list."
+                              },
+                              "type_counts": {
+                                "type": "object",
+                                "description": "The run's visualizations by type, whatever `type` is, so the types there are can be offered.",
+                                "additionalProperties": {
+                                  "type": "integer"
+                                }
                               },
                               "visualizations": {
                                 "type": "array",
@@ -8413,6 +8477,10 @@
                         },
                         "total": {
                           "type": "integer"
+                        },
+                        "pagination": {
+                          "description": "With `perTraining`, which page of the project's runs this is, `limit` runs a page, newest first.",
+                          "$ref": "#/components/schemas/Pagination"
                         }
                       }
                     }
@@ -8468,6 +8536,15 @@
             "schema": {
               "default": "true",
               "type": "string"
+            }
+          },
+          {
+            "name": "perTraining",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 24
             }
           }
         ],

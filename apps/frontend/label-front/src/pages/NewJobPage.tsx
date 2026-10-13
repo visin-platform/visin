@@ -24,6 +24,7 @@ import { getMaskFields, listDatasets } from '../services/datasetService';
 import { createJob, getMyGroups, materializeJob, transitionJob } from '../services/jobService';
 import { getGlobalConfig } from '../config/ConfigProvider';
 import { JobChoice, LabelDataset, MaskSelector, MaterializeBody, MaterializeResult, TaskType } from '../types';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 const STEPS = ['Basics', 'Question', 'Tasks', 'Activate'];
 
@@ -33,6 +34,7 @@ const DEFAULT_CHOICES: JobChoice[] = [
 ];
 
 const NewJobPage: React.FC = () => {
+  usePageTitle('New job - Labeling');
   const navigate = useNavigate();
   const visionFrontUrl = (getGlobalConfig().VISION_FRONT_URL || '').replace(/\/$/, '');
   const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups });

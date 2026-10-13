@@ -21,7 +21,6 @@ import {
   Delete as DeleteIcon,
   Download as DownloadIcon,
   Cloud as HubIcon,
-  Code as CodeIcon,
   Edit as EditIcon,
   SwapHoriz as TransferIcon,
   UploadFile as UploadIcon
@@ -44,7 +43,7 @@ import DatasetModels from '../components/dataset/DatasetModels';
 import DatasetFormDialog, { DatasetFormValues } from '../components/dataset/DatasetFormDialog';
 import DatasetImageGrid from '../components/dataset/DatasetImageGrid';
 import DatasetItemDialog from '../components/dataset/DatasetItemDialog';
-import UseThisDialog from '../components/common/UseThisDialog';
+import UseThisPanel from '../components/common/UseThisPanel';
 import BestRunCard from '../components/common/BestRunCard';
 import HubDatasetCard from '../components/dataset/HubDatasetCard';
 import LicenseChip from '../components/licensing/LicenseChip';
@@ -78,7 +77,7 @@ import { hubDatasetUrl, shortRevision } from '../utils/hubLinks';
 import { datasetSnippets } from '../utils/useSnippets';
 import { formatDateTime } from '../utils';
 
-type DialogName = 'use' | 'edit' | 'source' | 'replace' | 'mapping' | 'delete' | 'removeGroup' | 'transfer' | null;
+type DialogName = 'edit' | 'source' | 'replace' | 'mapping' | 'delete' | 'removeGroup' | 'transfer' | null;
 
 const isImporting = (dataset?: Dataset): boolean =>
   dataset?.import?.status === 'queued' || dataset?.import?.status === 'running';
@@ -317,13 +316,18 @@ const DatasetDetailPage: React.FC = () => {
 
       <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box sx={{ minWidth: 0 }}>
-          <Typography
-            variant="h4"
-            component="h1"
-            sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, overflowWrap: 'anywhere' }}
-          >
-            {dataset.name}
-          </Typography>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Typography
+              variant="h4"
+              component="h1"
+              sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' }, overflowWrap: 'anywhere' }}
+            >
+              {dataset.name}
+            </Typography>
+            {dataset.visibility === 'public' && datasetApiOrigin() && (
+              <ShareButton url={`${datasetApiOrigin()}/api/datasets/share/${dataset._id}`} />
+            )}
+          </Stack>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
             {[
               dataset.archive
@@ -360,9 +364,6 @@ const DatasetDetailPage: React.FC = () => {
           )}
         </Box>
         <Box sx={{ flexShrink: 0 }}>
-          {dataset.visibility === 'public' && datasetApiOrigin() && (
-            <ShareButton url={`${datasetApiOrigin()}/api/datasets/share/${dataset._id}`} />
-          )}
           <ResponsiveActions
             keepOnPhone={1}
             menuLabel={`More actions for ${dataset.name}`}
@@ -378,11 +379,10 @@ const DatasetDetailPage: React.FC = () => {
                     }
                   ]
                 : []),
-              { label: 'Use this', icon: <CodeIcon />, onClick: () => openDialog('use') },
               ...(dataset.permissions.contribute
                 ? [
                     {
-                      label: 'Image groups',
+                      label: 'Import image groups…',
                       icon: <MappingIcon />,
                       onClick: () => openDialog('mapping'),
                       disabled: !dataset.contents || importing || scanning || sending || held
@@ -495,6 +495,15 @@ const DatasetDetailPage: React.FC = () => {
         )
       )}
 
+      {/* Only once there is something to download: a zip here, or a pinned Hub copy. */}
+      {(dataset.archive || dataset.source) && (
+        <UseThisPanel
+          title="Use in Python"
+          summary="Download this dataset to a training machine with the visin package."
+          snippets={datasetSnippets(dataset)}
+        />
+      )}
+
       {dataset.description && (
         <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, mb: 3, borderRadius: 2 }}>
           <Typography sx={{ whiteSpace: 'pre-wrap' }}>{dataset.description}</Typography>
@@ -583,9 +592,6 @@ const DatasetDetailPage: React.FC = () => {
         onCancel={() => setDialog(null)}
         onSubmit={dialog === 'replace' ? handleReplace : handleEdit}
       />
-      {dialog === 'use' && (
-        <UseThisDialog title="Use this dataset" snippets={datasetSnippets(dataset)} onClose={() => setDialog(null)} />
-      )}
       <HubSourceDialog
         open={dialog === 'source'}
         current={dataset.source}

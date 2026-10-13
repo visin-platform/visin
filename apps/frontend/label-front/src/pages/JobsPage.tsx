@@ -20,6 +20,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { listJobs } from '../services/jobService';
 import { listDatasets } from '../services/datasetService';
 import { LabelJob } from '../types';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 /**
  * How far a job has got, and how much of it is this labeler's own doing.
@@ -58,6 +59,7 @@ const JobProgressBar: React.FC<{ job: LabelJob }> = ({ job }) => {
 };
 
 const JobsPage: React.FC = () => {
+  usePageTitle('Jobs - Labeling');
   const theme = useTheme();
   const { isAuthenticated } = useAuth();
   const { data: jobs, isLoading, error } = useQuery({ queryKey: ['jobs', 'worker'], queryFn: () => listJobs('worker') });

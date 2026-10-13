@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireInternalServiceToken, validateRequest } from '@visin/backend-core';
 import * as ctrl from '../controllers/internalController';
-import { resolveDatasetBodySchema, internalItemsQuerySchema, internalListQuerySchema, jsonFieldsQuerySchema } from '../validation/datasetSchemas';
+import { coversBodySchema, resolveDatasetBodySchema, internalItemsQuerySchema, internalListQuerySchema, jsonFieldsQuerySchema } from '../validation/datasetSchemas';
 
 const router = Router();
 
@@ -12,6 +12,8 @@ router.get('/datasets', validateRequest({ query: internalListQuerySchema }), ctr
 router.get('/groups/:groupId/owned', ctrl.getOwnedByGroup);
 // Before `/:id`, which would otherwise read "ids" as a dataset id.
 router.post('/datasets/resolve', validateRequest({ body: resolveDatasetBodySchema }), ctrl.resolveDataset);
+// Cover pictures by id, for a service that lists projects: only those the reader may see.
+router.post('/datasets/covers', validateRequest({ body: coversBodySchema }), ctrl.datasetCovers);
 router.get('/datasets/ids', validateRequest({ query: internalListQuerySchema }), ctrl.listIds);
 router.get('/datasets/:id', ctrl.getDataset);
 router.get('/datasets/:id/permission', ctrl.getPermission);

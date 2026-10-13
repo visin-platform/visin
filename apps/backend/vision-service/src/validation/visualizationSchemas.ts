@@ -34,7 +34,12 @@ export const getVisualizationsByTrainingQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(50),
   page: z.coerce.number().int().positive().default(1),
   projectId: z.string().optional(),
-  includeUrls: z.string().default('true')
+  includeUrls: z.string().default('true'),
+  /**
+   * With `projectId`: only this many of each run's newest frames, for a gallery that shows a few per run. The runs
+   * then come a page at a time, `limit` runs a page.
+   */
+  perTraining: z.coerce.number().int().positive().max(24).optional()
 });
 export type GetVisualizationsByTrainingQuery = z.infer<typeof getVisualizationsByTrainingQuerySchema>;
 

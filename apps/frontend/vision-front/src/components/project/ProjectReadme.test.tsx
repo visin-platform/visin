@@ -67,6 +67,20 @@ describe('ProjectReadme', () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 
+  it('folds a long readme behind "Read more", and leaves a short one whole', () => {
+    renderReadme(project({ readme: 'Short and complete.' }));
+    expect(screen.queryByRole('button', { name: 'Read more' })).not.toBeInTheDocument();
+  });
+
+  it('opens and closes a long readme', () => {
+    renderReadme(project({ readme: `# Study\n\n${'A sentence of the readme. '.repeat(30)}` }));
+
+    const more = screen.getByRole('button', { name: 'Read more' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(more);
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('shows no raw HTML from a readme, only the text of it', () => {
     renderReadme(project({ readme: 'Hello <script>alert(1)</script> <img src=x onerror=alert(1)>' }, false));
 

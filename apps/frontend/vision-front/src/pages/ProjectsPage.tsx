@@ -10,7 +10,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  useTheme,
   Table,
   TableBody,
   TableCell,
@@ -44,15 +43,14 @@ import {
   ListRow,
   PageHeader,
   Panel,
-  RowIcon,
-  useCompactLayout,
-  livePalette
+  useCompactLayout
 } from '@visin/frontend-core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
 import { Project } from '../types/Project';
 import { useProjectGroups } from '../hooks/useProjectGroups';
 import ProjectTrash from '../components/project/ProjectTrash';
+import ProjectThumb from '../components/project/ProjectThumb';
 import ProjectFormDialog from '../components/ProjectFormDialog';
 import { ProjectCosting, ProjectTaxonomy } from '../types/taxonomy';
 import { usePageTitle } from '../hooks/usePageTitle';
@@ -61,7 +59,6 @@ import { formatDate, formatDateTime } from '../utils';
 
 const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
-  const theme = useTheme();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const groups = useProjectGroups();
@@ -297,13 +294,7 @@ const ProjectsPage: React.FC = () => {
               key={project._id}
               to={`/projects/${project._id}`}
               leading={
-                <RowIcon
-                  color={
-                    project.visibility === 'public' ? livePalette(theme).success.main : livePalette(theme).primary.main
-                  }
-                >
-                  {project.visibility === 'public' ? <PublicIcon fontSize="small" /> : <FolderIcon fontSize="small" />}
-                </RowIcon>
+                <ProjectThumb project={project} />
               }
               title={
                 <>
@@ -373,19 +364,7 @@ const ProjectsPage: React.FC = () => {
                 <TableRow key={project._id} hover sx={{ '&:last-child td': { border: 0 } }}>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <RowIcon
-                        color={
-                          project.visibility === 'public'
-                            ? livePalette(theme).success.main
-                            : livePalette(theme).primary.main
-                        }
-                      >
-                        {project.visibility === 'public' ? (
-                          <PublicIcon fontSize="small" />
-                        ) : (
-                          <FolderIcon fontSize="small" />
-                        )}
-                      </RowIcon>
+                      <ProjectThumb project={project} />
                       <Typography
                         onClick={() => navigate(`/projects/${project._id}`)}
                         sx={{ fontWeight: 600, cursor: 'pointer', '&:hover': { color: 'primary.main' } }}

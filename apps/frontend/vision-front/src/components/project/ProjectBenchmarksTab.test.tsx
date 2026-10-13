@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ProjectBenchmarksTab from './ProjectBenchmarksTab';
 import type { Benchmark, BenchmarksPaginatedResponse } from '../../types';
 
@@ -32,29 +33,28 @@ const makeResponse = (benchmarks: Benchmark[]): BenchmarksPaginatedResponse => (
 const baseProps = {
   benchmarksResponse: makeResponse([]),
   isLoading: false,
-  page: 0,
-  rowsPerPage: 25,
-  onPageChange: vi.fn(),
-  onRowsPerPageChange: vi.fn(),
   isOwner: true,
 };
 
-const renderTab = (props = {}) =>
-  render(
+let client: QueryClient;
+const tree = (props = {}) => (
+  <QueryClientProvider client={client}>
     <MemoryRouter>
       <ProjectBenchmarksTab {...baseProps} {...props} />
     </MemoryRouter>
-  );
+  </QueryClientProvider>
+);
+const renderTab = (props = {}) => render(tree(props));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubGlobal('location', { ...window.location, reload: vi.fn() });
+  client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 });
 
 describe('ProjectBenchmarksTab', () => {
   it('shows a spinner while loading', () => {
     renderTab({ isLoading: true });
-    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading benchmarks' })).toBeInTheDocument();
   });
 
   it('shows an empty state', () => {
@@ -83,11 +83,7 @@ describe('ProjectBenchmarksTab', () => {
     expect(screen.getByText('5.0M')).toBeInTheDocument();
 
     const noParams = makeBenchmark({ _id: 'b2' });
-    rerender(
-      <MemoryRouter>
-        <ProjectBenchmarksTab {...baseProps} benchmarksResponse={makeResponse([noParams])} />
-      </MemoryRouter>
-    );
+    rerender(tree({ benchmarksResponse: makeResponse([noParams]) }));
     expect(screen.getByText('Unknown')).toBeInTheDocument();
     expect(screen.getAllByText('-').length).toBeGreaterThan(0);
   });
@@ -101,8 +97,9 @@ describe('ProjectBenchmarksTab', () => {
     expect(screen.queryByText('Actions')).not.toBeInTheDocument();
   });
 
-  it('deletes a benchmark via the confirmation dialog and reloads the page', async () => {
+  it('deletes a benchmark via the confirmation dialog and refreshes the lists, without reloading the page', async () => {
     mockedBenchmark.deleteBenchmark.mockResolvedValue(undefined as never);
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
     renderTab({ benchmarksResponse: makeResponse([makeBenchmark()]) });
 
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
@@ -111,7 +108,9 @@ describe('ProjectBenchmarksTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(mockedBenchmark.deleteBenchmark).toHaveBeenCalledWith('b1'));
-    await waitFor(() => expect(window.location.reload).toHaveBeenCalled());
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['project-benchmarks'] }));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['project-dashboard-stats'] });
+    await waitFor(() => expect(screen.queryByText('Delete Benchmark')).not.toBeInTheDocument());
   });
 
   it('shows an error message when deletion fails', async () => {
@@ -133,5 +132,48 @@ describe('ProjectBenchmarksTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(mockedBenchmark.deleteBenchmark).not.toHaveBeenCalled();
+  });
+
+  describe('grouped by device', () => {
+    const onDevice = (id: string, gpu: string | undefined, fps: number | undefined, name: string) =>
+      makeBenchmark({
+        _id: id,
+        system_info: gpu ? { gpu_name: gpu } : {},
+        results: fps === undefined ? [] : [{ fps }],
+        training_id: { _id: `t-${id}`, name, uuid: `u-${id}` },
+      });
+
+    it('puts each benchmark under the hardware it ran on, the fastest first', () => {
+      renderTab({
+        benchmarksResponse: makeResponse([
+          onDevice('1', 'RTX 3060', 40, 'slow-on-3060'),
+          onDevice('2', 'A100', 200, 'fast-on-a100'),
+          onDevice('3', 'RTX 3060', 90, 'quick-on-3060'),
+          onDevice('4', undefined, 10, 'no-device'),
+        ]),
+      });
+
+      const sections = screen.getAllByRole('region').map((section) => section.getAttribute('aria-label'));
+      expect(sections).toEqual(['A100', 'RTX 3060', 'Unknown device']);
+
+      const rtx = screen.getByRole('region', { name: 'RTX 3060' });
+      const order = Array.from(rtx.querySelectorAll('tbody tr')).map((row) => row.textContent);
+      expect(order[0]).toContain('quick-on-3060');
+      expect(order[1]).toContain('slow-on-3060');
+    });
+
+    it('says when it holds only the newest of more benchmarks', () => {
+      renderTab({
+        benchmarksResponse: {
+          success: true,
+          data: {
+            benchmarks: [onDevice('1', 'A100', 200, 'run')],
+            pagination: { page: 1, limit: 500, total: 800, pages: 2 },
+          },
+        } as BenchmarksPaginatedResponse,
+      });
+
+      expect(screen.getByText('Showing the newest 1 of 800 benchmarks.')).toBeInTheDocument();
+    });
   });
 });

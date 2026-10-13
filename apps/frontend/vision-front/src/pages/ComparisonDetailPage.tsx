@@ -63,9 +63,12 @@ const ComparisonDetailPage: React.FC = () => {
   const [editDescription, setEditDescription] = useState('');
   const [editSelectedIds, setEditSelectedIds] = useState<string[]>([]);
   const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   // State for delete dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // State for export all LaTeX dialog
   const [exportLatexOpen, setExportLatexOpen] = useState(false);
@@ -131,6 +134,7 @@ const ComparisonDetailPage: React.FC = () => {
     setEditName(comparison.name);
     setEditDescription(comparison.description || '');
     setEditSelectedIds(comparison.itemIds);
+    setUpdateError(null);
     setEditDialogOpen(true);
   };
 
@@ -146,6 +150,7 @@ const ComparisonDetailPage: React.FC = () => {
 
     try {
       setUpdating(true);
+      setUpdateError(null);
       await comparisonService.updateComparison(comparison._id, {
         name: editName.trim(),
         description: editDescription.trim(),
@@ -161,6 +166,7 @@ const ComparisonDetailPage: React.FC = () => {
       setEditSelectedIds([]);
     } catch (error) {
       console.error('Error updating comparison:', error);
+      setUpdateError(error instanceof Error ? error.message : 'Could not save the comparison');
     } finally {
       setUpdating(false);
     }
@@ -175,6 +181,7 @@ const ComparisonDetailPage: React.FC = () => {
   };
 
   const handleDeleteComparison = () => {
+    setDeleteError(null);
     setDeleteDialogOpen(true);
   };
 
@@ -182,6 +189,8 @@ const ComparisonDetailPage: React.FC = () => {
     if (!comparison) return;
 
     try {
+      setDeleting(true);
+      setDeleteError(null);
       await comparisonService.deleteComparison(comparison._id);
       // Navigate back to project or comparisons page
       if (project) {
@@ -191,6 +200,8 @@ const ComparisonDetailPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error deleting comparison:', error);
+      setDeleteError(error instanceof Error ? error.message : 'Could not delete the comparison');
+      setDeleting(false);
     }
   };
 
@@ -528,12 +539,15 @@ const ComparisonDetailPage: React.FC = () => {
         onTrainingToggle={handleEditTrainingIdToggle}
         isTrainingsLoading={isTrainingsLoading}
         updating={updating}
+        error={updateError}
       />
       {/* Delete Confirmation Dialog */}
       <DeleteComparisonDialog
         open={deleteDialogOpen}
         onClose={handleCancelDelete}
         onConfirm={handleConfirmDelete}
+        error={deleteError}
+        deleting={deleting}
       />
       {/* Export All LaTeX Dialog */}
       <ExportLatexDialog

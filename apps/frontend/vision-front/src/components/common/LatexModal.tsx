@@ -38,7 +38,7 @@ const LatexModal: React.FC<LatexModalProps> = ({
             alignItems: "center"
           }}>
           {title}
-          <IconButton onClick={onClose} size="small">
+          <IconButton onClick={onClose} size="small" aria-label="Close dialog">
             <CloseIcon />
           </IconButton>
         </Box>

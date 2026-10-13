@@ -31,6 +31,10 @@ export interface Project {
   /** absent means `visin` */
   storage?: ProjectStorage;
   stallAfterMinutes?: number;
+  /** the visualization its owner chose for its card; absent means a dataset's cover, when there is one */
+  cover?: { visualizationUuid: string };
+  /** the picture its card shows, short-lived: the chosen cover, else a dataset's */
+  coverUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,4 +65,6 @@ export interface UpdateProjectData {
   /** replaces the whole setting: leave `settings` out to clear it */
   storage?: ProjectStorage;
   stallAfterMinutes?: number;
+  /** a visualization of one of the project's own runs; null returns the card to a dataset's cover */
+  cover?: { visualizationUuid: string } | null;
 }

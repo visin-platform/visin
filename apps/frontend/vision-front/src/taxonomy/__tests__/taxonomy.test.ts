@@ -74,6 +74,13 @@ describe('discovery', () => {
     expect(discoverClasses(junk)).toEqual([]);
   });
 
+  it('discovers metrics with a numeric mean, as well as scalar metrics', () => {
+    const result = {
+      test_results: { day: { car: { ap: { mean: 0.42 }, quality: 0.8, details: { note: 'sample' } } } }
+    } as unknown as TestResult;
+    expect(discoverClassMetrics([result])).toEqual(['ap', 'quality']);
+  });
+
   it('finds epoch classes only where the metric is actually present', () => {
     const epochs = [
       {

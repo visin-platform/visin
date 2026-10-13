@@ -86,6 +86,8 @@ export const visualizationService = {
       limit?: number;
       projectId?: string;
       includeUrls?: boolean;
+      /** With `projectId`: only this many of each run's newest frames. */
+      perTraining?: number;
     }
   ): Promise<VisualizationsPaginatedResponse | ApiResponse<VisualizationsGroupedResponse>> {
     const endpoint = training_uuid && training_uuid.trim() !== ''

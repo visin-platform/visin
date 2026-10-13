@@ -41,21 +41,11 @@ const baseProps = {
     data: { testResults: [], pagination: { page: 0, limit: 25, total: 0, pages: 0 } }
   },
   isTestResultsLoading: false,
-  testsPage: 0,
-  testsRowsPerPage: 25,
-  onTestsPageChange: vi.fn(),
-  onTestsRowsPerPageChange: vi.fn(),
-  visualizationsResponse: { success: true, data: { trainings: [] } },
-  isVisualizationsLoading: false,
   benchmarksResponse: {
     success: true,
     data: { benchmarks: [], pagination: { page: 0, limit: 25, total: 0, pages: 0 } }
   },
   isBenchmarksLoading: false,
-  benchmarksPage: 0,
-  benchmarksRowsPerPage: 25,
-  onBenchmarksPageChange: vi.fn(),
-  onBenchmarksRowsPerPageChange: vi.fn(),
   project: {
     _id: 'p1',
     name: 'Project 1',
@@ -84,6 +74,19 @@ describe('ProjectTabs', () => {
 
     rerender(<ProjectTabs {...baseProps} tabValue={1} />);
     expect(screen.queryByText(/^readme:/)).not.toBeInTheDocument();
+  });
+
+  it('counts what is behind the Tests, Visualizations and Benchmarks tabs, once there is any', () => {
+    render(
+      <ProjectTabs
+        {...baseProps}
+        dashboardStats={{ testResultsCount: 3, visualizationsCount: 0, benchmarksCount: 12 }}
+      />
+    );
+
+    expect(screen.getByRole('tab', { name: 'Tests 3' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Visualizations' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Benchmarks 12' })).toBeInTheDocument();
   });
 
   it('renders the tab content matching each index', () => {

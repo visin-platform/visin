@@ -1,9 +1,6 @@
 import React from 'react';
-import {
-  Box,
-  Container,
-  Alert
-} from '@mui/material';
+import { Box, Container, Alert } from '@mui/material';
+import { PageHeader } from '@visin/frontend-core';
 import TrainingsTable from '../components/TrainingsTable';
 import TrainingFilters from '../components/TrainingFilters';
 import TrainingFormDialog from '../components/TrainingFormDialog';
@@ -73,16 +70,14 @@ const TrainingsPage: React.FC = () => {
     handleSelectTraining,
     handleSelectAll,
     handleCompareSelected,
-    handleDeleteSelected
+    handleDeleteSelected,
+    projectNames
   } = useTrainingsPage();
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
-      <PageBreadcrumbs
-        items={[
-          { label: 'Trainings', current: true }
-        ]}
-      />
+      <PageBreadcrumbs items={[{ label: 'Trainings', current: true }]} />
+      <PageHeader title="Trainings" subtitle="Your latest runs, grouped by project." />
       <TrainingFilters
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
@@ -126,6 +121,7 @@ const TrainingsPage: React.FC = () => {
         sortOrder={sortOrder}
         onSort={handleSort}
         isAuthenticated={isAuthenticated}
+        projectNames={projectNames}
       />
 
       {isAuthenticated && (

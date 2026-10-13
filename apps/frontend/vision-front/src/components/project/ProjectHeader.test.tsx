@@ -45,7 +45,7 @@ describe('ProjectHeader', () => {
       <ProjectHeader project={{ ...project, slug: 'abcdefabcdefabcdefabcdef' }} onEdit={vi.fn()} onDelete={vi.fn()} />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-    await screen.findByRole('button', { name: 'Link copied' });
+    await screen.findByRole('status');
     expect(writeText).toHaveBeenCalledWith('https://vision.example.test/api/public/share/projects/p1');
   });
 

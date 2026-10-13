@@ -97,9 +97,19 @@ export function ProjectCard({ project, now }: { project: ExploreProject; now: Da
     <Card
       to={`/projects/${project.slug || project._id}`}
       media={
-        <IconTile>
-          <Folder fontSize="large" />
-        </IconTile>
+        project.coverUrl ? (
+          <Box
+            component="img"
+            src={project.coverUrl}
+            alt=""
+            loading="lazy"
+            sx={{ display: 'block', width: '100%', aspectRatio: '16 / 7', objectFit: 'cover' }}
+          />
+        ) : (
+          <IconTile>
+            <Folder fontSize="large" />
+          </IconTile>
+        )
       }
       title={project.name}
       description={project.description}
