@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.39.0](https://github.com/visin-platform/visin/compare/v1.38.0...v1.39.0) (2026-10-13)
+
+
+### Features
+
+* Improve results, visualizations, model lists, and shared dialogs ([57046c5](https://github.com/visin-platform/visin/commit/57046c59e103b4b54e254c6cc532ad2812f3cd5d))
+
+
+### Chores
+
+* **release:** @visin/frontend-core 1.18.0 ([6d26f78](https://github.com/visin-platform/visin/commit/6d26f781b53dbc37e0d054e46ec41899225bb4f1))
+
 ## [1.38.0](https://github.com/visin-platform/visin/compare/v1.37.0...v1.38.0) (2026-10-12)
 
 
