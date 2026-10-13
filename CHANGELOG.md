@@ -1,4 +1,11 @@
 # Visin Changelog
+## [1.40.0](https://github.com/visin-platform/visin/compare/v1.39.0...v1.40.0) (2026-10-13)
+
+
+### Features
+
+* **label:** add configurable model class mappings ([a5394e2](https://github.com/visin-platform/visin/commit/a5394e2adb84c4366432baafdb1772b4169389ef))
+
 ## [1.39.0](https://github.com/visin-platform/visin/compare/v1.38.0...v1.39.0) (2026-10-13)
 
 
