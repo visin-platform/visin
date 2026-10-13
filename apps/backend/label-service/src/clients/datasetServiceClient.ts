@@ -38,11 +38,6 @@ export interface DatasetItem {
   data?: unknown;
 }
 
-export interface JsonField {
-  field: string;
-  values: { value: string; count: number }[];
-}
-
 export interface ManifestRow {
   stem: string;
   attributes: Record<string, string>;
@@ -121,9 +116,6 @@ export const listItems = async (
   } while (after);
   return items;
 };
-
-export const jsonFields = (id: string, group: string, variant: string): Promise<JsonField[]> =>
-  call('GET', `${datasetPath(id)}/json-fields`, { group, variant });
 
 export const getManifest = (id: string): Promise<ManifestRow[]> => call('GET', `${datasetPath(id)}/manifest`);
 

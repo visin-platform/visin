@@ -16,8 +16,11 @@ import {
   TableRow,
   Typography
 } from '@mui/material';
-import { ConfirmDialog, Loader, OwnerChip, ResponsiveActions, type OwnerRole, type ResponsiveAction } from '@visin/frontend-core';
+import { ConfirmDialog, Loader, OwnerChip, ResponsiveActions, useChartColors, type OwnerRole, type ResponsiveAction } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
+import ExportDialog from '../components/ExportDialog';
+import ImportDialog from '../components/ImportDialog';
+import ModelClassMappingDialog from '../components/ModelClassMappingDialog';
 import {
   JobAction,
   deleteJob,
@@ -43,8 +46,12 @@ const JobDetailPage: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { adapt } = useChartColors();
   const [actionError, setActionError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [modelMappingOpen, setModelMappingOpen] = useState(false);
 
   const { data: job, isLoading, error: jobError } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
   usePageTitle(job ? `${job.name} - Labeling` : 'Job - Labeling');
@@ -79,14 +86,14 @@ const JobDetailPage: React.FC = () => {
     onError: (err) => setActionError((err as Error).message)
   });
 
-  // Nothing below this is recoverable, and the answers are the labeling effort
+  // Nothing below this is recoverable, and the labels are the labeling effort
   // itself — so the count goes in the prompt rather than a bare "are you sure".
   const confirmDelete = (): void => {
     remove.reset();
     setDeleteOpen(true);
   };
   const collected = job?.progress?.completed ?? 0;
-  const deleteWarning = collected > 0 ? ` and ${collected} collected answer(s)` : '';
+  const deleteWarning = collected > 0 ? `, its masks and the labels on ${collected} frame(s)` : '';
 
   if (jobError) return <Alert severity="error">{jobError.message}</Alert>;
   if (isLoading || !job) {
@@ -95,8 +102,7 @@ const JobDetailPage: React.FC = () => {
 
   const progress = job.progress;
   const completion = progress && progress.tasks > 0 ? (progress.completed / progress.tasks) * 100 : 0;
-  const exportAs = (format: 'jsonl' | 'csv' | 'manifest') => () =>
-    downloadExport(jobId, format).catch((err) => setActionError(err.message));
+  const exportManifest = () => downloadExport(jobId, 'manifest').catch((err) => setActionError(err.message));
 
   const labelingActions: ResponsiveAction[] = [
     ...(job.status === 'active' && isAuthenticated && job.canLabel
@@ -120,11 +126,11 @@ const JobDetailPage: React.FC = () => {
           onClick: () => visibility.mutate(!job.isPublic),
           disabled: visibility.isPending
         },
-        { label: 'Export JSONL', onClick: exportAs('jsonl') },
-        { label: 'Export CSV', onClick: exportAs('csv') },
-        // Sampling spec, redundancy and per-value inclusion counts — what a rate
-        // measured on this job needs to scale back to the dataset.
-        { label: 'Export manifest', onClick: exportAs('manifest') },
+        { label: 'Export labels…', onClick: () => setExportOpen(true) },
+        { label: 'Model class mapping…', onClick: () => setModelMappingOpen(true) },
+        ...(job.tasksCount > 0 && job.status !== 'archived' ? [{ label: 'Import labels…', onClick: () => setImportOpen(true) }] : []),
+        // The classes, sensors and sampling spec the labels were made under.
+        { label: 'Export job setup', onClick: exportManifest },
         { label: 'Delete', onClick: confirmDelete, disabled: remove.isPending, danger: true }
       ]
     : [];
@@ -144,12 +150,19 @@ const JobDetailPage: React.FC = () => {
               <OwnerChip owner={job.dataset.owner} userId={user?.id} groups={ownerGroups} />
             </>
           )}
-          <Chip label={job.taskType} size="small" variant="outlined" />
-          <Chip label={`K=${job.redundancy}`} size="small" variant="outlined" />
+          <Chip label={job.sensors.map((sensor) => sensor.key).join(' + ')} size="small" variant="outlined" />
+          {job.redundancy > 1 && <Chip label={`K=${job.redundancy}`} size="small" variant="outlined" />}
         </Stack>
-        <Typography variant="body1" sx={{ mt: 1 }}>
-          {job.question.prompt}
-        </Typography>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 1.5 }} aria-label="classes">
+          {job.classes.map((entry) => (
+            <Chip
+              key={entry.key}
+              size="small"
+              label={`${entry.name} · ${entry.tools.join(' + ')}`}
+              icon={<Box component="span" sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: adapt(entry.color), ml: '8px !important' }} />}
+            />
+          ))}
+        </Stack>
         {job.description && (
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
             {job.description}
@@ -159,8 +172,7 @@ const JobDetailPage: React.FC = () => {
         {progress && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {progress.completed}/{progress.tasks} tasks complete · {progress.answers} answers · {progress.myAnswers}{' '}
-              by me
+              {progress.completed}/{progress.tasks} frames complete · {progress.skipped} skipped · {progress.myDone} by me
             </Typography>
             <LinearProgress variant="determinate" value={completion} sx={{ mt: 1 }} />
           </Box>
@@ -188,6 +200,10 @@ const JobDetailPage: React.FC = () => {
         </Typography>}
       </Paper>
 
+      <ExportDialog open={exportOpen} jobId={jobId} classes={job.classes} onClose={() => setExportOpen(false)} />
+      {isAdmin && modelMappingOpen && <ModelClassMappingDialog jobId={jobId} classes={job.classes} onClose={() => setModelMappingOpen(false)} />}
+      <ImportDialog open={importOpen} jobId={jobId} classes={job.classes} onClose={() => setImportOpen(false)} />
+
       <ConfirmDialog
         open={deleteOpen}
         title="Delete this job?"
@@ -198,7 +214,7 @@ const JobDetailPage: React.FC = () => {
         onConfirm={() => remove.mutate()}
         onCancel={() => setDeleteOpen(false)}
       >
-        Delete "{job.name}"? This removes the job, its tasks{deleteWarning}. Export first — this cannot be undone.
+        Delete "{job.name}"? This removes the job, its frames{deleteWarning}. Export first — this cannot be undone.
       </ConfirmDialog>
 
       {stats && (
@@ -206,43 +222,64 @@ const JobDetailPage: React.FC = () => {
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             Progress
           </Typography>
-          {job.redundancy > 1 && (
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              Inter-rater agreement:{' '}
-              {stats.agreement === null ? 'n/a (no overlapping answers yet)' : `${(stats.agreement * 100).toFixed(1)}%`}
-            </Typography>
-          )}
-
           <Divider sx={{ my: 2 }} />
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {stats.completed}/{stats.tasks} frames complete · {stats.answers} labels collected
+            {stats.completed}/{stats.tasks} frames complete · {stats.objects.toLocaleString()} boxes drawn
           </Typography>
+
+          {stats.perClass.length > 0 && (
+            <>
+              <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
+                Per class
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Class</TableCell>
+                    <TableCell align="right">Boxes</TableCell>
+                    <TableCell align="right">Mask pixels</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {stats.perClass.map((entry) => (
+                    <TableRow key={entry.classKey}>
+                      <TableCell>{entry.name}</TableCell>
+                      <TableCell align="right">{entry.boxes.toLocaleString()}</TableCell>
+                      <TableCell align="right">{entry.pixels.toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </>
+          )}
 
           {/* Absent, rather than empty, for an anonymous viewer: the breakdown
               is a list of labelers' email addresses. */}
           {stats.perUser && (
             <>
               <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
-                Per labeler
+                Per annotator
               </Typography>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Labeler</TableCell>
-                    <TableCell align="right">Answered</TableCell>
+                    <TableCell>Annotator</TableCell>
+                    <TableCell align="right">Done</TableCell>
+                    <TableCell align="right">Skipped</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {stats.perUser.map((user) => (
                     <TableRow key={user.userEmail}>
                       <TableCell>{user.userName || user.userEmail}</TableCell>
-                      <TableCell align="right">{user.answered}</TableCell>
+                      <TableCell align="right">{user.done}</TableCell>
+                      <TableCell align="right">{user.skipped}</TableCell>
                     </TableRow>
                   ))}
                   {stats.perUser.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={2} sx={{ color: 'text.secondary' }}>
-                        No answers yet
+                      <TableCell colSpan={3} sx={{ color: 'text.secondary' }}>
+                        No labels yet
                       </TableCell>
                     </TableRow>
                   )}
@@ -260,7 +297,7 @@ const JobDetailPage: React.FC = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell>Stratum</TableCell>
-                    <TableCell align="right">Tasks</TableCell>
+                    <TableCell align="right">Frames</TableCell>
                     <TableCell align="right">Complete</TableCell>
                   </TableRow>
                 </TableHead>

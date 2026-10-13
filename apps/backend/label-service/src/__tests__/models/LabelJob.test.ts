@@ -1,11 +1,11 @@
 import { LabelJob } from '../../models/LabelJob';
 
 const validJob = {
-  name: 'Mask verification',
+  name: 'Street scenes',
   createdBy: { userId: 'u1', email: 'Owner@X.com' },
   datasetId: 'd1',
-  taskType: 'mask_toggle',
-  question: { prompt: 'Mark all incorrect masks' },
+  sensors: [{ key: 'camera', group: 'frames' }],
+  classes: [{ key: 'car', name: 'Car', color: '#ff0000', maskIndex: 1 }],
 };
 
 describe('LabelJob model', () => {
@@ -15,42 +15,42 @@ describe('LabelJob model', () => {
     expect(job.validateSync()).toBeUndefined();
     expect(job.createdBy.email).toBe('owner@x.com');
     expect(job.status).toBe('draft');
+    expect(job.taskType).toBe('annotate');
     expect(job.redundancy).toBe(1);
-    expect(job.framesGroup).toBe('frames');
+    expect(job.classes[0].tools).toEqual(['box', 'mask']);
+    expect(job.sensors[0].kind).toBe('image');
     expect(LabelJob.collection.name).toBe('label_jobs');
   });
 
-  it('requires name, taskType and question prompt, and keeps no group of its own', () => {
+  it('requires a name and creator, and keeps no group of its own', () => {
     const error = new LabelJob({}).validateSync();
 
     expect(error?.errors.name).toBeDefined();
     expect(new LabelJob({ ...validJob, groupId: 'g1' }).toObject()).not.toHaveProperty('groupId');
-    expect(error?.errors.taskType).toBeDefined();
-    expect(error?.errors['question.prompt']).toBeDefined();
   });
 
-  it('rejects unknown task types and statuses', () => {
-    const error = new LabelJob({ ...validJob, taskType: 'bbox_draw', status: 'live' }).validateSync();
+  it('rejects unknown task types, statuses, sensors and tools', () => {
+    const error = new LabelJob({
+      ...validJob,
+      taskType: 'single_choice',
+      status: 'live',
+      sensors: [{ key: 'sonar', group: 'g' }],
+      classes: [{ key: 'a', name: 'A', color: '#000000', maskIndex: 1, tools: ['polygon'] }],
+    }).validateSync();
 
     expect(error?.errors.taskType).toBeDefined();
     expect(error?.errors.status).toBeDefined();
+    expect(error?.errors['sensors.0.key']).toBeDefined();
+    expect(error?.errors['classes.0.tools.0']).toBeDefined();
   });
 
-  it('accepts single_choice with choices and hotkeys', () => {
-    const job = new LabelJob({
-      ...validJob,
-      taskType: 'single_choice',
-      question: {
-        prompt: 'Frame quality?',
-        choices: [
-          { key: 'good', label: 'Good', hotkey: 'g' },
-          { key: 'bad', label: 'Bad', hotkey: 'b' },
-        ],
-      },
-    });
+  it('keeps a class mask index within what a mask byte can hold for the job', () => {
+    const at = (maskIndex: number) =>
+      new LabelJob({ ...validJob, classes: [{ ...validJob.classes[0], maskIndex }] }).validateSync();
 
-    expect(job.validateSync()).toBeUndefined();
-    expect(job.question.choices).toHaveLength(2);
+    expect(at(0)?.errors['classes.0.maskIndex']).toBeDefined();
+    expect(at(101)?.errors['classes.0.maskIndex']).toBeDefined();
+    expect(at(100)).toBeUndefined();
   });
 
   it('bounds redundancy between 1 and 10', () => {

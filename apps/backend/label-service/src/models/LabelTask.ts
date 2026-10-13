@@ -1,11 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose';
-
-export interface IMaskMeta {
-  id: number;
-  class: string;
-  bbox?: number[]; // [x1, y1, x2, y2]
-  [key: string]: unknown; // triage outcome, disagreement flags, scores, ...
-}
+import type { SensorKey, SensorKind } from './LabelJob';
 
 /**
  * The frame a task shows, copied from its dataset when the task was created.
@@ -23,14 +17,22 @@ export interface ITaskFrame {
   height?: number;
 }
 
-export interface ITaskLayer {
-  set: string;
-  fileId: string;
+/** One projected point of a point sensor, in the camera frame's pixel space. */
+export interface ITaskPoint {
+  u: number;
+  v: number;
+  /** range, depth, intensity or RCS — whatever the sensor's file calls its reading */
+  value?: number;
 }
 
-export interface ITaskMaskMap {
-  fileId: string; // the id map
-  masks: IMaskMeta[];
+/** What one of the job's non-camera sensors shows on this frame. */
+export interface ITaskSensor {
+  key: SensorKey;
+  kind: SensorKind;
+  /** image sensors: the file to draw */
+  fileId?: string;
+  /** point sensors: the points themselves, copied from the dataset's JSON sidecar */
+  points?: ITaskPoint[];
 }
 
 export interface ILabelTask extends Document {
@@ -39,12 +41,12 @@ export interface ILabelTask extends Document {
   frame: ITaskFrame;
   order: number;
   stratum?: string;
-  payload?: {
-    layers?: ITaskLayer[];
-    maskMap?: ITaskMaskMap;
-  };
+  sensors?: ITaskSensor[];
+  /** annotators who marked the frame done — what `redundancy` counts */
   answersCount: number;
   answeredBy: string[]; // userIds — lets `next` exclude in one query
+  /** annotators who skipped it: not counted as done, but not offered to them again */
+  skippedBy: string[];
   leasedBy?: string; // userId
   leaseExpiresAt?: Date;
   createdAt: Date;
@@ -68,32 +70,21 @@ const LabelTaskSchema = new Schema<ILabelTask>(
     frame: { type: TaskFrameSchema, required: true },
     order: { type: Number, required: true },
     stratum: { type: String },
-    payload: {
-      type: {
-        _id: false,
-        layers: {
-          type: [
-            {
-              _id: false,
-              set: { type: String, required: true },
-              fileId: { type: String, required: true }
-            }
-          ],
-          default: undefined
-        },
-        maskMap: {
-          type: {
-            _id: false,
-            fileId: { type: String, required: true },
-            masks: { type: [Schema.Types.Mixed], default: [] }
-          },
-          default: undefined
+    sensors: {
+      type: [
+        {
+          _id: false,
+          key: { type: String, required: true },
+          kind: { type: String, required: true },
+          fileId: { type: String },
+          points: { type: [{ _id: false, u: Number, v: Number, value: Number }], default: undefined }
         }
-      },
+      ],
       default: undefined
     },
     answersCount: { type: Number, default: 0 },
     answeredBy: { type: [String], default: [] },
+    skippedBy: { type: [String], default: [] },
     leasedBy: { type: String },
     leaseExpiresAt: { type: Date }
   },
@@ -101,7 +92,7 @@ const LabelTaskSchema = new Schema<ILabelTask>(
 );
 
 LabelTaskSchema.index({ jobId: 1, order: 1 });
-// `next` picks: unanswered-by-user, answersCount < K, no live lease.
+// `next` picks: unfinished by user, answersCount < K, no live lease.
 LabelTaskSchema.index({ jobId: 1, answersCount: 1, leaseExpiresAt: 1 });
 
 export const LabelTask = model<ILabelTask>('LabelTask', LabelTaskSchema, 'label_tasks');

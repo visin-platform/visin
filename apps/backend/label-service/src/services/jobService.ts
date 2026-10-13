@@ -1,10 +1,100 @@
 import { Types } from 'mongoose';
 import { atLeast, BadRequestError, ConflictError, ForbiddenError, NotFoundError, UserPayload, logger } from '@visin/backend-core';
-import { LabelJob, ILabelJob, JobStatus } from '../models/LabelJob';
+import { LabelJob, ILabelJob, IJobClass, JobStatus, MAX_CLASSES } from '../models/LabelJob';
 import { LabelTask } from '../models/LabelTask';
-import { LabelAnswer } from '../models/LabelAnswer';
-import { CreateJobBody } from '../validation/jobSchemas';
+import { LabelAnnotation } from '../models/LabelAnnotation';
+import { LabelSuggestion } from '../models/LabelSuggestion';
+import { ClassInput, CreateJobBody, ModelClassMappingBody } from '../validation/jobSchemas';
 import * as datasets from '../clients/datasetServiceClient';
+import * as files from '../clients/fileServiceClient';
+
+/**
+ * The colours a new class is given in turn. The first eight are the charts'
+ * series colours, which the fronts re-draw as their dark-scheme steps; the
+ * annotator never has to pick one, and the manager can change any of them.
+ */
+const CLASS_COLORS = [
+  '#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948',
+  '#00a3c4', '#b04fd0', '#7a8c00', '#a65d3a'
+];
+
+const slug = (name: string): string =>
+  name
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+
+/** Change detector names on existing classes, preserving their keys, mask values and geometry. */
+export const setModelClassMapping = async (job: ILabelJob, mapping: ModelClassMappingBody['mapping']): Promise<ILabelJob> => {
+  const filter: Record<string, unknown> = { _id: job._id };
+  const set: Record<string, string> = {};
+  const unset: Record<string, string> = {};
+  for (const [key, name] of Object.entries(mapping)) {
+    const index = job.classes.findIndex((entry) => entry.key === key);
+    if (index < 0) throw new BadRequestError(`"${key}" is not a class of this job`);
+    filter[`classes.${index}.key`] = key;
+    if (name === null) unset[`classes.${index}.modelClass`] = '';
+    else set[`classes.${index}.modelClass`] = name;
+  }
+  const names = job.classes.flatMap((entry) => {
+    const name = Object.prototype.hasOwnProperty.call(mapping, entry.key) ? mapping[entry.key] : entry.modelClass;
+    return name && entry.tools.includes('box') ? [name.trim().toLowerCase().replace(/[\s_-]+/g, ' ')] : [];
+  });
+  if (new Set(names).size !== names.length) throw new BadRequestError('A model class can map to only one job box class');
+  const updated = await LabelJob.findOneAndUpdate(filter, {
+    ...(Object.keys(set).length ? { $set: set } : {}),
+    ...(Object.keys(unset).length ? { $unset: unset } : {})
+  }, { returnDocument: 'after', runValidators: true });
+  if (!updated) throw new ConflictError('The job classes changed. Reload and try again.');
+  return updated;
+};
+
+/**
+ * Turn the classes a wizard (or an import) sends into stored ones: a unique key,
+ * a colour, a hotkey, and the mask value each gets. The value is its position
+ * and is never renumbered, so a mask written today still reads the same when
+ * classes are added later.
+ */
+export const buildClasses = (inputs: ClassInput[], existing: IJobClass[] = []): IJobClass[] => {
+  if (existing.length + inputs.length > MAX_CLASSES) {
+    throw new BadRequestError(`A job can have at most ${MAX_CLASSES} classes`);
+  }
+  const taken = new Set(existing.map((entry) => entry.key));
+  const hotkeys = new Set(existing.map((entry) => entry.hotkey).filter(Boolean));
+  const built: IJobClass[] = [];
+  for (const input of inputs) {
+    let key = input.key || slug(input.name) || 'class';
+    if (input.key && taken.has(key)) {
+      throw new BadRequestError(`Two classes use the key "${key}"`);
+    }
+    for (let n = 2; taken.has(key); n++) {
+      key = `${(input.key || slug(input.name) || 'class').slice(0, 36)}-${n}`;
+    }
+    taken.add(key);
+
+    const position = existing.length + built.length;
+    let hotkey = input.hotkey;
+    if (!hotkey && position < 9 && !hotkeys.has(String(position + 1))) hotkey = String(position + 1);
+    if (hotkey) hotkeys.add(hotkey);
+
+    built.push({
+      key,
+      name: input.name,
+      color: input.color || CLASS_COLORS[position % CLASS_COLORS.length],
+      ...(hotkey ? { hotkey } : {}),
+      tools: input.tools,
+      maskIndex: position + 1,
+      ...(input.modelClass ? { modelClass: input.modelClass } : {})
+    });
+  }
+  if (new Set(inputs.map((input) => input.name.toLowerCase())).size !== inputs.length) {
+    throw new BadRequestError('Two classes have the same name');
+  }
+  return built;
+};
 
 /**
  * Create a draft job on a dataset the caller manages, and claim the dataset so
@@ -26,12 +116,13 @@ export const createJob = async (user: UserPayload, data: CreateJobBody): Promise
     throw new ForbiddenError("Only the dataset's owner, or an owner or admin of the group that owns it, can build a labeling job on it");
   }
   const groupNames = dataset.groups.map((group) => group.name);
-  const unknown = [data.framesGroup, ...data.annotationSets].filter((name) => !groupNames.includes(name));
+  const unknown = data.sensors.map((sensor) => sensor.group).filter((name) => !groupNames.includes(name));
   if (unknown.length > 0) {
-    throw new BadRequestError(`Not image groups of this dataset: ${unknown.join(', ')}`);
+    throw new BadRequestError(`Not image groups of this dataset: ${[...new Set(unknown)].join(', ')}`);
   }
   const job = await LabelJob.create({
     ...data,
+    classes: buildClasses(data.classes),
     createdBy: {
       userId: user.id,
       email: (user.email || '').toLowerCase(),
@@ -133,8 +224,9 @@ export const setJobVisibility = async (jobId: string, isPublic: boolean): Promis
 export interface JobProgress {
   tasks: number;
   completed: number; // tasks that reached redundancy K
-  answers: number;
-  myAnswers: number;
+  done: number; // frames annotators finished (K per task when redundant)
+  skipped: number;
+  myDone: number;
 }
 
 /**
@@ -150,25 +242,26 @@ export const progressForJobs = async (
   userId: string
 ): Promise<Map<string, JobProgress>> => {
   const byJob = new Map<string, JobProgress>(
-    jobs.map((job) => [job._id.toString(), { tasks: 0, completed: 0, answers: 0, myAnswers: 0 }])
+    jobs.map((job) => [job._id.toString(), { tasks: 0, completed: 0, done: 0, skipped: 0, myDone: 0 }])
   );
   if (byJob.size === 0) {
     return byJob;
   }
 
   const jobIds = jobs.map((job) => job._id);
-  const [taskBuckets, answerRows] = await Promise.all([
+  const [taskBuckets, annotationRows] = await Promise.all([
     LabelTask.aggregate<{ _id: { jobId: Types.ObjectId; answersCount: number }; count: number }>([
       { $match: { jobId: { $in: jobIds } } },
       { $group: { _id: { jobId: '$jobId', answersCount: '$answersCount' }, count: { $sum: 1 } } }
     ]),
-    LabelAnswer.aggregate<{ _id: Types.ObjectId; answers: number; myAnswers: number }>([
-      { $match: { jobId: { $in: jobIds } } },
+    LabelAnnotation.aggregate<{ _id: Types.ObjectId; done: number; skipped: number; myDone: number }>([
+      { $match: { jobId: { $in: jobIds }, status: { $in: ['done', 'skipped'] } } },
       {
         $group: {
           _id: '$jobId',
-          answers: { $sum: 1 },
-          myAnswers: { $sum: { $cond: [{ $eq: ['$userId', userId] }, 1, 0] } }
+          done: { $sum: { $cond: [{ $eq: ['$status', 'done'] }, 1, 0] } },
+          skipped: { $sum: { $cond: [{ $eq: ['$status', 'skipped'] }, 1, 0] } },
+          myDone: { $sum: { $cond: [{ $and: [{ $eq: ['$status', 'done'] }, { $eq: ['$userId', userId] }] }, 1, 0] } }
         }
       }
     ])
@@ -185,11 +278,12 @@ export const progressForJobs = async (
       progress.completed += bucket.count;
     }
   }
-  for (const row of answerRows) {
+  for (const row of annotationRows) {
     const progress = byJob.get(row._id.toString());
     if (progress) {
-      progress.answers = row.answers;
-      progress.myAnswers = row.myAnswers;
+      progress.done = row.done;
+      progress.skipped = row.skipped;
+      progress.myDone = row.myDone;
     }
   }
   return byJob;
@@ -210,28 +304,35 @@ export type JobAction = keyof typeof TRANSITIONS;
 /**
  * Hard-delete a job and everything hanging off it.
  *
- * `archive` is a status, not a removal: an archived job kept its whole task set,
- * so three archived jobs over a 4k-frame dataset left 12,367 LabelTask documents
- * behind — each carrying a copy of its frame's selected mask metadata — with no
- * endpoint that could ever reach them. Deleting a job therefore deletes its
- * answers and tasks too; there is no soft-delete tier below this.
+ * `archive` is a status, not a removal: an archived job kept its whole task set
+ * with no endpoint that could ever reach it. Deleting a job therefore deletes its
+ * annotations, suggestions, mask files and tasks too; there is no soft-delete
+ * tier below this.
  *
- * Answers go first: an interrupted delete that has removed tasks but not answers
- * leaves answers pointing at nothing, while the reverse merely re-orphans tasks
- * a repeat call cleans up.
+ * Files and the dataset claim go first: if either fails the job survives intact
+ * and the delete can be retried, rather than leaving bytes or a hold that
+ * nothing points at. Annotations go before tasks: an interrupted delete that has
+ * removed tasks but not annotations leaves annotations pointing at nothing,
+ * while the reverse merely re-orphans tasks a repeat call cleans up.
  */
-export const deleteJob = async (jobId: string): Promise<{ tasks: number; answers: number }> => {
-  // Release the dataset first: if that fails the job survives intact and the
-  // delete can be retried, rather than leaving a claim nothing can release.
+export const deleteJob = async (
+  jobId: string
+): Promise<{ tasks: number; annotations: number; suggestions: number }> => {
   const job = await LabelJob.findById(jobId);
   if (job?.datasetId) {
     await datasets.removeHold(job.datasetId, jobId);
     logger.info('Released dataset hold', { jobId, datasetId: job.datasetId });
   }
-  const answers = await LabelAnswer.deleteMany({ jobId });
+  await files.deleteFolder(files.jobFolder(jobId));
+  const annotations = await LabelAnnotation.deleteMany({ jobId });
+  const suggestions = await LabelSuggestion.deleteMany({ jobId });
   const tasks = await LabelTask.deleteMany({ jobId });
   await LabelJob.deleteOne({ _id: jobId });
-  return { tasks: tasks.deletedCount || 0, answers: answers.deletedCount || 0 };
+  return {
+    tasks: tasks.deletedCount || 0,
+    annotations: annotations.deletedCount || 0,
+    suggestions: suggestions.deletedCount || 0
+  };
 };
 
 export const transitionJob = async (jobId: string, action: JobAction): Promise<ILabelJob> => {

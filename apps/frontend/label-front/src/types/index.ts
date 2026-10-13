@@ -4,20 +4,38 @@ export interface ApiResponse<T> {
   data: T;
 }
 
-export type TaskType = 'single_choice' | 'mask_toggle';
 export type JobStatus = 'draft' | 'active' | 'paused' | 'completed' | 'archived';
 
-export interface JobChoice {
+/** What an annotator may draw for a class. */
+export type AnnotationTool = 'box' | 'mask';
+
+export interface JobClass {
   key: string;
-  label: string;
+  name: string;
+  /** `#rrggbb` as stored; draw it through `useChartColors().adapt` so it suits the scheme showing */
+  color: string;
   hotkey?: string;
+  tools: AnnotationTool[];
+  /** the value a pixel of this class has in a mask; 0 is unlabeled */
+  maskIndex: number;
+  modelClass?: string;
+}
+
+export type SensorKey = 'camera' | 'lidar' | 'radar';
+
+export interface JobSensor {
+  key: SensorKey;
+  group: string;
+  kind: 'image' | 'points';
+  variant?: string;
 }
 
 export interface JobProgress {
   tasks: number;
   completed: number;
-  answers: number;
-  myAnswers: number;
+  done: number;
+  skipped: number;
+  myDone: number;
 }
 
 export interface LabelJob {
@@ -27,11 +45,9 @@ export interface LabelJob {
   datasetId: string;
   /** job detail only, for those who can reach the job: the dataset, whose owner the job follows */
   dataset?: { _id: string; name: string; owner: { kind: 'user' | 'group'; id: string } };
-  /** the dataset image group the frames come from */
-  framesGroup?: string;
-  taskType: TaskType;
-  question: { prompt: string; choices?: JobChoice[] };
-  annotationSets: string[];
+  taskType: 'annotate';
+  classes: JobClass[];
+  sensors: JobSensor[];
   redundancy: number;
   status: JobStatus;
   isPublic?: boolean;
@@ -56,11 +72,50 @@ export interface LabelDataset {
   importStatus?: string;
 }
 
-export interface MaskMeta {
-  id: number;
-  class: string;
-  bbox?: number[]; // [x1, y1, x2, y2]
-  [key: string]: unknown;
+export type BoxSource = 'human' | 'model' | 'import';
+
+/** One box, `bbox` being `[x, y, width, height]` in the camera frame's pixels. */
+export interface BoxObject {
+  id: string;
+  classKey: string;
+  bbox: [number, number, number, number];
+  source: BoxSource;
+  score?: number;
+}
+
+export interface MaskView {
+  url: string;
+  width: number;
+  height: number;
+}
+
+/** One annotator's labels on a frame, with no trace of who made them. */
+export interface AnnotationView {
+  status: 'draft' | 'done' | 'skipped';
+  objects: BoxObject[];
+  mask?: MaskView;
+  updatedAt: string;
+}
+
+/** Labels that came with an import, shown dashed until accepted. */
+export interface SuggestionView {
+  objects: BoxObject[];
+  mask?: MaskView;
+}
+
+export interface MapPoint {
+  u: number;
+  v: number;
+  value?: number;
+}
+
+export type SensorImage =
+  | { key: SensorKey; kind: 'image'; url: string }
+  | { key: SensorKey; kind: 'points'; points: MapPoint[] };
+
+export interface TaskImages {
+  frame: { url: string; width?: number; height?: number; stem?: string };
+  sensors: SensorImage[];
 }
 
 export interface LabelTask {
@@ -68,31 +123,7 @@ export interface LabelTask {
   jobId: string;
   order: number;
   stratum?: string;
-  payload?: {
-    layers?: { set: string }[];
-    maskMap?: { masks: MaskMeta[] };
-  };
-}
-
-export interface TaskImages {
-  frame: { url: string; width?: number; height?: number; stem?: string };
-  layers: { set: string; url: string }[];
-  idmap?: { url: string };
-}
-
-/** One verdict on a frame, carrying no trace of who gave it. */
-export interface AnswerSnapshot {
-  choiceKey?: string;
-  rejectedMaskIds?: number[];
-  updatedAt: string;
-}
-
-export interface TaskAnswerState {
-  count: number;
-  /** Your own answer, when you have one — what the workbench prefills. */
-  mine: AnswerSnapshot | null;
-  /** The most recent answer from anyone, shown to a viewer with none of their own. */
-  latest: AnswerSnapshot | null;
+  sensors?: { key: SensorKey; kind: string }[];
 }
 
 /** Where a frame sits in the job's frame order — `index` is 0-based. */
@@ -101,21 +132,33 @@ export interface TaskPosition {
   total: number;
 }
 
+export interface TaskAnnotationState {
+  /** annotators who finished the frame */
+  count: number;
+  /** Your own labels, when you have any — what the editor opens with. */
+  mine: AnnotationView | null;
+  /** The most recently finished labels from anyone, shown to a viewer with none of their own. */
+  latest: AnnotationView | null;
+}
+
 export interface WorkItem {
   task: LabelTask;
   images: TaskImages;
   position: TaskPosition;
-  answer: TaskAnswerState;
+  annotation: TaskAnnotationState;
+  suggestions: SuggestionView | null;
 }
 
 export interface JobStats {
   tasks: number;
   completed: number;
-  answers: number;
-  /** Omitted for anonymous viewers — it is a list of labelers' email addresses. */
-  perUser?: { userEmail: string; userName?: string; answered: number }[];
+  done: number;
+  skipped: number;
+  objects: number;
+  perClass: { classKey: string; name: string; boxes: number; pixels: number }[];
+  /** Omitted for anonymous viewers — it is a list of annotators' email addresses. */
+  perUser?: { userEmail: string; userName?: string; done: number; skipped: number }[];
   perStratum: { stratum: string; tasks: number; completed: number }[];
-  agreement: number | null;
 }
 
 export interface MyGroup {
@@ -124,37 +167,46 @@ export interface MyGroup {
   role: 'owner' | 'admin' | 'member';
 }
 
-export interface AnswerBody {
-  choiceKey?: string;
-  rejectedMaskIds?: number[];
-  elapsedMs?: number;
-}
-
-/**
- * Narrows a mask_toggle job to part of its annotation set, so one full-corpus
- * dataset can back several jobs. `perValue` caps each value across the whole
- * dataset, not per frame.
- */
-export interface MaskSelector {
-  field: string;
-  include?: string[];
-  perValue?: number;
-  seed?: number;
-}
-
 export type MaterializeBody =
-  | { kind: 'manifest'; content?: string; format?: 'csv' | 'jsonl'; masks?: MaskSelector }
-  | { kind: 'filter'; sampleN?: number; seed?: number; masks?: MaskSelector };
+  | { kind: 'manifest'; content?: string; format?: 'csv' | 'jsonl' }
+  | { kind: 'filter'; sampleN?: number; seed?: number };
 
-/** What materialization did: task count, unmatched manifest rows, masks per value. */
+/** What materialization did: task count, unmatched manifest rows, and frames per overlay sensor. */
 export interface MaterializeResult {
   tasks: number;
   missing: string[];
-  masks?: Record<string, number>;
+  sensors: Record<string, number>;
 }
 
-/** Groupable mask metadata in one annotation set, with a count per value. */
-export interface MaskField {
-  field: string;
-  values: { value: string; count: number }[];
+export type LabelFormatId = 'yolo' | 'coco' | 'voc' | 'semantic-png' | 'visin';
+
+/** A label format and what it can hold, as the server describes it. */
+export interface LabelFormat {
+  id: LabelFormatId;
+  name: string;
+  description: string;
+  boxes: boolean;
+  masks: boolean;
+}
+
+export interface ImportClassPlan {
+  name: string;
+  boxes: number;
+  maskFrames: number;
+  /** a job class key, `"+"` for a new class, or null to leave its labels out */
+  target: string | null;
+  matched: boolean;
+}
+
+export interface ImportReport {
+  format: LabelFormatId;
+  formatName: string;
+  dryRun: boolean;
+  as: 'suggestions' | 'done';
+  frames: { inFile: number; matched: number; unmatched: number; unmatchedSample: string[] };
+  classes: ImportClassPlan[];
+  boxes: number;
+  maskFrames: number;
+  createdClasses: string[];
+  warnings: string[];
 }

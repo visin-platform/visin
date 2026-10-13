@@ -1,168 +1,180 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./labelApiClient', () => ({
-  labelApi: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  labelApi: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(), request: vi.fn() }
 }));
 vi.mock('../config/ConfigProvider', () => ({
-  getGlobalConfig: () => ({ LABEL_SERVICE_URL: 'http://label.test' }),
+  getGlobalConfig: () => ({ LABEL_SERVICE_URL: 'https://label.example.test' })
 }));
 
 import { labelApi } from './labelApiClient';
-import {
-  createJob,
-  deleteJob,
-  downloadExport,
-  getJob,
-  getJobStats,
-  getMyGroups,
-  getTask,
-  getTaskAt,
-  listJobs,
-  materializeJob,
-  nextTask,
-  submitAnswer,
-  transitionJob,
-  setJobVisibility,
-  undoAnswer,
-} from './jobService';
+import * as service from './jobService';
 
-const mockedApi = labelApi as unknown as { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+const api = labelApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  api.get.mockResolvedValue({ data: 'got' });
+  api.post.mockResolvedValue({ data: 'posted' });
+  api.put.mockResolvedValue({ data: 'put' });
+  api.delete.mockResolvedValue({ data: 'deleted' });
+  api.request.mockResolvedValue({ data: { format: 'yolo' } });
 });
 
-describe('jobService', () => {
-  it('lists jobs by role', async () => {
-    mockedApi.get.mockResolvedValue({ success: true, data: [{ _id: 'j1' }] });
+describe('job calls', () => {
+  it('persists model class names and resets name matching with null', async () => {
+    await service.setModelClassMapping('j1', { vehicle: 'car', human: null });
+    expect(api.put).toHaveBeenCalledWith('/jobs/j1/model-mapping', { mapping: { vehicle: 'car', human: null } });
+  });
+  it('lists, reads, creates and prepares jobs', async () => {
+    expect(await service.listJobs('admin')).toBe('got');
+    expect(api.get).toHaveBeenCalledWith('/jobs?role=admin');
+    await service.getJob('j1');
+    expect(api.get).toHaveBeenCalledWith('/jobs/j1');
 
-    expect(await listJobs('admin')).toEqual([{ _id: 'j1' }]);
-    expect(mockedApi.get).toHaveBeenCalledWith('/jobs?role=admin');
+    const input = { name: 'J', datasetId: 'd1', sensors: [{ key: 'camera' as const, group: 'frames', kind: 'image' as const }], classes: [{ name: 'Car' }] };
+    expect(await service.createJob(input)).toBe('posted');
+    expect(api.post).toHaveBeenCalledWith('/jobs', input);
+
+    await service.materializeJob('j1', { kind: 'filter', sampleN: 5 });
+    expect(api.post).toHaveBeenCalledWith('/jobs/j1/materialize', { kind: 'filter', sampleN: 5 });
   });
 
-  it('gets a job and its stats', async () => {
-    mockedApi.get.mockResolvedValue({ success: true, data: { _id: 'j1' } });
-    expect(await getJob('j1')).toEqual({ _id: 'j1' });
-    expect(mockedApi.get).toHaveBeenCalledWith('/jobs/j1');
-
-    await getJobStats('j1');
-    expect(mockedApi.get).toHaveBeenCalledWith('/jobs/j1/stats');
+  it('moves a job through its states, shares it and deletes it', async () => {
+    await service.transitionJob('j1', 'activate');
+    expect(api.post).toHaveBeenCalledWith('/jobs/j1/activate');
+    await service.setJobVisibility('j1', true);
+    expect(api.put).toHaveBeenCalledWith('/jobs/j1/visibility', { isPublic: true });
+    await service.deleteJob('j1');
+    expect(api.delete).toHaveBeenCalledWith('/jobs/j1');
   });
 
-  it('creates, materializes, and transitions jobs', async () => {
-    mockedApi.post.mockResolvedValue({ success: true, data: { _id: 'j1' } });
-
-    await createJob({ name: 'J' } as never);
-    expect(mockedApi.post).toHaveBeenCalledWith('/jobs', { name: 'J' });
-
-    await materializeJob('j1', { kind: 'filter', sampleN: 5 });
-    expect(mockedApi.post).toHaveBeenCalledWith('/jobs/j1/materialize', { kind: 'filter', sampleN: 5 });
-
-    await transitionJob('j1', 'activate');
-    expect(mockedApi.post).toHaveBeenCalledWith('/jobs/j1/activate');
+  it('reads frames: by id, by position, and the next one in the queue', async () => {
+    await service.getTask('t1');
+    expect(api.get).toHaveBeenCalledWith('/tasks/t1');
+    await service.getTaskAt('j1', 4);
+    expect(api.get).toHaveBeenCalledWith('/jobs/j1/tasks/at/4');
+    await service.nextTask('j1', ['t0']);
+    expect(api.post).toHaveBeenCalledWith('/jobs/j1/next', { excludeTaskIds: ['t0'] });
   });
 
-  it('pulls, answers, and undoes tasks', async () => {
-    mockedApi.post.mockResolvedValue({ success: true, data: null });
-    expect(await nextTask('j1')).toBeNull();
-    expect(mockedApi.post).toHaveBeenCalledWith('/jobs/j1/next', { excludeTaskIds: [] });
+  it('reads stats, formats and the caller’s groups', async () => {
+    await service.getJobStats('j1');
+    expect(api.get).toHaveBeenCalledWith('/jobs/j1/stats');
+    await service.getFormats();
+    expect(api.get).toHaveBeenCalledWith('/jobs/formats');
+    await service.getMyGroups();
+    expect(api.get).toHaveBeenCalledWith('/me/groups');
+  });
+});
 
-    await nextTask('j1', ['t9']);
-    expect(mockedApi.post).toHaveBeenCalledWith('/jobs/j1/next', { excludeTaskIds: ['t9'] });
+describe('writing labels', () => {
+  it('saves boxes with and without a time', async () => {
+    const objects = [{ id: 'o', classKey: 'car', bbox: [0, 0, 1, 1] as [number, number, number, number], source: 'human' as const }];
 
-    await submitAnswer('t1', { rejectedMaskIds: [1] });
-    expect(mockedApi.post).toHaveBeenCalledWith('/tasks/t1/answer', { rejectedMaskIds: [1] });
-
-    await undoAnswer('t1');
-    expect(mockedApi.delete).toHaveBeenCalledWith('/tasks/t1/answer');
+    await service.saveObjects('t1', objects, 900);
+    expect(api.put).toHaveBeenCalledWith('/tasks/t1/annotation', { objects, elapsedMs: 900 });
+    await service.saveObjects('t1', objects);
+    expect(api.put).toHaveBeenLastCalledWith('/tasks/t1/annotation', { objects });
   });
 
-  it('fetches my groups', async () => {
-    mockedApi.get.mockResolvedValue({ success: true, data: [{ groupId: 'g1' }] });
+  it('sends the mask as raw bytes, and removes it', async () => {
+    const bytes = Uint8Array.from([1, 2, 3]);
 
-    expect(await getMyGroups()).toEqual([{ groupId: 'g1' }]);
-    expect(mockedApi.get).toHaveBeenCalledWith('/me/groups');
+    await service.saveMask('t1', bytes);
+    expect(api.request).toHaveBeenCalledWith('/tasks/t1/annotation/mask', {
+      method: 'PUT',
+      body: bytes,
+      headers: { 'Content-Type': 'application/octet-stream' }
+    });
+
+    await service.clearMask('t1');
+    expect(api.delete).toHaveBeenCalledWith('/tasks/t1/annotation/mask');
+  });
+
+  it('closes a frame as done or skipped, with its time when known', async () => {
+    await service.finishTask('t1', 'done', 1500);
+    expect(api.post).toHaveBeenCalledWith('/tasks/t1/annotation/done', { elapsedMs: 1500 });
+    await service.finishTask('t1', 'skip');
+    expect(api.post).toHaveBeenCalledWith('/tasks/t1/annotation/skip', {});
+  });
+});
+
+describe('importLabels', () => {
+  it('sends the archive as the body and the choices in the query', async () => {
+    const archive = new Blob(['zip']);
+
+    const report = await service.importLabels('j1', archive, {
+      as: 'done',
+      dryRun: false,
+      format: 'coco',
+      classMap: { person: 'pedestrian', junk: null }
+    });
+
+    expect(report).toEqual({ format: 'yolo' });
+    const [path, init] = api.request.mock.calls[0];
+    expect(path).toContain('/jobs/j1/import?');
+    const query = new URLSearchParams((path as string).split('?')[1]);
+    expect(query.get('as')).toBe('done');
+    expect(query.get('dryRun')).toBe('false');
+    expect(query.get('format')).toBe('coco');
+    expect(JSON.parse(query.get('classMap')!)).toEqual({ person: 'pedestrian', junk: null });
+    expect(init).toMatchObject({ method: 'POST', body: archive, headers: { 'Content-Type': 'application/zip' } });
+  });
+
+  it('leaves out options it was not given', async () => {
+    await service.importLabels('j1', new Blob(['zip']), { as: 'suggestions', dryRun: true });
+
+    const query = new URLSearchParams((api.request.mock.calls[0][0] as string).split('?')[1]);
+    expect(query.has('format')).toBe(false);
+    expect(query.has('classMap')).toBe(false);
   });
 });
 
 describe('downloadExport', () => {
-  it('fetches the export with credentials and triggers a download', async () => {
-    const blob = new Blob(['{}']);
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob });
-    vi.stubGlobal('fetch', fetchMock);
-    const createUrl = vi.fn(() => 'blob:x');
-    const revokeUrl = vi.fn();
-    vi.stubGlobal('URL', { ...URL, createObjectURL: createUrl, revokeObjectURL: revokeUrl });
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const click = vi.fn();
 
-    await downloadExport('j1', 'csv');
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, blob: async () => new Blob(['zip']) })));
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(click);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
-    expect(fetchMock).toHaveBeenCalledWith('http://label.test/api/jobs/j1/export?format=csv', {
-      credentials: 'include',
+  it('downloads a label bundle under a name that says what it is', async () => {
+    let name = '';
+    vi.spyOn(HTMLAnchorElement.prototype, 'download', 'set').mockImplementation((value) => {
+      name = value;
     });
-    expect(createUrl).toHaveBeenCalledWith(blob);
+
+    await service.downloadExport('j1', 'yolo', 'all');
+
+    expect(fetch).toHaveBeenCalledWith('https://label.example.test/api/jobs/j1/export?format=yolo&include=all', {
+      credentials: 'include'
+    });
+    expect(name).toBe('job-j1-yolo.zip');
     expect(click).toHaveBeenCalled();
-    expect(revokeUrl).toHaveBeenCalledWith('blob:x');
-
-    click.mockRestore();
-    vi.unstubAllGlobals();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:x');
   });
 
-  it('downloads the manifest as .manifest.json rather than .manifest', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['{}']) }));
-    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
-    const names: string[] = [];
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
-      names.push(this.download);
+  it('names the setup export as JSON, and finished frames are the default', async () => {
+    let name = '';
+    vi.spyOn(HTMLAnchorElement.prototype, 'download', 'set').mockImplementation((value) => {
+      name = value;
     });
 
-    await downloadExport('j1', 'manifest');
+    await service.downloadExport('j1', 'manifest');
 
-    expect(names).toEqual(['job-j1.manifest.json']);
-
-    click.mockRestore();
-    vi.unstubAllGlobals();
+    expect(name).toBe('job-j1.manifest.json');
+    expect((fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]).toContain('include=done');
   });
 
-  it('throws on a failed export', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403 }));
-
-    await expect(downloadExport('j1', 'jsonl')).rejects.toThrow('Export failed (403)');
-    vi.unstubAllGlobals();
+  it('reports a failed download', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403 })));
+    await expect(service.downloadExport('j1', 'coco')).rejects.toThrow('Export failed (403)');
   });
-
-  it('opens a task by id', async () => {
-    mockedApi.get.mockResolvedValue({ success: true, data: { task: { _id: 't1' } } });
-
-    expect(await getTask('t1')).toEqual({ task: { _id: 't1' } });
-    expect(mockedApi.get).toHaveBeenCalledWith('/tasks/t1');
-  });
-
-  it('opens the frame at a position', async () => {
-    mockedApi.get.mockResolvedValue({ success: true, data: { task: { _id: 't7' } } });
-
-    expect(await getTaskAt('j1', 6)).toEqual({ task: { _id: 't7' } });
-    expect(mockedApi.get).toHaveBeenCalledWith('/jobs/j1/tasks/at/6');
-  });
-
-  // Past the last frame the service answers with data:null, so a caller can walk
-  // forwards without first knowing how many frames there are.
-  it('passes a null frame through rather than treating it as an error', async () => {
-    mockedApi.get.mockResolvedValue({ success: true, data: null });
-
-    expect(await getTaskAt('j1', 999)).toBeNull();
-  });
-
-  it('deletes a job', async () => {
-    mockedApi.delete.mockResolvedValue({ success: true, data: { tasks: 3, answers: 4 } });
-
-    expect(await deleteJob('j1')).toEqual({ tasks: 3, answers: 4 });
-    expect(mockedApi.delete).toHaveBeenCalledWith('/jobs/j1');
-  });
-});
-
-it('sets visibility through the authenticated client', async () => {
-  mockedApi.put.mockResolvedValue({ data: { isPublic: true } });
-  expect(await setJobVisibility('j1', true)).toEqual({ isPublic: true });
-  expect(mockedApi.put).toHaveBeenCalledWith('/jobs/j1/visibility', { isPublic: true });
 });

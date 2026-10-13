@@ -37,15 +37,11 @@ it('reads every page of items, following the keyset cursor', async () => {
   expect(url(1)).toContain('after=frames%2Fa.png');
 });
 
-it('passes a variant through, and asks for mask fields and the manifest', async () => {
+it('passes a variant through, and asks for the manifest', async () => {
   fetchMock.mockResolvedValue(jsonResponse({ items: [], next: null }));
   await datasets.listItems('d1', { group: 'verify', kind: 'json', variant: 'masks' });
   expect(url()).toContain('variant=masks');
   expect(url()).not.toContain('noVariant');
-
-  fetchMock.mockResolvedValue(jsonResponse([{ field: 'stratum', values: [] }]));
-  expect(await datasets.jsonFields('d1', 'verify', 'masks')).toHaveLength(1);
-  expect(url(1)).toBe('http://dataset-service:5010/internal/datasets/d1/json-fields?group=verify&variant=masks');
 
   fetchMock.mockResolvedValue(jsonResponse([{ stem: 'a', attributes: { stratum: 'day' } }]));
   expect(await datasets.getManifest('d1')).toEqual([{ stem: 'a', attributes: { stratum: 'day' } }]);

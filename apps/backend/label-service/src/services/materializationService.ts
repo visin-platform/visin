@@ -1,82 +1,98 @@
 import { Types } from 'mongoose';
 import { BadRequestError, ConflictError } from '@visin/backend-core';
-import { ILabelJob } from '../models/LabelJob';
-import { IMaskMeta, ITaskFrame, ITaskLayer, ITaskMaskMap, LabelTask } from '../models/LabelTask';
+import { ILabelJob, IJobSensor } from '../models/LabelJob';
+import { ITaskFrame, ITaskPoint, ITaskSensor, LabelTask } from '../models/LabelTask';
 import * as datasets from '../clients/datasetServiceClient';
 import { parseManifest } from '../utils/manifest';
 import { seededSample } from '../utils/seededRandom';
-import { MaskSelector, MaterializeBody } from '../validation/jobSchemas';
+import { MaterializeBody } from '../validation/jobSchemas';
 
-/**
- * The file-name variants that mean something to labeling, inside an annotation
- * group of a dataset: `0001.png` is the overlay layer, `0001.ids.png` the id map
- * whose pixel values are mask ids, and `0001.masks.json` those masks' metadata.
- */
-export const IDS_VARIANT = 'ids';
-export const MASKS_VARIANT = 'masks';
+/** A point sensor's sidecar can be dense; a frame shows no more than this many of its points. */
+export const MAX_POINTS_PER_FRAME = 20_000;
 
 interface ResolvedRow {
   frame: ITaskFrame;
   stratum?: string;
 }
 
-interface AnnotationFiles {
-  layers: Map<string, string>; // `${set} ${stem}` → fileId
-  idmaps: Map<string, string>;
-  masks: Map<string, IMaskMeta[]>;
-}
+/** What each non-camera sensor has on file, by frame stem. */
+type SensorFiles = Map<string, Map<string, ITaskSensor>>;
 
-const key = (set: string, stem: string): string => `${set} ${stem}`;
-
-/** A mask's value for the selector's field, as the string the UI offers. */
-const fieldValue = (mask: IMaskMeta, field: string): string | undefined => {
-  const value = (mask as Record<string, unknown>)[field];
-  return value === undefined || value === null ? undefined : String(value);
+const num = (value: unknown): number | undefined => {
+  const parsed = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  return typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : undefined;
 };
 
 /**
- * Pick the masks a job asks for, out of every mask in its annotation set.
+ * A point sensor's JSON sidecar as the points a frame draws.
  *
- * The cap is global rather than per frame: a group like "only one of the two
- * runs confirmed this candidate" has ~1,100 members spread one per frame across
- * thousands of frames, so a per-frame cap could never reach a target count for
- * it. Sampling is seeded, so the same (dataset, selector, seed) always yields the
- * same task set.
+ * Datasets name their fields differently, so the reading a point carries is
+ * whichever of the usual names is present; position is `u`/`v` (or `x`/`y`, or
+ * a `[u, v, value?]` triple), always in the camera frame's pixels.
  */
-const selectMasks = (
-  rows: ResolvedRow[],
-  annotations: AnnotationFiles,
-  set: string,
-  selector: MaskSelector
-): { byStem: Map<string, IMaskMeta[]>; counts: Record<string, number> } => {
-  const include = selector.include ? new Set(selector.include) : undefined;
-  const byValue = new Map<string, { stem: string; mask: IMaskMeta }[]>();
-
-  for (const row of rows) {
-    for (const mask of annotations.masks.get(key(set, row.frame.stem)) || []) {
-      const value = fieldValue(mask, selector.field);
-      if (value === undefined || (include && !include.has(value))) {
-        continue;
+export const toPoints = (data: unknown): ITaskPoint[] | undefined => {
+  const list = Array.isArray(data)
+    ? data
+    : data && typeof data === 'object' && Array.isArray((data as { points?: unknown }).points)
+      ? ((data as { points: unknown[] }).points as unknown[])
+      : undefined;
+  if (!list) return undefined;
+  const points: ITaskPoint[] = [];
+  for (const entry of list) {
+    if (points.length >= MAX_POINTS_PER_FRAME) break;
+    let u: number | undefined;
+    let v: number | undefined;
+    let value: number | undefined;
+    if (Array.isArray(entry)) {
+      [u, v, value] = [num(entry[0]), num(entry[1]), num(entry[2])];
+    } else if (entry && typeof entry === 'object') {
+      const record = entry as Record<string, unknown>;
+      u = num(record.u ?? record.x);
+      v = num(record.v ?? record.y);
+      for (const field of ['value', 'range', 'depth', 'distance', 'intensity', 'rcs', 'doppler']) {
+        value = num(record[field]);
+        if (value !== undefined) break;
       }
-      byValue.set(value, [...(byValue.get(value) || []), { stem: row.frame.stem, mask }]);
+    }
+    if (u !== undefined && v !== undefined) {
+      points.push({ u, v, ...(value !== undefined ? { value } : {}) });
     }
   }
+  return points;
+};
 
-  const byStem = new Map<string, IMaskMeta[]>();
-  const counts: Record<string, number> = {};
-  for (const [value, entries] of byValue) {
-    const picked = selector.perValue ? seededSample(entries, selector.perValue, selector.seed ?? 42) : entries;
-    counts[value] = picked.length;
-    for (const entry of picked) {
-      byStem.set(entry.stem, [...(byStem.get(entry.stem) || []), entry.mask]);
+/** A dataset item as the frame a task shows. */
+const toFrame = (item: datasets.DatasetItem): ITaskFrame => ({
+  fileId: item.fileId!,
+  path: item.path,
+  stem: item.stem,
+  ...(item.width !== undefined ? { width: item.width } : {}),
+  ...(item.height !== undefined ? { height: item.height } : {})
+});
+
+const itemsOf = (datasetId: string, sensor: IJobSensor): Promise<datasets.DatasetItem[]> =>
+  datasets.listItems(datasetId, {
+    group: sensor.group,
+    kind: sensor.kind === 'points' ? 'json' : 'image',
+    ...(sensor.variant ? { variant: sensor.variant } : { noVariant: true })
+  });
+
+/** The overlay sensors' files and points, indexed by sensor then stem. */
+const loadSensors = async (job: ILabelJob, datasetId: string): Promise<SensorFiles> => {
+  const files: SensorFiles = new Map();
+  for (const sensor of job.sensors.filter((candidate) => candidate.key !== 'camera')) {
+    const byStem = new Map<string, ITaskSensor>();
+    for (const item of await itemsOf(datasetId, sensor)) {
+      if (sensor.kind === 'points') {
+        const points = toPoints(item.data);
+        if (points) byStem.set(item.stem, { key: sensor.key, kind: 'points', points });
+      } else if (item.fileId) {
+        byStem.set(item.stem, { key: sensor.key, kind: 'image', fileId: item.fileId });
+      }
     }
+    files.set(sensor.key, byStem);
   }
-  // Sampling shuffles; restore the dataset's own mask order so the workbench
-  // walks masks in a stable, frame-local order.
-  for (const [stem, masks] of byStem) {
-    byStem.set(stem, [...masks].sort((a, b) => Number(a.id) - Number(b.id)));
-  }
-  return { byStem, counts };
+  return files;
 };
 
 const resolveRows = (
@@ -96,100 +112,41 @@ const resolveRows = (
   return { resolved, missing };
 };
 
-const buildPayload = (
-  job: ILabelJob,
-  stem: string,
-  annotations: AnnotationFiles,
-  selectedMasks?: Map<string, IMaskMeta[]>
-): { layers?: ITaskLayer[]; maskMap?: ITaskMaskMap } | undefined => {
-  const layers: ITaskLayer[] = [];
-  for (const set of job.annotationSets) {
-    const fileId = annotations.layers.get(key(set, stem));
-    if (fileId) {
-      layers.push({ set, fileId });
-    }
-  }
-
-  let maskMap: ITaskMaskMap | undefined;
-  if (job.taskType === 'mask_toggle') {
-    const set = job.annotationSets[0];
-    const fileId = annotations.idmaps.get(key(set, stem));
-    if (fileId) {
-      const masks = selectedMasks ? selectedMasks.get(stem) || [] : annotations.masks.get(key(set, stem)) || [];
-      maskMap = { fileId, masks };
-    }
-  }
-
-  if (layers.length === 0 && !maskMap) {
-    return undefined;
-  }
-  return { ...(layers.length ? { layers } : {}), ...(maskMap ? { maskMap } : {}) };
-};
-
-/** A dataset item as the frame a task shows. */
-const toFrame = (item: datasets.DatasetItem): ITaskFrame => ({
-  fileId: item.fileId!,
-  path: item.path,
-  stem: item.stem,
-  ...(item.width !== undefined ? { width: item.width } : {}),
-  ...(item.height !== undefined ? { height: item.height } : {})
-});
-
-/** Layers, id maps and mask metadata for the job's annotation groups. */
-const loadAnnotations = async (job: ILabelJob, datasetId: string): Promise<AnnotationFiles> => {
-  const annotations: AnnotationFiles = { layers: new Map(), idmaps: new Map(), masks: new Map() };
-  for (const set of job.annotationSets) {
-    for (const item of await datasets.listItems(datasetId, { group: set, kind: 'image' })) {
-      if (!item.variant) annotations.layers.set(key(set, item.stem), item.fileId!);
-      else if (item.variant === IDS_VARIANT) annotations.idmaps.set(key(set, item.stem), item.fileId!);
-    }
-  }
-  if (job.taskType === 'mask_toggle' && job.annotationSets[0]) {
-    const set = job.annotationSets[0];
-    for (const item of await datasets.listItems(datasetId, { group: set, kind: 'json', variant: MASKS_VARIANT })) {
-      if (Array.isArray(item.data)) annotations.masks.set(key(set, item.stem), item.data as IMaskMeta[]);
-    }
-  }
-  return annotations;
-};
+export interface MaterializeResult {
+  tasks: number;
+  missing: string[];
+  /** frames that have a file for each overlay sensor — a sensor registered with fewer is a mapping worth a look */
+  sensors: Record<string, number>;
+}
 
 /**
  * Build the job's immutable task set from its dataset. Draft-only; re-running
  * replaces the previous set. Manifest rows (the dataset's, or posted inline) or
  * a seeded sample over the dataset's frames.
  *
- * Each task copies what it shows — file ids, sizes, the mask list — so labeling
- * never has to ask dataset-service for anything; the job's hold on the dataset
- * keeps those files in place.
+ * Each task copies what it shows — file ids, sizes, a point sensor's points — so
+ * labeling never has to ask dataset-service for anything; the job's hold on the
+ * dataset keeps those files in place.
  */
-export const materializeTasks = async (
-  job: ILabelJob,
-  body: MaterializeBody
-): Promise<{ tasks: number; missing: string[]; masks?: Record<string, number> }> => {
+export const materializeTasks = async (job: ILabelJob, body: MaterializeBody): Promise<MaterializeResult> => {
   if (job.status !== 'draft') {
     throw new ConflictError('Tasks can only be materialized while the job is a draft');
   }
   if (!job.datasetId) {
     throw new ConflictError('Job has no dataset');
   }
+  const camera = job.sensors.find((sensor) => sensor.key === 'camera');
+  if (!camera) {
+    throw new ConflictError('Job has no camera sensor');
+  }
   const dataset = await datasets.getDataset(job.datasetId);
   const groupNames = new Set(dataset.groups.map((group) => group.name));
-
-  if (!groupNames.has(job.framesGroup)) {
-    throw new BadRequestError(`The dataset has no image group "${job.framesGroup}"`);
-  }
-  const invalidSets = job.annotationSets.filter((set) => !groupNames.has(set));
-  if (invalidSets.length > 0) {
-    throw new BadRequestError(`Annotation sets not in dataset: ${invalidSets.join(', ')}`);
-  }
-  if (job.taskType === 'mask_toggle' && job.annotationSets.length !== 1) {
-    throw new BadRequestError('mask_toggle jobs verify exactly one annotation set');
+  const absent = job.sensors.filter((sensor) => !groupNames.has(sensor.group));
+  if (absent.length > 0) {
+    throw new BadRequestError(`The dataset has no image group "${absent[0].group}" (${absent[0].key})`);
   }
 
-  const [frameItems, annotations] = await Promise.all([
-    datasets.listItems(job.datasetId, { group: job.framesGroup, kind: 'image', noVariant: true }),
-    loadAnnotations(job, job.datasetId)
-  ]);
+  const [frameItems, sensorFiles] = await Promise.all([itemsOf(job.datasetId, camera), loadSensors(job, job.datasetId)]);
   // Path order — the order the dataset lists its frames in — is the task order.
   const frames = frameItems.map(toFrame).sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   const framesByStem = new Map(frames.map((frame) => [frame.stem, frame]));
@@ -212,78 +169,48 @@ export const materializeTasks = async (
       throw new BadRequestError('No manifest row matches a frame in the dataset');
     }
   } else {
-    // "All frames" means all frames this job's set actually covers. A dataset can
-    // carry several sets over different frames — one zip holding a mask-review
-    // set and a candidate-review set, each painted on the frames it applies to —
-    // and a mask_toggle job over one of them is not missing the other's frames,
-    // it simply doesn't include them. A named manifest is different: that lists
-    // frames on purpose, so a gap there stays an error below.
-    const covered =
-      job.taskType === 'mask_toggle'
-        ? frames.filter((frame) => annotations.idmaps.has(key(job.annotationSets[0], frame.stem)))
-        : frames;
-    const all: ResolvedRow[] = covered.map((frame) => ({ frame }));
+    const all: ResolvedRow[] = frames.map((frame) => ({ frame }));
     rows = body.sampleN ? seededSample(all, body.sampleN, body.seed ?? 42) : all;
     if (rows.length === 0) {
-      throw new BadRequestError(
-        job.taskType === 'mask_toggle'
-          ? `No frame in the dataset has an id map in "${job.annotationSets[0]}"`
-          : 'The dataset has no frames'
-      );
-    }
-  }
-
-  if (job.taskType === 'mask_toggle') {
-    const set = job.annotationSets[0];
-    const withoutIdmap = rows.filter((row) => !annotations.idmaps.has(key(set, row.frame.stem)));
-    if (withoutIdmap.length > 0) {
-      throw new BadRequestError(
-        `mask_toggle needs an id map per frame in "${set}" — missing for: ` +
-          withoutIdmap.slice(0, 5).map((row) => row.frame.stem).join(', ') +
-          (withoutIdmap.length > 5 ? ` (+${withoutIdmap.length - 5} more)` : '')
-      );
-    }
-  }
-
-  let selectedMasks: Map<string, IMaskMeta[]> | undefined;
-  let maskCounts: Record<string, number> | undefined;
-  if (body.masks) {
-    if (job.taskType !== 'mask_toggle') {
-      throw new BadRequestError('A mask selection only applies to mask_toggle jobs');
-    }
-    ({ byStem: selectedMasks, counts: maskCounts } = selectMasks(rows, annotations, job.annotationSets[0], body.masks));
-    // A frame none of whose masks were selected has nothing to ask about.
-    rows = rows.filter((row) => selectedMasks!.has(row.frame.stem));
-    if (rows.length === 0) {
-      throw new BadRequestError(`No mask matches the selection on "${body.masks.field}" in "${job.annotationSets[0]}"`);
+      throw new BadRequestError(`The dataset has no frames in "${camera.group}"`);
     }
   }
 
   await LabelTask.deleteMany({ jobId: job._id });
 
+  const coverage: Record<string, number> = {};
   const tasks = rows.map((row, order) => {
-    const payload = buildPayload(job, row.frame.stem, annotations, selectedMasks);
+    const sensors: ITaskSensor[] = [];
+    for (const [key, byStem] of sensorFiles) {
+      const sensor = byStem.get(row.frame.stem);
+      if (sensor) {
+        sensors.push(sensor);
+        coverage[key] = (coverage[key] || 0) + 1;
+      }
+    }
     return {
       jobId: job._id as Types.ObjectId,
       frame: row.frame,
       order,
       ...(row.stratum ? { stratum: row.stratum } : {}),
-      ...(payload ? { payload } : {})
+      ...(sensors.length ? { sensors } : {})
     };
   });
   await LabelTask.insertMany(tasks);
 
   job.selection = {
     kind: body.kind,
-    spec: {
-      ...(body.kind === 'manifest'
+    spec:
+      body.kind === 'manifest'
         ? { source: body.content ? 'inline' : 'dataset', rows: rows.length, missing: missing.length }
-        : { sampleN: body.sampleN ?? null, seed: body.seed ?? 42, rows: rows.length }),
-      ...(body.masks ? { masks: { ...body.masks, seed: body.masks.seed ?? 42, counts: maskCounts } } : {})
-    }
+        : { sampleN: body.sampleN ?? null, seed: body.seed ?? 42, rows: rows.length }
   };
   job.tasksCount = rows.length;
   await job.save();
 
-  return { tasks: rows.length, missing, ...(maskCounts ? { masks: maskCounts } : {}) };
+  return {
+    tasks: rows.length,
+    missing,
+    sensors: Object.fromEntries(job.sensors.filter((sensor) => sensor.key !== 'camera').map((sensor) => [sensor.key, coverage[sensor.key] || 0]))
+  };
 };

@@ -1,6 +1,14 @@
 import { Router } from 'express';
 import { asyncHandler, authenticateToken, validateRequest } from '@visin/backend-core';
-import { createJobBodySchema, listJobsQuerySchema, materializeBodySchema, jobVisibilityBodySchema } from '../validation/jobSchemas';
+import {
+  createJobBodySchema,
+  exportQuerySchema,
+  importQuerySchema,
+  jobVisibilityBodySchema,
+  listJobsQuerySchema,
+  materializeBodySchema,
+  modelClassMappingBodySchema
+} from '../validation/jobSchemas';
 import { nextBodySchema, taskAtParamsSchema } from '../validation/taskSchemas';
 import * as ctrl from '../controllers/jobController';
 import * as taskCtrl from '../controllers/taskController';
@@ -12,8 +20,11 @@ const router = Router();
 // caller is turned away at the door rather than inside a controller.
 router.post('/', authenticateToken, validateRequest({ body: createJobBodySchema }), asyncHandler(ctrl.createJob));
 router.get('/', validateRequest({ query: listJobsQuerySchema }), asyncHandler(ctrl.listJobs));
+// Static, so it must be declared before `/:id`.
+router.get('/formats', asyncHandler(ctrl.listFormats));
 router.get('/:id', asyncHandler(ctrl.getJob));
 router.put('/:id/visibility', authenticateToken, validateRequest({ body: jobVisibilityBodySchema }), asyncHandler(ctrl.setJobVisibility));
+router.put('/:id/model-mapping', authenticateToken, validateRequest({ body: modelClassMappingBodySchema }), asyncHandler(ctrl.setModelClassMapping));
 // Destructive: job + tasks + answers. `archive` only hides a job from workers.
 router.delete('/:id', authenticateToken, asyncHandler(ctrl.deleteJob));
 router.post(
@@ -40,7 +51,9 @@ router.get(
   asyncHandler(taskCtrl.getTaskAtIndex)
 );
 // The collected labels themselves, not progress about them: stays admin-only.
-router.get('/:id/export', authenticateToken, asyncHandler(ctrl.exportJob));
+router.get('/:id/export', authenticateToken, validateRequest({ query: exportQuerySchema }), asyncHandler(ctrl.exportJob));
+// The body is the labels zip itself; `dryRun=true` reports what would be imported.
+router.post('/:id/import', authenticateToken, validateRequest({ query: importQuerySchema }), asyncHandler(ctrl.importLabels));
 router.get('/:id/stats', asyncHandler(ctrl.jobStats));
 
 export default router;

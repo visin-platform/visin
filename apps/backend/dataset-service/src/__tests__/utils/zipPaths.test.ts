@@ -22,7 +22,14 @@ describe('stemAndVariant', () => {
     ['a/frame_000012.masks.json', { stem: 'frame_000012', variant: 'masks' }],
     ['frame.000012.png', { stem: 'frame.000012' }],
     ['img.2023.jpg', { stem: 'img.2023' }],
-    ['README', { stem: 'README' }]
+    ['README', { stem: 'README' }],
+    // One frame seen by three sensors, one group each: a label job joins them on the stem.
+    ['camera/0001.jpg', { stem: '0001' }],
+    ['lidar/0001.png', { stem: '0001' }],
+    ['radar/0001.json', { stem: '0001' }],
+    // ...or side by side in one group, told apart by their variant.
+    ['scene/0001.lidar.png', { stem: '0001', variant: 'lidar' }],
+    ['scene/0001.radar.json', { stem: '0001', variant: 'radar' }]
   ])('%s', (filePath, expected) => {
     expect(stemAndVariant(filePath)).toEqual(expected);
   });

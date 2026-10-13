@@ -1,43 +1,63 @@
 import { Types } from 'mongoose';
-import { BadRequestError, ConflictError, NotFoundError, UserPayload } from '@visin/backend-core';
-import { LabelTask, ILabelTask, IMaskMeta } from '../models/LabelTask';
-import { LabelJob, ILabelJob } from '../models/LabelJob';
-import { LabelAnswer, ILabelAnswer } from '../models/LabelAnswer';
+import { BadRequestError, ConflictError, NotFoundError, UserPayload, logger } from '@visin/backend-core';
+import { LabelTask, ILabelTask, ITaskPoint } from '../models/LabelTask';
+import { LabelJob, ILabelJob, IJobClass } from '../models/LabelJob';
+import { LabelAnnotation, ILabelAnnotation, IAnnotationMask, IBoxObject } from '../models/LabelAnnotation';
+import { LabelSuggestion } from '../models/LabelSuggestion';
 import * as files from '../clients/fileServiceClient';
-import { AnswerBody } from '../validation/taskSchemas';
+import { SaveAnnotationBody } from '../validation/taskSchemas';
+import { decodeMaskRle, countPixels } from '../utils/mask';
+import { encodeGrayscalePng } from '../utils/png';
+import { TASK_LEASE_MINUTES } from '../limits';
 import { getJobReadAccess } from './jobAccessService';
 import { getJob } from './jobService';
 
-const LEASE_MINUTES = Number(process.env.TASK_LEASE_MINUTES || 5);
+
+export type SensorView =
+  | { key: string; kind: 'image'; url: string }
+  | { key: string; kind: 'points'; points: ITaskPoint[] };
 
 export interface TaskImages {
   // `stem` is the frame's filename in the dataset — the name a labeler quotes
   // when asking a question about what they are looking at.
   frame: { url: string; width?: number; height?: number; stem?: string };
-  layers: { set: string; url: string }[];
-  idmap?: { url: string };
+  sensors: SensorView[];
 }
 
-/** One answer's verdict, with no trace of who gave it. */
-export interface AnswerSnapshot {
-  choiceKey?: string;
-  rejectedMaskIds?: number[];
+export interface MaskView {
+  url: string;
+  width: number;
+  height: number;
+}
+
+/** One annotator's labels on a frame, with no trace of who made them. */
+export interface AnnotationView {
+  status: 'draft' | 'done' | 'skipped';
+  objects: IBoxObject[];
+  mask?: MaskView;
   updatedAt: Date;
 }
 
+/** Labels that came with an import: shown dashed until an annotator accepts them. */
+export interface SuggestionView {
+  objects: IBoxObject[];
+  mask?: MaskView;
+}
+
 /**
- * What has already been decided about this frame.
+ * What has already been labeled on this frame.
  *
  * `latest` is deliberately anonymous: a visitor following a shared link should
- * see that a frame was labeled and how, without being handed the labelers'
- * email addresses. Service-managed labeler identity is omitted from this response.
+ * see that a frame was labeled and how, without being handed the annotators'
+ * email addresses. Service-managed identity is omitted from this response.
  */
-export interface TaskAnswerState {
+export interface TaskAnnotationState {
+  /** annotators who finished the frame */
   count: number;
-  /** The caller's own answer, when they have one — what the workbench prefills. */
-  mine: AnswerSnapshot | null;
-  /** Most recently updated answer from anyone, for viewers with none of their own. */
-  latest: AnswerSnapshot | null;
+  /** The caller's own labels, when they have any — what the editor opens with. */
+  mine: AnnotationView | null;
+  /** The most recently finished labels from anyone, shown to a viewer with none of their own. */
+  latest: AnnotationView | null;
 }
 
 /** Where this frame sits in the job's frame order — 0-based. */
@@ -48,69 +68,33 @@ export interface TaskPosition {
 
 /**
  * Public task content. Ownership, leases and storage file ids stay internal: the
- * client gets signed URLs in `images`, and from the payload only what it acts on.
+ * client gets signed URLs in `images`, and from the sensors only what it acts on.
  */
 export interface TaskView {
   _id: Types.ObjectId;
   jobId: Types.ObjectId;
   order: number;
   stratum?: string;
-  payload?: {
-    layers?: { set: string }[];
-    maskMap?: { masks: IMaskMeta[] };
-  };
+  sensors?: { key: string; kind: string }[];
 }
 
 export interface TaskItem {
   task: TaskView;
   images: TaskImages;
   position: TaskPosition;
-  answer: TaskAnswerState;
+  annotation: TaskAnnotationState;
+  /** present for a signed-in caller with no labels of their own on the frame */
+  suggestions: SuggestionView | null;
 }
 
-/** Signed URLs for everything a task shows, in one file-service call. */
-const buildTaskImages = async (task: ILabelTask): Promise<TaskImages> => {
-  const layers = task.payload?.layers || [];
-  const maskMap = task.payload?.maskMap;
-  const urls = await files.getDownloadUrls([task.frame.fileId, ...layers.map((layer) => layer.fileId), ...(maskMap ? [maskMap.fileId] : [])]);
-
-  const urlFor = (fileId: string): string => {
-    const url = urls[fileId];
-    if (!url) {
-      throw new NotFoundError('Task image could not be signed');
-    }
-    return url;
-  };
-
-  return {
-    frame: {
-      url: urlFor(task.frame.fileId),
-      width: task.frame.width,
-      height: task.frame.height,
-      stem: task.frame.stem
-    },
-    layers: layers.map((layer) => ({ set: layer.set, url: urlFor(layer.fileId) })),
-    ...(maskMap ? { idmap: { url: urlFor(maskMap.fileId) } } : {})
-  };
-};
-
-const snapshotOf = (answer: ILabelAnswer): AnswerSnapshot => ({
-  ...(answer.choiceKey ? { choiceKey: answer.choiceKey } : {}),
-  ...(answer.rejectedMaskIds ? { rejectedMaskIds: answer.rejectedMaskIds } : {}),
-  updatedAt: answer.updatedAt
-});
-
-// Bounded by the job's redundancy K (max 10), so reading the lot and picking in
-// memory costs one indexed query rather than one per question asked of it.
-const answerStateFor = async (taskId: Types.ObjectId, userId?: string): Promise<TaskAnswerState> => {
-  const answers = await LabelAnswer.find({ taskId }).sort({ updatedAt: -1 });
-  const mine = userId ? answers.find((answer) => answer.userId === userId) : undefined;
-  return {
-    count: answers.length,
-    mine: mine ? snapshotOf(mine) : null,
-    latest: answers[0] ? snapshotOf(answers[0]) : null
-  };
-};
+const toObjects = (objects: IBoxObject[]): IBoxObject[] =>
+  objects.map((object) => ({
+    id: object.id,
+    classKey: object.classKey,
+    bbox: [...object.bbox] as IBoxObject['bbox'],
+    source: object.source,
+    ...(object.score !== undefined ? { score: object.score } : {})
+  }));
 
 /**
  * `total` is passed in wherever the caller already holds the job, whose
@@ -126,11 +110,46 @@ const positionFor = async (task: ILabelTask, total?: number): Promise<TaskPositi
 };
 
 const buildTaskItem = async (task: ILabelTask, userId?: string, total?: number): Promise<TaskItem> => {
-  const [images, position, answer] = await Promise.all([
-    buildTaskImages(task),
+  // Bounded by the job's redundancy K (max 10) per frame, so reading the lot and
+  // picking in memory costs one indexed query rather than one per question.
+  const [annotations, position, suggestionDoc] = await Promise.all([
+    LabelAnnotation.find({ taskId: task._id }).sort({ updatedAt: -1 }),
     positionFor(task, total),
-    answerStateFor(task._id, userId)
+    userId ? LabelSuggestion.findOne({ taskId: task._id }) : Promise.resolve(null)
   ]);
+  const mine = userId ? annotations.find((annotation) => annotation.userId === userId) : undefined;
+  const finished = annotations.filter((annotation) => annotation.status === 'done');
+  const latest = finished[0];
+  const suggestion = mine ? null : suggestionDoc;
+
+  const sensors = task.sensors || [];
+  const maskFiles = [mine?.mask?.fileId, latest?.mask?.fileId, suggestion?.mask?.fileId].filter(
+    (fileId): fileId is string => Boolean(fileId)
+  );
+  const urls = await files.getDownloadUrls([
+    task.frame.fileId,
+    ...sensors.flatMap((sensor) => (sensor.fileId ? [sensor.fileId] : [])),
+    ...maskFiles
+  ]);
+  const urlFor = (fileId: string): string => {
+    const url = urls[fileId];
+    if (!url) {
+      throw new NotFoundError('Task image could not be signed');
+    }
+    return url;
+  };
+  const maskView = (mask?: IAnnotationMask): MaskView | undefined =>
+    mask ? { url: urlFor(mask.fileId), width: mask.width, height: mask.height } : undefined;
+  const annotationView = (annotation: ILabelAnnotation): AnnotationView => {
+    const mask = maskView(annotation.mask);
+    return {
+      status: annotation.status,
+      objects: toObjects(annotation.objects),
+      ...(mask ? { mask } : {}),
+      updatedAt: annotation.updatedAt
+    };
+  };
+
   // Construct an allowlist rather than serializing the document or deleting known
   // private fields: newly added model fields must not become public automatically.
   const view: TaskView = {
@@ -138,24 +157,42 @@ const buildTaskItem = async (task: ILabelTask, userId?: string, total?: number):
     jobId: task.jobId,
     order: task.order,
     stratum: task.stratum,
-    ...(task.payload
-      ? {
-          payload: {
-            ...(task.payload.layers ? { layers: task.payload.layers.map((layer) => ({ set: layer.set })) } : {}),
-            ...(task.payload.maskMap ? { maskMap: { masks: task.payload.maskMap.masks } } : {})
-          }
-        }
-      : {})
+    ...(sensors.length ? { sensors: sensors.map((sensor) => ({ key: sensor.key, kind: sensor.kind })) } : {})
   };
-  return { task: view, images, position, answer };
+  const suggestionMask = maskView(suggestion?.mask);
+  return {
+    task: view,
+    images: {
+      frame: {
+        url: urlFor(task.frame.fileId),
+        width: task.frame.width,
+        height: task.frame.height,
+        stem: task.frame.stem
+      },
+      sensors: sensors.map((sensor): SensorView =>
+        sensor.kind === 'points'
+          ? { key: sensor.key, kind: 'points', points: sensor.points || [] }
+          : { key: sensor.key, kind: 'image', url: urlFor(sensor.fileId!) }
+      )
+    },
+    position,
+    annotation: {
+      count: finished.length,
+      mine: mine ? annotationView(mine) : null,
+      latest: latest ? annotationView(latest) : null
+    },
+    suggestions: suggestion
+      ? { objects: toObjects(suggestion.objects), ...(suggestionMask ? { mask: suggestionMask } : {}) }
+      : null
+  };
 };
 
 /**
- * Lease-based pull: atomically grab the first task this user hasn't answered,
- * that still needs answers (< K) and has no live lease held by someone else.
- * A task leased by the caller is eligible again (resume after refresh), so a
- * client holding tasks (the workbench prefetches one ahead) must pass their
- * ids in `excludeTaskIds` or it would be handed the same task twice.
+ * Lease-based pull: atomically grab the first task this user hasn't finished or
+ * skipped, that still needs labels (< K) and has no live lease held by someone
+ * else. A task leased by the caller is eligible again (resume after refresh), so
+ * a client holding tasks (the editor prefetches one ahead) must pass their ids
+ * in `excludeTaskIds` or it would be handed the same task twice.
  * Returns null when the user is done with this job.
  */
 export const nextTask = async (
@@ -170,9 +207,10 @@ export const nextTask = async (
       ...(excludeTaskIds.length ? { _id: { $nin: excludeTaskIds } } : {}),
       answersCount: { $lt: job.redundancy },
       answeredBy: { $ne: user.id },
+      skippedBy: { $ne: user.id },
       $or: [{ leaseExpiresAt: null }, { leaseExpiresAt: { $lt: now } }, { leasedBy: user.id }]
     },
-    { $set: { leasedBy: user.id, leaseExpiresAt: new Date(now.getTime() + LEASE_MINUTES * 60 * 1000) } },
+    { $set: { leasedBy: user.id, leaseExpiresAt: new Date(now.getTime() + TASK_LEASE_MINUTES * 60 * 1000) } },
     { sort: { order: 1 }, returnDocument: 'after' }
   );
 
@@ -183,7 +221,7 @@ export const nextTask = async (
 };
 
 /**
- * One named task, images and all — what a shared workbench URL resolves to.
+ * One named task, images and all — what a shared editor URL resolves to.
  *
  * Deliberately does not take a lease: opening someone else's link is a look at
  * a specific frame, not a claim on it, and leasing here would pull the task out
@@ -196,8 +234,8 @@ export const getTaskItem = async (taskId: string, userId?: string): Promise<Task
 };
 
 /**
- * The frame at a 0-based position in the job's order — what the workbench's
- * prev/next stepping resolves to, and where an anonymous visitor starts.
+ * The frame at a 0-based position in the job's order — what the editor's
+ * back/forward stepping resolves to, and where an anonymous visitor starts.
  *
  * Out of range returns null rather than 404: the client walks to `index + 1`
  * without knowing whether it exists, and "you have reached the end" is not an
@@ -226,109 +264,238 @@ export const getTaskWithJob = async (taskId: string): Promise<{ task: ILabelTask
   return { task, job };
 };
 
-const validateAnswerForTaskType = (job: ILabelJob, task: ILabelTask, body: AnswerBody): void => {
-  if (job.taskType === 'single_choice') {
-    if (!body.choiceKey) {
-      throw new BadRequestError('choiceKey required for a single_choice task');
-    }
-    const keys = (job.question.choices || []).map((choice) => choice.key);
-    if (!keys.includes(body.choiceKey)) {
-      throw new BadRequestError(`Unknown choiceKey "${body.choiceKey}"`);
-    }
-    return;
-  }
+const identity = (user: UserPayload) => ({
+  userEmail: (user.email || '').toLowerCase(),
+  ...(user.name ? { userName: user.name } : {})
+});
 
-  // mask_toggle: an empty list is a valid answer ("all masks correct").
-  if (!body.rejectedMaskIds) {
-    throw new BadRequestError('rejectedMaskIds required for a mask_toggle task');
+/**
+ * Whether this caller may write labels on this task now.
+ *
+ * A completed job stopped handing out frames by definition — every task reached
+ * K. Revising one that is already counted doesn't change that, and refusing it
+ * would make the frames that finished the job the only ones that can never be
+ * corrected.
+ */
+const assertWritable = (job: ILabelJob, previous: ILabelAnnotation | null): void => {
+  if (job.status === 'active' || (job.status === 'completed' && previous)) return;
+  throw new ConflictError(`Job is ${job.status}, not accepting labels`);
+};
+
+const classFor = (job: ILabelJob, key: string): IJobClass => {
+  const found = job.classes.find((candidate) => candidate.key === key);
+  if (!found) {
+    throw new BadRequestError(`Unknown class "${key}"`);
   }
-  const known = new Set((task.payload?.maskMap?.masks || []).map((mask) => mask.id));
-  const unknown = body.rejectedMaskIds.filter((id) => !known.has(id));
-  if (unknown.length > 0) {
-    throw new BadRequestError(`Unknown mask ids: ${unknown.join(', ')}`);
+  return found;
+};
+
+/** Boxes keep to the frame: an edge dragged past it is pulled back, and one wholly outside is dropped. */
+export const clampBox = (
+  bbox: IBoxObject['bbox'],
+  width?: number,
+  height?: number
+): IBoxObject['bbox'] | null => {
+  let [x, y, w, h] = bbox;
+  if (width !== undefined && height !== undefined) {
+    const x2 = Math.min(width, x + w);
+    const y2 = Math.min(height, y + h);
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+    w = x2 - x;
+    h = y2 - y;
+  }
+  return w >= 1 && h >= 1 ? [x, y, w, h] : null;
+};
+
+const firstWrite = async <T>(attempt: () => Promise<T>): Promise<T> => {
+  try {
+    return await attempt();
+  } catch (err) {
+    // Two first saves for the same task racing: both found nothing and both tried
+    // to insert. The retry takes the update path against the other one's row.
+    if ((err as { code?: number }).code === 11000) return attempt();
+    throw err;
   }
 };
 
-const maybeCompleteJob = async (job: ILabelJob): Promise<void> => {
+/**
+ * The caller's annotation of this task, created as a draft if they have none.
+ * Touching a skipped frame reopens it: whoever draws on it is no longer skipping.
+ */
+const ensureAnnotation = async (
+  task: ILabelTask,
+  job: ILabelJob,
+  user: UserPayload,
+  set: Record<string, unknown> = {}
+): Promise<ILabelAnnotation> => {
+  const previous = await LabelAnnotation.findOne({ taskId: task._id, userId: user.id });
+  assertWritable(job, previous);
+  const reopen = previous?.status === 'skipped';
+  const annotation = await firstWrite(() =>
+    LabelAnnotation.findOneAndUpdate(
+      { taskId: task._id, userId: user.id },
+      // `status` goes in one operator or the other, never both: MongoDB refuses an
+      // update that names the same path in `$set` and `$setOnInsert`.
+      reopen
+        ? { $set: { jobId: job._id, ...identity(user), status: 'draft', ...set } }
+        : { $set: { jobId: job._id, ...identity(user), ...set }, $setOnInsert: { status: 'draft' } },
+      { upsert: true, returnDocument: 'after' }
+    )
+  );
+  if (reopen) {
+    await LabelTask.updateOne({ _id: task._id }, { $pull: { skippedBy: user.id } });
+  }
+  return annotation!;
+};
+
+/** Autosave of the boxes on a frame: the whole list, replacing what was there. */
+export const saveObjects = async (
+  task: ILabelTask,
+  job: ILabelJob,
+  user: UserPayload,
+  body: SaveAnnotationBody
+): Promise<ILabelAnnotation> => {
+  const objects: IBoxObject[] = [];
+  for (const object of body.objects) {
+    if (!classFor(job, object.classKey).tools.includes('box')) {
+      throw new BadRequestError(`"${object.classKey}" is not a box class`);
+    }
+    const bbox = clampBox(object.bbox, task.frame.width, task.frame.height);
+    if (bbox) {
+      objects.push({
+        id: object.id,
+        classKey: object.classKey,
+        bbox,
+        source: object.source,
+        ...(object.score !== undefined ? { score: object.score } : {})
+      });
+    }
+  }
+  return ensureAnnotation(task, job, user, {
+    objects,
+    ...(body.elapsedMs !== undefined ? { elapsedMs: body.elapsedMs } : {})
+  });
+};
+
+/**
+ * Store the frame's mask: decode the editor's run-length upload, check it against
+ * the frame and the job's classes, write it as a grayscale PNG and point the
+ * annotation at it. The file it replaces is removed afterwards — each save is a
+ * new file, so a failed upload can never leave a half-written mask behind.
+ */
+export const saveMask = async (
+  task: ILabelTask,
+  job: ILabelJob,
+  user: UserPayload,
+  upload: Buffer
+): Promise<ILabelAnnotation> => {
+  const raw = decodeMaskRle(upload);
+  const { width, height } = task.frame;
+  if (width !== undefined && height !== undefined && (raw.width !== width || raw.height !== height)) {
+    throw new BadRequestError(`The mask is ${raw.width}×${raw.height} but the frame is ${width}×${height}`);
+  }
+  const pixels = countPixels(raw.data);
+  const allowed = new Set(job.classes.filter((candidate) => candidate.tools.includes('mask')).map((c) => String(c.maskIndex)));
+  const unknown = Object.keys(pixels).filter((index) => !allowed.has(index));
+  if (unknown.length > 0) {
+    throw new BadRequestError(`The mask uses values that are not mask classes of this job: ${unknown.join(', ')}`);
+  }
+
+  const annotation = await ensureAnnotation(task, job, user);
+  const previousFileId = annotation.mask?.fileId;
+  const fileId = `${files.jobFolder(job._id.toString())}masks/${annotation._id}-${Date.now().toString(36)}.png`;
+  await files.putFile(fileId, encodeGrayscalePng(raw.width, raw.height, raw.data));
+
+  const stored = await LabelAnnotation.findOneAndUpdate(
+    { _id: annotation._id },
+    { $set: { mask: { fileId, width: raw.width, height: raw.height, pixels } } },
+    { returnDocument: 'after' }
+  );
+  if (previousFileId) {
+    files.deleteFile(previousFileId).catch((error: Error) => {
+      logger.warn('Could not remove a replaced mask file', { fileId: previousFileId, error: error.message });
+    });
+  }
+  return stored!;
+};
+
+/** Remove the frame's mask — the editor cleared every painted pixel. */
+export const clearMask = async (task: ILabelTask, job: ILabelJob, user: UserPayload): Promise<void> => {
+  const annotation = await LabelAnnotation.findOne({ taskId: task._id, userId: user.id });
+  if (!annotation?.mask) return;
+  assertWritable(job, annotation);
+  const { fileId } = annotation.mask;
+  await LabelAnnotation.updateOne({ _id: annotation._id }, { $unset: { mask: '' } });
+  await files.deleteFile(fileId).catch((error: Error) => {
+    logger.warn('Could not remove a cleared mask file', { fileId, error: error.message });
+  });
+};
+
+export const maybeCompleteJob = async (job: ILabelJob): Promise<void> => {
   const remaining = await LabelTask.countDocuments({ jobId: job._id, answersCount: { $lt: job.redundancy } });
   if (remaining === 0) {
     await LabelJob.updateOne({ _id: job._id, status: 'active' }, { $set: { status: 'completed' } });
   }
 };
 
-/**
- * Record this user's verdict on a task, replacing their previous one if they
- * had already answered.
- *
- * Revising used to be a two-step undo-then-answer, which the workbench never
- * exposed outside the "undo the last thing I just did" button — so walking back
- * to a frame and correcting a mask meant deleting the answer first. A re-submit
- * now overwrites, and only a *first* answer moves the task's counters.
- */
-export const submitAnswer = async (task: ILabelTask, job: ILabelJob, user: UserPayload, body: AnswerBody) => {
-  const previous = await LabelAnswer.findOne({ taskId: task._id, userId: user.id });
-  // A completed job stopped taking new answers by definition — every task
-  // reached K. Revising one that is already counted doesn't change that, and
-  // refusing it would make the frames that finished the job the only ones that
-  // can never be corrected.
-  if (job.status !== 'active' && !(previous && job.status === 'completed')) {
-    throw new ConflictError(`Job is ${job.status}, not accepting answers`);
-  }
-  validateAnswerForTaskType(job, task, body);
-
-  let existed: boolean;
-  try {
-    // `new: false` returns the pre-update document — null exactly when this
-    // call inserted — so the counters below are bumped once, on the first
-    // answer only, without a read that a concurrent submit could race.
-    existed = Boolean(
-      await LabelAnswer.findOneAndUpdate(
-        { taskId: task._id, userId: user.id },
-        {
-          $set: {
-            jobId: job._id,
-            userEmail: (user.email || '').toLowerCase(),
-            ...(user.name ? { userName: user.name } : {}),
-            ...(body.choiceKey ? { choiceKey: body.choiceKey } : {}),
-            ...(body.rejectedMaskIds ? { rejectedMaskIds: body.rejectedMaskIds } : {}),
-            ...(body.elapsedMs != null ? { elapsedMs: body.elapsedMs } : {})
-          }
-        },
-        { upsert: true, new: false }
-      )
-    );
-  } catch (err) {
-    // Two submits for the same task racing each other: both found nothing and
-    // both tried to insert. The other one won and its answer is stored.
-    if ((err as { code?: number }).code === 11000) {
-      throw new ConflictError('Another submission for this task landed first — reload the frame');
-    }
-    throw err;
-  }
-
-  await LabelTask.updateOne(
-    { _id: task._id },
-    {
-      ...(existed ? {} : { $inc: { answersCount: 1 }, $addToSet: { answeredBy: user.id } }),
-      $unset: { leasedBy: '', leaseExpiresAt: '' }
-    }
+/** Count an annotator once, including concurrent requests and retries after a partial write. */
+export const recordTaskCompletion = async (taskId: Types.ObjectId, userId: string): Promise<boolean> => {
+  const cleanup = { $pull: { skippedBy: userId }, $unset: { leasedBy: '', leaseExpiresAt: '' } };
+  const result = await LabelTask.updateOne(
+    { _id: taskId, answeredBy: { $ne: userId } },
+    { $inc: { answersCount: 1 }, $addToSet: { answeredBy: userId }, ...cleanup }
   );
-  if (!existed) {
-    await maybeCompleteJob(job);
-  }
-  return LabelAnswer.findOne({ taskId: task._id, userId: user.id });
+  if (result.modifiedCount > 0) return true;
+  await LabelTask.updateOne({ _id: taskId }, cleanup);
+  return false;
 };
 
-/** Undo-last: remove the caller's own answer so the task can be answered again. */
-export const undoAnswer = async (task: ILabelTask, job: ILabelJob, user: UserPayload): Promise<void> => {
-  const deleted = await LabelAnswer.findOneAndDelete({ taskId: task._id, userId: user.id });
-  if (!deleted) {
-    throw new NotFoundError('No answer of yours on this task');
+/**
+ * Close the frame for this annotator: `done` counts toward the job, `skip` only
+ * stops it being offered to them again (someone else may still label it).
+ *
+ * Only a *first* done moves the task's counters, so finishing a frame again
+ * after walking back to it changes nothing but the labels.
+ */
+export const finishTask = async (
+  task: ILabelTask,
+  job: ILabelJob,
+  user: UserPayload,
+  outcome: 'done' | 'skipped',
+  elapsedMs?: number
+): Promise<ILabelAnnotation> => {
+  const previous = await LabelAnnotation.findOne({ taskId: task._id, userId: user.id });
+  assertWritable(job, previous);
+  if (outcome === 'skipped' && previous?.status === 'done') {
+    throw new ConflictError('This frame is already done');
   }
-  await LabelTask.updateOne(
-    { _id: task._id },
-    { $inc: { answersCount: -1 }, $pull: { answeredBy: user.id } }
+
+  const annotation = await firstWrite(() =>
+    LabelAnnotation.findOneAndUpdate(
+      { taskId: task._id, userId: user.id },
+      {
+        $set: {
+          jobId: job._id,
+          ...identity(user),
+          status: outcome,
+          ...(outcome === 'done' ? { doneAt: new Date() } : {}),
+          ...(elapsedMs !== undefined ? { elapsedMs } : {})
+        }
+      },
+      { upsert: true, returnDocument: 'after' }
+    )
   );
-  // A completed job regains an open task.
-  await LabelJob.updateOne({ _id: job._id, status: 'completed' }, { $set: { status: 'active' } });
+
+  const newlyDone = outcome === 'done' && await recordTaskCompletion(task._id, user.id);
+  if (outcome === 'skipped') {
+    await LabelTask.updateOne(
+      { _id: task._id },
+      { $addToSet: { skippedBy: user.id }, $unset: { leasedBy: '', leaseExpiresAt: '' } }
+    );
+  }
+  if (newlyDone) {
+    await maybeCompleteJob(job);
+  }
+  return annotation!;
 };

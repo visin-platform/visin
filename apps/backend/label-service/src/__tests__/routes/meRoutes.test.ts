@@ -3,10 +3,7 @@ jest.mock('../../clients/groupServiceClient', () => ({
   checkMembership: jest.fn(),
 }));
 jest.mock('../../clients/datasetServiceClient', () => ({
-  getDataset: jest.fn(),
-  getPermission: jest.fn(),
   listDatasetsFor: jest.fn(),
-  jsonFields: jest.fn(),
 }));
 
 import type { Request, Response } from 'express';
@@ -72,29 +69,5 @@ describe('meRoutes', () => {
 
     expect(mockedDatasets.listDatasetsFor).toHaveBeenCalledWith('u1', 'manage');
     expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ _id: 'd1', name: 'VLM' }] });
-  });
-
-  it('serves mask fields of a dataset the caller may read, and needs the set', async () => {
-    mockedDatasets.getDataset.mockResolvedValue({ _id: 'd1', visibility: 'public', owner: { kind: 'user', id: 'someone' } });
-    mockedDatasets.getPermission.mockResolvedValue('read');
-    mockedDatasets.jsonFields.mockResolvedValue([{ field: 'stratum', values: [] }]);
-
-    const { res } = await call('/datasets/:id/mask-fields', { params: { id: 'd1' }, query: { set: 'verify' } });
-
-    expect(mockedDatasets.getPermission).toHaveBeenCalledWith('d1', 'u1');
-    expect(mockedDatasets.jsonFields).toHaveBeenCalledWith('d1', 'verify', 'masks');
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ field: 'stratum', values: [] }] });
-
-    const { next } = await call('/datasets/:id/mask-fields', { params: { id: 'd1' }, query: {} });
-    expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: 'set is required' }));
-  });
-
-  it('refuses a dataset the caller may not read, whoever uploaded it', async () => {
-    mockedDatasets.getDataset.mockResolvedValue({ _id: 'd1', visibility: 'private', owner: { kind: 'group', id: 'g1' } });
-    mockedDatasets.getPermission.mockResolvedValue('none');
-
-    const refused = await call('/datasets/:id/mask-fields', { params: { id: 'd1' }, query: { set: 'verify' } });
-    expect(refused.next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 403 }));
-    expect(mockedDatasets.jsonFields).not.toHaveBeenCalled();
   });
 });

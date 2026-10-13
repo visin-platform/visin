@@ -25,9 +25,9 @@ import { usePageTitle } from '../hooks/usePageTitle';
 /**
  * How far a job has got, and how much of it is this labeler's own doing.
  *
- * "Frames done" counts tasks that reached the job's redundancy K, not answers:
- * with K=2 a frame answered once is still waiting for its second opinion, and
- * counting it as done would show a job at 100% with half its labels missing.
+ * "Frames done" counts tasks that reached the job's redundancy K, not labels
+ * given: with K=2 a frame labeled once is still waiting for its second opinion,
+ * and counting it as done would show a job at 100% with half its labels missing.
  */
 const JobProgressBar: React.FC<{ job: LabelJob }> = ({ job }) => {
   const progress = job.progress;
@@ -44,8 +44,8 @@ const JobProgressBar: React.FC<{ job: LabelJob }> = ({ job }) => {
         </Typography>
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {percent.toFixed(0)}%
-          {job.redundancy > 1 && <> · {progress.answers.toLocaleString()} labels collected</>}
-          {progress.myAnswers > 0 && <> · you labeled {progress.myAnswers.toLocaleString()}</>}
+          {progress.skipped > 0 && <> · {progress.skipped.toLocaleString()} skipped</>}
+          {progress.myDone > 0 && <> · you labeled {progress.myDone.toLocaleString()}</>}
         </Typography>
       </Stack>
       <LinearProgress
@@ -56,6 +56,13 @@ const JobProgressBar: React.FC<{ job: LabelJob }> = ({ job }) => {
       />
     </Box>
   );
+};
+
+/** What an annotator draws on this job, from what its classes allow. */
+const labelKinds = (job: LabelJob): string => {
+  const boxes = job.classes.some((entry) => entry.tools.includes('box'));
+  const masks = job.classes.some((entry) => entry.tools.includes('mask'));
+  return boxes && masks ? 'Boxes & masks' : masks ? 'Masks' : 'Boxes';
 };
 
 const JobsPage: React.FC = () => {
@@ -87,7 +94,7 @@ const JobsPage: React.FC = () => {
             title="No labeling jobs yet"
             description={
               canCreate
-                ? 'A labeling job asks people to label images from a dataset. Start one on a dataset that belongs to a group, and it appears here for everyone in the group.'
+                ? 'A labeling job asks people to draw boxes and masks on the frames of a dataset. Start one on a dataset that belongs to a group, and it appears here for everyone in the group.'
                 : isAuthenticated
                   ? 'Active jobs shared with your groups will appear here.'
                   : 'Active jobs will appear here.'
@@ -130,13 +137,16 @@ const JobsPage: React.FC = () => {
                     {job.name}
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    {job.question.prompt}
+                    {job.description || job.classes.map((entry) => entry.name).join(', ')}
                   </Typography>
                 </Box>
               </Stack>
               <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap' }}>
-                <Chip size="small" label={job.taskType === 'mask_toggle' ? 'Mask verification' : 'Single choice'} />
-                <Chip size="small" label={`${job.tasksCount.toLocaleString()} tasks`} variant="outlined" />
+                <Chip size="small" label={labelKinds(job)} />
+                {job.sensors.length > 1 && (
+                  <Chip size="small" label={job.sensors.map((sensor) => sensor.key).join(' + ')} variant="outlined" />
+                )}
+                <Chip size="small" label={`${job.tasksCount.toLocaleString()} frames`} variant="outlined" />
               </Stack>
               <JobProgressBar job={job} />
             </CardContent>

@@ -6,82 +6,117 @@ import {
   Box,
   Button,
   Chip,
-  Divider,
-  FormControlLabel,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   IconButton,
   LinearProgress,
-  Slider,
   Stack,
-  Switch,
   Tooltip,
   Typography
 } from '@mui/material';
 import {
   ArrowBack,
-  Undo,
   CheckCircleOutlined,
+  KeyboardOutlined,
   LinkOutlined,
   NavigateBefore,
   NavigateNext,
   PlaylistPlay,
   Login
 } from '@mui/icons-material';
-import { Loader } from '@visin/frontend-core';
+import { Loader, useChartColors } from '@visin/frontend-core';
 import { useAuth } from '../contexts/AuthContext';
 import { getJob } from '../services/jobService';
-import { useWorkQueue } from '../workbench/useWorkQueue';
-import { DecodedImage, loadLayerPixels, loadMaskIndex } from '../workbench/idmapLoader';
-import { MaskIndex } from '../workbench/maskIndex';
-import { Viewport, focusBbox } from '../workbench/viewport';
-import FrameViewer from '../workbench/FrameViewer';
+import { JobClass } from '../types';
+import { useWorkQueue } from '../editor/useWorkQueue';
+import { useFrameDocument } from '../editor/useFrameDocument';
+import { useEditorPrefs } from '../editor/useEditorPrefs';
+import { useTabPresence } from '../editor/useTabPresence';
+import ObjectList from '../editor/ObjectList';
+import EditorCanvas, { EditorTool, SamPoint } from '../editor/EditorCanvas';
+import { decodeMaskRle } from '../editor/maskCodec';
+import type { Bbox } from '../editor/boxes';
+import ModelDialog from '../components/ModelDialog';
+import ModelClassMappingDialog from '../components/ModelClassMappingDialog';
+import { ImageNeededError } from '../localModel/client';
+import { toSuggestions } from '../localModel/matchClasses';
+import { useLocalModel } from '../localModel/useLocalModel';
+import EditorToolbar from '../editor/EditorToolbar';
+import { classHotkey } from '../editor/classHotkey';
+import { Viewport } from '../editor/viewport';
 import { usePageTitle } from '../hooks/usePageTitle';
 
-/** Gap left under the viewer so the page itself never scrolls. */
+/** Gap left under the editor so the page itself never scrolls. */
 const BOTTOM_GUTTER_PX = 8;
+
+const SHORTCUTS: [string, string][] = [
+  ['1–9', 'Pick a class'],
+  ['B / P / E', 'Box, brush, eraser'],
+  ['[ / ]', 'Smaller / larger brush'],
+  ['Shift + paint', 'Paint over other classes'],
+  ['Del', 'Delete the selected box'],
+  ['Ctrl+Z / Ctrl+Shift+Z', 'Undo / redo'],
+  ['Enter', 'Done — save and open the next frame'],
+  ['K', 'Skip this frame'],
+  ['← / →', 'Previous / next frame'],
+  ['V', 'Cycle LiDAR / radar view'],
+  ['A / X', 'Accept / dismiss suggestions'],
+  ['D', 'Suggest boxes with your model'],
+  ['S', 'Segment: click the object (right-click: not this); Enter keeps it'],
+  ['Space + drag, scroll', 'Pan, zoom'],
+  ['O', 'Show or hide the list of boxes'],
+  ['F', 'Fit the frame']
+];
 
 const WorkbenchPage: React.FC = () => {
   const { id: jobId = '' } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const { isAuthenticated, isLoading: authLoading, login } = useAuth();
+  const { adapt } = useChartColors();
   const { data: job, error: jobError } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
   usePageTitle(job ? `Labeling ${job.name}` : 'Labeling');
-  // Read once: the param is rewritten as the labeler advances, and re-reading it
-  // would restart the queue on every frame.
+  // Read once: the param is rewritten as the annotator advances, and re-reading
+  // it would restart the queue on every frame.
   const [startTaskId] = useState(() => searchParams.get('task'));
-  // Read once for the same reason: the queue must not restart when the flag is
-  // dropped from the URL on the first frame change.
   const [startBrowsing] = useState(() => searchParams.get('browse') === '1');
-  // Pulling takes a lease, which needs a signed-in labeler and a job that is
-  // actually taking answers; anyone else opens straight into browse mode.
+  // Pulling takes a lease, which needs a signed-in annotator and a job that is
+  // actually taking labels; anyone else opens straight into browse mode.
   const canPull = isAuthenticated && job?.canLabel === true && job.status === 'active';
-  // A completed job stopped handing out work, but its answers stay correctable.
+  // A completed job stopped handing out work, but its labels stay correctable.
   const canLabel = isAuthenticated && job?.canLabel === true && (job.status === 'active' || job.status === 'completed');
-  const queue = useWorkQueue(jobId, {
-    startTaskId,
-    canPull,
-    startBrowsing,
-    enabled: Boolean(job) && !authLoading
-  });
+  const queue = useWorkQueue(jobId, { startTaskId, canPull, startBrowsing, enabled: Boolean(job) && !authLoading });
 
-  const [rejected, setRejected] = useState<Set<number>>(new Set());
-  const [focusedIdx, setFocusedIdx] = useState<number | null>(null);
-  const [maskIndex, setMaskIndex] = useState<MaskIndex | null>(null);
-  const [layerPixels, setLayerPixels] = useState<DecodedImage | null>(null);
+  const item = queue.current;
+  const frame = useFrameDocument(item, { readOnly: !canLabel, independent: (job?.redundancy ?? 1) > 1 });
+  const doc = frame.doc;
+
+  const model = useLocalModel();
+  const [modelOpen, setModelOpen] = useState(false);
+  const [modelMappingOpen, setModelMappingOpen] = useState(false);
+  const [detectMessage, setDetectMessage] = useState<string | null>(null);
+  const [detecting, setDetecting] = useState(false);
+  const detectRequest = useRef(0);
+  const [samPoints, setSamPoints] = useState<SamPoint[]>([]);
+  const [samBox, setSamBox] = useState<Bbox | null>(null);
+  const [samPreview, setSamPreview] = useState<{ width: number; height: number; data: Uint8Array } | null>(null);
+  const [samBusy, setSamBusy] = useState(false);
+  const samRequest = useRef(0);
+  const frameBlobRef = useRef<{ taskId: string; blob: Blob } | null>(null);
+  const imageSentRef = useRef<string | null>(null);
+  const detectedForRef = useRef<string | null>(null);
+  const [prefs, setPrefs] = useEditorPrefs(jobId);
   const [viewport, setViewport] = useState<Viewport | null>(null);
-  const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({});
-  const [layerOpacity, setLayerOpacity] = useState(0.6);
   const [actionError, setActionError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
-  const startedAtRef = useRef<number>(Date.now());
-  const viewerBoxRef = useRef<HTMLDivElement>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [objectsOpen, setObjectsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const [availableHeight, setAvailableHeight] = useState<number | null>(null);
 
   // Take whatever vertical space is actually left below the app chrome, rather
-  // than subtracting a guessed constant from 100vh. The shell's header and
-  // padding differ by breakpoint, and a guess that is too small leaves the frame
-  // in a short box with the rest of a tall screen unused.
+  // than subtracting a guessed constant from 100vh.
   useEffect(() => {
     const measure = () => {
       const element = rootRef.current;
@@ -96,99 +131,224 @@ const WorkbenchPage: React.FC = () => {
     return () => window.removeEventListener('resize', measure);
   }, []);
 
-  const currentItem = queue.current;
-  const task = currentItem?.task ?? null;
-  const masks = useMemo(() => task?.payload?.maskMap?.masks ?? [], [task]);
-  // The layer paints every mask in the annotation set, but a job can be scoped to
-  // a subset of them — only these are clickable, the rest are dimmed.
-  const maskScope = useMemo(() => new Set(masks.map((mask) => mask.id)), [masks]);
-  const isMaskToggle = job?.taskType === 'mask_toggle';
+  const classes = useMemo<JobClass[]>(() => job?.classes ?? [], [job]);
+  const colorOf = useCallback((jobClass: JobClass) => adapt(jobClass.color), [adapt]);
+  const canBox = classes.some((entry) => entry.tools.includes('box'));
+  const canMask = classes.some((entry) => entry.tools.includes('mask'));
 
-  // A frame that was already labeled opens showing what was decided, not a
-  // blank slate: your own verdict when you have one, otherwise the most recent
-  // one from anyone, so stepping back to a frame shows the masks as they were
-  // left and marking one more is an edit rather than a re-do from scratch.
-  const savedRejected = currentItem?.answer.mine?.rejectedMaskIds ?? null;
-  const existingChoiceKey = currentItem?.answer.mine?.choiceKey ?? currentItem?.answer.latest?.choiceKey ?? null;
-  const answeredByMe = Boolean(currentItem?.answer.mine);
-  const answeredByAnyone = (currentItem?.answer.count ?? 0) > 0;
-  // Whether what is on screen still differs from what is stored — what turns the
-  // submit button from "Save changes" into an already-saved, inert one.
-  const dirty =
-    !answeredByMe ||
-    rejected.size !== (savedRejected?.length ?? 0) ||
-    (savedRejected ?? []).some((id) => !rejected.has(id));
+  // The segment tool exists only while a model that can segment is connected;
+  // if it goes away mid-session the editor falls back to the box tool.
+  const tool: EditorTool = prefs.tool === 'sam' && !model.canSegment ? 'box' : prefs.tool;
 
-  // Seed the marks from whatever verdict the frame already carries, and reset
-  // the rest of the per-frame state. Keyed on the task rather than the item, so
-  // saving an answer — which rewrites the item in place — does not wipe the
-  // marks the labeler is still working on.
-  const taskId = currentItem?.task._id ?? null;
-  const initialRejected = currentItem?.answer.mine?.rejectedMaskIds ?? currentItem?.answer.latest?.rejectedMaskIds;
+  // The class a new box or stroke is for: the last one chosen, if it still fits
+  // the tool, otherwise the first class that does.
+  const toolNeeds = tool === 'box' ? 'box' : 'mask';
+  const activeClass =
+    classes.find((entry) => entry.key === prefs.classKey && entry.tools.includes(toolNeeds)) ??
+    classes.find((entry) => entry.tools.includes(toolNeeds)) ??
+    null;
+
+  const availableOverlays = useMemo(
+    () => ({
+      lidar: Boolean(item?.images.sensors.some((sensor) => sensor.key === 'lidar')),
+      radar: Boolean(item?.images.sensors.some((sensor) => sensor.key === 'radar'))
+    }),
+    [item]
+  );
+  const overlays = {
+    lidar: availableOverlays.lidar && prefs.overlays.lidar,
+    radar: availableOverlays.radar && prefs.overlays.radar
+  };
+
+  // A new frame starts framed to fit.
+  const taskId = item?.task._id ?? null;
+  const openElsewhere = useTabPresence(canLabel ? taskId : null);
   useEffect(() => {
-    setRejected(new Set(initialRejected ?? []));
-    setFocusedIdx(null);
     setViewport(null);
     setActionError(null);
-    startedAtRef.current = Date.now();
-    // `initialRejected` is a property of the task being opened, read once here
-    // rather than tracked — re-running on it would undo the labeler's edits.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setDetectMessage(null);
+    detectRequest.current += 1;
+    setDetecting(false);
+    samRequest.current += 1;
+    setSamPoints([]);
+    setSamBox(null);
+    setSamPreview(null);
+    setSamBusy(false);
   }, [taskId]);
 
-  // Decode the id map and layer for the frame. Both are needed to hide a marked
-  // mask: the id map says which pixels are the mask, the layer supplies the
-  // pixels being erased. Keyed on the URLs, which change only with the frame.
-  const idmapUrl = currentItem?.images.idmap?.url;
-  const layerUrl = currentItem?.images.layers[0]?.url;
+  // Leaving the segment tool drops what it was working on.
   useEffect(() => {
-    setMaskIndex(null);
-    setLayerPixels(null);
-    if (!idmapUrl) return;
-    let cancelled = false;
-    loadMaskIndex(idmapUrl)
-      .then((index) => {
-        if (!cancelled) setMaskIndex(index);
-      })
-      .catch((err) => {
-        if (!cancelled) setActionError(`Id map failed to load: ${(err as Error).message}`);
-      });
-
-    if (layerUrl) {
-      loadLayerPixels(layerUrl)
-        .then((pixels) => {
-          if (!cancelled) setLayerPixels(pixels);
-        })
-        // Not fatal: the layer still renders as a plain image, marking still
-        // records, it just cannot be hidden. Better than blocking the frame.
-        .catch(() => undefined);
+    if (tool !== 'sam') {
+      samRequest.current += 1;
+      setSamPoints([]);
+      setSamBox(null);
+      setSamPreview(null);
+      setSamBusy(false);
     }
-    return () => {
-      cancelled = true;
-    };
-  }, [idmapUrl, layerUrl]);
+  }, [tool]);
 
-  // Keep the current frame in the URL, so a labeler with a question can copy the
-  // address bar and have it open on the same frame for whoever they ask.
-  // `replace` rather than push: Back should leave the workbench, not walk the
-  // queue backwards through frames that are no longer leased.
-  const currentTaskId = task?._id ?? null;
+  /** The frame's bytes for the model: the image the editor already shows, fetched once per frame. */
+  const frameBlob = useCallback(async (): Promise<Blob> => {
+    if (!item) throw new Error('No frame');
+    if (frameBlobRef.current?.taskId === item.task._id) return frameBlobRef.current.blob;
+    const response = await fetch(item.images.frame.url);
+    if (!response.ok) throw new Error(`Could not read the frame (${response.status})`);
+    const blob = await response.blob();
+    frameBlobRef.current = { taskId: item.task._id, blob };
+    return blob;
+  }, [item]);
+
+  // The frame on screen now, for answers that arrive after the annotator moved on.
+  const currentTaskRef = useRef<string | null>(null);
+  currentTaskRef.current = item?.task._id ?? null;
+
+  const runDetect = useCallback(
+    async (manual: boolean) => {
+      if (!doc || !item || !model.canDetect) return;
+      const forTask = item.task._id;
+      const request = ++detectRequest.current;
+      setDetecting(true);
+      setDetectMessage(null);
+      if (manual) setActionError(null);
+      try {
+        const found = await model.detect(await frameBlob());
+        // Boxes for a frame that is no longer on screen belong to no frame.
+        if (currentTaskRef.current !== forTask || request !== detectRequest.current) return;
+        const suggestions = toSuggestions(found, classes, doc.width, doc.height);
+        frame.setModelSuggestions(suggestions);
+        if (found.length > 0 && suggestions.length === 0) {
+          const names = [...new Set(found.map((entry) => entry.class))].join(', ');
+          setDetectMessage(`The model detected ${found.length} objects (${names}), but none match this job’s box classes. Check the model class mappings and frame size.`);
+        } else if (manual && found.length === 0) {
+          setDetectMessage('The model found no objects above the score threshold. Try lowering the threshold in Model settings.');
+        }
+      } catch (err) {
+        // Suggesting is a favour: a failure on its own is only worth a message when asked for.
+        if (manual && request === detectRequest.current) setActionError((err as Error).message);
+      } finally {
+        if (request === detectRequest.current) setDetecting(false);
+      }
+    },
+    [doc, item, model, frameBlob, frame, classes]
+  );
+
+  // Suggest boxes as an unlabeled frame opens, when a model is there and nothing
+  // else (an import, the annotator's own work) has claimed the frame.
+  const { canDetect } = model;
+  const autoDetect = model.settings.autoDetect;
+  const runDetectRef = useRef(runDetect);
+  runDetectRef.current = runDetect;
   useEffect(() => {
-    if (!currentTaskId) return;
+    detectedForRef.current = null;
+    detectRequest.current += 1;
+    setDetecting(false);
+    setDetectMessage(null);
+  }, [classes]);
+  useEffect(() => {
+    if (!canLabel || !canDetect || !autoDetect || !doc || !item || !taskId) return;
+    if (detectedForRef.current === taskId) return;
+    if (item.annotation.mine || item.suggestions || doc.boxes.length > 0 || doc.hasMask) return;
+    detectedForRef.current = taskId;
+    void runDetectRef.current(false);
+  }, [canLabel, canDetect, autoDetect, doc, item, taskId, classes]);
+
+  /** One more click, or a dragged box, for the segment tool: ask the model for the mask. */
+  const samPrompt = useCallback(
+    async (points: SamPoint[], box: Bbox | null) => {
+      if (!item) return;
+      setSamPoints(points);
+      setSamBox(box);
+      const request = ++samRequest.current;
+      if (points.length === 0 && !box) {
+        setSamPreview(null);
+        setSamBusy(false);
+        return;
+      }
+      setSamBusy(true);
+      try {
+        const id = item.task._id;
+        const send = async (withImage: boolean) =>
+          model.segment({ imageId: id, ...(withImage ? { image: await frameBlob() } : {}), points, ...(box ? { box } : {}) });
+        let result;
+        try {
+          result = await send(imageSentRef.current !== id);
+        } catch (err) {
+          if (!(err instanceof ImageNeededError)) throw err;
+          result = await send(true);
+        }
+        imageSentRef.current = id;
+        if (request !== samRequest.current) return;
+        const decoded = decodeMaskRle(result.rle);
+        setSamPreview(decoded);
+      } catch (err) {
+        if (request === samRequest.current) setActionError((err as Error).message);
+      } finally {
+        if (request === samRequest.current) setSamBusy(false);
+      }
+    },
+    [item, model, frameBlob]
+  );
+
+  const clearSam = useCallback(() => {
+    samRequest.current += 1;
+    setSamPoints([]);
+    setSamBox(null);
+    setSamPreview(null);
+    setSamBusy(false);
+  }, []);
+
+  /** Keep the model's mask: painted as the active class, around what is already drawn. */
+  const commitSam = useCallback(
+    (overwrite: boolean) => {
+      if (!doc || !samPreview || !activeClass) return;
+      doc.paintMask(samPreview.data, activeClass.maskIndex, overwrite);
+      clearSam();
+    },
+    [doc, samPreview, activeClass, clearSam]
+  );
+
+  const chooseTool = useCallback(
+    (tool: EditorTool) => {
+      const needs = tool === 'box' ? 'box' : 'mask';
+      if (!classes.some((entry) => entry.tools.includes(needs))) return;
+      if (tool === 'sam' && !model.canSegment) return;
+      if (tool !== 'sam') commitSam(false);
+      setPrefs({ tool });
+    },
+    [classes, setPrefs, model.canSegment, commitSam]
+  );
+
+  const chooseClass = useCallback(
+    (key: string) => {
+      const picked = classes.find((entry) => entry.key === key);
+      if (!picked) return;
+      if (key !== activeClass?.key) commitSam(false);
+      // Choosing a class that does not fit the current tool switches to one that does.
+      const next: EditorTool = tool === 'box' && !picked.tools.includes('box') ? 'brush' : tool !== 'box' && !picked.tools.includes('mask') ? 'box' : tool;
+      setPrefs({ classKey: key, tool: next });
+      // With a box picked, the class change is for that box, not the next one.
+      if (doc?.selectedId && picked.tools.includes('box')) doc.setBoxClass(doc.selectedId, key);
+    },
+    [classes, tool, setPrefs, doc, activeClass, commitSam]
+  );
+
+  // Keep the current frame in the URL, so an annotator with a question can copy
+  // the address bar and have it open on the same frame for whoever they ask.
+  // `replace`, so Back leaves the editor rather than walking the queue.
+  useEffect(() => {
+    if (!taskId) return;
     setLinkCopied(false);
     setSearchParams(
       (previous) => {
-        if (previous.get('task') === currentTaskId) return previous;
+        if (previous.get('task') === taskId) return previous;
         const next = new URLSearchParams(previous);
-        next.set('task', currentTaskId);
+        next.set('task', taskId);
         return next;
       },
       { replace: true }
     );
-  }, [currentTaskId, setSearchParams]);
+  }, [taskId, setSearchParams]);
 
-  // Composed from the router's location rather than read off window.location, so
-  // the link is whatever the app actually routed to.
   const copyFrameLink = useCallback(() => {
     const url = `${window.location.origin}${location.pathname}${location.search}`;
     navigator.clipboard
@@ -197,117 +357,175 @@ const WorkbenchPage: React.FC = () => {
       .catch(() => setActionError('Could not copy the link — copy it from the address bar instead.'));
   }, [location.pathname, location.search]);
 
-  const toggleMask = useCallback((maskId: number) => {
-    setRejected((previous) => {
-      const next = new Set(previous);
-      if (next.has(maskId)) {
-        next.delete(maskId);
-      } else {
-        next.add(maskId);
-      }
-      return next;
-    });
-  }, []);
+  const position = item?.position ?? null;
+  const { flush, elapsedMs } = frame;
 
-  const submit = useCallback(
-    async (body: { choiceKey?: string; rejectedMaskIds?: number[] }) => {
+  /** Everything unsent goes first: a frame is never left with work only this tab holds. */
+  const saveFirst = useCallback(async (): Promise<boolean> => {
+    if (samBusy) {
+      setActionError('Wait for the segment to finish, or switch tools to cancel it.');
+      return false;
+    }
+    commitSam(false);
+    const ok = await flush();
+    if (!ok) setActionError('Your changes could not be sent yet. They are kept on this device and will go when the connection is back.');
+    return ok;
+  }, [flush, samBusy, commitSam]);
+
+  const step = useCallback(
+    async (delta: number) => {
+      if (!position) return;
+      const target = position.index + delta;
+      if (target < 0 || target >= position.total) return;
+      if (canLabel && !(await saveFirst())) return;
+      queue.goTo(target).catch((err) => setActionError((err as Error).message));
+    },
+    [position, queue, canLabel, saveFirst]
+  );
+
+  const finish = useCallback(
+    async (outcome: 'done' | 'skip') => {
+      if (!canLabel || !item || queue.navigating) return;
       try {
         setActionError(null);
-        await queue.answer({ ...body, elapsedMs: Date.now() - startedAtRef.current });
+        if (outcome === 'done') frame.adoptCopy();
+        if (!(await saveFirst())) return;
+        await queue.finish(outcome, elapsedMs());
       } catch (err) {
         setActionError((err as Error).message);
       }
     },
-    [queue]
+    [canLabel, item, queue, saveFirst, elapsedMs, frame]
   );
 
-  const position = currentItem?.position ?? null;
-  const step = useCallback(
-    (delta: number) => {
-      if (!position) return;
-      const target = position.index + delta;
-      if (target < 0 || target >= position.total) return;
-      queue.goTo(target).catch((err) => setActionError((err as Error).message));
-    },
-    [position, queue]
-  );
-
-  const walkTo = useCallback(
-    (index: number) => {
-      if (masks.length === 0) return;
-      const wrapped = ((index % masks.length) + masks.length) % masks.length;
-      setFocusedIdx(wrapped);
-      const bbox = masks[wrapped].bbox;
-      const container = viewerBoxRef.current;
-      if (bbox && container) {
-        setViewport(focusBbox(bbox, container.clientWidth, container.clientHeight));
-      }
-    },
-    [masks]
-  );
-
-  // Keyboard: frame stepping (arrows), mask-walk (Tab/Space/Enter), choice
-  // hotkeys, undo.
+  // Keyboard. Handled on `window` and with `preventDefault`, so Enter finishes
+  // the frame even when a toolbar button still holds focus from a click.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!task || (event.target as HTMLElement)?.tagName === 'INPUT') return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      // A dialog on top owns the keyboard: Enter there is its button, not Done.
+      if (!item || helpOpen || modelOpen || modelMappingOpen) return;
+      const key = event.key;
+      const mod = event.ctrlKey || event.metaKey;
 
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      if (mod && (key === 'z' || key === 'Z')) {
         event.preventDefault();
-        step(event.key === 'ArrowLeft' ? -1 : 1);
+        if (event.shiftKey) doc?.redo();
+        else doc?.undo();
         return;
       }
-
-      if (event.key === 'u' && queue.canUndo) {
+      if (mod && (key === 'y' || key === 'Y')) {
         event.preventDefault();
-        queue.undoLast().catch((err) => setActionError((err as Error).message));
+        doc?.redo();
         return;
       }
+      if (mod || event.altKey) return;
 
-      // Clearing the viewport re-fits: the viewer treats null as "no framing of
-      // mine yet" and fits the frame to whatever the container is now.
-      if (event.key === 'f') {
+      if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        event.preventDefault();
+        void step(key === 'ArrowLeft' ? -1 : 1);
+        return;
+      }
+      if (key === 'f' || key === 'F') {
         event.preventDefault();
         setViewport(null);
         return;
       }
-
-      if (!canLabel) return;
-
-      if (isMaskToggle) {
-        if (event.key === 'Tab') {
-          event.preventDefault();
-          walkTo((focusedIdx ?? -1) + (event.shiftKey ? -1 : 1));
-        } else if (event.key === ' ' && focusedIdx !== null) {
-          event.preventDefault();
-          toggleMask(masks[focusedIdx].id);
-        } else if (event.key === 'Enter') {
-          event.preventDefault();
-          submit({ rejectedMaskIds: [...rejected].sort((a, b) => a - b) });
-        }
+      if (key === '?') {
+        setHelpOpen(true);
         return;
       }
+      if (key === 'o' || key === 'O') {
+        setObjectsOpen((open) => !open);
+        return;
+      }
+      if (!canLabel) return;
 
-      const choice = job?.question.choices?.find((candidate) => candidate.hotkey === event.key);
-      if (choice) {
+      if (key === 'Escape' && samPreview) {
+        clearSam();
+      } else if (key === 'Enter' && samBusy) {
         event.preventDefault();
-        submit({ choiceKey: choice.key });
+      } else if (key === 'Enter' && samPreview && tool === 'sam') {
+        // A segment waiting to be kept comes first; the next Enter finishes the frame.
+        event.preventDefault();
+        commitSam(event.shiftKey);
+      } else if (key === 'Enter') {
+        event.preventDefault();
+        void finish('done');
+      } else if (key === 'd' || key === 'D') {
+        void runDetect(true);
+      } else if (key === 's' || key === 'S') {
+        chooseTool('sam');
+      } else if (key === 'k' || key === 'K') {
+        event.preventDefault();
+        void finish('skip');
+      } else if (key === 'b' || key === 'B') {
+        chooseTool('box');
+      } else if (key === 'p' || key === 'P') {
+        chooseTool('brush');
+      } else if (key === 'e' || key === 'E') {
+        chooseTool('eraser');
+      } else if (key === '[' || key === ']') {
+        setPrefs({ brushDiameter: Math.min(200, Math.max(2, prefs.brushDiameter + (key === ']' ? 4 : -4))) });
+      } else if (key === 'v' || key === 'V') {
+        const order: { lidar: boolean; radar: boolean }[] = [{ lidar: false, radar: false }];
+        if (availableOverlays.lidar) order.push({ lidar: true, radar: false });
+        if (availableOverlays.radar) order.push({ lidar: false, radar: true });
+        if (availableOverlays.lidar && availableOverlays.radar) order.push({ lidar: true, radar: true });
+        const at = order.findIndex((entry) => entry.lidar === overlays.lidar && entry.radar === overlays.radar);
+        setPrefs({ overlays: order[(at + 1) % order.length] });
+      } else if (key === 'Delete' || key === 'Backspace') {
+        if (doc?.selectedId) {
+          event.preventDefault();
+          doc.deleteBox(doc.selectedId);
+        }
+      } else if (key === 'a' || key === 'A') {
+        frame.acceptAllSuggestions();
+      } else if (key === 'x' || key === 'X') {
+        frame.dismissSuggestions();
+      } else {
+        const index = classes.findIndex((entry, i) => classHotkey(entry, i) === key);
+        if (index >= 0) chooseClass(classes[index].key);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [task, isMaskToggle, canLabel, focusedIdx, masks, rejected, job, queue, step, submit, toggleMask, walkTo]);
+  }, [
+    item,
+    doc,
+    canLabel,
+    classes,
+    step,
+    finish,
+    chooseTool,
+    chooseClass,
+    setPrefs,
+    prefs.brushDiameter,
+    availableOverlays,
+    overlays.lidar,
+    overlays.radar,
+    frame,
+    samPreview,
+    samBusy,
+    tool,
+    clearSam,
+    commitSam,
+    runDetect,
+    helpOpen,
+    modelOpen,
+    modelMappingOpen
+  ]);
 
   if (jobError) return <Alert severity="error">{jobError.message}</Alert>;
   if (!job || queue.status === 'loading') {
-    return <Loader message="Loading workbench..." />;
+    return <Loader message="Loading editor..." />;
   }
-
   if (queue.status === 'error') {
     return <Alert severity="error">{queue.error}</Alert>;
   }
 
-  if (queue.status === 'done' || !queue.current) {
+  if (queue.status === 'done' || !item) {
     const hasFrames = (job.tasksCount || 0) > 0;
     return (
       <Box sx={{ textAlign: 'center', py: 8 }}>
@@ -317,13 +535,10 @@ const WorkbenchPage: React.FC = () => {
         </Typography>
         <Typography sx={{ color: 'text.secondary', mb: 3 }}>
           {hasFrames
-            ? `No tasks left for you in this job. You answered ${queue.sessionAnswered} this session.`
+            ? `No frames left for you in this job. You finished ${queue.sessionDone} this session.`
             : 'This job has no frames materialized yet.'}
         </Typography>
         <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
-          {/* The queue being empty doesn't mean there's nothing to look at: the
-              frames are all still there, already labeled, and reviewing them is
-              exactly what someone does next. */}
           {hasFrames && (
             <Button
               variant="outlined"
@@ -341,42 +556,45 @@ const WorkbenchPage: React.FC = () => {
     );
   }
 
-  const progressTotal = job.tasksCount || 0;
-  const myTotal = (job.progress?.myAnswers ?? 0) + queue.sessionAnswered;
+  const total = job.tasksCount || 0;
+  const myDone = (job.progress?.myDone ?? 0) + queue.sessionDone;
+  const finishedByMe = item.annotation.mine?.status === 'done';
+  const savedLabel =
+    frame.saveStatus === 'saving'
+      ? 'Saving…'
+      : frame.saveStatus === 'offline'
+        ? 'Offline — kept on this device'
+        : frame.saveStatus === 'error'
+          ? 'Could not save'
+          : 'Saved';
+  const suggestionCount = frame.suggestions?.boxes.length ?? 0;
+  const hasSuggestedMask = Boolean(frame.suggestions?.mask);
 
   return (
     <Box
       ref={rootRef}
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: availableHeight ?? 'calc(100vh - 120px)',
-        minHeight: 480
-      }}
+      sx={{ display: 'flex', flexDirection: 'column', height: availableHeight ?? 'calc(100vh - 120px)', minHeight: 480 }}
     >
-      {/* Progress header */}
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
-        <IconButton component={Link} to={`/jobs/${jobId}`} aria-label="back to job">
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 0.5 }}>
+        <IconButton component={Link} to={`/jobs/${jobId}`} aria-label="back to job" size="small">
           <ArrowBack />
         </IconButton>
         <Typography variant="h6" sx={{ fontWeight: 700, flexGrow: 1 }} noWrap>
           {job.name}
         </Typography>
-        {queue.current.task.stratum && <Chip size="small" label={queue.current.task.stratum} />}
-        {queue.current.images.frame.stem && (
+        {item.task.stratum && <Chip size="small" label={item.task.stratum} />}
+        {item.images.frame.stem && (
           <Tooltip title={linkCopied ? 'Link copied' : 'Copy a link to this frame'}>
             <Chip
               size="small"
               variant="outlined"
               icon={<LinkOutlined />}
-              label={queue.current.images.frame.stem}
+              label={item.images.frame.stem}
               onClick={copyFrameLink}
               color={linkCopied ? 'success' : 'default'}
             />
           </Tooltip>
         )}
-        {/* Stepping through the job's frames in order — the way back to a frame
-            that was labeled earlier, and forward again afterwards. */}
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
           <Tooltip title="Previous frame (←)">
             <span>
@@ -384,13 +602,13 @@ const WorkbenchPage: React.FC = () => {
                 aria-label="previous frame"
                 size="small"
                 disabled={queue.navigating || position === null || position.index === 0}
-                onClick={() => step(-1)}
+                onClick={() => void step(-1)}
               >
                 <NavigateBefore />
               </IconButton>
             </span>
           </Tooltip>
-          <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 92, textAlign: 'center' }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 84, textAlign: 'center' }}>
             {position ? `${position.index + 1} / ${position.total}` : '—'}
           </Typography>
           <Tooltip title="Next frame (→)">
@@ -399,176 +617,244 @@ const WorkbenchPage: React.FC = () => {
                 aria-label="next frame"
                 size="small"
                 disabled={queue.navigating || position === null || position.index + 1 >= position.total}
-                onClick={() => step(1)}
+                onClick={() => void step(1)}
               >
                 <NavigateNext />
               </IconButton>
             </span>
           </Tooltip>
         </Stack>
-        <Chip
-          size="small"
-          variant={answeredByAnyone ? 'filled' : 'outlined'}
-          color={answeredByMe ? 'success' : answeredByAnyone ? 'info' : 'default'}
-          label={answeredByMe ? 'labeled by you' : answeredByAnyone ? `${queue.current.answer.count} labels` : 'unlabeled'}
-        />
         {queue.browsing && canPull && (
           <Tooltip title="Stop browsing and take the next unlabeled frame">
             <span>
-              <IconButton aria-label="resume queue" size="small" disabled={queue.navigating} onClick={() => queue.resumeQueue().catch((err) => setActionError((err as Error).message))}>
+              <IconButton
+                aria-label="resume queue"
+                size="small"
+                disabled={queue.navigating}
+                onClick={async () => {
+                  if (canLabel && !(await saveFirst())) return;
+                  queue.resumeQueue().catch((err) => setActionError((err as Error).message));
+                }}
+              >
                 <PlaylistPlay />
               </IconButton>
             </span>
           </Tooltip>
         )}
+        {canLabel && (
+          <Chip
+            size="small"
+            data-testid="save-status"
+            color={frame.saveStatus === 'offline' || frame.saveStatus === 'error' ? 'warning' : 'default'}
+            variant="outlined"
+            label={savedLabel}
+          />
+        )}
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          {myTotal}/{progressTotal} · session {queue.sessionAnswered}
+          {myDone}/{total}
         </Typography>
-        <Tooltip title={queue.browsing ? 'Remove your answer on this frame (u)' : 'Undo last answer (u)'}>
-          <span>
-            <IconButton
-              aria-label="undo last answer"
-              disabled={!queue.canUndo}
-              onClick={() => queue.undoLast().catch((err) => setActionError((err as Error).message))}
-            >
-              <Undo />
-            </IconButton>
-          </span>
+        <Tooltip title="Keyboard shortcuts (?)">
+          <IconButton size="small" aria-label="keyboard shortcuts" onClick={() => setHelpOpen(true)}>
+            <KeyboardOutlined />
+          </IconButton>
         </Tooltip>
       </Stack>
-      <LinearProgress variant="determinate" value={progressTotal ? Math.min(100, (myTotal / progressTotal) * 100) : 0} sx={{ mb: 1 }} />
+      <LinearProgress variant="determinate" value={total ? Math.min(100, (myDone / total) * 100) : 0} sx={{ mb: 1 }} />
+
       {actionError && (
         <Alert severity="error" onClose={() => setActionError(null)} sx={{ mb: 1 }}>
           {actionError}
         </Alert>
       )}
+      {detectMessage && <Alert severity="info" onClose={() => setDetectMessage(null)} sx={{ mb: 1 }}
+        action={job.canManage ? <Button color="inherit" size="small" onClick={() => setModelMappingOpen(true)}>Class mappings</Button> : undefined}>
+        {detectMessage}
+      </Alert>}
+      {frame.saveStatus === 'error' && frame.saveMessage && (
+        <Alert severity="warning" sx={{ mb: 1 }}>
+          {frame.saveMessage}
+        </Alert>
+      )}
+      {openElsewhere && (
+        <Alert severity="warning" sx={{ mb: 1, py: 0.25 }}>
+          This frame is also open in another tab. Both save, and the last save wins — close one of them.
+        </Alert>
+      )}
+      {frame.openedFrom === 'latest' && (
+        <Alert severity="info" sx={{ mb: 1, py: 0.25 }}>
+          Showing another annotator&apos;s labels for this frame. Editing them saves a copy as your own.
+        </Alert>
+      )}
 
-      <Box sx={{ display: 'flex', gap: 2, flexGrow: 1, minHeight: 0 }}>
-        {/* Viewer */}
-        <Box ref={viewerBoxRef} sx={{ flexGrow: 1, minWidth: 0, borderRadius: 2, overflow: 'hidden' }}>
-          <FrameViewer
-            images={queue.current.images}
-            maskIndex={isMaskToggle ? maskIndex : null}
-            layerPixels={isMaskToggle ? layerPixels : null}
-            maskScope={isMaskToggle ? maskScope : null}
-            rejected={rejected}
-            focusedMaskId={focusedIdx !== null ? masks[focusedIdx]?.id ?? null : null}
-            layerVisibility={layerVisibility}
-            layerOpacity={layerOpacity}
-            viewport={viewport}
-            onViewportChange={setViewport}
-            onToggleMask={isMaskToggle ? toggleMask : undefined}
+      {canLabel && doc && (
+        <Box sx={{ mb: 1 }}>
+          <EditorToolbar
+            doc={doc}
+            classes={classes}
+            colorOf={colorOf}
+            tool={tool}
+            onTool={chooseTool}
+            canBox={canBox}
+            canMask={canMask}
+            activeClassKey={activeClass?.key ?? null}
+            onClass={chooseClass}
+            brushDiameter={prefs.brushDiameter}
+            onBrushDiameter={(brushDiameter) => setPrefs({ brushDiameter })}
+            maskOpacity={prefs.maskOpacity}
+            onMaskOpacity={(maskOpacity) => setPrefs({ maskOpacity })}
+            availableOverlays={availableOverlays}
+            overlays={overlays}
+            onOverlays={(next) => setPrefs({ overlays: next })}
+            onFit={() => setViewport(null)}
+            disabled={queue.navigating}
+            model={{
+              status: model.status,
+              label:
+                model.status === 'connected'
+                  ? `Model · ${model.info?.device ?? 'connected'}`
+                  : model.status === 'connecting'
+                    ? 'Model · connecting…'
+                    : model.status === 'unreachable'
+                      ? 'Model · not reachable'
+                      : 'Model',
+              canDetect: model.canDetect,
+              canSegment: model.canSegment,
+              detecting,
+              onDetect: () => void runDetect(true),
+              onOpen: () => setModelOpen(true)
+            }}
           />
         </Box>
+      )}
 
-        {/* Controls */}
-        <Box sx={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            {job.question.prompt}
-          </Typography>
-
-          {queue.current.images.layers.length > 0 && (
-            <>
-              {queue.current.images.layers.map((layer) => (
-                <FormControlLabel
-                  key={layer.set}
-                  control={
-                    <Switch
-                      size="small"
-                      checked={layerVisibility[layer.set] !== false}
-                      onChange={(event) =>
-                        setLayerVisibility((previous) => ({ ...previous, [layer.set]: event.target.checked }))
-                      }
-                    />
-                  }
-                  label={`Layer: ${layer.set}`}
-                />
-              ))}
-              <Box sx={{ px: 1 }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  Layer opacity
-                </Typography>
-                <Slider
-                  size="small"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={layerOpacity}
-                  onChange={(_event, value) => setLayerOpacity(value as number)}
-                  aria-label="layer opacity"
-                />
-              </Box>
-              <Divider />
-            </>
-          )}
-
-          {/* A frame someone else already labeled opens with their verdict on
-              screen, so say whose it is — otherwise the marks read as your own. */}
-          {!answeredByMe && answeredByAnyone && (
-            <Alert severity="info" sx={{ py: 0.5 }}>
-              Showing an existing label for this frame.
-            </Alert>
-          )}
-
-          {isMaskToggle ? (
-            <>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Click a mask to mark it incorrect — its colour disappears so you can see the pixels underneath.
-                Click the same spot again to bring it back. {rejected.size}/{masks.length} marked.
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                ← → step frames, Tab walks masks, Space toggles{canLabel ? ', Enter submits' : ''}, F fits the frame.
-              </Typography>
-              {canLabel && (
-                <>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    disabled={answeredByMe && !dirty}
-                    onClick={() => submit({ rejectedMaskIds: [...rejected].sort((a, b) => a - b) })}
-                  >
-                    {answeredByMe ? (dirty ? 'Save changes' : 'Saved') : `Submit (${rejected.size} incorrect)`}
-                  </Button>
-                  <Button variant="text" disabled={rejected.size === 0} onClick={() => setRejected(new Set())}>
-                    Show all again
-                  </Button>
-                </>
-              )}
-            </>
-          ) : (
-            <Stack spacing={1}>
-              {(job.question.choices || []).map((choice) => {
-                const chosen = existingChoiceKey === choice.key;
-                return (
-                  <Button
-                    key={choice.key}
-                    variant={chosen ? 'contained' : 'outlined'}
-                    color={chosen && answeredByMe ? 'success' : 'primary'}
-                    disabled={!canLabel}
-                    onClick={() => submit({ choiceKey: choice.key })}
-                  >
-                    {choice.label}
-                    {choice.hotkey ? ` (${choice.hotkey})` : ''}
-                  </Button>
-                );
-              })}
+      {(suggestionCount > 0 || hasSuggestedMask) && canLabel && (
+        <Alert
+          severity="info"
+          icon={false}
+          sx={{ mb: 1, py: 0.25 }}
+          action={
+            <Stack direction="row" spacing={1}>
+              <Button size="small" onClick={frame.acceptAllSuggestions}>
+                Accept all (A)
+              </Button>
+              <Button size="small" color="inherit" onClick={frame.dismissSuggestions}>
+                Dismiss (X)
+              </Button>
             </Stack>
-          )}
+          }
+        >
+          {suggestionCount > 0 && `${suggestionCount} suggested ${suggestionCount === 1 ? 'box' : 'boxes'}`}
+          {suggestionCount > 0 && hasSuggestedMask && ' and a mask'}
+          {suggestionCount === 0 && hasSuggestedMask && 'A suggested mask'} — click a dashed box to accept it.
+        </Alert>
+      )}
 
-          {/* Signed out: everything above is still explorable — masks toggle,
-              layers fade, frames step — only saving needs an account. */}
-          {!isAuthenticated && (
-            <Button variant="contained" startIcon={<Login />} onClick={login}>
-              Sign in to label
-            </Button>
-          )}
-          {isAuthenticated && !canLabel && (
-            <Alert severity="info" sx={{ py: 0.5 }}>
-              This job is {job.status} — read only.
-            </Alert>
+      {tool === 'sam' && canLabel && (
+        <Alert severity="info" icon={false} sx={{ mb: 1, py: 0.25 }}>
+          {samBusy
+            ? 'Segmenting…'
+            : samPreview
+              ? 'Enter keeps this mask · click more to add · right-click to take away · Esc starts over'
+              : 'Click the object (right-click what is not it), or drag a box around it.'}
+        </Alert>
+      )}
+
+      <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', borderRadius: 2, overflow: 'hidden' }}>
+        <Box sx={{ flexGrow: 1, minWidth: 0, position: 'relative' }}>
+          {frame.error ? (
+            <Alert severity="error">{frame.error}</Alert>
+          ) : !doc || frame.loading ? (
+            <Loader message="Loading frame..." />
+          ) : (
+            <EditorCanvas
+              doc={doc}
+              images={item.images}
+              classes={classes}
+              colorOf={colorOf}
+              tool={tool}
+              activeClass={activeClass}
+              brushRadius={prefs.brushDiameter / 2}
+              maskOpacity={prefs.maskOpacity}
+              overlays={overlays}
+              suggestionBoxes={frame.suggestions?.boxes ?? []}
+              suggestionMask={frame.suggestions?.mask ?? null}
+              onAcceptSuggestion={frame.acceptSuggestion}
+              readOnly={!canLabel}
+              viewport={viewport}
+              onViewportChange={setViewport}
+              onPickClass={(key) => setPrefs({ classKey: key })}
+              sam={
+                tool === 'sam'
+                  ? { points: samPoints, box: samBox, preview: samPreview, busy: samBusy, onPrompt: (points, box) => void samPrompt(points, box) }
+                  : undefined
+              }
+            />
           )}
         </Box>
+        {objectsOpen && doc && (
+          <ObjectList doc={doc} classes={classes} colorOf={colorOf} readOnly={!canLabel} onClose={() => setObjectsOpen(false)} />
+        )}
       </Box>
+
+      <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'center' }}>
+        {doc && (
+          <Button size="small" color="inherit" onClick={() => setObjectsOpen((open) => !open)} aria-pressed={objectsOpen}>
+            Objects ({doc.boxes.length}) <Box component="kbd" sx={{ ml: 0.75, opacity: 0.6 }}>O</Box>
+          </Button>
+        )}
+        {canLabel ? (
+          <>
+            <Button
+              startIcon={<NavigateBefore />}
+              disabled={queue.navigating || position === null || position.index === 0}
+              onClick={() => void step(-1)}
+            >
+              Back
+            </Button>
+            <Box sx={{ flexGrow: 1 }} />
+            <Button disabled={queue.navigating || finishedByMe} onClick={() => void finish('skip')}>
+              Skip (K)
+            </Button>
+            <Button variant="contained" size="large" disabled={queue.navigating || !doc} onClick={() => void finish('done')}>
+              Done (Enter)
+            </Button>
+          </>
+        ) : (
+          <>
+            <Box sx={{ flexGrow: 1 }} />
+            {!isAuthenticated ? (
+              <Button variant="contained" startIcon={<Login />} onClick={login}>
+                Sign in to label
+              </Button>
+            ) : (
+              <Alert severity="info" sx={{ py: 0.25 }}>
+                This job is {job.status} — read only.
+              </Alert>
+            )}
+          </>
+        )}
+      </Stack>
+
+      <ModelDialog open={modelOpen} model={model} onClose={() => setModelOpen(false)}
+        onConfigureClasses={job.canManage ? () => { setModelOpen(false); setModelMappingOpen(true); } : undefined} />
+      {job.canManage && modelMappingOpen && <ModelClassMappingDialog jobId={jobId} classes={classes} modelClasses={model.info?.classes ?? []}
+        onClose={() => setModelMappingOpen(false)} />}
+
+      <Dialog open={helpOpen} onClose={() => setHelpOpen(false)}>
+        <DialogTitle>Keyboard shortcuts</DialogTitle>
+        <DialogContent>
+          <Stack spacing={0.75}>
+            {SHORTCUTS.map(([keys, what]) => (
+              <Stack key={keys} direction="row" spacing={2} sx={{ justifyContent: 'space-between' }}>
+                <Typography variant="body2">{what}</Typography>
+                <Typography variant="body2" component="kbd" sx={{ fontWeight: 600 }}>
+                  {keys}
+                </Typography>
+              </Stack>
+            ))}
+          </Stack>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

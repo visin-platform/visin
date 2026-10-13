@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { useCompactLayout } from '@visin/frontend-core';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Box,
   Button,
-  Chip,
+  Checkbox,
   FormControlLabel,
+  IconButton,
   Link,
   MenuItem,
   Paper,
@@ -20,18 +21,30 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { getMaskFields, listDatasets } from '../services/datasetService';
-import { createJob, getMyGroups, materializeJob, transitionJob } from '../services/jobService';
+import { Add, DeleteOutlined } from '@mui/icons-material';
+import { listDatasets } from '../services/datasetService';
+import { ClassInput, createJob, getMyGroups, listJobs, materializeJob, transitionJob } from '../services/jobService';
 import { getGlobalConfig } from '../config/ConfigProvider';
-import { JobChoice, LabelDataset, MaskSelector, MaterializeBody, MaterializeResult, TaskType } from '../types';
+import { JobSensor, LabelDataset, MaterializeBody, MaterializeResult } from '../types';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { guessSensors } from './guessSensors';
 
-const STEPS = ['Basics', 'Question', 'Tasks', 'Activate'];
+const STEPS = ['Dataset', 'Sensors', 'Classes', 'Frames', 'Activate'];
 
-const DEFAULT_CHOICES: JobChoice[] = [
-  { key: 'good', label: 'Good', hotkey: 'g' },
-  { key: 'bad', label: 'Bad', hotkey: 'b' }
-];
+const NONE = '';
+
+interface ClassRow {
+  /** stable for React, never sent */
+  id: number;
+  name: string;
+  box: boolean;
+  mask: boolean;
+}
+
+type DatasetGroup = LabelDataset['groups'][number];
+
+let nextRowId = 1;
+const newRow = (name = ''): ClassRow => ({ id: nextRowId++, name, box: true, mask: true });
 
 const NewJobPage: React.FC = () => {
   usePageTitle('New job - Labeling');
@@ -39,34 +52,33 @@ const NewJobPage: React.FC = () => {
   const visionFrontUrl = (getGlobalConfig().VISION_FRONT_URL || '').replace(/\/$/, '');
   const { data: groups } = useQuery({ queryKey: ['my-groups'], queryFn: getMyGroups });
   const { data: datasets } = useQuery({ queryKey: ['datasets'], queryFn: listDatasets });
+  // Classes can be copied from a job already set up on a dataset this person manages.
+  const { data: jobs } = useQuery({ queryKey: ['jobs', 'admin'], queryFn: () => listJobs('admin') });
 
   const compact = useCompactLayout();
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Step 1 — basics
+  // Step 0 — dataset
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [datasetId, setDatasetId] = useState('');
-  const [framesGroup, setFramesGroup] = useState('');
 
-  // Step 2 — question
-  const [taskType, setTaskType] = useState<TaskType>('mask_toggle');
-  const [prompt, setPrompt] = useState('Mark all incorrect masks');
-  const [choices, setChoices] = useState<JobChoice[]>(DEFAULT_CHOICES);
-  const [annotationSets, setAnnotationSets] = useState<string[]>([]);
-  const [redundancy, setRedundancy] = useState(1);
+  // Step 1 — sensors
+  const [camera, setCamera] = useState('');
+  const [lidar, setLidar] = useState(NONE);
+  const [radar, setRadar] = useState(NONE);
 
-  // Step 3 — tasks
-  const [selectionKind, setSelectionKind] = useState<'manifest' | 'filter'>('manifest');
+  // Step 2 — classes
+  const [rows, setRows] = useState<ClassRow[]>(() => [newRow()]);
+
+  // Step 3 — frames
+  const [selectionKind, setSelectionKind] = useState<'filter' | 'manifest'>('filter');
   const [manifestContent, setManifestContent] = useState('');
   const [manifestFormat, setManifestFormat] = useState<'csv' | 'jsonl'>('csv');
-  const [sampleN, setSampleN] = useState<string>('');
-  const [seed, setSeed] = useState<string>('42');
-  const [maskField, setMaskField] = useState<string>('');
-  const [maskValues, setMaskValues] = useState<string[]>([]);
-  const [maskPerValue, setMaskPerValue] = useState<string>('');
+  const [sampleN, setSampleN] = useState('');
+  const [seed, setSeed] = useState('42');
   const [jobId, setJobId] = useState<string | null>(null);
   const [materialized, setMaterialized] = useState<MaterializeResult | null>(null);
 
@@ -77,51 +89,65 @@ const NewJobPage: React.FC = () => {
       ? 'you'
       : (groups || []).find((group) => group.groupId === candidate.owner.id)?.name || 'a group';
   const dataset = useMemo(() => available.find((candidate) => candidate._id === datasetId), [available, datasetId]);
-  const imageGroups = (dataset?.groups || []).filter((group) => group.images > 0).map((group) => group.name);
-  // Every group except the frames one can carry annotation layers.
-  const annotationGroups = imageGroups.filter((group) => group !== framesGroup);
+  const imageGroups = (dataset?.groups || []).filter((group) => group.images > 0);
+  const pointGroups = (dataset?.groups || []).filter((group) => group.jsons > 0);
 
-  /** Default the frames to a group called `frames`, else the first one. */
   const chooseDataset = (chosen: LabelDataset | undefined) => {
-    const groupNames = (chosen?.groups || []).filter((group) => group.images > 0).map((group) => group.name);
     setDatasetId(chosen?._id || '');
-    setFramesGroup(groupNames.includes('frames') ? 'frames' : groupNames[0] || '');
-    setAnnotationSets([]);
+    const guess = guessSensors(chosen?.groups || []);
+    setCamera(guess.camera);
+    setLidar(guess.lidar);
+    setRadar(guess.radar);
   };
 
-  // Mask metadata is per annotation set, so the groupable fields only exist once
-  // a set is picked — one full-corpus dataset can then be sliced per job.
-  const maskSet = taskType === 'mask_toggle' ? annotationSets[0] : undefined;
-  const { data: maskFields } = useQuery({
-    queryKey: ['mask-fields', datasetId, maskSet],
-    queryFn: () => getMaskFields(datasetId, maskSet!),
-    enabled: Boolean(datasetId && maskSet)
-  });
-  const selectedField = (maskFields || []).find((entry) => entry.field === maskField);
+  /** A radar group of JSON sidecars is a list of points; one of images is drawn like LiDAR. */
+  const sensors = (): Pick<JobSensor, 'key' | 'group' | 'kind'>[] => {
+    const radarGroup = (dataset?.groups || []).find((group) => group.name === radar);
+    return [
+      { key: 'camera', group: camera, kind: 'image' },
+      ...(lidar ? [{ key: 'lidar' as const, group: lidar, kind: 'image' as const }] : []),
+      ...(radar
+        ? [{ key: 'radar' as const, group: radar, kind: radarGroup && radarGroup.images === 0 && radarGroup.jsons > 0 ? ('points' as const) : ('image' as const) }]
+        : [])
+    ];
+  };
 
-  const toggleSet = (set: string) => {
-    setAnnotationSets((previous) =>
-      taskType === 'mask_toggle'
-        ? [set] // exactly one set for mask verification
-        : previous.includes(set)
-          ? previous.filter((candidate) => candidate !== set)
-          : [...previous, set]
+  const classInputs = (): ClassInput[] =>
+    rows
+      .filter((row) => row.name.trim())
+      .map((row) => ({
+        name: row.name.trim(),
+        tools: [...(row.box ? (['box'] as const) : []), ...(row.mask ? (['mask'] as const) : [])]
+      }));
+
+  const copyClassesFrom = (jobIdToCopy: string) => {
+    const source = (jobs || []).find((candidate) => candidate._id === jobIdToCopy);
+    if (!source) return;
+    setRows(
+      source.classes.map((entry) => ({
+        id: nextRowId++,
+        name: entry.name,
+        box: entry.tools.includes('box'),
+        mask: entry.tools.includes('mask')
+      }))
     );
   };
 
-  // A dataset with annotation groups but none picked materializes tasks with no
-  // payload — the workbench then shows the bare frame and there is nothing to
-  // judge, so block it.
+  const namesAreUnique = new Set(rows.filter((row) => row.name.trim()).map((row) => row.name.trim().toLowerCase())).size ===
+    rows.filter((row) => row.name.trim()).length;
+  const classesValid = classInputs().length > 0 && namesAreUnique && rows.every((row) => !row.name.trim() || row.box || row.mask);
+
   const stepValid = [
-    Boolean(name.trim() && datasetId && framesGroup),
-    Boolean(prompt.trim()) &&
-      (taskType === 'mask_toggle'
-        ? annotationSets.length === 1
-        : choices.length >= 2 && (annotationGroups.length === 0 || annotationSets.length >= 1)) &&
-      redundancy >= 1,
+    Boolean(name.trim() && datasetId),
+    Boolean(camera) && new Set([camera, lidar, radar].filter(Boolean)).size === [camera, lidar, radar].filter(Boolean).length,
+    classesValid,
     Boolean(materialized),
     true
   ][step];
+
+  // Once a draft exists its dataset, sensors and classes are fixed; only the
+  // frames can be prepared again.
+  const minStep = jobId ? 3 : 0;
 
   const createAndMaterialize = async () => {
     setBusy(true);
@@ -133,36 +159,16 @@ const NewJobPage: React.FC = () => {
           name: name.trim(),
           description: description.trim() || undefined,
           datasetId,
-          framesGroup,
-          taskType,
-          question: { prompt: prompt.trim(), ...(taskType === 'single_choice' ? { choices } : {}) },
-          annotationSets,
-          redundancy
+          sensors: sensors(),
+          classes: classInputs()
         });
         id = job._id;
         setJobId(id);
       }
-      const masks: MaskSelector | undefined = maskField
-        ? {
-            field: maskField,
-            ...(maskValues.length ? { include: maskValues } : {}),
-            ...(maskPerValue ? { perValue: Number(maskPerValue) } : {}),
-            seed: Number(seed) || 42
-          }
-        : undefined;
       const body: MaterializeBody =
         selectionKind === 'manifest'
-          ? {
-              kind: 'manifest',
-              ...(manifestContent.trim() ? { content: manifestContent, format: manifestFormat } : {}),
-              ...(masks ? { masks } : {})
-            }
-          : {
-              kind: 'filter',
-              ...(sampleN ? { sampleN: Number(sampleN) } : {}),
-              seed: Number(seed) || 42,
-              ...(masks ? { masks } : {})
-            };
+          ? { kind: 'manifest', ...(manifestContent.trim() ? { content: manifestContent, format: manifestFormat } : {}) }
+          : { kind: 'filter', ...(sampleN ? { sampleN: Number(sampleN) } : {}), seed: Number(seed) || 42 };
       setMaterialized(await materializeJob(id, body));
     } catch (err) {
       setError((err as Error).message);
@@ -184,9 +190,15 @@ const NewJobPage: React.FC = () => {
     }
   };
 
+  const groupOption = (group: DatasetGroup) => (
+    <MenuItem key={group.name} value={group.name}>
+      {group.name} ({group.images > 0 ? `${group.images.toLocaleString()} images` : `${group.jsons.toLocaleString()} files`})
+    </MenuItem>
+  );
+
   return (
     <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
-      {/* On a phone four labels do not fit: the steps keep their numbers, and
+      {/* On a phone five labels do not fit: the steps keep their numbers, and
           only the current one is named. */}
       <Stepper
         activeStep={step}
@@ -243,135 +255,142 @@ const NewJobPage: React.FC = () => {
               </MenuItem>
             ))}
           </TextField>
-          <TextField
-            select
-            label="Frames"
-            value={framesGroup}
-            onChange={(event) => {
-              setFramesGroup(event.target.value);
-              setAnnotationSets([]);
-            }}
-            disabled={!datasetId}
-            helperText="The dataset's image group the labeler sees; the others can be drawn over it"
-          >
-            {imageGroups.map((group) => (
-              <MenuItem key={group} value={group}>
-                {group}
-              </MenuItem>
-            ))}
-          </TextField>
         </Stack>
       )}
 
       {step === 1 && (
         <Stack spacing={2}>
-          <RadioGroup row value={taskType} onChange={(event) => {
-            setTaskType(event.target.value as TaskType);
-            setAnnotationSets([]);
-          }}>
-            <FormControlLabel value="mask_toggle" control={<Radio />} label="Mask verification (click incorrect masks)" />
-            <FormControlLabel value="single_choice" control={<Radio />} label="Single choice (hotkeys)" />
-          </RadioGroup>
-          <TextField label="Prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-
-          <Typography variant="subtitle2">
-            Annotation set{taskType === 'mask_toggle' ? ' (exactly one)' : 's (at least one)'}
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            Labels are drawn on the camera frame. LiDAR and radar are shown over it, so they have to be projected into
+            the camera&apos;s pixels — the same width and height, lined up.
           </Typography>
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-            {annotationGroups.map((set) => (
-              <Chip
-                key={set}
-                label={set}
-                color={annotationSets.includes(set) ? 'primary' : 'default'}
-                onClick={() => toggleSet(set)}
-                data-testid={`set-chip-${set}`}
-              />
-            ))}
-            {annotationGroups.length === 0 && (
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                This dataset has no other image group — tasks will show the bare frame.
-              </Typography>
-            )}
-          </Stack>
-          {annotationGroups.length > 0 && annotationSets.length === 0 && (
-            <Alert severity="info">
-              Pick a set — its layers are what the workbench draws over the frame. With none selected the labeler
-              sees the bare frame and has nothing to judge.
-            </Alert>
-          )}
-
-          {taskType === 'single_choice' && (
-            <Stack spacing={1}>
-              <Typography variant="subtitle2">Choices</Typography>
-              {choices.map((choice, index) => (
-                <Stack key={index} direction="row" spacing={1}>
-                  <TextField
-                    size="small"
-                    label="Key"
-                    value={choice.key}
-                    onChange={(event) =>
-                      setChoices(choices.map((c, i) => (i === index ? { ...c, key: event.target.value } : c)))
-                    }
-                  />
-                  <TextField
-                    size="small"
-                    label="Label"
-                    value={choice.label}
-                    onChange={(event) =>
-                      setChoices(choices.map((c, i) => (i === index ? { ...c, label: event.target.value } : c)))
-                    }
-                  />
-                  <TextField
-                    size="small"
-                    label="Hotkey"
-                    value={choice.hotkey || ''}
-                    slotProps={{ htmlInput: { maxLength: 1 } }}
-                    onChange={(event) =>
-                      setChoices(choices.map((c, i) => (i === index ? { ...c, hotkey: event.target.value || undefined } : c)))
-                    }
-                    sx={{ width: 90 }}
-                  />
-                  <Button size="small" disabled={choices.length <= 2} onClick={() => setChoices(choices.filter((_c, i) => i !== index))}>
-                    Remove
-                  </Button>
-                </Stack>
-              ))}
-              <Button size="small" onClick={() => setChoices([...choices, { key: '', label: '' }])}>
-                Add choice
-              </Button>
-            </Stack>
-          )}
-
           <TextField
-            label="Redundancy (independent labels per task)"
-            type="number"
-            value={redundancy}
-            onChange={(event) => setRedundancy(Math.max(1, Math.min(10, Number(event.target.value) || 1)))}
-            sx={{ width: 320 }}
-          />
+            select
+            label="Camera"
+            value={camera}
+            onChange={(event) => setCamera(event.target.value)}
+            helperText="The image group annotators label"
+            required
+          >
+            {imageGroups.map(groupOption)}
+          </TextField>
+          <TextField
+            select
+            label="LiDAR projection (optional)"
+            value={lidar}
+            onChange={(event) => setLidar(event.target.value)}
+            helperText="An image group with one file per frame, same name as the camera frame"
+          >
+            <MenuItem value={NONE}>None</MenuItem>
+            {imageGroups.filter((group) => group.name !== camera).map(groupOption)}
+          </TextField>
+          <TextField
+            select
+            label="Radar projection (optional)"
+            value={radar}
+            onChange={(event) => setRadar(event.target.value)}
+            helperText="An image group, or JSON files of projected points: [{u, v, range}]"
+          >
+            <MenuItem value={NONE}>None</MenuItem>
+            {[...imageGroups, ...pointGroups.filter((group) => group.images === 0)]
+              .filter((group) => group.name !== camera && group.name !== lidar)
+              .map(groupOption)}
+          </TextField>
         </Stack>
       )}
 
       {step === 2 && (
         <Stack spacing={2}>
-          <RadioGroup row value={selectionKind} onChange={(event) => setSelectionKind(event.target.value as 'manifest' | 'filter')}>
-            <FormControlLabel
-              value="manifest"
-              control={<Radio />}
-              label="Manifest"
-            />
-            <FormControlLabel value="filter" control={<Radio />} label="All frames / sample" />
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            What annotators can label. Each class is drawn as a box, a mask, or both; colours and hotkeys (1–9) are
+            assigned for you.
+          </Typography>
+          {(jobs || []).length > 0 && (
+            <TextField
+              select
+              size="small"
+              label="Copy classes from another job"
+              value=""
+              onChange={(event) => copyClassesFrom(event.target.value)}
+              sx={{ maxWidth: 360 }}
+            >
+              {(jobs || [])
+                .filter((candidate) => candidate.classes.length > 0)
+                .map((candidate) => (
+                  <MenuItem key={candidate._id} value={candidate._id}>
+                    {candidate.name} ({candidate.classes.map((entry) => entry.name).join(', ')})
+                  </MenuItem>
+                ))}
+            </TextField>
+          )}
+          {rows.map((row, index) => (
+            <Stack key={row.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <TextField
+                size="small"
+                label={`Class ${index + 1}`}
+                value={row.name}
+                autoFocus={index === rows.length - 1 && index > 0}
+                onChange={(event) => setRows(rows.map((entry) => (entry.id === row.id ? { ...entry, name: event.target.value } : entry)))}
+                sx={{ flexGrow: 1, maxWidth: 360 }}
+              />
+              <FormControlLabel
+                label="Box"
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={row.box}
+                    onChange={(event) => setRows(rows.map((entry) => (entry.id === row.id ? { ...entry, box: event.target.checked } : entry)))}
+                  />
+                }
+              />
+              <FormControlLabel
+                label="Mask"
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={row.mask}
+                    onChange={(event) => setRows(rows.map((entry) => (entry.id === row.id ? { ...entry, mask: event.target.checked } : entry)))}
+                  />
+                }
+              />
+              <IconButton
+                size="small"
+                aria-label={`remove class ${index + 1}`}
+                disabled={rows.length === 1}
+                onClick={() => setRows(rows.filter((entry) => entry.id !== row.id))}
+              >
+                <DeleteOutlined fontSize="small" />
+              </IconButton>
+            </Stack>
+          ))}
+          <Box>
+            <Button size="small" startIcon={<Add />} onClick={() => setRows([...rows, newRow()])}>
+              Add class
+            </Button>
+          </Box>
+          {!namesAreUnique && <Alert severity="warning">Two classes have the same name.</Alert>}
+          {rows.some((row) => row.name.trim() && !row.box && !row.mask) && (
+            <Alert severity="warning">Every class needs a box, a mask, or both.</Alert>
+          )}
+        </Stack>
+      )}
+
+      {step === 3 && (
+        <Stack spacing={2}>
+          <RadioGroup row value={selectionKind} onChange={(event) => setSelectionKind(event.target.value as 'filter' | 'manifest')}>
+            <FormControlLabel value="filter" control={<Radio />} label="All frames, or a random sample" />
+            <FormControlLabel value="manifest" control={<Radio />} label="A list of frames" />
           </RadioGroup>
 
           {selectionKind === 'manifest' && (
             <>
               <TextField
-                label="Manifest content (optional — blank uses the dataset's own manifest)"
+                label="Frame list (optional — blank uses the dataset's own manifest)"
                 value={manifestContent}
                 onChange={(event) => setManifestContent(event.target.value)}
                 multiline
                 minRows={4}
-                placeholder={'filename,stratum\nframe_000012.png,vehicle'}
+                placeholder={'filename,stratum\nframe_000012.png,night'}
               />
               <TextField select label="Format" value={manifestFormat} onChange={(event) => setManifestFormat(event.target.value as 'csv' | 'jsonl')} sx={{ width: 160 }}>
                 <MenuItem value="csv">CSV</MenuItem>
@@ -392,104 +411,46 @@ const NewJobPage: React.FC = () => {
             </Stack>
           )}
 
-          {maskSet && (maskFields || []).length > 0 && (
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Mask subset (optional)
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Label part of &quot;{maskSet}&quot; instead of every mask in it. The cap applies per value
-                across the whole dataset, so a group scattered one-per-frame still reaches its target;
-                frames left with no selected mask get no task.
-              </Typography>
-              <Stack direction="row" spacing={2} sx={{ mt: 2, flexWrap: 'wrap' }} useFlexGap>
-                <TextField
-                  select
-                  label="Group by"
-                  value={maskField}
-                  onChange={(event) => {
-                    setMaskField(event.target.value);
-                    setMaskValues([]);
-                  }}
-                  sx={{ width: 220 }}
-                >
-                  <MenuItem value="">All masks (no subset)</MenuItem>
-                  {(maskFields || []).map((entry) => (
-                    <MenuItem key={entry.field} value={entry.field}>
-                      {entry.field}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  label="Max per value (blank = all)"
-                  value={maskPerValue}
-                  onChange={(event) => setMaskPerValue(event.target.value.replace(/\D/g, ''))}
-                  disabled={!maskField}
-                  sx={{ width: 220 }}
-                />
-              </Stack>
-              {selectedField && (
-                <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap' }} useFlexGap>
-                  {selectedField.values.map((value) => {
-                    const on = maskValues.includes(value.value);
-                    return (
-                      <Chip
-                        key={value.value}
-                        label={`${value.value} (${value.count})`}
-                        color={on ? 'primary' : 'default'}
-                        variant={on ? 'filled' : 'outlined'}
-                        onClick={() =>
-                          setMaskValues((previous) =>
-                            on ? previous.filter((entry) => entry !== value.value) : [...previous, value.value]
-                          )
-                        }
-                      />
-                    );
-                  })}
-                  <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
-                    {maskValues.length ? `${maskValues.length} selected` : 'none selected = every value'}
-                  </Typography>
-                </Stack>
-              )}
-            </Paper>
-          )}
-
           <Box>
             <Button variant="contained" disabled={busy} onClick={createAndMaterialize}>
-              {jobId ? 'Re-materialize tasks' : 'Create draft & materialize'}
+              {jobId ? 'Prepare frames again' : 'Create draft & prepare frames'}
             </Button>
           </Box>
 
           {materialized && (
             <Alert severity={materialized.missing.length ? 'warning' : 'success'}>
-              {materialized.tasks} tasks created
-              {materialized.masks && (
-                <>
-                  {' '}
-                  from{' '}
-                  {Object.entries(materialized.masks)
-                    .map(([value, count]) => `${count} ${value}`)
-                    .join(', ')}{' '}
-                  masks
-                </>
-              )}
+              {materialized.tasks.toLocaleString()} frames ready
+              {Object.entries(materialized.sensors).map(([key, count]) => (
+                <React.Fragment key={key}>
+                  {' · '}
+                  {key} on {count.toLocaleString()}
+                </React.Fragment>
+              ))}
               {materialized.missing.length > 0 && (
-                <> — {materialized.missing.length} manifest rows matched no frame (e.g. {materialized.missing[0]})</>
+                <> — {materialized.missing.length} listed frames matched no image (e.g. {materialized.missing[0]})</>
+              )}
+              {jobId && (
+                <>
+                  {' · '}
+                  <Link component={RouterLink} to={`/jobs/${jobId}/work?browse=1`} target="_blank" rel="noreferrer">
+                    Preview a frame
+                  </Link>
+                </>
               )}
             </Alert>
           )}
         </Stack>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <Stack spacing={2}>
           <Typography variant="body1">
-            <strong>{name}</strong> — {taskType === 'mask_toggle' ? 'mask verification' : 'single choice'} ·{' '}
-            {materialized?.tasks} tasks · K={redundancy}
-            {annotationSets.length > 0 && <> · sets: {annotationSets.join(', ')}</>}
+            <strong>{name}</strong> — {materialized?.tasks.toLocaleString()} frames · {sensors().map((sensor) => sensor.key).join(' + ')} ·{' '}
+            {classInputs().map((entry) => entry.name).join(', ')}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Activating makes the job visible to every member of the group.
+            Activating makes the job visible to everyone who may label this dataset. You can import existing labels
+            from the job page afterwards.
           </Typography>
           <Box>
             <Button variant="contained" disabled={busy} onClick={activate}>
@@ -500,7 +461,7 @@ const NewJobPage: React.FC = () => {
       )}
 
       <Stack direction="row" sx={{ justifyContent: 'space-between', mt: 4 }}>
-        <Button disabled={step === 0 || busy} onClick={() => setStep(step - 1)}>
+        <Button disabled={step <= minStep || busy} onClick={() => setStep(step - 1)}>
           Back
         </Button>
         {step < STEPS.length - 1 && (

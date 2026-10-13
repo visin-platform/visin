@@ -14,16 +14,19 @@ jest.mock('../../services/jobService', () => ({
   getJobProgress: jest.fn(),
   transitionJob: jest.fn(),
   setJobVisibility: jest.fn(),
+  setModelClassMapping: jest.fn(),
 }));
 jest.mock('../../services/materializationService', () => ({
   materializeTasks: jest.fn(),
 }));
 jest.mock('../../services/exportService', () => ({
-  exportRows: jest.fn(),
-  exportCsv: jest.fn(),
   exportManifest: jest.fn(),
   jobStats: jest.fn(),
 }));
+jest.mock('../../services/bundleService', () => ({ streamExport: jest.fn() }));
+jest.mock('../../services/importService', () => ({ importLabels: jest.fn() }));
+// Small enough to cross in a test; the real limit is a gigabyte.
+jest.mock('../../limits', () => ({ IMPORT_MAX_BYTES: 1024, TASK_LEASE_MINUTES: 5 }));
 jest.mock('../../services/groupAccessService', () => ({
   requireUser: jest.fn((req: Request) => req.user),
 }));
@@ -35,16 +38,30 @@ import * as ctrl from '../../controllers/jobController';
 import * as svc from '../../services/jobService';
 import * as materialization from '../../services/materializationService';
 import * as exportSvc from '../../services/exportService';
+import * as bundles from '../../services/bundleService';
+import * as importer from '../../services/importService';
+import { Readable } from 'node:stream';
+import { existsSync, readFileSync } from 'node:fs';
 
+const mockedBundles = bundles as unknown as Record<string, jest.Mock>;
+const mockedImporter = importer as unknown as Record<string, jest.Mock>;
 const mockedSvc = svc as unknown as Record<string, jest.Mock>;
 const mockedMat = materialization as unknown as Record<string, jest.Mock>;
 const mockedExport = exportSvc as unknown as Record<string, jest.Mock>;
 const mockedAdmin = assertJobAdmin as jest.Mock;
 
-type MockRes = Response & { json: jest.Mock; status: jest.Mock; send: jest.Mock; setHeader: jest.Mock };
+type MockRes = Response & {
+  json: jest.Mock;
+  status: jest.Mock;
+  send: jest.Mock;
+  setHeader: jest.Mock;
+  end: jest.Mock;
+  destroy: jest.Mock;
+  headersSent: boolean;
+};
 
 const makeRes = (): MockRes => {
-  const res = { json: jest.fn(), status: jest.fn(), send: jest.fn(), setHeader: jest.fn() };
+  const res = { json: jest.fn(), status: jest.fn(), send: jest.fn(), setHeader: jest.fn(), end: jest.fn(), destroy: jest.fn(), headersSent: false };
   res.status.mockReturnValue(res);
   return res as unknown as MockRes;
 };
@@ -63,6 +80,19 @@ beforeEach(() => {
   mockedSvc.getJob.mockResolvedValue(job);
   mockedSvc.jobDataset.mockResolvedValue({ _id: 'd1', name: 'Road', owner: { kind: 'group', id: 'g1' } });
   (getJobReadAccess as jest.Mock).mockImplementation(async (_job, userId) => ({ member: Boolean(userId), isAdmin: false, canWork: false }));
+});
+
+describe('setModelClassMapping', () => {
+  it('requires job management before changing detector mappings', async () => {
+    mockedSvc.setModelClassMapping.mockResolvedValue(job);
+    const req = makeReq({ params: { id: 'j1' }, body: { mapping: { vehicle: 'car' } } });
+    const res = makeRes();
+    await ctrl.setModelClassMapping(req, res);
+    expect(mockedAdmin).toHaveBeenCalledWith(job, 'u1');
+    expect(mockedAdmin.mock.invocationCallOrder[0]).toBeLessThan(mockedSvc.setModelClassMapping.mock.invocationCallOrder[0]);
+    expect(mockedSvc.setModelClassMapping).toHaveBeenCalledWith(job, { vehicle: 'car' });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: job });
+  });
 });
 
 describe('createJob', () => {
@@ -146,11 +176,11 @@ describe('getJob', () => {
     });
   });
 
-  // A shared link resolves without an account; "answers by me" is simply zero.
+  // A shared link resolves without an account; "done by me" is simply zero.
   // `createdBy` is dropped for the same reason the per-labeler stats are: it is
   // an email address, and the progress is the thing being shared.
   it('serves an anonymous caller without the creator identity or a membership check', async () => {
-    mockedSvc.getJobProgress.mockResolvedValue({ tasks: 3, myAnswers: 0 });
+    mockedSvc.getJobProgress.mockResolvedValue({ tasks: 3, myDone: 0 });
     const res = makeRes();
 
     await ctrl.getJob(makeReq({ params: { id: 'j1' }, user: undefined }), res);
@@ -159,21 +189,21 @@ describe('getJob', () => {
     expect(mockedSvc.jobDataset).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { canLabel: false, canManage: false, _id: 'j1', datasetId: 'd1', progress: { tasks: 3, myAnswers: 0 } },
+      data: { canLabel: false, canManage: false, _id: 'j1', datasetId: 'd1', progress: { tasks: 3, myDone: 0 } },
     });
   });
 });
 
 describe('deleteJob', () => {
   it('requires admin, then reports what was removed', async () => {
-    mockedSvc.deleteJob.mockResolvedValue({ tasks: 10, answers: 12 });
+    mockedSvc.deleteJob.mockResolvedValue({ tasks: 10, annotations: 12, suggestions: 1 });
     const req = makeReq({ params: { id: 'j1' } });
     const res = makeRes();
 
     await ctrl.deleteJob(req, res);
 
     expect(mockedAdmin).toHaveBeenCalledWith(job, 'u1');
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: { tasks: 10, answers: 12 } });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { tasks: 10, annotations: 12, suggestions: 1 } });
   });
 
   it('propagates access denial before removing anything', async () => {
@@ -214,25 +244,37 @@ describe('materializeTasks', () => {
 });
 
 describe('exportJob', () => {
-  it('streams JSONL by default', async () => {
-    mockedExport.exportRows.mockResolvedValue([{ a: 1 }, { b: 2 }]);
+  it('streams the bundle as a zip in the requested format', async () => {
+    mockedBundles.streamExport.mockResolvedValue({ frames: 2 });
     const res = makeRes();
 
-    await ctrl.exportJob(makeReq({ params: { id: 'j1' } }), res);
+    await ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'yolo', include: 'all' } }), res);
 
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/x-ndjson');
-    expect(res.send).toHaveBeenCalledWith('{"a":1}\n{"b":2}\n');
+    expect(mockedAdmin).toHaveBeenCalledWith(job, 'u1');
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/zip');
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="job-j1-yolo.zip"');
+    expect(mockedBundles.streamExport).toHaveBeenCalledWith(job, 'yolo', 'all', res);
+    expect(res.end).toHaveBeenCalled();
   });
 
-  it('streams CSV when requested', async () => {
-    mockedExport.exportCsv.mockResolvedValue('h\nrow\n');
+  it('answers a failure before anything was sent with the error', async () => {
+    mockedBundles.streamExport.mockRejectedValue(new Error('file-service down'));
+
+    await expect(ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'coco', include: 'done' } }), makeRes())).rejects.toThrow(
+      'file-service down'
+    );
+  });
+
+  it('cuts the connection when the failure comes after bytes went out', async () => {
+    const failure = new Error('mask unreadable');
+    mockedBundles.streamExport.mockRejectedValue(failure);
     const res = makeRes();
+    res.headersSent = true;
 
-    await ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'csv' } }), res);
+    await ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'coco', include: 'done' } }), res);
 
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
-    expect(res.send).toHaveBeenCalledWith('h\nrow\n');
-    expect(mockedExport.exportRows).not.toHaveBeenCalled();
+    expect(res.destroy).toHaveBeenCalledWith(failure);
+    expect(res.end).not.toHaveBeenCalled();
   });
 
   it('serves the manifest as pretty JSON under its own filename', async () => {
@@ -247,21 +289,114 @@ describe('exportJob', () => {
       'attachment; filename="job-j1.manifest.json"'
     );
     expect(res.send).toHaveBeenCalledWith(JSON.stringify({ job: { id: 'j1' } }, null, 2));
-    expect(mockedExport.exportRows).not.toHaveBeenCalled();
+    expect(mockedBundles.streamExport).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller who does not manage the dataset, before reading any label', async () => {
+    mockedAdmin.mockRejectedValueOnce(new Error('forbidden'));
+
+    await expect(ctrl.exportJob(makeReq({ params: { id: 'j1' }, query: { format: 'yolo' } }), makeRes())).rejects.toThrow('forbidden');
+    expect(mockedBundles.streamExport).not.toHaveBeenCalled();
+  });
+});
+
+describe('listFormats', () => {
+  it('lists the formats with what each can hold', async () => {
+    const res = makeRes();
+
+    await ctrl.listFormats(makeReq(), res);
+
+    const formats = res.json.mock.calls[0][0].data as { id: string; boxes: boolean; masks: boolean }[];
+    expect(formats.map((format) => format.id)).toEqual(['yolo', 'coco', 'voc', 'semantic-png', 'visin']);
+    expect(formats.find((format) => format.id === 'yolo')).toMatchObject({ boxes: true, masks: false });
+  });
+});
+
+describe('importLabels', () => {
+  const upload = (chunks: Buffer[], overrides: Record<string, unknown> = {}): Request =>
+    Object.assign(Readable.from(chunks), {
+      params: { id: 'j1' },
+      query: { as: 'suggestions', dryRun: 'false', classMap: {} },
+      headers: {},
+      user: { id: 'u1', email: 'user@x.com' },
+      ...overrides,
+    }) as unknown as Request;
+
+  beforeEach(() => {
+    mockedSvc.getJob.mockResolvedValue({ ...job, tasksCount: 5 });
+  });
+
+  it('spools the body to a temporary file, imports from it and always removes it', async () => {
+    let seen: { path: string; bytes: string } | undefined;
+    mockedImporter.importLabels.mockImplementation(async (_job: unknown, _user: unknown, path: string) => {
+      seen = { path, bytes: readFileSync(path).toString() };
+      return { format: 'yolo' };
+    });
+    const res = makeRes();
+
+    await ctrl.importLabels(upload([Buffer.from('PK'), Buffer.from('zip')]), res);
+
+    expect(mockedAdmin).toHaveBeenCalled();
+    expect(seen!.bytes).toBe('PKzip');
+    expect(existsSync(seen!.path)).toBe(false);
+    expect(mockedImporter.importLabels.mock.calls[0][3]).toEqual({ as: 'suggestions', dryRun: 'false', classMap: {} });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { format: 'yolo' } });
+  });
+
+  it('removes the file when the import fails', async () => {
+    let path = '';
+    mockedImporter.importLabels.mockImplementation(async (_job: unknown, _user: unknown, file: string) => {
+      path = file;
+      throw new Error('Could not recognise these labels');
+    });
+
+    await expect(ctrl.importLabels(upload([Buffer.from('x')]), makeRes())).rejects.toThrow('Could not recognise');
+    expect(existsSync(path)).toBe(false);
+  });
+
+  it('needs the job to have frames', async () => {
+    mockedSvc.getJob.mockResolvedValue({ ...job, tasksCount: 0 });
+
+    await expect(ctrl.importLabels(upload([Buffer.from('x')]), makeRes())).rejects.toThrow('materialize it first');
+    expect(mockedImporter.importLabels).not.toHaveBeenCalled();
+  });
+
+  it('needs a body', async () => {
+    await expect(ctrl.importLabels(upload([]), makeRes())).rejects.toThrow('Send the labels archive');
+  });
+
+  it('refuses an archive too large by its declared size, without reading it', async () => {
+    await expect(
+      ctrl.importLabels(upload([Buffer.from('x')], { headers: { 'content-length': '5000' } }), makeRes())
+    ).rejects.toMatchObject({ statusCode: 413 });
+    expect(mockedImporter.importLabels).not.toHaveBeenCalled();
+  });
+
+  it('stops reading an archive that outgrows the limit whatever it declared', async () => {
+    await expect(
+      ctrl.importLabels(upload([Buffer.alloc(700), Buffer.alloc(700)], { headers: {} }), makeRes())
+    ).rejects.toMatchObject({ statusCode: 413 });
+    expect(mockedImporter.importLabels).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller who does not manage the dataset, before reading the body', async () => {
+    mockedAdmin.mockRejectedValueOnce(new Error('forbidden'));
+
+    await expect(ctrl.importLabels(upload([Buffer.from('x')]), makeRes())).rejects.toThrow('forbidden');
   });
 });
 
 describe('jobStats', () => {
   it('gives an authorized group administrator the per-labeler breakdown', async () => {
     (getJobReadAccess as jest.Mock).mockResolvedValue({ member: true, isAdmin: true });
-    mockedExport.jobStats.mockResolvedValue({ tasks: 1, perUser: [{ userEmail: 'w@x.com', answered: 1 }] });
+    mockedExport.jobStats.mockResolvedValue({ tasks: 1, perUser: [{ userEmail: 'w@x.com', done: 1, skipped: 0 }] });
     const res = makeRes();
 
     await ctrl.jobStats(makeReq({ params: { id: 'j1' } }), res);
 
     expect(res.json).toHaveBeenCalledWith({
       success: true,
-      data: { tasks: 1, perUser: [{ userEmail: 'w@x.com', answered: 1 }] },
+      data: { tasks: 1, perUser: [{ userEmail: 'w@x.com', done: 1, skipped: 0 }] },
     });
   });
 
@@ -270,7 +405,7 @@ describe('jobStats', () => {
     mockedExport.jobStats.mockResolvedValue({
       tasks: 1,
       perStratum: [],
-      perUser: [{ userEmail: 'w@x.com', answered: 1 }],
+      perUser: [{ userEmail: 'w@x.com', done: 1, skipped: 0 }],
     });
     const res = makeRes();
 

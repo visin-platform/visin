@@ -2,6 +2,8 @@ import type { Request, Response } from 'express';
 
 jest.mock('../../services/jobService', () => ({ getJob: jest.fn() }));
 jest.mock('../../services/materializationService', () => ({}));
+jest.mock('../../services/bundleService', () => ({}));
+jest.mock('../../services/importService', () => ({}));
 jest.mock('../../services/exportService', () => ({ jobStats: jest.fn() }));
 jest.mock('../../clients/datasetServiceClient', () => ({ getPermission: jest.fn() }));
 
@@ -11,8 +13,12 @@ import * as exportSvc from '../../services/exportService';
 import { getPermission } from '../../clients/datasetServiceClient';
 
 const permission = getPermission as jest.Mock;
-const aggregate = { tasks: 12, completed: 4, answers: 7, perStratum: [{ stratum: 'night', tasks: 12, completed: 4 }], agreement: 0.8 };
-const perUser = [{ userEmail: 'private@example.test', userName: 'Private Labeler', answered: 7 }];
+const aggregate = {
+  tasks: 12, completed: 4, done: 7, skipped: 1, objects: 30,
+  perClass: [{ classKey: 'car', name: 'Car', boxes: 30, pixels: 4000 }],
+  perStratum: [{ stratum: 'night', tasks: 12, completed: 4 }]
+};
+const perUser = [{ userEmail: 'private@example.test', userName: 'Private Labeler', done: 7, skipped: 1 }];
 const makeReq = (user: unknown = { id: 'account-id', email: 'viewer@example.test' }) => ({
   params: { id: 'job-id' }, query: { datasetId: 'other', role: 'owner' }, body: { datasetId: 'other' }, user,
 }) as unknown as Request;

@@ -6,6 +6,8 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { errorHandler, optionalAuth } from '@visin/backend-core';
 import { LabelJob, JOB_STATUSES, JobStatus } from '../../models/LabelJob';
 import { LabelTask } from '../../models/LabelTask';
+import { LabelAnnotation } from '../../models/LabelAnnotation';
+import { LabelSuggestion } from '../../models/LabelSuggestion';
 import jobRoutes from '../../routes/jobRoutes';
 import taskRoutes from '../../routes/taskRoutes';
 import { addHold, datasetIdsFor, getDataset, getPermission } from '../../clients/datasetServiceClient';
@@ -62,7 +64,7 @@ describe('job publication and task access with in-memory MongoDB', () => {
     sign.mockResolvedValue({ 'frame-file': 'SIGNED_IMAGE_URL' });
   });
   afterEach(async () => {
-    await Promise.all([mongoose.connection.collection('users').deleteMany({}), mongoose.connection.collection('user_sessions').deleteMany({}), LabelJob.deleteMany({}), LabelTask.deleteMany({})]);
+    await Promise.all([mongoose.connection.collection('users').deleteMany({}), mongoose.connection.collection('user_sessions').deleteMany({}), LabelJob.deleteMany({}), LabelTask.deleteMany({}), LabelAnnotation.deleteMany({}), LabelSuggestion.deleteMany({})]);
   });
   afterAll(async () => {
     await new Promise<void>(resolve => server.close(() => resolve()));
@@ -77,7 +79,8 @@ describe('job publication and task access with in-memory MongoDB', () => {
   });
   const fixture = async (status: JobStatus = 'active', isPublic?: boolean) => {
     const job = await LabelJob.create({ name: 'Private content', createdBy: creator, status,
-      datasetId: 'd1', taskType: 'single_choice', question: { prompt: 'Private prompt', choices: [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }] }, tasksCount: 1, ...(isPublic !== undefined ? { isPublic } : {}) });
+      datasetId: 'd1', taskType: 'annotate', sensors: [{ key: 'camera', group: 'frames' }],
+      classes: [{ key: 'private-class', name: 'Private class', color: '#ff0000', tools: ['box', 'mask'], maskIndex: 1 }], tasksCount: 1, ...(isPublic !== undefined ? { isPublic } : {}) });
     const task = await LabelTask.create({ jobId: job.id, frame: { fileId: 'frame-file', path: 'frames/frame.png', stem: 'frame' }, order: 0 });
     return { job, task };
   };
@@ -158,8 +161,9 @@ describe('job publication and task access with in-memory MongoDB', () => {
   });
 
   it('ignores publication fields during creation and grants labeling capability only to contributors', async () => {
-    expect((await request('/jobs', 'member', 'POST', { name: 'New job', datasetId: 'd1', taskType: 'single_choice', question: { prompt: 'P' } })).status).toBe(403);
-    const response = await request('/jobs', 'owner', 'POST', { name: 'New job', datasetId: 'd1', taskType: 'single_choice', question: { prompt: 'P' }, isPublic: true });
+    const body = { name: 'New job', datasetId: 'd1', sensors: [{ key: 'camera', group: 'frames' }], classes: [{ name: 'Car' }] };
+    expect((await request('/jobs', 'member', 'POST', body)).status).toBe(403);
+    const response = await request('/jobs', 'owner', 'POST', { ...body, isPublic: true });
     expect(response.status).toBe(201);
     expect((await response.json() as { data: { isPublic: boolean } }).data.isPublic).toBe(false);
     const { job } = await fixture('completed');

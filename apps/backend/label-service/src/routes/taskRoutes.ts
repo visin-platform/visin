@@ -1,18 +1,28 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { asyncHandler, authenticateToken, validateRequest } from '@visin/backend-core';
-import { answerBodySchema } from '../validation/taskSchemas';
+import { finishBodySchema, saveAnnotationBodySchema } from '../validation/taskSchemas';
 import * as ctrl from '../controllers/taskController';
 
 const router = Router();
 
 // Looking at a frame is public; labeling it is not.
 router.get('/:id', asyncHandler(ctrl.getTask));
-router.post(
-  '/:id/answer',
+router.put(
+  '/:id/annotation',
   authenticateToken,
-  validateRequest({ body: answerBodySchema }),
-  asyncHandler(ctrl.submitAnswer)
+  validateRequest({ body: saveAnnotationBodySchema }),
+  asyncHandler(ctrl.saveAnnotation)
 );
-router.delete('/:id/answer', authenticateToken, asyncHandler(ctrl.undoAnswer));
+// The mask is run-length bytes, not JSON (utils/mask.ts): a megapixel frame's
+// worth of class indices is a few kilobytes that way.
+router.put(
+  '/:id/annotation/mask',
+  authenticateToken,
+  express.raw({ type: 'application/octet-stream', limit: '8mb' }),
+  asyncHandler(ctrl.saveMask)
+);
+router.delete('/:id/annotation/mask', authenticateToken, asyncHandler(ctrl.clearMask));
+router.post('/:id/annotation/done', authenticateToken, validateRequest({ body: finishBodySchema }), asyncHandler(ctrl.finishDone));
+router.post('/:id/annotation/skip', authenticateToken, validateRequest({ body: finishBodySchema }), asyncHandler(ctrl.finishSkip));
 
 export default router;

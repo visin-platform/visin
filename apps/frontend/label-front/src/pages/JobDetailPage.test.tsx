@@ -7,8 +7,11 @@ vi.mock('../services/jobService', () => ({
   getMyGroups: vi.fn(),
   transitionJob: vi.fn(),
   setJobVisibility: vi.fn(),
+  setModelClassMapping: vi.fn(),
   downloadExport: vi.fn(),
   deleteJob: vi.fn(),
+  getFormats: vi.fn(),
+  importLabels: vi.fn(),
 }));
 
 // Signed in unless a test says otherwise — anonymous is the exception here.
@@ -17,7 +20,7 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => authState,
 }));
 
-import { deleteJob, downloadExport, getJob, getJobStats, getMyGroups, transitionJob, setJobVisibility } from '../services/jobService';
+import { deleteJob, downloadExport, getFormats, getJob, getJobStats, getMyGroups, transitionJob, setJobVisibility } from '../services/jobService';
 import JobDetailPage from './JobDetailPage';
 import { renderWithProviders } from '../test/renderWithProviders';
 
@@ -36,24 +39,36 @@ const job = (overrides: Record<string, unknown> = {}) => ({
   status: 'active',
   canLabel: true,
   canManage,
-  taskType: 'mask_toggle',
+  taskType: 'annotate',
   redundancy: 2,
-  question: { prompt: 'Mark all incorrect masks' },
+  classes: [
+    { key: 'car', name: 'Car', color: '#2a78d6', tools: ['box', 'mask'], maskIndex: 1 },
+    { key: 'road', name: 'Road', color: '#eb6834', tools: ['mask'], maskIndex: 2 },
+  ],
+  sensors: [
+    { key: 'camera', group: 'camera', kind: 'image' },
+    { key: 'lidar', group: 'lidar', kind: 'image' },
+  ],
   tasksCount: 10,
-  progress: { tasks: 10, completed: 4, answers: 12, myAnswers: 6 },
+  progress: { tasks: 10, completed: 4, done: 12, skipped: 2, myDone: 6 },
   ...overrides,
 });
 
 const stats = {
   tasks: 10,
   completed: 4,
-  answers: 12,
-  perUser: [{ userEmail: 'a@x.com', userName: 'Ann', answered: 7 }],
+  done: 12,
+  skipped: 2,
+  objects: 31,
+  perClass: [
+    { classKey: 'car', name: 'Car', boxes: 31, pixels: 120000 },
+    { classKey: 'road', name: 'Road', boxes: 0, pixels: 450000 },
+  ],
+  perUser: [{ userEmail: 'a@x.com', userName: 'Ann', done: 7, skipped: 1 }],
   perStratum: [
     { stratum: 'vehicle', tasks: 6, completed: 3 },
     { stratum: 'sign', tasks: 4, completed: 1 },
   ],
-  agreement: 0.875,
 };
 
 const renderPage = () => renderWithProviders(<JobDetailPage />, { route: '/jobs/j1', path: '/jobs/:id' });
@@ -64,6 +79,9 @@ beforeEach(() => {
   mockedGetJob.mockResolvedValue(job());
   mockedStats.mockResolvedValue(stats);
   mockedGroups.mockResolvedValue([]);
+  (getFormats as ReturnType<typeof vi.fn>).mockResolvedValue([
+    { id: 'yolo', name: 'YOLO', description: 'One txt per image', boxes: true, masks: false },
+  ]);
 });
 
 
@@ -74,6 +92,17 @@ const chooseAction = async (name: string) => {
 };
 
 describe('JobDetailPage', () => {
+  it('allows managers to configure model classes on an existing job', async () => {
+    canManage = true;
+    mockedGetJob.mockResolvedValue(job());
+    renderPage();
+    await chooseAction('Model class mapping…');
+    expect(await screen.findByRole('dialog', { name: 'Model class mapping' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Model class for Car')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Model class for Road')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
   it('names the browser tab after the job', async () => {
     renderPage();
 
@@ -81,14 +110,28 @@ describe('JobDetailPage', () => {
     await waitFor(() => expect(document.title).toBe('Mask check - Labeling'));
   });
 
-  it('shows progress, stats, per-user and per-stratum tables', async () => {
+  it('shows progress, the classes, and the per-class, per-annotator and per-stratum tables', async () => {
     renderPage();
 
     expect(await screen.findByText('Mask check')).toBeInTheDocument();
-    expect(screen.getByText(/4\/10 tasks complete/)).toBeInTheDocument();
+    expect(screen.getByText(/4\/10 frames complete · 2 skipped · 6 by me/)).toBeInTheDocument();
+    expect(screen.getByText('Car · box + mask')).toBeInTheDocument();
+    expect(screen.getByText('Road · mask')).toBeInTheDocument();
+    expect(screen.getByText('camera + lidar')).toBeInTheDocument();
+    expect(screen.getByText('K=2')).toBeInTheDocument();
     expect(await screen.findByText('Ann')).toBeInTheDocument();
     expect(screen.getByText('vehicle')).toBeInTheDocument();
-    expect(screen.getByText(/87\.5%/)).toBeInTheDocument(); // agreement (K=2)
+    expect(screen.getByText('450,000')).toBeInTheDocument();
+    expect(screen.getByText(/31 boxes drawn/)).toBeInTheDocument();
+  });
+
+  it('shows no annotator table to a visitor, who is not given the email addresses', async () => {
+    mockedStats.mockResolvedValue({ ...stats, perUser: undefined });
+    renderPage();
+
+    await screen.findByText('Mask check');
+    await screen.findByText('Per class');
+    expect(screen.queryByText('Per annotator')).not.toBeInTheDocument();
   });
 
   it('hides admin controls for plain workers but shows the labeling link', async () => {
@@ -100,7 +143,7 @@ describe('JobDetailPage', () => {
     expect(screen.queryByRole('button', { name: /More actions for/ })).not.toBeInTheDocument();
   });
 
-  it('lets an admin pause and export', async () => {
+  it('lets an admin pause and export the job’s setup', async () => {
     canManage = true;
     mockedGetJob.mockResolvedValue(job());
     mockedTransition.mockResolvedValue(job({ status: 'paused' }));
@@ -110,11 +153,32 @@ describe('JobDetailPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Pause' }));
     await waitFor(() => expect(mockedTransition).toHaveBeenCalledWith('j1', 'pause'));
 
-    await chooseAction('Export CSV');
-    expect(mockedExport).toHaveBeenCalledWith('j1', 'csv');
-
-    await chooseAction('Export manifest');
+    await chooseAction('Export job setup');
     expect(mockedExport).toHaveBeenCalledWith('j1', 'manifest');
+  });
+
+  it('opens the label export and import dialogs from the menu', async () => {
+    canManage = true;
+    mockedGetJob.mockResolvedValue(job());
+    renderPage();
+
+    await chooseAction('Export labels…');
+    expect(await screen.findByRole('dialog', { name: 'Export labels' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await chooseAction('Import labels…');
+    expect(await screen.findByRole('dialog', { name: 'Import labels' })).toBeInTheDocument();
+  });
+
+  it('offers no import for a job with no frames, or one that is archived', async () => {
+    canManage = true;
+    mockedGetJob.mockResolvedValue(job({ tasksCount: 0 }));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /More actions for/ }));
+    expect(await screen.findByRole('menuitem', { name: 'Export labels…' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Import labels…' })).not.toBeInTheDocument();
   });
 
   it('lets an admin activate a draft and surfaces transition errors', async () => {
@@ -143,28 +207,28 @@ describe('JobDetailPage transitions', () => {
     await waitFor(() => expect(mockedTransition).toHaveBeenCalledWith('j1', 'archive'));
   });
 
-  it('exports JSONL and surfaces export failures', async () => {
+  it('surfaces a failure to export the setup', async () => {
     canManage = true;
     mockedGetJob.mockResolvedValue(job());
     mockedExport.mockRejectedValue(new Error('Export failed (500)'));
     renderPage();
 
-    await chooseAction('Export JSONL');
+    await chooseAction('Export job setup');
 
-    expect(mockedExport).toHaveBeenCalledWith('j1', 'jsonl');
+    expect(mockedExport).toHaveBeenCalledWith('j1', 'manifest');
     expect(await screen.findByText('Export failed (500)')).toBeInTheDocument();
   });
   it('hard-deletes the job once confirmed and returns to the list', async () => {
     canManage = true;
     mockedGetJob.mockResolvedValue(job());
-    mockedDelete.mockResolvedValue({ tasks: 4135, answers: 7 });
+    mockedDelete.mockResolvedValue({ tasks: 4135, annotations: 7, suggestions: 0 });
     renderPage();
 
     await chooseAction('Delete');
     const dialog = await screen.findByRole('dialog', { name: 'Delete this job?' });
-    // The 4 collected answers are named in the prompt: they are the labeling
-    // effort, and archiving used to be the only option that kept them.
-    expect(dialog).toHaveTextContent('4 collected answer(s)');
+    // The 4 labeled frames are named in the prompt: they are the labeling
+    // effort, and archiving is the option that keeps them.
+    expect(dialog).toHaveTextContent('labels on 4 frame(s)');
     expect(mockedDelete).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete job' }));
 

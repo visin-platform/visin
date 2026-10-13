@@ -1,355 +1,154 @@
 jest.mock('../../models/LabelTask', () => ({
   LabelTask: { find: jest.fn() },
 }));
-jest.mock('../../models/LabelAnswer', () => ({
-  LabelAnswer: { find: jest.fn() },
+jest.mock('../../models/LabelAnnotation', () => ({
+  LabelAnnotation: { find: jest.fn() },
 }));
 jest.mock('../../clients/datasetServiceClient', () => ({
   getDataset: jest.fn(),
-  jsonFields: jest.fn(),
 }));
 
-import { exportRows, exportCsv, exportManifest, jobStats } from '../../services/exportService';
+import { exportManifest, jobStats } from '../../services/exportService';
 import { LabelTask } from '../../models/LabelTask';
-import { LabelAnswer } from '../../models/LabelAnswer';
+import { LabelAnnotation } from '../../models/LabelAnnotation';
 import * as datasets from '../../clients/datasetServiceClient';
 import type { ILabelJob } from '../../models/LabelJob';
 
 const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
-const mockedAnswer = LabelAnswer as unknown as Record<string, jest.Mock>;
+const mockedAnnotation = LabelAnnotation as unknown as Record<string, jest.Mock>;
 const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
 
-const singleChoiceJob = { _id: 'j1', taskType: 'single_choice', redundancy: 2 } as unknown as ILabelJob;
-const maskJob = { _id: 'j1', taskType: 'mask_toggle', redundancy: 2 } as unknown as ILabelJob;
+const job = {
+  _id: 'j1',
+  name: 'Street',
+  taskType: 'annotate',
+  redundancy: 2,
+  status: 'active',
+  tasksCount: 3,
+  createdBy: { email: 'owner@x.com' },
+  createdAt: new Date('2026-10-01T00:00:00Z'),
+  datasetId: 'd1',
+  sensors: [{ key: 'camera', group: 'camera', kind: 'image' }],
+  classes: [
+    { key: 'car', name: 'Car', color: '#ff0000', tools: ['box', 'mask'], maskIndex: 1 },
+    { key: 'road', name: 'Road', color: '#00ff00', tools: ['mask'], maskIndex: 2 },
+  ],
+  selection: { kind: 'filter', spec: { sampleN: 3 } },
+} as unknown as ILabelJob;
 
-const task = (id: string, overrides: Record<string, unknown> = {}) => ({
-  _id: id,
-  frame: { fileId: `file-${id}`, path: `frames/${id}.png`, stem: id },
-  answersCount: 0,
-  payload: undefined,
-  ...overrides,
-});
+const stub = (tasks: unknown[], annotations: unknown[]) => {
+  mockedTask.find.mockReturnValue({ lean: jest.fn().mockResolvedValue(tasks) });
+  mockedAnnotation.find.mockReturnValue({ lean: jest.fn().mockResolvedValue(annotations) });
+};
 
-const answer = (taskId: string, userId: string, overrides: Record<string, unknown> = {}) => ({
-  taskId,
+const annotation = (userId: string, overrides: Record<string, unknown> = {}) => ({
   userId,
   userEmail: `${userId}@x.com`,
   userName: userId.toUpperCase(),
+  status: 'done',
+  objects: [],
   ...overrides,
 });
-
-const stubData = (tasks: unknown[], answers: unknown[]) => {
-  // A thenable that also has `.sort()`: loadJobData sorts, exportManifest awaits
-  // the projected query directly, and both go through this one mock.
-  mockedTask.find.mockReturnValue({
-    sort: jest.fn().mockResolvedValue(tasks),
-    then: (resolve: (value: unknown) => unknown) => resolve(tasks),
-  });
-  mockedAnswer.find.mockResolvedValue(answers);
-};
-
-const csvRows = (csv: string) => csv.trim().split('\n');
 
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('exportRows single_choice', () => {
-  it('aggregates per-task answers with majority consensus', async () => {
-    stubData(
-      [task('t1', { stratum: 's1', answersCount: 2 })],
-      [answer('t1', 'u1', { choiceKey: 'good', elapsedMs: 5 }), answer('t1', 'u2', { choiceKey: 'good' })]
-    );
-
-    const rows = await exportRows(singleChoiceJob);
-
-    expect(rows).toEqual([
-      {
-        taskId: 't1',
-        frame: 'frames/t1.png',
-        stratum: 's1',
-        answers: [
-          { userEmail: 'u1@x.com', userName: 'U1', choiceKey: 'good', elapsedMs: 5 },
-          { userEmail: 'u2@x.com', userName: 'U2', choiceKey: 'good', elapsedMs: undefined },
-        ],
-        consensus: 'good',
-      },
-    ]);
-  });
-
-  it('reports a tie as null consensus and no answers as null', async () => {
-    stubData(
-      [task('t1'), task('t2')],
-      [answer('t1', 'u1', { choiceKey: 'good' }), answer('t1', 'u2', { choiceKey: 'bad' })]
-    );
-
-    const rows = await exportRows(singleChoiceJob);
-
-    expect(rows[0].consensus).toBeNull();
-    expect(rows[1].consensus).toBeNull();
-  });
-});
-
-describe('exportRows mask_toggle', () => {
-  it('explodes one row per mask with per-user verdicts', async () => {
-    stubData(
+describe('jobStats', () => {
+  it('counts progress, boxes and mask pixels per class, and who did how much', async () => {
+    stub(
       [
-        task('t1', {
-          payload: { maskMap: { imageId: 'idmap', masks: [{ id: 1, class: 'vehicle' }, { id: 2, class: 'sign' }] } },
-        }),
+        { _id: 't1', stratum: 'day', answersCount: 2 },
+        { _id: 't2', stratum: 'day', answersCount: 1 },
+        { _id: 't3', answersCount: 0 },
       ],
-      [answer('t1', 'u1', { rejectedMaskIds: [2] }), answer('t1', 'u2', { rejectedMaskIds: [] })]
+      [
+        annotation('u1', {
+          objects: [{ classKey: 'car' }, { classKey: 'car' }, { classKey: 'ghost' }],
+          mask: { pixels: { '1': 100, '2': 400, '9': 5 } },
+        }),
+        annotation('u2', { objects: [{ classKey: 'car' }] }),
+        annotation('u1', { objects: [{ classKey: 'car' }], mask: { pixels: { '2': 50 } } }),
+        annotation('u2', { status: 'skipped', objects: [{ classKey: 'car' }] }),
+      ]
     );
 
-    const rows = await exportRows(maskJob);
+    const stats = await jobStats(job);
 
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({
-      maskId: 1,
-      class: 'vehicle',
-      verdicts: [
-        { userEmail: 'u1@x.com', verdict: 'correct' },
-        { userEmail: 'u2@x.com', verdict: 'correct' },
+    expect(stats).toEqual({
+      tasks: 3,
+      completed: 1,
+      done: 3,
+      skipped: 1,
+      // The ghost class is not in the job, but the box is still on a finished frame.
+      objects: 5,
+      perUser: [
+        { userEmail: 'u1@x.com', userName: 'U1', done: 2, skipped: 0 },
+        { userEmail: 'u2@x.com', userName: 'U2', done: 1, skipped: 1 },
       ],
-      consensus: 'correct',
+      perClass: [
+        { classKey: 'car', name: 'Car', boxes: 4, pixels: 100 },
+        { classKey: 'road', name: 'Road', boxes: 0, pixels: 450 },
+      ],
+      perStratum: [
+        { stratum: '(none)', tasks: 1, completed: 0 },
+        { stratum: 'day', tasks: 2, completed: 1 },
+      ],
     });
-    expect(rows[1]).toMatchObject({ maskId: 2, consensus: null }); // u1 incorrect vs u2 correct → tie
   });
 
-  it('nests the dataset mask metadata and stamps each verdict with its timing', async () => {
-    stubData(
-      [
-        task('t1', {
-          stratum: 'task-level',
-          payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'vehicle', stratum: 'both', kind: 'fringe' }] } },
-        }),
-      ],
-      [answer('t1', 'u1', { rejectedMaskIds: [1], elapsedMs: 12, createdAt: new Date('2026-08-04T10:00:00Z') })]
-    );
+  it('only reads finished and skipped labels', async () => {
+    stub([], []);
 
-    const [row] = await exportRows(maskJob);
+    await jobStats(job);
 
-    expect(row.stratum).toBe('task-level');
-    expect(row.mask).toEqual({ id: 1, class: 'vehicle', stratum: 'both', kind: 'fringe' });
-    expect(row.verdicts).toEqual([
-      {
-        userEmail: 'u1@x.com',
-        userName: 'U1',
-        verdict: 'incorrect',
-        elapsedMs: 12,
-        answeredAt: '2026-08-04T10:00:00.000Z',
-      },
-    ]);
-  });
-});
-
-describe('exportCsv', () => {
-  it('emits long-format single_choice rows and escapes commas', async () => {
-    stubData(
-      [task('t1', { stratum: 'a,b' })],
-      [answer('t1', 'u1', { choiceKey: 'good', elapsedMs: 3 })]
-    );
-
-    expect(csvRows(await exportCsv(singleChoiceJob))).toEqual([
-      'taskId,frame,stratum,userEmail,choiceKey,elapsedMs,answeredAt,userName',
-      't1,frames/t1.png,"a,b",u1@x.com,good,3,,U1',
-    ]);
+    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({ jobId: 'j1', status: { $in: ['done', 'skipped'] } });
   });
 
-  it('keeps an unanswered single_choice task in the table', async () => {
-    stubData([task('t1'), task('t2')], [answer('t1', 'u1', { choiceKey: 'good' })]);
+  it('is all zeros for a job nobody has started, and copes with an annotation that has no objects field', async () => {
+    stub([], []);
+    expect(await jobStats(job)).toMatchObject({ tasks: 0, completed: 0, done: 0, skipped: 0, objects: 0, perUser: [] });
 
-    const rows = csvRows(await exportCsv(singleChoiceJob));
-
-    expect(rows).toHaveLength(3);
-    expect(rows[2]).toBe('t2,frames/t2.png,,,,,,');
-  });
-
-  it('emits one row per user-mask verdict for mask_toggle', async () => {
-    stubData(
-      [task('t1', { payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'vehicle' }] } } })],
-      [answer('t1', 'u1', { rejectedMaskIds: [1], elapsedMs: 40, createdAt: new Date('2026-08-04T10:00:00Z') })]
-    );
-
-    expect(csvRows(await exportCsv(maskJob))).toEqual([
-      'taskId,frame,stratum,maskId,class,userEmail,verdict,elapsedMs,answeredAt,userName',
-      't1,frames/t1.png,,1,vehicle,u1@x.com,incorrect,40,2026-08-04T10:00:00.000Z,U1',
-    ]);
-  });
-
-  it('carries every dataset mask field as a mask_ column without shadowing the task stratum', async () => {
-    stubData(
-      [
-        task('t1', {
-          stratum: 'task-level',
-          payload: {
-            maskMap: {
-              imageId: 'i',
-              // `stratum` here is the dataset's own mask field, a different thing
-              // from the task's; both have to survive the export.
-              masks: [{ id: 1, class: 'vehicle', stratum: 'both', triage_llava: 'accept', bbox: [1, 2, 3, 4] }],
-            },
-          },
-        }),
-      ],
-      [answer('t1', 'u1', { rejectedMaskIds: [] })]
-    );
-
-    const [header, row] = csvRows(await exportCsv(maskJob));
-
-    expect(header.split(',')).toEqual([
-      'taskId',
-      'frame',
-      'stratum',
-      'maskId',
-      'class',
-      'userEmail',
-      'verdict',
-      'elapsedMs',
-      'answeredAt',
-      'mask_bbox',
-      'mask_stratum',
-      'mask_triage_llava',
-      'userName',
-    ]);
-    expect(row).toContain('task-level'); // the task's stratum column
-    expect(row).toContain('"[1,2,3,4]"'); // bbox survives as JSON, not "1,2,3,4"
-    expect(row).toContain('both');
-    expect(row).toContain('accept');
-  });
-
-  it('emits a row for a task nobody has answered, so the denominator survives', async () => {
-    stubData(
-      [
-        task('t1', { payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'vehicle' }] } } }),
-        task('t2', { payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'sign' }] } } }),
-      ],
-      [answer('t1', 'u1', { rejectedMaskIds: [1] })]
-    );
-
-    const rows = csvRows(await exportCsv(maskJob));
-
-    expect(rows).toHaveLength(3); // header + one answered + one unanswered
-    expect(rows[2]).toBe('t2,frames/t2.png,,1,sign,,,,,');
+    stub([{ _id: 't1', answersCount: 0 }], [{ userId: 'u', userEmail: 'u@x.com', status: 'done' }]);
+    expect((await jobStats(job)).objects).toBe(0);
   });
 });
 
 describe('exportManifest', () => {
-  const datasetJob = {
-    _id: 'j1',
-    name: 'Verify',
-    taskType: 'mask_toggle',
-    redundancy: 2,
-    datasetId: 'd1',
-    annotationSets: ['verify'],
-    question: { prompt: 'Mark all incorrect masks' },
-    status: 'active',
-    tasksCount: 2,
-    selection: { kind: 'filter', spec: { sampleN: null, seed: 42, rows: 2 } },
-  } as unknown as ILabelJob;
-
-  it('pairs each value with what the dataset holds and what the job asks about', async () => {
-    stubData(
-      [
-        task('t1', {
-          answersCount: 1,
-          payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'vehicle', stratum: 'both' }] } },
-        }),
-        task('t2', {
-          payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'sign', stratum: 'neither' }] } },
-        }),
-      ],
-      [answer('t1', 'u1', { rejectedMaskIds: [] })]
-    );
-    mockedDatasets.getDataset.mockResolvedValue({ _id: 'd1', name: 'corpus', groups: [{ name: 'verify', images: 9, jsons: 9 }] });
-    mockedDatasets.jsonFields.mockResolvedValue([
-      {
-        field: 'stratum',
-        values: [
-          { value: 'both', count: 100 },
-          { value: 'neither', count: 40 },
-          { value: 'llava_only', count: 7 },
-        ],
-      },
-    ]);
-
-    const manifest = await exportManifest(datasetJob);
-
-    expect(mockedDatasets.jsonFields).toHaveBeenCalledWith('d1', 'verify', 'masks');
-
-    expect(manifest.masks?.stratum).toEqual({
-      both: { dataset: 100, job: 1 },
-      neither: { dataset: 40, job: 1 },
-      // In the dataset, in no task — inclusion zero, which is the whole point of
-      // reporting the pair rather than either number alone.
-      llava_only: { dataset: 7, job: 0 },
+  it('describes how the job was set up, with its classes and sensors', async () => {
+    stub([{ _id: 't1', answersCount: 2 }], [annotation('u1'), annotation('u2', { status: 'skipped' })]);
+    mockedDatasets.getDataset.mockResolvedValue({
+      _id: 'd1',
+      name: 'Drive',
+      description: 'City',
+      groups: [{ name: 'camera', images: 3, jsons: 0 }],
     });
-    expect(manifest.selection).toEqual({ kind: 'filter', spec: { sampleN: null, seed: 42, rows: 2 } });
-    expect(manifest.progress).toEqual({ tasks: 2, completed: 0, answers: 1 });
-    expect(manifest.dataset).toMatchObject({ id: 'd1', name: 'corpus' });
-    expect(manifest.job).toMatchObject({ redundancy: 2, tasksCount: 2, taskType: 'mask_toggle' });
+
+    const manifest = await exportManifest(job);
+
+    expect(manifest.job).toMatchObject({
+      id: 'j1',
+      name: 'Street',
+      taskType: 'annotate',
+      sensors: job.sensors,
+      redundancy: 2,
+      createdBy: 'owner@x.com',
+      createdAt: '2026-10-01T00:00:00.000Z',
+    });
+    expect(manifest.job.classes).toEqual(job.classes);
+    expect(manifest.dataset).toEqual({ id: 'd1', name: 'Drive', description: 'City', groups: [{ name: 'camera', images: 3, jsons: 0 }] });
+    expect(manifest.selection).toEqual({ kind: 'filter', spec: { sampleN: 3 } });
+    expect(manifest.progress).toEqual({ tasks: 1, completed: 1, done: 1, skipped: 1 });
   });
 
-  it('omits inclusion counts for a single_choice job, which has no masks to weight', async () => {
-    stubData([task('t1')], []);
+  it('copes with a job that has no dataset and no selection', async () => {
+    stub([], []);
 
-    const manifest = await exportManifest({ ...datasetJob, taskType: 'single_choice', datasetId: undefined } as unknown as ILabelJob);
+    const manifest = await exportManifest({ ...job, datasetId: undefined, selection: undefined, createdBy: undefined } as never);
 
-    expect(manifest.masks).toBeUndefined();
-    expect(mockedDatasets.jsonFields).not.toHaveBeenCalled();
+    expect(mockedDatasets.getDataset).not.toHaveBeenCalled();
     expect(manifest.dataset).toBeNull();
-  });
-});
-
-describe('jobStats', () => {
-  it('computes totals, per-user, per-stratum, and pairwise agreement', async () => {
-    stubData(
-      [
-        task('t1', { stratum: 'v', answersCount: 2 }),
-        task('t2', { answersCount: 1 }),
-      ],
-      [
-        answer('t1', 'u1', { choiceKey: 'good' }),
-        answer('t1', 'u2', { choiceKey: 'good' }),
-        answer('t2', 'u1', { choiceKey: 'bad' }),
-      ]
-    );
-
-    const stats = await jobStats(singleChoiceJob);
-
-    expect(stats.tasks).toBe(2);
-    expect(stats.completed).toBe(1);
-    expect(stats.answers).toBe(3);
-    expect(stats.perUser).toEqual([
-      { userEmail: 'u1@x.com', userName: 'U1', answered: 2 },
-      { userEmail: 'u2@x.com', userName: 'U2', answered: 1 },
-    ]);
-    expect(stats.perStratum).toEqual([
-      { stratum: '(none)', tasks: 1, completed: 0 },
-      { stratum: 'v', tasks: 1, completed: 1 },
-    ]);
-    expect(stats.agreement).toBe(1); // the single pair agrees
-  });
-
-  it('computes mask agreement as matching-verdict fraction', async () => {
-    stubData(
-      [
-        task('t1', {
-          answersCount: 2,
-          payload: { maskMap: { fileId: 'i', masks: [{ id: 1, class: 'v' }, { id: 2, class: 's' }] } },
-        }),
-      ],
-      [answer('t1', 'u1', { rejectedMaskIds: [1] }), answer('t1', 'u2', { rejectedMaskIds: [1, 2] })]
-    );
-
-    const stats = await jobStats(maskJob);
-
-    expect(stats.agreement).toBe(0.5); // mask 1 matches, mask 2 differs
-  });
-
-  it('returns null agreement with no comparable pairs', async () => {
-    stubData([task('t1')], [answer('t1', 'u1', { choiceKey: 'good' })]);
-
-    expect((await jobStats(singleChoiceJob)).agreement).toBeNull();
+    expect(manifest.selection).toBeNull();
+    expect(manifest.job.createdBy).toBeUndefined();
   });
 });

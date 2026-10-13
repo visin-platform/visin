@@ -33,11 +33,15 @@ describe('jobRoutes', () => {
     expect(find('post', '/:id/next')).toBeDefined();
     expect(find('get', '/:id/tasks/at/:index')).toBeDefined();
     expect(find('get', '/:id/export')).toBeDefined();
+    expect(find('post', '/:id/import')).toBeDefined();
+    expect(find('get', '/formats')).toBeDefined();
     expect(find('get', '/:id/stats')).toBeDefined();
     expect(find('delete', '/:id')).toBeDefined();
     expect(find('put', '/:id/visibility')!.requiresAuth).toBe(true);
     expect(find('put', '/:id/visibility')!.handlerCount).toBe(3);
-    expect(routes).toHaveLength(14);
+    expect(find('put', '/:id/model-mapping')!.requiresAuth).toBe(true);
+    expect(find('put', '/:id/model-mapping')!.handlerCount).toBe(3);
+    expect(routes).toHaveLength(17);
   });
 
   it('validates bodies/queries where schemas exist', () => {
@@ -47,6 +51,15 @@ describe('jobRoutes', () => {
     // Public, so validateRequest + controller only.
     expect(find('get', '/')!.handlerCount).toBe(2);
     expect(find('get', '/:id/tasks/at/:index')!.handlerCount).toBe(2);
+    // authenticateToken + validateRequest(query) + controller; the import body is the zip itself.
+    expect(find('get', '/:id/export')!.handlerCount).toBe(3);
+    expect(find('post', '/:id/import')!.handlerCount).toBe(3);
+  });
+
+  it('declares the static formats route before /:id, which would otherwise swallow it', () => {
+    const order = (router.stack as Layer[]).filter((layer) => layer.route).map((layer) => layer.route!.path);
+    expect(order.indexOf('/formats')).toBeLessThan(order.indexOf('/:id'));
+    expect(find('get', '/formats')!.requiresAuth).toBe(false);
   });
 
   it('serves reading a job anonymously and gates everything else', () => {
@@ -60,6 +73,7 @@ describe('jobRoutes', () => {
     // neither is progress anyone can be shown.
     expect(find('post', '/:id/next')!.requiresAuth).toBe(true);
     expect(find('get', '/:id/export')!.requiresAuth).toBe(true);
+    expect(find('post', '/:id/import')!.requiresAuth).toBe(true);
     for (const path of ['/', '/:id/materialize', '/:id/activate', '/:id/pause', '/:id/resume', '/:id/archive']) {
       expect(find('post', path)!.requiresAuth).toBe(true);
     }

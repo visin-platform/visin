@@ -26,10 +26,15 @@ const managed = { _id: 'd1', name: 'Road', owner: { kind: 'group', id: 'g1' }, v
 const job = {
   _id: 'j1',
   name: 'Mask check',
-  taskType: 'mask_toggle',
+  taskType: 'annotate',
   tasksCount: 42,
   redundancy: 1,
-  question: { prompt: 'Mark all incorrect masks' },
+  description: 'Label the road scene',
+  classes: [
+    { key: 'car', name: 'Car', color: '#2a78d6', tools: ['box', 'mask'], maskIndex: 1 },
+    { key: 'road', name: 'Road', color: '#eb6834', tools: ['mask'], maskIndex: 2 },
+  ],
+  sensors: [{ key: 'camera', group: 'camera', kind: 'image' }],
 };
 
 beforeEach(() => {
@@ -59,8 +64,9 @@ describe('JobsPage', () => {
     renderWithProviders(<JobsPage />);
 
     expect(await screen.findByText('Mask check')).toBeInTheDocument();
-    expect(screen.getByText('Mask verification')).toBeInTheDocument();
-    expect(screen.getByText('42 tasks')).toBeInTheDocument();
+    expect(screen.getByText('Boxes & masks')).toBeInTheDocument();
+    expect(screen.getByText('42 frames')).toBeInTheDocument();
+    expect(screen.getByText('Label the road scene')).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'Start labeling' })).toHaveAttribute('href', '/jobs/j1/work')
     );
@@ -69,29 +75,40 @@ describe('JobsPage', () => {
 
   it('shows how many frames are done', async () => {
     mockedList.mockResolvedValue([
-      { ...job, progress: { tasks: 600, completed: 134, answers: 134, myAnswers: 87 } },
+      { ...job, progress: { tasks: 600, completed: 134, done: 134, skipped: 3, myDone: 87 } },
     ]);
     renderWithProviders(<JobsPage />);
 
     expect(await screen.findByText('134 / 600 frames done')).toBeInTheDocument();
     expect(screen.getByText(/22%/)).toBeInTheDocument();
     expect(screen.getByText(/you labeled 87/)).toBeInTheDocument();
+    expect(screen.getByText(/3 skipped/)).toBeInTheDocument();
     expect(Number(screen.getByRole('progressbar').getAttribute('aria-valuenow'))).toBeCloseTo(22.3, 1);
   });
 
-  // A K>1 job's answer count is not its frame count, so both are shown.
-  it('reports collected labels separately when redundancy is above 1', async () => {
+  it('names the class list when a job has no description, and what kinds of labels it takes', async () => {
     mockedList.mockResolvedValue([
-      { ...job, redundancy: 3, progress: { tasks: 100, completed: 20, answers: 140, myAnswers: 0 } },
+      {
+        ...job,
+        description: undefined,
+        classes: [{ key: 'sign', name: 'Sign', color: '#1baf7a', tools: ['box'], maskIndex: 1 }],
+        sensors: [
+          { key: 'camera', group: 'c', kind: 'image' },
+          { key: 'lidar', group: 'l', kind: 'image' },
+        ],
+      },
+      { ...job, _id: 'j2', name: 'Roads', classes: [{ key: 'road', name: 'Road', color: '#eb6834', tools: ['mask'], maskIndex: 1 }] },
     ]);
     renderWithProviders(<JobsPage />);
 
-    expect(await screen.findByText('20 / 100 frames done')).toBeInTheDocument();
-    expect(screen.getByText(/140 labels collected/)).toBeInTheDocument();
+    expect(await screen.findByText('Boxes')).toBeInTheDocument();
+    expect(screen.getByText('Sign')).toBeInTheDocument();
+    expect(screen.getByText('camera + lidar')).toBeInTheDocument();
+    expect(screen.getByText('Masks')).toBeInTheDocument();
   });
 
   it('omits the bar for a job whose tasks are not materialized yet', async () => {
-    mockedList.mockResolvedValue([{ ...job, progress: { tasks: 0, completed: 0, answers: 0, myAnswers: 0 } }]);
+    mockedList.mockResolvedValue([{ ...job, progress: { tasks: 0, completed: 0, done: 0, skipped: 0, myDone: 0 } }]);
     renderWithProviders(<JobsPage />);
 
     expect(await screen.findByText('Mask check')).toBeInTheDocument();
@@ -120,7 +137,7 @@ describe('JobsPage', () => {
     await screen.findByText('No labeling jobs yet');
     // In the header and in the empty state itself, which says what a job is.
     await waitFor(() => expect(screen.getAllByRole('link', { name: 'New job' })).toHaveLength(2));
-    expect(screen.getByText(/asks people to label images from a dataset/)).toBeInTheDocument();
+    expect(screen.getByText(/asks people to draw boxes and masks/)).toBeInTheDocument();
   });
 
   it("shows a visitor the public jobs to browse, and never asks which datasets they manage", async () => {
