@@ -1,4 +1,16 @@
 # Visin Changelog
+## [1.41.0](https://github.com/visin-platform/visin/compare/v1.40.0...v1.41.0) (2026-10-14)
+
+
+### Features
+
+* **vision:** project landing pages, card list and one Evaluations view ([6ee1624](https://github.com/visin-platform/visin/commit/6ee16247fd2405ce4317fa64bfc22cf1849f86be))
+
+
+### Chores
+
+* **release:** @visin/frontend-core 1.19.0 ([1b07b1c](https://github.com/visin-platform/visin/commit/1b07b1c4d3e1f7e0b0701497a0de48595b148667))
+
 ## [1.40.0](https://github.com/visin-platform/visin/compare/v1.39.0...v1.40.0) (2026-10-13)
 
 
