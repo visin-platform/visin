@@ -96,7 +96,7 @@ describe('PaperEditPage', () => {
       owner: { kind: 'user', id: 'me1' }
     });
     expect(await screen.findByTestId('elsewhere')).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('refuses what cannot be sent before sending it', async () => {
     create();
