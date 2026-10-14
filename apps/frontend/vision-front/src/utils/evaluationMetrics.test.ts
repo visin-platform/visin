@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { TestResult } from '../types';
-import { AVERAGED_METRICS, averageAcrossConditions, bestPerRun, overallMean } from './testResultMetrics';
+import type { RunEvaluation } from '../types';
+import { AVERAGED_METRICS, averageAcrossConditions, bestPerRun, overallMean } from './evaluationMetrics';
 
 const result = (id: string, run: string | null, epoch: number, results: Record<string, unknown>, timestamp = '2026-01-01T00:00:00Z') =>
   ({
@@ -13,7 +13,7 @@ const result = (id: string, run: string | null, epoch: number, results: Record<s
     createdAt: timestamp,
     updatedAt: timestamp,
     ...(run ? { training: { _id: run, name: `Run ${run}`, uuid: `u${run}`, status: 'completed' } } : {})
-  }) as unknown as TestResult;
+  }) as unknown as RunEvaluation;
 
 const withOverall = (value: number) => ({ day: { overall: { mean_iou: value } } });
 const higher = (a: number, b: number) => a > b;

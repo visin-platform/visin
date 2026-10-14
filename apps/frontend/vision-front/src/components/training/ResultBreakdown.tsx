@@ -11,7 +11,7 @@ import {
   useTheme
 } from '@mui/material';
 import { livePalette, tint } from '@visin/frontend-core';
-import type { TestResult, TestResultData } from '../../types';
+import type { RunEvaluation, EvaluationResults } from '../../types';
 import ConfusionMatrix from './ConfusionMatrix';
 import { discoverClassMetrics, isRecord, readMetric } from '../../taxonomy/discover';
 import { useTaxonomyFor } from '../../taxonomy/useTaxonomy';
@@ -23,7 +23,7 @@ const CLASS_METRICS = ['iou', 'precision', 'recall', 'ap'];
 
 interface ResultBreakdownProps {
   /** a result blob: condition, then class, then metrics, with an `overall` beside either */
-  results: TestResultData;
+  results: EvaluationResults;
   /**
    * Which per-class metrics get a column block. Without it, the usual four. `discover` takes the ones the result
    * really reports, in the usual order first, for a result from an evaluator that names its own.
@@ -39,8 +39,8 @@ interface ResultBreakdownProps {
 const ResultBreakdown: React.FC<ResultBreakdownProps> = ({ results: resultData, classMetrics }) => {
   const theme = useTheme();
 
-  const testResult = useMemo(() => ({ test_results: resultData }) as TestResult, [resultData]);
-  const results = useMemo(() => [testResult], [testResult]);
+  const evaluation = useMemo(() => ({ test_results: resultData }) as RunEvaluation, [resultData]);
+  const results = useMemo(() => [evaluation], [evaluation]);
   const taxonomy = useTaxonomyFor(results);
 
   const shownMetrics = useMemo(() => {
@@ -60,18 +60,18 @@ const ResultBreakdown: React.FC<ResultBreakdownProps> = ({ results: resultData, 
   };
 
   // Only conditions this result actually carries get a row.
-  const conditions = taxonomy.conditions.filter((condition) => isRecord(testResult.test_results?.[condition.key]));
+  const conditions = taxonomy.conditions.filter((condition) => isRecord(evaluation.test_results?.[condition.key]));
   const classes = taxonomy.classes;
   const overallMetrics = taxonomy.overallMetrics;
 
-  const overallBlock = testResult.test_results?.overall;
+  const overallBlock = evaluation.test_results?.overall;
 
   /** Confusion-matrix axis labels, from the payload where it supplies them. */
   const matrixLabels = (labels: unknown): string[] | undefined =>
     Array.isArray(labels) && labels.every((l) => typeof l === 'string') ? labels.map(humanize) : undefined;
 
   const conditionMatrix = (conditionKey: string) => {
-    const block = testResult.test_results?.[conditionKey];
+    const block = evaluation.test_results?.[conditionKey];
     if (!isRecord(block) || !isRecord(block.overall)) {
       return { matrix: undefined, labels: undefined };
     }
@@ -137,7 +137,7 @@ const ResultBreakdown: React.FC<ResultBreakdownProps> = ({ results: resultData, 
           </TableHead>
           <TableBody>
             {conditions.map((condition) => {
-              const conditionData = testResult.test_results[condition.key];
+              const conditionData = evaluation.test_results[condition.key];
               if (!isRecord(conditionData)) return null;
               const overall = conditionData.overall;
 

@@ -237,11 +237,10 @@ describe('DatasetDetailPage', () => {
     await waitFor(() => expect(service.listMyGroups).toHaveBeenCalled());
     fireEvent.click(await screen.findByRole('button', { name: 'Transfer' }));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.mouseDown(within(dialog).getByLabelText('New owner'));
-    fireEvent.click(await screen.findByRole('option', { name: 'Team' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Transfer' }));
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Team/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Transfer to Team' }));
     expect(await within(dialog).findByText('Not yours to give')).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Transfer' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Transfer to Team' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(service.transferDataset).toHaveBeenLastCalledWith('d1', { kind: 'group', id: 'g1' });
     expect(await screen.findByLabelText('Owner: Team')).toBeInTheDocument();

@@ -51,3 +51,26 @@ export const formatDuration = (seconds: number): string => {
 
   return parts.join(' ');
 };
+
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 24 * 3600],
+  ['month', 30 * 24 * 3600],
+  ['week', 7 * 24 * 3600],
+  ['day', 24 * 3600],
+  ['hour', 3600],
+  ['minute', 60]
+];
+
+/**
+ * How long ago a time was, in words ("3 days ago", "yesterday", "just now"): what a card says where a full date and
+ * time would be noise. A time in the future reads as "just now", since a clock a little ahead is not news.
+ */
+export const formatRelativeTime = (dateString: string, now: number = Date.now()): string => {
+  const seconds = Math.round((now - new Date(dateString).getTime()) / 1000);
+  if (Number.isNaN(seconds) || seconds < 60) return 'just now';
+  const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+  for (const [unit, size] of UNITS) {
+    if (seconds >= size) return formatter.format(-Math.floor(seconds / size), unit);
+  }
+  return 'just now';
+};

@@ -1,6 +1,6 @@
 import { useContext, useMemo } from 'react';
 import { ProjectTaxonomy, ResolvedTaxonomy } from '../types/taxonomy';
-import { TestResult } from '../types/testResult';
+import { RunEvaluation } from '../types/runEvaluation';
 import { TaxonomyContext } from './context';
 import {
   discoverClassMetrics,
@@ -15,13 +15,13 @@ import { resolveTaxonomy } from './resolveTaxonomy';
  */
 export const resolveTaxonomyFor = (
   taxonomy: ProjectTaxonomy | undefined,
-  testResults: TestResult[]
+  evaluations: RunEvaluation[]
 ): ResolvedTaxonomy =>
   resolveTaxonomy(taxonomy, {
-    conditions: discoverConditions(testResults),
-    classes: discoverClasses(testResults),
-    metrics: discoverClassMetrics(testResults),
-    overallMetrics: discoverOverallMetrics(testResults)
+    conditions: discoverConditions(evaluations),
+    classes: discoverClasses(evaluations),
+    metrics: discoverClassMetrics(evaluations),
+    overallMetrics: discoverOverallMetrics(evaluations)
   });
 
 export const useTaxonomy = (): ResolvedTaxonomy => useContext(TaxonomyContext).resolved;
@@ -38,12 +38,12 @@ export const useProjectTaxonomy = (): ProjectTaxonomy | undefined =>
  * for a component whose own data is narrower than the provider's, or which renders
  * outside any provider at all.
  */
-export const useTaxonomyFor = (testResults: TestResult[]): ResolvedTaxonomy => {
+export const useTaxonomyFor = (evaluations: RunEvaluation[]): ResolvedTaxonomy => {
   const { taxonomy, resolved } = useContext(TaxonomyContext);
   return useMemo(() => {
-    if (testResults.length === 0) {
+    if (evaluations.length === 0) {
       return resolved;
     }
-    return resolveTaxonomyFor(taxonomy, testResults);
-  }, [taxonomy, resolved, testResults]);
+    return resolveTaxonomyFor(taxonomy, evaluations);
+  }, [taxonomy, resolved, evaluations]);
 };

@@ -94,7 +94,7 @@ const NAV_GROUPS: NavGroup[] = [
     ],
     pages: {
       app: 'vision',
-      paths: ['/comparisons', '/epochs', '/configs', '/test-results', '/visualizations', '/benchmarks']
+      paths: ['/comparisons', '/epochs', '/configs', '/visualizations', '/benchmarks']
     }
   },
   {

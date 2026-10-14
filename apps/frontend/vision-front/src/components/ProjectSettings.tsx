@@ -45,9 +45,11 @@ interface ProjectSettingsProps {
    * anything left unconfigured is discovered at render time anyway.
    */
   discovered?: { conditions?: string[]; classes?: string[] };
+  /** asks the page to move the project to the trash (it confirms first) */
+  onMoveToTrash?: () => void;
 }
 
-/** Where the rail's entries lead; an id is the card's, so a link and its card cannot drift apart. */
+/** Each menu entry selects one settings section. */
 const SECTIONS = [
   { id: 'settings-details', label: 'Details' },
   { id: 'settings-cover', label: 'Cover' },
@@ -56,18 +58,20 @@ const SECTIONS = [
   { id: 'settings-monitoring', label: 'Run monitoring' },
   { id: 'settings-costs', label: 'Compute costs' },
   { id: 'settings-storage', label: 'Storage' },
-  { id: 'settings-ownership', label: 'Ownership' }
+  { id: 'settings-ownership', label: 'Ownership' },
+  { id: 'settings-trash', label: 'Trash' }
 ] as const;
 
 /** Clear of the app bar that sticks to the top of the page, so a section's heading is not hidden by it. */
 const SECTION_OFFSET = 80;
 
-const sectionSx = { mb: 3, scrollMarginTop: `${SECTION_OFFSET}px` } as const;
+const sectionSx = { mb: 3 } as const;
 
-const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }) => {
+const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered, onMoveToTrash }) => {
   const queryClient = useQueryClient();
   const compact = useCompactLayout();
   const { user } = useAuth();
+  const [activeSection, setActiveSection] = useState<string>('settings-details');
   const [transferOpen, setTransferOpen] = useState(false);
 
   // Project editing state
@@ -154,13 +158,13 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
     });
   };
 
-  const goTo = (id: string) => document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-  const sections = SECTIONS.filter((section) => section.id !== 'settings-ownership' || project.permissions.own);
+  const goTo = (id: string) => setActiveSection(id);
+  const sections = SECTIONS.filter(
+    (section) =>
+      (section.id !== 'settings-ownership' || project.permissions.own) && (section.id !== 'settings-trash' || !!onMoveToTrash)
+  );
 
-  // One Save for the whole page: in the rail beside the sections while it can
-  // stick there, and at the end of the form on a phone, where the rail is a row.
-  // The outcome sits with the button, where the person who pressed it is looking: the top of a long page is
-  // off-screen when the Save in the rail is used.
+  // Settings drafts survive section switches; one Save submits them together.
   const saveButton = (
     <Box sx={{ display: 'grid', gap: 1 }}>
       <Button
@@ -216,6 +220,8 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
             <ListItemButton
               key={section.id}
               onClick={() => goTo(section.id)}
+              selected={activeSection === section.id}
+              aria-current={activeSection === section.id ? 'page' : undefined}
               sx={{ borderRadius: 1, flexShrink: 0, width: { xs: 'auto', md: '100%' } }}
             >
               <ListItemText primary={section.label} slotProps={{ primary: { noWrap: true } }} />
@@ -226,7 +232,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
       </Box>
       <Box sx={{ minWidth: 0 }}>
         {/* Project Settings */}
-        <Card id="settings-details" component="section" aria-labelledby="settings-details-title" sx={sectionSx}>
+        <Card hidden={activeSection !== 'settings-details'} id="settings-details" component="section" aria-labelledby="settings-details-title" sx={sectionSx}>
           <CardContent>
             <Typography id="settings-details-title" variant="h6" sx={{ mb: 3 }}>
               Details
@@ -299,7 +305,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
             </Box>
           </CardContent>
         </Card>
-        <Card id="settings-cover" component="section" aria-labelledby="settings-cover-title" sx={sectionSx}>
+        <Card hidden={activeSection !== 'settings-cover'} id="settings-cover" component="section" aria-labelledby="settings-cover-title" sx={sectionSx}>
           <CardContent>
             <Typography id="settings-cover-title" variant="h6" sx={{ mb: 1 }}>
               Cover
@@ -307,7 +313,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
             <ProjectCoverPicker project={project} />
           </CardContent>
         </Card>
-        <Card id="settings-access" component="section" aria-labelledby="settings-access-title" sx={sectionSx}>
+        <Card hidden={activeSection !== 'settings-access'} id="settings-access" component="section" aria-labelledby="settings-access-title" sx={sectionSx}>
           <CardContent>
             <Typography id="settings-access-title" variant="h6" sx={{ mb: 3 }}>
               Access and keys
@@ -341,9 +347,9 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
             </Box>
           </CardContent>
         </Card>
-        {project.permissions.contribute && <PipelineKeys projectId={project._id} />}
+        {project.permissions.contribute && <Box hidden={activeSection !== 'settings-access'}><PipelineKeys projectId={project._id} /></Box>}
         {/* Result vocabulary */}
-        <Card id="settings-labels" component="section" aria-labelledby="settings-labels-title" sx={sectionSx}>
+        <Card hidden={activeSection !== 'settings-labels'} id="settings-labels" component="section" aria-labelledby="settings-labels-title" sx={sectionSx}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
               <Typography id="settings-labels-title" variant="h6">
@@ -369,7 +375,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
             />
           </CardContent>
         </Card>
-        <Card id="settings-monitoring" component="section" aria-labelledby="settings-monitoring-title" sx={sectionSx}>
+        <Card hidden={activeSection !== 'settings-monitoring'} id="settings-monitoring" component="section" aria-labelledby="settings-monitoring-title" sx={sectionSx}>
           <CardContent>
             <Typography id="settings-monitoring-title" variant="h6" sx={{ mb: 2 }}>
               Run monitoring
@@ -386,7 +392,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
           </CardContent>
         </Card>
         {/* Compute costs */}
-        <Card id="settings-costs" component="section" aria-labelledby="settings-costs-title" sx={sectionSx}>
+        <Card hidden={activeSection !== 'settings-costs'} id="settings-costs" component="section" aria-labelledby="settings-costs-title" sx={sectionSx}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
               <Typography id="settings-costs-title" variant="h6">
@@ -407,7 +413,7 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
           </CardContent>
         </Card>
         {/* Where big files live */}
-        <Card id="settings-storage" component="section" aria-labelledby="settings-storage-title" sx={sectionSx}>
+        <Card hidden={activeSection !== 'settings-storage'} id="settings-storage" component="section" aria-labelledby="settings-storage-title" sx={sectionSx}>
           <CardContent>
             <Typography id="settings-storage-title" variant="h6" sx={{ mb: 1 }}>
               Storage
@@ -419,10 +425,15 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
           </CardContent>
         </Card>
         {project.permissions.own && (
-          <Card id="settings-ownership" component="section" aria-labelledby="settings-ownership-title" sx={sectionSx}>
+          <Card hidden={activeSection !== 'settings-ownership'} id="settings-ownership" component="section" aria-labelledby="settings-ownership-title" sx={sectionSx}>
             <CardContent>
-              <Typography id="settings-ownership-title" variant="h6" sx={{ mb: 3 }}>
+              <Typography id="settings-ownership-title" variant="h6" sx={{ mb: 1 }}>
                 Ownership
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                {project.owner.kind === 'group'
+                  ? 'This project belongs to a group, and its roles decide who can do what. Only the group’s owner can move it.'
+                  : 'This project is yours. Move it to a group to share it with a team; once there, only that group’s owner can move it again.'}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <OwnerChip owner={project.owner} userId={user?.id} groups={groups} ownerName={project.owner.name} />
@@ -440,12 +451,29 @@ const ProjectSettings: React.FC<ProjectSettingsProps> = ({ project, discovered }
             </CardContent>
           </Card>
         )}
+        {onMoveToTrash && (
+          <Card hidden={activeSection !== 'settings-trash'} id="settings-trash" component="section" aria-labelledby="settings-trash-title" sx={sectionSx}>
+            <CardContent>
+              <Typography id="settings-trash-title" variant="h6" sx={{ mb: 1 }}>
+                Trash
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                Move this project and its runs to the trash. It disappears from the lists at once, and its owner can
+                restore it for 30 days; after that it is deleted for good.
+              </Typography>
+              <Button color="error" variant="outlined" onClick={onMoveToTrash}>
+                Move to trash
+              </Button>
+            </CardContent>
+          </Card>
+        )}
         {compact && saveButton}
       </Box>
       {user && (
         <TransferOwnershipDialog
           open={transferOpen}
           resourceName={project.name}
+          resourceKind="project"
           current={project.owner}
           userId={user.id}
           groups={groups}

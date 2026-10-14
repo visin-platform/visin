@@ -56,9 +56,9 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
   // Edit/Delete Dialog States
   const [trainingModalOpen, setTrainingModalOpen] = useState(false);
   const [editingTrainingId, setEditingTrainingId] = useState<string | null>(null);
+  const editingTraining = trainings.find((row) => row._id === editingTrainingId);
   const [trainingName, setTrainingName] = useState('');
   const [trainingDescription, setTrainingDescription] = useState('');
-  const [selectedDatasetId, setSelectedDatasetId] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'pending' | 'running' | 'completed' | 'failed' | 'stalled'>('pending');
   const [trainingTags, setTrainingTags] = useState<string[]>([]);
@@ -114,7 +114,6 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
     setEditingTrainingId(training._id);
     setTrainingName(training.name);
     setTrainingDescription(training.description || '');
-    setSelectedDatasetId(training.datasetId || '');
     setSelectedProjectId(training.projectId || '');
     setSelectedStatus(training.status);
     setTrainingTags(training.tags || []);
@@ -128,7 +127,6 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
       await trainingService.updateTraining(editingTrainingId, {
         name: trainingName,
         description: trainingDescription,
-        datasetId: selectedDatasetId || undefined,
         projectId: selectedProjectId || undefined,
         status: selectedStatus,
         tags: trainingTags
@@ -218,7 +216,6 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
           setEditingTrainingId(null);
           setTrainingName('');
           setTrainingDescription('');
-          setSelectedDatasetId('');
           setSelectedProjectId('');
           setSelectedStatus('pending');
           setTrainingTags([]);
@@ -233,7 +230,8 @@ const ProjectTrainingsTab: React.FC<ProjectTrainingsTabProps> = ({
         onNameChange={setTrainingName}
         trainingDescription={trainingDescription}
         onDescriptionChange={setTrainingDescription}
-        selectedDatasetId={selectedDatasetId}
+        dataset={editingTraining?.dataset}
+        datasetId={editingTraining?.datasetId}
         selectedProjectId={selectedProjectId}
         onProjectChange={setSelectedProjectId}
         selectedStatus={selectedStatus}

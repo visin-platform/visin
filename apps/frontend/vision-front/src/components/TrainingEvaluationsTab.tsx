@@ -4,17 +4,17 @@ import {
   Alert,
   Button
 } from '@mui/material';
-import { TestResult } from '../types';
+import { RunEvaluation } from '../types';
 import UploadResultsDialog from './training/UploadResultsDialog';
 import LatexExportDialog from './training/LatexExportDialog';
-import TestResultsHeader from './training/TestResultsHeader';
-import TestResultsList from './training/TestResultsList';
+import RunEvaluationsHeader from './training/RunEvaluationsHeader';
+import RunEvaluationsList from './training/RunEvaluationsList';
 import type { Training } from '../types/training';
 
-interface TrainingTestResultsTabProps {
-  allTestResults: TestResult[];
-  testResultsLoading: boolean;
-  availableTestEpochs: number[];
+interface TrainingEvaluationsTabProps {
+  allEvaluations: RunEvaluation[];
+  evaluationsLoading: boolean;
+  availableEpochs: number[];
   uploading: boolean;
   uploadError: string | null;
   uploadSuccess: string | null;
@@ -25,20 +25,20 @@ interface TrainingTestResultsTabProps {
   };
   latexModalOpen: boolean;
   latexCode: string;
-  onTestResultFileUpload: (files: FileList) => Promise<void>;
-  onLatexExport: (testResult: TestResult) => void;
+  onEvaluationFileUpload: (files: FileList) => Promise<void>;
+  onLatexExport: (evaluation: RunEvaluation) => void;
   onSetUploadResultsOpen: (open: boolean) => void;
   onSetLatexModalOpen: (open: boolean) => void;
-  onDeleteTestResult?: (testResultId: string) => void;
+  onDeleteEvaluation?: (evaluationId: string) => void;
   isAuthenticated: boolean;
   /** the run these belong to, so an empty tab can say why */
   run?: Pick<Training, 'status' | 'lastSeenAt'>;
 }
 
-const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
-  allTestResults,
-  testResultsLoading,
-  availableTestEpochs,
+const TrainingEvaluationsTab: React.FC<TrainingEvaluationsTabProps> = ({
+  allEvaluations,
+  evaluationsLoading,
+  availableEpochs,
   uploading,
   uploadError,
   uploadSuccess,
@@ -46,20 +46,20 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
   uploadResults,
   latexModalOpen,
   latexCode,
-  onTestResultFileUpload,
+  onEvaluationFileUpload,
   onLatexExport,
   onSetUploadResultsOpen,
   onSetLatexModalOpen,
-  onDeleteTestResult,
+  onDeleteEvaluation,
   isAuthenticated,
   run
 }) => {
 
   return (
     <Box>
-      <TestResultsHeader
+      <RunEvaluationsHeader
         uploading={uploading}
-        onTestResultFileUpload={onTestResultFileUpload}
+        onEvaluationFileUpload={onEvaluationFileUpload}
         isAuthenticated={isAuthenticated}
       />
 
@@ -91,13 +91,13 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
         </Alert>
       )}
 
-      <TestResultsList
-        allTestResults={allTestResults}
-        testResultsLoading={testResultsLoading}
-        availableTestEpochs={availableTestEpochs}
+      <RunEvaluationsList
+        allEvaluations={allEvaluations}
+        evaluationsLoading={evaluationsLoading}
+        availableEpochs={availableEpochs}
         uploading={uploading}
         onLatexExport={onLatexExport}
-        onDeleteTestResult={onDeleteTestResult}
+        onDeleteEvaluation={onDeleteEvaluation}
         isAuthenticated={isAuthenticated}
         run={run}
       />
@@ -119,4 +119,4 @@ const TrainingTestResultsTab: React.FC<TrainingTestResultsTabProps> = ({
   );
 };
 
-export default TrainingTestResultsTab;
+export default TrainingEvaluationsTab;

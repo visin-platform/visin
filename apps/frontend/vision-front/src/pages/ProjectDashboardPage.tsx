@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, Container, CircularProgress, Alert, Button } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,7 +14,7 @@ import ProjectHeader from '../components/project/ProjectHeader';
 import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
 import { CostingProvider } from '../costing/CostingProvider';
 import ProjectTabs from '../components/project/ProjectTabs';
-import EditProjectDialog from '../components/project/EditProjectDialog';
+import { resolveProjectTab, type ProjectTabKey } from '../components/project/projectTabs';
 import DeleteProjectDialog from '../components/project/DeleteProjectDialog';
 
 // Custom hook
@@ -23,58 +22,18 @@ import { useProjectDashboard } from '../hooks/useProjectDashboard';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import { usePageTitle } from '../hooks/usePageTitle';
 
-// In ProjectTabs' order. Analysis once had no entry here while Settings kept
-// its old index, so `?tab=settings` opened Analysis and neither tab could be
-// linked to.
-const tabNameToIndex: Record<string, number> = {
-  overview: 0,
-  trainings: 1,
-  tests: 2,
-  visualizations: 3,
-  benchmarks: 4,
-  comparisons: 5,
-  analysis: 6,
-  models: 7,
-  evaluations: 8,
-  settings: 9
-};
-
-const indexToTabName: Record<number, string> = {
-  0: 'overview',
-  1: 'trainings',
-  2: 'tests',
-  3: 'visualizations',
-  4: 'benchmarks',
-  5: 'comparisons',
-  6: 'analysis',
-  7: 'models',
-  8: 'evaluations',
-  9: 'settings'
-};
-
 const ProjectDashboardPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
-  const [tabValue, setTabValue] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  React.useEffect(() => {
-    const tabQuery = searchParams.get('tab');
-    if (tabQuery && tabNameToIndex[tabQuery] !== undefined) {
-      setTabValue(tabNameToIndex[tabQuery]);
-    }
-  }, [searchParams]);
-
-  // Dialog states
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [editFormData, setEditFormData] = useState({
-    name: '',
-    description: '',
-    isPublic: false
-  });
+
+  // The address is the one source of the open tab. Which tabs load data does not depend on Settings, so the
+  // project's own permission is applied after it has loaded, below.
+  const requestedTab = searchParams.get('tab');
 
   // Use custom hook for all project data
   const {
@@ -82,13 +41,13 @@ const ProjectDashboardPage: React.FC = () => {
     stats,
     dashboardStats,
     fullTrainings,
-    testResults,
+    evaluations,
     benchmarks,
     isProjectLoading,
     isStatsLoading,
     isDashboardStatsLoading,
     isFullTrainingsLoading,
-    isTestResultsLoading,
+    isEvaluationsLoading,
     isBenchmarksLoading,
     projectError,
     page,
@@ -97,9 +56,11 @@ const ProjectDashboardPage: React.FC = () => {
     sortOrder,
     handlePageChange,
     handleRowsPerPageChange,
-    handleSort,
-    invalidateProjectQueries
-  } = useProjectDashboard(id, tabValue);
+    handleSort
+  } = useProjectDashboard(id, resolveProjectTab(requestedTab, true));
+
+  // Settings is for managers only: without that permission a request for it opens the overview.
+  const tab: ProjectTabKey = resolveProjectTab(requestedTab, project?.permissions.manage ?? false);
 
   usePageTitle(project ? `${project.name} - Vision` : 'Project - Vision');
 
@@ -108,31 +69,7 @@ const ProjectDashboardPage: React.FC = () => {
     project ? { kind: 'project', id: project._id, name: project.name, path: `/projects/${project.slug || project._id}` } : null
   );
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-    const tabName = indexToTabName[newValue];
-    if (tabName) {
-      setSearchParams({ tab: tabName });
-    }
-  };
-
-  const updateProjectMutation = useMutation({
-    mutationFn: () => {
-      if (!id) throw new Error('No project id');
-      return projectService.updateProject(id, {
-        name: editFormData.name,
-        description: editFormData.description,
-        ...(project?.permissions.own ? { visibility: editFormData.isPublic ? 'public' : 'private' } : {})
-      });
-    },
-    onSuccess: () => {
-      setEditDialogOpen(false);
-      invalidateProjectQueries();
-    },
-    onError: (error) => {
-      console.error('Failed to update project:', error);
-    }
-  });
+  const handleTabChange = (next: ProjectTabKey) => setSearchParams({ tab: next });
 
   const deleteProjectMutation = useMutation({
     mutationFn: () => {
@@ -150,29 +87,13 @@ const ProjectDashboardPage: React.FC = () => {
     }
   });
 
-  // Project edit/delete handlers
-  const handleEditProject = () => {
-    if (project) {
-      setEditFormData({
-        name: project.name,
-        description: project.description || '',
-        isPublic: project.visibility === 'public'
-      });
-      setEditDialogOpen(true);
-    }
-  };
-
-  const handleUpdateProject = () => {
-    if (!id) return;
-    updateProjectMutation.mutate();
-  };
-
   const handleDeleteProject = () => {
     if (!id) return;
     deleteProjectMutation.mutate();
   };
 
-  if (isProjectLoading || isStatsLoading || (tabValue === 0 && isDashboardStatsLoading)) {
+  // Only the project itself holds the page back: its totals arrive after the header, the readme and the tabs.
+  if (isProjectLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
@@ -205,13 +126,15 @@ const ProjectDashboardPage: React.FC = () => {
             ]}
           />
 
-          <ProjectHeader project={project} onEdit={handleEditProject} onDelete={() => setDeleteDialogOpen(true)} />
+          <ProjectHeader project={project} />
 
           <CitedInPapers projectId={project._id} />
 
           <ProjectTabs
-            tabValue={tabValue}
+            tab={tab}
             onTabChange={handleTabChange}
+            isStatsLoading={isStatsLoading || isDashboardStatsLoading}
+            onMoveToTrash={() => setDeleteDialogOpen(true)}
             canManage={project.permissions.manage}
             projectId={id!}
             stats={stats}
@@ -228,22 +151,11 @@ const ProjectDashboardPage: React.FC = () => {
             sortBy={sortBy}
             sortOrder={sortOrder}
             onSort={handleSort}
-            testResultsResponse={testResults}
-            isTestResultsLoading={isTestResultsLoading}
+            evaluationsResponse={evaluations}
+            isEvaluationsLoading={isEvaluationsLoading}
             benchmarksResponse={benchmarks}
             isBenchmarksLoading={isBenchmarksLoading}
             project={project}
-          />
-
-          <EditProjectDialog
-            open={editDialogOpen}
-            onClose={() => setEditDialogOpen(false)}
-            formData={editFormData}
-            onFormDataChange={setEditFormData}
-            onSubmit={handleUpdateProject}
-            isUpdating={updateProjectMutation.isPending}
-            canShare={project.permissions.own}
-            error={updateProjectMutation.error?.message}
           />
 
           <DeleteProjectDialog

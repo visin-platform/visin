@@ -15,11 +15,20 @@ import {
   CircularProgress,
   Typography,
   Box,
-  FormHelperText
+  Chip,
+  FormHelperText,
+  Link
 } from '@mui/material';
 import { Training } from '../types';
+import type { DatasetReference } from '../types/training';
 import { Project } from '../types/Project';
 import TagInput from './TagInput';
+
+const DATASET_SOURCE_LABEL: Record<DatasetReference['source'], string> = {
+  visin: 'Visin dataset',
+  hf: 'Hugging Face Hub',
+  other: 'Named only'
+};
 
 interface TrainingFormDialogProps {
   open: boolean;
@@ -32,8 +41,12 @@ interface TrainingFormDialogProps {
   onNameChange: (value: string) => void;
   trainingDescription: string;
   onDescriptionChange: (value: string) => void;
-  /** Read-only here; the reporting pipeline owns it. */
-  selectedDatasetId: string;
+  /**
+   * The run's dataset, shown and never edited: the reporting pipeline sets it with the run, and it cannot be
+   * reassigned afterwards. `datasetId` is for a run that recorded only an id.
+   */
+  dataset?: DatasetReference;
+  datasetId?: string;
   selectedProjectId: string;
   onProjectChange: (value: string) => void;
   selectedStatus: Training['status'];
@@ -58,7 +71,8 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
   onNameChange,
   trainingDescription,
   onDescriptionChange,
-  selectedDatasetId,
+  dataset,
+  datasetId,
   selectedProjectId,
   onProjectChange,
   selectedStatus,
@@ -131,19 +145,40 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
           </Select>
           {isEditing && <FormHelperText>Project cannot be changed after creation.</FormHelperText>}
         </FormControl>
-        {/* Read-only: the dataset is whatever the pipeline reported with the
-            run, so the form shows it rather than offering to reassign it. */}
-        <TextField
-          margin="dense"
-          label="Dataset"
-          fullWidth
-          variant="outlined"
-          value={selectedDatasetId}
-          slotProps={{ input: { readOnly: true }, inputLabel: { shrink: true } }}
-          placeholder="None"
-          helperText="Set by the pipeline that reports the training."
-          sx={{ mb: 2 }}
-        />
+        {isEditing && (dataset || datasetId) && (
+          // Not a field: a dataset is fixed when the run is reported, so it is shown as a fact about the run.
+          <Box
+            component="section"
+            aria-label="Dataset"
+            sx={{ mb: 2, p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+          >
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              Dataset
+            </Typography>
+            {dataset ? (
+              <>
+                <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
+                  {dataset.source === 'visin' && dataset.id ? (
+                    <Link href={`/datasets/${dataset.id}`}>{dataset.name}</Link>
+                  ) : (
+                    dataset.name
+                  )}
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 0.5 }}>
+                  <Chip size="small" variant="outlined" label={DATASET_SOURCE_LABEL[dataset.source]} />
+                  {dataset.revision && <Chip size="small" variant="outlined" label={`Revision ${dataset.revision}`} />}
+                </Box>
+              </>
+            ) : (
+              <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                A dataset recorded by its id only: {datasetId}
+              </Typography>
+            )}
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
+              Fixed when the run was reported. A dataset cannot be changed after training.
+            </Typography>
+          </Box>
+        )}
         <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel>Status</InputLabel>
           <Select
@@ -171,9 +206,8 @@ export const TrainingFormDialog: React.FC<TrainingFormDialogProps> = ({
           />
         </Box>
         <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 2 }}>
-          A unique UUID will be automatically generated for this training. After creating, you can upload epoch JSON
-          files to track training progress. The training&apos;s dataset and config are set by the pipeline that reports
-          it and are shown read-only — the config on the Config tab.
+          The training&apos;s dataset and config are set by the pipeline that reports it and cannot be changed here:
+          the config is on the Config tab.
         </Typography>
       </DialogContent>
       <DialogActions>

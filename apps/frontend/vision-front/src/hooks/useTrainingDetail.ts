@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trainingService } from '../services/trainingService';
 import { configService } from '../services/configService';
-import { testResultService } from '../services/testResultService';
-import { TestResult } from '../types';
+import { runEvaluationService } from '../services/runEvaluationService';
+import { RunEvaluation } from '../types';
 
 export const useTrainingDetail = (id: string | undefined) => {
   const [selectedTestEpoch, setSelectedTestEpoch] = useState<number | null>(null);
@@ -25,58 +25,58 @@ export const useTrainingDetail = (id: string | undefined) => {
   const config = configData?.data ?? null;
 
   const {
-    data: testResultsResponse,
-    isLoading: testResultsLoading,
-    refetch: refetchTestResults
+    data: evaluationsResponse,
+    isLoading: evaluationsLoading,
+    refetch: refetchEvaluations
   } = useQuery({
-    queryKey: ['testResults', training?.uuid],
+    queryKey: ['evaluations', training?.uuid],
     queryFn: () =>
-      testResultService.getTestResults({
+      runEvaluationService.list({
         training_uuid: training!.uuid,
         limit: 1000
       }),
     enabled: !!training?.uuid
   });
 
-  const allTestResults = useMemo(
-    () => testResultsResponse?.data.testResults ?? [],
-    [testResultsResponse?.data.testResults]
+  const allEvaluations = useMemo(
+    () => evaluationsResponse?.data.evaluations ?? [],
+    [evaluationsResponse?.data.evaluations]
   );
 
-  const { testResultsMap, availableTestEpochs } = useMemo(() => {
-    const resultsByEpoch: { [epoch: number]: TestResult[] } = {};
+  const { evaluationsMap, availableEpochs } = useMemo(() => {
+    const resultsByEpoch: { [epoch: number]: RunEvaluation[] } = {};
     const epochsWithResults: number[] = [];
 
-    allTestResults.forEach((testResult: TestResult) => {
-      const epochNumber = testResult.epoch;
+    allEvaluations.forEach((evaluation: RunEvaluation) => {
+      const epochNumber = evaluation.epoch;
       if (!resultsByEpoch[epochNumber]) {
         resultsByEpoch[epochNumber] = [];
         epochsWithResults.push(epochNumber);
       }
-      resultsByEpoch[epochNumber].push(testResult);
+      resultsByEpoch[epochNumber].push(evaluation);
     });
 
     return {
-      testResultsMap: resultsByEpoch,
-      availableTestEpochs: epochsWithResults.sort((a, b) => a - b)
+      evaluationsMap: resultsByEpoch,
+      availableEpochs: epochsWithResults.sort((a, b) => a - b)
     };
-  }, [allTestResults]);
+  }, [allEvaluations]);
 
   // Update test results when selected epoch changes
   useEffect(() => {
     setSelectedTestEpoch((currentEpoch) =>
-      currentEpoch && availableTestEpochs.includes(currentEpoch)
+      currentEpoch && availableEpochs.includes(currentEpoch)
         ? currentEpoch
-        : availableTestEpochs[0] ?? null
+        : availableEpochs[0] ?? null
     );
-  }, [availableTestEpochs]);
+  }, [availableEpochs]);
 
-  const testResults = selectedTestEpoch ? testResultsMap[selectedTestEpoch] ?? [] : [];
+  const evaluations = selectedTestEpoch ? evaluationsMap[selectedTestEpoch] ?? [] : [];
 
   const refetch = useCallback(() => {
     refetchTraining();
-    refetchTestResults();
-  }, [refetchTraining, refetchTestResults]);
+    refetchEvaluations();
+  }, [refetchTraining, refetchEvaluations]);
 
   return {
     training,
@@ -86,11 +86,11 @@ export const useTrainingDetail = (id: string | undefined) => {
     refetch,
     config,
     configLoading,
-    testResults,
-    allTestResults,
-    testResultsLoading,
+    evaluations,
+    allEvaluations,
+    evaluationsLoading,
     selectedTestEpoch,
     setSelectedTestEpoch,
-    availableTestEpochs
+    availableEpochs
   };
 };

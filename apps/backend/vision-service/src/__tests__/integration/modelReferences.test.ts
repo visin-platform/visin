@@ -736,6 +736,18 @@ describe('the model registry with in-memory MongoDB', () => {
     Epoch.create({ trainingId, training_uuid: 'u', epoch_uuid: `e-${trainingId}-${number}`, epoch: number, timestamp: new Date(), results });
   const repos = (data: { models: { model: { repo: string } }[] }) => data.models.map(row => row.model.repo);
 
+  it('offers numeric results from visible model runs without exposing private metrics', async () => {
+    const visible = await project({ visibility: 'public' });
+    const hidden = await project({ owner: { kind: 'user', id: STRANGER }, createdBy: STRANGER });
+    const publicRun = await run(visible, 'public', [{ repo: 'acme/public' }]);
+    const privateRun = await run(hidden, 'private', [{ repo: 'acme/private' }]);
+    await epoch(publicRun, 1, { val: { loss: 0.2, mean_iou: 0.7 }, lr: 0.01 });
+    await epoch(privateRun, 1, { secret_score: 99 });
+    const response = await list('', '');
+    expect(response.status).toBe(200);
+    expect(response.data.metrics).toEqual(['val.loss', 'val.mean_iou']);
+  });
+
   it('lists the models on runs the caller can see, newest link first, and nothing else', async () => {
     const mine = await project();
     const hidden = await project({ owner: { kind: 'user', id: STRANGER }, createdBy: STRANGER });

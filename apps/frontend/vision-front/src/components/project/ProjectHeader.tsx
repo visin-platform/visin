@@ -1,20 +1,20 @@
 import React from 'react';
-import { Box, Typography, IconButton } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Box, Chip, Typography } from '@mui/material';
+import { Lock as LockIcon, Public as PublicIcon } from '@mui/icons-material';
 
 import type { Project } from '../../types/Project';
 import { visionApiOrigin } from '../../config/visionApi';
 import { OwnerChip, ShareButton } from '@visin/frontend-core';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatRelativeTime } from '../../utils';
 
 interface ProjectHeaderProps {
   project: Project;
-  onEdit: () => void;
-  onDelete: () => void;
 }
 
-const ProjectHeader: React.FC<ProjectHeaderProps> = ({ project, onEdit, onDelete }) => {
+const ProjectHeader: React.FC<ProjectHeaderProps> = ({ project }) => {
   const { user } = useAuth();
+  const isPublic = project.visibility === 'public';
   return (
     <Box sx={{ mb: { xs: 2, sm: 3 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -42,23 +42,25 @@ const ProjectHeader: React.FC<ProjectHeaderProps> = ({ project, onEdit, onDelete
           >
             {project.description || 'No description provided.'}
           </Typography>
-          <OwnerChip owner={project.owner} userId={user?.id} groups={[]} ownerName={project.owner.name} />
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+            <OwnerChip owner={project.owner} userId={user?.id} groups={[]} ownerName={project.owner.name} />
+            <Chip
+              size="small"
+              variant="outlined"
+              color={isPublic ? 'success' : 'default'}
+              icon={isPublic ? <PublicIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+              label={isPublic ? 'Public' : 'Private'}
+            />
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Active {formatRelativeTime(project.lastActivityAt ?? project.updatedAt)}
+            </Typography>
+          </Box>
         </Box>
 
         {project.visibility === 'public' && (
           <ShareButton
             url={`${visionApiOrigin().replace(/\/$/, '')}/api/public/share/projects/${encodeURIComponent(project._id)}`}
           />
-        )}
-        {project.permissions.manage && (
-          <Box sx={{ display: 'flex', gap: 0.5, ml: 2 }}>
-            <IconButton aria-label="Edit project" color="primary" onClick={onEdit} size="small">
-              <EditIcon fontSize="small" />
-            </IconButton>
-            <IconButton aria-label="Move project to trash" color="error" onClick={onDelete} size="small">
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Box>
         )}
       </Box>
     </Box>

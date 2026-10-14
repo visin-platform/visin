@@ -42,7 +42,6 @@ const baseProps = {
   onDescriptionChange: vi.fn(),
   selectedConfigId: '',
   onConfigChange: vi.fn(),
-  selectedDatasetId: '',
   selectedProjectId: '',
   onProjectChange: vi.fn(),
   selectedStatus: 'pending' as Training['status'],
@@ -121,22 +120,41 @@ describe('TrainingFormDialog', () => {
     expect(await screen.findByText('Project One')).toBeInTheDocument();
   });
 
-  it('shows the dataset the pipeline reported, read-only', async () => {
-    render(<TrainingFormDialog {...baseProps} selectedDatasetId="d1" />);
+  describe('the dataset', () => {
+    const hub = { source: 'hf' as const, id: 'org/roads', name: 'org/roads', revision: 'abc123' };
+    const visin = { source: 'visin' as const, id: 'd1', name: 'Road scenes' };
 
-    const field = screen.getByLabelText('Dataset');
-    expect(field).toHaveValue('d1');
-    expect(field).toHaveAttribute('readonly');
-    await userEvent.type(field, 'x');
-    expect(field).toHaveValue('d1');
-  });
+    it('names the run\'s dataset, with where it came from, as a fact and not as a field', () => {
+      render(<TrainingFormDialog {...baseProps} isEditing dataset={hub} />);
 
-  it('leaves the dataset field empty for a run that has none, and never offers a picker for it', () => {
-    render(<TrainingFormDialog {...baseProps} selectedDatasetId="" />);
+      const section = screen.getByRole('region', { name: 'Dataset' });
+      expect(section).toHaveTextContent('org/roads');
+      expect(section).toHaveTextContent('Hugging Face Hub');
+      expect(section).toHaveTextContent('Revision abc123');
+      expect(section).toHaveTextContent('cannot be changed after training');
+      expect(screen.queryByRole('textbox', { name: /dataset/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: /dataset/i })).not.toBeInTheDocument();
+    });
 
-    expect(screen.getByLabelText('Dataset')).toHaveValue('');
-    // A plain field, not one of the dialog's pickers.
-    expect(screen.getByRole('textbox', { name: 'Dataset' })).toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: /dataset/i })).not.toBeInTheDocument();
+    it('links a Visin dataset by name to its page', () => {
+      render(<TrainingFormDialog {...baseProps} isEditing dataset={visin} />);
+
+      expect(screen.getByRole('link', { name: 'Road scenes' })).toHaveAttribute('href', '/datasets/d1');
+      expect(screen.getByRole('region', { name: 'Dataset' })).toHaveTextContent('Visin dataset');
+    });
+
+    it('still says what it can for a run that recorded only an id', () => {
+      render(<TrainingFormDialog {...baseProps} isEditing datasetId="64f0c0ffee" />);
+
+      expect(screen.getByRole('region', { name: 'Dataset' })).toHaveTextContent('64f0c0ffee');
+    });
+
+    it('shows nothing for a run with no dataset, and nothing while creating one', () => {
+      const { rerender } = render(<TrainingFormDialog {...baseProps} isEditing />);
+      expect(screen.queryByRole('region', { name: 'Dataset' })).not.toBeInTheDocument();
+
+      rerender(<TrainingFormDialog {...baseProps} isEditing={false} dataset={visin} />);
+      expect(screen.queryByRole('region', { name: 'Dataset' })).not.toBeInTheDocument();
+    });
   });
 });

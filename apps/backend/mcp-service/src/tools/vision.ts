@@ -505,7 +505,7 @@ function registerReadTools(server: McpServer, caller: Caller): void {
           lines.push(
             '',
             `Started from commit ${git.commit.slice(0, 7)}${git.branch ? ` on ${git.branch}` : ''}` +
-              `${git.dirty ? ', with uncommitted changes (so the commit alone does not give back the code)' : ''}.`
+              `${git.dirty ? ', with local changes in the working tree' : ''}.`
           );
         }
 

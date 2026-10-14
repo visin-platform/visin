@@ -1,5 +1,5 @@
 import { Epoch } from '../types/epoch';
-import { TestResult } from '../types/testResult';
+import { RunEvaluation } from '../types/runEvaluation';
 import { RESERVED_CLASS_KEYS, RESERVED_CONDITION_KEYS, RESERVED_EPOCH_KEYS } from './reserved';
 
 /**
@@ -17,9 +17,9 @@ export const isRecord = (value: unknown): value is Rec =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** Condition names present across a set of test results. */
-export const discoverConditions = (testResults: TestResult[]): string[] => {
+export const discoverConditions = (evaluations: RunEvaluation[]): string[] => {
   const found = new Set<string>();
-  testResults.forEach(result => {
+  evaluations.forEach(result => {
     if (!isRecord(result?.test_results)) {
       return;
     }
@@ -33,9 +33,9 @@ export const discoverConditions = (testResults: TestResult[]): string[] => {
 };
 
 /** Class names present inside any condition of a set of test results. */
-export const discoverClasses = (testResults: TestResult[]): string[] => {
+export const discoverClasses = (evaluations: RunEvaluation[]): string[] => {
   const found = new Set<string>();
-  testResults.forEach(result => {
+  evaluations.forEach(result => {
     if (!isRecord(result?.test_results)) {
       return;
     }
@@ -54,9 +54,9 @@ export const discoverClasses = (testResults: TestResult[]): string[] => {
 };
 
 /** Metric names reported for classes, e.g. iou / precision / recall / ap. */
-export const discoverClassMetrics = (testResults: TestResult[]): string[] => {
+export const discoverClassMetrics = (evaluations: RunEvaluation[]): string[] => {
   const found = new Set<string>();
-  testResults.forEach(result => {
+  evaluations.forEach(result => {
     if (!isRecord(result?.test_results)) {
       return;
     }
@@ -80,7 +80,7 @@ export const discoverClassMetrics = (testResults: TestResult[]): string[] => {
 };
 
 /** Metric names in the `overall` blocks, which summarise a whole condition. */
-export const discoverOverallMetrics = (testResults: TestResult[]): string[] => {
+export const discoverOverallMetrics = (evaluations: RunEvaluation[]): string[] => {
   const found = new Set<string>();
   const collect = (block: unknown) => {
     if (!isRecord(block)) {
@@ -92,7 +92,7 @@ export const discoverOverallMetrics = (testResults: TestResult[]): string[] => {
       }
     });
   };
-  testResults.forEach(result => {
+  evaluations.forEach(result => {
     if (!isRecord(result?.test_results)) {
       return;
     }

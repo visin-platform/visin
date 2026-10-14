@@ -6,6 +6,7 @@ import { Benchmark } from './benchmark';
 export interface Comparison {
   _id: string;
   uuid: string;
+  ownerId?: string;
   name: string;
   description?: string;
   type: 'trainings' | 'tests' | 'benchmarks' | 'epochs';
@@ -78,7 +79,7 @@ export interface TrainingComparison {
   };
   lastEpoch: ComparisonEpoch | null;
   epochs: ComparisonEpoch[];
-  aggregatedTestResults: Record<string, Record<string, unknown>> | null;
+  aggregatedEvaluations: Record<string, Record<string, unknown>> | null;
   testResultsCount: number;
   benchmarks: Benchmark[];
 }

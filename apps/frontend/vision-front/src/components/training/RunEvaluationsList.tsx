@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -6,51 +6,58 @@ import {
   CircularProgress,
   Paper
 } from '@mui/material';
-import { TestResult } from '../../types';
+import { RunEvaluation } from '../../types';
 import type { Training } from '../../types/training';
 import { describeEmpty } from '../../utils/trainingStatus';
-import TestResultTable from './TestResultTable';
+import RunEvaluationCard from './RunEvaluationCard';
 import DeleteConfirmationDialog from './DeleteConfirmationDialog';
 
-interface TestResultsListProps {
-  allTestResults: TestResult[];
-  testResultsLoading: boolean;
-  availableTestEpochs: number[];
+interface RunEvaluationsListProps {
+  allEvaluations: RunEvaluation[];
+  evaluationsLoading: boolean;
+  availableEpochs: number[];
   uploading: boolean;
-  onLatexExport: (testResult: TestResult) => void;
-  onDeleteTestResult?: (testResultId: string) => void;
+  onLatexExport: (evaluation: RunEvaluation) => void;
+  onDeleteEvaluation?: (evaluationId: string) => void;
   isAuthenticated: boolean;
   /** the run these belong to, so an empty list can say why */
   run?: Pick<Training, 'status' | 'lastSeenAt'>;
 }
 
-const TestResultsList: React.FC<TestResultsListProps> = ({
-  allTestResults,
-  testResultsLoading,
-  availableTestEpochs,
+const RunEvaluationsList: React.FC<RunEvaluationsListProps> = ({
+  allEvaluations,
+  evaluationsLoading,
+  availableEpochs,
   uploading,
   onLatexExport,
-  onDeleteTestResult,
+  onDeleteEvaluation,
   isAuthenticated,
   run
 }) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<TestResult | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RunEvaluation | null>(null);
 
-  const handleDeleteClick = (testResult: TestResult) => {
-    setDeleteTarget(testResult);
+  // `?evaluation=<id>`, from the project's list: the one that was clicked is brought into view and outlined.
+  const focused = new URLSearchParams(window.location.search).get('evaluation') ?? undefined;
+  useEffect(() => {
+    if (!focused || evaluationsLoading) return;
+    document.getElementById(`evaluation-${focused}`)?.scrollIntoView?.({ block: 'center' });
+  }, [focused, evaluationsLoading, allEvaluations.length]);
+
+  const handleDeleteClick = (evaluation: RunEvaluation) => {
+    setDeleteTarget(evaluation);
     setDeleteDialogOpen(true);
   };
 
   const handleConfirmDelete = () => {
-    if (deleteTarget && onDeleteTestResult) {
-      onDeleteTestResult(deleteTarget._id);
+    if (deleteTarget && onDeleteEvaluation) {
+      onDeleteEvaluation(deleteTarget._id);
       setDeleteDialogOpen(false);
       setDeleteTarget(null);
     }
   };
 
-  if (testResultsLoading) {
+  if (evaluationsLoading) {
     return (
       <Box
         sx={{
@@ -63,7 +70,7 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
     );
   }
 
-  if (allTestResults.length === 0) {
+  if (allEvaluations.length === 0) {
     const empty = describeEmpty('tests', run);
     return (
       <Paper
@@ -87,7 +94,7 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
             color: "text.secondary",
             mb: 3
           }}>
-          {empty.body}{isAuthenticated && ' You can also upload test result JSON files here.'}
+          {empty.body}{isAuthenticated && ' You can also upload result JSON files here.'}
         </Typography>
       </Paper>
     );
@@ -96,11 +103,11 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
   return (
     <>
       <Stack spacing={4}>
-        {/* Group test results by epoch */}
+        {/* Group evaluations by epoch */}
         {/* A copy: sorting the prop in place would reorder the caller's memoised array. */}
-        {[...availableTestEpochs].sort((a, b) => a - b).map((epoch) => {
-          // Filter test results for this epoch
-          const epochTestResults = allTestResults.filter(tr => tr.epoch === epoch);
+        {[...availableEpochs].sort((a, b) => a - b).map((epoch) => {
+          // Filter evaluations for this epoch
+          const epochEvaluations = allEvaluations.filter(tr => tr.epoch === epoch);
 
           return (
             <Box key={epoch}>
@@ -113,13 +120,14 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
                 Epoch {epoch}
               </Typography>
               <Stack spacing={3}>
-                {epochTestResults.map((testResult) => (
-                  <TestResultTable
-                    key={testResult._id}
-                    testResult={testResult}
+                {epochEvaluations.map((evaluation) => (
+                  <RunEvaluationCard
+                    key={evaluation._id}
+                    evaluation={evaluation}
                     onLatexExport={onLatexExport}
-                    onDeleteTestResult={() => handleDeleteClick(testResult)}
+                    onDeleteEvaluation={() => handleDeleteClick(evaluation)}
                     isAuthenticated={isAuthenticated}
+                    highlighted={evaluation._id === focused}
                   />
                 ))}
               </Stack>
@@ -132,12 +140,12 @@ const TestResultsList: React.FC<TestResultsListProps> = ({
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         onConfirm={handleConfirmDelete}
-        title="Delete Test Result"
-        message={`Are you sure you want to delete this test result? ${deleteTarget ? `(UUID: ${deleteTarget.test_uuid})` : ''} This action cannot be undone.`}
+        title="Delete Evaluation"
+        message={`Are you sure you want to delete this evaluation? ${deleteTarget ? `(UUID: ${deleteTarget.test_uuid})` : ''} This action cannot be undone.`}
         isDeleting={uploading}
       />
     </>
   );
 };
 
-export default TestResultsList;
+export default RunEvaluationsList;

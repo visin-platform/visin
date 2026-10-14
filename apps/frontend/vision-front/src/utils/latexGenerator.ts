@@ -1,4 +1,4 @@
-import { TestResult } from '../types';
+import { RunEvaluation } from '../types';
 import { ResolvedTaxonomy } from '../types/taxonomy';
 import { isRecord, readMetric } from '../taxonomy/discover';
 import { resolveTaxonomyFor } from '../taxonomy/useTaxonomy';
@@ -31,11 +31,11 @@ const INFERENCE_COLUMNS: SummaryColumn[] = [
 
 const escapeLatex = (value: string) => value.replace(/[&%$#_{}~^\\]/g, '\\$&');
 
-export const generateLatexCode = (testResult: TestResult, taxonomy?: ResolvedTaxonomy): string => {
-  const resolved = taxonomy ?? resolveTaxonomyFor(undefined, [testResult]);
+export const generateLatexCode = (evaluation: RunEvaluation, taxonomy?: ResolvedTaxonomy): string => {
+  const resolved = taxonomy ?? resolveTaxonomyFor(undefined, [evaluation]);
 
   const conditions = resolved.conditions.filter(condition =>
-    isRecord(testResult.test_results?.[condition.key])
+    isRecord(evaluation.test_results?.[condition.key])
   );
   const classes = resolved.classes;
 
@@ -48,7 +48,7 @@ export const generateLatexCode = (testResult: TestResult, taxonomy?: ResolvedTax
   }));
   const inferenceColumns = INFERENCE_COLUMNS.filter(column =>
     conditions.some(condition => {
-      const block = testResult.test_results?.[condition.key];
+      const block = evaluation.test_results?.[condition.key];
       return isRecord(block) && readMetric(block.inference_time, column.key) !== undefined;
     })
   );
@@ -78,7 +78,7 @@ export const generateLatexCode = (testResult: TestResult, taxonomy?: ResolvedTax
 `;
 
   conditions.forEach(condition => {
-    const conditionData = testResult.test_results[condition.key];
+    const conditionData = evaluation.test_results[condition.key];
     if (!isRecord(conditionData)) return;
 
     const cells = [

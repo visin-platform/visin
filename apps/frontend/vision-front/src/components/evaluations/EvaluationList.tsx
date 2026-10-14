@@ -84,7 +84,7 @@ const EvaluationList: React.FC<EvaluationListProps> = ({ projectId, suite, title
         description={
           state
             ? 'Try another state.'
-            : 'An evaluation is one checkpoint scored on a suite. Publish a suite, then record results on it from your evaluation script, or promote an older test result.'
+            : 'An evaluation is one checkpoint measured on test data. A run reports them from its test stage; scored on a suite, one can be ranked and put on a leaderboard.'
         }
       />
     );

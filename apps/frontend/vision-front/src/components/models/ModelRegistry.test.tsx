@@ -71,6 +71,20 @@ describe('ModelRegistry', () => {
     expect(service.list).toHaveBeenCalledWith({ page: 1, limit: 30 });
   });
 
+  it('offers reported metrics and lets the reader clear ranking and search', async () => {
+    service.list.mockResolvedValue({ ...page([row('1')]), metrics: ['val.loss', 'val.mean_iou'] });
+    renderWithClient(<ModelRegistry />);
+    await screen.findByText('Run 1');
+    expect(screen.queryByRole('combobox', { name: 'Better is' })).not.toBeInTheDocument();
+    fireEvent.focus(screen.getByLabelText('Rank by result'));
+    fireEvent.mouseDown(screen.getByLabelText('Rank by result'));
+    fireEvent.click(await screen.findByRole('option', { name: 'val.mean_iou' }));
+    await waitFor(() => expect(service.list).toHaveBeenLastCalledWith(expect.objectContaining({ metric: 'val.mean_iou' })));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => expect(service.list).toHaveBeenLastCalledWith({ page: 1, limit: 30 }));
+    expect(screen.getByLabelText('Rank by result')).toHaveValue('');
+  });
+
   it('is limited to a project when given one, and leaves the project column out', async () => {
     service.list.mockResolvedValue(page([row('1')]));
     renderWithClient(<ModelRegistry projectId="p1" title="Models" />);
@@ -228,9 +242,10 @@ describe('ModelRegistry', () => {
       expect(screen.getByText('.pth · 1.2 GB')).toBeInTheDocument();
       expect(screen.getByText('.onnx · 614.4 MB')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Download the outputs of ISEAUTO_CLFT-epoch99.pth as a zip' })).toHaveAttribute('href', `${origin}/m1/bundle`);
+      expect(screen.queryByText('Licence CC BY 4.0 · TalTech')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /^Show details for/ }));
       expect(screen.getByText('Licence CC BY 4.0 · TalTech')).toBeInTheDocument();
       expect(screen.getByText('input 384 px · camera mean 0.485, 0.456, 0.406 · std 0.229, 0.224, 0.225')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: /^Show details for/ }));
       expect(screen.getByText('epoch 99')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Try it' })).not.toBeInTheDocument();
     });
@@ -255,6 +270,8 @@ describe('ModelRegistry', () => {
       expect(screen.getByText('.pth · 1.2 GB · Being verified')).toBeInTheDocument();
       expect(screen.getByText('.pth · 1.2 GB · Failed verification: The file does not match the SHA-256 that was declared')).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: /Download/ })).not.toBeInTheDocument();
+      expect(screen.queryByText('Licence not stated')).not.toBeInTheDocument();
+      for (const button of screen.getAllByRole('button', { name: /^Show details/ })) fireEvent.click(button);
       expect(screen.getByText('Licence not stated')).toBeInTheDocument();
     });
 

@@ -17,9 +17,7 @@ vi.mock('../services/projectService', () => ({
   projectService: {
     getGroups: vi.fn(async () => []),
     getProjects: vi.fn(),
-    createProject: vi.fn(),
-    updateProject: vi.fn(),
-    deleteProject: vi.fn()
+    createProject: vi.fn()
   }
 }));
 
@@ -36,7 +34,6 @@ vi.mock('../components/ProjectFormDialog', () => ({
   default: (props: any) =>
     props.open ? (
       <div data-testid="project-form-dialog">
-        <span>editing:{String(props.isEditing)}</span>
         <span>name:{props.name}</span>
         {props.error && <span>form-error:{props.error}</span>}
         {props.success && <span>form-success:{props.success}</span>}
@@ -57,8 +54,6 @@ import { projectService } from '../services/projectService';
 const projectServiceMock = projectService as unknown as {
   getProjects: ReturnType<typeof vi.fn>;
   createProject: ReturnType<typeof vi.fn>;
-  updateProject: ReturnType<typeof vi.fn>;
-  deleteProject: ReturnType<typeof vi.fn>;
 };
 
 function renderPage(path = '/projects') {
@@ -148,45 +143,52 @@ describe('ProjectsPage', () => {
     expect(pictures).toHaveLength(1);
   });
 
-  it('only shows edit/delete actions for projects owned by the current user', async () => {
+  it('has no edit or delete actions in the list, which is for browsing: those live in the project', async () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [project1, project2] });
 
     renderPage();
     await waitFor(() => expect(screen.getByText('Project One')).toBeInTheDocument());
 
-    // Only project1 is owned by u1, so exactly one delete icon should appear
-    expect(screen.getAllByTestId('DeleteOutlinedIcon')).toHaveLength(1);
-  });
-
-  it('drops the Actions column when the viewer owns none of the projects', async () => {
-    useAuthMock.mockReturnValue({ user: null });
-    projectServiceMock.getProjects.mockResolvedValue({ data: [project2] });
-
-    renderPage();
-    await waitFor(() => expect(screen.getByText('Project Two')).toBeInTheDocument());
-
     expect(screen.queryByText('Actions')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('EditIcon')).not.toBeInTheDocument();
     expect(screen.queryByTestId('DeleteOutlinedIcon')).not.toBeInTheDocument();
   });
 
-  it("keeps the Actions column when at least one project is the viewer's own", async () => {
-    projectServiceMock.getProjects.mockResolvedValue({ data: [project1, project2] });
-
-    renderPage();
-    await waitFor(() => expect(screen.getByText('Project One')).toBeInTheDocument());
-
-    expect(screen.getByText('Actions')).toBeInTheDocument();
-  });
-
-  it('navigates to the project detail page when a project name is clicked', async () => {
+  it('makes each project a real link to its page, the whole card', async () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [project1] });
 
     renderPage();
-    await waitFor(() => expect(screen.getByText('Project One')).toBeInTheDocument());
+    const link = await screen.findByRole('link', { name: /Project One/ });
 
-    fireEvent.click(screen.getByText('Project One'));
+    expect(link).toHaveAttribute('href', '/projects/p1');
+    expect(link).toHaveTextContent('A description');
+  });
 
-    expect(navigateMock).toHaveBeenCalledWith('/projects/p1');
+  it('says on each card how many runs there are, which are running, and when it last moved', async () => {
+    const now = Date.now();
+    projectServiceMock.getProjects.mockResolvedValue({
+      data: [
+        {
+          ...project1,
+          runs: 12,
+          runningRuns: 2,
+          lastActivityAt: new Date(now - 3 * 24 * 3600 * 1000).toISOString()
+        },
+        { ...project2, runs: 0, runningRuns: 0 }
+      ]
+    });
+
+    renderPage();
+    const one = await screen.findByRole('link', { name: /Project One/ });
+    const two = screen.getByRole('link', { name: /Project Two/ });
+
+    expect(one).toHaveTextContent('12 runs');
+    expect(one).toHaveTextContent('2 running');
+    expect(one).toHaveTextContent('Active 3 days ago');
+    expect(one).toHaveTextContent('Public');
+    expect(two).toHaveTextContent('No runs yet');
+    expect(two).toHaveTextContent('Private');
+    expect(two).not.toHaveTextContent('running');
   });
 
   it('opens the form from "Get started" (?new=1) and goes to the new project', async () => {
@@ -195,8 +197,7 @@ describe('ProjectsPage', () => {
 
     renderPage('/projects?new=1');
 
-    const dialog = await screen.findByTestId('project-form-dialog');
-    expect(dialog).toHaveTextContent('editing:false');
+    await screen.findByTestId('project-form-dialog');
     fireEvent.click(screen.getByText('type-name'));
     fireEvent.click(screen.getByText('submit-form'));
 
@@ -209,8 +210,7 @@ describe('ProjectsPage', () => {
 
     renderPage('/projects?create=1');
 
-    const dialog = await screen.findByTestId('project-form-dialog');
-    expect(dialog).toHaveTextContent('editing:false');
+    await screen.findByTestId('project-form-dialog');
     fireEvent.click(screen.getByText('type-name'));
     fireEvent.click(screen.getByText('submit-form'));
 
@@ -253,7 +253,6 @@ describe('ProjectsPage', () => {
     await waitFor(() => expect(screen.getByText('Project One')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: /New project/i }));
-    expect(screen.getByTestId('project-form-dialog')).toHaveTextContent('editing:false');
 
     fireEvent.click(screen.getByText('submit-form'));
 
@@ -282,64 +281,23 @@ describe('ProjectsPage', () => {
     );
   });
 
-  it('lets a group admin edit without sending an ownership-only visibility change', async () => {
-    projectServiceMock.getProjects.mockResolvedValue({
-      data: [
-        {
-          ...project1,
-          owner: { kind: 'group', id: 'g1' },
-          permissions: { read: true, contribute: true, manage: true, own: false }
-        }
-      ]
-    });
-    projectServiceMock.updateProject.mockResolvedValue({ data: project1 });
-    renderPage();
-    fireEvent.click((await screen.findByTestId('EditIcon')).closest('button')!);
-    fireEvent.click(screen.getByText('submit-form'));
-    await waitFor(() => expect(projectServiceMock.updateProject).toHaveBeenCalled());
-    expect(projectServiceMock.updateProject.mock.calls[0][1]).not.toHaveProperty('visibility');
-  });
-
-  it('opens the edit dialog pre-filled with the project values', async () => {
+  it('lists the most recently active first, and sorts by name or newest when asked', async () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [project1] });
 
     renderPage();
-    await waitFor(() => expect(screen.getByText('Project One')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByTestId('EditIcon').closest('button')!);
-
-    expect(screen.getByTestId('project-form-dialog')).toHaveTextContent('editing:true');
-    expect(screen.getByTestId('project-form-dialog')).toHaveTextContent('name:Project One');
-  });
-
-  it('opens the delete confirmation dialog and calls deleteProject on confirm', async () => {
-    projectServiceMock.getProjects.mockResolvedValue({ data: [project1] });
-    projectServiceMock.deleteProject.mockResolvedValue({});
-
-    renderPage();
-    await waitFor(() => expect(screen.getByText('Project One')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByTestId('DeleteOutlinedIcon').closest('button')!);
-    expect(screen.getByText('Delete Project')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-
-    await waitFor(() => {
-      expect(projectServiceMock.deleteProject).toHaveBeenCalledWith('p1');
+    await screen.findByRole('link', { name: /Project One/ });
+    expect(projectServiceMock.getProjects).toHaveBeenLastCalledWith({
+      sortBy: 'lastActivityAt',
+      sortOrder: 'desc',
+      search: undefined
     });
-  });
 
-  it('toggles sort order when clicking the Name column header', async () => {
-    projectServiceMock.getProjects.mockResolvedValue({ data: [project1] });
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Sort by' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Name (A to Z)' }));
 
-    renderPage();
-    await waitFor(() => expect(screen.getByText('Project One')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByText('Name'));
-
-    await waitFor(() => {
-      expect(projectServiceMock.getProjects).toHaveBeenLastCalledWith({ sortBy: 'name', sortOrder: 'asc' });
-    });
+    await waitFor(() =>
+      expect(projectServiceMock.getProjects).toHaveBeenLastCalledWith({ sortBy: 'name', sortOrder: 'asc', search: undefined })
+    );
   });
 });
 
@@ -377,20 +335,12 @@ describe('ProjectsPage on a phone', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it("offers edit and delete from a row menu, on the viewer's own projects only", async () => {
+  it('has no row menu on the phone list either', async () => {
     projectServiceMock.getProjects.mockResolvedValue({ data: [project1, project2] });
     renderPage();
 
     await screen.findByRole('link', { name: /Project One/ });
-    expect(screen.queryByRole('button', { name: 'Actions for Project Two' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Actions for Project One' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
-    expect(screen.getByTestId('project-form-dialog')).toHaveTextContent('name:Project One');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Actions for Project One' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
-    expect(screen.getByText('Delete Project')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Actions for/ })).not.toBeInTheDocument();
   });
 
   it('floats New project above the tab bar', async () => {

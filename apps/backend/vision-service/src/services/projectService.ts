@@ -126,11 +126,50 @@ export const listProjects = async (userId: string | undefined, filters: GetProje
     ]
   };
   // Without readmes: each can be 20,000 characters, and a list shows none of them.
-  const projects = await Project.find(query).select('-readme').sort({ [sortBy]: sortOrder });
-  const owners = await lookupOwnerIdentities(projects.map(project => project.owner));
-  const views = await Promise.all(projects.map(project => toProjectView(project, userId, undefined, owners)));
+  // `lastActivityAt` is sorted here: a project older than that field reads as its last edit.
+  const byActivity = sortBy === 'lastActivityAt';
+  const found = await Project.find(query).select('-readme').sort(byActivity ? {} : { [sortBy]: sortOrder });
+  const activity = (project: IProject) => (project.lastActivityAt ?? project.updatedAt).getTime();
+  const projects = byActivity
+    ? [...found].sort((a, b) => (sortOrder === 1 ? activity(a) - activity(b) : activity(b) - activity(a)))
+    : found;
+  const [owners, counts] = await Promise.all([
+    lookupOwnerIdentities(projects.map(project => project.owner)),
+    runCounts(projects.map(project => String(project._id)))
+  ]);
+  const views = await Promise.all(
+    projects.map(async project => {
+      const view = await toProjectView(project, userId, undefined, owners);
+      const counted = counts.get(String(project._id));
+      return {
+        ...view,
+        // What a card says at a glance, so the list need not open every project.
+        lastActivityAt: (project.lastActivityAt ?? project.updatedAt).toISOString(),
+        runs: counted?.runs ?? 0,
+        runningRuns: counted?.running ?? 0,
+        ...(counted?.lastRunAt ? { lastRunAt: counted.lastRunAt.toISOString() } : {})
+      };
+    })
+  );
   return withCovers(projects, views, userId);
 };
+
+/** Runs per project, how many are running, and when the latest started: one grouped read for a whole list. */
+async function runCounts(ids: string[]): Promise<Map<string, { runs: number; running: number; lastRunAt?: Date }>> {
+  if (ids.length === 0) return new Map();
+  const rows = await Training.aggregate<{ _id: string; runs: number; running: number; lastRunAt?: Date }>([
+    { $match: { projectId: { $in: ids }, deletedAt: null } },
+    {
+      $group: {
+        _id: '$projectId',
+        runs: { $sum: 1 },
+        running: { $sum: { $cond: [{ $eq: ['$status', 'running'] }, 1, 0] } },
+        lastRunAt: { $max: '$createdAt' }
+      }
+    }
+  ]);
+  return new Map(rows.map(row => [row._id, row]));
+}
 
 export const getProjectByIdOrSlug = async (identifier: string, userId: string | undefined): Promise<ProjectView> => {
   const project = await requireProject(identifier, userId);

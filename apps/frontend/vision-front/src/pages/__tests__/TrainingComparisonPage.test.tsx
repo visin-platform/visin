@@ -19,13 +19,13 @@ vi.mock('../../contexts/AuthContext', () => ({
 vi.mock('@/components/comparison/ComparisonTable', () => ({
   default: (props: any) => <div data-testid="comparison-table">{props.comparisonData.length}</div>
 }));
-vi.mock('../../components/test-results/PerformanceMetricsTable', () => ({
+vi.mock('../../components/result-tables/PerformanceMetricsTable', () => ({
   default: (props: any) => <div data-testid="performance-metrics-table">{props.comparisonData.length}</div>
 }));
-vi.mock('../../components/test-results/IoUMetricsTable', () => ({
+vi.mock('../../components/result-tables/IoUMetricsTable', () => ({
   default: (props: any) => <div data-testid="iou-metrics-table">{props.comparisonData.length}</div>
 }));
-vi.mock('../../components/test-results/APMetricsTable', () => ({
+vi.mock('../../components/result-tables/APMetricsTable', () => ({
   default: (props: any) => <div data-testid="ap-metrics-table">{props.comparisonData.length}</div>
 }));
 vi.mock('../../components/comparison/BenchmarksComparisonTable', () => ({
@@ -85,13 +85,13 @@ describe('TrainingComparisonPage', () => {
         comparison: [
           {
             training: { name: 'Run A' },
-            aggregatedTestResults: null,
+            aggregatedEvaluations: null,
             testResultsCount: 0,
             benchmarks: []
           },
           {
             training: { name: 'Run B' },
-            aggregatedTestResults: { iou: 0.5 },
+            aggregatedEvaluations: { iou: 0.5 },
             testResultsCount: 3,
             benchmarks: [{ name: 'bench1' }]
           }
@@ -102,17 +102,17 @@ describe('TrainingComparisonPage', () => {
 
     expect(await screen.findByTestId('comparison-table')).toHaveTextContent('2');
     expect(screen.getByText('Training Runs (2)')).toBeInTheDocument();
-    expect(screen.getByText('Test Results (1)')).toBeInTheDocument();
+    expect(screen.getByText('Evaluations (1)')).toBeInTheDocument();
     expect(screen.getByText('Benchmarks (1)')).toBeInTheDocument();
   });
 
-  it('opens directly on the test results tab via the ?tab=tests query param', async () => {
+  it('opens directly on the evaluations tab via the ?tab=tests query param', async () => {
     compareTrainingsMock.mockResolvedValue({
       data: {
         comparison: [
           {
             training: { name: 'Run A' },
-            aggregatedTestResults: { iou: 0.5 },
+            aggregatedEvaluations: { iou: 0.5 },
             testResultsCount: 2,
             benchmarks: []
           }
@@ -126,19 +126,19 @@ describe('TrainingComparisonPage', () => {
     expect(screen.getByTestId('performance-metrics-table')).toBeInTheDocument();
   });
 
-  it('shows a message when there are no test results to compare on the tests tab', async () => {
+  it('shows a message when there are no evaluations to compare on the tests tab', async () => {
     compareTrainingsMock.mockResolvedValue({
-      data: { comparison: [{ training: { name: 'Run A' }, aggregatedTestResults: null, testResultsCount: 0, benchmarks: [] }] }
+      data: { comparison: [{ training: { name: 'Run A' }, aggregatedEvaluations: null, testResultsCount: 0, benchmarks: [] }] }
     });
     renderWithProviders('/trainings/compare?ids=t1&tab=tests');
-    expect(await screen.findByText(/^None of the selected runs has test results to compare/)).toBeInTheDocument();
+    expect(await screen.findByText(/^None of the selected runs has evaluations to compare/)).toBeInTheDocument();
   });
 
   it('opens directly on the benchmarks tab via the ?tab=benchmarks query param', async () => {
     compareTrainingsMock.mockResolvedValue({
       data: {
         comparison: [
-          { training: { name: 'Run A' }, aggregatedTestResults: null, testResultsCount: 0, benchmarks: [{ name: 'bench1' }] }
+          { training: { name: 'Run A' }, aggregatedEvaluations: null, testResultsCount: 0, benchmarks: [{ name: 'bench1' }] }
         ]
       }
     });
@@ -151,14 +151,14 @@ describe('TrainingComparisonPage', () => {
     compareTrainingsMock.mockResolvedValue({
       data: {
         comparison: [
-          { training: { name: 'Run A' }, aggregatedTestResults: { iou: 1 }, testResultsCount: 1, benchmarks: [] }
+          { training: { name: 'Run A' }, aggregatedEvaluations: { iou: 1 }, testResultsCount: 1, benchmarks: [] }
         ]
       }
     });
     renderWithProviders('/trainings/compare?ids=t1');
 
     await screen.findByTestId('comparison-table');
-    await user.click(screen.getByText('Test Results (1)'));
+    await user.click(screen.getByText('Evaluations (1)'));
     expect(await screen.findByTestId('iou-metrics-table')).toBeInTheDocument();
   });
 });

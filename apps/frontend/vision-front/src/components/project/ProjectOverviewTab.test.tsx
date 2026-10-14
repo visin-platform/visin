@@ -105,4 +105,19 @@ describe('ProjectOverviewTab', () => {
     );
     expect(screen.queryByText('Start New Training')).not.toBeInTheDocument();
   });
+
+  it('shows the totals as loading, not as zeros, while they are on their way', () => {
+    render(
+      <MemoryRouter>
+        <ProjectOverviewTab
+          stats={undefined}
+          isLoading
+          isAuthenticated={true}
+          user={{ id: 'u1', email: 'u1@test.dev', name: 'User One' }}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getAllByLabelText('Loading').length).toBeGreaterThan(0);
+  });
 });

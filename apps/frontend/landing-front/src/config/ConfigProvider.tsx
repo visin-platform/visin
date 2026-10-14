@@ -26,5 +26,5 @@ export const { ConfigProvider, ConfigContext, useConfig, getGlobalConfig } = cre
   createDevConfig,
   isDev: import.meta.env.DEV,
   onFetchError: 'fallback',
-  loadingFallback: <div>Loading configuration...</div>
+  loadingFallback: null
 });

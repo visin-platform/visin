@@ -26,7 +26,6 @@ export const useTrainingsPage = () => {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [trainingName, setTrainingName] = useState('');
   const [trainingDescription, setTrainingDescription] = useState('');
-  const [selectedDatasetId, setSelectedDatasetId] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<Training['status']>('pending');
   const [trainingTags, setTrainingTags] = useState<string[]>([]);
@@ -191,7 +190,6 @@ export const useTrainingsPage = () => {
         await trainingService.updateTraining(editingTrainingId, {
           name: trainingName.trim(),
           description: trainingDescription.trim() || undefined,
-          datasetId: selectedDatasetId || undefined,
           projectId: selectedProjectId || undefined,
           status: selectedStatus,
           tags: trainingTags
@@ -201,7 +199,6 @@ export const useTrainingsPage = () => {
         await trainingService.createTraining({
           name: trainingName.trim(),
           description: trainingDescription.trim() || undefined,
-          datasetId: selectedDatasetId || undefined,
           projectId: selectedProjectId || undefined,
           status: selectedStatus,
           tags: trainingTags
@@ -213,7 +210,6 @@ export const useTrainingsPage = () => {
       setEditingTrainingId(null);
       setTrainingName('');
       setTrainingDescription('');
-      setSelectedDatasetId('');
       setSelectedProjectId('');
       refetch();
       refetchTags();
@@ -229,7 +225,6 @@ export const useTrainingsPage = () => {
       setCreateModalOpen(false);
       setTrainingName('');
       setTrainingDescription('');
-      setSelectedDatasetId('');
       setSelectedProjectId('');
       setSelectedStatus('pending');
       setTrainingTags([]);
@@ -246,7 +241,6 @@ export const useTrainingsPage = () => {
     setEditingTrainingId(training._id);
     setTrainingName(training.name);
     setTrainingDescription(training.description || '');
-    setSelectedDatasetId(training.datasetId || '');
     setSelectedProjectId(training.projectId || '');
     setSelectedStatus(training.status);
     setTrainingTags(training.tags || []);
@@ -345,8 +339,6 @@ export const useTrainingsPage = () => {
     setTrainingName,
     trainingDescription,
     setTrainingDescription,
-    selectedDatasetId,
-    setSelectedDatasetId,
     selectedProjectId,
     setSelectedProjectId,
     selectedStatus,

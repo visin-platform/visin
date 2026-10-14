@@ -147,7 +147,10 @@ export async function listModels(userId: string | undefined, query: ListModelsQu
   const rows = trainings.flatMap((training) => (training.models ?? []).map((model) => ({ training, model })));
 
   const runIds = [...new Set(rows.map((row) => row.training._id.toString()))];
-  const segments = query.metric ? await resolveSegments(runIds, query.metric) : [];
+  const sampledEpochs = await latestEpochs(runIds);
+  const discovered = sampledEpochs.flatMap(({ results }) => metricLeaves(results));
+  const metrics = [...new Set(discovered.map(({ path }) => path))].sort();
+  const segments = query.metric ? (discovered.find(({ path }) => path === query.metric)?.segments ?? query.metric.split('.')) : [];
   const best = query.metric
     ? await bestByRun(runIds, query.metric, query.direction, segments)
     : new Map<string, Best>();
@@ -239,6 +242,7 @@ export async function listModels(userId: string | undefined, query: ListModelsQu
       ...(checkpoint ? { checkpoint } : {}),
       ...(evaluationsOf(training, model) ? { evaluations: evaluationsOf(training, model) } : {})
     })),
+    metrics,
     pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) }
   };
 }

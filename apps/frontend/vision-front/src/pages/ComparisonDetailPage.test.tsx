@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 
 const navigateMock = vi.fn();
+const auth = vi.hoisted(() => ({ isAuthenticated: true, user: { id: 'u1' } }));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => auth }));
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
@@ -49,13 +51,13 @@ vi.mock('../utils/latex/comparisonExportLatex', () => ({
 vi.mock('@/components/comparison/ComparisonTable', () => ({
   default: (props: any) => <div data-testid="comparison-table">rows:{props.comparisonData?.length}</div>
 }));
-vi.mock('../components/test-results/PerformanceMetricsTable', () => ({
+vi.mock('../components/result-tables/PerformanceMetricsTable', () => ({
   default: (props: any) => <div data-testid="performance-metrics-table">rows:{props.comparisonData?.length}</div>
 }));
-vi.mock('../components/test-results/IoUMetricsTable', () => ({
+vi.mock('../components/result-tables/IoUMetricsTable', () => ({
   default: (props: any) => <div data-testid="iou-metrics-table">rows:{props.comparisonData?.length}</div>
 }));
-vi.mock('../components/test-results/APMetricsTable', () => ({
+vi.mock('../components/result-tables/APMetricsTable', () => ({
   default: (props: any) => <div data-testid="ap-metrics-table">rows:{props.comparisonData?.length}</div>
 }));
 vi.mock('../components/comparison/BenchmarksComparisonTable', () => ({
@@ -125,7 +127,7 @@ const baseComparison = {
   updatedAt: '2024-01-02T00:00:00.000Z'
 };
 
-const baseProject = { _id: 'p1', name: 'Project One', slug: 'project-one' };
+const baseProject = { _id: 'p1', name: 'Project One', slug: 'project-one', permissions: { manage: true, contribute: true } };
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -141,8 +143,20 @@ function renderPage() {
 describe('ComparisonDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    auth.isAuthenticated = true;
     trainingServiceMock.getTrainings.mockResolvedValue({ data: { trainings: [] } });
     projectServiceMock.getProjectById.mockResolvedValue({ data: baseProject });
+  });
+
+  it.each([false, true])('hides write actions from a viewer (authenticated: %s)', async (authenticated) => {
+    auth.isAuthenticated = authenticated;
+    projectServiceMock.getProjectById.mockResolvedValue({ data: { ...baseProject, permissions: { manage: false, contribute: false } } });
+    comparisonServiceMock.getComparisonByUuid.mockResolvedValue({ data: baseComparison });
+    trainingServiceMock.compareTrainings.mockResolvedValue({ data: { comparison: [] } });
+    renderPage();
+    await screen.findByText('My Comparison');
+    expect(screen.queryByLabelText('Edit Comparison')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Delete Comparison')).not.toBeInTheDocument();
   });
 
   it('shows a loading spinner while the comparison is loading', async () => {
@@ -173,7 +187,7 @@ describe('ComparisonDetailPage', () => {
         comparison: [
           {
             training: { name: 'Training A' },
-            aggregatedTestResults: { some: 'metric' },
+            aggregatedEvaluations: { some: 'metric' },
             testResultsCount: 3,
             benchmarks: [{ id: 'b1' }]
           }
@@ -193,14 +207,14 @@ describe('ComparisonDetailPage', () => {
     expect(screen.getByTestId('training-class-iou-table')).toBeInTheDocument();
   });
 
-  it('switches to the Test Results tab and shows the test result tables', async () => {
+  it('switches to the Evaluations tab and shows the evaluation tables', async () => {
     comparisonServiceMock.getComparisonByUuid.mockResolvedValue({ data: baseComparison });
     trainingServiceMock.compareTrainings.mockResolvedValue({
       data: {
         comparison: [
           {
             training: { name: 'Training A' },
-            aggregatedTestResults: { some: 'metric' },
+            aggregatedEvaluations: { some: 'metric' },
             testResultsCount: 3,
             benchmarks: []
           }
@@ -211,9 +225,9 @@ describe('ComparisonDetailPage', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('My Comparison')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Test Results' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Evaluations' }));
 
-    expect(screen.getByText('Test Results Comparison')).toBeInTheDocument();
+    expect(screen.getByText('Evaluations Comparison')).toBeInTheDocument();
     expect(screen.getByTestId('performance-metrics-table')).toHaveTextContent('rows:1');
   });
 
@@ -224,7 +238,7 @@ describe('ComparisonDetailPage', () => {
         comparison: [
           {
             training: { name: 'Training A' },
-            aggregatedTestResults: null,
+            aggregatedEvaluations: null,
             testResultsCount: 0,
             benchmarks: []
           }

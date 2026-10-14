@@ -45,7 +45,7 @@ export const projectService = {
     search?: string;
     owner?: string;
     access?: 'contribute';
-    sortBy?: string;
+    sortBy?: 'name' | 'createdAt' | 'updatedAt' | 'lastActivityAt';
     sortOrder?: 'asc' | 'desc';
   }): Promise<ApiResponse<Project[]>> {
     const response = await visionApi.get('/projects', { params });

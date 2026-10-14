@@ -51,8 +51,8 @@ describe('APMetricsTable', () => {
 
     expect(namesInOrder()[0]).toBe('A Run');
 
-    const testResultHeaders = screen.getAllByText('Test Result');
-    fireEvent.click(testResultHeaders[0]);
+    const evaluationHeaders = screen.getAllByText('Evaluation');
+    fireEvent.click(evaluationHeaders[0]);
 
     expect(namesInOrder()[0]).toBe('B Run');
   });

@@ -7,7 +7,6 @@ const baseProps = {
   open: true,
   onClose: vi.fn(),
   onSubmit: vi.fn(async () => {}),
-  isEditing: false,
   isCreating: false,
   name: '',
   onNameChange: vi.fn(),
@@ -34,14 +33,9 @@ describe('ProjectFormDialog', () => {
     expect(screen.queryByText('Create New Project')).not.toBeInTheDocument();
   });
 
-  it('shows "Create New Project" when not editing', () => {
+  it('shows "Create New Project"', () => {
     render(<ProjectFormDialog {...baseProps} />);
     expect(screen.getByText('Create New Project')).toBeInTheDocument();
-  });
-
-  it('shows "Edit Project" when editing', () => {
-    render(<ProjectFormDialog {...baseProps} isEditing />);
-    expect(screen.getByText('Edit Project')).toBeInTheDocument();
   });
 
   it('calls onNameChange as the name field is typed', async () => {

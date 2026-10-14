@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TestResult } from '../../types/testResult';
+import { RunEvaluation } from '../../types/runEvaluation';
 import { Epoch } from '../../types/epoch';
 import {
   discoverClassMetrics,
@@ -30,7 +30,7 @@ const weatherResult = {
       overall: { mIoU_foreground: 0.5, mean_accuracy: 0.7, fw_iou: 0.6, pixel_accuracy: 0.8 }
     }
   }
-} as unknown as TestResult;
+} as unknown as RunEvaluation;
 
 const factoryResult = {
   test_results: {
@@ -44,7 +44,7 @@ const factoryResult = {
       overall: { mean_dice: 0.7 }
     }
   }
-} as unknown as TestResult;
+} as unknown as RunEvaluation;
 
 describe('discovery', () => {
   it('finds conditions without knowing the vocabulary', () => {
@@ -69,7 +69,7 @@ describe('discovery', () => {
   });
 
   it('survives a malformed payload', () => {
-    const junk = [{}, { test_results: null }, { test_results: 'nope' }] as unknown as TestResult[];
+    const junk = [{}, { test_results: null }, { test_results: 'nope' }] as unknown as RunEvaluation[];
     expect(discoverConditions(junk)).toEqual([]);
     expect(discoverClasses(junk)).toEqual([]);
   });
@@ -77,7 +77,7 @@ describe('discovery', () => {
   it('discovers metrics with a numeric mean, as well as scalar metrics', () => {
     const result = {
       test_results: { day: { car: { ap: { mean: 0.42 }, quality: 0.8, details: { note: 'sample' } } } }
-    } as unknown as TestResult;
+    } as unknown as RunEvaluation;
     expect(discoverClassMetrics([result])).toEqual(['ap', 'quality']);
   });
 

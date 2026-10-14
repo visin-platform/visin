@@ -157,18 +157,18 @@ describe('AppLayout', () => {
   });
 
   describe('app bar', () => {
-    it('names the area being shown, with its sections as tabs', () => {
+    it('shows section tabs without repeating the area name', () => {
       const { container } = renderAt('/jobs');
 
       const header = container.querySelector('header')!;
-      expect(header).toHaveTextContent('Labels');
+      expect(header).not.toHaveTextContent('Labels');
       expect(within(header).getByRole('link', { name: 'Jobs' })).toHaveAttribute('aria-current', 'page');
     });
 
-    it('names the app outside any area', () => {
+    it('leaves out a redundant app title outside any area', () => {
       const { container } = renderAt('/somewhere-else');
 
-      expect(container.querySelector('header')).toHaveTextContent('Visin App');
+      expect(container.querySelector('header')).not.toHaveTextContent('Visin App');
     });
   });
 

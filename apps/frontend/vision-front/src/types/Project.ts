@@ -37,6 +37,11 @@ export interface Project {
   coverUrl?: string;
   createdAt: string;
   updatedAt: string;
+  /** In a list: when anything last happened in it, and how many runs it holds, running now, and when the latest began. */
+  lastActivityAt?: string;
+  runs?: number;
+  runningRuns?: number;
+  lastRunAt?: string;
 }
 
 export interface CreateProjectData {

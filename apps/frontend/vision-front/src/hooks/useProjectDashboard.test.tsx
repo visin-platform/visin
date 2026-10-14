@@ -9,8 +9,8 @@ vi.mock('../services/projectService', () => ({
 vi.mock('../services/trainingService', () => ({
   trainingService: { getTrainingStats: vi.fn(), getTrainings: vi.fn() }
 }));
-vi.mock('../services/testResultService', () => ({
-  testResultService: { getTestResults: vi.fn() }
+vi.mock('../services/runEvaluationService', () => ({
+  runEvaluationService: { list: vi.fn() }
 }));
 vi.mock('../services/visualizationService', () => ({
   visualizationService: { getVisualizationsByTraining: vi.fn() }
@@ -21,14 +21,14 @@ vi.mock('../services/benchmarkService', () => ({
 
 import { projectService } from '../services/projectService';
 import { trainingService } from '../services/trainingService';
-import { testResultService } from '../services/testResultService';
+import { runEvaluationService } from '../services/runEvaluationService';
 import { visualizationService } from '../services/visualizationService';
 import { benchmarkService } from '../services/benchmarkService';
 import { useProjectDashboard } from './useProjectDashboard';
 
 const mockedProject = vi.mocked(projectService);
 const mockedTraining = vi.mocked(trainingService);
-const mockedTestResult = vi.mocked(testResultService);
+const mockedRunEvaluation = vi.mocked(runEvaluationService);
 const mockedVisualization = vi.mocked(visualizationService);
 const mockedBenchmark = vi.mocked(benchmarkService);
 
@@ -44,32 +44,32 @@ describe('useProjectDashboard', () => {
     mockedProject.getProjectDashboardStats.mockResolvedValue({ success: true, data: {} as any });
     mockedTraining.getTrainingStats.mockResolvedValue({ success: true, data: {} as any });
     mockedTraining.getTrainings.mockResolvedValue({ success: true, data: { trainings: [], pagination: {} as any } });
-    mockedTestResult.getTestResults.mockResolvedValue({ success: true, data: { testResults: [], pagination: {} as any } });
+    mockedRunEvaluation.list.mockResolvedValue({ success: true, data: { evaluations: [], pagination: {} as any } });
     mockedVisualization.getVisualizationsByTraining.mockResolvedValue({ success: true, data: { visualizations: [], total: 0 } } as never);
     mockedBenchmark.getBenchmarks.mockResolvedValue({ success: true, data: { benchmarks: [], pagination: {} } } as never);
   });
 
   it('does not fetch the project when projectId is undefined', () => {
-    renderHook(() => useProjectDashboard(undefined, 0), { wrapper: makeWrapper() });
+    renderHook(() => useProjectDashboard(undefined, 'overview'), { wrapper: makeWrapper() });
     expect(mockedProject.getProjectById).not.toHaveBeenCalled();
   });
 
   it('loads the project and dependent stats queries once the project resolves', async () => {
-    const { result } = renderHook(() => useProjectDashboard('p1', 0), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useProjectDashboard('p1', 'overview'), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.project?._id).toBe('p1'));
     await waitFor(() => expect(mockedTraining.getTrainingStats).toHaveBeenCalledWith({ projectId: 'p1' }));
     await waitFor(() => expect(mockedProject.getProjectDashboardStats).toHaveBeenCalledWith('p1'));
   });
 
-  it('only fetches full trainings when tabValue is 1', async () => {
-    const { result } = renderHook(() => useProjectDashboard('p1', 0), { wrapper: makeWrapper() });
+  it('only fetches full trainings on the trainings tab', async () => {
+    const { result } = renderHook(() => useProjectDashboard('p1', 'overview'), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.project?._id).toBe('p1'));
     expect(mockedTraining.getTrainings).not.toHaveBeenCalled();
   });
 
-  it('fetches full trainings with pagination params when tabValue is 1', async () => {
-    const { result } = renderHook(() => useProjectDashboard('p1', 1), { wrapper: makeWrapper() });
+  it('fetches full trainings with pagination params on the trainings tab', async () => {
+    const { result } = renderHook(() => useProjectDashboard('p1', 'trainings'), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.project?._id).toBe('p1'));
     await waitFor(() =>
       expect(mockedTraining.getTrainings).toHaveBeenCalledWith(
@@ -78,14 +78,14 @@ describe('useProjectDashboard', () => {
     );
   });
 
-  it('fetches test results only when tabValue is 2', async () => {
-    const { result } = renderHook(() => useProjectDashboard('p1', 2), { wrapper: makeWrapper() });
+  it('fetches test results only on the evaluations tab', async () => {
+    const { result } = renderHook(() => useProjectDashboard('p1', 'evaluations'), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.project?._id).toBe('p1'));
-    await waitFor(() => expect(mockedTestResult.getTestResults).toHaveBeenCalled());
+    await waitFor(() => expect(mockedRunEvaluation.list).toHaveBeenCalled());
   });
 
   it('handlePageChange updates the page state', async () => {
-    const { result } = renderHook(() => useProjectDashboard('p1', 1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useProjectDashboard('p1', 'trainings'), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.project?._id).toBe('p1'));
 
     act(() => {
@@ -96,7 +96,7 @@ describe('useProjectDashboard', () => {
   });
 
   it('handleRowsPerPageChange resets page to 0', async () => {
-    const { result } = renderHook(() => useProjectDashboard('p1', 1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useProjectDashboard('p1', 'trainings'), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.project?._id).toBe('p1'));
 
     act(() => {
@@ -111,7 +111,7 @@ describe('useProjectDashboard', () => {
   });
 
   it('handleSort toggles order when the same column is selected again', async () => {
-    const { result } = renderHook(() => useProjectDashboard('p1', 1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useProjectDashboard('p1', 'trainings'), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.project?._id).toBe('p1'));
 
     expect(result.current.sortBy).toBe('updatedAt');
@@ -130,7 +130,7 @@ describe('useProjectDashboard', () => {
   });
 
   it('invalidateProjectQueries triggers a refetch of the project query', async () => {
-    const { result } = renderHook(() => useProjectDashboard('p1', 0), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useProjectDashboard('p1', 'overview'), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.project?._id).toBe('p1'));
 
     mockedProject.getProjectById.mockClear();

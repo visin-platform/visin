@@ -3,7 +3,7 @@ import { sortOrderSchema } from './common';
 import { projectStorageSchema } from './artifactSchemas';
 import { costingSchema, taxonomySchema } from './taxonomySchemas';
 
-const PROJECT_SORT_FIELDS = ['name', 'createdAt', 'updatedAt'] as const;
+const PROJECT_SORT_FIELDS = ['name', 'createdAt', 'updatedAt', 'lastActivityAt'] as const;
 
 /**
  * `contribute`: only projects the caller may write to (owner or editor group),

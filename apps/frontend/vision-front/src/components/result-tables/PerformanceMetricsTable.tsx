@@ -188,7 +188,7 @@ const PerformanceMetricsTable: React.FC<PerformanceMetricsTableProps> = ({
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'background.default' }}>
                     <TableCell sx={{ fontWeight: 600, borderRight: `2px solid ${surface.divider}`, minWidth: 120 }}>
-                      Test Result
+                      Evaluation
                     </TableCell>
                     {classes.map(className => (
                       <TableCell

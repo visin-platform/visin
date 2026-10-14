@@ -6,7 +6,7 @@ import { Box, Container, CircularProgress, Alert } from '@mui/material';
 
 import TrainingOverviewTab from '../components/TrainingOverviewTab';
 import TrainingEpochsTab from '../components/TrainingEpochsTab';
-import TrainingTestResultsTab from '../components/TrainingTestResultsTab';
+import TrainingEvaluationsTab from '../components/TrainingEvaluationsTab';
 import TrainingConfigTab from '../components/TrainingConfigTab';
 import TrainingVisualizationsTab from '../components/TrainingVisualizationsTab';
 import TrainingSystemInfoTab from '../components/TrainingSystemInfoTab';
@@ -40,7 +40,7 @@ const TrainingDetailPage: React.FC = () => {
   const canWrite = useWriteCapabilities('training', id ? [id] : []);
 
   // Tab mapping
-  const tabNames = ['overview', 'epochs', 'test-results', 'visualizations', 'system-info', 'config', 'benchmarks', 'analysis'];
+  const tabNames = ['overview', 'epochs', 'evaluations', 'visualizations', 'system-info', 'config', 'benchmarks', 'analysis'];
   const getTabIndex = (tabName: string) => tabNames.indexOf(tabName);
   const getTabName = (index: number) => tabNames[index] || 'overview';
 
@@ -57,9 +57,9 @@ const TrainingDetailPage: React.FC = () => {
     refetch,
     config,
     configLoading,
-    allTestResults,
-    testResultsLoading,
-    availableTestEpochs
+    allEvaluations,
+    evaluationsLoading,
+    availableEpochs
   } = useTrainingDetail(id);
 
   // Fetch project information if training has a projectId
@@ -80,7 +80,6 @@ const TrainingDetailPage: React.FC = () => {
     handleEditCancel,
     editName, setEditName,
     editDescription, setEditDescription,
-    editDatasetId,
     editProjectId, setEditProjectId,
     editStatus, setEditStatus,
     editTags, setEditTags,
@@ -111,7 +110,7 @@ const TrainingDetailPage: React.FC = () => {
     handleDeleteClick,
     handleConfirmDelete,
     handleConfirmDeleteTraining,
-    handleDeleteTestResult,
+    handleDeleteEvaluation,
     handleLatexExport
   } = useTrainingActions({
     trainingId: training?._id,
@@ -226,10 +225,10 @@ const TrainingDetailPage: React.FC = () => {
       )}
       {/* Test Results Tab */}
       {detailTab === 2 && (
-        <TrainingTestResultsTab
-          allTestResults={allTestResults}
-          testResultsLoading={testResultsLoading}
-          availableTestEpochs={availableTestEpochs}
+        <TrainingEvaluationsTab
+          allEvaluations={allEvaluations}
+          evaluationsLoading={evaluationsLoading}
+          availableEpochs={availableEpochs}
           uploading={uploading}
           uploadError={uploadError}
           uploadSuccess={uploadSuccess}
@@ -237,11 +236,11 @@ const TrainingDetailPage: React.FC = () => {
           uploadResults={uploadResults}
           latexModalOpen={latexModalOpen}
           latexCode={latexCode}
-          onTestResultFileUpload={(files) => handleFileUpload(files, 'testResult')}
+          onEvaluationFileUpload={(files) => handleFileUpload(files, 'evaluation')}
           onLatexExport={handleLatexExport}
           onSetUploadResultsOpen={setUploadResultsOpen}
           onSetLatexModalOpen={setLatexModalOpen}
-          onDeleteTestResult={handleDeleteTestResult}
+          onDeleteEvaluation={handleDeleteEvaluation}
           isAuthenticated={canWrite(id)}
           run={training}
         />
@@ -324,7 +323,8 @@ const TrainingDetailPage: React.FC = () => {
         onNameChange={setEditName}
         trainingDescription={editDescription}
         onDescriptionChange={setEditDescription}
-        selectedDatasetId={editDatasetId}
+        dataset={training?.dataset}
+        datasetId={training?.datasetId}
         selectedProjectId={editProjectId}
         onProjectChange={setEditProjectId}
         selectedStatus={editStatus}

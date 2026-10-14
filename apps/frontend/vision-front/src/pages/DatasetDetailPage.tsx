@@ -623,6 +623,7 @@ const DatasetDetailPage: React.FC = () => {
         <TransferOwnershipDialog
           open={dialog === 'transfer'}
           resourceName={dataset.name}
+          resourceKind="dataset"
           current={dataset.owner}
           userId={user.id}
           groups={ownerGroups}

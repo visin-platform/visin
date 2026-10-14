@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
+  Button,
   Chip,
   IconButton,
   Link,
@@ -135,19 +137,21 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
         }}
         sx={{ flex: '1 1 200px' }}
       />
-      <TextField
-        size="small"
-        label="Rank by result"
-        placeholder="val.mean_iou"
-        value={metric}
-        onChange={(event) => {
-          setMetric(event.target.value);
+      <Autocomplete
+        freeSolo
+        options={data?.metrics ?? []}
+        value={metric || null}
+        inputValue={metric}
+        onInputChange={(_event, value) => {
+          setMetric(value);
           setPage(0);
         }}
-        title="A result your runs report, such as val.mean_iou. Leave empty for newest first."
+        size="small"
         sx={{ flex: '1 1 220px' }}
+        renderInput={(params) => <TextField {...params} label="Rank by result" placeholder="Newest first" />}
+        noOptionsText="No reported results yet"
       />
-      <TextField
+      {metric.trim() && <TextField
         select
         size="small"
         label="Better is"
@@ -156,12 +160,17 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
           setDirection(event.target.value as 'max' | 'min');
           setPage(0);
         }}
-        disabled={!metric.trim()}
         sx={{ flex: '0 1 160px' }}
       >
         <MenuItem value="max">Higher</MenuItem>
         <MenuItem value="min">Lower</MenuItem>
-      </TextField>
+      </TextField>}
+      {(search || metric) && <Button onClick={() => {
+        setSearch('');
+        setMetric('');
+        setDirection('max');
+        setPage(0);
+      }}>Clear filters</Button>}
     </Box>
   );
 
@@ -175,7 +184,7 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
             {modelTitle(model)}
             <Chip size="small" variant="outlined" label="Visin" sx={{ ml: 1 }} />
           </Typography>
-          <StoredModelDownloads trainingId={row.training._id} models={stored} />
+          <StoredModelDownloads trainingId={row.training._id} models={stored} compact />
         </>
       );
     }
@@ -294,7 +303,7 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
           </TableHead>
           <TableBody>
             {rows.map((grouped) => {
-              const { row } = grouped;
+              const { row, stored } = grouped;
               const isOpen = opened.has(row.model._id);
               const columns = 4 + (projectId ? 0 : 1) + (ranked ? 1 : 0);
               const where = [
@@ -352,6 +361,7 @@ const ModelRegistry: React.FC<ModelRegistryProps> = ({ projectId, datasetId, tit
                     <TableRow>
                       <TableCell colSpan={columns} sx={{ py: 0 }}>
                         <Box sx={{ pb: 1.5, pl: 5, display: 'grid', gap: 0.5 }}>
+                          {stored.length > 0 && <StoredModelDownloads trainingId={row.training._id} models={stored} detailsOnly />}
                           <Typography variant="body2">
                             <Box component="span" sx={{ color: 'text.secondary' }}>
                               Dataset:{' '}

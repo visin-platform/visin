@@ -25,7 +25,7 @@ const makeTraining = (id: string, name: string, epochs: TrainingComparison['epoc
   metrics: { totalEpochs: epochs.length, totalTime: 0, avgEpochTime: 0, maxEpochTime: 0, cost: { totalHours: 0, cpuCost: 0, gpuCost: 0, totalCost: 0 } },
   lastEpoch: epochs[epochs.length - 1] ?? null,
   epochs,
-  aggregatedTestResults: null,
+  aggregatedEvaluations: null,
   testResultsCount: 0,
   benchmarks: []
 });

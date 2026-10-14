@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Chip, Dialog, DialogContent, DialogTitle, IconButton, TextField, Tooltip } from '@mui/material';
+import { Alert, Box, Fade, Chip, Dialog, DialogContent, DialogTitle, IconButton, TextField, Tooltip } from '@mui/material';
 import { Check, Share } from '@mui/icons-material';
 
 /** How long the "Link copied" tag stays, when focus has not already left. */
@@ -23,12 +23,18 @@ function ShareButtonForUrl({ url }: { url: string }) {
   };
   return (
     <>
-      <Tooltip title="Copy link">
-        <IconButton size="small" aria-label="Share" onClick={() => void copy()} onBlur={() => setCopied(false)}>
-          <Share fontSize="small" />
-        </IconButton>
-      </Tooltip>
-      {copied && <Chip role="status" size="small" color="success" variant="outlined" icon={<Check />} label="Link copied" />}
+      <Box component="span" sx={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+        <Tooltip title={copied ? '' : 'Copy link'}>
+          <IconButton size="small" aria-label="Share" onClick={() => void copy()} onBlur={() => setCopied(false)}>
+            <Share fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Fade in={copied} unmountOnExit>
+          <Box sx={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', pb: 1, zIndex: 'tooltip', pointerEvents: 'none' }}>
+            <Chip role={copied ? 'status' : undefined} size="small" color="success" icon={<Check />} label="Link copied" />
+          </Box>
+        </Fade>
+      </Box>
       <Dialog open={manual} onClose={() => setManual(false)} fullWidth maxWidth="sm">
         <DialogTitle>Share this page</DialogTitle>
         <DialogContent>

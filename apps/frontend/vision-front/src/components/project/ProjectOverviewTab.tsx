@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Paper, Typography } from '@mui/material';
+import { Box, Button, Paper, Skeleton, Typography } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { AuthUser } from '@visin/frontend-core';
@@ -12,6 +12,8 @@ export type ProjectOverviewDashboardStats = Pick<ProjectDashboardStats, 'testRes
 
 interface ProjectOverviewTabProps {
   stats: ProjectOverviewStats | undefined;
+  /** the totals are still being read: show the strip as loading, not as zeros */
+  isLoading?: boolean;
   isAuthenticated: boolean;
   user: AuthUser | null;
 }
@@ -26,7 +28,7 @@ interface Figure {
  * and benchmarks live on their own tabs, and what the best run reached is
  * the card above this.
  */
-const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({ stats, isAuthenticated, user }) => {
+const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({ stats, isLoading, isAuthenticated, user }) => {
   const navigate = useNavigate();
   const costing = useCosting();
   const formatCost = useFormatCost();
@@ -80,7 +82,7 @@ const ProjectOverviewTab: React.FC<ProjectOverviewTabProps> = ({ stats, isAuthen
               {figure.label}
             </Typography>
             <Typography component="dd" sx={{ m: 0, fontWeight: 700, fontSize: { xs: '1.1rem', sm: '1.35rem' }, lineHeight: 1.3 }}>
-              {figure.value}
+              {isLoading ? <Skeleton width="60%" aria-label="Loading" /> : figure.value}
             </Typography>
           </Box>
         ))}

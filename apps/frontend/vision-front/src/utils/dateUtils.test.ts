@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { formatDate, formatDateTime, formatDuration } from './dateUtils';
+import { formatDate, formatDateTime, formatDuration, formatRelativeTime } from './dateUtils';
+import { runsLabel } from './runsLabel';
 
 describe('formatDateTime', () => {
   it('formats a date as DD.MM.YYYY HH:mm with zero-padding', () => {
@@ -52,5 +53,41 @@ describe('formatDuration', () => {
 
   it('rounds fractional seconds to the nearest integer', () => {
     expect(formatDuration(59.6)).toBe('1m');
+  });
+});
+
+describe('formatRelativeTime', () => {
+  const now = new Date('2026-10-14T12:00:00.000Z').getTime();
+  const ago = (seconds: number) => new Date(now - seconds * 1000).toISOString();
+
+  it('says "just now" for under a minute, and for a clock a little ahead', () => {
+    expect(formatRelativeTime(ago(20), now)).toBe('just now');
+    expect(formatRelativeTime(ago(-30), now)).toBe('just now');
+  });
+
+  it('counts back in the largest whole unit', () => {
+    expect(formatRelativeTime(ago(5 * 60), now)).toBe('5 minutes ago');
+    expect(formatRelativeTime(ago(2 * 3600), now)).toBe('2 hours ago');
+    expect(formatRelativeTime(ago(3 * 24 * 3600), now)).toBe('3 days ago');
+    expect(formatRelativeTime(ago(2 * 7 * 24 * 3600), now)).toBe('2 weeks ago');
+    expect(formatRelativeTime(ago(70 * 24 * 3600), now)).toBe('2 months ago');
+    expect(formatRelativeTime(ago(800 * 24 * 3600), now)).toBe('2 years ago');
+  });
+
+  it('says "yesterday" for a day ago', () => {
+    expect(formatRelativeTime(ago(25 * 3600), now)).toBe('yesterday');
+  });
+
+  it('does not make up a time from something that is not one', () => {
+    expect(formatRelativeTime('not a date', now)).toBe('just now');
+  });
+});
+
+describe('runsLabel', () => {
+  it('says how many runs, in the singular and plural, and when there are none', () => {
+    expect(runsLabel(12)).toBe('12 runs');
+    expect(runsLabel(1)).toBe('1 run');
+    expect(runsLabel(0)).toBe('No runs yet');
+    expect(runsLabel(undefined)).toBeNull();
   });
 });

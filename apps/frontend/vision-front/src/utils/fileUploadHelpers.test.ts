@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { processEpochFiles, processTestResultFiles } from './fileUploadHelpers';
+import { processEpochFiles, processEvaluationFiles } from './fileUploadHelpers';
 
 vi.mock('../services/epochService', () => ({
   epochService: {
@@ -8,14 +8,14 @@ vi.mock('../services/epochService', () => ({
   }
 }));
 
-vi.mock('../services/testResultService', () => ({
-  testResultService: {
-    uploadTestResult: vi.fn()
+vi.mock('../services/runEvaluationService', () => ({
+  runEvaluationService: {
+    upload: vi.fn()
   }
 }));
 
 import { epochService } from '../services/epochService';
-import { testResultService } from '../services/testResultService';
+import { runEvaluationService } from '../services/runEvaluationService';
 
 const makeFile = (name: string, content: string): File =>
   new File([content], name, { type: 'application/json' });
@@ -91,31 +91,31 @@ describe('processEpochFiles', () => {
   });
 });
 
-describe('processTestResultFiles', () => {
+describe('processEvaluationFiles', () => {
   it('uploads a valid test result file', async () => {
-    (testResultService.uploadTestResult as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (runEvaluationService.upload as ReturnType<typeof vi.fn>).mockResolvedValue({});
     const files = [makeFile('result.json', JSON.stringify({ test_uuid: 't1' }))] as unknown as FileList;
 
-    const result = await processTestResultFiles(files);
+    const result = await processEvaluationFiles(files);
 
-    expect(testResultService.uploadTestResult).toHaveBeenCalledWith({ test_uuid: 't1' });
+    expect(runEvaluationService.upload).toHaveBeenCalledWith({ test_uuid: 't1' });
     expect(result.successful).toEqual([{ name: 'result.json', operation: 'uploaded' }]);
   });
 
   it('rejects non-.json files', async () => {
     const files = [makeFile('result.csv', 'a,b')] as unknown as FileList;
 
-    const result = await processTestResultFiles(files);
+    const result = await processEvaluationFiles(files);
 
     expect(result.failed).toEqual([{ name: 'result.csv', error: 'Invalid file type (must be .json)' }]);
-    expect(testResultService.uploadTestResult).not.toHaveBeenCalled();
+    expect(runEvaluationService.upload).not.toHaveBeenCalled();
   });
 
   it('records the service error message when the upload rejects', async () => {
-    (testResultService.uploadTestResult as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('server exploded'));
+    (runEvaluationService.upload as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('server exploded'));
     const files = [makeFile('result.json', JSON.stringify({ test_uuid: 't1' }))] as unknown as FileList;
 
-    const result = await processTestResultFiles(files);
+    const result = await processEvaluationFiles(files);
 
     expect(result.failed).toEqual([{ name: 'result.json', error: 'server exploded' }]);
   });

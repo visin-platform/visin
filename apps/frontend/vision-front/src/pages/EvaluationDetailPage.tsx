@@ -35,7 +35,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { evaluationService } from '../services/evaluationService';
 import type { Evaluation } from '../types/evaluation';
-import type { TestResultData } from '../types';
+import type { EvaluationResults } from '../types';
 import { formatDateTime } from '../utils/dateUtils';
 import { resultTable } from '../utils/resultTable';
 
@@ -211,7 +211,7 @@ const EvaluationDetailPage: React.FC = () => {
                   As the evaluator reported them. An “overall” here is the evaluator’s own figure, not the overall that is ranked, which Visin forms from the suite’s conditions.
                 </Typography>
                 <Paper elevation={0} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-                  <ResultBreakdown results={results as TestResultData} classMetrics="discover" />
+                  <ResultBreakdown results={results as EvaluationResults} classMetrics="discover" />
                 </Paper>
               </>
             )}

@@ -104,12 +104,50 @@ describe('TransferOwnershipDialog', () => {
   it('transfers to a chosen group, warning that it is one-way', () => {
     const { onTransfer, dialog } = renderDialog();
     expect(dialog.getByText(/only that group’s owner can move it again/)).toBeInTheDocument();
+    expect(dialog.getByText('Owned by')).toBeInTheDocument();
     expect(dialog.getByRole('button', { name: 'Transfer' })).toBeDisabled();
 
-    fireEvent.mouseDown(dialog.getByLabelText('New owner'));
-    fireEvent.click(screen.getByRole('option', { name: 'Vision lab' }));
-    fireEvent.click(dialog.getByRole('button', { name: 'Transfer' }));
+    fireEvent.click(dialog.getByRole('radio', { name: /Vision lab/ }));
+    fireEvent.click(dialog.getByRole('button', { name: 'Transfer to Vision lab' }));
     expect(onTransfer).toHaveBeenCalledWith({ kind: 'group', id: 'lab' });
+  });
+
+  it('says what each group means for the person, by their role there', () => {
+    const { dialog } = renderDialog();
+    expect(dialog.getByRole('radio', { name: /Vision lab.*You are an owner of this group/ })).toBeInTheDocument();
+    expect(dialog.getByRole('radio', { name: /Road team.*You are a member of this group/ })).toBeInTheDocument();
+
+    fireEvent.click(dialog.getByRole('radio', { name: /Road team/ }));
+    const changes = within(dialog.getByRole('region', { name: 'What changes' }));
+    expect(changes.getByText(/Road team’s roles decide/)).toBeInTheDocument();
+    expect(changes.getByText(/As a member you can add to it and change what you added/)).toBeInTheDocument();
+  });
+
+  it('forgets the choice once closed, so a reopened dialog starts fresh', () => {
+    const props = { resourceName: 'Road scenes', current: { kind: 'user' as const, id: ME }, userId: ME, groups, onClose: vi.fn(), onTransfer: vi.fn() };
+    const { rerender } = render(<TransferOwnershipDialog open {...props} />);
+    fireEvent.click(screen.getByRole('radio', { name: /Vision lab/ }));
+    expect(screen.getByRole('button', { name: 'Transfer to Vision lab' })).toBeEnabled();
+
+    // Closed by the page after a transfer, not through Cancel.
+    rerender(<TransferOwnershipDialog open={false} {...props} />);
+    rerender(<TransferOwnershipDialog open {...props} />);
+
+    expect(screen.getByRole('button', { name: 'Transfer' })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: /Vision lab/ })).not.toBeChecked();
+  });
+
+  it('names what moves with a project or a dataset', () => {
+    renderDialog(undefined, { resourceKind: 'dataset' });
+    expect(screen.getByText('Its images and labeling jobs move with it.')).toBeInTheDocument();
+  });
+
+  it('tells a group owner moving it back to themself that the group loses access', () => {
+    const { onTransfer, dialog } = renderDialog({ kind: 'group', id: 'lab' } as never);
+    fireEvent.click(dialog.getByRole('radio', { name: /Me/ }));
+    expect(dialog.getByText(/The group’s members lose access to it/)).toBeInTheDocument();
+    fireEvent.click(dialog.getByRole('button', { name: 'Transfer to Me' }));
+    expect(onTransfer).toHaveBeenCalledWith({ kind: 'user', id: ME });
   });
 
   it('says why when there is nowhere it may go', () => {

@@ -18,16 +18,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { comparisonService } from '../services/comparisonService';
 import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
-import { discoverAggregateVocabulary } from '../components/test-results/aggregateVocabulary';
+import { discoverAggregateVocabulary } from '../components/result-tables/aggregateVocabulary';
 import { resolveTaxonomy } from '../taxonomy/resolveTaxonomy';
-import { DEFAULT_CLASS_METRICS } from '../components/test-results/performanceMetricsUtils';
+import { DEFAULT_CLASS_METRICS } from '../components/result-tables/performanceMetricsUtils';
 import { trainingService } from '../services/trainingService';
 import { projectService } from '../services/projectService';
+import { useAuth } from '../contexts/AuthContext';
 import { usePageTitle } from '../hooks/usePageTitle';
 import ComparisonTable from '@/components/comparison/ComparisonTable';
-import PerformanceMetricsTable from '../components/test-results/PerformanceMetricsTable';
-import IoUMetricsTable from '../components/test-results/IoUMetricsTable';
-import APMetricsTable from '../components/test-results/APMetricsTable';
+import PerformanceMetricsTable from '../components/result-tables/PerformanceMetricsTable';
+import IoUMetricsTable from '../components/result-tables/IoUMetricsTable';
+import APMetricsTable from '../components/result-tables/APMetricsTable';
 import BenchmarksComparisonTable from '../components/comparison/BenchmarksComparisonTable';
 import PageBreadcrumbs from '../components/common/PageBreadcrumbs';
 import DeleteComparisonDialog from '../components/comparisons/DeleteComparisonDialog';
@@ -46,6 +47,7 @@ const ComparisonDetailPage: React.FC = () => {
   const { uuid } = useParams<{ uuid: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, isAuthenticated } = useAuth();
 
   // Set page title
   usePageTitle('Comparison - Vision');
@@ -110,6 +112,8 @@ const ComparisonDetailPage: React.FC = () => {
   });
 
   const project = projectResponse?.data;
+  const canEdit = Boolean(isAuthenticated && user && (project?.permissions?.manage ||
+    (comparison?.ownerId === user?.id && (!comparison?.projectId || project?.permissions?.contribute))));
 
   // Fetch training comparison data
   const {
@@ -129,7 +133,7 @@ const ComparisonDetailPage: React.FC = () => {
 
   // Handler functions
   const handleEditComparison = async () => {
-    if (!comparison) return;
+    if (!comparison || !canEdit) return;
 
     setEditName(comparison.name);
     setEditDescription(comparison.description || '');
@@ -186,7 +190,7 @@ const ComparisonDetailPage: React.FC = () => {
   };
 
   const handleConfirmDelete = async () => {
-    if (!comparison) return;
+    if (!comparison || !canEdit) return;
 
     try {
       setDeleting(true);
@@ -219,13 +223,13 @@ const ComparisonDetailPage: React.FC = () => {
   };
 
   // Process test results data - use the already aggregated data from backend
-  const testResultsData = React.useMemo(() => {
+  const evaluationsData = React.useMemo(() => {
     if (!comparisonData.length) return [];
 
     return comparisonData
-      .filter(comp => comp.aggregatedTestResults !== null)
+      .filter(comp => comp.aggregatedEvaluations !== null)
       .map(comp => ({
-        aggregatedResults: comp.aggregatedTestResults,
+        aggregatedResults: comp.aggregatedEvaluations,
         training: comp.training,
         testResultsCount: comp.testResultsCount || 0
       }));
@@ -256,16 +260,16 @@ const ComparisonDetailPage: React.FC = () => {
   const exportTaxonomy = React.useMemo(
     () =>
       discoverAggregateVocabulary(
-        testResultsData,
+        evaluationsData,
         resolveTaxonomy(project?.taxonomy, {}),
         DEFAULT_CLASS_METRICS
       ).taxonomy,
-    [testResultsData, project?.taxonomy]
+    [evaluationsData, project?.taxonomy]
   );
 
   const testingLatex = React.useMemo(
-    () => generateTestingLatex(testResultsData, decimals, multiplier, exportTaxonomy),
-    [testResultsData, decimals, multiplier, exportTaxonomy]
+    () => generateTestingLatex(evaluationsData, decimals, multiplier, exportTaxonomy),
+    [evaluationsData, decimals, multiplier, exportTaxonomy]
   );
 
   const benchmarkingLatex = React.useMemo(
@@ -379,34 +383,38 @@ const ComparisonDetailPage: React.FC = () => {
                 </Menu>
               </>
             )}
-            <Tooltip title="Edit Comparison">
-              <IconButton
-                onClick={handleEditComparison}
-                color="primary"
-                sx={{
-                  bgcolor: 'background.paper',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  '&:hover': { bgcolor: 'action.hover' }
-                }}
-              >
-                <EditIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Delete Comparison">
-              <IconButton
-                onClick={handleDeleteComparison}
-                color="error"
-                sx={{
-                  bgcolor: 'background.paper',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  '&:hover': { bgcolor: 'action.hover' }
-                }}
-              >
-                <DeleteIcon />
-              </IconButton>
-            </Tooltip>
+            {canEdit && (
+              <>
+              <Tooltip title="Edit Comparison">
+                <IconButton
+                  onClick={handleEditComparison}
+                  color="primary"
+                  sx={{
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
+                >
+                  <EditIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Delete Comparison">
+                <IconButton
+                  onClick={handleDeleteComparison}
+                  color="error"
+                  sx={{
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Tooltip>
+              </>
+            )}
           </Box>
         </Box>
 
@@ -424,7 +432,7 @@ const ComparisonDetailPage: React.FC = () => {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
           <Tab label="Training Metrics" />
-          <Tab label="Test Results" />
+          <Tab label="Evaluations" />
           <Tab label="Benchmarks" />
         </Tabs>
       </Box>
@@ -475,7 +483,7 @@ const ComparisonDetailPage: React.FC = () => {
       {activeTab === 1 && (
         <Box>
           <Typography variant="h6" gutterBottom>
-            Test Results Comparison
+            Evaluations Comparison
           </Typography>
 
           {/* Number Formatting Controls */}
@@ -486,30 +494,30 @@ const ComparisonDetailPage: React.FC = () => {
             onMultiplierChange={setMultiplier}
           />
 
-          {testResultsData.length > 0 ? (
+          {evaluationsData.length > 0 ? (
             <>
               <PerformanceMetricsTable
-                comparisonData={testResultsData}
+                comparisonData={evaluationsData}
                 decimals={decimals}
                 multiplier={multiplier}
               />
               <Box sx={{ mt: 4 }}>
                 <IoUMetricsTable
-                  comparisonData={testResultsData}
+                  comparisonData={evaluationsData}
                   decimals={decimals}
                   multiplier={multiplier}
                 />
               </Box>
               <Box sx={{ mt: 4 }}>
                 <APMetricsTable
-                  comparisonData={testResultsData}
+                  comparisonData={evaluationsData}
                   decimals={decimals}
                   multiplier={multiplier}
                 />
               </Box>
             </>
           ) : (
-            <Alert severity="info">None of these runs has test results to compare. A run reports them from its test stage, after training.</Alert>
+            <Alert severity="info">None of these runs has evaluations to compare. A run reports them from its test stage, after training.</Alert>
           )}
         </Box>
       )}

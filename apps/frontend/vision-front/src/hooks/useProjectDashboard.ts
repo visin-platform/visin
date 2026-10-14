@@ -2,18 +2,19 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
 import { trainingService } from '../services/trainingService';
-import { testResultService } from '../services/testResultService';
+import { runEvaluationService } from '../services/runEvaluationService';
 import { benchmarkService } from '../services/benchmarkService';
+import type { ProjectTabKey } from '../components/project/projectTabs';
 
 type TrainingSortColumn =
   'name' | 'createdAt' | 'updatedAt' | 'status' | 'totalTime' | 'cpuCost' | 'gpuCost' | 'totalCost' | 'epochCount';
 
-/** The most test results the project's Tests tab loads, newest first. */
+/** The most evaluations the project's Evaluations tab loads, newest first. */
 const PROJECT_TESTS_LIMIT = 500;
 /** The same, for benchmarks, which the tab groups by device. */
 const PROJECT_BENCHMARKS_LIMIT = 500;
 
-export const useProjectDashboard = (projectId: string | undefined, tabValue: number) => {
+export const useProjectDashboard = (projectId: string | undefined, tab: ProjectTabKey) => {
   const queryClient = useQueryClient();
 
   // Table state
@@ -58,20 +59,20 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
         sortBy,
         order: sortOrder
       }),
-    enabled: !!projectResponse?.data && tabValue === 1
+    enabled: !!projectResponse?.data && tab === 'trainings'
   });
 
-  // Test results query: every test of the project, up to a cap, because the tab ranks runs by their
+  // Evaluations query: every evaluation of the project, up to a cap, because the tab ranks runs by their
   // best test and a page of them cannot say which run that is.
-  const { data: testResultsResponse, isLoading: isTestResultsLoading } = useQuery({
-    queryKey: ['project-test-results', projectId],
+  const { data: evaluationsResponse, isLoading: isEvaluationsLoading } = useQuery({
+    queryKey: ['project-evaluations', projectId],
     queryFn: () =>
-      testResultService.getTestResults({
+      runEvaluationService.list({
         projectId: projectResponse?.data?._id,
         page: 1,
         limit: PROJECT_TESTS_LIMIT
       }),
-    enabled: !!projectResponse?.data && tabValue === 2
+    enabled: !!projectResponse?.data && tab === 'evaluations'
   });
 
   // Benchmarks query
@@ -83,7 +84,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
         page: 1,
         limit: PROJECT_BENCHMARKS_LIMIT
       }),
-    enabled: !!projectResponse?.data && tabValue === 4
+    enabled: !!projectResponse?.data && tab === 'benchmarks'
   });
 
   // Pagination handlers
@@ -113,7 +114,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     stats: statsResponse?.data,
     dashboardStats: dashboardStatsResponse?.data,
     fullTrainings: fullTrainingsResponse?.data,
-    testResults: testResultsResponse,
+    evaluations: evaluationsResponse,
     benchmarks: benchmarksResponse,
 
     // Loading states
@@ -121,7 +122,7 @@ export const useProjectDashboard = (projectId: string | undefined, tabValue: num
     isStatsLoading,
     isDashboardStatsLoading,
     isFullTrainingsLoading,
-    isTestResultsLoading,
+    isEvaluationsLoading,
     isBenchmarksLoading,
 
     // Errors

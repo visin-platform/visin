@@ -14,9 +14,9 @@ describe('trainingStatusLabel', () => {
 describe('describeEmpty', () => {
   const now = Date.parse('2026-10-02T12:00:00Z');
 
-  it('says a run that is still going has no test results yet, and why', () => {
+  it('says a run that is still going has no evaluations yet, and why', () => {
     expect(describeEmpty('tests', { status: 'running' }, now)).toEqual({
-      title: 'No test results yet',
+      title: 'No evaluations yet',
       body: 'This run is still training. The test stage usually comes after it.'
     });
     expect(describeEmpty('tests', { status: 'pending' }, now).body).toMatch(/has not started/);
@@ -24,7 +24,7 @@ describe('describeEmpty', () => {
 
   it('says what a finished run without them means: something did not happen', () => {
     expect(describeEmpty('tests', { status: 'completed' }, now)).toEqual({
-      title: 'No test results',
+      title: 'No evaluations',
       body: 'This run finished without reporting any. The test stage may have been skipped, or its results were never sent to Visin.'
     });
     expect(describeEmpty('benchmarks', { status: 'completed' }, now).body).toMatch(/The benchmark stage may have been skipped/);
@@ -42,6 +42,6 @@ describe('describeEmpty', () => {
 
   it('describes the first epoch for a running run, and stays general when the run is unknown', () => {
     expect(describeEmpty('epochs', { status: 'running' }, now).body).toBe('This run is training. The first epoch appears here when it finishes one.');
-    expect(describeEmpty('tests').body).toBe('The test results are reported by the test stage.');
+    expect(describeEmpty('tests').body).toBe('The evaluations are reported by the test stage.');
   });
 });

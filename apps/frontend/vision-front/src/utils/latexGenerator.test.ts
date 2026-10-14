@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { generateLatexCode } from './latexGenerator';
 import { resolveTaxonomyFor } from '../taxonomy/useTaxonomy';
-import type { TestResult } from '../types';
+import type { RunEvaluation } from '../types';
 
 const metric = (v: number) => ({ iou: v, precision: v, recall: v, ap: v });
 
-const makeTestResult = (overrides: Record<string, unknown> = {}): TestResult =>
+const makeEvaluation = (overrides: Record<string, unknown> = {}): RunEvaluation =>
   ({
     _id: 'tr1',
     test_results: {
@@ -19,11 +19,11 @@ const makeTestResult = (overrides: Record<string, unknown> = {}): TestResult =>
       },
     },
     ...overrides,
-  } as unknown as TestResult);
+  } as unknown as RunEvaluation);
 
 describe('generateLatexCode', () => {
   it('renders a LaTeX table row with all metrics for a populated condition', () => {
-    const latex = generateLatexCode(makeTestResult());
+    const latex = generateLatexCode(makeEvaluation());
 
     expect(latex).toContain('\\begin{table*}[ht]');
     expect(latex).toContain('0.8000');
@@ -32,7 +32,7 @@ describe('generateLatexCode', () => {
   });
 
   it('renders "-" placeholders for a condition carrying no metrics', () => {
-    const result = makeTestResult({
+    const result = makeEvaluation({
       test_results: { day_fair: { vehicle: metric(0.8) }, snow: {} },
     });
     const latex = generateLatexCode(result);
@@ -42,14 +42,14 @@ describe('generateLatexCode', () => {
   });
 
   it('skips conditions entirely absent from test_results', () => {
-    const latex = generateLatexCode(makeTestResult({ test_results: {} }));
+    const latex = generateLatexCode(makeEvaluation({ test_results: {} }));
 
     expect(latex).not.toContain('Day Fair');
     expect(latex).toContain('\\end{table*}');
   });
 
   it('sizes the table to the classes present rather than a fixed four', () => {
-    const twoClasses = makeTestResult({
+    const twoClasses = makeEvaluation({
       test_results: { line_a: { scratch: metric(0.4), dent: metric(0.9) } },
     });
     const latex = generateLatexCode(twoClasses);
@@ -62,7 +62,7 @@ describe('generateLatexCode', () => {
   });
 
   it('uses a project taxonomy for labels and the condition-axis wording', () => {
-    const result = makeTestResult({
+    const result = makeEvaluation({
       test_results: { line_a: { scratch: metric(0.4) } },
     });
     const taxonomy = resolveTaxonomyFor(
@@ -82,7 +82,7 @@ describe('generateLatexCode', () => {
 
   it('escapes LaTeX-special characters in a class label', () => {
     // humanize turns underscores into spaces, so use a character it leaves alone
-    const result = makeTestResult({
+    const result = makeEvaluation({
       test_results: { line_a: { 'r&d': metric(0.4) } },
     });
     const latex = generateLatexCode(result);

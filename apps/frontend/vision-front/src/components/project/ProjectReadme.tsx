@@ -1,21 +1,19 @@
 import React, { useState } from 'react';
 import { Alert, Box, Button, Paper, Tab, Tabs, TextField, Typography } from '@mui/material';
-import { Edit as EditIcon, ExpandLess as LessIcon, ExpandMore as MoreIcon } from '@mui/icons-material';
+import { Edit as EditIcon } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Markdown, MAX_MARKDOWN_LENGTH, type ApiError } from '@visin/frontend-core';
 import { projectService } from '../../services/projectService';
 import type { Project } from '../../types/Project';
 
-/** A readme past this is shown to about six lines, with the rest behind "Read more". */
-const COLLAPSE_OVER_CHARS = 480;
-const COLLAPSE_OVER_LINES = 8;
-const COLLAPSED_HEIGHT = '9rem';
-
 /**
- * The project's front page: what it is, written by whoever manages it, for whoever finds it. Shown as Markdown
- * (text, links, lists, tables; never raw HTML or images). A manager can write or change it here; for everyone else
- * a project with no readme simply shows none.
+ * The project's landing page: what it is, written by whoever manages it, for whoever finds it. Shown whole, as
+ * Markdown (text, links, lists, tables; never raw HTML or images), and never folded away: it is what someone should
+ * read first. A manager can write or change it here. A project with no readme still has a landing page, which says
+ * so (or shows its description) rather than leaving a gap.
  */
+const landingSx = { border: '1px solid', borderColor: 'divider', p: { xs: 2, sm: 3 }, mb: 3 } as const;
+
 const ProjectReadme: React.FC<{ project: Project }> = ({ project }) => {
   const queryClient = useQueryClient();
   const canManage = project.permissions.manage;
@@ -23,7 +21,6 @@ const ProjectReadme: React.FC<{ project: Project }> = ({ project }) => {
   const [draft, setDraft] = useState('');
   const [view, setView] = useState<'write' | 'preview'>('write');
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
 
   const save = useMutation({
     mutationFn: (readme: string) => projectService.updateProject(project._id, { readme }),
@@ -45,7 +42,7 @@ const ProjectReadme: React.FC<{ project: Project }> = ({ project }) => {
 
   if (editing) {
     return (
-      <Paper elevation={0} component="section" aria-label="Edit readme" sx={{ border: '1px solid', borderColor: 'divider', p: { xs: 2, sm: 3 }, mb: 3 }}>
+      <Paper elevation={0} component="section" aria-label="Edit readme" sx={landingSx}>
         <Tabs value={view} onChange={(_event, next) => setView(next)} aria-label="Readme editor" sx={{ mb: 2 }}>
           <Tab value="write" label="Write" />
           <Tab value="preview" label="Preview" />
@@ -90,14 +87,23 @@ const ProjectReadme: React.FC<{ project: Project }> = ({ project }) => {
   }
 
   if (!project.readme) {
-    if (!canManage) return null;
+    if (!canManage) {
+      return (
+        <Paper elevation={0} component="section" aria-label="Readme" sx={landingSx}>
+          <Typography variant="body1" sx={{ color: project.description ? 'text.primary' : 'text.secondary' }}>
+            {project.description || 'No readme has been written for this project yet.'}
+          </Typography>
+        </Paper>
+      );
+    }
     return (
-      <Paper elevation={0} component="section" aria-label="Readme" sx={{ border: '1px dashed', borderColor: 'divider', p: { xs: 2, sm: 3 }, mb: 3 }}>
+      <Paper elevation={0} component="section" aria-label="Readme" sx={{ ...landingSx, borderStyle: 'dashed' }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
           Add a readme
         </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
-          What the project is, how its runs were made and what to read first. It is the first thing someone sees when they open it
+          What the project is, how its runs were made and what to read first. It is the landing page of the project: the first
+          thing someone sees when they open it
           {project.visibility === 'public' ? ', and this project is public.' : '.'}
         </Typography>
         <Button variant="outlined" size="small" startIcon={<EditIcon />} onClick={startEditing}>
@@ -107,53 +113,16 @@ const ProjectReadme: React.FC<{ project: Project }> = ({ project }) => {
     );
   }
 
-  const long = project.readme.length > COLLAPSE_OVER_CHARS || project.readme.split('\n').length > COLLAPSE_OVER_LINES;
-  const collapsed = long && !expanded;
-
   return (
-    <Paper elevation={0} component="section" aria-label="Readme" sx={{ border: '1px solid', borderColor: 'divider', p: { xs: 2, sm: 3 }, mb: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1 }}>
-        <Typography component="h2" sx={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
-          Readme
-        </Typography>
-        {canManage && (
+    <Paper elevation={0} component="section" aria-label="Readme" sx={landingSx}>
+      {canManage && (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 0.5 }}>
           <Button size="small" startIcon={<EditIcon />} onClick={startEditing}>
             Edit readme
           </Button>
-        )}
-      </Box>
-      <Box
-        sx={{
-          position: 'relative',
-          ...(collapsed && {
-            maxHeight: COLLAPSED_HEIGHT,
-            overflow: 'hidden',
-            // Fades into the card so the cut reads as "there is more".
-            '&::after': {
-              content: '""',
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: '3rem',
-              background: 'linear-gradient(transparent, var(--mui-palette-background-paper))'
-            }
-          })
-        }}
-      >
-        <Markdown>{project.readme}</Markdown>
-      </Box>
-      {long && (
-        <Button
-          size="small"
-          sx={{ mt: 1 }}
-          aria-expanded={expanded}
-          startIcon={expanded ? <LessIcon /> : <MoreIcon />}
-          onClick={() => setExpanded((open) => !open)}
-        >
-          {expanded ? 'Show less' : 'Read more'}
-        </Button>
+        </Box>
       )}
+      <Markdown>{project.readme}</Markdown>
     </Paper>
   );
 };

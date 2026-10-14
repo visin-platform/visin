@@ -1,4 +1,4 @@
-import type { TestResult, TestResultData } from '../types';
+import type { RunEvaluation, EvaluationResults } from '../types';
 import { isRecord, readMetric } from '../taxonomy/discover';
 import { RESERVED_CLASS_KEYS, RESERVED_CONDITION_KEYS } from '../taxonomy/reserved';
 
@@ -26,7 +26,7 @@ const averageOverClasses = (conditionData: unknown, metric: string): number | un
  * Mean of one per-class metric across every condition of a result. A genuine 0
  * counts, and a condition with no value for it is left out rather than read as 0.
  */
-export const averageAcrossConditions = (results: TestResultData, metric: string): number | undefined => {
+export const averageAcrossConditions = (results: EvaluationResults, metric: string): number | undefined => {
   if (!isRecord(results)) return undefined;
   return mean(
     Object.entries(results)
@@ -37,7 +37,7 @@ export const averageAcrossConditions = (results: TestResultData, metric: string)
 };
 
 /** Mean of one summary metric across the conditions that report an `overall`, or the top-level one. */
-export const overallMean = (results: TestResultData, metric: string): number | undefined => {
+export const overallMean = (results: EvaluationResults, metric: string): number | undefined => {
   if (!isRecord(results)) return undefined;
 
   const blocks = Object.entries(results)
@@ -51,7 +51,7 @@ export const overallMean = (results: TestResultData, metric: string): number | u
 };
 
 /** Mean of each named summary metric. */
-export const overallMeans = (results: TestResultData, metrics: string[]): Record<string, number | undefined> =>
+export const overallMeans = (results: EvaluationResults, metrics: string[]): Record<string, number | undefined> =>
   Object.fromEntries(metrics.map(metric => [metric, overallMean(results, metric)]));
 
 /** Where a result's figure for a metric comes from: the mean over classes, or the run's own summary. */
@@ -62,20 +62,20 @@ export interface RankableMetric {
   source: MetricSource;
 }
 
-export const metricValue = (result: TestResult, metric: RankableMetric): number | undefined =>
+export const metricValue = (result: RunEvaluation, metric: RankableMetric): number | undefined =>
   metric.source === 'classes'
     ? averageAcrossConditions(result.test_results, metric.key)
     : overallMean(result.test_results, metric.key);
 
 export interface RunBest {
   /** the run's test result that scored best, or its newest when none scored */
-  result: TestResult;
+  result: RunEvaluation;
   value: number | undefined;
   /** how many test results the run has */
   tests: number;
 }
 
-const time = (result: TestResult) => new Date(result.timestamp).getTime() || 0;
+const time = (result: RunEvaluation) => new Date(result.timestamp).getTime() || 0;
 
 /**
  * One row per run: the test result that did best on `metric`, in the direction
@@ -84,11 +84,11 @@ const time = (result: TestResult) => new Date(result.timestamp).getTime() || 0;
  * each stand alone.
  */
 export const bestPerRun = (
-  results: TestResult[],
+  results: RunEvaluation[],
   metric: RankableMetric,
   isBetter: (a: number, b: number) => boolean
 ): RunBest[] => {
-  const byRun = new Map<string, TestResult[]>();
+  const byRun = new Map<string, RunEvaluation[]>();
   for (const result of results) {
     const key = result.training?._id ?? `test:${result._id}`;
     byRun.set(key, [...(byRun.get(key) ?? []), result]);
@@ -97,7 +97,7 @@ export const bestPerRun = (
   const rows = [...byRun.values()].map((group): RunBest => {
     const scored = group
       .map(result => ({ result, value: metricValue(result, metric) }))
-      .filter((entry): entry is { result: TestResult; value: number } => entry.value !== undefined);
+      .filter((entry): entry is { result: RunEvaluation; value: number } => entry.value !== undefined);
     if (scored.length === 0) {
       const newest = [...group].sort((a, b) => time(b) - time(a))[0];
       return { result: newest, value: undefined, tests: group.length };

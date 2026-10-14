@@ -13,17 +13,17 @@ import ProjectOverviewTab, {
   type ProjectOverviewDashboardStats
 } from './ProjectOverviewTab';
 import ProjectTrainingsTab, { type TrainingSortColumn } from './ProjectTrainingsTab';
-import ProjectTestsTab from './ProjectTestsTab';
+import ProjectEvaluationsTab from './ProjectEvaluationsTab';
 import ProjectVisualizationsTab from './ProjectVisualizationsTab';
 import ProjectBenchmarksTab from './ProjectBenchmarksTab';
 import ProjectComparisonsTab from './ProjectComparisonsTab';
 import ModelRegistry from '../models/ModelRegistry';
-import EvaluationList from '../evaluations/EvaluationList';
 import FindingsPanel from '../analysis/FindingsPanel';
 import ProjectSettings from '../ProjectSettings';
 import { discoverClasses, discoverConditions } from '../../taxonomy/discover';
-import { Training, TestResultsPaginatedResponse, BenchmarksPaginatedResponse } from '../../types';
+import { Training, RunEvaluationsResponse, BenchmarksPaginatedResponse } from '../../types';
 import { Project } from '../../types/Project';
+import type { ProjectTabKey } from './projectTabs';
 
 /** A tab's name, with how much is behind it once there is any. */
 const withCount = (label: string, count?: number) =>
@@ -41,32 +41,29 @@ const withCount = (label: string, count?: number) =>
 
 interface TabPanelProps {
   children?: React.ReactNode;
-  index: number;
-  value: number;
+  tab: ProjectTabKey;
+  active: ProjectTabKey;
 }
 
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
+function TabPanel({ children, tab, active }: TabPanelProps) {
   return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`project-tabpanel-${index}`}
-      aria-labelledby={`project-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ px: { xs: 1.5, sm: 0 }, py: { xs: 2, sm: 3 } }}>{children}</Box>}
+    <div role="tabpanel" hidden={active !== tab} id={`project-tabpanel-${tab}`} aria-labelledby={`project-tab-${tab}`}>
+      {active === tab && <Box sx={{ px: { xs: 1.5, sm: 0 }, py: { xs: 2, sm: 3 } }}>{children}</Box>}
     </div>
   );
 }
 
 interface ProjectTabsProps {
-  tabValue: number;
-  onTabChange: (event: React.SyntheticEvent, newValue: number) => void;
+  /** the open tab, by name */
+  tab: ProjectTabKey;
+  onTabChange: (tab: ProjectTabKey) => void;
   canManage: boolean;
   projectId: string;
   stats: ProjectOverviewStats | undefined;
+  /** the totals are still on their way: the overview shows its strip as loading rather than as zeros */
+  isStatsLoading?: boolean;
+  /** asks to move the project to the trash, from its Settings */
+  onMoveToTrash: () => void;
   dashboardStats: ProjectOverviewDashboardStats | undefined;
   isAuthenticated: boolean;
   user: AuthUser | null;
@@ -81,9 +78,9 @@ interface ProjectTabsProps {
   sortBy: TrainingSortColumn;
   sortOrder: 'asc' | 'desc';
   onSort: (column: TrainingSortColumn) => void;
-  // Tests tab props
-  testResultsResponse: TestResultsPaginatedResponse | undefined;
-  isTestResultsLoading: boolean;
+  // Evaluations tab props
+  evaluationsResponse: RunEvaluationsResponse | undefined;
+  isEvaluationsLoading: boolean;
   // Visualizations tab props
   // Benchmarks tab props
   benchmarksResponse: BenchmarksPaginatedResponse | undefined;
@@ -93,11 +90,13 @@ interface ProjectTabsProps {
 }
 
 const ProjectTabs: React.FC<ProjectTabsProps> = ({
-  tabValue,
+  tab,
   onTabChange,
   canManage,
   projectId,
   stats,
+  isStatsLoading,
+  onMoveToTrash,
   dashboardStats,
   isAuthenticated,
   user,
@@ -111,8 +110,8 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
   sortBy,
   sortOrder,
   onSort,
-  testResultsResponse,
-  isTestResultsLoading,
+  evaluationsResponse,
+  isEvaluationsLoading,
   benchmarksResponse,
   isBenchmarksLoading,
   project
@@ -121,16 +120,16 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
   // editor can offer them rather than making someone retype what is in the data.
   const canWrite = useWriteCapabilities('project', [project._id]);
   const discoveredVocabulary = React.useMemo(() => {
-    const results = testResultsResponse?.data?.testResults ?? [];
+    const results = evaluationsResponse?.data?.evaluations ?? [];
     return { conditions: discoverConditions(results), classes: discoverClasses(results) };
-  }, [testResultsResponse]);
+  }, [evaluationsResponse]);
 
   return (
     <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', px: { xs: 0.5, sm: 2 } }}>
         <Tabs
-          value={tabValue}
-          onChange={onTabChange}
+          value={tab}
+          onChange={(_event, next: ProjectTabKey) => onTabChange(next)}
           aria-label="project tabs"
           variant="scrollable"
           scrollButtons="auto"
@@ -156,30 +155,42 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
             }
           }}
         >
-          <Tab label="Overview" />
-          <Tab label="Trainings" />
-          <Tab label={withCount('Tests', dashboardStats?.testResultsCount)} />
-          <Tab label={withCount('Visualizations', dashboardStats?.visualizationsCount)} />
-          <Tab label={withCount('Benchmarks', dashboardStats?.benchmarksCount)} />
-          <Tab label="Comparisons" />
-          <Tab label="Analysis" />
-          <Tab label="Models" />
-          <Tab label="Evaluations" />
-          {canManage && <Tab label="Settings" />}
+          <Tab value="overview" id="project-tab-overview" label="Overview" />
+          <Tab value="trainings" id="project-tab-trainings" label="Trainings" />
+          <Tab
+            value="evaluations"
+            id="project-tab-evaluations"
+            label={withCount('Evaluations', dashboardStats?.testResultsCount)}
+          />
+          <Tab
+            value="visualizations"
+            id="project-tab-visualizations"
+            label={withCount('Visualizations', dashboardStats?.visualizationsCount)}
+          />
+          <Tab
+            value="benchmarks"
+            id="project-tab-benchmarks"
+            label={withCount('Benchmarks', dashboardStats?.benchmarksCount)}
+          />
+          <Tab value="comparisons" id="project-tab-comparisons" label="Comparisons" />
+          <Tab value="analysis" id="project-tab-analysis" label="Analysis" />
+          <Tab value="models" id="project-tab-models" label="Models" />
+          {canManage && <Tab value="settings" id="project-tab-settings" label="Settings" />}
         </Tabs>
       </Box>
 
       {/* Overview Tab */}
-      <TabPanel value={tabValue} index={0}>
+      <TabPanel tab="overview" active={tab}>
+        {/* The landing page first: setup guidance leads only while there is no real run, and hides itself after. */}
         {canWrite(project._id) && <FirstRunPanel project={project} />}
-        {project.permissions.contribute && !canManage && <PipelineKeys projectId={project._id} />}
         <ProjectReadme project={project} />
         <BestRunCard projectId={project._id} />
-        <ProjectOverviewTab stats={stats} isAuthenticated={isAuthenticated} user={user} />
+        <ProjectOverviewTab stats={stats} isLoading={isStatsLoading} isAuthenticated={isAuthenticated} user={user} />
+        {project.permissions.contribute && !canManage && <PipelineKeys projectId={project._id} />}
       </TabPanel>
 
       {/* Trainings Tab */}
-      <TabPanel value={tabValue} index={1}>
+      <TabPanel tab="trainings" active={tab}>
         <ProjectTrainingsTab
           projectId={projectId}
           trainings={trainings}
@@ -196,22 +207,22 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
         />
       </TabPanel>
 
-      {/* Tests Tab */}
-      <TabPanel value={tabValue} index={2}>
-        <ProjectTestsTab
+      {/* Evaluations Tab: a run's tests and checkpoints scored on a suite are one record */}
+      <TabPanel tab="evaluations" active={tab}>
+        <ProjectEvaluationsTab
           projectId={projectId}
-          testResultsResponse={testResultsResponse}
-          isLoading={isTestResultsLoading}
+          evaluationsResponse={evaluationsResponse}
+          isLoading={isEvaluationsLoading}
         />
       </TabPanel>
 
       {/* Visualizations Tab */}
-      <TabPanel value={tabValue} index={3}>
+      <TabPanel tab="visualizations" active={tab}>
         <ProjectVisualizationsTab projectId={project._id} />
       </TabPanel>
 
       {/* Benchmarks Tab */}
-      <TabPanel value={tabValue} index={4}>
+      <TabPanel tab="benchmarks" active={tab}>
         <ProjectBenchmarksTab
           benchmarksResponse={benchmarksResponse}
           isLoading={isBenchmarksLoading}
@@ -220,34 +231,27 @@ const ProjectTabs: React.FC<ProjectTabsProps> = ({
       </TabPanel>
 
       {/* Comparisons Tab */}
-      <TabPanel value={tabValue} index={5}>
+      <TabPanel tab="comparisons" active={tab}>
         <ProjectComparisonsTab projectId={project._id} />
       </TabPanel>
 
       {/* Analysis Tab — written conclusions, from the app or from an assistant */}
-      <TabPanel value={tabValue} index={6}>
+      <TabPanel tab="analysis" active={tab}>
         <FindingsPanel projectId={project._id} isOwner={canWrite(project._id)} />
       </TabPanel>
 
       {/* Models Tab */}
-      <TabPanel value={tabValue} index={7}>
+      <TabPanel tab="models" active={tab}>
         <Box sx={{ px: { xs: 0, sm: 3 } }}>
           <ModelRegistry projectId={project._id} title="Models" />
         </Box>
       </TabPanel>
 
-      {/* Evaluations Tab */}
-      <TabPanel value={tabValue} index={8}>
-        <Box sx={{ px: { xs: 0, sm: 3 } }}>
-          <EvaluationList projectId={project._id} title="Evaluations" />
-        </Box>
-      </TabPanel>
-
       {/* Settings Tab */}
       {canManage && (
-        <TabPanel value={tabValue} index={9}>
+        <TabPanel tab="settings" active={tab}>
           <Box sx={{ px: { xs: 0, sm: 3 } }}>
-            <ProjectSettings project={project} discovered={discoveredVocabulary} />
+            <ProjectSettings project={project} discovered={discoveredVocabulary} onMoveToTrash={onMoveToTrash} />
           </Box>
         </TabPanel>
       )}

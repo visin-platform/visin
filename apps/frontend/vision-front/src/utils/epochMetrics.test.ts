@@ -24,7 +24,7 @@ const comparison = (epochs: ComparisonEpoch[]): TrainingComparison => ({
   },
   lastEpoch: null,
   epochs,
-  aggregatedTestResults: null,
+  aggregatedEvaluations: null,
   testResultsCount: 0,
   benchmarks: []
 });

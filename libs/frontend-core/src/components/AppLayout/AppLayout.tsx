@@ -562,10 +562,6 @@ export function AppLayout({
     </Box>
   ) : (
     <Box component="header" sx={{ ...appBarSx, minHeight: 64, gap: 3, px: { md: 5 } }}>
-      {/* The area (Projects, Data, Account); the page under it carries its own title. */}
-      <Typography component="span" noWrap sx={{ fontWeight: 700, fontSize: '1.125rem', flexShrink: 0 }}>
-        {activeGroup?.label ?? appName}
-      </Typography>
       {sectionGroup && (
         <Box
           component="nav"

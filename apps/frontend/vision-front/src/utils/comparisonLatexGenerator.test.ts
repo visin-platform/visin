@@ -65,7 +65,7 @@ describe('generateLatexTable', () => {
       },
       lastEpoch: null,
       epochs: [epoch(1, 0.6), epoch(2, 0.8)],
-      aggregatedTestResults: null,
+      aggregatedEvaluations: null,
       testResultsCount: 0,
       benchmarks: [],
       ...overrides,

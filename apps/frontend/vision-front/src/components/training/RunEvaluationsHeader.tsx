@@ -6,27 +6,27 @@ import {
 } from '@mui/material';
 import { CloudUpload as CloudUploadIcon } from '@mui/icons-material';
 
-interface TestResultsHeaderProps {
+interface RunEvaluationsHeaderProps {
   uploading: boolean;
-  onTestResultFileUpload: (files: FileList) => Promise<void>;
+  onEvaluationFileUpload: (files: FileList) => Promise<void>;
   isAuthenticated: boolean;
 }
 
-const TestResultsHeader: React.FC<TestResultsHeaderProps> = ({
+const RunEvaluationsHeader: React.FC<RunEvaluationsHeaderProps> = ({
   uploading,
-  onTestResultFileUpload,
+  onEvaluationFileUpload,
   isAuthenticated
 }) => {
-  const testResultFileInputRef = useRef<HTMLInputElement>(null);
+  const evaluationFileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleTestResultFileClick = () => {
-    testResultFileInputRef.current?.click();
+  const handleEvaluationFileClick = () => {
+    evaluationFileInputRef.current?.click();
   };
 
-  const handleTestResultFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEvaluationFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-    await onTestResultFileUpload(files);
+    await onEvaluationFileUpload(files);
   };
 
   return (
@@ -40,22 +40,22 @@ const TestResultsHeader: React.FC<TestResultsHeaderProps> = ({
       <Typography variant="h6" sx={{
         fontWeight: "bold"
       }}>
-        Test Results
+        Evaluations
       </Typography>
       <Box>
         <input
-          ref={testResultFileInputRef}
+          ref={evaluationFileInputRef}
           type="file"
           accept=".json"
           multiple
-          onChange={handleTestResultFileChange}
+          onChange={handleEvaluationFileChange}
           style={{ display: 'none' }}
         />
         {isAuthenticated && (
           <Button
             variant="contained"
             startIcon={<CloudUploadIcon />}
-            onClick={handleTestResultFileClick}
+            onClick={handleEvaluationFileClick}
             disabled={uploading}
           >
             {uploading ? 'Uploading...' : 'Upload Results'}
@@ -66,4 +66,4 @@ const TestResultsHeader: React.FC<TestResultsHeaderProps> = ({
   );
 };
 
-export default TestResultsHeader;
+export default RunEvaluationsHeader;

@@ -2,26 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
-  Typography,
   Button,
   Alert,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableSortLabel,
-  Chip,
   Tooltip,
-  Menu,
   MenuItem,
-  ListItemIcon,
+  TextField,
   Tabs,
   Tab
 } from '@mui/material';
@@ -29,12 +15,7 @@ import {
   Scoreboard as LeaderboardIcon,
   Refresh as RefreshIcon,
   Add as AddIcon,
-  Edit as EditIcon,
-  DeleteOutlined as DeleteOutlineIcon,
-  Public as PublicIcon,
-  Lock as LockIcon,
-  Folder as FolderIcon,
-  MoreVert as MoreVertIcon
+  Folder as FolderIcon
 } from '@mui/icons-material';
 import {
   OwnerChip,
@@ -45,29 +26,35 @@ import {
   Panel,
   useCompactLayout
 } from '@visin/frontend-core';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
 import { Project } from '../types/Project';
 import { useProjectGroups } from '../hooks/useProjectGroups';
 import ProjectTrash from '../components/project/ProjectTrash';
 import ProjectThumb from '../components/project/ProjectThumb';
+import ProjectCard from '../components/project/ProjectCard';
 import ProjectFormDialog from '../components/ProjectFormDialog';
 import { ProjectCosting, ProjectTaxonomy } from '../types/taxonomy';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
-import { formatDate, formatDateTime } from '../utils';
+import { formatRelativeTime, runsLabel } from '../utils';
+
+type SortField = 'name' | 'createdAt' | 'lastActivityAt';
+type SortKey = `${SortField}:${'asc' | 'desc'}`;
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'lastActivityAt:desc', label: 'Latest activity' },
+  { key: 'createdAt:desc', label: 'Newest' },
+  { key: 'name:asc', label: 'Name (A to Z)' }
+];
 
 const ProjectsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const groups = useProjectGroups();
   const [owner, setOwner] = useState<OwnerRef>({ kind: 'user', id: user?.id ?? '' });
   const [showTrash, setShowTrash] = useState(false);
   const compact = useCompactLayout();
   usePageTitle('Projects - Vision');
-  // The phone list's per-row actions menu, and the project it is open for.
-  const [menu, setMenu] = useState<{ anchor: HTMLElement; project: Project } | null>(null);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
@@ -80,19 +67,16 @@ const ProjectsPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState<string | null>(null);
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   // `?new=1`, from the home page's "Get started": open the form at once, and go
   // to the project once it exists, where its first-run guide is.
   const [searchParams, setSearchParams] = useSearchParams();
   const [openedFromGuide, setOpenedFromGuide] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
   // `?search=`, from the menu's search box: only projects matching it (name or description).
   const search = searchParams.get('search')?.trim() || undefined;
 
-  // Sorting state
-  const [sortBy, setSortBy] = useState<'name' | 'createdAt'>('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  // What moved most recently first: what someone coming back to their work wants to see.
+  const [sort, setSort] = useState<SortKey>('lastActivityAt:desc');
+  const [sortBy, sortOrder] = sort.split(':') as [SortField, 'asc' | 'desc'];
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['projects', user?.id, sortBy, sortOrder, search],
@@ -101,20 +85,8 @@ const ProjectsPage: React.FC = () => {
 
   const projects = data?.data || [];
 
-  // Edit/delete only ever render on a project the signed-in user owns, so for a
-  // logged-out visitor — or one browsing only other people's public projects —
-  // the column was a header over a row of blank cells.
-  const showActions = projects.some((project: Project) => project.permissions.manage);
-
-  const canShare = editingProjectId
-    ? !!projects.find((project) => project._id === editingProjectId)?.permissions.own
-    : owner.kind === 'user' || groups.data?.find((group) => group.id === owner.id)?.role === 'owner';
-
-  const handleSort = (property: 'name' | 'createdAt') => {
-    const isAsc = sortBy === property && sortOrder === 'asc';
-    setSortOrder(isAsc ? 'desc' : 'asc');
-    setSortBy(property);
-  };
+  // Editing, ownership and the trash live in the project's Settings, not in the list.
+  const canShare = owner.kind === 'user' || groups.data?.find((group) => group.id === owner.id)?.role === 'owner';
 
   const handleCreateProject = async () => {
     if (!projectName.trim()) {
@@ -127,36 +99,21 @@ const ProjectsPage: React.FC = () => {
       setCreateError(null);
       setCreateSuccess(null);
 
-      if (editingProjectId) {
-        await projectService.updateProject(editingProjectId, {
-          name: projectName.trim(),
-          description: projectDescription.trim() || undefined,
-          ...(projects.find((project) => project._id === editingProjectId)?.permissions.own
-            ? { visibility: isPublic ? ('public' as const) : ('private' as const) }
-            : {}),
-          // null clears it, so an emptied form returns the project to discovery
-          taxonomy: Object.keys(taxonomy).length > 0 ? taxonomy : null,
-          costing: Object.keys(costing).length > 0 ? costing : null
-        });
-        setCreateSuccess('Project updated successfully!');
-      } else {
-        const created = await projectService.createProject({
-          name: projectName.trim(),
-          description: projectDescription.trim() || undefined,
-          owner,
-          visibility: isPublic && canShare ? 'public' : 'private',
-          taxonomy: Object.keys(taxonomy).length > 0 ? taxonomy : undefined,
-          costing: Object.keys(costing).length > 0 ? costing : undefined
-        });
-        if (openedFromGuide && created.data) {
-          navigate(`/projects/${created.data._id}`);
-          return;
-        }
-        setCreateSuccess(`Project "${projectName}" created successfully!`);
+      const created = await projectService.createProject({
+        name: projectName.trim(),
+        description: projectDescription.trim() || undefined,
+        owner,
+        visibility: isPublic && canShare ? 'public' : 'private',
+        taxonomy: Object.keys(taxonomy).length > 0 ? taxonomy : undefined,
+        costing: Object.keys(costing).length > 0 ? costing : undefined
+      });
+      if (openedFromGuide && created.data) {
+        navigate(`/projects/${created.data._id}`);
+        return;
       }
+      setCreateSuccess(`Project "${projectName}" created successfully!`);
 
       setCreateModalOpen(false);
-      setEditingProjectId(null);
       setProjectName('');
       setProjectDescription('');
       setIsPublic(false);
@@ -165,39 +122,6 @@ const ProjectsPage: React.FC = () => {
       refetch();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to save project');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleEditProject = (project: Project) => {
-    setEditingProjectId(project._id);
-    setProjectName(project.name);
-    setProjectDescription(project.description || '');
-    setIsPublic(project.visibility === 'public');
-    setTaxonomy(project.taxonomy ?? {});
-    setCosting(project.costing ?? {});
-    setCreateModalOpen(true);
-  };
-
-  const handleDeleteClick = (projectId: string) => {
-    setDeleteProjectId(projectId);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deleteProjectId) return;
-
-    try {
-      setCreating(true);
-      await projectService.deleteProject(deleteProjectId);
-      setCreateSuccess('Project moved to trash. Its owner can restore it for 30 days.');
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setDeleteDialogOpen(false);
-      setDeleteProjectId(null);
-      refetch();
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to delete project');
     } finally {
       setCreating(false);
     }
@@ -213,7 +137,6 @@ const ProjectsPage: React.FC = () => {
       setCosting({});
       setCreateError(null);
       setCreateSuccess(null);
-      setEditingProjectId(null);
     }
   };
 
@@ -259,7 +182,6 @@ const ProjectsPage: React.FC = () => {
     setIsPublic(false);
     setCreateError(null);
     setCreateSuccess(null);
-    setEditingProjectId(null);
     setCreateModalOpen(true);
   };
 
@@ -307,135 +229,30 @@ const ProjectsPage: React.FC = () => {
                   />
                 </>
               }
-              secondary={[visibility(project), formatDate(project.createdAt), project.description]
+              secondary={[
+                visibility(project),
+                runsLabel(project.runs),
+                project.runningRuns ? `${project.runningRuns} running` : null,
+                `active ${formatRelativeTime(project.lastActivityAt ?? project.updatedAt)}`,
+                project.description
+              ]
                 .filter(Boolean)
                 .join(' · ')}
-              trailing={
-                project.permissions.manage ? (
-                  <IconButton
-                    aria-label={`Actions for ${project.name}`}
-                    onClick={(event) => setMenu({ anchor: event.currentTarget, project })}
-                  >
-                    <MoreVertIcon />
-                  </IconButton>
-                ) : undefined
-              }
             />
           ))}
     </Panel>
+  ) : projects.length === 0 && !isLoading ? (
+    <Panel>{emptyState}</Panel>
   ) : (
-    <Panel>
-      <TableContainer>
-        <Table sx={{ '& .MuiTableCell-root': { px: 2 } }}>
-          <TableHead>
-            <TableRow>
-              <TableCell>
-                <TableSortLabel
-                  active={sortBy === 'name'}
-                  direction={sortBy === 'name' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('name')}
-                >
-                  Name
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell>Visibility</TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortBy === 'createdAt'}
-                  direction={sortBy === 'createdAt' ? sortOrder : 'asc'}
-                  onClick={() => handleSort('createdAt')}
-                >
-                  Created
-                </TableSortLabel>
-              </TableCell>
-              {showActions && <TableCell align="right">Actions</TableCell>}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {projects.length === 0 && !isLoading ? (
-              <TableRow>
-                <TableCell colSpan={showActions ? 5 : 4} sx={{ border: 0 }}>
-                  {emptyState}
-                </TableCell>
-              </TableRow>
-            ) : (
-              projects.map((project: Project) => (
-                <TableRow key={project._id} hover sx={{ '&:last-child td': { border: 0 } }}>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <ProjectThumb project={project} />
-                      <Typography
-                        onClick={() => navigate(`/projects/${project._id}`)}
-                        sx={{ fontWeight: 600, cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
-                      >
-                        {project.name}
-                      </Typography>
-                      <OwnerChip
-                        owner={project.owner}
-                        userId={user?.id}
-                        groups={groups.data ?? []}
-                        ownerName={project.owner.name}
-                      />
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: 'text.secondary',
-                        maxWidth: 380,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}
-                    >
-                      {project.description || '-'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      icon={
-                        project.visibility === 'public' ? (
-                          <PublicIcon fontSize="small" />
-                        ) : (
-                          <LockIcon fontSize="small" />
-                        )
-                      }
-                      label={visibility(project)}
-                      size="small"
-                      color={project.visibility === 'public' ? 'success' : 'default'}
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                    {formatDateTime(project.createdAt)}
-                  </TableCell>
-                  {showActions && (
-                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                      {project.permissions.manage && (
-                        <>
-                          <Tooltip title="Edit">
-                            <IconButton size="small" onClick={() => handleEditProject(project)}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete">
-                            <IconButton size="small" color="error" onClick={() => handleDeleteClick(project._id)}>
-                              <DeleteOutlineIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </>
-                      )}
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Panel>
+    <Box
+      component="section"
+      aria-label="Projects"
+      sx={{ display: 'grid', gap: 2, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))' }}
+    >
+      {projects.map((project: Project) => (
+        <ProjectCard key={project._id} project={project} userId={user?.id} groups={groups.data ?? []} />
+      ))}
+    </Box>
   );
 
   return (
@@ -487,12 +304,32 @@ const ProjectsPage: React.FC = () => {
           Projects matching “{search}”
         </Alert>
       )}
-      {user && (
-        <Tabs value={showTrash ? 1 : 0} onChange={(_event, value) => setShowTrash(value === 1)} sx={{ mb: 2 }}>
-          <Tab label="Projects" />
-          <Tab label="Trash" />
-        </Tabs>
-      )}
+      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+        {user ? (
+          <Tabs value={showTrash ? 1 : 0} onChange={(_event, value) => setShowTrash(value === 1)}>
+            <Tab label="Projects" />
+            <Tab label="Trash" />
+          </Tabs>
+        ) : (
+          <span />
+        )}
+        {!showTrash && (
+          <TextField
+            select
+            size="small"
+            label="Sort by"
+            value={sort}
+            onChange={(event) => setSort(event.target.value as SortKey)}
+            sx={{ minWidth: 190 }}
+          >
+            {SORTS.map((option) => (
+              <MenuItem key={option.key} value={option.key}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
+      </Box>
       {createError && !createModalOpen && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {createError}
@@ -504,42 +341,10 @@ const ProjectsPage: React.FC = () => {
         </Alert>
       )}
       {showTrash && user ? <ProjectTrash userId={user.id} groups={groups.data ?? []} /> : list}
-      <Menu
-        anchorEl={menu?.anchor}
-        open={Boolean(menu)}
-        onClose={() => setMenu(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <MenuItem
-          onClick={() => {
-            if (menu) handleEditProject(menu.project);
-            setMenu(null);
-          }}
-        >
-          <ListItemIcon>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
-          Edit
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (menu) handleDeleteClick(menu.project._id);
-            setMenu(null);
-          }}
-          sx={{ color: 'error.main' }}
-        >
-          <ListItemIcon sx={{ color: 'inherit' }}>
-            <DeleteOutlineIcon fontSize="small" />
-          </ListItemIcon>
-          Delete
-        </MenuItem>
-      </Menu>
       <ProjectFormDialog
         open={createModalOpen}
         onClose={handleCloseModal}
         onSubmit={handleCreateProject}
-        isEditing={!!editingProjectId}
         isCreating={creating}
         name={projectName}
         onNameChange={setProjectName}
@@ -564,32 +369,6 @@ const ProjectsPage: React.FC = () => {
         error={createError}
         success={createSuccess}
       />
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        slotProps={{ paper: { sx: { borderRadius: 2 } } }}
-      >
-        <DialogTitle>Delete Project</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Move this project and its trainings to the trash? Its owner can restore them for 30 days.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ p: 2.5 }}>
-          <Button onClick={() => setDeleteDialogOpen(false)} disabled={creating} sx={{ borderRadius: 2 }}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleConfirmDelete}
-            color="error"
-            variant="contained"
-            disabled={creating}
-            sx={{ borderRadius: 2 }}
-          >
-            {creating ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

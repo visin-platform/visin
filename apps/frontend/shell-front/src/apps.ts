@@ -43,7 +43,6 @@ export const APPS: Record<ShellApp, ShellAppDefinition> = {
       '/epochs',
       '/configs',
       '/datasets',
-      '/test-results',
       '/visualizations',
       '/benchmarks',
       '/models',

@@ -9,7 +9,7 @@ export type ClassAggregates = Record<string, MetricStat>;
 export type ConditionAggregates = Record<string, ClassAggregates>;
 
 export interface ComparisonData {
-  // Matches TrainingComparison['aggregatedTestResults']'s loose shape; cast to
+  // Matches TrainingComparison['aggregatedEvaluations']'s loose shape; cast to
   // ConditionAggregates/ClassAggregates at the point of use below.
   aggregatedResults: Record<string, Record<string, unknown>> | null;
   training: { _id: string; name: string };

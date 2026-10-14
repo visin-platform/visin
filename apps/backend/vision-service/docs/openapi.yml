@@ -1249,6 +1249,21 @@ components:
         updatedAt:
           type: string
           format: date-time
+        lastActivityAt:
+          type: string
+          format: date-time
+          description: In a list, when anything last happened in the project (a run, an epoch, a finding, a change of
+            settings); a project older than that field reads as its last edit.
+        runs:
+          type: integer
+          description: In a list, how many runs the project holds.
+        runningRuns:
+          type: integer
+          description: In a list, how many of those are running now.
+        lastRunAt:
+          type: string
+          format: date-time
+          description: In a list, when the latest run started. Absent for a project with no runs.
         stallAfterMinutes:
           type: integer
           minimum: 1
@@ -4745,6 +4760,10 @@ paths:
                     type: object
                     required: [models, pagination]
                     properties:
+                      metrics:
+                        type: array
+                        description: Numeric result paths discovered from the latest epochs of up to 20 visible model runs. Custom paths may also be entered.
+                        items: { type: string }
                       models:
                         type: array
                         items:

@@ -53,7 +53,6 @@ describe('useTrainingEdit', () => {
 
     expect(result.current.editDialogOpen).toBe(true);
     expect(result.current.editName).toBe('Training One');
-    expect(result.current.editDatasetId).toBe('d1');
     expect(result.current.editProjectId).toBe('p1');
     expect(result.current.editStatus).toBe('running');
     expect(result.current.editTags).toEqual(['a', 'b']);
@@ -107,6 +106,8 @@ describe('useTrainingEdit', () => {
 
     await waitFor(() => expect(refetch).toHaveBeenCalled());
     expect(mockedTraining.updateTraining).toHaveBeenCalledWith('t1', expect.objectContaining({ name: 'Updated Name' }));
+    // The dataset is fixed with the run, so an edit never sends one back for the server to resolve again.
+    expect(mockedTraining.updateTraining.mock.calls[0][1]).not.toHaveProperty('datasetId');
     expect(result.current.editDialogOpen).toBe(false);
   });
 

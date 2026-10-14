@@ -82,7 +82,7 @@ const DeletedTrainings: React.FC = () => {
             ) : (
               <>
                 <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
-                  Restoring brings a run back with the epochs and test results deleted along with it. Comparisons it
+                  Restoring brings a run back with the epochs and evaluations deleted along with it. Comparisons it
                   was removed from are not updated.
                 </Typography>
                 <List disablePadding>

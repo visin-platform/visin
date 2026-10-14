@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, Button, CircularProgress, Divider, Grid, Paper, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Divider, Paper, Typography } from '@mui/material';
 import { createAuthService, type AuthUser } from '@visin/frontend-core';
 import { initializeGoogleSignIn } from '../authFlow';
 import LoggedInUser from '../components/LoggedInUser';
@@ -9,19 +9,6 @@ import * as authApi from '../services/authApi';
 import { useConfig } from '../config/useConfig';
 
 type Phase = 'checking' | 'authenticated' | 'form';
-
-/* eslint-disable no-restricted-syntax -- The brand panel is the landing page's dark ink in either scheme,
-   so its colours are its own rather than the theme's. */
-const BRAND_PANEL = {
-  ink: '#111827',
-  text: '#fff',
-  glowNarrow: 'radial-gradient(500px 200px at 20% 0%, rgba(37,99,235,0.45), transparent 65%)',
-  glowWide:
-    'radial-gradient(800px 400px at 20% 0%, rgba(37,99,235,0.4), transparent 60%), radial-gradient(600px 400px at 90% 20%, rgba(96,165,250,0.2), transparent 55%)',
-  shotBorder: '1px solid rgba(255,255,255,0.14)',
-  shotShadow: '0 30px 80px rgba(2, 6, 23, 0.55)'
-} as const;
-/* eslint-enable no-restricted-syntax */
 
 const HEADINGS: Record<CredentialsMode, { title: string; subtitle: string }> = {
   setup: {
@@ -141,77 +128,12 @@ const LoginPage: React.FC = () => {
   const heading = HEADINGS[mode];
 
   return (
-    <Grid container component="main" sx={{ minHeight: '100vh', alignContent: { xs: 'flex-start', md: 'stretch' } }}>
-      {/* On a phone, the brand is a dark band across the top — the same ink the
-          app bar has once you are in — with the form on white below it. */}
-      <Grid
-        size={12}
-        sx={{
-          display: { xs: 'flex', md: 'none' },
-          alignItems: 'center',
-          gap: 1.5,
-          px: 3,
-          pt: 'calc(20px + env(safe-area-inset-top))',
-          pb: 3,
-          bgcolor: BRAND_PANEL.ink,
-          color: BRAND_PANEL.text,
-          backgroundImage: BRAND_PANEL.glowNarrow
-        }}
-      >
-        <Box component="img" src="/logo.svg" alt="" sx={{ width: 32, height: 32 }} />
-        <Typography sx={{ fontWeight: 700, fontSize: '1.35rem' }}>Visin</Typography>
-      </Grid>
-
-      {/* Brand panel, painted with the product's own colours rather than a
-          stock photo, so it costs no third-party request. */}
-      <Grid
-        size={{ xs: 0, md: 6 }}
-        sx={{
-          // From `md` only: at tablet widths a third of the screen left the
-          // panel's heading one word per line and squeezed the form beside it,
-          // so below that the form takes the whole width and the wordmark
-          // above it carries the brand instead.
-          display: { xs: 'none', md: 'flex' },
-          flexDirection: 'column',
-          justifyContent: 'center',
-          p: { md: 5, lg: 7 },
-          bgcolor: BRAND_PANEL.ink,
-          color: BRAND_PANEL.text,
-          backgroundImage: BRAND_PANEL.glowWide
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 'auto' }}>
-          <Box component="img" src="/logo.svg" alt="" sx={{ width: 36, height: 36 }} />
-          <Typography sx={{ fontWeight: 700, fontSize: '1.5rem' }}>Visin</Typography>
-        </Box>
-        {/* The product itself, rather than a paragraph about it. */}
-        <Box
-          component="img"
-          src="/showcase/charts.webp"
-          alt="Loss and mean IoU curves of a training run in Visin"
-          sx={{
-            width: '100%',
-            maxWidth: 640,
-            borderRadius: '14px',
-            border: BRAND_PANEL.shotBorder,
-            boxShadow: BRAND_PANEL.shotShadow,
-            my: 5
-          }}
-        />
-        <Typography sx={{ fontSize: { md: '1.6rem', lg: '1.9rem' }, fontWeight: 700, lineHeight: 1.2, maxWidth: 560 }}>
-          Every epoch, score and frame your training produces — in one place.
-        </Typography>
-      </Grid>
-
-      <Grid
-        size={{ xs: 12, md: 6 }}
-        component={Paper}
-        elevation={0}
-        square
-        sx={{ display: 'flex', flexDirection: 'column', justifyContent: { xs: 'flex-start', md: 'center' }, alignItems: 'center' }}
-      >
-        <Box sx={{ my: { xs: 4, md: 8 }, width: '100%', maxWidth: 440, px: { xs: 3, sm: 4 } }}>
-
+    <Box component="main" sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', px: 2, py: 5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 4 }}>
+        <Box component="img" src="/logo.svg" alt="" sx={{ width: 36, height: 36 }} />
+        <Typography sx={{ fontWeight: 700, fontSize: '1.5rem' }}>Visin</Typography>
+      </Box>
+      <Paper variant="outlined" sx={{ width: '100%', maxWidth: 440, borderRadius: 3, p: { xs: 3, sm: 4 } }}>
           {phase === 'checking' && (
             <Box sx={{ py: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               <CircularProgress size={36} />
@@ -275,14 +197,13 @@ const LoginPage: React.FC = () => {
             </>
           )}
 
-          <Box sx={{ mt: 8, textAlign: 'center' }}>
+          <Box sx={{ mt: 4, textAlign: 'center' }}>
             <Typography variant="caption" sx={{ color: 'text.disabled' }}>
               © {new Date().getFullYear()} Visin
             </Typography>
           </Box>
-        </Box>
-      </Grid>
-    </Grid>
+      </Paper>
+    </Box>
   );
 };
 

@@ -9,7 +9,6 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
-  const [editDatasetId, setEditDatasetId] = useState('');
   const [editStatus, setEditStatus] = useState<Training['status']>('pending');
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editProjectId, setEditProjectId] = useState('');
@@ -32,9 +31,7 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
       return trainingService.updateTraining(training._id, {
         name: editName.trim(),
         description: editDescription.trim(),
-        // Unchanged by this form — sent back as it came so an edit of the name
-        // does not clear what the pipeline reported.
-        datasetId: editDatasetId || undefined,
+        // The dataset is not sent: it is fixed when the run is reported, and leaving it out leaves it untouched.
         projectId: editProjectId || undefined,
         status: editStatus,
         tags: editTags
@@ -51,7 +48,6 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
 
     setEditName(training.name);
     setEditDescription(training.description || '');
-    setEditDatasetId(training.datasetId || '');
     setEditProjectId(training.projectId || '');
     setEditStatus(training.status);
     setEditTags(training.tags || []);
@@ -67,7 +63,6 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
     setEditDialogOpen(false);
     setEditName('');
     setEditDescription('');
-    setEditDatasetId('');
     setEditStatus('pending');
     setEditTags([]);
     updateMutation.reset();
@@ -80,7 +75,6 @@ export const useTrainingEdit = (training: Training | undefined, refetch: () => v
     handleEditCancel,
     editName, setEditName,
     editDescription, setEditDescription,
-    editDatasetId, setEditDatasetId,
     editProjectId, setEditProjectId,
     editStatus, setEditStatus,
     editTags, setEditTags,

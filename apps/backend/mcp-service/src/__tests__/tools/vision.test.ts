@@ -246,7 +246,7 @@ describe('get_training with a summary', () => {
     const { text } = await call('get_training', { training: 't1' });
     expect(text).toContain('Model on Hugging Face: acme/clft @ a1b2c3d, demo space acme/clft-demo.');
     expect(text).toContain('Model on Hugging Face: acme/other @ 1234567.');
-    expect(text).toContain('Started from commit abcdef0 on main, with uncommitted changes');
+    expect(text).toContain('Started from commit abcdef0 on main, with local changes');
   });
 
   it('says which models Visin keeps, in what format, and whether they are offered for download', async () => {

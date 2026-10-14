@@ -9,8 +9,8 @@ interface MetricStat {
 type ClassAggregates = Record<string, MetricStat>;
 type ConditionAggregates = Record<string, ClassAggregates>;
 
-export interface TestResultsDatum {
-  // Matches TrainingComparison['aggregatedTestResults']'s loose shape; the
+export interface EvaluationsDatum {
+  // Matches TrainingComparison['aggregatedEvaluations']'s loose shape; the
   // more precise ConditionAggregates/ClassAggregates nesting is applied via
   // a cast at the point of use below, once per condition being read.
   aggregatedResults: Record<string, Record<string, unknown>> | null;
@@ -219,12 +219,12 @@ export function generateTrainingLatex(
  * one particular dataset happened to be.
  */
 export function generateTestingLatex(
-  testResultsData: TestResultsDatum[],
+  evaluationsData: EvaluationsDatum[],
   decimals: number,
   multiplier: number,
   taxonomy: ResolvedTaxonomy
 ): string {
-  if (!testResultsData.length) return '';
+  if (!evaluationsData.length) return '';
   const d = decimals;
   const m = multiplier;
   const conditions = taxonomy.conditions;
@@ -256,7 +256,7 @@ export function generateTestingLatex(
     }
     tbl += `Training & ${headers.join(' & ')} \\\\\n\\hline\n`;
 
-    testResultsData.forEach(({ training, aggregatedResults }) => {
+    evaluationsData.forEach(({ training, aggregatedResults }) => {
       const condData = aggregatedResults?.[cond] as ConditionAggregates | undefined;
       tbl += `${esc(training.name)} `;
       classes.forEach(cls => {

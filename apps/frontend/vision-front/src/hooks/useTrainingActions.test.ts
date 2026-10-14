@@ -7,12 +7,12 @@ vi.mock('../services/epochService', () => ({
 vi.mock('../services/trainingService', () => ({
   trainingService: { deleteTraining: vi.fn() }
 }));
-vi.mock('../services/testResultService', () => ({
-  testResultService: { deleteTestResult: vi.fn() }
+vi.mock('../services/runEvaluationService', () => ({
+  runEvaluationService: { trash: vi.fn() }
 }));
 vi.mock('../utils/fileUploadHelpers', () => ({
   processEpochFiles: vi.fn(),
-  processTestResultFiles: vi.fn()
+  processEvaluationFiles: vi.fn()
 }));
 vi.mock('../utils/latexGenerator', () => ({
   generateLatexCode: vi.fn(() => '\\latex')
@@ -20,15 +20,15 @@ vi.mock('../utils/latexGenerator', () => ({
 
 import { epochService } from '../services/epochService';
 import { trainingService } from '../services/trainingService';
-import { testResultService } from '../services/testResultService';
-import { processEpochFiles, processTestResultFiles } from '../utils/fileUploadHelpers';
+import { runEvaluationService } from '../services/runEvaluationService';
+import { processEpochFiles, processEvaluationFiles } from '../utils/fileUploadHelpers';
 import { useTrainingActions } from './useTrainingActions';
 
 const mockedEpoch = vi.mocked(epochService);
 const mockedTraining = vi.mocked(trainingService);
-const mockedTestResult = vi.mocked(testResultService);
+const mockedRunEvaluation = vi.mocked(runEvaluationService);
 const mockedProcessEpoch = vi.mocked(processEpochFiles);
-const mockedProcessTestResult = vi.mocked(processTestResultFiles);
+const mockedProcessEvaluation = vi.mocked(processEvaluationFiles);
 
 const makeFileList = (names: string[]): FileList => {
   const files = names.map((n) => new File(['x'], n));
@@ -77,16 +77,16 @@ describe('useTrainingActions', () => {
     expect(result.current.uploadSuccess).toBe('1 file(s) processed successfully');
   });
 
-  it('uploads test result files via processTestResultFiles', async () => {
-    mockedProcessTestResult.mockResolvedValue({ successful: [], failed: [{ name: 'b.json', error: 'bad json' }] });
+  it('uploads test result files via processEvaluationFiles', async () => {
+    mockedProcessEvaluation.mockResolvedValue({ successful: [], failed: [{ name: 'b.json', error: 'bad json' }] });
     const refetch = vi.fn();
     const { result } = renderHook(() => useTrainingActions({ trainingId: 't1', refetch, onTrainingDeleted: vi.fn() }));
 
     await act(async () => {
-      await result.current.handleFileUpload(makeFileList(['b.json']), 'testResult');
+      await result.current.handleFileUpload(makeFileList(['b.json']), 'evaluation');
     });
 
-    expect(mockedProcessTestResult).toHaveBeenCalled();
+    expect(mockedProcessEvaluation).toHaveBeenCalled();
     expect(result.current.uploadError).toBe('Failed to process 1 file(s)');
     expect(refetch).not.toHaveBeenCalled();
   });
@@ -220,27 +220,27 @@ describe('useTrainingActions', () => {
     expect(onTrainingDeleted).toHaveBeenCalled();
   });
 
-  it('handleDeleteTestResult deletes the test result and refetches', async () => {
-    mockedTestResult.deleteTestResult.mockResolvedValue({ success: true } as any);
+  it('handleDeleteEvaluation deletes the evaluation and refetches', async () => {
+    mockedRunEvaluation.trash.mockResolvedValue({ success: true } as any);
     const refetch = vi.fn();
     const { result } = renderHook(() => useTrainingActions({ trainingId: 't1', refetch, onTrainingDeleted: vi.fn() }));
 
     await act(async () => {
-      await result.current.handleDeleteTestResult('tr1');
+      await result.current.handleDeleteEvaluation('tr1');
     });
 
-    expect(mockedTestResult.deleteTestResult).toHaveBeenCalledWith('tr1');
+    expect(mockedRunEvaluation.trash).toHaveBeenCalledWith('tr1');
     expect(refetch).toHaveBeenCalled();
-    expect(result.current.uploadSuccess).toBe('Test result deleted successfully');
+    expect(result.current.uploadSuccess).toBe('Evaluation deleted successfully');
   });
 
-  it('handleDeleteTestResult surfaces an error message on failure', async () => {
-    mockedTestResult.deleteTestResult.mockRejectedValue(new Error('cannot delete'));
+  it('handleDeleteEvaluation surfaces an error message on failure', async () => {
+    mockedRunEvaluation.trash.mockRejectedValue(new Error('cannot delete'));
     const refetch = vi.fn();
     const { result } = renderHook(() => useTrainingActions({ trainingId: 't1', refetch, onTrainingDeleted: vi.fn() }));
 
     await act(async () => {
-      await result.current.handleDeleteTestResult('tr1');
+      await result.current.handleDeleteEvaluation('tr1');
     });
 
     expect(result.current.uploadError).toBe('cannot delete');

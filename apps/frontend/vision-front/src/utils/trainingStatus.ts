@@ -19,7 +19,7 @@ export type RunPart = 'epochs' | 'tests' | 'benchmarks' | 'visualizations';
 
 const PARTS: Record<RunPart, { noun: string; stage: string; afterTraining: boolean }> = {
   epochs: { noun: 'epochs', stage: 'training', afterTraining: false },
-  tests: { noun: 'test results', stage: 'the test stage', afterTraining: true },
+  tests: { noun: 'evaluations', stage: 'the test stage', afterTraining: true },
   benchmarks: { noun: 'benchmarks', stage: 'the benchmark stage', afterTraining: true },
   visualizations: { noun: 'visualizations', stage: 'the visualize stage', afterTraining: true }
 };

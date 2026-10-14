@@ -5,8 +5,8 @@ vi.mock('../config/visionApi', () => ({
 }));
 
 import { visionApi } from '../config/visionApi';
-import { testResultService } from './testResultService';
-import type { CreateTestResultData } from '../types';
+import { runEvaluationService } from './runEvaluationService';
+import type { CreateRunEvaluationData } from '../types';
 
 const mockedApi = vi.mocked(visionApi);
 
@@ -25,19 +25,19 @@ const evaluation = (over: Record<string, unknown> = {}) => ({
 });
 const page = { page: 1, limit: 30, total: 1, pages: 1 };
 
-describe('testResultService', () => {
+describe('runEvaluationService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('reads what runs reported from the evaluations list, with the results, in the shape the pages know', async () => {
     mockedApi.get.mockResolvedValue({ data: { success: true, data: { evaluations: [evaluation()], pagination: page } } });
-    const response = await testResultService.getTestResults({ page: 1, limit: 30, training_uuid: 'u1', epoch_uuids: 'a,b', projectId: 'p1' });
+    const response = await runEvaluationService.list({ page: 1, limit: 30, training_uuid: 'u1', epoch_uuids: 'a,b', projectId: 'p1' });
     expect(mockedApi.get).toHaveBeenCalledWith('/evaluations', {
       params: { page: 1, limit: 30, projectId: 'p1', trainingUuid: 'u1', epochUuids: 'a,b', include: 'results' }
     });
     expect(response.data.pagination).toEqual(page);
-    expect(response.data.testResults).toEqual([
+    expect(response.data.evaluations).toEqual([
       {
         _id: 'e1',
         test_uuid: 't-1',
@@ -55,13 +55,13 @@ describe('testResultService', () => {
 
   it('asks for no parameters it was not given, and orders only the ways an evaluation list can', async () => {
     mockedApi.get.mockResolvedValue({ data: { success: true, data: { evaluations: [], pagination: page } } });
-    await testResultService.getTestResults();
+    await runEvaluationService.list();
     expect(mockedApi.get).toHaveBeenLastCalledWith('/evaluations', { params: { include: 'results' } });
-    await testResultService.getTestResults({ sortBy: 'timestamp', order: 'asc' });
+    await runEvaluationService.list({ sortBy: 'timestamp', order: 'asc' });
     expect(mockedApi.get).toHaveBeenLastCalledWith('/evaluations', { params: { order: 'asc', sortBy: 'executedAt', include: 'results' } });
-    await testResultService.getTestResults({ sortBy: 'epoch' });
+    await runEvaluationService.list({ sortBy: 'epoch' });
     expect(mockedApi.get).toHaveBeenLastCalledWith('/evaluations', { params: { sortBy: 'epoch', include: 'results' } });
-    await testResultService.getTestResults({ sortBy: 'createdAt' });
+    await runEvaluationService.list({ sortBy: 'createdAt' });
     expect(mockedApi.get).toHaveBeenLastCalledWith('/evaluations', { params: { include: 'results' } });
   });
 
@@ -69,7 +69,7 @@ describe('testResultService', () => {
     mockedApi.get.mockResolvedValue({
       data: { success: true, data: { evaluations: [evaluation({ source: undefined, executedAt: undefined, run: undefined, epochInfo: undefined, results: undefined })], pagination: page } }
     });
-    const [result] = (await testResultService.getTestResults()).data.testResults;
+    const [result] = (await runEvaluationService.list()).data.evaluations;
     expect(result).toMatchObject({ epoch: 0, epoch_uuid: '', timestamp: '2026-10-01T09:00:00.000Z', test_results: {} });
     expect(result).not.toHaveProperty('training');
     expect(result).not.toHaveProperty('epoch_info');
@@ -77,8 +77,8 @@ describe('testResultService', () => {
 
   it('records an uploaded result file as an evaluation of its epoch, under its own uuid', async () => {
     mockedApi.post.mockResolvedValue({ data: { success: true, data: { _id: 'e1' } } });
-    const data: CreateTestResultData = { epoch: 3, epoch_uuid: 'ep-3', test_uuid: 't-3', timestamp: '2026-10-01T00:00:00Z', test_results: { overall: { iou: 0.5 } } };
-    const result = await testResultService.uploadTestResult(data);
+    const data: CreateRunEvaluationData = { epoch: 3, epoch_uuid: 'ep-3', test_uuid: 't-3', timestamp: '2026-10-01T00:00:00Z', test_results: { overall: { iou: 0.5 } } };
+    const result = await runEvaluationService.upload(data);
     expect(mockedApi.post).toHaveBeenCalledWith('/evaluations', {
       uuid: 't-3',
       results: { overall: { iou: 0.5 } },
@@ -90,13 +90,13 @@ describe('testResultService', () => {
 
   it('leaves out the uuid and time a file did not carry, so the server supplies them', async () => {
     mockedApi.post.mockResolvedValue({ data: { success: true, data: { _id: 'e1' } } });
-    await testResultService.uploadTestResult({ epoch: 3, epoch_uuid: 'ep-3', test_results: { overall: {} } });
+    await runEvaluationService.upload({ epoch: 3, epoch_uuid: 'ep-3', test_results: { overall: {} } });
     expect(mockedApi.post).toHaveBeenCalledWith('/evaluations', { results: { overall: {} }, source: { epochUuid: 'ep-3', epoch: 3 } });
   });
 
   it('moves a result to the trash', async () => {
     mockedApi.delete.mockResolvedValue({ data: { success: true, data: { _id: 'e1' } } });
-    await testResultService.deleteTestResult('e1');
+    await runEvaluationService.trash('e1');
     expect(mockedApi.delete).toHaveBeenCalledWith('/evaluations/e1');
   });
 });

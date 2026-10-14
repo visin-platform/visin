@@ -1,5 +1,5 @@
 import { epochService } from '../services/epochService';
-import { testResultService } from '../services/testResultService';
+import { runEvaluationService } from '../services/runEvaluationService';
 
 export interface UploadResult {
   successful: Array<{ name: string; operation: string }>;
@@ -65,7 +65,7 @@ export const processEpochFiles = async (
   return { successful: successfulFiles, failed: failedFiles };
 };
 
-export const processTestResultFiles = async (
+export const processEvaluationFiles = async (
   files: FileList
 ): Promise<UploadResult> => {
   const successfulFiles: Array<{ name: string; operation: string }> = [];
@@ -82,10 +82,10 @@ export const processTestResultFiles = async (
 
     try {
       const content = await file.text();
-      const testResultData = JSON.parse(content);
+      const evaluationData = JSON.parse(content);
 
       // Upload test result
-      await testResultService.uploadTestResult(testResultData);
+      await runEvaluationService.upload(evaluationData);
 
       successfulFiles.push({ name: file.name, operation: 'uploaded' });
     } catch (err) {

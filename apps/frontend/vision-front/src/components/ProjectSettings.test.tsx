@@ -44,12 +44,12 @@ const project: Project = {
 const makeQueryClient = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 
-const renderComponent = (value: Project = project) => {
+const renderComponent = (value: Project = project, onMoveToTrash?: () => void) => {
   const qc = makeQueryClient();
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <ProjectSettings project={value} />
+        <ProjectSettings project={value} onMoveToTrash={onMoveToTrash} />
       </MemoryRouter>
     </QueryClientProvider>
   );
@@ -66,6 +66,7 @@ describe('ProjectSettings', () => {
     vi.mocked(visionApi.get).mockResolvedValue({ data: { data: [{ id, name: 'Researchers' }] } });
     mockedProjectService.updateProject.mockResolvedValue({ data: project } as any);
     renderComponent();
+    fireEvent.click(screen.getByRole('button', { name: 'Access and keys' }));
     const picker = screen.getByRole('combobox', { name: 'Editor groups' });
     fireEvent.mouseDown(picker);
     fireEvent.click(await screen.findByRole('option', { name: 'Researchers' }));
@@ -93,7 +94,25 @@ describe('ProjectSettings', () => {
       'Ownership'
     ]);
     expect(screen.getAllByRole('button', { name: /^save$/i })).toHaveLength(1);
-    expect(screen.getByRole('region', { name: 'Storage' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Storage' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Details' })).toBeVisible();
+  });
+
+  it('moves the project to the trash from its own section, which asks the page to confirm', () => {
+    const onMoveToTrash = vi.fn();
+    renderComponent(project, onMoveToTrash);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Trash' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move to trash' }));
+
+    expect(onMoveToTrash).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no trash section when the page offers no way to confirm one', () => {
+    renderComponent();
+
+    expect(screen.queryByRole('button', { name: 'Trash' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Move to trash' })).not.toBeInTheDocument();
   });
 
   it('leaves Ownership out for someone who does not own the project', () => {
@@ -103,13 +122,14 @@ describe('ProjectSettings', () => {
     expect(screen.queryByRole('button', { name: 'Transfer ownership' })).not.toBeInTheDocument();
   });
 
-  it('scrolls to a section from the rail', () => {
-    const scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView;
+  it('switches sections and retains unsaved edits', () => {
     renderComponent();
-
+    fireEvent.change(screen.getByLabelText(/Project Name/), { target: { value: 'Unsaved' } });
     fireEvent.click(screen.getByRole('button', { name: 'Storage' }));
-    expect(scrollIntoView).toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Details' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Storage' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(screen.getByLabelText(/Project Name/)).toHaveValue('Unsaved');
   });
 
   it('renders project fields pre-filled from the project prop', async () => {
@@ -121,12 +141,14 @@ describe('ProjectSettings', () => {
 
   it('has a Cover section', () => {
     renderComponent();
+    fireEvent.click(screen.getByRole('button', { name: 'Cover' }));
     expect(screen.getByRole('region', { name: 'Cover' })).toHaveTextContent('cover-picker');
   });
 
   it('shows pipeline keys', () => {
     renderComponent();
-    expect(screen.getByText('pipeline-keys')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Access and keys' }));
+    expect(screen.getByText('pipeline-keys')).toBeVisible();
   });
 
   it('saves project changes when Save is clicked', async () => {
@@ -176,6 +198,7 @@ describe('ProjectSettings', () => {
       owner: { kind: 'group', id: 'g1' },
       permissions: { ...project.permissions, own: false }
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Access and keys' }));
     expect(screen.getByRole('radio', { name: 'Public' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Transfer ownership' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -188,20 +211,20 @@ describe('ProjectSettings', () => {
     vi.mocked(visionApi.get).mockResolvedValue({ data: { data: [{ id, name: 'Researchers', role: 'member' }] } });
     mockedProjectService.transferProject.mockRejectedValueOnce(new Error('Membership changed'));
     renderComponent();
+    fireEvent.click(screen.getByRole('button', { name: 'Ownership' }));
     fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }));
-    const picker = await screen.findByRole('combobox', { name: 'New owner' });
-    fireEvent.mouseDown(picker);
-    fireEvent.click(await screen.findByRole('option', { name: 'Researchers' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Transfer' }));
+    fireEvent.click(await screen.findByRole('radio', { name: /Researchers/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer to Researchers' }));
     expect(await screen.findByText('Membership changed')).toBeInTheDocument();
     expect(mockedProjectService.transferProject).toHaveBeenCalledWith('p1', { kind: 'group', id });
     mockedProjectService.transferProject.mockResolvedValue({ success: true, data: project });
-    fireEvent.click(screen.getByRole('button', { name: 'Transfer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer to Researchers' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   describe('storage', () => {
     const chooseHub = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Storage' }));
       fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Storage' }));
       fireEvent.click(await screen.findByRole('option', { name: 'Hugging Face Hub' }));
     };

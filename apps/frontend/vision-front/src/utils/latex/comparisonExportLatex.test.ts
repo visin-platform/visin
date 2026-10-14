@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { generateTrainingLatex, generateTestingLatex, generateBenchmarkingLatex } from './comparisonExportLatex';
 import type { TrainingComparison, ComparisonEpoch } from '@/types';
-import type { TestResultsDatum } from './comparisonExportLatex';
-import { discoverAggregateVocabulary } from '@/components/test-results/aggregateVocabulary';
+import type { EvaluationsDatum } from './comparisonExportLatex';
+import { discoverAggregateVocabulary } from '@/components/result-tables/aggregateVocabulary';
 import { resolveTaxonomy } from '@/taxonomy/resolveTaxonomy';
-import { DEFAULT_CLASS_METRICS } from '@/components/test-results/performanceMetricsUtils';
+import { DEFAULT_CLASS_METRICS } from '@/components/result-tables/performanceMetricsUtils';
 
 const epoch = (epochNum: number, valMeanIoU: number | undefined, valExtra: Record<string, unknown> = {}): ComparisonEpoch =>
   ({
@@ -37,7 +37,7 @@ const makeComparison = (overrides: Partial<TrainingComparison> = {}): TrainingCo
       epoch(1, 0.6, { car: { iou: 0.5, precision: 0.4, recall: 0.3, f1_score: 0.35 } }),
       epoch(2, 0.8, { car: { iou: 0.7, precision: 0.6, recall: 0.5, f1: 0.55 } }),
     ],
-    aggregatedTestResults: null,
+    aggregatedEvaluations: null,
     testResultsCount: 0,
     benchmarks: [],
     ...overrides,
@@ -100,7 +100,7 @@ describe('generateTrainingLatex', () => {
 });
 
 describe('generateTestingLatex', () => {
-  const datum: TestResultsDatum = {
+  const datum: EvaluationsDatum = {
     training: { _id: 't1', name: 'Run & 1', status: 'completed', createdAt: '', updatedAt: '' },
     aggregatedResults: {
       day_fair: {
@@ -114,7 +114,7 @@ describe('generateTestingLatex', () => {
   };
 
   /** Project config naming both conditions, so `snow` shows even with no data. */
-  const taxonomyFor = (data: TestResultsDatum[]) =>
+  const taxonomyFor = (data: EvaluationsDatum[]) =>
     discoverAggregateVocabulary(
       data,
       resolveTaxonomy(
@@ -151,11 +151,11 @@ describe('generateTestingLatex', () => {
   });
 
   it('renders an unfamiliar vocabulary with no project config at all', () => {
-    const factory: TestResultsDatum = {
+    const factory: EvaluationsDatum = {
       training: { _id: 't1', name: 'Run 1' },
       aggregatedResults: { line_a: { scratch: { iou: { mean: 0.4 } } } },
       testResultsCount: 1
-    } as unknown as TestResultsDatum;
+    } as unknown as EvaluationsDatum;
     const discovered = discoverAggregateVocabulary(
       [factory],
       resolveTaxonomy(undefined, {}),

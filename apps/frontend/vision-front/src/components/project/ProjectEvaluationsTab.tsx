@@ -17,14 +17,17 @@ import {
   TextField,
   MenuItem,
   ToggleButton,
-  ToggleButtonGroup
+  ToggleButtonGroup,
+  Chip
 } from '@mui/material';
 import { Compare as CompareIcon } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import VerdictChip from '../evaluations/VerdictChip';
+import { checkpointLabel } from '../evaluations/verdict';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { comparisonService } from '../../services/comparisonService';
 import { formatDateTime } from '../../utils';
-import { TestResult, TestResultsPaginatedResponse } from '../../types';
+import { RunEvaluation, RunEvaluationsResponse } from '../../types';
 import { useTaxonomyFor } from '../../taxonomy/useTaxonomy';
 import { discoverClassMetrics } from '../../taxonomy/discover';
 import {
@@ -33,17 +36,23 @@ import {
   metricValue,
   type MetricSource,
   type RankableMetric
-} from '../../utils/testResultMetrics';
+} from '../../utils/evaluationMetrics';
 
-interface ProjectTestsTabProps {
+interface ProjectEvaluationsTabProps {
   projectId: string;
-  /** Every test result of the project the page loaded, up to its cap. */
-  testResultsResponse: TestResultsPaginatedResponse | undefined;
+  /** Every evaluation of the project the page loaded, up to its cap. */
+  evaluationsResponse: RunEvaluationsResponse | undefined;
   isLoading: boolean;
 }
 
-/** A test result is read on its run's test-results tab. */
-const testRunPath = (trainingId: string) => `/trainings/${trainingId}?tab=test-results`;
+/**
+ * An evaluation is a test result of a run, so it is read on the run, in its project's context, with that one
+ * outlined. Only one with no run behind it (a checkpoint scored on a suite) has no such place, and opens its own page.
+ */
+const evaluationPath = (result: RunEvaluation) =>
+  result.training
+    ? `/trainings/${result.training._id}?tab=evaluations&evaluation=${result._id}`
+    : `/evaluations/${result._id}`;
 
 interface MetricOption extends RankableMetric {
   id: string;
@@ -52,7 +61,7 @@ interface MetricOption extends RankableMetric {
 }
 
 interface Entry {
-  result: TestResult;
+  result: RunEvaluation;
   value: number | undefined;
   /** the run's test count, in the one-per-run view */
   tests?: number;
@@ -60,12 +69,32 @@ interface Entry {
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
+type Scope = 'all' | 'ranked' | 'exploratory' | 'attention';
+const SCOPES: { value: Scope; label: string }[] = [
+  { value: 'all', label: 'All evaluations' },
+  { value: 'ranked', label: 'Ranked on a suite' },
+  { value: 'exploratory', label: 'Exploratory (no suite)' },
+  { value: 'attention', label: 'Needs attention' }
+];
+
+/** Whether a result belongs to the scope: ranked ones passed a suite, exploratory ones named none. */
+const inScope = (result: RunEvaluation, scope: Scope): boolean => {
+  const state = result.validation?.state;
+  if (scope === 'all') return true;
+  if (scope === 'ranked') return state === 'eligible';
+  if (scope === 'exploratory') return !state || state === 'exploratory' || state === 'legacy-unverified';
+  return state === 'incomplete' || state === 'incompatible';
+};
+
 /**
- * A project's tests, answering "which run did best?": one row per run, at the
- * test that scored best on a result you choose, ranked. "All tests" lists every
- * one a run reported, for when the run's other epochs are the question.
+ * A project's evaluations, answering "which run did best?": one row per run, at the
+ * evaluation that scored best on a metric you choose, ranked. "All evaluations" lists every
+ * one, for when the run's other epochs are the question.
+ *
+ * An evaluation is one record: a run's own test, or a checkpoint scored on a suite. Ranked-on-a-suite is a property of
+ * it, shown as a column and a filter, not a second list somewhere else.
  */
-const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResultsResponse, isLoading }) => {
+const ProjectEvaluationsTab: React.FC<ProjectEvaluationsTabProps> = ({ projectId, evaluationsResponse, isLoading }) => {
   const compact = useCompactLayout();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -75,8 +104,15 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
 
-  const results = useMemo(() => testResultsResponse?.data?.testResults ?? [], [testResultsResponse]);
-  const total = testResultsResponse?.data?.pagination?.total ?? results.length;
+  const [scope, setScope] = useState<Scope>('all');
+  const everything = useMemo(() => evaluationsResponse?.data?.evaluations ?? [], [evaluationsResponse]);
+  // The suite columns and the filter say nothing until some result was scored on a suite.
+  const hasSuites = useMemo(() => everything.some((result) => result.suite), [everything]);
+  // A filter chosen while there were suite results stops applying when there are none left: its control goes with
+  // them, and nothing else could clear it.
+  const activeScope: Scope = hasSuites ? scope : 'all';
+  const results = useMemo(() => everything.filter((result) => inScope(result, activeScope)), [everything, activeScope]);
+  const total = evaluationsResponse?.data?.pagination?.total ?? everything.length;
   const taxonomy = useTaxonomyFor(results);
 
   // Only results some test actually reports are offered to rank by.
@@ -164,14 +200,15 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
     );
     if (selected.size > 1 && trainingIds.length > 0) {
       createComparisonMutation.mutate({
-        name: `Comparison of ${trainingIds.length} trainings (from test results)`,
+        name: `Comparison of ${trainingIds.length} trainings (from evaluations)`,
         itemIds: trainingIds,
         projectId
       });
     }
   };
 
-  const runName = (result: TestResult) => result.training?.name || 'Unknown';
+  const runName = (result: RunEvaluation) =>
+    result.training?.name || (result.checkpoint ? checkpointLabel(result.checkpoint) : 'Unknown');
 
   const controls = (
     <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1.5, mb: 2 }}>
@@ -179,7 +216,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
         exclusive
         size="small"
         value={view}
-        aria-label="Which tests to list"
+        aria-label="Which evaluations to list"
         onChange={(_event, next: 'best' | 'all' | null) => {
           if (next) {
             setView(next);
@@ -188,8 +225,27 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
         }}
       >
         <ToggleButton value="best">Best per run</ToggleButton>
-        <ToggleButton value="all">All tests</ToggleButton>
+        <ToggleButton value="all">All evaluations</ToggleButton>
       </ToggleButtonGroup>
+      {hasSuites && (
+        <TextField
+          select
+          size="small"
+          label="Show"
+          value={activeScope}
+          onChange={(event) => {
+            setScope(event.target.value as Scope);
+            setPage(0);
+          }}
+          sx={{ minWidth: 200 }}
+        >
+          {SCOPES.map((option) => (
+            <MenuItem key={option.value} value={option.value}>
+              {option.label}
+            </MenuItem>
+          ))}
+        </TextField>
+      )}
       {options.length > 0 && (
         <TextField
           select
@@ -231,13 +287,13 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
               checked: allSelected,
               indeterminate: someSelected && !allSelected,
               onChange: toggleAll,
-              label: 'Select all test results'
+              label: 'Select all evaluations'
             }}
           />
           {shown.map(({ result, value, tests }, index) => (
             <MobileListRow
               key={result._id}
-              to={result.training ? testRunPath(result.training._id) : undefined}
+              to={evaluationPath(result)}
               title={ranked ? `${index + 1}. ${runName(result)}` : runName(result)}
               selected={selected.has(result._id)}
               onToggle={() => toggle(result._id)}
@@ -245,7 +301,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
               meta={`Epoch ${result.epoch} · ${formatDateTime(result.timestamp)}`}
               figures={[
                 ...(metric && value !== undefined ? [{ label: metric.label, value: format(value) }] : []),
-                ...(tests !== undefined && tests > 1 ? [{ label: 'Tests', value: tests }] : [])
+                ...(tests !== undefined && tests > 1 ? [{ label: 'Evaluations', value: tests }] : [])
               ]}
             />
           ))}
@@ -260,14 +316,16 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
                     indeterminate={someSelected && !allSelected}
                     checked={allSelected}
                     onChange={toggleAll}
-                    slotProps={{ input: { 'aria-label': 'Select all test results' } }}
+                    slotProps={{ input: { 'aria-label': 'Select all evaluations' } }}
                   />
                 </TableCell>
                 {ranked && <TableCell sx={{ width: 56 }}>Rank</TableCell>}
                 <TableCell>Training</TableCell>
                 <TableCell>Epoch</TableCell>
                 {metric && <TableCell align="right">{metric.label}</TableCell>}
-                {view === 'best' && <TableCell align="right">Tests</TableCell>}
+                {view === 'best' && <TableCell align="right">Evaluations</TableCell>}
+                {hasSuites && <TableCell>Scored on</TableCell>}
+                {hasSuites && <TableCell>Verdict</TableCell>}
                 <TableCell>Timestamp</TableCell>
               </TableRow>
             </TableHead>
@@ -275,9 +333,9 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
               {shown.map(({ result, value, tests }, index) => (
                 <TableRow
                   key={result._id}
-                  hover={Boolean(result.training)}
-                  onClick={result.training ? () => navigate(testRunPath(result.training!._id)) : undefined}
-                  sx={{ cursor: result.training ? 'pointer' : 'default' }}
+                  hover
+                  onClick={() => navigate(evaluationPath(result))}
+                  sx={{ cursor: 'pointer' }}
                 >
                   <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
                     <Checkbox
@@ -288,17 +346,13 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
                   </TableCell>
                   {ranked && <TableCell>{index + 1}</TableCell>}
                   <TableCell>
-                    {result.training ? (
-                      <RouterLink
-                        to={testRunPath(result.training._id)}
-                        onClick={(event) => event.stopPropagation()}
-                        style={{ color: 'inherit', textDecoration: 'none' }}
-                      >
-                        {runName(result)}
-                      </RouterLink>
-                    ) : (
-                      'Unknown'
-                    )}
+                    <RouterLink
+                      to={evaluationPath(result)}
+                      onClick={(event) => event.stopPropagation()}
+                      style={{ color: 'inherit', textDecoration: 'none' }}
+                    >
+                      {runName(result)}
+                    </RouterLink>
                   </TableCell>
                   <TableCell>{result.epoch}</TableCell>
                   {metric && (
@@ -307,6 +361,25 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
                     </TableCell>
                   )}
                   {view === 'best' && <TableCell align="right">{tests}</TableCell>}
+                  {hasSuites && (
+                    <TableCell>{result.suite ? `${result.suite.slug} v${result.suite.version}` : 'No suite'}</TableCell>
+                  )}
+                  {hasSuites && (
+                    <TableCell onClick={(event) => event.stopPropagation()}>
+                      {result.validation ? (
+                        <RouterLink
+                          to={`/evaluations/${result._id}`}
+                          aria-label={`Details of the evaluation of ${runName(result)}`}
+                          style={{ textDecoration: 'none' }}
+                        >
+                          <VerdictChip validation={result.validation} />
+                        </RouterLink>
+                      ) : (
+                        '-'
+                      )}
+                      {result.publishedAt && <Chip size="small" variant="outlined" label="Public" sx={{ ml: 0.5 }} />}
+                    </TableCell>
+                  )}
                   <TableCell>{formatDateTime(result.timestamp)}</TableCell>
                 </TableRow>
               ))}
@@ -332,7 +405,7 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
       )}
       {total > results.length && (
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-          Showing the newest {results.length.toLocaleString()} of {total.toLocaleString()} test results.
+          Showing the newest {everything.length.toLocaleString()} of {total.toLocaleString()} evaluations.
         </Typography>
       )}
     </>
@@ -341,23 +414,29 @@ const ProjectTestsTab: React.FC<ProjectTestsTabProps> = ({ projectId, testResult
   return (
     <Box sx={{ px: { xs: 0, sm: 3 } }}>
       <Typography variant="h6" gutterBottom>
-        Test Results
+        Evaluations
       </Typography>
       {isLoading ? (
-        <ListSkeleton rows={5} label="Loading test results" />
-      ) : results.length > 0 ? (
+        <ListSkeleton rows={5} label="Loading evaluations" />
+      ) : everything.length > 0 ? (
         <>
           {controls}
-          {list}
+          {results.length > 0 ? (
+            list
+          ) : (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              None of the evaluations fit that filter.
+            </Typography>
+          )}
         </>
       ) : (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          No test results yet. A run reports them from its test stage, after training, so runs that are still going or
-          skipped it have none.
+          No evaluations yet. A run reports them from its test stage, after training, so runs that are still going or
+          skipped it have none. A checkpoint scored on a suite shows up here too.
         </Typography>
       )}
     </Box>
   );
 };
 
-export default ProjectTestsTab;
+export default ProjectEvaluationsTab;

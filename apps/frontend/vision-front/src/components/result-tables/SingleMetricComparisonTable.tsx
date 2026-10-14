@@ -242,7 +242,7 @@ const SingleMetricComparisonTable: React.FC<SingleMetricComparisonTableProps> = 
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'background.default' }}>
                     <SortableTableCell condition={condition.key} column="training" align="left">
-                      Test Result
+                      Evaluation
                     </SortableTableCell>
                     {shownClasses.map(className => (
                       <SortableTableCell

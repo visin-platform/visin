@@ -55,7 +55,7 @@ vi.mock('../../components/TrainingEpochsTab', () => ({
     </div>
   )
 }));
-vi.mock('../../components/TrainingTestResultsTab', () => ({ default: () => <div data-testid="test-results-tab" /> }));
+vi.mock('../../components/TrainingEvaluationsTab', () => ({ default: () => <div data-testid="test-results-tab" /> }));
 vi.mock('../../components/TrainingConfigTab', () => ({ default: () => <div data-testid="config-tab" /> }));
 vi.mock('../../components/TrainingVisualizationsTab', () => ({ default: () => <div data-testid="visualizations-tab" /> }));
 vi.mock('../../components/TrainingSystemInfoTab', () => ({ default: () => <div data-testid="system-info-tab" /> }));
@@ -103,7 +103,7 @@ vi.mock('../../components/training/TrainingDetailTabs', () => ({
   default: (props: any) => (
     <div data-testid="training-tabs">
       <span data-testid="active-tab">{props.value}</span>
-      {['overview', 'epochs', 'test-results', 'visualizations', 'system-info', 'config', 'benchmarks'].map((name, idx) => (
+      {['overview', 'epochs', 'evaluations', 'visualizations', 'system-info', 'config', 'benchmarks'].map((name, idx) => (
         <button key={name} onClick={() => props.onChange({}, idx)}>{`tab-${name}`}</button>
       ))}
     </div>
@@ -128,9 +128,9 @@ const baseTrainingDetail = (overrides: Record<string, unknown> = {}) => ({
   refetch: vi.fn(),
   config: null,
   configLoading: false,
-  allTestResults: [],
-  testResultsLoading: false,
-  availableTestEpochs: [],
+  allEvaluations: [],
+  evaluationsLoading: false,
+  availableEpochs: [],
   ...overrides
 });
 
@@ -184,7 +184,7 @@ const baseTrainingActions = () => ({
   handleDeleteClick: vi.fn(),
   handleConfirmDelete: vi.fn(),
   handleConfirmDeleteTraining: vi.fn(),
-  handleDeleteTestResult: vi.fn(),
+  handleDeleteEvaluation: vi.fn(),
   handleLatexExport: vi.fn()
 });
 

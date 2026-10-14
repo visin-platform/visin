@@ -9,18 +9,18 @@ vi.mock('../services/trainingService', () => ({
 vi.mock('../services/configService', () => ({
   configService: { getConfigById: vi.fn() }
 }));
-vi.mock('../services/testResultService', () => ({
-  testResultService: { getTestResults: vi.fn() }
+vi.mock('../services/runEvaluationService', () => ({
+  runEvaluationService: { list: vi.fn() }
 }));
 
 import { trainingService } from '../services/trainingService';
 import { configService } from '../services/configService';
-import { testResultService } from '../services/testResultService';
+import { runEvaluationService } from '../services/runEvaluationService';
 import { useTrainingDetail } from './useTrainingDetail';
 
 const mockedTraining = vi.mocked(trainingService);
 const mockedConfig = vi.mocked(configService);
-const mockedTestResult = vi.mocked(testResultService);
+const mockedRunEvaluation = vi.mocked(runEvaluationService);
 
 const makeWrapper = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -30,9 +30,9 @@ const makeWrapper = () => {
 describe('useTrainingDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedTestResult.getTestResults.mockResolvedValue({
+    mockedRunEvaluation.list.mockResolvedValue({
       success: true,
-      data: { testResults: [], pagination: {} as any }
+      data: { evaluations: [], pagination: {} as any }
     });
   });
 
@@ -75,10 +75,10 @@ describe('useTrainingDetail', () => {
       success: true,
       data: { training: { _id: 't1', uuid: 'uuid-1' } as any, epochs: [] }
     });
-    mockedTestResult.getTestResults.mockResolvedValue({
+    mockedRunEvaluation.list.mockResolvedValue({
       success: true,
       data: {
-        testResults: [
+        evaluations: [
           { _id: 'tr1', epoch: 2 },
           { _id: 'tr2', epoch: 1 },
           { _id: 'tr3', epoch: 1 }
@@ -90,22 +90,22 @@ describe('useTrainingDetail', () => {
     const { result } = renderHook(() => useTrainingDetail('t1'), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.training?._id).toBe('t1'));
-    await waitFor(() => expect(result.current.availableTestEpochs).toEqual([1, 2]));
+    await waitFor(() => expect(result.current.availableEpochs).toEqual([1, 2]));
 
     expect(result.current.selectedTestEpoch).toBe(1);
-    expect(result.current.testResults).toHaveLength(2);
-    expect(result.current.allTestResults).toHaveLength(3);
+    expect(result.current.evaluations).toHaveLength(2);
+    expect(result.current.allEvaluations).toHaveLength(3);
   });
 
-  it('updates displayed testResults when selectedTestEpoch changes', async () => {
+  it('updates displayed evaluations when selectedTestEpoch changes', async () => {
     mockedTraining.getTrainingWithEpochs.mockResolvedValue({
       success: true,
       data: { training: { _id: 't1', uuid: 'uuid-1' } as any, epochs: [] }
     });
-    mockedTestResult.getTestResults.mockResolvedValue({
+    mockedRunEvaluation.list.mockResolvedValue({
       success: true,
       data: {
-        testResults: [
+        evaluations: [
           { _id: 'tr1', epoch: 2 },
           { _id: 'tr2', epoch: 1 }
         ] as any,
@@ -121,7 +121,7 @@ describe('useTrainingDetail', () => {
       result.current.setSelectedTestEpoch(2);
     });
 
-    await waitFor(() => expect(result.current.testResults[0]?._id).toBe('tr1'));
+    await waitFor(() => expect(result.current.evaluations[0]?._id).toBe('tr1'));
   });
 
   it('resets state when the test results fetch fails', async () => {
@@ -129,15 +129,15 @@ describe('useTrainingDetail', () => {
       success: true,
       data: { training: { _id: 't1', uuid: 'uuid-1' } as any, epochs: [] }
     });
-    mockedTestResult.getTestResults.mockRejectedValue(new Error('boom'));
+    mockedRunEvaluation.list.mockRejectedValue(new Error('boom'));
 
     const { result } = renderHook(() => useTrainingDetail('t1'), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.training?._id).toBe('t1'));
-    await waitFor(() => expect(mockedTestResult.getTestResults).toHaveBeenCalled());
-    await waitFor(() => expect(result.current.testResultsLoading).toBe(false));
-    expect(result.current.testResults).toEqual([]);
-    expect(result.current.availableTestEpochs).toEqual([]);
+    await waitFor(() => expect(mockedRunEvaluation.list).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.evaluationsLoading).toBe(false));
+    expect(result.current.evaluations).toEqual([]);
+    expect(result.current.availableEpochs).toEqual([]);
     expect(result.current.selectedTestEpoch).toBeNull();
   });
 });

@@ -55,34 +55,39 @@ const BestRunCard: React.FC<BestRunCardProps> = ({ projectId, datasetId, showPro
   const decimals = resolved.decimals;
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2, display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+    <Paper variant="outlined" sx={{ px: 2, py: 1.5, mb: 3, borderRadius: 2, display: 'flex', gap: 2, alignItems: 'flex-start' }}>
       <Box sx={{ color: 'warning.main', display: 'flex', pt: 0.25 }}>
         <BestIcon />
       </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="overline" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
-          Best run
-        </Typography>
-        <Typography variant="h6" sx={{ overflowWrap: 'anywhere' }}>
-          <Link component={RouterLink} to={`/trainings/${training._id}`}>
-            {training.name}
-          </Link>
-          {showProject && (
-            <Typography component="span" variant="body2" sx={{ color: 'text.secondary', ml: 1 }}>
-              in {project.name}
-            </Typography>
-          )}
-        </Typography>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 1.5 }}>
+          <Typography variant="overline" sx={{ color: 'text.secondary', lineHeight: 1.5 }}>
+            Best run
+          </Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
+            <Link component={RouterLink} to={`/trainings/${training._id}`}>
+              {training.name}
+            </Link>
+            {showProject && (
+              <Typography component="span" variant="body2" sx={{ color: 'text.secondary', ml: 1 }}>
+                in {project.name}
+              </Typography>
+            )}
+          </Typography>
+        </Box>
         <Typography variant="body2">
           <MetricName label={label} description={resolved.description} /> reached <strong>{value.toFixed(decimals)}</strong> at epoch {epoch}
           {' '}({metric.direction === 'higher' ? 'higher' : 'lower'} is better).
         </Typography>
-        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
-          {metric.source === 'project'
-            ? `Ranked on ${metric.path}, the result this project chose.`
-            : `Ranked on ${metric.path}, picked from what the runs report because the project has not chosen a result.`}
-          {metric.directionFrom === 'default' && ` Whether ${metric.direction} is better was assumed from the name.`}
-        </Typography>
+        <Box component="details" sx={{ mt: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+          <Box component="summary" sx={{ cursor: 'pointer' }}>Ranking details</Box>
+          <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+            {metric.source === 'project'
+              ? `Ranked on ${metric.path}, the result this project chose.`
+              : `Ranked on ${metric.path}, picked from what the runs report because the project has not chosen a result.`}
+            {metric.directionFrom === 'default' && ` Whether ${metric.direction} is better was assumed from the name.`}
+          </Typography>
+        </Box>
       </Box>
     </Paper>
   );

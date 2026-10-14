@@ -14,7 +14,6 @@ const ConfigsPage = lazy(() => import('../pages/ConfigsPage'));
 const DatasetsPage = lazy(() => import('../pages/DatasetsPage'));
 const DatasetDetailPage = lazy(() => import('../pages/DatasetDetailPage'));
 const LabelingRedirectPage = lazy(() => import('../pages/LabelingRedirectPage'));
-const TestResultsPage = lazy(() => import('../pages/TestResultsPage'));
 const VisualizationsPage = lazy(() => import('../pages/VisualizationsPage'));
 const VisualizationsComparisonPage = lazy(() => import('../pages/VisualizationsComparisonPage'));
 const TrainingVisualizationsComparisonPage = lazy(() => import('../pages/TrainingVisualizationsComparisonPage'));
@@ -51,7 +50,6 @@ function AppRoutes() {
         <Route path="/datasets/:id" element={<DatasetDetailPage />} />
         {/* The labeling tool moved to label-front; keep old URLs working. */}
         <Route path="/image-labeling/*" element={<LabelingRedirectPage />} />
-        <Route path="/test-results" element={<TestResultsPage />} />
         <Route path="/visualizations" element={<VisualizationsPage />} />
         <Route path="/visualizations/compare" element={<VisualizationsComparisonPage />} />
         <Route path="/visualizations/compare-trainings" element={<TrainingVisualizationsComparisonPage />} />

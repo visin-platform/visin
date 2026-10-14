@@ -23,7 +23,6 @@ interface ProjectFormDialogProps {
   open: boolean;
   onClose: () => void;
   onSubmit: () => Promise<void>;
-  isEditing: boolean;
   isCreating: boolean;
   name: string;
   onNameChange: (value: string) => void;
@@ -50,7 +49,6 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
   open,
   onClose,
   onSubmit,
-  isEditing,
   isCreating,
   name,
   onNameChange,
@@ -74,7 +72,7 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
 }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{isEditing ? 'Edit Project' : 'Create New Project'}</DialogTitle>
+      <DialogTitle>Create New Project</DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -116,16 +114,14 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
           disabled={isCreating}
           sx={{ mb: 2 }}
         />
-        {!isEditing && (
-          <OwnerPicker
-            value={owner}
-            onChange={onOwnerChange}
-            userId={userId}
-            groups={groups}
-            disabled={isCreating || groupsLoading}
-            helperText={groupsError ? 'Could not load your groups' : undefined}
-          />
-        )}
+        <OwnerPicker
+          value={owner}
+          onChange={onOwnerChange}
+          userId={userId}
+          groups={groups}
+          disabled={isCreating || groupsLoading}
+          helperText={groupsError ? 'Could not load your groups' : undefined}
+        />
         <VisibilitySwitch
           value={isPublic ? 'public' : 'private'}
           onChange={(value) => onIsPublicChange(value === 'public')}
@@ -161,7 +157,7 @@ export const ProjectFormDialog: React.FC<ProjectFormDialogProps> = ({
           Cancel
         </Button>
         <Button onClick={onSubmit} variant="contained" disabled={isCreating || !name.trim()}>
-          {isCreating ? <CircularProgress size={24} /> : isEditing ? 'Update' : 'Create'}
+          {isCreating ? <CircularProgress size={24} /> : 'Create'}
         </Button>
       </DialogActions>
     </Dialog>

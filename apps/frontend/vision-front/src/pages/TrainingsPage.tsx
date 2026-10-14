@@ -31,7 +31,6 @@ const TrainingsPage: React.FC = () => {
     setTrainingName,
     trainingDescription,
     setTrainingDescription,
-    selectedDatasetId,
     selectedProjectId,
     setSelectedProjectId,
     selectedStatus,
@@ -73,6 +72,8 @@ const TrainingsPage: React.FC = () => {
     handleDeleteSelected,
     projectNames
   } = useTrainingsPage();
+
+  const editingTraining = displayTrainings.find((row) => row._id === editingTrainingId);
 
   return (
     <Container maxWidth="xl" sx={{ pb: 4 }}>
@@ -142,7 +143,8 @@ const TrainingsPage: React.FC = () => {
         onNameChange={setTrainingName}
         trainingDescription={trainingDescription}
         onDescriptionChange={setTrainingDescription}
-        selectedDatasetId={selectedDatasetId}
+        dataset={editingTraining?.dataset}
+        datasetId={editingTraining?.datasetId}
         selectedProjectId={selectedProjectId}
         onProjectChange={setSelectedProjectId}
         selectedStatus={selectedStatus}

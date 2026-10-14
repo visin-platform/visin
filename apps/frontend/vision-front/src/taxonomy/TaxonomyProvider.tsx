@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ProjectTaxonomy } from '../types/taxonomy';
-import { TestResult } from '../types/testResult';
+import { RunEvaluation } from '../types/runEvaluation';
 import { TaxonomyContext } from './context';
 import { resolveTaxonomyFor } from './useTaxonomy';
 
@@ -11,18 +11,18 @@ import { resolveTaxonomyFor } from './useTaxonomy';
 interface TaxonomyProviderProps {
   taxonomy?: ProjectTaxonomy;
   /** results to discover vocabulary from; usually the ones about to be rendered */
-  testResults?: TestResult[];
+  evaluations?: RunEvaluation[];
   children: React.ReactNode;
 }
 
 export const TaxonomyProvider: React.FC<TaxonomyProviderProps> = ({
   taxonomy,
-  testResults,
+  evaluations,
   children
 }) => {
   const value = useMemo(
-    () => ({ taxonomy, resolved: resolveTaxonomyFor(taxonomy, testResults ?? []) }),
-    [taxonomy, testResults]
+    () => ({ taxonomy, resolved: resolveTaxonomyFor(taxonomy, evaluations ?? []) }),
+    [taxonomy, evaluations]
   );
   return <TaxonomyContext.Provider value={value}>{children}</TaxonomyContext.Provider>;
 };

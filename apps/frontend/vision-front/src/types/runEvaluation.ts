@@ -1,10 +1,11 @@
+import type { Checkpoint, ValidationReport } from './evaluation';
 import { PaginatedResponse } from './api';
 
 /**
  * One class's metrics. All optional: a run reports whatever it computed, and AP
  * in particular is absent from most training-time payloads.
  */
-export interface TestResultMetrics {
+export interface EvaluationClassMetrics {
   iou?: number;
   precision?: number;
   recall?: number;
@@ -29,7 +30,7 @@ export interface InferenceTimeMetrics {
  * and are hints, not a contract — a detection or classification run reports its
  * own, which the index signature admits.
  */
-export interface TestResultOverallMetrics {
+export interface EvaluationOverallMetrics {
   mIoU_foreground?: number;
   mean_accuracy?: number;
   fw_iou?: number;
@@ -45,28 +46,28 @@ export interface TestResultOverallMetrics {
  * name five of them as *required*, so a genuinely generic payload failed to
  * type-check even though the backend stores the field as an open blob.
  */
-export interface TestResultCondition {
+export interface EvaluationCondition {
   inference_time?: InferenceTimeMetrics;
-  overall?: TestResultOverallMetrics;
-  [className: string]: TestResultMetrics | InferenceTimeMetrics | TestResultOverallMetrics | undefined;
+  overall?: EvaluationOverallMetrics;
+  [className: string]: EvaluationClassMetrics | InferenceTimeMetrics | EvaluationOverallMetrics | undefined;
 }
 
 /**
  * A whole test result: one entry per condition, plus an optional top-level
  * `overall`. Condition names come from the data, not from this type.
  */
-export interface TestResultData {
-  overall?: TestResultOverallMetrics;
-  [condition: string]: TestResultCondition | TestResultOverallMetrics | undefined;
+export interface EvaluationResults {
+  overall?: EvaluationOverallMetrics;
+  [condition: string]: EvaluationCondition | EvaluationOverallMetrics | undefined;
 }
 
-export interface TestResult {
+export interface RunEvaluation {
   _id: string;
   timestamp: string;
   epoch: number;
   epoch_uuid: string;
   test_uuid: string;
-  test_results: TestResultData;
+  test_results: EvaluationResults;
   createdAt: string;
   updatedAt: string;
   training?: {
@@ -79,19 +80,29 @@ export interface TestResult {
     epoch: number;
     epoch_time: number;
   };
+  /**
+   * What makes a result one of the ranked kind: the suite it was scored on, and the server's verdict on it. Both are
+   * absent on a plain test a run reported, which is an exploratory measurement of the same record.
+   */
+  suite?: { id: string; slug: string; version: number };
+  validation?: ValidationReport;
+  /** put on a public leaderboard by a manager */
+  publishedAt?: string;
+  /** which model was scored, for a result with no run behind it (a Hub checkpoint) */
+  checkpoint?: Checkpoint;
 }
 
-export interface CreateTestResultData {
+export interface CreateRunEvaluationData {
   timestamp?: string;
   epoch: number;
   epoch_uuid: string;
   test_uuid?: string;
-  test_results: TestResultData;
+  test_results: EvaluationResults;
 }
 
-export interface TestResultsPaginatedResponse extends PaginatedResponse<TestResult> {
+export interface RunEvaluationsResponse extends PaginatedResponse<RunEvaluation> {
   data: {
-    testResults: TestResult[];
+    evaluations: RunEvaluation[];
     pagination: {
       page: number;
       limit: number;

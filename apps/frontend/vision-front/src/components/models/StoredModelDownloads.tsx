@@ -8,6 +8,8 @@ interface StoredModelDownloadsProps {
   trainingId: string;
   /** the formats of one checkpoint: its `.pth` and its `.onnx` export */
   models: StoredModelReference[];
+  compact?: boolean;
+  detailsOnly?: boolean;
 }
 
 /**
@@ -18,7 +20,7 @@ interface StoredModelDownloadsProps {
  * The weights are a plain link, so the browser sends the session along and a private run's model downloads for
  * whoever may read the run.
  */
-const StoredModelDownloads: React.FC<StoredModelDownloadsProps> = ({ trainingId, models }) => {
+const StoredModelDownloads: React.FC<StoredModelDownloadsProps> = ({ trainingId, models, compact = false, detailsOnly = false }) => {
   const ordered = [...models].sort((a, b) => a.format.localeCompare(b.format));
   const license = ordered.find((model) => model.license)?.license;
   const credit = ordered.find((model) => model.credit)?.credit;
@@ -31,7 +33,7 @@ const StoredModelDownloads: React.FC<StoredModelDownloadsProps> = ({ trainingId,
 
   return (
     <Box component="span" sx={{ display: 'block' }}>
-      <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', columnGap: 1.5, alignItems: 'baseline' }}>
+      {!detailsOnly && <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', columnGap: 1.5, alignItems: 'baseline' }}>
         {ordered.map((model) => {
           const block = storedModelBlock(model);
           const size = model.size === undefined ? '' : ` · ${formatBytes(model.size)}`;
@@ -65,12 +67,12 @@ const StoredModelDownloads: React.FC<StoredModelDownloadsProps> = ({ trainingId,
             Outputs (.zip)
           </Link>
         )}
-      </Box>
-      <Typography variant="caption" component="span" sx={{ display: 'block', color: 'text.secondary' }}>
+      </Box>}
+      {!compact && <Typography variant="caption" component="span" sx={{ display: 'block', color: 'text.secondary' }}>
         {license ? `Licence ${license.name ?? license.id}` : 'Licence not stated'}
         {credit ? ` · ${credit}` : ''}
-      </Typography>
-      {preprocessing && (
+      </Typography>}
+      {!compact && preprocessing && (
         <Typography variant="caption" component="span" sx={{ display: 'block', color: 'text.secondary' }}>
           {preprocessing}
         </Typography>

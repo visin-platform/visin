@@ -52,6 +52,8 @@ export interface RegistryQuery {
 }
 
 export interface RegistryPage {
+  /** Numeric results discovered from recent visible model runs. */
+  metrics?: string[];
   models: RegistryModel[];
   pagination: { page: number; limit: number; total: number; pages: number };
 }

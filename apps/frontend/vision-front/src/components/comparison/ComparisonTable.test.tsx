@@ -14,7 +14,7 @@ const makeComparison = (id: string, name: string, iouValues: number[]): Training
     timestamp: new Date().toISOString(),
     results: { val: { mean_iou: v } }
   })),
-  aggregatedTestResults: null,
+  aggregatedEvaluations: null,
   testResultsCount: 0,
   benchmarks: []
 });

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Epoch, TestResult } from '../types';
+import { Epoch, RunEvaluation } from '../types';
 import { epochService } from '../services/epochService';
 import { trainingService } from '../services/trainingService';
-import { testResultService } from '../services/testResultService';
-import { processEpochFiles, processTestResultFiles, UploadResult } from '../utils/fileUploadHelpers';
+import { runEvaluationService } from '../services/runEvaluationService';
+import { processEpochFiles, processEvaluationFiles, UploadResult } from '../utils/fileUploadHelpers';
 import { generateLatexCode } from '../utils/latexGenerator';
 import { resolveTaxonomyFor, useProjectTaxonomy } from '../taxonomy/useTaxonomy';
 
@@ -27,7 +27,7 @@ export function useTrainingActions({ trainingId, refetch, onTrainingDeleted }: U
 
   const projectTaxonomy = useProjectTaxonomy();
 
-  const handleFileUpload = async (files: FileList, type: 'epoch' | 'testResult') => {
+  const handleFileUpload = async (files: FileList, type: 'epoch' | 'evaluation') => {
     if (!files || files.length === 0 || !trainingId) return;
 
     try {
@@ -37,7 +37,7 @@ export function useTrainingActions({ trainingId, refetch, onTrainingDeleted }: U
 
       const results = type === 'epoch'
         ? await processEpochFiles(files, trainingId)
-        : await processTestResultFiles(files);
+        : await processEvaluationFiles(files);
 
       setUploadResults(results);
 
@@ -102,23 +102,23 @@ export function useTrainingActions({ trainingId, refetch, onTrainingDeleted }: U
     }
   };
 
-  const handleDeleteTestResult = async (testResultId: string) => {
+  const handleDeleteEvaluation = async (evaluationId: string) => {
     try {
       setUploading(true);
-      await testResultService.deleteTestResult(testResultId);
-      setUploadSuccess('Test result deleted successfully');
+      await runEvaluationService.trash(evaluationId);
+      setUploadSuccess('Evaluation deleted successfully');
       refetch();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete test result';
+      const message = err instanceof Error ? err.message : 'Failed to delete evaluation';
       setUploadError(message);
     } finally {
       setUploading(false);
     }
   };
 
-  const handleLatexExport = (testResult: TestResult) => {
+  const handleLatexExport = (evaluation: RunEvaluation) => {
     // resolve against this result's own vocabulary, keeping the project's labels
-    setLatexCode(generateLatexCode(testResult, resolveTaxonomyFor(projectTaxonomy, [testResult])));
+    setLatexCode(generateLatexCode(evaluation, resolveTaxonomyFor(projectTaxonomy, [evaluation])));
     setLatexModalOpen(true);
   };
 
@@ -141,7 +141,7 @@ export function useTrainingActions({ trainingId, refetch, onTrainingDeleted }: U
     handleDeleteClick,
     handleConfirmDelete,
     handleConfirmDeleteTraining,
-    handleDeleteTestResult,
+    handleDeleteEvaluation,
     handleLatexExport
   };
 }

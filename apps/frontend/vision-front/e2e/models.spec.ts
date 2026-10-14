@@ -99,8 +99,10 @@ test.describe('stored model downloads', () => {
     await expect(onnx).toHaveAttribute('href', 'http://localhost:4010/api/trainings/t1/models/onnx/file');
     const row = page.getByRole('row').filter({ has: weights });
     await expect(row.getByRole('link', { name: 'Download clft.onnx (onnx)' })).toBeVisible();
-    await expect(row.getByText(/camera mean 0.485/)).toBeVisible();
-    await expect(row.getByText(/Licence CC BY 4.0/)).toBeVisible();
+    await expect(page.getByText(/camera mean 0.485/)).toHaveCount(0);
+    await row.getByRole('button', { name: /^Show details/ }).click();
+    await expect(page.getByText(/camera mean 0.485/)).toBeVisible();
+    await expect(page.getByText(/Licence CC BY 4.0/)).toBeVisible();
     await expect(row.getByRole('link', { name: /Download the outputs/ })).toHaveAttribute(
       'href',
       /\/models\/pth\/bundle$/

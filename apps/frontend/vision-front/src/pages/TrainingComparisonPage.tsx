@@ -17,9 +17,9 @@ import { trainingService } from '../services/trainingService';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import ComparisonTable from '@/components/comparison/ComparisonTable';
-import PerformanceMetricsTable from '../components/test-results/PerformanceMetricsTable';
-import IoUMetricsTable from '../components/test-results/IoUMetricsTable';
-import APMetricsTable from '../components/test-results/APMetricsTable';
+import PerformanceMetricsTable from '../components/result-tables/PerformanceMetricsTable';
+import IoUMetricsTable from '../components/result-tables/IoUMetricsTable';
+import APMetricsTable from '../components/result-tables/APMetricsTable';
 import BenchmarksComparisonTable from '../components/comparison/BenchmarksComparisonTable';
 import TrainingValidationMetricsTable from '../components/comparison/TrainingValidationMetricsTable';
 import TrainingClassIoUTable from '../components/comparison/TrainingClassIoUTable';
@@ -70,13 +70,13 @@ const TrainingComparisonPage: React.FC = () => {
   );
 
   // Process test results data - use the already aggregated data from backend
-  const testResultsData = React.useMemo(() => {
+  const evaluationsData = React.useMemo(() => {
     if (!comparisonData.length) return [];
     
     return comparisonData
-      .filter(comp => comp.aggregatedTestResults !== null)
+      .filter(comp => comp.aggregatedEvaluations !== null)
       .map(comp => ({
-        aggregatedResults: comp.aggregatedTestResults,
+        aggregatedResults: comp.aggregatedEvaluations,
         training: comp.training,
         testResultsCount: comp.testResultsCount || 0
       }));
@@ -160,7 +160,7 @@ const TrainingComparisonPage: React.FC = () => {
           }}
         >
           <Tab label={`Training Runs (${comparisonData.length})`} />
-          <Tab label={`Test Results (${testResultsData.length})`} />
+          <Tab label={`Evaluations (${evaluationsData.length})`} />
           <Tab label={`Benchmarks (${benchmarksData.length})`} />
         </Tabs>
       </Box>
@@ -209,21 +209,21 @@ const TrainingComparisonPage: React.FC = () => {
             onMultiplierChange={setMultiplier}
           />
 
-          {/* Test Results Comparison */}
-          {testResultsData.length > 0 ? (
+          {/* Evaluations Comparison */}
+          {evaluationsData.length > 0 ? (
             <>
               <IoUMetricsTable
-                comparisonData={testResultsData}
+                comparisonData={evaluationsData}
                 decimals={decimals}
                 multiplier={multiplier}
               />
               <APMetricsTable
-                comparisonData={testResultsData}
+                comparisonData={evaluationsData}
                 decimals={decimals}
                 multiplier={multiplier}
               />
               <PerformanceMetricsTable
-                comparisonData={testResultsData}
+                comparisonData={evaluationsData}
                 decimals={decimals}
                 multiplier={multiplier}
               />
@@ -233,7 +233,7 @@ const TrainingComparisonPage: React.FC = () => {
               <Typography variant="body1" sx={{
                 color: "text.secondary"
               }}>
-                None of the selected runs has test results to compare. A run reports them from its test stage, after training.
+                None of the selected runs has evaluations to compare. A run reports them from its test stage, after training.
               </Typography>
             </Box>
           )}

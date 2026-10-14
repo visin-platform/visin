@@ -13,11 +13,9 @@ vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => useAuthMock()
 }));
 
-const updateProjectMock = vi.fn();
 const deleteProjectMock = vi.fn();
 vi.mock('../../services/projectService', () => ({
   projectService: {
-    updateProject: (...args: unknown[]) => updateProjectMock(...args),
     deleteProject: (...args: unknown[]) => deleteProjectMock(...args)
   }
 }));
@@ -28,8 +26,6 @@ vi.mock('../../components/project/ProjectHeader', () => ({
     <div data-testid="project-header">
       <span>{props.project.name}</span>
       <span data-testid="is-owner">{String(props.project.permissions.manage)}</span>
-      <button onClick={() => props.onEdit()}>open-edit</button>
-      <button onClick={() => props.onDelete()}>open-delete</button>
     </div>
   )
 }));
@@ -37,22 +33,12 @@ vi.mock('../../components/project/ProjectHeader', () => ({
 vi.mock('../../components/project/ProjectTabs', () => ({
   default: (props: any) => (
     <div data-testid="project-tabs">
-      <span data-testid="tab-value">{props.tabValue}</span>
+      <span data-testid="tab-value">{props.tab}</span>
+      <button onClick={() => props.onMoveToTrash()}>open-delete</button>
       <span data-testid="trainings-total">{props.total}</span>
-      <button onClick={() => props.onTabChange({}, 1)}>go-to-trainings-tab</button>
+      <button onClick={() => props.onTabChange('trainings')}>go-to-trainings-tab</button>
     </div>
   )
-}));
-
-vi.mock('../../components/project/EditProjectDialog', () => ({
-  default: (props: any) =>
-    props.open ? (
-      <div data-testid="edit-project-dialog">
-        <span data-testid="edit-updating">{String(props.isUpdating)}</span>
-        <button onClick={() => props.onSubmit()}>submit-edit</button>
-        <button onClick={() => props.onClose()}>close-edit</button>
-      </div>
-    ) : null
 }));
 
 vi.mock('../../components/project/DeleteProjectDialog', () => ({
@@ -85,14 +71,14 @@ const baseHookReturn = (overrides: Record<string, unknown> = {}) => ({
   stats: {},
   dashboardStats: {},
   fullTrainings: { trainings: [], pagination: { total: 0 } },
-  testResults: {},
+  evaluations: {},
   visualizations: {},
   benchmarks: {},
   isProjectLoading: false,
   isStatsLoading: false,
   isDashboardStatsLoading: false,
   isFullTrainingsLoading: false,
-  isTestResultsLoading: false,
+  isEvaluationsLoading: false,
   isBenchmarksLoading: false,
   projectError: null,
   page: 0,
@@ -121,6 +107,19 @@ const renderPage = (path = '/projects/p1') => {
   return qc;
 };
 
+const renderPageWithUnmount = (path: string) => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/projects/:id" element={<ProjectDashboardPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+};
+
 describe('ProjectDashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -133,6 +132,40 @@ describe('ProjectDashboardPage', () => {
     renderPage();
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
     expect(screen.queryByTestId('project-header')).not.toBeInTheDocument();
+  });
+
+  it('keeps the header and tabs up while the totals are still loading', () => {
+    useProjectDashboardMock.mockReturnValue(baseHookReturn({ isStatsLoading: true, isDashboardStatsLoading: true }));
+    renderPage();
+    expect(screen.getByTestId('project-header')).toBeInTheDocument();
+    expect(screen.getByTestId('project-tabs')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  it('opens the tab the address names, and the overview for one it does not', () => {
+    const { unmount } = renderPageWithUnmount('/projects/p1?tab=models');
+    expect(screen.getByTestId('tab-value').textContent).toBe('models');
+    unmount();
+
+    renderPage('/projects/p1?tab=nonsense');
+    expect(screen.getByTestId('tab-value').textContent).toBe('overview');
+  });
+
+  it('opens Settings from the address for a manager only', () => {
+    const { unmount } = renderPageWithUnmount('/projects/p1?tab=settings');
+    expect(screen.getByTestId('tab-value').textContent).toBe('settings');
+    unmount();
+
+    useProjectDashboardMock.mockReturnValue(
+      baseHookReturn({
+        project: {
+          ...baseHookReturn().project,
+          permissions: { read: true, contribute: false, manage: false, own: false }
+        }
+      })
+    );
+    renderPage('/projects/p1?tab=settings');
+    expect(screen.getByTestId('tab-value').textContent).toBe('overview');
   });
 
   it('shows an error message and a back link when the project fails to load', () => {
@@ -179,26 +212,6 @@ describe('ProjectDashboardPage', () => {
     expect(screen.getByTestId('is-owner').textContent).toBe('true');
   });
 
-  it('opens the edit dialog from the header and submits an update', async () => {
-    updateProjectMock.mockResolvedValue({});
-    const hookReturn = baseHookReturn();
-    useProjectDashboardMock.mockReturnValue(hookReturn);
-    renderPage();
-
-    fireEvent.click(screen.getByText('open-edit'));
-    expect(screen.getByTestId('edit-project-dialog')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('submit-edit'));
-    await waitFor(() =>
-      expect(updateProjectMock).toHaveBeenCalledWith('p1', {
-        name: 'My Project',
-        description: 'desc',
-        visibility: 'public' as const
-      })
-    );
-    await waitFor(() => expect(hookReturn.invalidateProjectQueries).toHaveBeenCalled());
-  });
-
   it('opens the delete dialog from the header and confirms deletion, navigating away', async () => {
     deleteProjectMock.mockResolvedValue({});
     renderPage();
@@ -226,9 +239,9 @@ describe('ProjectDashboardPage', () => {
 
   it('changes tabs and updates the tab value passed to ProjectTabs', () => {
     renderPage();
-    expect(screen.getByTestId('tab-value').textContent).toBe('0');
+    expect(screen.getByTestId('tab-value').textContent).toBe('overview');
     fireEvent.click(screen.getByText('go-to-trainings-tab'));
-    expect(screen.getByTestId('tab-value').textContent).toBe('1');
+    expect(screen.getByTestId('tab-value').textContent).toBe('trainings');
   });
 
   it('passes the trainings pagination total through to ProjectTabs', () => {

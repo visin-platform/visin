@@ -6,7 +6,7 @@ describe('TrainingDetailTabs', () => {
   it('renders all seven tabs', () => {
     render(<TrainingDetailTabs value={0} onChange={vi.fn()} />);
 
-    ['Overview', 'Epochs', 'Test Results', 'Visualizations', 'System Info', 'Config', 'Benchmarks'].forEach((label) => {
+    ['Overview', 'Epochs', 'Evaluations', 'Visualizations', 'System Info', 'Config', 'Benchmarks'].forEach((label) => {
       expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
     });
   });
