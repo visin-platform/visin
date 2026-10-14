@@ -81,9 +81,11 @@ and every minute with per-job ownership tokens; a crashed operation's lease
 expires after ten minutes. These timings are code constants. Existing jobs with
 no lifecycle field continue to work without a migration.
 
-Requests that began writing before deletion still need operation fencing,
-especially task materialization and label imports. Historical orphan holds also
-need separate reconciliation; see item 4 in the repository's `todo.md`.
+Task materialization now fences publication against activation and deletion, and
+an expired build's late rows remain inaccessible and are collected by recovery.
+Mask uploads and label imports that began before deletion still need operation
+fencing. Historical orphan holds also need separate reconciliation; see item 4
+in the repository's `todo.md`.
 
 ## Labels
 
@@ -169,6 +171,21 @@ image or archive dependency.
 You cannot: tasks are immutable once materialized, because labels point at tasks.
 Re-map or re-import the dataset and build a new job from it. Materializing again
 is draft-only and replaces the whole task set.
+
+Replacement builds a separate generation in batches of 100, preserving the
+current tasks and labels until one conditional Mongo update publishes the new
+generation, count and selection together. Activation, deletion and another
+materialization are refused while a build owns the job. A ten-minute lease,
+renewed before each batch, allows recovery after a crash. Late publication from
+an expired build is refused.
+
+Every task read, position, progress query, import and export selects the published
+generation. Retired tasks, their annotations/suggestions and their mask files are
+collected at startup and every minute, with failed file cleanup retried. Existing
+jobs with no generation keep their current tasks until their first replacement;
+no database migration or replica-set transaction is needed. A lost publication
+acknowledgement can fail the request even though the new set was published;
+reloading shows the committed generation.
 
 ## Develop
 

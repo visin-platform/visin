@@ -11,6 +11,7 @@ import { encodeGrayscalePng } from '../utils/png';
 import { TASK_LEASE_MINUTES } from '../limits';
 import { getJobReadAccess } from './jobAccessService';
 import { getJob } from './jobService';
+import { taskSet } from './taskGeneration';
 
 
 export type SensorView =
@@ -102,9 +103,10 @@ const toObjects = (objects: IBoxObject[]): IBoxObject[] =>
  * frame a labeler sees and shouldn't pay for a count it was handed.
  */
 const positionFor = async (task: ILabelTask, total?: number): Promise<TaskPosition> => {
+  const filter = { jobId: task.jobId, generation: task.generation ?? null };
   const [index, resolvedTotal] = await Promise.all([
-    LabelTask.countDocuments({ jobId: task.jobId, order: { $lt: task.order } }),
-    total != null ? Promise.resolve(total) : LabelTask.countDocuments({ jobId: task.jobId })
+    LabelTask.countDocuments({ ...filter, order: { $lt: task.order } }),
+    total != null ? Promise.resolve(total) : LabelTask.countDocuments(filter)
   ]);
   return { index, total: resolvedTotal };
 };
@@ -203,7 +205,7 @@ export const nextTask = async (
   const now = new Date();
   const task = await LabelTask.findOneAndUpdate(
     {
-      jobId: job._id,
+      ...taskSet(job),
       ...(excludeTaskIds.length ? { _id: { $nin: excludeTaskIds } } : {}),
       answersCount: { $lt: job.redundancy },
       answeredBy: { $ne: user.id },
@@ -248,7 +250,7 @@ export const getTaskItemAtIndex = async (
 ): Promise<TaskItem | null> => {
   const job = await getJob(jobId);
   await getJobReadAccess(job, userId);
-  const task = await LabelTask.findOne({ jobId }).sort({ order: 1 }).skip(index);
+  const task = await LabelTask.findOne(taskSet(job)).sort({ order: 1 }).skip(index);
   return task ? buildTaskItem(task, userId) : null;
 };
 
@@ -258,7 +260,7 @@ export const getTaskWithJob = async (taskId: string): Promise<{ task: ILabelTask
     throw new NotFoundError('Task not found');
   }
   const job = await LabelJob.findById(task.jobId);
-  if (!job || job.lifecycle) {
+  if (!job || job.lifecycle || (task.generation ?? null) !== (job.taskGeneration ?? null)) {
     throw new NotFoundError('Job not found');
   }
   return { task, job };
@@ -339,8 +341,8 @@ const ensureAnnotation = async (
       // `status` goes in one operator or the other, never both: MongoDB refuses an
       // update that names the same path in `$set` and `$setOnInsert`.
       reopen
-        ? { $set: { jobId: job._id, ...identity(user), status: 'draft', ...set } }
-        : { $set: { jobId: job._id, ...identity(user), ...set }, $setOnInsert: { status: 'draft' } },
+        ? { $set: { jobId: job._id, ...(task.generation ? { generation: task.generation } : {}), ...identity(user), status: 'draft', ...set } }
+        : { $set: { jobId: job._id, ...(task.generation ? { generation: task.generation } : {}), ...identity(user), ...set }, $setOnInsert: { status: 'draft' } },
       { upsert: true, returnDocument: 'after' }
     )
   );
@@ -434,7 +436,7 @@ export const clearMask = async (task: ILabelTask, job: ILabelJob, user: UserPayl
 };
 
 export const maybeCompleteJob = async (job: ILabelJob): Promise<void> => {
-  const remaining = await LabelTask.countDocuments({ jobId: job._id, answersCount: { $lt: job.redundancy } });
+  const remaining = await LabelTask.countDocuments({ ...taskSet(job), answersCount: { $lt: job.redundancy } });
   if (remaining === 0) {
     await LabelJob.updateOne({ _id: job._id, status: 'active' }, { $set: { status: 'completed' } });
   }
@@ -478,6 +480,7 @@ export const finishTask = async (
       {
         $set: {
           jobId: job._id,
+          ...(task.generation ? { generation: task.generation } : {}),
           ...identity(user),
           status: outcome,
           ...(outcome === 'done' ? { doneAt: new Date() } : {}),

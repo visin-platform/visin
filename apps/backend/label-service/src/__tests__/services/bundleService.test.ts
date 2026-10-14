@@ -84,7 +84,7 @@ describe('streamExport', () => {
     expect(frames).toBe(2);
     expect(Object.keys(entries)).toEqual(['labels/a.txt', 'labels/c.txt', 'data.yaml']);
     expect(entries['labels/a.txt'].toString()).toBe('0 0.25 0.5 0.5 1\n');
-    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({ jobId: 'j1', status: { $in: ['done'] } });
+    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({ jobId: 'j1', generation: null, status: { $in: ['done'] } });
   });
 
   it('fetches a frame’s mask and hands the format its class indices', async () => {
@@ -114,7 +114,7 @@ describe('streamExport', () => {
 
     const { entries } = await run('yolo', 'all');
 
-    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({ jobId: 'j1', status: { $in: ['done', 'draft'] } });
+    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({ jobId: 'j1', generation: null, status: { $in: ['done', 'draft'] } });
     expect(Object.keys(entries)).toEqual(['labels/a.txt', 'labels/c.txt', 'data.yaml']);
   });
 

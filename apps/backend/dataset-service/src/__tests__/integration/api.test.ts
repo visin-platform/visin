@@ -548,6 +548,94 @@ describe('what label-service asks', () => {
 });
 
 describe('archive upload, download and import', () => {
+  it.each(['reserve', 'resume', 'complete'])('refuses %s when a hold arrives during file-service work', async (operation) => {
+    const id = await createDataset();
+    const first = await uploadZip(id, [{ path: 'old.png', data: Buffer.from('old') }]);
+    const upload = (filename: string) => call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename } });
+    const pending = (await upload('new.zip')).body.data.uploadUrl.replace('upload:', '');
+    if (operation === 'complete') fileStore.stored.set(pending, Buffer.from('new archive'));
+    const hold = async () => {
+      await Dataset.updateOne({ _id: id }, { $push: { holds: { service: 'label-service', ref: 'late', createdAt: new Date() } } });
+    };
+    if (operation === 'complete') {
+      jest.mocked(fileStore.client.getFileSize).mockImplementationOnce(async (fileId) => { const size = fileStore.stored.get(fileId)?.length ?? null; await hold(); return size; });
+    } else {
+      jest.mocked(fileStore.client.getUploadUrl).mockImplementationOnce(async (fileId) => { await hold(); return { url: `upload:${fileId}`, expiresMs: Date.now() + 60_000 }; });
+    }
+    const scans = jest.mocked(enqueueScan).mock.calls.length;
+    const response = operation === 'complete'
+      ? await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER })
+      : await upload(operation === 'resume' ? 'new.zip' : 'other.zip');
+    expect(response.status).toBe(409);
+    const stored = (await Dataset.findById(id))!;
+    expect(stored.archive!.fileId).toBe(first.fileId);
+    expect(stored.pendingUpload!.fileId).toBe(pending);
+    expect(fileStore.stored.has(first.fileId)).toBe(true);
+    expect(jest.mocked(enqueueScan).mock.calls).toHaveLength(scans);
+  });
+
+  it('never deletes a pending archive adopted while a replacement reservation is waiting', async () => {
+    const id = await createDataset();
+    const reserved = await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename: 'first.zip' } });
+    const pending = reserved.body.data.uploadUrl.replace('upload:', '');
+    fileStore.stored.set(pending, Buffer.from('first archive'));
+    jest.mocked(fileStore.client.getUploadUrl).mockImplementationOnce(async (fileId) => {
+      expect((await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER })).status).toBe(200);
+      return { url: `upload:${fileId}`, expiresMs: Date.now() + 60_000 };
+    });
+    const other = await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename: 'other.zip' } });
+    expect(other.status).toBe(409);
+    expect((await Dataset.findById(id))!.archive!.fileId).toBe(pending);
+    expect(fileStore.stored.has(pending)).toBe(true);
+  });
+
+  it('serializes concurrent reservations without overwriting the winner', async () => {
+    const id = await createDataset();
+    let release!: () => void;
+    const both = new Promise<void>((resolve) => { release = resolve; });
+    let calls = 0;
+    jest.mocked(fileStore.client.getUploadUrl).mockImplementation(async (fileId) => {
+      if (++calls === 2) release();
+      await both;
+      return { url: `upload:${fileId}`, expiresMs: Date.now() + 60_000 };
+    });
+    const responses = await Promise.all(['one.zip', 'two.zip'].map((filename) =>
+      call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename } })));
+    expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
+    const winner = responses.find((response) => response.status === 201)!;
+    expect((await Dataset.findById(id))!.pendingUpload!.fileId).toBe(winner.body.data.uploadUrl.replace('upload:', ''));
+  });
+
+  it('retains a failed discard for retry and prevents adopting its bytes', async () => {
+    const id = await createDataset();
+    const reserved = await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename: 'set.zip' } });
+    const pending = reserved.body.data.uploadUrl.replace('upload:', '');
+    fileStore.stored.set(pending, Buffer.from('archive'));
+    jest.mocked(fileStore.client.deleteFile).mockRejectedValueOnce(new Error('files down'));
+    expect((await call(`/api/datasets/${id}/archive/upload`, { method: 'DELETE', user: OWNER })).status).toBe(500);
+    expect((await Dataset.findById(id))!.pendingUpload!.discarding).toBe(true);
+    expect((await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER })).status).toBe(409);
+    expect((await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename: 'set.zip' } })).status).toBe(409);
+    expect((await call(`/api/datasets/${id}/archive/upload`, { method: 'DELETE', user: OWNER })).status).toBe(200);
+    expect(fileStore.stored.has(pending)).toBe(false);
+  });
+
+  it('does not discard an archive when completion wins first', async () => {
+    const id = await createDataset();
+    const reserved = await call(`/api/datasets/${id}/archive/upload-url`, { method: 'POST', user: OWNER, body: { filename: 'set.zip' } });
+    const pending = reserved.body.data.uploadUrl.replace('upload:', '');
+    fileStore.stored.set(pending, Buffer.from('archive'));
+    const update = Dataset.updateOne.bind(Dataset);
+    const spy = jest.spyOn(Dataset, 'updateOne').mockImplementationOnce(((...args: Parameters<typeof Dataset.updateOne>) =>
+      call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER }).then(() => update(...args))
+    ) as unknown as typeof Dataset.updateOne);
+    try {
+      expect((await call(`/api/datasets/${id}/archive/upload`, { method: 'DELETE', user: OWNER })).status).toBe(409);
+      expect(fileStore.stored.has(pending)).toBe(true);
+      expect((await Dataset.findById(id))!.archive!.fileId).toBe(pending);
+    } finally { spy.mockRestore(); }
+  });
+
   it('adopts the zip at once, reads its index in the background, and replaces a previous archive', async () => {
     const id = await createDataset();
     expect(

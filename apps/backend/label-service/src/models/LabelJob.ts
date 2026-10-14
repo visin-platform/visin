@@ -77,6 +77,8 @@ export interface ILabelJob extends Document {
   lifecycleLeaseUntil?: Date;
   isPublic: boolean;
   tasksCount: number; // denormalized at materialization
+  taskGeneration?: string;
+  materialization?: { generation: string; leaseUntil: Date };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -133,7 +135,9 @@ const LabelJobSchema = new Schema<ILabelJob>(
     lifecycleToken: String,
     lifecycleLeaseUntil: Date,
     isPublic: { type: Boolean, default: false },
-    tasksCount: { type: Number, default: 0 }
+    tasksCount: { type: Number, default: 0 },
+    taskGeneration: String,
+    materialization: { type: new Schema({ generation: { type: String, required: true }, leaseUntil: { type: Date, required: true } }, { _id: false }), default: undefined }
   },
   { timestamps: true }
 );

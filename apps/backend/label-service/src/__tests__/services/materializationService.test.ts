@@ -1,3 +1,11 @@
+jest.mock('../../services/taskSetService', () => ({
+  ...jest.requireActual('../../services/taskSetService'),
+  beginTaskSet: jest.fn(async () => 'stage'),
+  renewTaskSet: jest.fn(), abandonTaskSet: jest.fn(),
+  publishTaskSet: jest.fn(async (job, generation, tasksCount, selection) => {
+    job.taskGeneration = generation; job.tasksCount = tasksCount; job.selection = selection;
+  })
+}));
 jest.mock('../../clients/datasetServiceClient', () => ({
   getDataset: jest.fn(),
   listItems: jest.fn(),
@@ -121,7 +129,7 @@ describe('filter path', () => {
     const result = await materializeTasks(job, { kind: 'filter' });
 
     expect(result).toEqual({ tasks: 3, missing: [], sensors: {} });
-    expect(mockedTask.deleteMany).toHaveBeenCalledWith({ jobId: 'j1' });
+    expect(mockedTask.deleteMany).not.toHaveBeenCalled();
     expect(inserted().map((task) => (task.frame as { stem: string }).stem)).toEqual(['a', 'b', 'c']);
     expect(inserted().map((task) => task.order)).toEqual([0, 1, 2]);
     expect(inserted()[0]).toMatchObject({
@@ -131,7 +139,7 @@ describe('filter path', () => {
     expect(inserted()[0]).not.toHaveProperty('sensors');
     expect(job.tasksCount).toBe(3);
     expect(job.selection).toEqual({ kind: 'filter', spec: { sampleN: null, seed: 42, rows: 3 } });
-    expect(job.save).toHaveBeenCalled();
+    expect(job.save).not.toHaveBeenCalled();
   });
 
   it('samples deterministically with a seed', async () => {

@@ -10,6 +10,7 @@ import type { IAnnotationMask, IBoxObject } from './LabelAnnotation';
 export interface ILabelSuggestion extends Document {
   _id: Types.ObjectId;
   jobId: Types.ObjectId;
+  generation?: string;
   taskId: Types.ObjectId;
   source: 'import';
   objects: IBoxObject[];
@@ -21,6 +22,7 @@ export interface ILabelSuggestion extends Document {
 const LabelSuggestionSchema = new Schema<ILabelSuggestion>(
   {
     jobId: { type: Schema.Types.ObjectId, ref: 'LabelJob', required: true },
+    generation: String,
     taskId: { type: Schema.Types.ObjectId, ref: 'LabelTask', required: true },
     source: { type: String, enum: ['import'], default: 'import' },
     objects: {

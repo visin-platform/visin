@@ -540,7 +540,7 @@ describe('finishTask', () => {
 
     await svc.finishTask(frameTask(), activeJob(), user, 'done');
 
-    expect(mockedTask.countDocuments).toHaveBeenCalledWith({ jobId: 'j1', answersCount: { $lt: 2 } });
+    expect(mockedTask.countDocuments).toHaveBeenCalledWith({ jobId: 'j1', generation: null, answersCount: { $lt: 2 } });
     expect(mockedJob.updateOne).toHaveBeenCalledWith({ _id: 'j1', status: 'active' }, { $set: { status: 'completed' } });
   });
 

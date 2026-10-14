@@ -64,6 +64,13 @@ answers mean.
 
 ### Import
 
+Archive reservations and completion use conditional updates against the current
+hold, import, archive and pending-upload state. A concurrent change returns 409
+without replacing the reservation or deleting an archive another request adopted.
+Discarding first marks the pending upload so completion cannot adopt bytes being
+removed. A failed discard keeps that marker and can be retried through the same
+DELETE endpoint.
+
 `POST /api/datasets/:id/import` writes the mapping to the dataset and hands the id
 to a BullMQ queue backed by Redis (`REDIS_URL`); a worker in the same process picks
 it up (`src/queue/`). An import routinely runs for hours, far past the HTTP

@@ -8,6 +8,7 @@ import type { FrameLabels } from '../formats';
 import { decodePng } from '../utils/png';
 import { ZipWriter } from '../utils/zip';
 import type { FormatId } from '../validation/jobSchemas';
+import { taskSet } from './taskGeneration';
 
 /**
  * Stream a job's labels to `out` as a zip in one of the supported formats.
@@ -29,7 +30,7 @@ export const streamExport = async (
 
   const statuses: AnnotationStatus[] = include === 'all' ? ['done', 'draft'] : ['done'];
   const annotations: ILabelAnnotation[] = await LabelAnnotation.find<ILabelAnnotation>({
-    jobId: job._id,
+    ...taskSet(job),
     status: { $in: statuses }
   }).sort({ updatedAt: 1 });
   // Redundant labels: the most recently finished one wins, so an export has one
@@ -42,7 +43,7 @@ export const streamExport = async (
   }
 
   let frames = 0;
-  const cursor = LabelTask.find({ jobId: job._id }).sort({ order: 1 }).cursor();
+  const cursor = LabelTask.find(taskSet(job)).sort({ order: 1 }).cursor();
   for await (const task of cursor) {
     const annotation = byTask.get(task._id.toString());
     if (!annotation) continue;

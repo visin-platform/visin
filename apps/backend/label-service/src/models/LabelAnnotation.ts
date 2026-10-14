@@ -30,6 +30,7 @@ export interface ILabelAnnotation extends Document {
   _id: Types.ObjectId;
   taskId: Types.ObjectId;
   jobId: Types.ObjectId;
+  generation?: string;
   userId: string;
   userEmail: string;
   userName?: string;
@@ -46,6 +47,7 @@ const LabelAnnotationSchema = new Schema<ILabelAnnotation>(
   {
     taskId: { type: Schema.Types.ObjectId, ref: 'LabelTask', required: true },
     jobId: { type: Schema.Types.ObjectId, ref: 'LabelJob', required: true },
+    generation: String,
     userId: { type: String, required: true },
     userEmail: { type: String, required: true, lowercase: true },
     userName: { type: String },

@@ -102,7 +102,7 @@ describe('jobStats', () => {
 
     await jobStats(job);
 
-    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({ jobId: 'j1', status: { $in: ['done', 'skipped'] } });
+    expect(mockedAnnotation.find.mock.calls[0][0]).toEqual({ jobId: 'j1', generation: null, status: { $in: ['done', 'skipped'] } });
   });
 
   it('is all zeros for a job nobody has started, and copes with an annotation that has no objects field', async () => {

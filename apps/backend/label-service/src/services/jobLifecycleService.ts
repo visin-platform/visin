@@ -90,11 +90,11 @@ const availableLease = (now: Date) => ({
 /** Claim before destructive work so retries and recovery cannot process it together. */
 export async function beginJobDeletion(jobId: string): Promise<ILabelJob | null> {
   const job = await LabelJob.findOneAndUpdate(
-    { _id: jobId, lifecycle: { $ne: 'creating' }, ...availableLease(new Date()) },
+    { _id: jobId, lifecycle: { $ne: 'creating' }, materialization: { $exists: false }, ...availableLease(new Date()) },
     { $set: { lifecycle: 'deleting', ...newLifecycleLease() } },
     { returnDocument: 'after' }
   );
-  if (!job && await LabelJob.exists({ _id: jobId })) throw new ConflictError('Job creation or deletion is already running');
+  if (!job && await LabelJob.exists({ _id: jobId })) throw new ConflictError('Job creation, task materialization or deletion is already running');
   return job;
 }
 

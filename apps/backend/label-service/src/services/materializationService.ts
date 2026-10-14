@@ -1,11 +1,12 @@
 import { Types } from 'mongoose';
-import { BadRequestError, ConflictError } from '@visin/backend-core';
+import { BadRequestError, ConflictError, logger } from '@visin/backend-core';
 import { ILabelJob, IJobSensor } from '../models/LabelJob';
 import { ITaskFrame, ITaskPoint, ITaskSensor, LabelTask } from '../models/LabelTask';
 import * as datasets from '../clients/datasetServiceClient';
 import { parseManifest } from '../utils/manifest';
 import { seededSample } from '../utils/seededRandom';
 import { MaterializeBody } from '../validation/jobSchemas';
+import { abandonTaskSet, beginTaskSet, publishTaskSet, renewTaskSet, TASK_BATCH_SIZE } from './taskSetService';
 
 /** A point sensor's sidecar can be dense; a frame shows no more than this many of its points. */
 export const MAX_POINTS_PER_FRAME = 20_000;
@@ -177,8 +178,6 @@ export const materializeTasks = async (job: ILabelJob, body: MaterializeBody): P
     }
   }
 
-  await LabelTask.deleteMany({ jobId: job._id });
-
   const coverage: Record<string, number> = {};
   const tasks = rows.map((row, order) => {
     const sensors: ITaskSensor[] = [];
@@ -197,17 +196,28 @@ export const materializeTasks = async (job: ILabelJob, body: MaterializeBody): P
       ...(sensors.length ? { sensors } : {})
     };
   });
-  await LabelTask.insertMany(tasks);
-
-  job.selection = {
+  const selection = {
     kind: body.kind,
     spec:
       body.kind === 'manifest'
         ? { source: body.content ? 'inline' : 'dataset', rows: rows.length, missing: missing.length }
         : { sampleN: body.sampleN ?? null, seed: body.seed ?? 42, rows: rows.length }
   };
-  job.tasksCount = rows.length;
-  await job.save();
+  const generation = await beginTaskSet(job);
+  try {
+    for (let offset = 0; offset < tasks.length; offset += TASK_BATCH_SIZE) {
+      await renewTaskSet(job, generation);
+      await LabelTask.insertMany(tasks.slice(offset, offset + TASK_BATCH_SIZE).map((task) => ({ ...task, generation })));
+    }
+    await publishTaskSet(job, generation, rows.length, selection);
+  } catch (error) {
+    try {
+      await abandonTaskSet(job, generation);
+    } catch (cleanupError) {
+      logger.warn('Could not release task materialization; recovery will retry', { jobId: job._id.toString(), error: (cleanupError as Error).message });
+    }
+    throw error;
+  }
 
   return {
     tasks: rows.length,

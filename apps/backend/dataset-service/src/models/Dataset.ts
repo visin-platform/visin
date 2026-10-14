@@ -119,7 +119,7 @@ export interface IDataset extends Document {
   /** `size` and `contents` are absent until the zip has been scanned (a migrated dataset starts that way) */
   archive?: { fileId: string; filename: string; size?: number; uploadedAt: Date };
   /** `size`/`lastModified` identify the browser's file, so choosing it again resumes the upload */
-  pendingUpload?: { fileId: string; filename: string; size?: number; lastModified?: number; expiresAt: Date };
+  pendingUpload?: { fileId: string; filename: string; size?: number; lastModified?: number; expiresAt: Date; discarding?: boolean };
   contents?: DatasetContents;
   scan?: DatasetScan;
   groups: DatasetGroup[];
@@ -187,7 +187,8 @@ const DatasetSchema = new Schema<IDataset>(
         filename: { type: String, required: true },
         size: { type: Number },
         lastModified: { type: Number },
-        expiresAt: { type: Date, required: true }
+        expiresAt: { type: Date, required: true },
+        discarding: Boolean
       },
       default: undefined
     },

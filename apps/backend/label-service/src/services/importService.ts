@@ -14,6 +14,7 @@ import { openZip } from '../utils/zip';
 import type { FormatId, ImportQuery } from '../validation/jobSchemas';
 import { buildClasses } from './jobService';
 import { clampBox, maybeCompleteJob, recordTaskCompletion } from './taskService';
+import { taskSet } from './taskGeneration';
 
 export interface ClassPlan {
   /** the class as the file names it */
@@ -160,7 +161,7 @@ export const importLabels = async (
       );
     }
 
-    const tasks = await LabelTask.find({ jobId: job._id }).sort({ order: 1 });
+    const tasks = await LabelTask.find(taskSet(job)).sort({ order: 1 });
     const taskByStem = new Map(tasks.map((task) => [task.frame.stem, task]));
     const labels = await format.parse(source, {
       sizeOf: (stem) => {
@@ -263,7 +264,7 @@ export const importLabels = async (
         const stored = mask ? await storeMask(job, 'suggestions', task, mask) : undefined;
         await LabelSuggestion.findOneAndUpdate(
           { taskId: task._id, source: 'import' },
-          { $set: { jobId: job._id, objects, ...(stored ? { mask: stored } : {}) }, ...(stored ? {} : { $unset: { mask: '' } }) },
+          { $set: { jobId: job._id, ...(task.generation ? { generation: task.generation } : {}), objects, ...(stored ? { mask: stored } : {}) }, ...(stored ? {} : { $unset: { mask: '' } }) },
           { upsert: true }
         );
         dropFile(previous?.mask?.fileId);
@@ -274,6 +275,7 @@ export const importLabels = async (
           {
             $set: {
               jobId: job._id,
+              ...(task.generation ? { generation: task.generation } : {}),
               userEmail: (user.email || '').toLowerCase(),
               ...(user.name ? { userName: user.name } : {}),
               status: 'done',

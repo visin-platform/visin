@@ -38,6 +38,7 @@ export interface ITaskSensor {
 export interface ILabelTask extends Document {
   _id: Types.ObjectId;
   jobId: Types.ObjectId;
+  generation?: string;
   frame: ITaskFrame;
   order: number;
   stratum?: string;
@@ -67,6 +68,7 @@ const TaskFrameSchema = new Schema<ITaskFrame>(
 const LabelTaskSchema = new Schema<ILabelTask>(
   {
     jobId: { type: Schema.Types.ObjectId, ref: 'LabelJob', required: true },
+    generation: String,
     frame: { type: TaskFrameSchema, required: true },
     order: { type: Number, required: true },
     stratum: { type: String },
@@ -92,6 +94,7 @@ const LabelTaskSchema = new Schema<ILabelTask>(
 );
 
 LabelTaskSchema.index({ jobId: 1, order: 1 });
+LabelTaskSchema.index({ jobId: 1, generation: 1, order: 1 }, { unique: true, partialFilterExpression: { generation: { $type: 'string' } } });
 // `next` picks: unfinished by user, answersCount < K, no live lease.
 LabelTaskSchema.index({ jobId: 1, answersCount: 1, leaseExpiresAt: 1 });
 

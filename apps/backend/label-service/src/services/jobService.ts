@@ -6,6 +6,7 @@ import { LabelAnnotation } from '../models/LabelAnnotation';
 import { ClassInput, CreateJobBody, ModelClassMappingBody } from '../validation/jobSchemas';
 import * as datasets from '../clients/datasetServiceClient';
 import { beginJobDeletion, finishJobCreation, finishJobDeletion, newLifecycleLease, READY_JOB, releaseLifecycleLease, type RemovedJob } from './jobLifecycleService';
+import { taskSet } from './taskGeneration';
 
 /**
  * The colours a new class is given in turn. The first eight are the charts'
@@ -239,7 +240,7 @@ export interface JobProgress {
  * redundancy (10), not by task count, so the threshold is cheap to apply here.
  */
 export const progressForJobs = async (
-  jobs: Pick<ILabelJob, '_id' | 'redundancy'>[],
+  jobs: Pick<ILabelJob, '_id' | 'redundancy' | 'taskGeneration'>[],
   userId: string
 ): Promise<Map<string, JobProgress>> => {
   const byJob = new Map<string, JobProgress>(
@@ -249,14 +250,14 @@ export const progressForJobs = async (
     return byJob;
   }
 
-  const jobIds = jobs.map((job) => job._id);
+  const sets = jobs.map(taskSet);
   const [taskBuckets, annotationRows] = await Promise.all([
     LabelTask.aggregate<{ _id: { jobId: Types.ObjectId; answersCount: number }; count: number }>([
-      { $match: { jobId: { $in: jobIds } } },
+      { $match: { $or: sets } },
       { $group: { _id: { jobId: '$jobId', answersCount: '$answersCount' }, count: { $sum: 1 } } }
     ]),
     LabelAnnotation.aggregate<{ _id: Types.ObjectId; done: number; skipped: number; myDone: number }>([
-      { $match: { jobId: { $in: jobIds }, status: { $in: ['done', 'skipped'] } } },
+      { $match: { $or: sets, status: { $in: ['done', 'skipped'] } } },
       {
         $group: {
           _id: '$jobId',
@@ -345,7 +346,7 @@ export const transitionJob = async (jobId: string, action: JobAction): Promise<I
   }
 
   const updated = await LabelJob.findOneAndUpdate(
-    { _id: job._id, ...READY_JOB, status: job.status, tasksCount: job.tasksCount },
+    { _id: job._id, ...READY_JOB, materialization: { $exists: false }, taskGeneration: job.taskGeneration ?? null, status: job.status, tasksCount: job.tasksCount },
     { $set: { status: transition.to } }, { returnDocument: 'after' }
   );
   if (!updated) throw new ConflictError('Job changed. Reload and try again.');

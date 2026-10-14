@@ -3,6 +3,7 @@ import jobRoutes from './routes/jobRoutes';
 import taskRoutes from './routes/taskRoutes';
 import meRoutes from './routes/meRoutes';
 import { recoverJobLifecycles } from './services/jobLifecycleService';
+import { recoverTaskSets } from './services/taskSetService';
 
 // The client modules call requireEnv() lazily, per request — asserting here
 // turns a missing setting into a boot failure rather than a 500 mid-labeling.
@@ -39,7 +40,10 @@ const PORT = process.env.PORT || 5008;
 // the container restart policy.
 connectDb({ serviceName: 'label-service' })
   .then(() => {
-    const recovery = startSweeper({ name: 'label-job-recovery', everyMs: 60_000, run: async () => void (await recoverJobLifecycles()) });
+    const recovery = startSweeper({ name: 'label-job-recovery', everyMs: 60_000, run: async () => {
+      await recoverTaskSets();
+      await recoverJobLifecycles();
+    } });
     serve(app, { port: PORT, serviceName: 'label-service', onShutdown: () => recovery.stop() });
   })
   .catch((err: Error) => {

@@ -2,6 +2,7 @@ import { ILabelJob } from '../models/LabelJob';
 import { LabelTask } from '../models/LabelTask';
 import { LabelAnnotation } from '../models/LabelAnnotation';
 import * as datasets from '../clients/datasetServiceClient';
+import { taskSet } from './taskGeneration';
 
 export interface JobStats {
   tasks: number;
@@ -19,9 +20,9 @@ export interface JobStats {
 /** Progress, who did how much, and how much of each class has been drawn. */
 export const jobStats = async (job: ILabelJob): Promise<JobStats> => {
   const [tasks, annotations] = await Promise.all([
-    LabelTask.find({ jobId: job._id }, { stratum: 1, answersCount: 1 }).lean(),
+    LabelTask.find(taskSet(job), { stratum: 1, answersCount: 1 }).lean(),
     LabelAnnotation.find(
-      { jobId: job._id, status: { $in: ['done', 'skipped'] } },
+      { ...taskSet(job), status: { $in: ['done', 'skipped'] } },
       { userId: 1, userEmail: 1, userName: 1, status: 1, 'objects.classKey': 1, 'mask.pixels': 1 }
     ).lean()
   ]);

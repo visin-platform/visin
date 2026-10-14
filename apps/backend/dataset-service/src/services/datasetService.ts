@@ -349,6 +349,17 @@ const isSameFile = (pending: NonNullable<IDataset['pendingUpload']>, body: Archi
   pending.filename === body.filename &&
   (pending.size === undefined || (pending.size === body.size && pending.lastModified === body.lastModified));
 
+/** Reservations and adoption compete with holds and imports on the same record. */
+const archiveMutation = (dataset: IDataset): QueryFilter<IDataset> => ({
+  _id: dataset._id, ...LIVE, holds: { $size: 0 },
+  'import.status': { $nin: ['queued', 'running'] },
+  'pendingUpload.fileId': dataset.pendingUpload?.fileId ?? { $exists: false },
+  'pendingUpload.discarding': { $ne: true },
+  'archive.fileId': dataset.archive?.fileId ?? { $exists: false }
+});
+
+const archiveChanged = () => new ConflictError('The dataset or upload changed. Reload and try again.');
+
 /**
  * Hand back a signed chunked-upload URL for a dataset's zip.
  *
@@ -364,34 +375,41 @@ export const createArchiveUpload = async (access: DatasetAccess, id: string, bod
   if (isImportActive(dataset)) throw new ConflictError('An import is running — wait for it or cancel it first');
 
   const pending = dataset.pendingUpload;
+  if (pending?.discarding) throw new ConflictError('This upload is being discarded. Retry discarding it first.');
   const policyFor = (fileId: string) => getUploadPolicy(fileId, 'application/zip', 'archive');
   if (pending && isSameFile(pending, body)) {
     if (await files.getFileSize(pending.fileId)) return { uploaded: true, resumed: true };
+    let upload: Awaited<ReturnType<typeof files.getUploadUrl>> | undefined;
     try {
-      const upload = await files.getUploadUrl(pending.fileId, policyFor(pending.fileId).maxBytes, UPLOAD_URL_MINUTES);
-      dataset.pendingUpload = { ...pending, expiresAt: new Date(upload.expiresMs) };
-      await dataset.save();
-      return { uploadUrl: upload.url, expiresAt: new Date(upload.expiresMs).toISOString(), uploaded: false, resumed: true };
+      upload = await files.getUploadUrl(pending.fileId, policyFor(pending.fileId).maxBytes, UPLOAD_URL_MINUTES);
     } catch (err) {
       logger.warn('Could not resume a dataset upload; starting it again', { datasetId: id, error: (err as Error).message });
     }
-  }
-  if (pending) {
-    await files.deleteFile(pending.fileId).catch((err: Error) =>
-      logger.warn('Could not delete an abandoned dataset upload', { datasetId: id, error: err.message })
-    );
+    if (upload) {
+      const resumed = await Dataset.updateOne(archiveMutation(dataset), { $set: { 'pendingUpload.expiresAt': new Date(upload.expiresMs) } });
+      if (!resumed.matchedCount) throw archiveChanged();
+      return { uploadUrl: upload.url, expiresAt: new Date(upload.expiresMs).toISOString(), uploaded: false, resumed: true };
+    }
   }
 
   const fileId = `${dataset.storagePrefix}archives/${randomUUID()}-${sanitizeFilename(body.filename)}`;
   const upload = await files.getUploadUrl(fileId, policyFor(fileId).maxBytes, UPLOAD_URL_MINUTES);
-  dataset.pendingUpload = {
+  const reservation = {
     fileId,
     filename: body.filename,
     size: body.size,
     lastModified: body.lastModified,
     expiresAt: new Date(upload.expiresMs)
   };
-  await dataset.save();
+  const reserved = await Dataset.updateOne(archiveMutation(dataset), { $set: { pendingUpload: reservation } });
+  if (!reserved.matchedCount) throw archiveChanged();
+  // Delete only after winning adoption. A stale request must never remove a
+  // pending archive another request has already adopted as the current one.
+  if (pending) {
+    await files.deleteFile(pending.fileId).catch((err: Error) =>
+      logger.warn('Could not delete an abandoned dataset upload', { datasetId: id, error: err.message })
+    );
+  }
   return { uploadUrl: upload.url, expiresAt: new Date(upload.expiresMs).toISOString(), uploaded: false, resumed: false };
 };
 
@@ -403,10 +421,20 @@ export const discardArchiveUpload = async (access: DatasetAccess, id: string) =>
   const dataset = await requireDataset(access, id, 'contribute');
   const pending = dataset.pendingUpload;
   if (pending) {
+    const claimed = await Dataset.updateOne(
+      { _id: dataset._id, ...LIVE, 'pendingUpload.fileId': pending.fileId,
+        'archive.fileId': dataset.archive?.fileId ?? { $exists: false } },
+      { $set: { 'pendingUpload.discarding': true } }
+    );
+    if (!claimed.matchedCount) throw archiveChanged();
     await files.deleteFile(pending.fileId);
-    dataset.pendingUpload = undefined;
-    await dataset.save();
+    const discarded = await Dataset.findOneAndUpdate(
+      { _id: dataset._id, 'pendingUpload.fileId': pending.fileId, 'pendingUpload.discarding': true },
+      { $unset: { pendingUpload: '' } }, { returnDocument: 'after' }
+    );
+    if (!discarded) throw archiveChanged();
     logger.info('Dataset upload discarded', { datasetId: id });
+    return viewFor(access, discarded);
   }
   return viewFor(access, dataset);
 };
@@ -472,17 +500,21 @@ export const completeArchiveUpload = async (access: DatasetAccess, id: string) =
   const pending = dataset.pendingUpload;
   if (!pending) throw new BadRequestError('No upload is in progress for this dataset');
   assertNotHeld(dataset, 'replace the zip');
+  if (isImportActive(dataset)) throw new ConflictError('An import is running — wait for it or cancel it first');
 
   const size = await files.getFileSize(pending.fileId);
   if (!size) throw new BadRequestError('The upload has not arrived — upload the zip again');
   const previous = dataset.archive?.fileId;
-  dataset.archive = { fileId: pending.fileId, filename: pending.filename, size, uploadedAt: new Date() };
-  dataset.pendingUpload = undefined;
-  dataset.contents = undefined;
-  await queueScan(dataset, pending.fileId);
+  const scan = { id: new Types.ObjectId().toString(), status: 'queued', fileId: pending.fileId };
+  const adopted = await Dataset.findOneAndUpdate(archiveMutation(dataset), {
+    $set: { archive: { fileId: pending.fileId, filename: pending.filename, size, uploadedAt: new Date() }, scan },
+    $unset: { pendingUpload: '', contents: '' }
+  }, { returnDocument: 'after' });
+  if (!adopted) throw archiveChanged();
+  await enqueueScan({ datasetId: id, fileId: pending.fileId, scanId: scan.id });
   if (previous && previous !== pending.fileId) await files.deleteFile(previous);
   logger.info('Dataset archive uploaded', { datasetId: id, size });
-  return viewFor(access, dataset);
+  return viewFor(access, adopted);
 };
 
 /**

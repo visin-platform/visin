@@ -143,11 +143,13 @@ describe('annotation lifecycle with in-memory MongoDB', () => {
         { key: 'car', name: 'Car', color: '#2a78d6', tools: ['box', 'mask'], maskIndex: 1 },
         { key: 'road', name: 'Road', color: '#eb6834', tools: ['mask'], maskIndex: 2 }
       ],
-      tasksCount: frames
+      tasksCount: frames,
+      taskGeneration: 'published'
     });
     const tasks = await LabelTask.insertMany(
       Array.from({ length: frames }, (_, i) => ({
         jobId: job._id,
+        generation: 'published',
         order: i,
         frame: { fileId: `f${i}`, path: `camera/000${i}.jpg`, stem: `000${i}`, width: 8, height: 4 }
       }))
