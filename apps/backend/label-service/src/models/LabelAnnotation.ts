@@ -85,5 +85,7 @@ const LabelAnnotationSchema = new Schema<ILabelAnnotation>(
 LabelAnnotationSchema.index({ taskId: 1, userId: 1 }, { unique: true });
 LabelAnnotationSchema.index({ jobId: 1, userId: 1 });
 LabelAnnotationSchema.index({ jobId: 1, status: 1 });
+// Task-set recovery lists the generations in use by key alone.
+LabelAnnotationSchema.index({ jobId: 1, generation: 1 });
 
 export const LabelAnnotation = model<ILabelAnnotation>('LabelAnnotation', LabelAnnotationSchema, 'label_annotations');

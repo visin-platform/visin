@@ -872,6 +872,50 @@ describe('archive upload, download and import', () => {
     expect((await Dataset.findById(id).lean())?.scan).toMatchObject({ status: 'queued', id: expect.any(String) });
   });
 
+  it('deletes a replaced zip even when the new one cannot be queued for scanning', async () => {
+    const id = await createDataset();
+    const first = await uploadZip(id, [{ path: 'a.png', data: Buffer.from('x') }]);
+    jest.mocked(enqueueScan).mockRejectedValueOnce(new ServiceUnavailableError('Dataset queue unavailable'));
+    const second = await uploadZip(id, [{ path: 'b.png', data: Buffer.from('y') }]);
+    expect(second.completed.status).toBe(503);
+    expect(fileStore.stored.has(first.fileId)).toBe(false);
+    expect(await Dataset.findById(id).lean()).toMatchObject({
+      archive: { fileId: second.fileId },
+      scan: { status: 'queued', fileId: second.fileId }
+    });
+  });
+
+  it('answers a repeated completion with the adopted archive after the queue was unavailable', async () => {
+    const id = await createDataset();
+    jest.mocked(enqueueScan).mockRejectedValueOnce(new ServiceUnavailableError('Dataset queue unavailable'));
+    const first = await uploadZip(id, [{ path: 'a.png', data: Buffer.from('x') }]);
+    expect(first.completed.status).toBe(503);
+    const again = await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER });
+    expect(again.status).toBe(200);
+    expect(again.body.data).toMatchObject({ archive: { filename: 'set.zip' }, scan: { status: 'queued' } });
+  });
+
+  it('refuses a rescan of a zip replaced while the request was in flight', async () => {
+    const id = await createDataset();
+    const first = await uploadZip(id, [{ path: 'a.png', data: Buffer.from('x') }]);
+    const scansOfFirst = () => jest.mocked(enqueueScan).mock.calls.filter(([data]) => data.fileId === first.fileId).length;
+    const before = scansOfFirst();
+    let second: Awaited<ReturnType<typeof uploadZip>> | undefined;
+    const findOneAndUpdate = Dataset.findOneAndUpdate.bind(Dataset);
+    const spy = jest.spyOn(Dataset, 'findOneAndUpdate').mockImplementationOnce(((...args: Parameters<typeof Dataset.findOneAndUpdate>) =>
+      uploadZip(id, [{ path: 'b.png', data: Buffer.from('y') }]).then((done) => {
+        second = done;
+        return findOneAndUpdate(...args);
+      })
+    ) as unknown as typeof Dataset.findOneAndUpdate);
+    try {
+      expect((await call(`/api/datasets/${id}/archive/scan`, { method: 'POST', user: OWNER })).status).toBe(409);
+    } finally { spy.mockRestore(); }
+    expect(second!.completed.status).toBe(200);
+    expect((await Dataset.findById(id).lean())?.scan).toMatchObject({ status: 'queued', fileId: second!.fileId });
+    expect(scansOfFirst()).toBe(before);
+  });
+
   it('waits for recovery to close a stale running import before replacing it', async () => {
     const id = await createDataset();
     await uploadZip(id, [{ path: 'frames/1.png', data: Buffer.from('x') }]);

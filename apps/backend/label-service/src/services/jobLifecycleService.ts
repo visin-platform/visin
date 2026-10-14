@@ -72,7 +72,13 @@ export async function finishJobCreation(job: ILabelJob): Promise<ILabelJob> {
   } catch (error) {
     if (error instanceof NotFoundError || error instanceof ConflictError) {
       const deleting = await LabelJob.findOneAndUpdate(owned(job), { $set: { lifecycle: 'deleting' } }, { returnDocument: 'after' });
-      if (deleting) await finishJobDeletion(deleting);
+      if (deleting) {
+        // The refusal is what the caller can act on. A cleanup that fails stays
+        // a durable deletion intent, which recovery retries.
+        await finishJobDeletion(deleting).catch((cleanupError: Error) =>
+          logger.warn('Refused job creation cleanup failed; will retry', { jobId: job._id.toString(), error: cleanupError.message })
+        );
+      }
     }
     throw error;
   }

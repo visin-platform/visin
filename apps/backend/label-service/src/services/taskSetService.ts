@@ -72,12 +72,17 @@ async function removeRetiredSet(jobId: ILabelJob['_id'], generation: string | nu
 /** Discover retired sets even after a crash or a late write from an expired build. */
 export async function recoverTaskSets(now = new Date()): Promise<number> {
   await LabelJob.updateMany({ 'materialization.leaseUntil': { $lte: now } }, { $unset: { materialization: '' } });
-  const project = { $project: { jobId: 1, generation: { $ifNull: ['$generation', null] } } };
+  // Sorted on an index's leading keys, so each collection is walked by key
+  // without reading its documents. `$ifNull` folds a missing generation into null.
+  const distinct = [
+    { $sort: { jobId: 1 as const, generation: 1 as const } },
+    { $group: { _id: { jobId: '$jobId', generation: { $ifNull: ['$generation', null] } } } }
+  ];
   const sets = LabelTask.aggregate<{ _id: { jobId: ILabelJob['_id']; generation: string | null } }>([
-    project,
-    { $unionWith: { coll: 'label_annotations', pipeline: [project] } },
-    { $unionWith: { coll: 'label_suggestions', pipeline: [project] } },
-    { $group: { _id: { jobId: '$jobId', generation: '$generation' } } }
+    ...distinct,
+    { $unionWith: { coll: 'label_annotations', pipeline: distinct } },
+    { $unionWith: { coll: 'label_suggestions', pipeline: distinct } },
+    { $group: { _id: '$_id' } }
   ]).allowDiskUse(true).cursor();
   let removed = 0;
   for await (const set of sets) {

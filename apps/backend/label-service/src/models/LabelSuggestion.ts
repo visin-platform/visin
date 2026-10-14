@@ -53,6 +53,6 @@ const LabelSuggestionSchema = new Schema<ILabelSuggestion>(
 );
 
 LabelSuggestionSchema.index({ taskId: 1, source: 1 }, { unique: true });
-LabelSuggestionSchema.index({ jobId: 1 });
+LabelSuggestionSchema.index({ jobId: 1, generation: 1 });
 
 export const LabelSuggestion = model<ILabelSuggestion>('LabelSuggestion', LabelSuggestionSchema, 'label_suggestions');

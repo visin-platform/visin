@@ -40,11 +40,17 @@ const PORT = process.env.PORT || 5008;
 // the container restart policy.
 connectDb({ serviceName: 'label-service' })
   .then(() => {
-    const recovery = startSweeper({ name: 'label-job-recovery', everyMs: 60_000, run: async () => {
-      await recoverTaskSets();
-      await recoverJobLifecycles();
-    } });
-    serve(app, { port: PORT, serviceName: 'label-service', onShutdown: () => recovery.stop() });
+    // Separate sweepers: the task-set scan walks every task and label key, and a
+    // failure or slow pass there must not hold up job creation/deletion recovery.
+    const jobRecovery = startSweeper({ name: 'label-job-recovery', everyMs: 60_000, run: async () => void (await recoverJobLifecycles()) });
+    const taskSetRecovery = startSweeper({ name: 'label-task-set-recovery', everyMs: 5 * 60_000, run: async () => void (await recoverTaskSets()) });
+    serve(app, {
+      port: PORT,
+      serviceName: 'label-service',
+      onShutdown: async () => {
+        await Promise.all([jobRecovery.stop(), taskSetRecovery.stop()]);
+      }
+    });
   })
   .catch((err: Error) => {
     logger.error('Failed to start label-service', { error: err.message, stack: err.stack });

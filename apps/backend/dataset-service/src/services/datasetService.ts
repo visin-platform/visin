@@ -480,12 +480,21 @@ export const removeGroup = async (access: DatasetAccess, id: string, group: stri
   return viewFor(access, marked);
 };
 
-/** Hand reading the archive's index to the worker; the page polls `scan`. */
-const queueScan = async (dataset: IDataset, fileId: string): Promise<void> => {
-  dataset.scan = { id: new Types.ObjectId().toString(), status: 'queued', fileId };
-  dataset.markModified('scan');
-  await dataset.save();
-  await enqueueScan({ datasetId: dataset._id.toString(), fileId, scanId: dataset.scan.id });
+/**
+ * Hand reading the archive's index to the worker; the page polls `scan`. Only
+ * while `fileId` is still the archive: a rescan racing a replacement must not
+ * point the scan back at the old zip and write its contents over the new one.
+ */
+const queueScan = async (dataset: IDataset, fileId: string): Promise<IDataset> => {
+  const scan = { id: new Types.ObjectId().toString(), status: 'queued', fileId };
+  const queued = await Dataset.findOneAndUpdate(
+    { _id: dataset._id, ...LIVE, 'archive.fileId': fileId },
+    { $set: { scan } },
+    { returnDocument: 'after' }
+  );
+  if (!queued) throw archiveChanged();
+  await enqueueScan({ datasetId: dataset._id.toString(), fileId, scanId: scan.id });
+  return queued;
 };
 
 /**
@@ -498,6 +507,9 @@ const queueScan = async (dataset: IDataset, fileId: string): Promise<void> => {
 export const completeArchiveUpload = async (access: DatasetAccess, id: string) => {
   const dataset = await requireDataset(access, id, 'contribute');
   const pending = dataset.pendingUpload;
+  // Adopted already, whose answer was lost (a queue outage answers 503 after the
+  // archive is saved): finishing is done, and the sweeper owns the scan.
+  if (!pending && dataset.archive && dataset.scan?.fileId === dataset.archive.fileId) return viewFor(access, dataset);
   if (!pending) throw new BadRequestError('No upload is in progress for this dataset');
   assertNotHeld(dataset, 'replace the zip');
   if (isImportActive(dataset)) throw new ConflictError('An import is running — wait for it or cancel it first');
@@ -511,8 +523,10 @@ export const completeArchiveUpload = async (access: DatasetAccess, id: string) =
     $unset: { pendingUpload: '', contents: '' }
   }, { returnDocument: 'after' });
   if (!adopted) throw archiveChanged();
-  await enqueueScan({ datasetId: id, fileId: pending.fileId, scanId: scan.id });
+  // Before the enqueue: a 503 from Redis leaves the scan for recovery, and
+  // nothing would come back for the replaced zip's bytes.
   if (previous && previous !== pending.fileId) await files.deleteFile(previous);
+  await enqueueScan({ datasetId: id, fileId: pending.fileId, scanId: scan.id });
   logger.info('Dataset archive uploaded', { datasetId: id, size });
   return viewFor(access, adopted);
 };
@@ -525,8 +539,7 @@ export const completeArchiveUpload = async (access: DatasetAccess, id: string) =
 export const rescanArchive = async (access: DatasetAccess, id: string) => {
   const dataset = await requireDataset(access, id, 'contribute');
   if (!dataset.archive) throw new BadRequestError('This dataset has no zip yet');
-  await queueScan(dataset, dataset.archive.fileId);
-  return viewFor(access, dataset);
+  return viewFor(access, await queueScan(dataset, dataset.archive.fileId));
 };
 
 /** What the store says about a dataset kept on one; anyone who may read the dataset may see it. */

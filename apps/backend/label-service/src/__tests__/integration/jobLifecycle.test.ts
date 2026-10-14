@@ -90,7 +90,7 @@ it.each([new ConflictError('import won'), new NotFoundError('purge won')])('clea
 it('retains a failed creation cleanup and resumes it', async () => {
   jest.mocked(datasets.addHold).mockRejectedValueOnce(new ConflictError('import won'));
   jest.mocked(files.deleteFolder).mockRejectedValueOnce(new Error('files unavailable'));
-  await expect(createJob(user, body)).rejects.toThrow('files unavailable');
+  await expect(createJob(user, body)).rejects.toThrow('import won');
   expect((await LabelJob.findOne())!.lifecycle).toBe('deleting');
   expect(await recoverJobLifecycles()).toBe(1);
   expect(await LabelJob.countDocuments()).toBe(0);
