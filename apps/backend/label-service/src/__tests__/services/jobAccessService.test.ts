@@ -28,6 +28,11 @@ describe('jobPermission', () => {
 });
 
 describe('getJobReadAccess', () => {
+  it.each(['creating', 'deleting'] as const)('hides %s jobs even from dataset managers', async (lifecycle) => {
+    as('manage');
+    await expect(getJobReadAccess(job({ lifecycle }), 'u1')).rejects.toMatchObject({ statusCode: 404 });
+    expect(permission).not.toHaveBeenCalled();
+  });
   it('lets the dataset’s contributors see and work a job, and its managers run it', async () => {
     as('contribute');
     expect(await getJobReadAccess(job(), 'u1')).toEqual({ permission: 'contribute', member: true, isAdmin: false, canWork: true });

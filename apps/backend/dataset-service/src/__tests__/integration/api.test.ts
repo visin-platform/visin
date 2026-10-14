@@ -1027,6 +1027,40 @@ describe('resuming an import', () => {
 });
 
 describe('holds', () => {
+  it.each([
+    { 'import.status': 'queued' }, { 'import.status': 'running' }, { removingGroups: ['frames'] }
+  ])('refuses a new claim during image mutation: %j', async (state) => {
+    const id = await createDataset();
+    await Dataset.updateOne({ _id: id }, { $set: state });
+    expect((await call(`/internal/datasets/${id}/holds/label-service/job`, { method: 'PUT', internal: true })).status).toBe(409);
+    expect((await Dataset.findById(id))!.holds).toHaveLength(0);
+  });
+
+  it('never acknowledges a hold when purge wins before the atomic update', async () => {
+    const id = await createDataset();
+    const update = Dataset.updateOne.bind(Dataset);
+    const spy = jest.spyOn(Dataset, 'updateOne').mockImplementationOnce(((...args: Parameters<typeof Dataset.updateOne>) =>
+      update({ _id: id }, { $set: { deletingAt: new Date() } }).then(() => update(...args))
+    ) as unknown as typeof Dataset.updateOne);
+    try {
+      expect((await call(`/internal/datasets/${id}/holds/label-service/job`, { method: 'PUT', internal: true })).status).toBe(404);
+      expect((await Dataset.findById(id))!.holds).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('recognizes an identical hold after a lost ACK and trashing, without duplicating it', async () => {
+    const id = await createDataset();
+    const path = `/internal/datasets/${id}/holds/label-service/job`;
+    expect((await call(path, { method: 'PUT', internal: true })).status).toBe(204);
+    await Dataset.updateOne({ _id: id }, { $set: { trashedAt: new Date() } });
+    expect((await call(path, { method: 'PUT', internal: true })).status).toBe(204);
+    expect((await Dataset.findById(id))!.holds).toHaveLength(1);
+    expect((await call(`/internal/datasets/${id}/holds/label-service/other`, { method: 'PUT', internal: true })).status).toBe(404);
+    expect((await call('/internal/datasets/invalid/holds/label-service/job', { method: 'PUT', internal: true })).status).toBe(404);
+  });
+
   it('keeps a dataset labeling uses from being deleted for good, though it can go in the trash', async () => {
     const id = await createDataset();
     const { fileId } = await uploadZip(id, [{ path: 'frames/1.png', data: Buffer.from('x') }]);

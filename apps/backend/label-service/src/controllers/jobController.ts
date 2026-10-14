@@ -77,7 +77,7 @@ export const setModelClassMapping = async (req: Request, res: Response): Promise
 
 /** Irreversible: the job, its tasks and every label collected against it. */
 export const deleteJob = async (req: Request, res: Response): Promise<void> => {
-  const job = await svc.getJob(req.params.id as string);
+  const job = await svc.getJob(req.params.id as string, true);
   await assertJobAdmin(job, req.user?.id);
   const removed = await svc.deleteJob(job._id.toString());
   res.json({ success: true, data: removed });

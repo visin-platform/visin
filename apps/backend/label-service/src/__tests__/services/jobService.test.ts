@@ -1,3 +1,8 @@
+jest.mock('../../services/jobLifecycleService', () => ({
+  ...jest.requireActual('../../services/jobLifecycleService'),
+  finishJobCreation: jest.fn(), beginJobDeletion: jest.fn(),
+  finishJobDeletion: jest.fn(), releaseLifecycleLease: jest.fn()
+}));
 jest.mock('../../models/LabelJob', () => ({
   MAX_CLASSES: 100,
   LabelJob: { create: jest.fn(), find: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() },
@@ -28,16 +33,15 @@ import { LabelJob } from '../../models/LabelJob';
 import * as datasets from '../../clients/datasetServiceClient';
 import { LabelTask } from '../../models/LabelTask';
 import { LabelAnnotation } from '../../models/LabelAnnotation';
-import { LabelSuggestion } from '../../models/LabelSuggestion';
-import * as files from '../../clients/fileServiceClient';
+import * as lifecycle from '../../services/jobLifecycleService';
 import { BadRequestError, ConflictError, NotFoundError } from '@visin/backend-core';
 
 const mockedJob = LabelJob as unknown as Record<string, jest.Mock>;
 const mockedDatasets = datasets as unknown as Record<string, jest.Mock>;
 const mockedTask = LabelTask as unknown as Record<string, jest.Mock>;
 const mockedAnnotation = LabelAnnotation as unknown as Record<string, jest.Mock>;
-const mockedSuggestion = LabelSuggestion as unknown as Record<string, jest.Mock>;
-const mockedFiles = files as unknown as Record<string, jest.Mock>;
+
+const mockedLifecycle = lifecycle as unknown as Record<string, jest.Mock>;
 
 const user = { id: 'u1', email: 'Admin@X.com', name: 'Admin' };
 const body = {
@@ -60,7 +64,8 @@ const dataset = (extra: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  jest.resetAllMocks();
+  mockedLifecycle.finishJobCreation.mockImplementation(async (job) => job);
 });
 
 describe('setModelClassMapping', () => {
@@ -74,7 +79,7 @@ describe('setModelClassMapping', () => {
     mockedJob.findOneAndUpdate.mockResolvedValue(job());
     await svc.setModelClassMapping(job(), { vehicle: 'car', human: null });
     expect(mockedJob.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: 'j1', 'classes.1.key': 'vehicle', 'classes.0.key': 'human' },
+      { _id: 'j1', ...lifecycle.READY_JOB, 'classes.1.key': 'vehicle', 'classes.0.key': 'human' },
       { $set: { 'classes.1.modelClass': 'car' }, $unset: { 'classes.0.modelClass': '' } },
       { returnDocument: 'after', runValidators: true }
     );
@@ -122,7 +127,7 @@ describe('createJob', () => {
       { key: 'car', name: 'Car', color: '#2a78d6', hotkey: '1', tools: ['box', 'mask'], maskIndex: 1 },
     ]);
     expect(mockedJob.create.mock.calls[0][0]).not.toHaveProperty('groupId');
-    expect(mockedDatasets.addHold).toHaveBeenCalledWith('d1', 'j1');
+    expect(mockedLifecycle.finishJobCreation).toHaveBeenCalledWith(expect.objectContaining({ _id: 'j1', datasetId: 'd1' }));
   });
 
   it('builds a job only on a dataset the caller manages', async () => {
@@ -150,13 +155,14 @@ describe('createJob', () => {
     expect(mockedJob.create).not.toHaveBeenCalled();
   });
 
-  it('does not leave a job behind when the claim fails', async () => {
+  it('retains a recovery intent when claiming fails', async () => {
     mockedJob.create.mockResolvedValue({ _id: 'j1', datasetId: 'd1' });
-    mockedDatasets.addHold.mockRejectedValueOnce(new Error('dataset-service down'));
+    mockedLifecycle.finishJobCreation.mockRejectedValueOnce(new Error('dataset-service down'));
 
     await expect(svc.createJob(user, body)).rejects.toThrow('dataset-service down');
 
-    expect(mockedJob.deleteOne).toHaveBeenCalledWith({ _id: 'j1' });
+    expect(mockedJob.deleteOne).not.toHaveBeenCalled();
+    expect(mockedLifecycle.releaseLifecycleLease).toHaveBeenCalledWith(expect.objectContaining({ _id: 'j1' }));
   });
 });
 
@@ -174,7 +180,7 @@ describe('listJobsForUser', () => {
     await svc.listJobsForUser('u1', 'worker');
 
     expect(mockedDatasets.datasetIdsFor).toHaveBeenCalledWith('u1', 'contribute');
-    expect(mockedJob.find).toHaveBeenCalledWith({ datasetId: { $in: ['d1', 'd2'] }, status: 'active' });
+    expect(mockedJob.find).toHaveBeenCalledWith({ ...lifecycle.READY_JOB, datasetId: { $in: ['d1', 'd2'] }, status: 'active' });
   });
 
   it('public: explicitly published active jobs, minus who set it up', async () => {
@@ -192,7 +198,7 @@ describe('listJobsForUser', () => {
     // Only on public datasets: a job made public on a dataset that later went
     // private is closed. Active only: a job is active because someone activated it.
     expect(mockedDatasets.datasetIdsFor).toHaveBeenCalledWith(undefined, 'read');
-    expect(mockedJob.find).toHaveBeenCalledWith({ status: 'active', isPublic: true, datasetId: { $in: ['d-public'] } });
+    expect(mockedJob.find).toHaveBeenCalledWith({ ...lifecycle.READY_JOB, status: 'active', isPublic: true, datasetId: { $in: ['d-public'] } });
     // Nobody's own labels, since there is nobody.
     expect(jobs[0].progress.myDone).toBe(0);
     // `createdBy` is an email address; the progress is what is being shared.
@@ -208,6 +214,7 @@ describe('listJobsForUser', () => {
 
     expect(mockedDatasets.datasetIdsFor).toHaveBeenCalledWith('u1', 'manage');
     expect(mockedJob.find).toHaveBeenCalledWith({
+      ...lifecycle.READY_JOB,
       $or: [{ datasetId: { $in: ['d1'] } }, { datasetId: { $exists: false }, 'createdBy.userId': 'u1' }]
     });
   });
@@ -263,6 +270,7 @@ describe('progress', () => {
 });
 
 describe('transitionJob', () => {
+  beforeEach(() => mockedJob.findOneAndUpdate.mockImplementation(async (filter, update) => ({ ...filter, status: update.$set.status })));
   const makeJob = (status: string, extra: Record<string, unknown> = {}) => ({
     _id: 'j1',
     status,
@@ -279,7 +287,7 @@ describe('transitionJob', () => {
     const updated = await svc.transitionJob('j1', 'activate');
 
     expect(updated.status).toBe('active');
-    expect(job.save).toHaveBeenCalled();
+    expect(job.save).not.toHaveBeenCalled();
   });
 
   it('refuses to activate without a dataset or without tasks', async () => {
@@ -319,71 +327,26 @@ describe('transitionJob', () => {
 });
 
 describe('deleteJob', () => {
-  it('releases the dataset and the files, then removes labels, tasks and the job itself', async () => {
-    mockedJob.findById.mockResolvedValue({ _id: 'j1', datasetId: 'd1' });
-    const order: string[] = [];
-    mockedDatasets.removeHold.mockImplementation(async () => void order.push('hold'));
-    mockedFiles.deleteFolder.mockImplementation(async () => void order.push('files'));
-    mockedAnnotation.deleteMany.mockImplementation(async () => {
-      order.push('annotations');
-      return { deletedCount: 7 };
-    });
-    mockedSuggestion.deleteMany.mockImplementation(async () => {
-      order.push('suggestions');
-      return { deletedCount: 2 };
-    });
-    mockedTask.deleteMany.mockImplementation(async () => {
-      order.push('tasks');
-      return { deletedCount: 4135 };
-    });
-    mockedJob.deleteOne.mockImplementation(async () => {
-      order.push('job');
-      return {};
-    });
-
-    const result = await svc.deleteJob('j1');
-
-    expect(result).toEqual({ tasks: 4135, annotations: 7, suggestions: 2 });
-    expect(mockedFiles.deleteFolder).toHaveBeenCalledWith('label/j1/');
-    expect(mockedAnnotation.deleteMany).toHaveBeenCalledWith({ jobId: 'j1' });
-    expect(mockedTask.deleteMany).toHaveBeenCalledWith({ jobId: 'j1' });
-    expect(mockedJob.deleteOne).toHaveBeenCalledWith({ _id: 'j1' });
-    // Things that can fail and be retried go first, and labels before tasks: a
-    // half-done delete must never leave a label whose task is already gone,
-    // which no repeat call could then find.
-    expect(order).toEqual(['hold', 'files', 'annotations', 'suggestions', 'tasks', 'job']);
+  it('persists the deletion intent before cleanup', async () => {
+    const job = { _id: 'j1', lifecycle: 'deleting' };
+    mockedLifecycle.beginJobDeletion.mockResolvedValue(job);
+    mockedLifecycle.finishJobDeletion.mockResolvedValue({ tasks: 3, annotations: 2, suggestions: 1 });
+    expect(await svc.deleteJob('j1')).toEqual({ tasks: 3, annotations: 2, suggestions: 1 });
+    expect(mockedLifecycle.finishJobDeletion).toHaveBeenCalledWith(job);
   });
 
-  it('keeps the job when its dataset claim cannot be released, so the delete can be retried', async () => {
-    mockedJob.findById.mockResolvedValue({ _id: 'j1', datasetId: 'd1' });
-    mockedDatasets.removeHold.mockRejectedValueOnce(new Error('dataset-service down'));
-
-    await expect(svc.deleteJob('j1')).rejects.toThrow('dataset-service down');
-
-    expect(mockedFiles.deleteFolder).not.toHaveBeenCalled();
-    expect(mockedAnnotation.deleteMany).not.toHaveBeenCalled();
-    expect(mockedJob.deleteOne).not.toHaveBeenCalled();
-  });
-
-  it('keeps the job when its files cannot be removed', async () => {
-    mockedJob.findById.mockResolvedValue({ _id: 'j1' });
-    mockedFiles.deleteFolder.mockRejectedValueOnce(new Error('file-service down'));
-
+  it('releases its lease for recovery after a failed cleanup', async () => {
+    const job = { _id: 'j1', lifecycle: 'deleting' };
+    mockedLifecycle.beginJobDeletion.mockResolvedValue(job);
+    mockedLifecycle.finishJobDeletion.mockRejectedValue(new Error('file-service down'));
     await expect(svc.deleteJob('j1')).rejects.toThrow('file-service down');
-
-    expect(mockedDatasets.removeHold).not.toHaveBeenCalled();
-    expect(mockedJob.deleteOne).not.toHaveBeenCalled();
+    expect(mockedLifecycle.releaseLifecycleLease).toHaveBeenCalledWith(job);
   });
 
-  it('reports zero when a driver omits deletedCount', async () => {
-    mockedJob.findById.mockResolvedValue(null);
-    mockedFiles.deleteFolder.mockResolvedValue(undefined);
-    mockedAnnotation.deleteMany.mockResolvedValue({});
-    mockedSuggestion.deleteMany.mockResolvedValue({});
-    mockedTask.deleteMany.mockResolvedValue({});
-    mockedJob.deleteOne.mockResolvedValue({});
-
+  it('repeats a completed deletion without more remote work', async () => {
+    mockedLifecycle.beginJobDeletion.mockResolvedValue(null);
     expect(await svc.deleteJob('j1')).toEqual({ tasks: 0, annotations: 0, suggestions: 0 });
+    expect(mockedLifecycle.finishJobDeletion).not.toHaveBeenCalled();
   });
 });
 
@@ -464,5 +427,19 @@ describe('jobDataset', () => {
 
     mockedDatasets.getDataset.mockRejectedValueOnce(new Error('dataset-service down'));
     await expect(svc.jobDataset({ datasetId: 'd1' } as never)).rejects.toThrow('dataset-service down');
+  });
+});
+
+describe('unfinished jobs', () => {
+  it.each(['creating', 'deleting'])('hides %s jobs except for an authorized delete retry', async (state) => {
+    mockedJob.findById.mockResolvedValue({ _id: 'j1', lifecycle: state });
+    await expect(svc.getJob('j1')).rejects.toThrow(NotFoundError);
+    expect(await svc.getJob('j1', true)).toMatchObject({ lifecycle: state });
+  });
+
+  it('fences a transition that loses a race to deletion', async () => {
+    mockedJob.findById.mockResolvedValue({ _id: 'j1', status: 'paused', tasksCount: 1 });
+    mockedJob.findOneAndUpdate.mockResolvedValue(null);
+    await expect(svc.transitionJob('j1', 'resume')).rejects.toThrow(ConflictError);
   });
 });

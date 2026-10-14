@@ -1,7 +1,8 @@
-import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, authenticateToken, optionalAuth, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve } from '@visin/backend-core';
+import { createBaseApp, errorHandler, logger, connectDb, createHealthCheckHandler, authenticateToken, optionalAuth, assertRequiredEnv, STANDARD_CORS_ALLOWED_HEADERS, serve, startSweeper } from '@visin/backend-core';
 import jobRoutes from './routes/jobRoutes';
 import taskRoutes from './routes/taskRoutes';
 import meRoutes from './routes/meRoutes';
+import { recoverJobLifecycles } from './services/jobLifecycleService';
 
 // The client modules call requireEnv() lazily, per request — asserting here
 // turns a missing setting into a boot failure rather than a 500 mid-labeling.
@@ -38,7 +39,8 @@ const PORT = process.env.PORT || 5008;
 // the container restart policy.
 connectDb({ serviceName: 'label-service' })
   .then(() => {
-    serve(app, { port: PORT, serviceName: 'label-service' });
+    const recovery = startSweeper({ name: 'label-job-recovery', everyMs: 60_000, run: async () => void (await recoverJobLifecycles()) });
+    serve(app, { port: PORT, serviceName: 'label-service', onShutdown: () => recovery.stop() });
   })
   .catch((err: Error) => {
     logger.error('Failed to start label-service', { error: err.message, stack: err.stack });

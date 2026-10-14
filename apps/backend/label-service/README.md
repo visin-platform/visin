@@ -67,10 +67,23 @@ moves on.
 
 **A job holds its dataset.** Creating a job claims the dataset
 (`PUT /internal/datasets/:id/holds/label-service/:jobId` in dataset-service);
-deleting the job releases it. While a hold exists, that dataset cannot be deleted,
-re-imported or have its zip replaced — its files are what the tasks show. A job
-whose claim cannot be made is not created, and a job whose claim cannot be
-released is not deleted, so a retry is always the right move.
+deleting the job releases it after task cleanup. While a hold exists, that dataset
+cannot be purged, re-imported or have its zip replaced — its files are what the
+tasks show. Creation persists an internal `creating` intent before claiming the
+dataset and exposes the draft only after confirmation. An uncertain request,
+including a lost acknowledgement, retains the intent and retries the same hold
+reference; the recovered draft may appear in the manager's job list later.
+
+Deletion persists a `deleting` intent and hides the job before removing its files,
+labels, suggestions and tasks. Only then does it release the dataset hold and
+remove the job record. Failed stages remain retryable. Recovery runs at startup
+and every minute with per-job ownership tokens; a crashed operation's lease
+expires after ten minutes. These timings are code constants. Existing jobs with
+no lifecycle field continue to work without a migration.
+
+Requests that began writing before deletion still need operation fencing,
+especially task materialization and label imports. Historical orphan holds also
+need separate reconciliation; see item 4 in the repository's `todo.md`.
 
 ## Labels
 

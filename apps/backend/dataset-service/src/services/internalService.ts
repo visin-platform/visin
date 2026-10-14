@@ -1,9 +1,9 @@
 import type { CoversBody, ResolveDatasetBody } from '../validation/datasetSchemas';
 import { QueryFilter } from 'mongoose';
-import { BadRequestError, NotFoundError, type Permission } from '@visin/backend-core';
+import { BadRequestError, ConflictError, NotFoundError, type Permission } from '@visin/backend-core';
 import { Dataset } from '../models/Dataset';
 import { DatasetItem, IDatasetItem } from '../models/DatasetItem';
-import { createDatasetAccess, findDataset } from './accessService';
+import { createDatasetAccess, findDataset, LIVE } from './accessService';
 import * as files from '../clients/fileServiceClient';
 import type { InternalItemsQuery, JsonFieldsQuery } from '../validation/datasetSchemas';
 
@@ -157,11 +157,19 @@ export const jsonFields = async (id: string, query: JsonFieldsQuery): Promise<Js
 export const getManifest = async (id: string) => (await findDataset(id, true)).manifest || [];
 
 export const addHold = async (id: string, service: string, ref: string) => {
-  const dataset = await findDataset(id);
-  await Dataset.updateOne(
-    { _id: dataset._id, deletingAt: { $exists: false }, holds: { $not: { $elemMatch: { service, ref } } } },
+  if (!/^[0-9a-fA-F]{24}$/.test(id)) throw new NotFoundError('Dataset not found');
+  const acquired = await Dataset.updateOne(
+    { _id: id, ...LIVE, 'removingGroups.0': { $exists: false },
+      'import.status': { $nin: ['queued', 'running'] },
+      holds: { $not: { $elemMatch: { service, ref } } } },
     { $push: { holds: { service, ref, createdAt: new Date() } } }
   );
+  if (acquired.matchedCount > 0) return;
+  // An ACK can be lost, including just before the dataset goes in the trash.
+  // Confirm the identical claim rather than treating every no-op as success.
+  if (await Dataset.exists({ _id: id, deletingAt: { $exists: false }, holds: { $elemMatch: { service, ref } } })) return;
+  await findDataset(id);
+  throw new ConflictError('Dataset images are being imported or removed; try again once that work finishes');
 };
 
 /**

@@ -258,7 +258,7 @@ export const getTaskWithJob = async (taskId: string): Promise<{ task: ILabelTask
     throw new NotFoundError('Task not found');
   }
   const job = await LabelJob.findById(task.jobId);
-  if (!job) {
+  if (!job || job.lifecycle) {
     throw new NotFoundError('Job not found');
   }
   return { task, job };
@@ -278,6 +278,7 @@ const identity = (user: UserPayload) => ({
  * corrected.
  */
 const assertWritable = (job: ILabelJob, previous: ILabelAnnotation | null): void => {
+  if (job.lifecycle) throw new ConflictError('Job creation or deletion is still running');
   if (job.status === 'active' || (job.status === 'completed' && previous)) return;
   throw new ConflictError(`Job is ${job.status}, not accepting labels`);
 };

@@ -1,5 +1,5 @@
 import * as datasets from '../../clients/datasetServiceClient';
-import { BadGatewayError, NotFoundError } from '@visin/backend-core';
+import { BadGatewayError, ConflictError, NotFoundError } from '@visin/backend-core';
 
 const fetchMock = jest.fn();
 global.fetch = fetchMock as unknown as typeof fetch;
@@ -88,4 +88,7 @@ it('reports a missing dataset as such, and any other failure as an upstream erro
 
   fetchMock.mockResolvedValue(jsonResponse(null, 503));
   await expect(datasets.getDataset('d1')).rejects.toBeInstanceOf(BadGatewayError);
+
+  fetchMock.mockResolvedValue(jsonResponse(null, 409));
+  await expect(datasets.addHold('d1', 'j1')).rejects.toBeInstanceOf(ConflictError);
 });

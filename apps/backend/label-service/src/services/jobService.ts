@@ -1,12 +1,11 @@
 import { Types } from 'mongoose';
-import { atLeast, BadRequestError, ConflictError, ForbiddenError, NotFoundError, UserPayload, logger } from '@visin/backend-core';
+import { atLeast, BadRequestError, ConflictError, ForbiddenError, NotFoundError, UserPayload } from '@visin/backend-core';
 import { LabelJob, ILabelJob, IJobClass, JobStatus, MAX_CLASSES } from '../models/LabelJob';
 import { LabelTask } from '../models/LabelTask';
 import { LabelAnnotation } from '../models/LabelAnnotation';
-import { LabelSuggestion } from '../models/LabelSuggestion';
 import { ClassInput, CreateJobBody, ModelClassMappingBody } from '../validation/jobSchemas';
 import * as datasets from '../clients/datasetServiceClient';
-import * as files from '../clients/fileServiceClient';
+import { beginJobDeletion, finishJobCreation, finishJobDeletion, newLifecycleLease, READY_JOB, releaseLifecycleLease, type RemovedJob } from './jobLifecycleService';
 
 /**
  * The colours a new class is given in turn. The first eight are the charts'
@@ -29,7 +28,7 @@ const slug = (name: string): string =>
 
 /** Change detector names on existing classes, preserving their keys, mask values and geometry. */
 export const setModelClassMapping = async (job: ILabelJob, mapping: ModelClassMappingBody['mapping']): Promise<ILabelJob> => {
-  const filter: Record<string, unknown> = { _id: job._id };
+  const filter: Record<string, unknown> = { _id: job._id, ...READY_JOB };
   const set: Record<string, string> = {};
   const unset: Record<string, string> = {};
   for (const [key, name] of Object.entries(mapping)) {
@@ -101,8 +100,8 @@ export const buildClasses = (inputs: ClassInput[], existing: IJobClass[] = []): 
  * the files its tasks will show cannot be deleted or re-imported from under it.
  *
  * The job has no owner of its own: it follows its dataset. The claim is made
- * after the job exists (it names the job) and the job is removed again if the
- * claim fails — a job whose images are unprotected must not exist.
+ * after a durable creation intent exists (it names the job). Only a confirmed
+ * claim makes it usable; uncertain delivery is retried by lifecycle recovery.
  */
 export const createJob = async (user: UserPayload, data: CreateJobBody): Promise<ILabelJob> => {
   let dataset: datasets.DatasetSummary;
@@ -129,15 +128,16 @@ export const createJob = async (user: UserPayload, data: CreateJobBody): Promise
       name: user.name
     },
     status: 'draft',
+    lifecycle: 'creating',
+    ...newLifecycleLease(),
     isPublic: false
   });
   try {
-    await datasets.addHold(data.datasetId, job._id.toString());
+    return await finishJobCreation(job);
   } catch (err) {
-    await LabelJob.deleteOne({ _id: job._id });
+    await releaseLifecycleLease(job);
     throw err;
   }
-  return job;
 };
 
 export type JobWithProgress = Record<string, unknown> & { progress: JobProgress };
@@ -158,9 +158,10 @@ export const listJobsForUser = async (
   const jobs =
     role === 'admin'
       ? await LabelJob.find({
+          ...READY_JOB,
           $or: [{ datasetId: { $in: datasetIds } }, { datasetId: { $exists: false }, 'createdBy.userId': userId }]
         }).sort({ updatedAt: -1 })
-      : await LabelJob.find({ datasetId: { $in: datasetIds }, status: 'active' }).sort({ updatedAt: -1 });
+      : await LabelJob.find({ ...READY_JOB, datasetId: { $in: datasetIds }, status: 'active' }).sort({ updatedAt: -1 });
 
   const progress = await progressForJobs(jobs, userId);
   return jobs.map((job) => ({ ...job.toObject(), progress: progress.get(job._id.toString())! }));
@@ -184,7 +185,7 @@ export const withoutCreatorIdentity = (job: ILabelJob): Record<string, unknown> 
  */
 export const listPublicJobs = async (): Promise<JobWithProgress[]> => {
   const publicDatasets = await datasets.datasetIdsFor(undefined, 'read');
-  const jobs = await LabelJob.find({ status: 'active', isPublic: true, datasetId: { $in: publicDatasets } }).sort({ updatedAt: -1 });
+  const jobs = await LabelJob.find({ ...READY_JOB, status: 'active', isPublic: true, datasetId: { $in: publicDatasets } }).sort({ updatedAt: -1 });
   const progress = await progressForJobs(jobs, '');
   return jobs.map((job) => ({
     ...withoutCreatorIdentity(job),
@@ -192,9 +193,9 @@ export const listPublicJobs = async (): Promise<JobWithProgress[]> => {
   }));
 };
 
-export const getJob = async (jobId: string): Promise<ILabelJob> => {
+export const getJob = async (jobId: string, forDeletion = false): Promise<ILabelJob> => {
   const job = await LabelJob.findById(jobId);
-  if (!job) {
+  if (!job || (job.lifecycle && !forDeletion)) {
     throw new NotFoundError('Job not found');
   }
   return job;
@@ -216,7 +217,7 @@ export const jobDataset = async (job: ILabelJob): Promise<Pick<datasets.DatasetS
 };
 
 export const setJobVisibility = async (jobId: string, isPublic: boolean): Promise<ILabelJob> => {
-  const job = await LabelJob.findByIdAndUpdate(jobId, { $set: { isPublic } }, { returnDocument: 'after' });
+  const job = await LabelJob.findOneAndUpdate({ _id: jobId, ...READY_JOB }, { $set: { isPublic } }, { returnDocument: 'after' });
   if (!job) throw new NotFoundError('Job not found');
   return job;
 };
@@ -309,30 +310,20 @@ export type JobAction = keyof typeof TRANSITIONS;
  * annotations, suggestions, mask files and tasks too; there is no soft-delete
  * tier below this.
  *
- * Files and the dataset claim go first: if either fails the job survives intact
- * and the delete can be retried, rather than leaving bytes or a hold that
- * nothing points at. Annotations go before tasks: an interrupted delete that has
- * removed tasks but not annotations leaves annotations pointing at nothing,
- * while the reverse merely re-orphans tasks a repeat call cleans up.
+ * A durable intent hides it before cleanup. The dataset claim is released only
+ * after tasks are gone; every failed stage remains available for recovery.
  */
 export const deleteJob = async (
   jobId: string
-): Promise<{ tasks: number; annotations: number; suggestions: number }> => {
-  const job = await LabelJob.findById(jobId);
-  if (job?.datasetId) {
-    await datasets.removeHold(job.datasetId, jobId);
-    logger.info('Released dataset hold', { jobId, datasetId: job.datasetId });
+): Promise<RemovedJob> => {
+  const job = await beginJobDeletion(jobId);
+  if (!job) return { tasks: 0, annotations: 0, suggestions: 0 };
+  try {
+    return await finishJobDeletion(job);
+  } catch (error) {
+    await releaseLifecycleLease(job);
+    throw error;
   }
-  await files.deleteFolder(files.jobFolder(jobId));
-  const annotations = await LabelAnnotation.deleteMany({ jobId });
-  const suggestions = await LabelSuggestion.deleteMany({ jobId });
-  const tasks = await LabelTask.deleteMany({ jobId });
-  await LabelJob.deleteOne({ _id: jobId });
-  return {
-    tasks: tasks.deletedCount || 0,
-    annotations: annotations.deletedCount || 0,
-    suggestions: suggestions.deletedCount || 0
-  };
 };
 
 export const transitionJob = async (jobId: string, action: JobAction): Promise<ILabelJob> => {
@@ -353,7 +344,10 @@ export const transitionJob = async (jobId: string, action: JobAction): Promise<I
     }
   }
 
-  job.status = transition.to;
-  await job.save();
-  return job;
+  const updated = await LabelJob.findOneAndUpdate(
+    { _id: job._id, ...READY_JOB, status: job.status, tasksCount: job.tasksCount },
+    { $set: { status: transition.to } }, { returnDocument: 'after' }
+  );
+  if (!updated) throw new ConflictError('Job changed. Reload and try again.');
+  return updated;
 };

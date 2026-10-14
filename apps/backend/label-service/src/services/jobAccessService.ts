@@ -1,4 +1,4 @@
-import { atLeast, ForbiddenError, UnauthorizedError, type Permission } from '@visin/backend-core';
+import { atLeast, ForbiddenError, NotFoundError, UnauthorizedError, type Permission } from '@visin/backend-core';
 import type { ILabelJob } from '../models/LabelJob';
 import * as datasets from '../clients/datasetServiceClient';
 
@@ -30,6 +30,7 @@ export interface JobAccess {
  * public. Making the dataset private closes the job to outsiders by itself.
  */
 export async function getJobReadAccess(job: ILabelJob, userId?: string): Promise<JobAccess> {
+  if (job.lifecycle) throw new NotFoundError('Job not found');
   const permission = await jobPermission(job, userId);
   const member = atLeast(permission, 'contribute');
   const open = job.isPublic === true && job.status === 'active' && atLeast(permission, 'read');

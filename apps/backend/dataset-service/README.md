@@ -174,6 +174,12 @@ label-service takes one per job. While any hold exists, deleting the dataset,
 replacing its zip and re-importing are refused — those delete files a labeling
 task is showing.
 
+Hold acquisition atomically excludes purge, active imports and image-group
+removal. A refused claim returns 404 for an unavailable dataset or 409 for image
+mutation. Repeating an identical existing hold succeeds without duplicating it,
+including when the dataset has since been trashed. Releasing a hold also works
+in the trash so the dataset can eventually be purged.
+
 ## Develop
 
 ```sh

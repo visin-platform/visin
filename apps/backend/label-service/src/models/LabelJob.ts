@@ -71,6 +71,10 @@ export interface ILabelJob extends Document {
   redundancy: number;
   selection?: IJobSelection;
   status: JobStatus;
+  /** Unfinished cross-service operations; absent on usable jobs, including legacy jobs. */
+  lifecycle?: 'creating' | 'deleting';
+  lifecycleToken?: string;
+  lifecycleLeaseUntil?: Date;
   isPublic: boolean;
   tasksCount: number; // denormalized at materialization
   createdAt: Date;
@@ -125,6 +129,9 @@ const LabelJobSchema = new Schema<ILabelJob>(
       default: undefined
     },
     status: { type: String, enum: JOB_STATUSES, default: 'draft', index: true },
+    lifecycle: { type: String, enum: ['creating', 'deleting'] },
+    lifecycleToken: String,
+    lifecycleLeaseUntil: Date,
     isPublic: { type: Boolean, default: false },
     tasksCount: { type: Number, default: 0 }
   },
@@ -132,5 +139,6 @@ const LabelJobSchema = new Schema<ILabelJob>(
 );
 
 LabelJobSchema.index({ datasetId: 1, status: 1 });
+LabelJobSchema.index({ lifecycle: 1, lifecycleLeaseUntil: 1 });
 
 export const LabelJob = model<ILabelJob>('LabelJob', LabelJobSchema, 'label_jobs');

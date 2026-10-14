@@ -129,6 +129,7 @@ export interface MaterializeResult {
  * dataset keeps those files in place.
  */
 export const materializeTasks = async (job: ILabelJob, body: MaterializeBody): Promise<MaterializeResult> => {
+  if (job.lifecycle) throw new ConflictError('Job creation or deletion is still running');
   if (job.status !== 'draft') {
     throw new ConflictError('Tasks can only be materialized while the job is a draft');
   }

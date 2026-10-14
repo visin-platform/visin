@@ -2,6 +2,7 @@ import {
   requireEnv,
   fetchWithTimeout,
   BadGatewayError,
+  ConflictError,
   NotFoundError,
   TRANSFER_FETCH_TIMEOUT_MS,
   type Permission,
@@ -65,6 +66,7 @@ const call = async <T>(method: string, path: string, query?: Record<string, stri
     serviceName: 'dataset-service'
   });
   if (response.status === 404) throw new NotFoundError('Dataset not found');
+  if (response.status === 409) throw new ConflictError('Dataset images are being changed; try again once that work finishes');
   if (!response.ok) throw new BadGatewayError(`dataset-service ${method} ${path} failed (${response.status})`);
   if (response.status === 204) return undefined as T;
   return ((await response.json()) as { data: T }).data;
