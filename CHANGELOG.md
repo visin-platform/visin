@@ -1,4 +1,14 @@
 # Visin Changelog
+### [1.41.1](https://github.com/visin-platform/visin/compare/v1.41.0...v1.41.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* close archive and lifecycle races left by the recovery work ([12ed1f5](https://github.com/visin-platform/visin/commit/12ed1f5a768d09a73ff728a6c0b70531a1f70c68))
+* **dataset-service:** recover lost queue jobs and bound Redis operations ([bc84592](https://github.com/visin-platform/visin/commit/bc845925a305c4ac63c756fa6f959a61ab472125))
+* recover labeling job lifecycle and protect dataset holds ([5ff6999](https://github.com/visin-platform/visin/commit/5ff69998a2c1c07c07d2d1cc665b96d13224744f))
+* stage task generations and serialize archive mutations ([d0f1e5d](https://github.com/visin-platform/visin/commit/d0f1e5d0708ab35adcd7820ae68bf69881644af3))
+
 ## [1.41.0](https://github.com/visin-platform/visin/compare/v1.40.0...v1.41.0) (2026-10-14)
 
 
