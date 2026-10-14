@@ -25,15 +25,13 @@ import * as groupService from '../clients/groupServiceClient';
 import { lookupOwnerIdentities, type OwnerIdentity } from '../clients/ownerIdentityClient';
 import { DatasetAccess, DatasetPermissions, LIVE, permissionsOf, readableDataset, requireDataset } from './accessService';
 import type { ArchiveUploadBody, CreateDatasetBody, ListDatasetsQuery, UpdateDatasetBody } from '../validation/datasetSchemas';
+import { importDelivery, pendingWork } from './workIdentity';
 
 /** How long a trashed dataset can still be restored before the sweeper deletes it. */
 export const TRASH_DAYS = 30;
 
 const UPLOAD_URL_MINUTES = 240;
 const DOWNLOAD_URL_MINUTES = 60;
-// The worker flushes its heartbeat at least every 5s while running, so an import
-// silent for this long died with its process.
-const IMPORT_STALE_MS = Number(process.env.DATASET_IMPORT_STALE_MINUTES || 10) * 60 * 1000;
 
 export const datasetStoragePrefix = (id: Types.ObjectId | string): string => `datasets/${id}/`;
 
@@ -44,10 +42,7 @@ const sanitizeFilename = (filename: string): string => {
 
 const isImportActive = (dataset: IDataset): boolean => {
   const current = dataset.import;
-  if (!current || (current.status !== 'queued' && current.status !== 'running')) return false;
-  if (current.status === 'queued') return true;
-  const heartbeat = current.heartbeatAt ? new Date(current.heartbeatAt).getTime() : 0;
-  return heartbeat >= Date.now() - IMPORT_STALE_MS;
+  return Boolean(current && (current.status === 'queued' || current.status === 'running'));
 };
 
 /** Files other services show — a label job's tasks — must not be deleted from under them. */
@@ -319,7 +314,7 @@ const purge = async (dataset: IDataset, actorId: string): Promise<boolean> => {
     }
   );
   if (marked.matchedCount === 0) return false;
-  if (activeImport) await removeQueuedImport(dataset.import!.id);
+  if (activeImport) await removeQueuedImport(dataset.import!.deliveryId ?? dataset.import!.id);
   await enqueueDelete({ datasetId: dataset._id.toString() });
   recordEvent(dataset, actorId, 'purge');
   logger.info('Dataset deletion queued', { datasetId: dataset._id.toString() });
@@ -459,10 +454,10 @@ export const removeGroup = async (access: DatasetAccess, id: string, group: stri
 
 /** Hand reading the archive's index to the worker; the page polls `scan`. */
 const queueScan = async (dataset: IDataset, fileId: string): Promise<void> => {
-  dataset.scan = { status: 'queued', fileId };
+  dataset.scan = { id: new Types.ObjectId().toString(), status: 'queued', fileId };
   dataset.markModified('scan');
   await dataset.save();
-  await enqueueScan({ datasetId: dataset._id.toString(), fileId });
+  await enqueueScan({ datasetId: dataset._id.toString(), fileId, scanId: dataset.scan.id });
 };
 
 /**
@@ -559,16 +554,14 @@ export const startImport = async (access: DatasetAccess, id: string, mapping: Im
   if (!dataset.archive) throw new BadRequestError('Upload a zip before importing');
   if (isImportActive(dataset)) throw new ConflictError('An import is already running for this dataset');
   if (dataset.removingGroups?.length) throw new ConflictError('An image group is still being removed — import once it is gone');
-  if (dataset.import && (dataset.import.status === 'queued' || dataset.import.status === 'running')) {
-    // Stale: its process died. Drop it from the queue so a late pickup can't race this one.
-    await removeQueuedImport(dataset.import.id);
-  }
+  // Queue recovery decides whether a running delivery really disappeared. A
+  // stale heartbeat alone must not replace a job still active or delayed in Redis.
 
   const groupNames = mapping.groups.map((row) => row.group);
   const importId = new Types.ObjectId().toString();
   const groups = mapping.groups.map((row, index) => ({ folder: normalizeFolder(row.folder), group: groupNames[index] }));
   const expected = expectedImportFiles(dataset.contents, groups.map((row) => row.folder));
-  dataset.import = {
+  const importing = {
     id: importId,
     status: 'queued',
     mapping: {
@@ -581,17 +574,28 @@ export const startImport = async (access: DatasetAccess, id: string, mapping: Im
     errors: [],
     ...(expected !== undefined ? { expected } : {})
   };
-  dataset.markModified('import');
-  await dataset.save();
+  const started = await Dataset.findOneAndUpdate(
+    {
+      _id: dataset._id, ...LIVE, holds: { $size: 0 }, 'removingGroups.0': { $exists: false },
+      'archive.fileId': dataset.archive.fileId,
+      ...(dataset.import ? {
+        'import.id': dataset.import.id, 'import.status': dataset.import.status,
+        'import.deliveryId': dataset.import.deliveryId ?? { $exists: false }
+      } : { import: { $exists: false } })
+    },
+    { $set: { import: importing } },
+    { returnDocument: 'after' }
+  );
+  if (!started) throw new ConflictError('The dataset or import changed meanwhile — reload and try again');
   await enqueueImport({ datasetId: dataset._id.toString(), importId });
   logger.info('Dataset import queued', { datasetId: id, importId, groups: groupNames.length });
-  return viewFor(access, dataset);
+  return viewFor(access, started);
 };
 
 /**
  * Carry on with an import that was cancelled or failed part-way: the same
- * mapping, queued again under the same id, so the worker skips every file that
- * import already stored. Not for an import of a zip since replaced.
+ * mapping and stored files, with a new delivery id so the old attempt's outcome
+ * cannot overwrite it. Not for an import of a zip since replaced.
  */
 export const resumeImport = async (access: DatasetAccess, id: string) => {
   const dataset = await requireDataset(access, id, 'contribute');
@@ -605,14 +609,16 @@ export const resumeImport = async (access: DatasetAccess, id: string) => {
   }
   if (dataset.removingGroups?.length) throw new ConflictError('An image group is still being removed — import once it is gone');
   const resumed = await Dataset.findOneAndUpdate(
-    { _id: dataset._id, 'import.id': current.id, 'import.status': current.status },
-    { $set: { 'import.status': 'queued', 'import.errors': [] }, $unset: { 'import.finishedAt': '' } },
+    { ...importDelivery(id, current.id, current.deliveryId), ...LIVE, holds: { $size: 0 },
+      'removingGroups.0': { $exists: false }, 'archive.fileId': current.archiveFileId, 'import.status': current.status },
+    { $set: { 'import.status': 'queued', 'import.errors': [], 'import.deliveryId': new Types.ObjectId().toString() }, $unset: { 'import.finishedAt': '', 'import.heartbeatAt': '' } },
     { returnDocument: 'after' }
   );
   if (!resumed) throw new ConflictError('The import changed meanwhile — reload and try again');
-  // A finished job keeps its id in the queue for a while; clear it, or the add is a no-op.
-  await removeQueuedImport(current.id);
-  await enqueueImport({ datasetId: id, importId: current.id });
+  // Drop an old queued/terminal delivery where possible. A still active old
+  // attempt is fenced by the new delivery id and stops at its next heartbeat.
+  await removeQueuedImport(current.deliveryId ?? current.id);
+  await enqueueImport({ datasetId: id, importId: current.id, deliveryId: resumed.import!.deliveryId });
   logger.info('Dataset import resumed', { datasetId: id, importId: current.id });
   return viewFor(access, resumed);
 };
@@ -623,10 +629,12 @@ export const cancelImport = async (access: DatasetAccess, id: string) => {
   if (!current || (current.status !== 'queued' && current.status !== 'running')) {
     throw new ConflictError('No import is running');
   }
-  await Dataset.updateOne(
-    { _id: dataset._id, 'import.id': current.id },
-    { $set: { 'import.status': 'cancelled', 'import.finishedAt': new Date() } }
+  const cancelled = await Dataset.findOneAndUpdate(
+    { ...importDelivery(id, current.id, current.deliveryId), 'import.status': pendingWork },
+    { $set: { 'import.status': 'cancelled', 'import.finishedAt': new Date() } },
+    { returnDocument: 'after' }
   );
-  await removeQueuedImport(current.id);
-  return viewFor(access, await Dataset.findById(dataset._id).orFail());
+  if (!cancelled) throw new ConflictError('The import changed meanwhile — reload and try again');
+  await removeQueuedImport(current.deliveryId ?? current.id);
+  return viewFor(access, cancelled);
 };

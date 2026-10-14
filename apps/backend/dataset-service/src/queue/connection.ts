@@ -1,4 +1,5 @@
 import Redis, { RedisOptions } from 'ioredis';
+import { QUEUE_TIMEOUT_MS } from './constants';
 
 /**
  * Redis connections for BullMQ.
@@ -20,4 +21,12 @@ export const redisUrl = (): string => {
   return url;
 };
 
-export const createRedisConnection = (): Redis => new Redis(redisUrl(), OPTIONS);
+export const createRedisConnection = (role: 'worker' | 'producer' = 'worker'): Redis => new Redis(redisUrl(), {
+  ...OPTIONS,
+  ...(role === 'producer' ? {
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
+    connectTimeout: QUEUE_TIMEOUT_MS,
+    commandTimeout: QUEUE_TIMEOUT_MS
+  } : {})
+});

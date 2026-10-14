@@ -1665,7 +1665,7 @@ paths:
                   message:
                     type: string
         '503':
-          description: Request refused
+          description: Database or queue unavailable; persisted work is recovered when Redis returns.
           content:
             application/json:
               schema:
@@ -1973,7 +1973,7 @@ paths:
                   message:
                     type: string
         '503':
-          description: Request refused
+          description: Database or queue unavailable; persisted work is recovered when Redis returns.
           content:
             application/json:
               schema:
@@ -2430,7 +2430,7 @@ paths:
                   message:
                     type: string
         '503':
-          description: Request refused
+          description: Database or queue unavailable; persisted work is recovered when Redis returns.
           content:
             application/json:
               schema:
@@ -2726,7 +2726,7 @@ paths:
                   message:
                     type: string
         '503':
-          description: Request refused
+          description: Database or queue unavailable; persisted work is recovered when Redis returns.
           content:
             application/json:
               schema:
@@ -3437,7 +3437,7 @@ paths:
                   message:
                     type: string
         '503':
-          description: Request refused
+          description: Database or queue unavailable; persisted work is recovered when Redis returns.
           content:
             application/json:
               schema:
@@ -3590,7 +3590,7 @@ paths:
                   message:
                     type: string
         '503':
-          description: Request refused
+          description: Database or queue unavailable; a persisted cancellation remains effective.
           content:
             application/json:
               schema:
@@ -3738,7 +3738,7 @@ paths:
                   message:
                     type: string
         '503':
-          description: Request refused
+          description: Database or queue unavailable; persisted work is recovered when Redis returns.
           content:
             application/json:
               schema:

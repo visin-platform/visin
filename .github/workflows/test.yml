@@ -222,6 +222,12 @@ jobs:
         if: matrix.workspace == 'group-service'
         run: node --test scripts/jest-mongo-setup.test.mjs
 
+      - name: Install Redis for isolated queue integration tests
+        if: matrix.workspace == 'dataset-service'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends redis-server
+
       - name: Run tests with coverage
         run: npm run test:coverage --workspace=${{ matrix.workspace }}
 

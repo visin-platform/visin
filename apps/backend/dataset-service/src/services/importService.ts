@@ -8,6 +8,7 @@ import { importZipLimits, NonRetryableImportError, readZipEntries, ZipData } fro
 import { createClassifier, EntryClassification, StoredEntry } from '../utils/mapping';
 import { parseManifest } from '../utils/manifest';
 import { mimetypeFor } from '../utils/zipPaths';
+import { importDelivery, pendingWork, staleHeartbeat } from './workIdentity';
 
 const THUMBNAIL_WIDTH = 320;
 const HEARTBEAT_MS = 5000;
@@ -227,16 +228,20 @@ export const refreshCover = async (datasetId: Types.ObjectId, coverPath: string 
  * budget is spent — `runImport` never decides this, because from inside one
  * attempt a transient failure is indistinguishable from a final one.
  */
-export const markImportFailed = async (datasetId: string, importId: string, reason: string): Promise<void> => {
-  const dataset = await Dataset.findById(datasetId);
-  if (!dataset?.import || dataset.import.id !== importId || dataset.import.status === 'cancelled') return;
-  await Dataset.updateOne(
-    { _id: datasetId, 'import.id': importId },
+export const markImportFailed = async (datasetId: string, importId: string, reason: string, deliveryId?: string, staleBefore?: Date): Promise<void> => {
+  const dataset = await Dataset.findOneAndUpdate(
+    {
+      ...importDelivery(datasetId, importId, deliveryId),
+      'import.status': pendingWork,
+      ...(staleBefore ? staleHeartbeat('import.heartbeatAt', staleBefore) : {})
+    },
     {
       $set: { 'import.status': 'failed', 'import.finishedAt': new Date() },
       $push: { 'import.errors': { path: '(zip)', reason } }
-    }
+    },
+    { returnDocument: 'after' }
   );
+  if (!dataset) return;
   await showStoredItems(dataset._id, dataset.coverPath);
 };
 
@@ -256,18 +261,19 @@ const showStoredItems = async (datasetId: Types.ObjectId, coverPath: string | un
  * Progress and per-file errors land on the dataset's `import`, which the client
  * polls. A retried attempt skips what the dead one already stored.
  */
-export const runImport = async (datasetId: string, importId: string): Promise<void> => {
-  const dataset = await Dataset.findById(datasetId);
+export const runImport = async (datasetId: string, importId: string, deliveryId?: string): Promise<void> => {
+  const work = importDelivery(datasetId, importId, deliveryId);
+  const dataset = await Dataset.findOne(work);
   const current = dataset?.import;
   if (!dataset || !current || current.id !== importId) {
     throw new NonRetryableImportError('Import no longer belongs to its dataset (deleted or superseded)');
   }
-  if (current.status === 'cancelled') return;
+  if (current.status !== 'queued' && current.status !== 'running') return;
 
   const state: ImportState = { processed: 0, skipped: 0, errors: [], errorBytes: 0, copiedBytes: 0 };
   const now = new Date();
-  await Dataset.updateOne(
-    { _id: dataset._id, 'import.id': importId },
+  const started = await Dataset.updateOne(
+    { ...work, 'import.status': pendingWork },
     {
       $set: {
         'import.status': 'running',
@@ -277,13 +283,14 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
       }
     }
   );
+  if (!started.matchedCount) return;
 
   let lastFlush = Date.now();
   const flush = async (force = false): Promise<void> => {
     if (!force && Date.now() - lastFlush < HEARTBEAT_MS) return;
     lastFlush = Date.now();
     const updated = await Dataset.findOneAndUpdate(
-      { _id: dataset._id, 'import.id': importId },
+      { ...work, 'import.status': 'running' },
       {
         $set: {
           'import.processed': state.processed,
@@ -294,8 +301,7 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
       },
       { returnDocument: 'after', projection: 'import.status' }
     );
-    if (!updated) throw new NonRetryableImportError('Import no longer belongs to its dataset (deleted or superseded)');
-    if (updated.import?.status === 'cancelled') throw new ImportStopped();
+    if (!updated) throw new ImportStopped();
   };
 
   // Declared outside the try: whatever stops the loop, entries already being
@@ -347,7 +353,7 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
     const summary = await summarizeItems(dataset._id);
     const status = state.processed === 0 && state.errors.length > 0 ? 'failed' : 'done';
     const finished = await Dataset.findOneAndUpdate(
-      { _id: dataset._id, 'import.id': importId, 'import.status': { $ne: 'cancelled' } },
+      { ...work, 'import.status': 'running' },
       {
         $set: {
           groups: summary.groups,
@@ -370,11 +376,11 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
     await Promise.allSettled(inFlight);
     if (err instanceof ImportStopped) {
       // Cancelled: what landed stays and shows, and resuming stores the rest.
-      await Dataset.updateOne(
-        { _id: dataset._id, 'import.id': importId },
+      const cancelled = await Dataset.updateOne(
+        { ...work, 'import.status': 'cancelled' },
         { $set: { 'import.processed': state.processed, 'import.skipped': state.skipped, 'import.errors': state.errors } }
       );
-      await showStoredItems(dataset._id, dataset.coverPath);
+      if (cancelled.matchedCount) await showStoredItems(dataset._id, dataset.coverPath);
       logger.info('Dataset import cancelled', { datasetId, importId, processed: state.processed });
       return;
     }
@@ -382,7 +388,7 @@ export const runImport = async (datasetId: string, importId: string): Promise<vo
     // Keep the partial progress (a retry skips what landed) but leave `status`
     // alone — see markImportFailed.
     await Dataset.updateOne(
-      { _id: dataset._id, 'import.id': importId },
+      { ...work, 'import.status': 'running' },
       { $set: { 'import.processed': state.processed, 'import.skipped': state.skipped, 'import.errors': state.errors } }
     );
     throw err;

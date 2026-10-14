@@ -82,8 +82,34 @@ response, so it cannot live in the request.
 - **Cancellation** stops the import at its next heartbeat. What it had stored
   stays and shows (counts, groups, cover), as it does for an import that failed.
 - **Resume**: `POST /api/datasets/:id/import/resume` queues a cancelled or failed
-  import again under its own id, so the worker skips every file it already
-  stored. Refused once the zip has been replaced; import anew then.
+  import with a new delivery id while keeping its import id and extracted files,
+  so the worker skips every file it already stored. Late results from the previous
+  delivery cannot change the resumed import. Refused once the zip has been replaced;
+  import anew then.
+
+### Queue recovery and availability
+
+Mongo records work before Redis accepts delivery. A leased sweeper reconciles
+unfinished work at startup and every minute: missing queued scans/imports are
+re-enqueued under stable identities; waiting, delayed and active jobs are left
+alone. Rescanning the same archive also creates a distinct scan identity, so an
+older scan cannot overwrite the new result.
+
+If a running job disappears, its heartbeat protects an attempt still finishing.
+After ten minutes without a heartbeat, recovery marks it failed with
+a resume/rescan instruction rather than starting a second processor. A retained
+terminal queue failure whose Mongo outcome was lost is likewise made visible.
+Replacing a pending import requires cancellation or recovery first; heartbeat
+age alone is not permission to replace a job still active in Redis.
+
+API queue operations have a ten-second initialization/command deadline.
+An unavailable queue answers 503;
+already persisted work stays available for recovery. Producer sockets are
+discarded after failures and closed at shutdown. Worker connections keep
+reconnecting without the producer retry/command deadline. Queue policy is fixed
+in [src/queue/constants.ts](src/queue/constants.ts): one worker, three attempts,
+five-second initial retry backoff, two stalled-job recoveries, and a ten-minute
+stale-heartbeat threshold.
 
 ### Archive resource limits
 
@@ -96,12 +122,14 @@ temporary disk for the largest zip it will import.
 
 ### Deleting
 
-`DELETE /api/datasets/:id` answers `202` at once: it marks the dataset
+`DELETE /api/datasets/:id` moves the dataset to the trash. Emptying it with
+`DELETE /api/datasets/:id/permanent` answers `202` at once: it marks the dataset
 (`deletingAt`), which hides it from every reader and refuses new holds, cancels a
 running import, and queues a `delete` job. The worker removes the files (one
 folder delete in file-service, which retires them in bulk), the item rows, and
-the record last — so an attempt that dies part-way leaves the mark, and startup
-queues every marked dataset again.
+the record last — so an attempt that dies part-way leaves the mark. The recovery
+sweep retries retained failed deletion jobs with a fresh attempt budget, instead
+of re-adding an existing id (which would be a duplicate, not another attempt).
 
 ### Removing one image group
 
@@ -112,7 +140,16 @@ files (file-service's batch `POST /internal/delete-files`) and rows a thousand a
 a time, then recounts, re-picks the cover and drops the group from the recorded
 mapping. Refused while a labeling job holds the dataset or an import runs; an
 import waits until the removal is done. Like deletions, unfinished removals are
-queued again at startup.
+reconciled at startup and every minute. Waiting/active jobs remain untouched;
+retained failed or completed jobs are retried when a removal mark still exists.
+
+### Queue integration tests
+
+Install `redis-server` to run this workspace's tests. The recovery suite starts
+an isolated, nonpersistent Redis on an ephemeral loopback port, together with
+MongoMemoryServer; it never connects to the development database or Redis.
+`REDIS_TEST_SERVER=/path/to/redis-server` may select a local/extracted executable.
+CI installs Redis for this workspace before running its coverage suite.
 
 ### Cover image
 

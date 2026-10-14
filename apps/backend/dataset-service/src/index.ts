@@ -5,7 +5,7 @@ import { datasetApiGuards } from './apiGuards';
 import datasetRoutes from './routes/datasetRoutes';
 import internalRoutes from './routes/internalRoutes';
 import { createImportWorker } from './queue/importWorker';
-import { resumeDeletions } from './services/deleteService';
+import { recoverDatasetJobs } from './services/jobRecoveryService';
 import { closeImportQueue } from './queue/importQueue';
 import { purgeExpiredTrash } from './services/datasetService';
 
@@ -42,9 +42,9 @@ connectDb({ serviceName: 'dataset-service' })
     // container (same image, a worker-only entrypoint) if imports start competing
     // with request handling for the event loop.
     const importWorker = createImportWorker();
-    resumeDeletions()
-      .then((count) => count && logger.info('Resumed dataset deletions', { count }))
-      .catch((err: Error) => logger.error('Could not resume dataset deletions', { error: err.message }));
+    // Reconcile at startup and while running: a failed enqueue or lost Redis
+    // delivery must not need a redeploy to become recoverable.
+    const queueSweeper = startSweeper({ name: 'dataset-job-recovery', everyMs: 60_000, run: async () => void (await recoverDatasetJobs()) });
     // On redeploy, stop taking new work and let the in-flight import finish:
     // `worker.close()` waits for the active job. A hard kill is covered by
     // BullMQ's stalled-job recovery, and the import resumes where it stopped.
@@ -53,7 +53,11 @@ connectDb({ serviceName: 'dataset-service' })
     serve(app, {
       port: PORT,
       serviceName: 'dataset-service',
-      onShutdown: () => Promise.all([trashSweeper.stop(), importWorker.close(), closeImportQueue()])
+      onShutdown: async () => {
+        await Promise.all([trashSweeper.stop(), queueSweeper.stop()]);
+        await importWorker.close();
+        await closeImportQueue();
+      }
     });
   })
   .catch((err: Error) => {

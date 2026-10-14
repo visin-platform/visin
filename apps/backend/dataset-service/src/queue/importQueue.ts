@@ -1,16 +1,24 @@
-import { Queue, JobsOptions } from 'bullmq';
+import { createHash } from 'crypto';
+import type Redis from 'ioredis';
+import { Queue, JobsOptions, type Job } from 'bullmq';
+import { logger, ServiceUnavailableError } from '@visin/backend-core';
 import { createRedisConnection } from './connection';
+import { IMPORT_ATTEMPTS, IMPORT_BACKOFF_MS, QUEUE_TIMEOUT_MS } from './constants';
 
 export const IMPORT_QUEUE_NAME = 'dataset-import';
 
 export interface ImportJobData {
   datasetId: string;
   importId: string;
+  /** A resume keeps the import's files but has its own queue delivery. */
+  deliveryId?: string;
 }
 
 export interface ScanJobData {
   datasetId: string;
   fileId: string;
+  /** Different rescans of the same file must not share a result or job. */
+  scanId?: string;
 }
 
 export interface DeleteJobData {
@@ -33,12 +41,9 @@ export const REMOVE_GROUP_JOB = 'remove-group';
 // A transient failure (file-service restart, aborted transfer) is worth another
 // go — import is idempotent, so a retry resumes where the dead attempt stopped.
 // A structurally bad zip is not, and is thrown as UnrecoverableError instead.
-const ATTEMPTS = Number(process.env.DATASET_IMPORT_JOB_ATTEMPTS || 3);
-const BACKOFF_MS = Number(process.env.DATASET_IMPORT_JOB_BACKOFF_MS || 5000);
-
 const JOB_OPTIONS: JobsOptions = {
-  attempts: ATTEMPTS,
-  backoff: { type: 'exponential', delay: BACKOFF_MS },
+  attempts: IMPORT_ATTEMPTS,
+  backoff: { type: 'exponential', delay: IMPORT_BACKOFF_MS },
   // The dataset's `import` field is the durable record the client polls; the
   // queue entry is only the delivery mechanism, so don't keep it around forever.
   removeOnComplete: { age: 3600, count: 100 },
@@ -48,21 +53,88 @@ const JOB_OPTIONS: JobsOptions = {
 // Created on first use, not at import time, so requiring this module (or
 // anything that reaches it) never opens a socket in a test or a CLI script.
 let queue: Queue<DatasetJobData> | undefined;
+let connection: Redis | undefined;
+const closingQueues = new Set<Promise<void>>();
 
 export const getImportQueue = (): Queue<DatasetJobData> => {
   if (!queue) {
-    queue = new Queue<DatasetJobData>(IMPORT_QUEUE_NAME, { connection: createRedisConnection() });
+    connection = createRedisConnection('producer');
+    queue = new Queue<DatasetJobData>(IMPORT_QUEUE_NAME, { connection });
+    queue.on('error', () => logger.warn('Dataset queue connection unavailable'));
   }
   return queue;
 };
 
+/** BullMQ also waits for initialization before sending a command. An ioredis
+ * command timeout alone does not bound that wait. Disconnect on failure so
+ * abandoned initialization cannot enqueue work minutes after its caller left.
+ * Mongo's work record remains authoritative and is reconciled on recovery. */
+async function queueOperation<T>(work: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const ownedQueue = getImportQueue();
+  try {
+    return await Promise.race([
+      work(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new ServiceUnavailableError('Dataset queue is unavailable; work will be recovered when Redis returns')), QUEUE_TIMEOUT_MS);
+      })
+    ]);
+  } catch {
+    // Do not close a successor connection created by another failed request.
+    if (queue === ownedQueue) {
+      connection?.disconnect();
+      connection = undefined;
+      queue = undefined;
+      const closing = ownedQueue.close()
+        .catch(() => { logger.warn('Could not close unavailable dataset queue'); })
+        .finally(() => closingQueues.delete(closing));
+      closingQueues.add(closing);
+    }
+    throw new ServiceUnavailableError('Dataset queue is unavailable; work will be recovered when Redis returns');
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export const importJobId = (data: ImportJobData): string => data.deliveryId ?? data.importId;
+export const scanJobId = (data: ScanJobData): string =>
+  `scan-${data.datasetId}-${data.scanId ?? createHash('sha256').update(data.fileId).digest('hex')}`;
+
+/** Missing means the queue lost delivery; waiting/delayed/active must be left
+ * alone even if an import has been sitting behind a large job for hours. */
+export const getDatasetJob = (jobId: string): Promise<Job<DatasetJobData> | undefined> =>
+  queueOperation(() => getImportQueue().getJob(jobId));
+
+export const getDatasetJobState = (job: Job<DatasetJobData>) => queueOperation(() => job.getState());
+
+/** Deletions retain their Mongo mark until all work finishes. Retry a retained
+ * terminal job instead of adding its existing id (which BullMQ treats as a
+ * duplicate). The retry's atomic state check also handles concurrent sweeps. */
+async function enqueueRemoval(name: string, data: DeleteJobData | RemoveGroupJobData, jobId: string): Promise<void> {
+  await queueOperation(async () => {
+    const target = getImportQueue();
+    const job = await target.getJob(jobId);
+    const state = await job?.getState();
+    if (job && (state === 'failed' || state === 'completed')) {
+      try {
+        await job.retry(state, { resetAttemptsMade: true, resetAttemptsStarted: true });
+      } catch (error) {
+        const changed = await job.getState();
+        if (changed === state) throw error;
+        if (changed === 'unknown') await target.add(name, data, { ...JOB_OPTIONS, jobId });
+      }
+    } else if (!job || state === 'unknown') {
+      await target.add(name, data, { ...JOB_OPTIONS, jobId });
+    }
+  });
+}
+
 /**
- * Queue one import. The import id doubles as the BullMQ job id: it makes the
- * queue entry addressable for cancellation, and makes a double-submit a no-op
- * rather than a second worker racing the first over the same zip.
+ * Queue one delivery of an import. Stable across enqueue/recovery retries;
+ * explicit resumes have a new delivery id while preserving their stored files.
  */
 export const enqueueImport = async (data: ImportJobData): Promise<void> => {
-  await getImportQueue().add(IMPORT_JOB, data, { ...JOB_OPTIONS, jobId: data.importId });
+  await queueOperation(() => getImportQueue().add(IMPORT_JOB, data, { ...JOB_OPTIONS, jobId: importJobId(data) }));
 };
 
 /**
@@ -71,7 +143,7 @@ export const enqueueImport = async (data: ImportJobData): Promise<void> => {
  * the dataset's `scan` is what the page polls.
  */
 export const enqueueScan = async (data: ScanJobData): Promise<void> => {
-  await getImportQueue().add(SCAN_JOB, data, JOB_OPTIONS);
+  await queueOperation(() => getImportQueue().add(SCAN_JOB, data, { ...JOB_OPTIONS, jobId: scanJobId(data) }));
 };
 
 /**
@@ -79,23 +151,31 @@ export const enqueueScan = async (data: ScanJobData): Promise<void> => {
  * twice (a retried request, the startup sweep) one deletion.
  */
 export const enqueueDelete = async (data: DeleteJobData): Promise<void> => {
-  await getImportQueue().add(DELETE_JOB, data, { ...JOB_OPTIONS, jobId: `delete-${data.datasetId}` });
+  await enqueueRemoval(DELETE_JOB, data, `delete-${data.datasetId}`);
 };
 
 /** Queue removing one image group; one job per group however often it is asked for. */
 export const enqueueRemoveGroup = async (data: RemoveGroupJobData): Promise<void> => {
   // Group names are free text; hex keeps the job id to characters BullMQ accepts.
   const jobId = `remove-group-${data.datasetId}-${Buffer.from(data.group).toString('hex')}`;
-  await getImportQueue().add(REMOVE_GROUP_JOB, data, { ...JOB_OPTIONS, jobId });
+  await enqueueRemoval(REMOVE_GROUP_JOB, data, jobId);
 };
 
 /** Drop a not-yet-started import from the queue. No-op once a worker has it. */
 export const removeQueuedImport = async (importId: string): Promise<void> => {
-  const job = await getImportQueue().getJob(importId);
-  await job?.remove().catch(() => undefined);
+  await queueOperation(async () => {
+    const job = await getImportQueue().getJob(importId);
+    await job?.remove().catch(() => undefined);
+  });
 };
 
 export const closeImportQueue = async (): Promise<void> => {
-  await queue?.close();
+  const closing = queue;
+  const closingConnection = connection;
   queue = undefined;
+  connection = undefined;
+  // The explicitly supplied ioredis instance is shared from BullMQ's point of
+  // view; Queue.close() alone does not own or close that socket.
+  closingConnection?.disconnect();
+  await Promise.all([...closingQueues, closing?.close()]);
 };

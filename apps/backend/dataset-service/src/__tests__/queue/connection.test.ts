@@ -27,6 +27,12 @@ describe('redisUrl', () => {
 });
 
 describe('createRedisConnection', () => {
+  it('bounds producer commands without queuing commands while offline', () => {
+    createRedisConnection('producer');
+    expect(redisConstructor).toHaveBeenCalledWith('redis://localhost:6379', expect.objectContaining({
+      maxRetriesPerRequest: 1, enableOfflineQueue: false, commandTimeout: 10_000, connectTimeout: 10_000
+    }));
+  });
   it('disables the per-request retry cap that BullMQ workers cannot live with', () => {
     createRedisConnection();
 

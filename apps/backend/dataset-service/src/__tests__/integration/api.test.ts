@@ -8,7 +8,7 @@ import { createHmac } from 'crypto';
 import express from 'express';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { BadGatewayError, createApiKey, errorHandler, resetEncryptionKeyCache } from '@visin/backend-core';
+import { BadGatewayError, createApiKey, errorHandler, resetEncryptionKeyCache, ServiceUnavailableError } from '@visin/backend-core';
 import { projectDatasetOwner } from '../../clients/projectServiceClient';
 import { datasetApiGuards } from '../../apiGuards';
 import { checkMembership, getMyGroups, type GroupRole } from '../../clients/groupServiceClient';
@@ -22,6 +22,7 @@ import {
 import { resumeDeletions, runDelete, runRemoveGroup } from '../../services/deleteService';
 import { markScanFailed, runScan } from '../../services/scanService';
 import { NonRetryableImportError } from '../../utils/boundedZip';
+import { markImportFailed } from '../../services/importService';
 import { fetchDatasetInfo } from '../../clients/hubClient';
 import { lookupOwnerIdentities } from '../../clients/ownerIdentityClient';
 import { clearHubCache } from '../../services/hubService';
@@ -184,6 +185,11 @@ const createDataset = async (
   const response = await call('/api/datasets', { method: 'POST', user, body });
   expect(response.status).toBe(201);
   return response.body.data._id as string;
+};
+
+const runCurrentScan = async (id: string, fileId: string) => {
+  const scanId = (await Dataset.findById(id).lean())?.scan?.id;
+  return runScan(id, fileId, scanId);
 };
 
 const uploadZip = async (id: string, entries: { path: string; data: Buffer }[]) => {
@@ -564,10 +570,10 @@ describe('archive upload, download and import', () => {
     // The request returns before the zip is read: the browser can leave now.
     expect(first.completed.body.data).toMatchObject({ archive: { filename: 'set.zip' }, scan: { status: 'queued' } });
     expect(first.completed.body.data).not.toHaveProperty('contents');
-    expect(enqueueScan).toHaveBeenCalledWith({ datasetId: id, fileId: first.fileId });
+    expect(enqueueScan).toHaveBeenCalledWith({ datasetId: id, fileId: first.fileId, scanId: expect.any(String) });
 
     // What the worker does with that job.
-    await runScan(id, first.fileId);
+    await runCurrentScan(id, first.fileId);
     const scanned = (await call(`/api/datasets/${id}`)).body.data;
     expect(scanned.contents).toMatchObject({ entries: 2, totalBytes: 11 });
     expect(scanned.scan.status).toBe('done');
@@ -598,9 +604,9 @@ describe('archive upload, download and import', () => {
     const queued = await call(`/api/datasets/${id}/archive/scan`, { method: 'POST', user: OWNER });
     expect(queued.status).toBe(200);
     expect(queued.body.data.scan).toEqual({ status: 'queued' });
-    expect(enqueueScan).toHaveBeenCalledWith({ datasetId: id, fileId });
+    expect(enqueueScan).toHaveBeenCalledWith({ datasetId: id, fileId, scanId: expect.any(String) });
 
-    await runScan(id, fileId);
+    await runCurrentScan(id, fileId);
     const scanned = (await call(`/api/datasets/${id}`)).body.data;
     expect(scanned.archive.size).toBeGreaterThan(0);
     expect(scanned.contents).toMatchObject({ entries: 1, totalBytes: 2 });
@@ -681,8 +687,8 @@ describe('archive upload, download and import', () => {
     fileStore.stored.set(fileId, Buffer.from('definitely not a zip file'));
     expect((await call(`/api/datasets/${id}/archive/complete`, { method: 'POST', user: OWNER })).status).toBe(200);
 
-    await expect(runScan(id, fileId)).rejects.toThrow(/not a readable zip archive \(.+\)/);
-    await markScanFailed(id, fileId, 'The uploaded file is not a readable zip archive');
+    await expect(runCurrentScan(id, fileId)).rejects.toThrow(/not a readable zip archive \(.+\)/);
+    await markScanFailed(id, fileId, 'The uploaded file is not a readable zip archive', (await Dataset.findById(id).lean())?.scan?.id);
     expect((await call(`/api/datasets/${id}`)).body.data.scan).toMatchObject({
       status: 'failed',
       error: 'The uploaded file is not a readable zip archive'
@@ -695,23 +701,23 @@ describe('archive upload, download and import', () => {
     jest
       .mocked(fileStore.client.getFileRange)
       .mockRejectedValueOnce(new BadGatewayError('file-service ignored a Range request'));
-    const failure = await runScan(id, fileId).catch((err: Error) => err);
+    const failure = await runCurrentScan(id, fileId).catch((err: Error) => err);
     expect(failure).toBeInstanceOf(BadGatewayError);
     expect(failure).not.toBeInstanceOf(NonRetryableImportError);
     jest.mocked(fileStore.client.getFileRange).mockRejectedValueOnce(new TypeError('fetch failed'));
-    await expect(runScan(id, fileId)).rejects.toThrow('fetch failed');
-    await runScan(id, fileId);
+    await expect(runCurrentScan(id, fileId)).rejects.toThrow('fetch failed');
+    await runCurrentScan(id, fileId);
     expect((await call(`/api/datasets/${id}`)).body.data.scan.status).toBe('done');
   });
 
   it('ignores a scan whose archive has since been replaced, or whose file is gone', async () => {
     const id = await createDataset();
     const { fileId } = await uploadZip(id, [{ path: 'a.png', data: Buffer.from('x') }]);
-    await runScan(id, 'some/older/upload.zip');
+    await runCurrentScan(id, 'some/older/upload.zip');
     expect((await Dataset.findById(id).lean())?.scan?.status).toBe('queued');
 
     fileStore.stored.delete(fileId);
-    await expect(runScan(id, fileId)).rejects.toThrow('no longer stored');
+    await expect(runCurrentScan(id, fileId)).rejects.toThrow('no longer stored');
   });
 
   it('queues, refuses a second, and cancels an import', async () => {
@@ -761,7 +767,24 @@ describe('archive upload, download and import', () => {
     expect((await call(`/api/datasets/${id}/import`, { method: 'DELETE', user: OWNER })).status).toBe(409);
   });
 
-  it('retries an import whose process died', async () => {
+  it('answers 503 after a failed enqueue while retaining the work recovery needs', async () => {
+    const id = await createDataset();
+    await uploadZip(id, [{ path: 'frames/1.png', data: Buffer.from('x') }]);
+    jest.mocked(enqueueImport).mockRejectedValueOnce(new ServiceUnavailableError('Dataset queue unavailable'));
+    const refused = await call(`/api/datasets/${id}/import`, {
+      method: 'POST', user: OWNER, body: { groups: [{ folder: 'frames', group: 'camera' }] }
+    });
+    expect(refused.status).toBe(503);
+    expect((await Dataset.findById(id).lean())?.import?.status).toBe('queued');
+    expect((await call(`/api/datasets/${id}/import`, {
+      method: 'POST', user: OWNER, body: { groups: [{ folder: 'frames', group: 'camera' }] }
+    })).status).toBe(409);
+    jest.mocked(enqueueScan).mockRejectedValueOnce(new ServiceUnavailableError('Dataset queue unavailable'));
+    expect((await call(`/api/datasets/${id}/archive/scan`, { method: 'POST', user: OWNER })).status).toBe(503);
+    expect((await Dataset.findById(id).lean())?.scan).toMatchObject({ status: 'queued', id: expect.any(String) });
+  });
+
+  it('waits for recovery to close a stale running import before replacing it', async () => {
     const id = await createDataset();
     await uploadZip(id, [{ path: 'frames/1.png', data: Buffer.from('x') }]);
     await Dataset.updateOne(
@@ -781,13 +804,16 @@ describe('archive upload, download and import', () => {
         }
       }
     );
-    const started = await call(`/api/datasets/${id}/import`, {
+    const begin = () => call(`/api/datasets/${id}/import`, {
       method: 'POST',
       user: OWNER,
       body: { groups: [{ folder: '', group: 'all' }], manifest: './m.csv' }
     });
+    expect((await begin()).status).toBe(409);
+    await markImportFailed(id, 'dead', 'Queue delivery disappeared');
+    const started = await begin();
     expect(started.status).toBe(202);
-    expect(removeQueuedImport).toHaveBeenCalledWith('dead');
+    expect(removeQueuedImport).not.toHaveBeenCalled();
     expect(started.body.data.import.mapping.manifest).toBe('m.csv');
   });
 });
@@ -995,7 +1021,7 @@ describe('resuming an import', () => {
     expect(resumed.status).toBe(202);
     expect(resumed.body.data.import).toMatchObject({ id: 'imp', status: 'queued', processed: 100, errors: [] });
     expect(removeQueuedImport).toHaveBeenCalledWith('imp');
-    expect(enqueueImport).toHaveBeenCalledWith({ datasetId: id, importId: 'imp' });
+    expect(enqueueImport).toHaveBeenCalledWith({ datasetId: id, importId: 'imp', deliveryId: expect.any(String) });
     expect((await resume()).status).toBe(409);
   });
 });

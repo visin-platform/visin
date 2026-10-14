@@ -39,7 +39,7 @@ it('registers a worker on the import queue', () => {
 
 it('runs the import and turns a bad archive into an unrecoverable failure', async () => {
   await processImportJob(job(0));
-  expect(runImport).toHaveBeenCalledWith('d', 'i');
+  expect(runImport).toHaveBeenCalledWith('d', 'i', undefined);
 
   jest.mocked(runImport).mockRejectedValueOnce(new NonRetryableImportError('too big'));
   await expect(processImportJob(job(0))).rejects.toBeInstanceOf(FakeUnrecoverableError);
@@ -56,18 +56,18 @@ it('marks the import failed only when no retry is left', async () => {
   expect(markImportFailed).not.toHaveBeenCalled();
   jest.mocked(markImportFailed).mockRejectedValueOnce(new Error('mongo down'));
   handleFailedImport(job(3), new Error('final'));
-  expect(markImportFailed).toHaveBeenCalledWith('d', 'i', 'final');
+  expect(markImportFailed).toHaveBeenCalledWith('d', 'i', 'final', undefined);
   handleFailedImport(undefined, new Error('orphan'));
   await new Promise((resolve) => setImmediate(resolve));
 });
 
 it('runs a scan job, and marks a scan failed when no retry is left', async () => {
   await processImportJob(scanJob(0));
-  expect(runScan).toHaveBeenCalledWith('d', 'f.zip');
+  expect(runScan).toHaveBeenCalledWith('d', 'f.zip', undefined);
   expect(runImport).not.toHaveBeenCalled();
 
   handleFailedImport(scanJob(3), new Error('not a zip'));
-  expect(markScanFailed).toHaveBeenCalledWith('d', 'f.zip', 'not a zip');
+  expect(markScanFailed).toHaveBeenCalledWith('d', 'f.zip', 'not a zip', undefined);
   expect(markImportFailed).not.toHaveBeenCalled();
 });
 

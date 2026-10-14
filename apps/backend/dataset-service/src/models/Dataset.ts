@@ -26,6 +26,7 @@ export interface ImportError {
 
 export interface DatasetImport {
   id: string;
+  deliveryId?: string;
   status: ImportStatus;
   mapping: ImportMapping;
   /** the archive this import read — a later zip replacement leaves it pointing at the old one */
@@ -69,9 +70,11 @@ export type ScanStatus = (typeof SCAN_STATUSES)[number];
 
 /** Reading a zip's index, done in the background after an upload so the browser can leave. */
 export interface DatasetScan {
+  id?: string;
   status: ScanStatus;
   /** the archive being read — a newer upload supersedes it */
   fileId: string;
+  heartbeatAt?: Date;
   error?: string;
   finishedAt?: Date;
 }
