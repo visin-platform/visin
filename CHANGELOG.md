@@ -1,4 +1,15 @@
 # Visin Changelog
+## [2.0.0](https://github.com/visin-platform/visin/compare/v1.41.1...v2.0.0) (2026-10-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* replace the model outputs zip with JSON, painted frames and MCP tools
+
+### Features
+
+* replace the model outputs zip with JSON, painted frames and MCP tools ([f32cc5f](https://github.com/visin-platform/visin/commit/f32cc5f315501b71dd74d61aead89418ff4605d3))
+
 ### [1.41.1](https://github.com/visin-platform/visin/compare/v1.41.0...v1.41.1) (2026-10-14)
 
 
