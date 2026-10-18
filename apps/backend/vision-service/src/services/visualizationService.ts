@@ -231,7 +231,7 @@ export const getVisualizationsByTraining = async (
   filters: GetVisualizationsByTrainingQuery,
   userId: string | undefined
 ): Promise<VisualizationsByTrainingResult> => {
-  const { type, limit, page, projectId, includeUrls, perTraining } = filters;
+  const { type, limit, page, projectId, includeUrls, perTraining, epoch: epochNumber } = filters;
   const shouldIncludeUrls = includeUrls === 'true';
 
   // If specific training_uuid is provided, return flat list for that training
@@ -242,9 +242,11 @@ export const getVisualizationsByTraining = async (
       throw new ForbiddenError();
     }
 
-    const epochs = await Epoch.find({ trainingId: parentTraining._id.toString(), deletedAt: null }).select(
-      'epoch_uuid epoch'
-    );
+    const epochs = await Epoch.find({
+      trainingId: parentTraining._id.toString(),
+      deletedAt: null,
+      ...(epochNumber === undefined ? {} : { epoch: epochNumber })
+    }).select('epoch_uuid epoch');
     const epochUuids = epochs.map((e) => e.epoch_uuid);
 
     if (epochUuids.length === 0) {

@@ -157,16 +157,16 @@ can include measured `parity`, so both formats share a checkpoint identity.
 `GET /api/trainings?dataset=<id>` lists visible runs linked to that dataset with their models,
 visualization types, and best/last metric readings.
 
-`GET /api/trainings/:id/models/:modelId/bundle` generates an outputs zip for that checkpoint's epoch.
-It includes `metrics.json`, `manifest.json`, masks, colourized predictions, and confidence maps. This
-stream has no fixed length, stable validator, or resume support. Metrics follow evaluation visibility,
-so public readers cannot retrieve unpublished suite results through a bundle.
+`GET /api/trainings/:id/models/:modelId/outputs` describes that checkpoint's outputs as JSON: the run and
+model, the epoch's results and its tests, and one row per mask, colourized prediction and confidence map,
+naming the visualization that holds the image. Metrics follow evaluation visibility, so public readers
+cannot see unpublished suite results through it.
 
-The manifest separates `trainedOn` from `predictedOn`, which groups prediction dataset references and
+The answer separates `trainedOn` from `predictedOn`, which groups prediction dataset references and
 input frame names. To identify outputs on a sample dataset, visualization clients send
 `metadata.prediction: { dataset: { source: 'visin', id, archiveRevision }, frame, width, height,
 confidenceEncoding: 'uint8' | 'uint16' }`. These are publisher-reported values. Older uploads remain
-unattributed (`dataset: null`, encoding `unknown`). Geometry is reported per file; the manifest documents
+unattributed (`dataset: null`, encoding `unknown`). Geometry is reported per file; the answer documents
 bilinear resizing of logits back to input-image size before softmax and argmax (use log probabilities for ONNX), and confidence encodings
 `round(255 * p)` / `round(65535 * p)`. See [the API contract](docs/openapi.yml) for all fields.
 

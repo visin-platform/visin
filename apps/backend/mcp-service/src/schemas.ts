@@ -129,18 +129,22 @@ export const epochSchema = z
 const hubRunModelSchema = z.object({ repo: z.string(), revision: z.string(), space: z.string().optional() }).loose();
 const storedRunModelSchema = z
   .object({
+    _id: z.string().optional(),
     provider: z.literal('visin'),
     format: z.string(),
     filename: z.string().optional(),
     size: z.number().optional(),
     status: z.string().optional(),
     epoch: z.number().optional(),
-    license: z.object({ id: z.string(), name: z.string().optional() }).loose().optional()
+    license: z.object({ id: z.string(), name: z.string().optional() }).loose().optional(),
+    /** what the weights record about themselves; only `train_classes` is read, to name a mask's classes */
+    modelInfo: z.record(z.string(), z.unknown()).optional()
   })
   .loose();
 const runModelSchema = z.union([hubRunModelSchema, storedRunModelSchema]);
 export type RunModel = z.infer<typeof runModelSchema>;
 export type HubRunModel = z.infer<typeof hubRunModelSchema>;
+export type StoredRunModel = z.infer<typeof storedRunModelSchema>;
 /** Whether a linked model is a pointer to a Hub repo, as opposed to a checkpoint Visin keeps. */
 export const isHubRunModel = (model: RunModel): model is HubRunModel => typeof (model as HubRunModel).repo === 'string';
 
@@ -395,6 +399,59 @@ export const visualizationsResponseSchema = z
     pagination: pagination.optional()
   })
   .loose();
+
+/**
+ * `GET /trainings/{id}/models/{modelId}/outputs`: what a stored model produced, its scores and where both came from.
+ * Only what get_model_outputs says is checked; the rest rides along loose.
+ */
+const datasetRefSchema = z
+  .object({ id: z.string().optional(), name: z.string().optional(), revision: z.string().optional(), archiveRevision: z.string().optional() })
+  .loose();
+
+export const modelOutputsSchema = z
+  .object({
+    run: z.object({ id: z.string(), name: z.string(), epoch: z.number(), project: z.object({ name: z.string() }).loose().optional() }).loose(),
+    model: z
+      .object({
+        id: z.string(),
+        format: z.string(),
+        filename: z.string().optional(),
+        size: z.number().optional(),
+        sha256: z.string().optional(),
+        license: z.object({ id: z.string(), name: z.string().optional(), url: z.string().optional() }).loose().optional(),
+        credit: z.string().optional(),
+        modelInfo: z.record(z.string(), z.unknown()).optional(),
+        parity: z.object({ maxAbsDiff: z.number(), argmaxMismatchFraction: z.number(), frames: z.number() }).loose().optional(),
+        sourceSha256: z.string().optional(),
+        file: z.string()
+      })
+      .loose(),
+    sameCheckpoint: z.array(z.object({ format: z.string(), size: z.number().optional(), file: z.string() }).loose()).catch([]),
+    trainedOn: datasetRefSchema.optional(),
+    checkpoint: z.object({ epoch: z.number(), sha256: z.string().optional() }).loose(),
+    predictedOn: z.array(z.object({ dataset: datasetRefSchema.nullable(), frames: z.array(z.string()) }).loose()).catch([]),
+    totals: z.record(z.string(), z.number()).catch({}),
+    metrics: z
+      .object({
+        epoch: z.number(),
+        results: z.record(z.string(), z.unknown()).optional(),
+        evaluations: z
+          .array(
+            z
+              .object({
+                id: z.string(),
+                suite: z.object({ slug: z.string(), version: z.number() }).loose().optional(),
+                executedAt: z.string().optional(),
+                sampleCounts: z.record(z.string(), z.number()).optional()
+              })
+              .loose()
+          )
+          .catch([])
+      })
+      .loose()
+  })
+  .loose();
+export type ModelOutputs = z.infer<typeof modelOutputsSchema>;
 
 export const visualizationTypesResponseSchema = z
   .object({ types: z.array(z.string()).catch([]) })

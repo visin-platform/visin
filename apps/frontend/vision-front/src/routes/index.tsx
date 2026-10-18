@@ -8,6 +8,7 @@ import { Loader } from '@visin/frontend-core';
 const TrainingsPage = lazy(() => import('../pages/TrainingsPage'));
 const TrainingDetailPage = lazy(() => import('../pages/TrainingDetailPage'));
 const TrainingComparisonPage = lazy(() => import('../pages/TrainingComparisonPage'));
+const ModelOutputsPage = lazy(() => import('../pages/ModelOutputsPage'));
 const ComparisonDetailPage = lazy(() => import('../pages/ComparisonDetailPage'));
 const EpochsPage = lazy(() => import('../pages/EpochsPage'));
 const ConfigsPage = lazy(() => import('../pages/ConfigsPage'));
@@ -44,6 +45,7 @@ function AppRoutes() {
         <Route path="/trainings" element={<TrainingsPage />} />
         <Route path="/trainings/:id" element={<TrainingDetailPage />} />
         <Route path="/trainings/compare" element={<TrainingComparisonPage />} />
+        <Route path="/trainings/:id/models/:modelId" element={<ModelOutputsPage />} />
         <Route path="/epochs" element={<EpochsPage />} />
         <Route path="/configs" element={<ConfigsPage />} />
         <Route path="/datasets" element={<DatasetsPage />} />

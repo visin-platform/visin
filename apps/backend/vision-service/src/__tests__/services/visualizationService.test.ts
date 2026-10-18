@@ -292,6 +292,17 @@ describe('getVisualizationsByTraining', () => {
     expect(result.pagination.total).toBe(1);
   });
 
+  it('narrows a training to one epoch', async () => {
+    mockedTraining.findOne.mockResolvedValue({ _id: 't1', uuid: 'uuid-t1', projectId: 'p1' });
+    mockEpochSelect([epochDoc('e1')]);
+    mockedViz.countDocuments.mockResolvedValue(1);
+    mockVizFindChain([vizDoc('v1')]);
+
+    await getVisualizationsByTraining('uuid-t1', { ...filters, epoch: 4 }, 'u1');
+
+    expect(mockedEpoch.find).toHaveBeenCalledWith({ trainingId: 't1', deletedAt: null, epoch: 4 });
+  });
+
   it('403s when the training project is not visible', async () => {
     mockedTraining.findOne.mockResolvedValue({ _id: 't1', uuid: 'uuid-t1', projectId: 'p-private' });
     mockedCheckAccess.mockResolvedValue(false);

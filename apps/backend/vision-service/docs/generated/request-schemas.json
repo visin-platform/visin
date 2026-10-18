@@ -2344,6 +2344,10 @@
         "type": "integer",
         "exclusiveMinimum": 0,
         "maximum": 24
+      },
+      "epoch": {
+        "type": "integer",
+        "minimum": 0
       }
     }
   },
@@ -2638,14 +2642,6 @@
           "asc",
           "desc"
         ]
-      }
-    }
-  },
-  "ModelBundleQuery": {
-    "type": "object",
-    "properties": {
-      "folders": {
-        "type": "string"
       }
     }
   },

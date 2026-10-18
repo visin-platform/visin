@@ -39,7 +39,9 @@ export const getVisualizationsByTrainingQuerySchema = z.object({
    * With `projectId`: only this many of each run's newest frames, for a gallery that shows a few per run. The runs
    * then come a page at a time, `limit` runs a page.
    */
-  perTraining: z.coerce.number().int().positive().max(24).optional()
+  perTraining: z.coerce.number().int().positive().max(24).optional(),
+  /** With a training: only this epoch's images, so a page of them is not spent on newer epochs. */
+  epoch: z.coerce.number().int().min(0).optional()
 });
 export type GetVisualizationsByTrainingQuery = z.infer<typeof getVisualizationsByTrainingQuerySchema>;
 

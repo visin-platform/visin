@@ -20,23 +20,28 @@ vi.mock('../services/visualizationService', () => ({
   }
 }));
 
+vi.mock('../services/trainingService', () => ({
+  trainingService: { getTrainingById: vi.fn() }
+}));
+
 vi.mock('../hooks/usePageTitle', () => ({
   usePageTitle: vi.fn()
 }));
 
 import VisualizationsPage from './VisualizationsPage';
 import { visualizationService } from '../services/visualizationService';
+import { trainingService } from '../services/trainingService';
 
 const visualizationServiceMock = visualizationService as unknown as {
   getVisualizationSummary: ReturnType<typeof vi.fn>;
   getVisualizationsByTraining: ReturnType<typeof vi.fn>;
 };
 
-function renderPage() {
+function renderPage(path = '/visualizations') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>
         <VisualizationsPage />
       </MemoryRouter>
     </QueryClientProvider>
@@ -218,6 +223,149 @@ describe('VisualizationsPage', () => {
 
     await waitFor(() => {
       expect(screen.getAllByAltText('v1.png').length).toBeGreaterThan(1);
+    });
+  });
+
+  describe('model outputs', () => {
+    const outputsRun = {
+      _id: 't3', uuid: 'uuid-3', name: 'Outputs Run', total: 9,
+      types: [
+        { type: 'mask', count: 3, epochs: [1, 2] },
+        { type: 'segment', count: 3, epochs: [1, 2] },
+        { type: 'confidence', count: 2, epochs: [1] },
+        { type: 'overlay', count: 1, epochs: [1] }
+      ]
+    };
+    const output = (type: string, frame: string, epoch: number, uploadedAt = '2024-01-01T00:00:00.000Z') => ({
+      visualization_uuid: `${type}-${frame}-${epoch}-${uploadedAt}`,
+      training_uuid: 'uuid-3',
+      type,
+      epoch,
+      filename: `${frame}.png`,
+      signedUrl: `http://img/${type}/${frame}.png`,
+      uploadedAt
+    });
+    let byType: Record<string, Array<{ epoch: number }>> = {};
+
+    beforeEach(() => {
+      byType = {
+        mask: [output('mask', 'f1', 1), output('mask', 'f2', 1), output('mask', 'f9', 2)],
+        segment: [output('segment', 'f1', 1), output('segment', 'f2', 1), output('segment', 'f9', 2)],
+        confidence: [output('confidence', 'f1', 1)]
+      };
+      visualizationServiceMock.getVisualizationSummary.mockResolvedValue([outputsRun]);
+      // The server answers one epoch at a time, as the gallery asks it to.
+      visualizationServiceMock.getVisualizationsByTraining.mockImplementation(
+        async (_uuid: string, { type, epoch }: { type: string; epoch?: number }) =>
+          page((byType[type] ?? []).filter((row) => epoch === undefined || row.epoch === epoch))
+      );
+      vi.mocked(trainingService.getTrainingById).mockResolvedValue({
+        success: true,
+        data: {
+          models: [{ provider: 'visin', epoch: 1, modelInfo: { train_classes: [{ name: 'road', index: 0 }, { name: 'car', index: 1 }] } }]
+        }
+      } as never);
+    });
+
+    it('opens on a run’s outputs from a model’s link, frame by frame, side by side', async () => {
+      renderPage('/visualizations?training=uuid-3&view=outputs&epoch=1');
+
+      expect(await screen.findByRole('region', { name: 'Frame f1' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Model outputs' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'Epoch 1' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByAltText('Prediction for f1')).toHaveAttribute('src', 'http://img/segment/f1.png');
+      expect(screen.getByAltText('Class mask for f1')).toBeInTheDocument();
+      expect(screen.getByAltText('Confidence for f1')).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Frame f2' })).toHaveTextContent('Not uploaded');
+      expect(screen.queryByRole('region', { name: 'Frame f9' })).not.toBeInTheDocument();
+      expect(await screen.findByRole('list', { name: 'Classes' })).toHaveTextContent('roadcar');
+      expect(screen.getByLabelText('Confidence scale')).toHaveTextContent('0.50');
+      expect(trainingService.getTrainingById).toHaveBeenCalledWith('t3');
+
+      expect(visualizationServiceMock.getVisualizationsByTraining).toHaveBeenCalledWith('uuid-3', expect.objectContaining({ type: 'mask', epoch: 1 }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Epoch 2' }));
+      expect(await screen.findByRole('region', { name: 'Frame f9' })).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Frame f1' })).not.toBeInTheDocument();
+      // Epoch 2 has no confidence maps, so it shows no column for them.
+      expect(screen.queryByAltText('Confidence for f9')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open the class mask for f9' }));
+      expect(await screen.findByText('Point at a pixel to read it')).toBeInTheDocument();
+      expect(screen.getAllByText('Class mask').length).toBeGreaterThan(1);
+    });
+
+    it('is offered beside the types, and gives way to one', async () => {
+      renderPage();
+      await screen.findByText('Outputs Run');
+      fireEvent.click(screen.getByTestId('ExpandMoreIcon').closest('button')!);
+      fireEvent.click(await screen.findByRole('button', { name: 'Model outputs' }));
+      expect(await screen.findByRole('region', { name: 'Frame f9' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'overlay' }));
+      expect(screen.queryByRole('region', { name: 'Frame f9' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Model outputs' })).toHaveAttribute('aria-pressed', 'false');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Model outputs' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Model outputs' }));
+      expect(screen.getByText('Select a visualization type above to view side-by-side comparison')).toBeInTheDocument();
+    });
+
+    it('lays out frames a page at a time, with the newest upload of each', async () => {
+      byType.mask = [
+        ...Array.from({ length: 30 }, (_, index) => output('mask', `n${String(index).padStart(2, '0')}`, 1)),
+        { ...output('mask', 'n00', 1, '2024-02-01T00:00:00.000Z'), signedUrl: 'http://img/mask/newer.png' }
+      ];
+      byType.segment = [];
+      byType.confidence = [];
+      renderPage('/visualizations?training=uuid-3&view=outputs');
+
+      expect(await screen.findByRole('button', { name: 'Epoch 2' })).toHaveAttribute('aria-pressed', 'true');
+      fireEvent.click(screen.getByRole('button', { name: 'Epoch 1' }));
+      expect(await screen.findAllByRole('region', { name: /^Frame n/ })).toHaveLength(24);
+      expect(screen.getByAltText('Class mask for n00')).toHaveAttribute('src', 'http://img/mask/newer.png');
+      fireEvent.click(screen.getByRole('button', { name: 'Show more (6 more frames)' }));
+      expect(screen.getAllByRole('region', { name: /^Frame n/ })).toHaveLength(30);
+      expect(screen.getByText(/^30 frames/)).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('Find a frame'), { target: { value: 'N2' } });
+      expect(screen.getAllByRole('region', { name: /^Frame n/ })).toHaveLength(10);
+      expect(screen.getByText(/^10 of 30 frames/)).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Find a frame'), { target: { value: 'nothing' } });
+      expect(screen.getByText('No frame matches “nothing”')).toBeInTheDocument();
+    });
+
+    it('picks among many epochs from a menu, and says when an epoch has more images than it shows', async () => {
+      const epochs = Array.from({ length: 12 }, (_, index) => index + 1);
+      visualizationServiceMock.getVisualizationSummary.mockResolvedValue([
+        { ...outputsRun, types: [{ type: 'mask', count: 12, epochs }] }
+      ]);
+      byType.mask = epochs.map((epoch) => output('mask', `e${epoch}`, epoch));
+      visualizationServiceMock.getVisualizationsByTraining.mockImplementation(
+        async (_uuid: string, { epoch }: { epoch?: number }) => page(byType.mask.filter((row) => row.epoch === epoch), 250)
+      );
+      vi.mocked(trainingService.getTrainingById).mockResolvedValue({ success: true, data: {} } as never);
+      renderPage('/visualizations?training=uuid-3&view=outputs&epoch=3');
+
+      expect(await screen.findByRole('region', { name: 'Frame e3' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Epoch 3' })).not.toBeInTheDocument();
+      expect(screen.getByText('Showing the latest 200 of 250 class mask images for this epoch.')).toBeInTheDocument();
+      expect(screen.getByText(/don’t name its classes/)).toBeInTheDocument();
+
+      fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Epoch' }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Epoch 12' }));
+      expect(await screen.findByRole('region', { name: 'Frame e12' })).toBeInTheDocument();
+    });
+
+    it('says when the linked run is not one it can show', async () => {
+      renderPage('/visualizations?training=elsewhere&view=outputs');
+      expect(await screen.findByText('The run this link names has no visualizations you can see.')).toBeInTheDocument();
+    });
+
+    it('says when the outputs fail to load', async () => {
+      visualizationServiceMock.getVisualizationsByTraining.mockRejectedValue(new Error('down'));
+      renderPage('/visualizations?training=uuid-3&view=outputs');
+      expect(await screen.findByText('Failed to load the model outputs')).toBeInTheDocument();
     });
   });
 });

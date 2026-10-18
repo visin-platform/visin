@@ -53,9 +53,27 @@ export const FORMAT_LABELS: Record<StoredModelFormat, string> = { pth: 'PyTorch 
 export const storedModelFileUrl = (trainingId: string, modelId: string): string =>
   `${visionApiOrigin()}/api/trainings/${trainingId}/models/${modelId}/file`;
 
-/** Where what the model produced on its frames is downloaded from, as one zip. */
-export const storedModelBundleUrl = (trainingId: string, modelId: string): string =>
-  `${visionApiOrigin()}/api/trainings/${trainingId}/models/${modelId}/bundle`;
+/** The page that shows what a stored model produced on its frames, its scores and where it came from. */
+export const storedModelOutputsPath = (trainingId: string, modelId: string): string =>
+  `/trainings/${trainingId}/models/${modelId}`;
+
+/**
+ * The classes a run's masks index, from what its stored weights record (`train_classes`): those of the checkpoint at
+ * `epoch` when it names any, else of any checkpoint that does. Empty when no checkpoint says.
+ */
+export const outputClassesOf = (
+  models: ReadonlyArray<{ provider?: string; epoch?: number; modelInfo?: StoredModelInfo }> | undefined,
+  epoch?: number
+): Array<{ index: number; name: string }> => {
+  const named = (models ?? []).filter(
+    (model) => model.provider === VISIN && Array.isArray(model.modelInfo?.train_classes)
+  );
+  const chosen = named.find((model) => epoch !== undefined && model.epoch === epoch) ?? named[0];
+  return (chosen?.modelInfo?.train_classes ?? [])
+    .filter((entry) => Number.isInteger(entry?.index) && typeof entry?.name === 'string')
+    .map(({ index, name }) => ({ index, name }))
+    .sort((a, b) => a.index - b.index);
+};
 
 /** Why a stored model cannot be downloaded, or `undefined` when it can. */
 export const storedModelBlock = (

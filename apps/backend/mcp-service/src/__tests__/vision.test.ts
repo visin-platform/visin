@@ -188,6 +188,17 @@ describe('routing', () => {
       { method: 'GET', path: '/visualizations/v1' }
     ],
     [
+      'getModelOutputs',
+      () => vision.getModelOutputs('k', 't1', 'm1'),
+      {
+        run: { id: 't1', name: 'Run', epoch: 9 },
+        model: { id: 'm1', format: 'pth', file: '/api/trainings/t1/models/m1/file' },
+        checkpoint: { epoch: 9 },
+        metrics: { epoch: 9 }
+      },
+      { method: 'GET', path: '/trainings/t1/models/m1/outputs' }
+    ],
+    [
       'listFindings',
       () => vision.listFindings('k', { project: 'p1' }),
       [],

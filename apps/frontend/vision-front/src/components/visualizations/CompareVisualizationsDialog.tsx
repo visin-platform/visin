@@ -14,17 +14,22 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { Visualization } from '../../types';
+import type { OutputClass } from '../../utils/outputPixels';
+import OutputImage from './OutputImage';
 
 interface CompareVisualizationsDialogProps {
   open: boolean;
   onClose: () => void;
   selectedForCompare: Visualization[];
+  /** the classes a mask's indices stand for */
+  classes?: OutputClass[];
 }
 
 const CompareVisualizationsDialog: React.FC<CompareVisualizationsDialogProps> = ({
   open,
   onClose,
-  selectedForCompare
+  selectedForCompare,
+  classes
 }) => {
   return (
     <Dialog 
@@ -83,10 +88,9 @@ const CompareVisualizationsDialog: React.FC<CompareVisualizationsDialogProps> = 
                     mb: 2
                   }}
                 >
-                  <Box
-                    component="img"
-                    src={viz.signedUrl || ''}
-                    alt={viz.filename}
+                  <OutputImage
+                    visualization={viz}
+                    classes={classes}
                     sx={{
                       maxWidth: '100%',
                       maxHeight: '60vh',

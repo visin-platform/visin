@@ -11,9 +11,9 @@ export const VISIN = 'visin' as const;
 
 export const MODEL_FORMATS = ['pth', 'onnx'] as const;
 
-/** The folders of a model's outputs bundle: each is a visualization `type` a run uploaded against the model's epoch. */
-export const BUNDLE_FOLDER_NAMES = ['mask', 'segment', 'confidence'] as const;
-export type BundleFolder = (typeof BUNDLE_FOLDER_NAMES)[number];
+/** The kinds of a model's outputs: each is a visualization `type` a run uploaded against the model's epoch. */
+export const OUTPUT_FOLDER_NAMES = ['mask', 'segment', 'confidence'] as const;
+export type OutputFolder = (typeof OUTPUT_FOLDER_NAMES)[number];
 export type ModelFormat = (typeof MODEL_FORMATS)[number];
 
 /** `verifying` until the stored file has been read once and its digest recorded; only `ready` is served. */

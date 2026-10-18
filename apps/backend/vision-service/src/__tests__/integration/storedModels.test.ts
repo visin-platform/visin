@@ -15,7 +15,6 @@ import Epoch from '../../models/Epoch';
 import EpochVisualization from '../../models/EpochVisualization';
 import Evaluation from '../../models/Evaluation';
 import modelRoutes from '../../routes/modelRoutes';
-import { unzip } from '../fixtures/unzip';
 import trainingRoutes from '../../routes/trainingRoutes';
 import { purgeTrainings } from '../../services/purgeService';
 import { scheduleVerification, verifyPendingModels } from '../../services/modelVerificationService';
@@ -727,9 +726,10 @@ describe('models kept on this deployment', () => {
     });
   });
 
-  describe('the outputs bundle', () => {
-    const bundle = (trainingId: string, modelId: unknown, query = '') =>
-      `/trainings/${trainingId}/models/${String(modelId)}/bundle${query}`;
+  describe('the outputs', () => {
+    const outputs = (trainingId: string, modelId: unknown) => `/trainings/${trainingId}/models/${String(modelId)}/outputs`;
+    const describeAs = async (trainingId: string, modelId: unknown, user = '') =>
+      (await call(outputs(trainingId, modelId), { user })).body.data as Body['data'];
     const png = (fill: number) => Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(300, fill)]);
 
     /** A run whose epoch 99 produced masks, colourised maps and confidence for two frames, and was scored. */
@@ -777,7 +777,7 @@ describe('models kept on this deployment', () => {
           });
         }
       }
-      // An overlay is not one of the bundle's folders, and another epoch's frames are not this model's.
+      // An overlay is not one of the outputs, and another epoch's frames are not this model's.
       await EpochVisualization.collection.insertOne({
         epoch_uuid: 'epoch-99',
         visualization_uuid: 'o',
@@ -815,7 +815,6 @@ describe('models kept on this deployment', () => {
       });
       return { projectId, trainingId, frames };
     };
-    const readBundle = async (response: Response) => unzip(Buffer.from(await response.arrayBuffer()));
 
     it('lists a dataset’s visible runs with models, output kinds and best metrics, including both dataset reference styles', async () => {
       const { trainingId } = await scoredRun();
@@ -870,48 +869,26 @@ describe('models kept on this deployment', () => {
       expect((await call('/trainings?dataset=other', { user: '' })).body.data.trainings).toEqual([]);
     });
 
-    it('delivers the outputs, the scores and a manifest that names the model, in one zip', async () => {
+    it('describes the outputs, the scores and the model that made them, without reading a file', async () => {
       const { trainingId, frames } = await scoredRun();
       const pth = weights(5);
       await publish(trainingId, pth, { modelInfo: { backbone: 'clft', transforms: { resize: 384 } } });
       const model = await settled(trainingId);
+      jest.mocked(getFileStream).mockClear();
 
-      const response = await raw(bundle(trainingId, model._id), {}, { user: '' });
+      const response = await call(outputs(trainingId, model._id), { user: '' });
       expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toBe('application/zip');
-      expect(response.headers.get('content-disposition')).toBe(
-        'attachment; filename="ISEAUTO_CLFT_Large-epoch99-outputs.zip"'
-      );
-      expect(response.headers.get('content-length')).toBeNull();
-      expect(response.headers.get('etag')).toBeNull();
-      expect(response.headers.get('last-modified')).toBeNull();
-      expect(response.headers.get('cache-control')).toBe('no-store');
-      const files = await readBundle(response);
+      expect(getFileStream).not.toHaveBeenCalled();
+      const data = response.body.data;
 
-      expect([...files.keys()].sort()).toEqual([
-        'confidence/sq11_000301.png',
-        'confidence/sq14_000061.png',
-        'manifest.json',
-        'mask/sq11_000301.png',
-        'mask/sq14_000061.png',
-        'metrics.json',
-        'segment/sq11_000301.png',
-        'segment/sq14_000061.png'
-      ]);
-      for (const [path, data] of Object.entries(frames)) expect(files.get(path)!.equals(data)).toBe(true);
-
-      const metrics = JSON.parse(files.get('metrics.json')!.toString());
-      expect(metrics).toMatchObject({ epoch: 99, results: { val: { mean_iou: 0.81 } } });
-      expect(metrics.evaluations).toHaveLength(1);
-      expect(metrics.evaluations[0]).toMatchObject({
+      expect(data.metrics).toMatchObject({ epoch: 99, results: { val: { mean_iou: 0.81 } } });
+      expect(data.metrics.evaluations).toHaveLength(1);
+      expect(data.metrics.evaluations[0]).toMatchObject({
         results: { day_fair: { vehicle: { iou: 0.83 } } },
         sampleCounts: { day_fair: 150 }
       });
-
-      const manifest = JSON.parse(files.get('manifest.json')!.toString());
-      expect(manifest).toMatchObject({
-        format: 1,
-        run: { id: trainingId, name: 'ISEAUTO CLFT Large', epoch: 99, project: { name: 'Team project' } },
+      expect(data).toMatchObject({
+        run: { id: trainingId, name: 'ISEAUTO CLFT Large', epoch: 99, epochUuid: 'epoch-99', project: { name: 'Team project' } },
         model: {
           format: 'pth',
           sha256: sha256(pth),
@@ -922,17 +899,21 @@ describe('models kept on this deployment', () => {
           modelInfo: { backbone: 'clft' }
         },
         trainedOn: { source: 'visin', id: 'iseauto', revision: '2026-02-17T00:00:00.000Z' },
-        sameCheckpoint: []
+        sameCheckpoint: [],
+        totals: { mask: 2, segment: 2, confidence: 2 },
+        truncated: false
       });
-      expect(manifest.model.file).toBe(`/api/trainings/${trainingId}/models/${model._id}/file`);
-      expect(Object.keys(manifest.folders)).toEqual(['mask', 'segment', 'confidence']);
-      expect(manifest.files).toHaveLength(6);
-      const listed = manifest.files.find((file: { path: string }) => file.path === 'mask/sq14_000061.png');
-      expect(listed).toMatchObject({
+      expect(data.model.file).toBe(`/api/trainings/${trainingId}/models/${model._id}/file`);
+      expect(Object.keys(data.folders)).toEqual(['mask', 'segment', 'confidence']);
+      expect(data.files.map((file: { folder: string; filename: string }) => `${file.folder}/${file.filename}`)).toEqual(
+        Object.keys(frames).sort()
+      );
+      expect(data.files.find((file: { visualizationUuid: string }) => file.visualizationUuid === 'mask-sq14_000061.png')).toEqual({
+        visualizationUuid: 'mask-sq14_000061.png',
         folder: 'mask',
-        frame: 'sq14_000061.png',
-        size: frames['mask/sq14_000061.png'].length,
-        sha256: sha256(frames['mask/sq14_000061.png'])
+        frame: 'sq14_000061',
+        filename: 'sq14_000061.png',
+        size: frames['mask/sq14_000061.png'].length
       });
     });
 
@@ -953,31 +934,28 @@ describe('models kept on this deployment', () => {
       );
       await publish(trainingId, weights(1));
       const model = await settled(trainingId);
-      const manifest = JSON.parse(
-        (await readBundle(await raw(bundle(trainingId, model._id), {}, { user: '' }))).get('manifest.json')!.toString()
-      );
-      expect(manifest.trainedOn.id).toBe('iseauto');
-      expect(manifest.predictedOn).toEqual([
+      const data = await describeAs(trainingId, model._id);
+      expect(data.trainedOn.id).toBe('iseauto');
+      expect(data.predictedOn).toEqual([
         {
           dataset: { source: 'visin', id: 'sample', archiveRevision: 'sample-v1' },
           frames: ['sq11_000301', 'sq14_000061']
         }
       ]);
-      expect(manifest.checkpoint).toEqual({ epoch: 99, sha256: model.sha256 });
-      expect(manifest.outputGeometry.mapping).toMatch(/bilinearly.*argmax/);
-      expect(manifest.confidence.encodings.uint16).toBe('round(65535 * p)');
-      expect(manifest.files.find((file: { folder: string }) => file.folder === 'confidence')).toMatchObject({
+      expect(data.checkpoint).toEqual({ epoch: 99, sha256: model.sha256 });
+      expect(data.outputGeometry.mapping).toMatch(/bilinearly.*argmax/);
+      expect(data.confidence.encodings.uint16).toBe('round(65535 * p)');
+      expect(data.files.find((file: { folder: string }) => file.folder === 'confidence')).toMatchObject({
         geometry: { width: 1363, height: 768 },
         confidenceEncoding: 'uint16'
       });
       await EpochVisualization.updateMany({ epoch_uuid: 'epoch-99' }, { $unset: { 'metadata.prediction': '' } });
-      const legacy = JSON.parse(
-        (await readBundle(await raw(bundle(trainingId, model._id), {}, { user: '' }))).get('manifest.json')!.toString()
-      );
+      const legacy = await describeAs(trainingId, model._id);
       expect(legacy.predictedOn[0].dataset).toBeNull();
       expect(legacy.files.find((file: { folder: string }) => file.folder === 'confidence').confidenceEncoding).toBe(
         'unknown'
       );
+      expect(legacy.files[0].geometry).toBeUndefined();
     });
 
     it('includes only evaluations visible to the caller in this project, even when another project names the same epoch', async () => {
@@ -1005,22 +983,16 @@ describe('models kept on this deployment', () => {
       ]);
       await publish(trainingId, weights(1));
       const model = await settled(trainingId);
-      const publicMetrics = JSON.parse(
-        (await readBundle(await raw(bundle(trainingId, model._id), {}, { user: '' }))).get('metrics.json')!.toString()
-      );
+      const publicMetrics = (await describeAs(trainingId, model._id)).metrics;
       expect(publicMetrics.evaluations).toHaveLength(1);
       expect(JSON.stringify(publicMetrics)).not.toMatch(/unpublished|unrelated/);
-      const memberMetrics = JSON.parse(
-        (await readBundle(await raw(bundle(trainingId, model._id), {}, { user: MEMBER })))
-          .get('metrics.json')!
-          .toString()
-      );
+      const memberMetrics = (await describeAs(trainingId, model._id, MEMBER)).metrics;
       expect(memberMetrics.evaluations).toHaveLength(2);
       expect(JSON.stringify(memberMetrics)).toContain('unpublished');
       expect(JSON.stringify(memberMetrics)).not.toContain('unrelated');
     });
 
-    it('names the other format of the same checkpoint', async () => {
+    it('names the other format of the same checkpoint, from either format', async () => {
       const { trainingId } = await scoredRun();
       const pth = weights(5);
       const onnx = Buffer.concat([Buffer.from('0809', 'hex'), Buffer.alloc(64, 1)]);
@@ -1036,67 +1008,44 @@ describe('models kept on this deployment', () => {
         format: string;
       }>;
       const pthModel = models.find((model) => model.format === 'pth')!;
-      const manifest = JSON.parse(
-        (await readBundle(await raw(bundle(trainingId, pthModel._id), {}, { user: '' })))
-          .get('manifest.json')!
-          .toString()
-      );
-      expect(manifest.sameCheckpoint).toEqual([
+      const onnxModel = models.find((model) => model.format === 'onnx')!;
+      expect((await describeAs(trainingId, pthModel._id)).sameCheckpoint).toEqual([
         expect.objectContaining({ format: 'onnx', sha256: sha256(onnx), size: onnx.length })
       ]);
-    });
-
-    it('can be narrowed to some folders', async () => {
-      const { trainingId } = await scoredRun();
-      await publish(trainingId, weights(5));
-      const model = await settled(trainingId);
-      const files = await readBundle(
-        await raw(bundle(trainingId, model._id, '?folders=mask,confidence'), {}, { user: '' })
-      );
-      expect([...files.keys()].filter((name) => name.includes('/')).map((name) => name.split('/')[0])).toEqual([
-        'confidence',
-        'confidence',
-        'mask',
-        'mask'
-      ]);
-      expect(JSON.parse(files.get('manifest.json')!.toString()).folders).toEqual({
-        mask: expect.any(String),
-        confidence: expect.any(String)
-      });
-      expect((await raw(bundle(trainingId, model._id, '?folders=overlay'), {}, { user: '' })).status).toBe(400);
+      const fromOnnx = await describeAs(trainingId, onnxModel._id);
+      expect(fromOnnx.model).toMatchObject({ format: 'onnx', sourceSha256: sha256(pth) });
+      expect(fromOnnx.checkpoint).toEqual({ epoch: 99, sha256: sha256(pth) });
+      expect(fromOnnx.sameCheckpoint).toEqual([expect.objectContaining({ format: 'pth', sha256: sha256(pth) })]);
     });
 
     it('is refused on the terms the file is, and for a model that names no epoch or an epoch the run lacks', async () => {
       const { trainingId } = await scoredRun('private');
       await publish(trainingId, weights(5), { license: undefined });
       const model = await settled(trainingId);
-      const unlicensed = await raw(bundle(trainingId, model._id), {}, { user: MEMBER });
+      const unlicensed = await call(outputs(trainingId, model._id), { user: MEMBER });
       expect(unlicensed.status).toBe(409);
-      expect((await unlicensed.json()).message).toMatch(/no licence/);
+      expect(unlicensed.body.message).toMatch(/no licence/);
 
       await Training.updateOne(
         { _id: trainingId, 'models._id': model._id },
         { $set: { 'models.$.license': { id: 'cc-by-4.0' } } }
       );
-      expect((await raw(bundle(trainingId, model._id), {}, { user: STRANGER })).status).toBe(403);
-      expect((await raw(bundle(trainingId, model._id), {}, { user: MEMBER })).status).toBe(200);
+      expect((await call(outputs(trainingId, model._id), { user: STRANGER })).status).toBe(403);
+      expect((await call(outputs(trainingId, model._id), { user: MEMBER })).status).toBe(200);
 
       await Training.updateOne({ _id: trainingId, 'models._id': model._id }, { $set: { 'models.$.epoch': 500 } });
-      const missing = await raw(bundle(trainingId, model._id), {}, { user: MEMBER });
+      const missing = await call(outputs(trainingId, model._id), { user: MEMBER });
       expect(missing.status).toBe(409);
-      expect((await missing.json()).message).toMatch(/no recorded epoch 500/);
+      expect(missing.body.message).toMatch(/no recorded epoch 500/);
 
       await Training.updateOne({ _id: trainingId, 'models._id': model._id }, { $unset: { 'models.$.epoch': '' } });
-      expect((await (await raw(bundle(trainingId, model._id), {}, { user: MEMBER })).json()).message).toMatch(
-        /names no epoch/
-      );
+      expect((await call(outputs(trainingId, model._id), { user: MEMBER })).body.message).toMatch(/names no epoch/);
     });
 
-    it('refuses more outputs than a bundle may hold, or more bytes than it may be', async () => {
+    it('lists at most 5000 outputs, and counts every one', async () => {
       const { trainingId } = await scoredRun();
       await publish(trainingId, weights(5));
       const model = await settled(trainingId);
-
       await EpochVisualization.collection.insertMany(
         Array.from({ length: 5001 }, (_, index) => ({
           epoch_uuid: 'epoch-99',
@@ -1107,28 +1056,14 @@ describe('models kept on this deployment', () => {
           uploadedAt: new Date()
         }))
       );
-      const tooMany = await raw(bundle(trainingId, model._id), {}, { user: '' });
-      expect(tooMany.status).toBe(413);
-      expect((await tooMany.json()).message).toMatch(/More than 5000 outputs/);
-      expect((await raw(bundle(trainingId, model._id, '?folders=segment'), {}, { user: '' })).status).toBe(200);
-
-      await EpochVisualization.collection.deleteMany({ visualization_uuid: /^bulk-/ });
-      await EpochVisualization.collection.insertOne({
-        epoch_uuid: 'epoch-99',
-        visualization_uuid: 'huge',
-        filename: 'huge.png',
-        type: 'mask',
-        fileId: 'visualizations/huge',
-        uploadedAt: new Date(),
-        metadata: { size: 3 * 1024 ** 3 }
-      });
-      const tooBig = await raw(bundle(trainingId, model._id), {}, { user: '' });
-      expect(tooBig.status).toBe(413);
-      expect((await tooBig.json()).message).toMatch(/larger than a bundle may be/);
+      const data = await describeAs(trainingId, model._id);
+      expect(data.files).toHaveLength(5000);
+      expect(data.totals).toEqual({ mask: 5003, segment: 2, confidence: 2 });
+      expect(data.truncated).toBe(true);
     });
 
     it('names a suite’s result and a dataset known only by id, and takes the newest upload of a frame', async () => {
-      const { projectId, trainingId, frames } = await scoredRun();
+      const { projectId, trainingId } = await scoredRun();
       await Training.updateOne({ _id: trainingId }, { $unset: { dataset: '' }, $set: { datasetId: 'iseauto' } });
       await Evaluation.collection.insertOne({
         uuid: 'e3',
@@ -1143,8 +1078,6 @@ describe('models kept on this deployment', () => {
         results: { day_fair: {} }
       });
       // The same frame uploaded again later (a path in its name is not part of it), and a hidden result.
-      const newer = png(77);
-      mockFiles.set('visualizations/mask/newer', newer);
       await EpochVisualization.collection.insertOne({
         epoch_uuid: 'epoch-99',
         visualization_uuid: 'again',
@@ -1166,69 +1099,26 @@ describe('models kept on this deployment', () => {
       await publish(trainingId, weights(5));
       const model = await settled(trainingId);
 
-      const files = await readBundle(await raw(bundle(trainingId, model._id), {}, { user: '' }));
-      expect(files.get('mask/sq11_000301.png')!.equals(newer)).toBe(true);
-      expect(files.get('mask/sq11_000301.png')!.equals(frames['mask/sq11_000301.png'])).toBe(false);
-      const metrics = JSON.parse(files.get('metrics.json')!.toString());
-      expect(metrics.evaluations).toHaveLength(2);
-      expect(metrics.evaluations.find((evaluation: { suite?: unknown }) => evaluation.suite)).toMatchObject({
+      const data = await describeAs(trainingId, model._id);
+      const masks = data.files.filter((file: { folder: string }) => file.folder === 'mask');
+      expect(masks.map((file: { visualizationUuid: string }) => file.visualizationUuid)).toEqual([
+        'again',
+        'mask-sq14_000061.png'
+      ]);
+      expect(data.metrics.evaluations).toHaveLength(2);
+      expect(data.metrics.evaluations.find((evaluation: { suite?: unknown }) => evaluation.suite)).toMatchObject({
         suite: { slug: 'road-test', version: 2 },
         executedAt: '2026-10-11T00:00:00.000Z'
       });
-      expect(JSON.stringify(metrics)).not.toContain('hidden');
-      expect(JSON.parse(files.get('manifest.json')!.toString()).trainedOn).toEqual({ id: 'iseauto' });
+      expect(JSON.stringify(data.metrics)).not.toContain('hidden');
+      expect(data.trainedOn).toEqual({ id: 'iseauto' });
     });
 
-    it('bundles from the ONNX export as readily as from the weights, naming the weights as the same checkpoint', async () => {
-      const { trainingId } = await scoredRun();
-      const pth = weights(5);
-      const onnx = Buffer.concat([Buffer.from('0809', 'hex'), Buffer.alloc(64, 1)]);
-      await publish(trainingId, pth);
-      await publish(trainingId, onnx, { sourceSha256: sha256(pth) }, 'onnx');
-      for (let attempt = 0; attempt < 100; attempt += 1) {
-        const models = (await Training.findById(trainingId).lean())?.models ?? [];
-        if (models.length === 2 && models.every((model) => (model as { status?: string }).status === 'ready')) break;
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      }
-      const models = (await Training.findById(trainingId).lean())!.models! as unknown as Array<{
-        _id: mongoose.Types.ObjectId;
-        format: string;
-      }>;
-      const onnxModel = models.find((model) => model.format === 'onnx')!;
-
-      const response = await raw(bundle(trainingId, onnxModel._id), {}, { user: '' });
-      expect(response.headers.get('content-disposition')).toBe(
-        'attachment; filename="ISEAUTO_CLFT_Large-epoch99-outputs.zip"'
-      );
-      const manifest = JSON.parse((await readBundle(response)).get('manifest.json')!.toString());
-      expect(manifest.model).toMatchObject({ format: 'onnx', sourceSha256: sha256(pth) });
-      expect(manifest.sameCheckpoint).toEqual([expect.objectContaining({ format: 'pth', sha256: sha256(pth) })]);
-    });
-
-    it('answers HEAD with headers alone', async () => {
+    it('no longer serves a zip', async () => {
       const { trainingId } = await scoredRun();
       await publish(trainingId, weights(5));
       const model = await settled(trainingId);
-      jest.mocked(getFileStream).mockClear();
-      const head = await raw(bundle(trainingId, model._id), {}, { user: '', method: 'HEAD' });
-      expect(head.status).toBe(200);
-      expect(head.headers.get('content-type')).toBe('application/zip');
-      expect(getFileStream).not.toHaveBeenCalled();
-    });
-
-    it('breaks the zip, rather than end it whole, when a frame cannot be read', async () => {
-      const { trainingId } = await scoredRun();
-      await publish(trainingId, weights(5));
-      const model = await settled(trainingId);
-      mockFiles.delete('visualizations/segment/sq14_000061.png');
-      let outcome: 'error' | 'whole' = 'whole';
-      try {
-        const response = await raw(bundle(trainingId, model._id), {}, { user: '' });
-        unzip(Buffer.from(await response.arrayBuffer()));
-      } catch {
-        outcome = 'error';
-      }
-      expect(outcome).toBe('error');
+      expect((await raw(`/trainings/${trainingId}/models/${model._id}/bundle`, {}, { user: '' })).status).toBe(404);
     });
   });
 });

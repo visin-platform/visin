@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { PageHeader, onImage } from '@visin/frontend-core';
+import React, { useEffect, useRef, useState } from 'react';
+import { PageHeader } from '@visin/frontend-core';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -20,21 +20,20 @@ import {
   Paper,
   IconButton,
   Chip,
-  Collapse,
-  Dialog,
-  DialogContent
+  Collapse
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  Close as CloseIcon
+  ExpandLess as ExpandLessIcon
 } from '@mui/icons-material';
 import { visualizationService } from '../services/visualizationService';
-import { Visualization, VisualizationsPaginatedResponse } from '../types';
+import { Visualization } from '../types';
 import { usePageTitle } from '../hooks/usePageTitle';
-
-/** Most images one training shows for one type at a time. */
-const GALLERY_LIMIT = 200;
+import ImageViewDialog from '../components/visualizations/ImageViewDialog';
+import OutputImage from '../components/visualizations/OutputImage';
+import OutputsGallery from '../components/visualizations/OutputsGallery';
+import { typeGalleryQuery, useRunClasses } from '../hooks/useOutputImages';
+import { isOutputKind, type OutputClass } from '../utils/outputPixels';
 
 const formatDate = (dateString: string) => new Date(dateString).toLocaleString();
 
@@ -42,20 +41,14 @@ const formatDate = (dateString: string) => new Date(dateString).toLocaleString()
  * One training's images of one type, side by side by epoch. Loaded only when
  * shown: the overview carries counts, never images or their signed URLs.
  */
-function TypeGallery({ trainingUuid, type, onImageClick }: {
+function TypeGallery({ trainingId, trainingUuid, type, onImageClick }: {
+  trainingId: string;
   trainingUuid: string;
   type: string;
-  onImageClick: (viz: Visualization) => void;
+  onImageClick: (viz: Visualization, classes: OutputClass[]) => void;
 }) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['visualizations', trainingUuid, type],
-    queryFn: async () =>
-      (await visualizationService.getVisualizationsByTraining(trainingUuid, {
-        type,
-        limit: GALLERY_LIMIT,
-        includeUrls: true
-      }) as VisualizationsPaginatedResponse).data
-  });
+  const { data, isLoading, error } = useQuery(typeGalleryQuery(trainingUuid, type));
+  const classes = useRunClasses(isOutputKind(type) ? trainingId : undefined);
 
   if (isLoading) {
     return (
@@ -92,10 +85,10 @@ function TypeGallery({ trainingUuid, type, onImageClick }: {
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
                 Epoch {viz.epoch}
               </Typography>
-              <Box
-                component="img"
-                src={viz.signedUrl || ''}
-                alt={viz.filename}
+              <OutputImage
+                visualization={viz}
+                classes={classes}
+                maxWidth={640}
                 sx={{
                   width: '100%',
                   height: 'auto',
@@ -105,7 +98,7 @@ function TypeGallery({ trainingUuid, type, onImageClick }: {
                   borderRadius: 1,
                   cursor: 'pointer'
                 }}
-                onClick={() => onImageClick(viz)}
+                onClick={() => onImageClick(viz, classes)}
               />
               <Typography
                 variant="caption"
@@ -134,11 +127,24 @@ function TypeGallery({ trainingUuid, type, onImageClick }: {
 
 export const VisualizationsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [expandedTrainings, setExpandedTrainings] = useState<Set<string>>(new Set());
-  const [selectedType, setSelectedType] = useState<string | null>(null);
+  // A model's page links here with the run (by uuid), the outputs view and the model's epoch.
+  const [searchParams] = useSearchParams();
+  const linkedTraining = searchParams.get('training');
+  const linkedEpoch = Number.parseInt(searchParams.get('epoch') ?? '', 10);
+  const [expandedTrainings, setExpandedTrainings] = useState<Set<string>>(
+    () => new Set(linkedTraining ? [linkedTraining] : [])
+  );
+  const [selectedType, setSelectedTypeState] = useState<string | null>(null);
+  // A run's model outputs side by side, in place of one type's gallery.
+  const [showOutputs, setShowOutputs] = useState(() => searchParams.get('view') === 'outputs');
+  const setSelectedType = (type: string | null) => {
+    setSelectedTypeState(type);
+    setShowOutputs(false);
+  };
   const [selectedTrainings, setSelectedTrainings] = useState<Set<string>>(new Set());
   const [compareMode, setCompareMode] = useState(false);
   const [selectedImage, setSelectedImage] = useState<Visualization | null>(null);
+  const [selectedClasses, setSelectedClasses] = useState<OutputClass[]>([]);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [actionError, setError] = useState<string | null>(null);
 
@@ -153,10 +159,20 @@ export const VisualizationsPage: React.FC = () => {
     queryFn: () => visualizationService.getVisualizationSummary()
   });
 
+  // A link names one run: bring it into view once the list is there, and only then.
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!linkedTraining || scrolledTo.current === linkedTraining) return;
+    if (!trainings.some((training) => training.uuid === linkedTraining)) return;
+    scrolledTo.current = linkedTraining;
+    document.getElementById(`training-${linkedTraining}`)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }, [linkedTraining, trainings]);
+
   const error =
     actionError ||
     (queryError ? (queryError instanceof Error ? queryError.message : 'Failed to load trainings and visualizations') : null);
 
+  /** Expanded runs are kept by uuid, the name a link to this page carries. */
   const toggleTraining = (trainingId: string) => {
     const newExpanded = new Set(expandedTrainings);
     if (newExpanded.has(trainingId)) {
@@ -193,8 +209,9 @@ export const VisualizationsPage: React.FC = () => {
     navigate(`/visualizations/compare-trainings?ids=${ids.join(',')}`);
   };
 
-  const handleImageClick = (image: Visualization) => {
+  const handleImageClick = (image: Visualization, classes: OutputClass[] = []) => {
     setSelectedImage(image);
+    setSelectedClasses(classes);
     setImageModalOpen(true);
   };
 
@@ -209,6 +226,11 @@ export const VisualizationsPage: React.FC = () => {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+      {linkedTraining && !loading && !queryError && !trainings.some((training) => training.uuid === linkedTraining) && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          The run this link names has no visualizations you can see.
         </Alert>
       )}
       {/* Filter Controls */}
@@ -266,13 +288,16 @@ export const VisualizationsPage: React.FC = () => {
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {trainings.map((training) => {
-            const isExpanded = expandedTrainings.has(training._id);
+            const isExpanded = expandedTrainings.has(training.uuid);
             const isSelected = selectedTrainings.has(training._id);
             const availableTypes = training.types.map(({ type }) => type);
+            const outputTypes = training.types.filter(({ type }) => isOutputKind(type));
+            const outputKinds = outputTypes.map(({ type }) => type).filter(isOutputKind);
 
             return (
               <Card 
                 key={training._id}
+                id={`training-${training.uuid}`}
                 sx={{
                   border: isSelected ? '2px solid' : '1px solid',
                   borderColor: isSelected ? 'primary.main' : 'divider'
@@ -302,7 +327,7 @@ export const VisualizationsPage: React.FC = () => {
                       )}
                       <IconButton 
                         size="small" 
-                        onClick={() => !compareMode && toggleTraining(training._id)}
+                        onClick={() => !compareMode && toggleTraining(training.uuid)}
                         disabled={compareMode}
                         aria-expanded={isExpanded}
                         aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${training.name}`}
@@ -335,6 +360,19 @@ export const VisualizationsPage: React.FC = () => {
                     <Box>
                       {/* Type Selector */}
                       <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {outputKinds.length > 0 && (
+                          <Button
+                            size="small"
+                            variant={showOutputs ? 'contained' : 'outlined'}
+                            aria-pressed={showOutputs}
+                            onClick={() => {
+                              setSelectedTypeState(null);
+                              setShowOutputs(!showOutputs);
+                            }}
+                          >
+                            Model outputs
+                          </Button>
+                        )}
                         {availableTypes.map(type => (
                           <Button
                             key={type}
@@ -348,12 +386,27 @@ export const VisualizationsPage: React.FC = () => {
                       </Box>
 
                       {/* Visualization Grid - Side by Side */}
+                      {isExpanded && showOutputs && outputKinds.length > 0 && (
+                        <OutputsGallery
+                          trainingId={training._id}
+                          trainingUuid={training.uuid}
+                          kinds={outputKinds}
+                          epochs={outputTypes.flatMap(({ epochs }) => epochs)}
+                          initialEpoch={training.uuid === linkedTraining && Number.isFinite(linkedEpoch) ? linkedEpoch : undefined}
+                          onImageClick={handleImageClick}
+                        />
+                      )}
                       {isExpanded && selectedType && availableTypes.includes(selectedType) && (
-                        <TypeGallery trainingUuid={training.uuid} type={selectedType} onImageClick={handleImageClick} />
+                        <TypeGallery
+                          trainingId={training._id}
+                          trainingUuid={training.uuid}
+                          type={selectedType}
+                          onImageClick={handleImageClick}
+                        />
                       )}
 
                       {/* Show all types overview when none selected */}
-                      {!selectedType && (
+                      {!selectedType && !(showOutputs && outputKinds.length > 0) && (
                         <Box>
                           <Typography
                             variant="body2"
@@ -399,45 +452,12 @@ export const VisualizationsPage: React.FC = () => {
           })}
         </Box>
       )}
-      {/* Image Modal */}
-      <Dialog
+      <ImageViewDialog
         open={imageModalOpen}
         onClose={handleCloseImageModal}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogContent sx={{ p: 0, position: 'relative', height: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <IconButton
-            aria-label="Close image"
-            onClick={handleCloseImageModal}
-            sx={{
-              position: 'absolute',
-              right: 8,
-              top: 8,
-              bgcolor: onImage.scrim,
-              color: onImage.ink,
-              '&:hover': {
-                bgcolor: onImage.scrimStrong,
-              },
-              zIndex: 1,
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-          {selectedImage && (
-            <Box
-              component="img"
-              src={selectedImage.signedUrl}
-              alt={selectedImage.filename}
-              sx={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+        selectedImage={selectedImage}
+        classes={selectedClasses}
+      />
     </Container>
   );
 };

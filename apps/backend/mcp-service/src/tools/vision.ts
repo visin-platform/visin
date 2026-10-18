@@ -500,6 +500,9 @@ function registerReadTools(server: McpServer, caller: Caller): void {
             `Model kept on Visin: ${model.filename ?? `${model.format} checkpoint`} (${model.format}${size}${model.epoch === undefined ? '' : `, epoch ${model.epoch}`}${state}), ${licence}.`
           );
         }
+        if ((summary?.models ?? []).some((model) => !isHubRunModel(model))) {
+          lines.push('get_model_outputs describes a kept model: its classes, data, outputs and tests.');
+        }
         const git = summary?.provenance?.git;
         if (git) {
           lines.push(

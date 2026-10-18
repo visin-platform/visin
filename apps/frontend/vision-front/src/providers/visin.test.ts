@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  outputClassesOf,
   preprocessingText,
   type StoredModelInfo,
   storedCheckpointKey,
   storedLinkAnswers,
   storedLinkCheckpoint,
   storedModelBlock,
-  storedModelLabel
+  storedModelLabel,
+  storedModelOutputsPath
 } from './visin';
 
 const base = { fileId: 'models/t1/a.pth', filename: 'run.pth', format: 'pth' as const };
@@ -70,5 +72,31 @@ describe('stored models', () => {
       'input 384 px · camera mean 0.485, 0.456, 0.406 · std 0.229, 0.224, 0.225 · LiDAR mean 0.8124, 0.1489, 0.03287 · std 0.1947, 0.2857, 0.1533'
     );
     expect(preprocessingText({ transforms: { resize: 256 } })).toBe('input 256 px');
+  });
+});
+
+describe('model outputs', () => {
+  const classes = (names: string[]) => names.map((name, index) => ({ name, index }));
+
+  it('are a page of their own', () => {
+    expect(storedModelOutputsPath('t1', 'm1')).toBe('/trainings/t1/models/m1');
+  });
+
+  it('name the classes a mask indexes from the stored weights, preferring the checkpoint at the epoch', () => {
+    const models = [
+      { provider: 'huggingface', epoch: 5, modelInfo: { train_classes: classes(['hub']) } },
+      { provider: 'visin', epoch: 10, modelInfo: { train_classes: [{ name: 'sign', index: 2 }, ...classes(['road', 'car'])] } },
+      { provider: 'visin', epoch: 20, modelInfo: { train_classes: classes(['sky']) } },
+      { provider: 'visin', epoch: 30 }
+    ];
+    expect(outputClassesOf(models)).toEqual([
+      { index: 0, name: 'road' },
+      { index: 1, name: 'car' },
+      { index: 2, name: 'sign' }
+    ]);
+    expect(outputClassesOf(models, 20)).toEqual([{ index: 0, name: 'sky' }]);
+    expect(outputClassesOf(models, 99)).toHaveLength(3);
+    expect(outputClassesOf(undefined)).toEqual([]);
+    expect(outputClassesOf([{ provider: 'visin', modelInfo: { train_classes: [{ name: 'x', index: 0.5 }] } }])).toEqual([]);
   });
 });

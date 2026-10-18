@@ -62,6 +62,19 @@ const rows = [
   }
 ];
 
+const outputs = {
+  run: { id: 't1', uuid: 'run1', name: 'Iseauto CLFT', epoch: 99, epochUuid: 'e99' },
+  model: { ...base, id: 'pth', format: 'pth', filename: 'clft.pth', sha256: digest, file: '/api/trainings/t1/models/pth/file' },
+  sameCheckpoint: [],
+  checkpoint: { epoch: 99, sha256: digest },
+  predictedOn: [{ dataset: null, frames: ['f1'] }],
+  folders: { mask: 'Class indices.', segment: 'Coloured.', confidence: 'Probability.' },
+  totals: { mask: 1, segment: 1, confidence: 0 },
+  metrics: { epoch: 99, results: { val: { mean_iou: 0.81 } }, evaluations: [] },
+  files: [],
+  truncated: false
+};
+
 async function mockApi(page: Page) {
   await page.route(/^http:\/\/localhost:(4010|5001)\//, async (route) => {
     const request = route.request();
@@ -81,7 +94,11 @@ async function mockApi(page: Page) {
       });
     }
     const data =
-      pathname === '/api/models' ? { models: rows, pagination: { page: 1, limit: 30, total: 3, pages: 1 } } : [];
+      pathname === '/api/models'
+        ? { models: rows, pagination: { page: 1, limit: 30, total: 3, pages: 1 } }
+        : pathname === '/api/trainings/t1/models/pth/outputs'
+          ? outputs
+          : [];
     return route.fulfill({ headers, contentType: 'application/json', body: JSON.stringify({ success: true, data }) });
   });
 }
@@ -103,9 +120,9 @@ test.describe('stored model downloads', () => {
     await row.getByRole('button', { name: /^Show details/ }).click();
     await expect(page.getByText(/camera mean 0.485/)).toBeVisible();
     await expect(page.getByText(/Licence CC BY 4.0/)).toBeVisible();
-    await expect(row.getByRole('link', { name: /Download the outputs/ })).toHaveAttribute(
+    await expect(row.getByRole('link', { name: 'View the outputs of clft.pth' })).toHaveAttribute(
       'href',
-      /\/models\/pth\/bundle$/
+      '/trainings/t1/models/pth'
     );
     const download = page.waitForEvent('download');
     await weights.click();
@@ -113,6 +130,18 @@ test.describe('stored model downloads', () => {
     await expect(page.getByRole('link', { name: /Download pending/ })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /Download unlicensed/ })).toHaveCount(0);
     await expect(page.getByRole('progressbar', { name: 'Verifying model' })).toBeVisible();
+  });
+
+  test('opens what a model produced as a page, not a zip', async ({ page }) => {
+    await page.goto('/models');
+    await page.getByRole('link', { name: 'View the outputs of clft.pth' }).click();
+    await expect(page).toHaveURL(/\/trainings\/t1\/models\/pth$/);
+    await expect(page.getByRole('heading', { name: 'clft.pth' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'View frames' })).toHaveAttribute(
+      'href',
+      '/visualizations?training=run1&view=outputs&epoch=99'
+    );
+    await expect(page.getByRole('table', { name: 'Epoch results' }).getByText('val.mean_iou')).toBeVisible();
   });
 
   test('keeps both downloads and preprocessing accessible on a phone', async ({ page }) => {

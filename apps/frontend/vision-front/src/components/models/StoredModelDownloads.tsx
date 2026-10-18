@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, CircularProgress, Link, Typography } from '@mui/material';
-import { preprocessingText, storedModelBlock, storedModelBundleUrl, storedModelFileUrl } from '../../providers/visin';
+import { Link as RouterLink } from 'react-router-dom';
+import { preprocessingText, storedModelBlock, storedModelFileUrl, storedModelOutputsPath } from '../../providers/visin';
 import type { StoredModelReference } from '../../types/training';
 import { formatBytes } from '../../utils/datasetMapping';
 
@@ -13,8 +14,8 @@ interface StoredModelDownloadsProps {
 }
 
 /**
- * The downloads of a model kept on this deployment: one link per format, with its size; the licence it is shared
- * under; and what to do to an input. A format that cannot be served says why (still being read, failed, no licence
+ * The downloads of a model kept on this deployment: one link per format, with its size; a link to what it produced;
+ * the licence it is shared under; and what to do to an input. A format that cannot be served says why (still being read, failed, no licence
  * stated) instead of offering a link that would answer 409.
  *
  * The weights are a plain link, so the browser sends the session along and a private run's model downloads for
@@ -25,7 +26,7 @@ const StoredModelDownloads: React.FC<StoredModelDownloadsProps> = ({ trainingId,
   const license = ordered.find((model) => model.license)?.license;
   const credit = ordered.find((model) => model.credit)?.credit;
   const info = ordered.find((model) => model.modelInfo)?.modelInfo;
-  // The outputs belong to the checkpoint; name them after the `.pth` the export was made from when it can be served.
+  // The outputs belong to the checkpoint; describe them from the `.pth` the export was made from when it can be served.
   const servable =
     ordered.find((model) => model.format === 'pth' && !storedModelBlock(model)) ??
     ordered.find((model) => !storedModelBlock(model));
@@ -59,12 +60,12 @@ const StoredModelDownloads: React.FC<StoredModelDownloadsProps> = ({ trainingId,
         })}
         {servable && (
           <Link
-            href={storedModelBundleUrl(trainingId, servable._id)}
-            download
+            component={RouterLink}
+            to={storedModelOutputsPath(trainingId, servable._id)}
             variant="caption"
-            aria-label={`Download the outputs of ${servable.filename ?? 'this model'} as a zip`}
+            aria-label={`View the outputs of ${servable.filename ?? 'this model'}`}
           >
-            Outputs (.zip)
+            Outputs
           </Link>
         )}
       </Box>}

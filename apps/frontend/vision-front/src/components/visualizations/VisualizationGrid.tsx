@@ -5,7 +5,6 @@ import {
   Chip,
   Grid,
   Card,
-  CardMedia,
   CardContent,
   CardActions,
   Button,
@@ -26,6 +25,8 @@ import {
 import { surface } from '@visin/frontend-core';
 import { Visualization } from '../../types';
 import { formatDateTime } from '../../utils';
+import type { OutputClass } from '../../utils/outputPixels';
+import OutputImage from './OutputImage';
 
 interface VisualizationGridProps {
   visualizations: Visualization[];
@@ -34,6 +35,8 @@ interface VisualizationGridProps {
   handleImageClick: (viz: Visualization) => void;
   handleDelete: (uuid: string) => void;
   isAuthenticated: boolean;
+  /** the classes a mask's indices stand for */
+  classes?: OutputClass[];
 }
 
 const VisualizationGrid: React.FC<VisualizationGridProps> = ({
@@ -42,7 +45,8 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
   handleCompareToggle,
   handleImageClick,
   handleDelete,
-  isAuthenticated
+  isAuthenticated,
+  classes
 }) => {
   const theme = useTheme();
   const [visualizationToDelete, setVisualizationToDelete] = useState<string | null>(null);
@@ -117,10 +121,10 @@ const VisualizationGrid: React.FC<VisualizationGridProps> = ({
                   }}
                 >
                   <Box sx={{ position: 'relative', pt: '75%', bgcolor: 'background.default', overflow: 'hidden' }}>
-                    <CardMedia
-                      component="img"
-                      image={viz.signedUrl || ''}
-                      alt={viz.filename}
+                    <OutputImage
+                      visualization={viz}
+                      classes={classes}
+                      maxWidth={480}
                       onClick={() => handleImageClick(viz)}
                       sx={{ 
                         position: 'absolute',

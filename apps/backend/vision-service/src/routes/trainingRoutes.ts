@@ -15,7 +15,7 @@ import {
   compareTrainings,
   addTrainingModel,
   createTrainingModelUpload,
-  downloadModelBundle,
+  getModelOutputs,
   downloadTrainingModel,
   removeTrainingModel,
   setTrainingModelDemo,
@@ -27,7 +27,7 @@ import { getConfigsByTraining } from '../controllers/configController';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/authMiddleware';
 import { validateRequest } from '@visin/backend-core';
 import { bestRunQuerySchema } from '../validation/bestRunSchemas';
-import { modelBundleQuerySchema, modelCardQuerySchema, modelDemoBodySchema, modelLinkSchema, modelUploadBodySchema } from '../validation/artifactSchemas';
+import { modelCardQuerySchema, modelDemoBodySchema, modelLinkSchema, modelUploadBodySchema } from '../validation/artifactSchemas';
 import {
   getDeletedTrainingsQuerySchema,
   getTrainingsQuerySchema,
@@ -67,7 +67,7 @@ router.post('/:id/heartbeat', authMiddleware, heartbeatTraining);
 router.post('/:id/models/upload-url', authMiddleware, validateRequest({ body: modelUploadBodySchema }), createTrainingModelUpload);
 router.post('/:id/models', authMiddleware, validateRequest({ body: modelLinkSchema }), addTrainingModel);
 router.get('/:id/models/:modelId/file', optionalAuthMiddleware, downloadTrainingModel);
-router.get('/:id/models/:modelId/bundle', optionalAuthMiddleware, validateRequest({ query: modelBundleQuerySchema }), downloadModelBundle);
+router.get('/:id/models/:modelId/outputs', optionalAuthMiddleware, getModelOutputs);
 router.patch('/:id/models/:modelId', authMiddleware, validateRequest({ body: modelDemoBodySchema }), setTrainingModelDemo);
 router.delete('/:id/models/:modelId', authMiddleware, removeTrainingModel);
 router.post('/:id/restore', authMiddleware, restoreTraining);

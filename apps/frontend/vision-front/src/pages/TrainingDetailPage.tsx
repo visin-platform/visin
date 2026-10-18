@@ -252,6 +252,7 @@ const TrainingDetailPage: React.FC = () => {
           epochs={epochs}
           isAuthenticated={canWrite(id)}
           run={training}
+          models={training.models}
         />
       )}
       {/* System Info Tab */}

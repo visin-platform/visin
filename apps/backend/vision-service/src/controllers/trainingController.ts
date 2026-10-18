@@ -14,8 +14,8 @@ import { getBestRun } from '../services/bestRunService';
 import type { BestRunQuery } from '../validation/bestRunSchemas';
 import { getTrainingSummary } from '../services/trainingSummaryService';
 import { buildModelCard } from '../services/modelCardService';
-import type { ModelBundleQuery, ModelCardQuery, ModelUploadBody } from '../validation/artifactSchemas';
-import { openModelBundle } from '../services/modelBundleService';
+import type { ModelCardQuery, ModelUploadBody } from '../validation/artifactSchemas';
+import { describeModelOutputs } from '../services/modelOutputsService';
 import { AuthRequest } from '../middleware/authMiddleware';
 import { trainingService } from '../services/trainingService';
 import type {
@@ -230,28 +230,10 @@ export const downloadTrainingModel = async (req: AuthRequest, res: Response): Pr
   });
 };
 
-/**
- * What a stored model produced on its frames, as one zip, for a caller that takes one response as the data. Built as
- * it is sent, so it has no size and no ranges; the weights are the separate `file` download.
- */
-export const downloadModelBundle = async (req: AuthRequest, res: Response): Promise<void> => {
+/** What a stored model produced on its frames, and the scores and provenance of its checkpoint, as JSON. */
+export const getModelOutputs = async (req: AuthRequest, res: Response): Promise<void> => {
   const training = await trainingService.getTrainingById(String(req.params.id), req.user?.id);
-  const { folders } = req.query as unknown as ModelBundleQuery;
-  const bundle = await openModelBundle(training, String(req.params.modelId), folders, req.user?.id);
-  if (req.method === 'GET') {
-    logger.info('Model outputs downloaded', {
-      trainingId: String(training._id),
-      modelId: String(bundle.model._id),
-      userId: req.user?.id
-    });
-  }
-  await sendStoredFile(req, res, {
-    filename: bundle.filename,
-    contentType: 'application/zip',
-    headers: { 'Cache-Control': 'no-store' },
-    open: async () => bundle.stream(),
-    logContext: { trainingId: String(training._id), modelId: String(bundle.model._id) }
-  });
+  res.json({ success: true, data: await describeModelOutputs(training, String(req.params.modelId), req.user?.id) });
 };
 
 // Unlink a model from a run

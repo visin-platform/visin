@@ -3186,6 +3186,10 @@ paths:
         - name: perTraining
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/perTraining }
+        - name: epoch
+          in: query
+          description: Only this epoch's visualizations.
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/epoch }
       responses:
         '200':
           description: Successful response
@@ -3282,6 +3286,10 @@ paths:
         - name: perTraining
           in: query
           schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/perTraining }
+        - name: epoch
+          in: query
+          description: Applies to one training's listing only; ignored here.
+          schema: { $ref: ./generated/request-schemas.json#/GetVisualizationsByTrainingQuery/properties/epoch }
       security:
         - { BearerCredential: [] }
         - { SessionCookie: [] }
@@ -4506,41 +4514,38 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
-  /trainings/{id}/models/{modelId}/bundle:
+  /trainings/{id}/models/{modelId}/outputs:
     get:
       tags:
         - Trainings
-      summary: Download what a stored model produced
+      summary: Describe what a stored model produced
       description: |
-        One zip of what the model produced on the frames its run was evaluated on, for a caller that takes one response
-        as the data (a dataspace connector's data plane). Readable by anyone who may read the run, and refused on the
-        same terms as the weights (`409` unless the model is `ready` and its `license` is stated).
+        What the model produced on the frames its run was evaluated on, the scores of its checkpoint, and where both
+        came from, as JSON. Readable by anyone who may read the run, and refused on the same terms as the weights
+        (`409` unless the model is `ready` and its `license` is stated, and names an epoch the run recorded).
 
-        - `mask/<frame>.png`: the predicted class of every pixel, as pixel values (class indices in `modelInfo`).
-        - `segment/<frame>.png`: the prediction in the class colours.
-        - `confidence/<frame>.png`: the maximum class probability (`p_max`), in [1/C, 1]. Each file's
-          `confidenceEncoding` is `uint8` (`round(255 × p)`), `uint16` (`round(65535 × p)`), or `unknown` for older uploads.
-        - `metrics.json`: what the model's epoch reported and the tests visible to the caller in this project,
-          per condition and class. A public reader sees published suite results and the run's unsuited tests.
-        - `manifest.json`: written last. The run, the model (digest, epoch, licence, credit, `modelInfo`), the other
-          format of the same checkpoint, `checkpoint` (epoch and weights SHA-256), `trainedOn` (the training dataset
-          and revision), `predictedOn` (prediction datasets and frame lists), `outputGeometry`, `confidence`,
-          and each file's size and SHA-256. A prediction dataset missing from the upload metadata is `null`;
-          it is never assumed to be the training dataset.
+        The outputs are the visualizations the run uploaded against the model's epoch, one row per kind and frame
+        (the newest upload of a frame wins). Fetch an image through `GET /visualizations/{visualizationUuid}`.
+
+        - `mask`: the predicted class of every pixel, as pixel values (class indices in `modelInfo`).
+        - `segment`: the prediction in the class colours.
+        - `confidence`: the maximum class probability (`p_max`), in [1/C, 1]. Each row's `confidenceEncoding` is
+          `uint8` (`round(255 × p)`), `uint16` (`round(65535 × p)`), or `unknown` for older uploads.
+
+        `metrics` is what the model's epoch reported and the tests visible to the caller in this project, per
+        condition and class; a public reader sees published suite results and the run's unsuited tests. `trainedOn` is
+        the training dataset and revision, `predictedOn` the prediction datasets and their frames. A prediction dataset
+        missing from the upload metadata is `null`; it is never assumed to be the training dataset.
 
         Visualization uploads can report `metadata.prediction` with `dataset: { source: 'visin', id, revision,
         archiveRevision }`, `frame` (input frame name), `width`, `height`, and `confidenceEncoding`. Geometry is
         reported per file: predictions use input-image coordinates (e.g. 1363×768 for Iseauto), and ONNX produces
         probabilities at its square input size without preserving aspect ratio. Resize logits bilinearly
-        to input-image size before softmax and argmax. Predictor interpolates logits; for an ONNX graph's
-        probabilities, interpolate log probabilities instead to preserve the same decoder. The model's
-        `modelInfo.transforms` carries preprocessing.
+        to input-image size before softmax and argmax; for an ONNX graph's probabilities, interpolate log probabilities
+        instead to preserve the same decoder. The model's `modelInfo.transforms` carries preprocessing.
 
-        The zip is built as it is sent: it has no `Content-Length`, stable ETag or ranges, and uses `Cache-Control: no-store`.
-        It is not resumable, so fetch it again whole. A
-        read that fails part way ends the response early, leaving a zip with no central directory, never one that
-        looks complete. The weights are the separate `/file` download. At most 5,000 outputs and 2 GiB (`413`).
-      operationId: downloadModelBundle
+        At most 5,000 rows are listed (`truncated`); `totals` counts every output of each kind.
+      operationId: getModelOutputs
       security:
         - BearerCredential: []
         - SessionCookie: []
@@ -4557,25 +4562,124 @@ paths:
           description: The `_id` of the link, from the training's `models`.
           schema:
             type: string
-        - name: folders
-          in: query
-          required: false
-          description: Which folders to include, comma-separated; all three when absent.
-          schema: { $ref: ./generated/request-schemas.json#/ModelBundleQuery/properties/folders }
       responses:
         '200':
-          description: The zip
-          headers:
-            Content-Disposition:
-              schema:
-                type: string
+          description: The model's outputs, scores and provenance
           content:
-            application/zip:
+            application/json:
               schema:
-                type: string
-                format: binary
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                    const: true
+                  data:
+                    type: object
+                    required: [run, model, sameCheckpoint, checkpoint, predictedOn, folders, totals, metrics, files, truncated]
+                    properties:
+                      run:
+                        type: object
+                        properties:
+                          id: { type: string }
+                          uuid: { type: string }
+                          name: { type: string }
+                          status: { type: string }
+                          project:
+                            type: object
+                            properties:
+                              id: { type: string }
+                              name: { type: string }
+                              slug: { type: string }
+                          epoch: { type: integer }
+                          epochUuid: { type: string }
+                      model:
+                        type: object
+                        description: The stored model, with its licence resolved to a name and link.
+                        properties:
+                          id: { type: string }
+                          format: { type: string, enum: [pth, onnx] }
+                          filename: { type: string }
+                          size: { type: integer }
+                          sha256: { type: string }
+                          epoch: { type: integer }
+                          license: { type: object }
+                          credit: { type: string }
+                          modelInfo: { type: object }
+                          parity: { type: object }
+                          sourceSha256: { type: string }
+                          file: { type: string, description: Where the weights are downloaded from. }
+                      sameCheckpoint:
+                        type: array
+                        description: The other stored formats of the same checkpoint that are served.
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            format: { type: string }
+                            size: { type: integer }
+                            sha256: { type: string }
+                            file: { type: string }
+                      trainedOn: { type: object }
+                      checkpoint:
+                        type: object
+                        properties:
+                          epoch: { type: integer }
+                          sha256: { type: string, description: The digest of the weights. }
+                      predictedOn:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            dataset: { type: [object, 'null'] }
+                            frames: { type: array, items: { type: string } }
+                      outputGeometry: { type: object }
+                      confidence: { type: object }
+                      folders:
+                        type: object
+                        description: How to read each kind of output.
+                        additionalProperties: { type: string }
+                      totals:
+                        type: object
+                        description: How many outputs of each kind the epoch has.
+                        additionalProperties: { type: integer }
+                      metrics:
+                        type: object
+                        properties:
+                          epoch: { type: integer }
+                          results: { type: object }
+                          evaluations:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id: { type: string }
+                                suite:
+                                  type: object
+                                  properties:
+                                    slug: { type: string }
+                                    version: { type: integer }
+                                executedAt: { type: string, format: date-time }
+                                sampleCounts: { type: object }
+                                results: { type: object }
+                      files:
+                        type: array
+                        items:
+                          type: object
+                          required: [visualizationUuid, folder, frame, filename]
+                          properties:
+                            visualizationUuid: { type: string }
+                            folder: { type: string, enum: [mask, segment, confidence] }
+                            frame: { type: string }
+                            filename: { type: string }
+                            size: { type: integer }
+                            geometry:
+                              type: object
+                              properties:
+                                width: { type: integer }
+                                height: { type: integer }
+                            confidenceEncoding: { type: string, enum: [uint8, uint16, unknown] }
+                      truncated: { type: boolean }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -4584,12 +4688,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '413':
-          description: More outputs than a bundle may hold
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
 

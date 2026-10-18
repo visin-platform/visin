@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -20,7 +20,8 @@ import VisualizationGrid from './visualizations/VisualizationGrid';
 import UploadVisualizationDialog from './visualizations/UploadVisualizationDialog';
 import CompareVisualizationsDialog from './visualizations/CompareVisualizationsDialog';
 import ImageViewDialog from './visualizations/ImageViewDialog';
-import type { Training } from '../types/training';
+import type { ModelReference, Training } from '../types/training';
+import { outputClassesOf } from '../providers/visin';
 import { describeEmpty } from '../utils/trainingStatus';
 
 interface TrainingVisualizationsTabProps {
@@ -29,14 +30,18 @@ interface TrainingVisualizationsTabProps {
   isAuthenticated: boolean;
   /** the run these belong to, so an empty tab can say why */
   run?: Pick<Training, 'status' | 'lastSeenAt'>;
+  /** the run's models, whose weights name the classes its masks index */
+  models?: ModelReference[];
 }
 
 const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
   training_uuid,
   epochs,
   isAuthenticated,
-  run
+  run,
+  models
 }) => {
+  const classes = useMemo(() => outputClassesOf(models), [models]);
   const {
     visualizations,
     loading,
@@ -194,6 +199,7 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
           handleImageClick={handleImageClick}
           handleDelete={handleDelete}
           isAuthenticated={isAuthenticated}
+          classes={classes}
         />
       )}
       {/* Upload Dialog */}
@@ -209,12 +215,14 @@ const TrainingVisualizationsTab: React.FC<TrainingVisualizationsTabProps> = ({
         open={compareDialogOpen}
         onClose={() => setCompareDialogOpen(false)}
         selectedForCompare={selectedForCompare}
+        classes={classes}
       />
       {/* Image View Dialog */}
       <ImageViewDialog
         open={imageDialogOpen}
         onClose={() => setImageDialogOpen(false)}
         selectedImage={selectedImage}
+        classes={classes}
       />
     </Box>
   );

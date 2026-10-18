@@ -1,6 +1,6 @@
 import { z } from '@visin/backend-core';
 import { HF_REPO_PATTERN, hubModelLinkSchema, hubRepoSchema, hubStorageSchema } from '../services/huggingFace';
-import { BUNDLE_FOLDER_NAMES, MODEL_FORMATS, visinModelLinkSchema } from '../services/visinModels';
+import { MODEL_FORMATS, visinModelLinkSchema } from '../services/visinModels';
 
 /**
  * Where a project keeps what is too big for a database row. `visin` keeps every byte on this deployment's own servers
@@ -40,13 +40,3 @@ export const modelDemoBodySchema = z.object({
 });
 export type ModelDemoBody = z.infer<typeof modelDemoBodySchema>;
 
-/** Which folders of a model's outputs bundle to include; all of them when absent. */
-export const modelBundleQuerySchema = z.object({
-  /** a comma-separated list of `mask`, `segment` and `confidence` */
-  folders: z
-    .string()
-    .transform((value) => value.split(',').map((name) => name.trim()).filter(Boolean))
-    .pipe(z.array(z.enum(BUNDLE_FOLDER_NAMES)).min(1))
-    .optional()
-});
-export type ModelBundleQuery = z.infer<typeof modelBundleQuerySchema>;

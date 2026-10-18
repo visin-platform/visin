@@ -6,6 +6,8 @@ import {
   parseResponse,
   trainingConfigsResponseSchema,
   findingExportSchema,
+  modelOutputsSchema,
+  type ModelOutputs,
   type Config,
   projectSchema,
   projectsResponseSchema,
@@ -213,6 +215,14 @@ export const vision = {
     get(visualizationTypesResponseSchema, apiKey, '/visualizations/types', {
       training_uuid: trainingUuid
     }),
+
+  /** What a stored model produced, its checkpoint's scores and provenance. `training` is the run's `_id`. */
+  getModelOutputs: (apiKey: string, training: string, modelId: string): Promise<ModelOutputs> =>
+    get(
+      modelOutputsSchema,
+      apiKey,
+      `/trainings/${encodeURIComponent(training)}/models/${encodeURIComponent(modelId)}/outputs`
+    ),
 
   getVisualization: (apiKey: string, uuid: string): Promise<Visualization> =>
     get(visualizationSchema, apiKey, `/visualizations/${encodeURIComponent(uuid)}`),

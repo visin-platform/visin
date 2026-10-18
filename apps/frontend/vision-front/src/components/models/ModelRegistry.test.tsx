@@ -241,7 +241,7 @@ describe('ModelRegistry', () => {
       expect(screen.getByRole('link', { name: 'Download ISEAUTO_CLFT-epoch99.onnx (onnx)' })).toHaveAttribute('href', `${origin}/m2/file`);
       expect(screen.getByText('.pth · 1.2 GB')).toBeInTheDocument();
       expect(screen.getByText('.onnx · 614.4 MB')).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Download the outputs of ISEAUTO_CLFT-epoch99.pth as a zip' })).toHaveAttribute('href', `${origin}/m1/bundle`);
+      expect(screen.getByRole('link', { name: 'View the outputs of ISEAUTO_CLFT-epoch99.pth' })).toHaveAttribute('href', '/trainings/t-1/models/m1');
       expect(screen.queryByText('Licence CC BY 4.0 · TalTech')).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: /^Show details for/ }));
       expect(screen.getByText('Licence CC BY 4.0 · TalTech')).toBeInTheDocument();
