@@ -1,4 +1,11 @@
 # Visin Changelog
+## [2.1.0](https://github.com/visin-platform/visin/compare/v2.0.0...v2.1.0) (2026-10-22)
+
+
+### Features
+
+* **vision-front:** show a run's stored models on a Models tab of its page ([68c0296](https://github.com/visin-platform/visin/commit/68c0296a0c2005aeff6ed08846cc1fed9f97b74d))
+
 ## [2.0.0](https://github.com/visin-platform/visin/compare/v1.41.1...v2.0.0) (2026-10-18)
 
 
