@@ -4,7 +4,11 @@ import { MemoryRouter } from 'react-router-dom';
 import AppRoutes from './index';
 
 vi.mock('../pages/TrainingsPage', () => ({ default: () => <div>TrainingsPage</div> }));
-vi.mock('../pages/TrainingDetailPage', () => ({ default: () => <div>TrainingDetailPage</div> }));
+vi.mock('../pages/TrainingDetailPage', async () => {
+  const { useLocation } = await import('react-router-dom');
+  const TrainingDetailPage = () => <div>TrainingDetailPage{useLocation().search}</div>;
+  return { default: TrainingDetailPage };
+});
 vi.mock('../pages/TrainingComparisonPage', () => ({ default: () => <div>TrainingComparisonPage</div> }));
 vi.mock('../pages/ComparisonDetailPage', () => ({ default: () => <div>ComparisonDetailPage</div> }));
 vi.mock('../pages/EpochsPage', () => ({ default: () => <div>EpochsPage</div> }));
@@ -41,6 +45,11 @@ describe('AppRoutes', () => {
   it('redirects "/" to "/projects"', async () => {
     renderAt('/');
     expect(await screen.findByText('ProjectsPage')).toBeInTheDocument();
+  });
+
+  it('sends the old model outputs page to the Models tab of its run', async () => {
+    renderAt('/trainings/t1/models/m1');
+    expect(await screen.findByText('TrainingDetailPage?tab=models&model=m1')).toBeInTheDocument();
   });
 
   it.each([

@@ -3,7 +3,7 @@ vi.mock('../../hooks/useWriteCapabilities', async () => {
   return { useWriteCapabilities: () => { const { isAuthenticated } = useAuth(); return (id?: string) => !!id && isAuthenticated; } };
 });
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { clearVisits, readVisits } from '@visin/frontend-core';
@@ -60,6 +60,15 @@ vi.mock('../../components/TrainingConfigTab', () => ({ default: () => <div data-
 vi.mock('../../components/TrainingVisualizationsTab', () => ({ default: () => <div data-testid="visualizations-tab" /> }));
 vi.mock('../../components/TrainingSystemInfoTab', () => ({ default: () => <div data-testid="system-info-tab" /> }));
 vi.mock('../../components/TrainingBenchmarksTab', () => ({ default: () => <div data-testid="benchmarks-tab" /> }));
+vi.mock('../../components/training/TrainingModelsTab', () => ({
+  default: (props: any) => (
+    <div data-testid="models-tab">
+      {`selected:${props.selectedModelId}`}
+      <button onClick={() => props.onSelectModel('m2')}>select-m2</button>
+      <button onClick={() => props.onShowTab('epochs')}>show-epochs</button>
+    </div>
+  )
+}));
 
 vi.mock('../../components/TrainingFormDialog', () => ({
   default: (props: any) =>
@@ -103,8 +112,9 @@ vi.mock('../../components/training/TrainingDetailTabs', () => ({
   default: (props: any) => (
     <div data-testid="training-tabs">
       <span data-testid="active-tab">{props.value}</span>
-      {['overview', 'epochs', 'evaluations', 'visualizations', 'system-info', 'config', 'benchmarks'].map((name, idx) => (
-        <button key={name} onClick={() => props.onChange({}, idx)}>{`tab-${name}`}</button>
+      {props.showModels && <span>has-models-tab</span>}
+      {['overview', 'epochs', 'evaluations', 'visualizations', 'models', 'system-info', 'config', 'benchmarks'].map((name) => (
+        <button key={name} onClick={() => props.onChange({}, name)}>{`tab-${name}`}</button>
       ))}
     </div>
   )
@@ -311,6 +321,34 @@ describe('TrainingDetailPage', () => {
 
     fireEvent.click(screen.getByText('tab-benchmarks'));
     expect(screen.getByTestId('benchmarks-tab')).toBeInTheDocument();
+  });
+
+  it('opens the tab the URL names, and falls back to the overview for one it does not know', () => {
+    renderPage('/trainings/tr1?tab=epochs');
+    expect(screen.getByTestId('epochs-tab')).toBeInTheDocument();
+    cleanup();
+    renderPage('/trainings/tr1?tab=nonsense');
+    expect(screen.getByTestId('overview-tab')).toBeInTheDocument();
+  });
+
+  it('offers the Models tab only for a run that keeps a model, and keeps the chosen checkpoint in the URL', () => {
+    renderPage('/trainings/tr1?tab=models&model=m1');
+    // No stored model: the tab is not there, so its URL lands on the overview.
+    expect(screen.getByTestId('overview-tab')).toBeInTheDocument();
+    expect(screen.queryByText('has-models-tab')).not.toBeInTheDocument();
+    cleanup();
+
+    const stored = { _id: 'm1', provider: 'visin', kind: 'model', fileId: 'models/a.pth', format: 'pth', status: 'ready' };
+    useTrainingDetailMock.mockReturnValue(
+      baseTrainingDetail({ training: { _id: 'tr1', uuid: 'uuid-1', name: 'Training One', projectId: null, models: [stored] } })
+    );
+    renderPage('/trainings/tr1?tab=models&model=m1');
+    expect(screen.getByText('has-models-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('models-tab')).toHaveTextContent('selected:m1');
+    fireEvent.click(screen.getByText('select-m2'));
+    expect(screen.getByTestId('models-tab')).toHaveTextContent('selected:m2');
+    fireEvent.click(screen.getByText('show-epochs'));
+    expect(screen.getByTestId('epochs-tab')).toBeInTheDocument();
   });
 
   it('opens the edit dialog from the header and submits the edit', () => {

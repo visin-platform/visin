@@ -98,7 +98,9 @@ async function mockApi(page: Page) {
         ? { models: rows, pagination: { page: 1, limit: 30, total: 3, pages: 1 } }
         : pathname === '/api/trainings/t1/models/pth/outputs'
           ? outputs
-          : [];
+          : pathname === '/api/trainings/t1/epochs'
+            ? { training: { ...training, models: rows.map((row) => ({ ...row.model, provider: 'visin' })) }, epochs: [] }
+            : [];
     return route.fulfill({ headers, contentType: 'application/json', body: JSON.stringify({ success: true, data }) });
   });
 }
@@ -122,7 +124,7 @@ test.describe('stored model downloads', () => {
     await expect(page.getByText(/Licence CC BY 4.0/)).toBeVisible();
     await expect(row.getByRole('link', { name: 'View the outputs of clft.pth' })).toHaveAttribute(
       'href',
-      '/trainings/t1/models/pth'
+      '/trainings/t1?tab=models&model=pth'
     );
     const download = page.waitForEvent('download');
     await weights.click();
@@ -132,16 +134,24 @@ test.describe('stored model downloads', () => {
     await expect(page.getByRole('progressbar', { name: 'Verifying model' })).toBeVisible();
   });
 
-  test('opens what a model produced as a page, not a zip', async ({ page }) => {
+  test('opens what a model produced on the Models tab of its run', async ({ page }) => {
     await page.goto('/models');
     await page.getByRole('link', { name: 'View the outputs of clft.pth' }).click();
-    await expect(page).toHaveURL(/\/trainings\/t1\/models\/pth$/);
+    await expect(page).toHaveURL(/\/trainings\/t1\?tab=models&model=pth$/);
+    await expect(page.getByRole('tab', { name: 'Models' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('heading', { name: 'clft.pth' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'View frames' })).toHaveAttribute(
       'href',
       '/visualizations?training=run1&view=outputs&epoch=99'
     );
-    await expect(page.getByRole('table', { name: 'Epoch results' }).getByText('val.mean_iou')).toBeVisible();
+    await page.getByRole('button', { name: 'Epochs tab' }).click();
+    await expect(page).toHaveURL(/\/trainings\/t1\?tab=epochs$/);
+  });
+
+  test('sends the old outputs address to the Models tab', async ({ page }) => {
+    await page.goto('/trainings/t1/models/pth');
+    await expect(page).toHaveURL(/\/trainings\/t1\?tab=models&model=pth$/);
+    await expect(page.getByRole('heading', { name: 'clft.pth' })).toBeVisible();
   });
 
   test('keeps both downloads and preprocessing accessible on a phone', async ({ page }) => {

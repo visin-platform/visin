@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Loader } from '@visin/frontend-core';
+import { storedModelOutputsPath } from '../providers/visin';
 
 // Each page is its own chunk: the charts (@mui/x-charts and d3) weigh more than
 // the rest of the app together and most pages never draw one, and as a shell
@@ -8,7 +9,6 @@ import { Loader } from '@visin/frontend-core';
 const TrainingsPage = lazy(() => import('../pages/TrainingsPage'));
 const TrainingDetailPage = lazy(() => import('../pages/TrainingDetailPage'));
 const TrainingComparisonPage = lazy(() => import('../pages/TrainingComparisonPage'));
-const ModelOutputsPage = lazy(() => import('../pages/ModelOutputsPage'));
 const ComparisonDetailPage = lazy(() => import('../pages/ComparisonDetailPage'));
 const EpochsPage = lazy(() => import('../pages/EpochsPage'));
 const ConfigsPage = lazy(() => import('../pages/ConfigsPage'));
@@ -34,6 +34,12 @@ const PaperEditPage = lazy(() => import('../pages/PaperEditPage'));
 const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
 const ProjectDashboardPage = lazy(() => import('../pages/ProjectDashboardPage'));
 
+/** A model's outputs had a page of their own; they are the Models tab of the run's page now. */
+function ModelOutputsRedirect() {
+  const { id = '', modelId = '' } = useParams();
+  return <Navigate to={storedModelOutputsPath(id, modelId)} replace />;
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<Loader />}>
@@ -45,7 +51,7 @@ function AppRoutes() {
         <Route path="/trainings" element={<TrainingsPage />} />
         <Route path="/trainings/:id" element={<TrainingDetailPage />} />
         <Route path="/trainings/compare" element={<TrainingComparisonPage />} />
-        <Route path="/trainings/:id/models/:modelId" element={<ModelOutputsPage />} />
+        <Route path="/trainings/:id/models/:modelId" element={<ModelOutputsRedirect />} />
         <Route path="/epochs" element={<EpochsPage />} />
         <Route path="/configs" element={<ConfigsPage />} />
         <Route path="/datasets" element={<DatasetsPage />} />

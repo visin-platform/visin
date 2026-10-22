@@ -79,7 +79,7 @@ describe('model outputs', () => {
   const classes = (names: string[]) => names.map((name, index) => ({ name, index }));
 
   it('are a page of their own', () => {
-    expect(storedModelOutputsPath('t1', 'm1')).toBe('/trainings/t1/models/m1');
+    expect(storedModelOutputsPath('t1', 'm1')).toBe('/trainings/t1?tab=models&model=m1');
   });
 
   it('name the classes a mask indexes from the stored weights, preferring the checkpoint at the epoch', () => {

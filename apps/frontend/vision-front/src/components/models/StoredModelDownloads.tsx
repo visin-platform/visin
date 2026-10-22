@@ -4,6 +4,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { preprocessingText, storedModelBlock, storedModelFileUrl, storedModelOutputsPath } from '../../providers/visin';
 import type { StoredModelReference } from '../../types/training';
 import { formatBytes } from '../../utils/datasetMapping';
+import { servableModel } from '../../utils/modelLinks';
 
 interface StoredModelDownloadsProps {
   trainingId: string;
@@ -26,10 +27,8 @@ const StoredModelDownloads: React.FC<StoredModelDownloadsProps> = ({ trainingId,
   const license = ordered.find((model) => model.license)?.license;
   const credit = ordered.find((model) => model.credit)?.credit;
   const info = ordered.find((model) => model.modelInfo)?.modelInfo;
-  // The outputs belong to the checkpoint; describe them from the `.pth` the export was made from when it can be served.
-  const servable =
-    ordered.find((model) => model.format === 'pth' && !storedModelBlock(model)) ??
-    ordered.find((model) => !storedModelBlock(model));
+  // The outputs belong to the checkpoint, not to one of its formats.
+  const servable = servableModel(ordered);
   const preprocessing = preprocessingText(info);
 
   return (

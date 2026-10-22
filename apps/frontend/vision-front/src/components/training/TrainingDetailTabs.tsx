@@ -1,12 +1,15 @@
 import React from 'react';
 import { Paper, Tab, Tabs } from '@mui/material';
+import { TRAINING_TABS, type TrainingTab } from './trainingTabs';
 
 interface TrainingDetailTabsProps {
-  value: number;
-  onChange: (event: React.SyntheticEvent, newValue: number) => void;
+  value: TrainingTab;
+  onChange: (event: React.SyntheticEvent, newValue: TrainingTab) => void;
+  /** whether the run keeps a model on Visin; the Models tab is left out when it keeps none */
+  showModels?: boolean;
 }
 
-const TrainingDetailTabs: React.FC<TrainingDetailTabsProps> = ({ value, onChange }) => (
+const TrainingDetailTabs: React.FC<TrainingDetailTabsProps> = ({ value, onChange, showModels = false }) => (
   <Paper
     elevation={0}
     variant="outlined"
@@ -46,14 +49,9 @@ const TrainingDetailTabs: React.FC<TrainingDetailTabsProps> = ({ value, onChange
         }
       }}
     >
-      <Tab label="Overview" />
-      <Tab label="Epochs" />
-      <Tab label="Evaluations" />
-      <Tab label="Visualizations" />
-      <Tab label="System Info" />
-      <Tab label="Config" />
-      <Tab label="Benchmarks" />
-      <Tab label="Analysis" />
+      {TRAINING_TABS.filter(([name]) => showModels || name !== 'models').map(([name, label]) => (
+        <Tab key={name} value={name} label={label} />
+      ))}
     </Tabs>
   </Paper>
 );

@@ -34,8 +34,7 @@ import ModelCardDialog from './models/ModelCardDialog';
 import ModelTryDialog from './models/ModelTryDialog';
 import StoredModelDownloads from './models/StoredModelDownloads';
 import { hubModelUrl, hubSpaceUrl } from '../utils/hubLinks';
-import { isHubModel, isStoredModel, modelTitle } from '../utils/modelLinks';
-import { storedCheckpointKey } from '../providers/visin';
+import { isHubModel, modelTitle, storedCheckpoints } from '../utils/modelLinks';
 import { costOf } from '../costing/costing';
 import { useCosting, useFormatCost } from '../costing/useCosting';
 
@@ -43,16 +42,6 @@ interface TrainingOverviewCardProps {
   training: Training;
   epochs: Epoch[];
 }
-
-/** The stored models of a run, one group per checkpoint: a `.pth` and the ONNX export made from it go together. */
-const storedCheckpoints = (models: NonNullable<Training['models']>) => {
-  const groups = new Map<string, Array<Extract<NonNullable<Training['models']>[number], { provider: 'visin' }>>>();
-  for (const model of models.filter(isStoredModel)) {
-    const key = storedCheckpointKey(model);
-    groups.set(key, [...(groups.get(key) ?? []), model]);
-  }
-  return [...groups.values()];
-};
 
 const TrainingOverviewCard: React.FC<TrainingOverviewCardProps> = ({
   training,

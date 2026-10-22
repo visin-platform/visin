@@ -18,6 +18,8 @@ import LatexExportDialog from '../components/training/LatexExportDialog';
 import DeleteConfirmationDialog from '../components/training/DeleteConfirmationDialog';
 import TrainingDetailHeader from '../components/training/TrainingDetailHeader';
 import TrainingDetailTabs from '../components/training/TrainingDetailTabs';
+import { TRAINING_TABS, type TrainingTab } from '../components/training/trainingTabs';
+import TrainingModelsTab from '../components/training/TrainingModelsTab';
 import SampleTour from '../components/guide/SampleTour';
 import UseThisDialog from '../components/common/UseThisDialog';
 import { runSnippets } from '../utils/useSnippets';
@@ -32,21 +34,13 @@ import { TaxonomyProvider } from '../taxonomy/TaxonomyProvider';
 import { CostingProvider } from '../costing/CostingProvider';
 import { projectService } from '../services/projectService';
 import { trainingService } from '../services/trainingService';
+import { isStoredModel } from '../utils/modelLinks';
 
 const TrainingDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const canWrite = useWriteCapabilities('training', id ? [id] : []);
-
-  // Tab mapping
-  const tabNames = ['overview', 'epochs', 'evaluations', 'visualizations', 'system-info', 'config', 'benchmarks', 'analysis'];
-  const getTabIndex = (tabName: string) => tabNames.indexOf(tabName);
-  const getTabName = (index: number) => tabNames[index] || 'overview';
-
-  // Initialize tab from URL or default to 0
-  const initialTab = getTabIndex(searchParams.get('tab') || 'overview');
-  const [detailTab, setDetailTab] = useState(initialTab >= 0 ? initialTab : 0);
 
   // Custom hooks
   const {
@@ -125,12 +119,16 @@ const TrainingDetailPage: React.FC = () => {
   usePageTitle(training ? `${training.name} - Vision` : 'Training Details - Vision');
   useTrackVisit(training ? { kind: 'training', id: training._id, name: training.name, path: `/trainings/${training._id}` } : null);
 
-  // Handle tab change with URL update
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setDetailTab(newValue);
-    const newSearchParams = new URLSearchParams(searchParams);
-    newSearchParams.set('tab', getTabName(newValue));
-    setSearchParams(newSearchParams, { replace: true });
+  // The tab is the URL's, so a link to `?tab=models&model=…` from elsewhere on the page switches to it.
+  const hasStoredModels = Boolean(training?.models?.some(isStoredModel));
+  const requestedTab = TRAINING_TABS.find(([name]) => name === searchParams.get('tab'))?.[0];
+  const detailTab: TrainingTab = requestedTab && (requestedTab !== 'models' || hasStoredModels) ? requestedTab : 'overview';
+  const showTab = (tab: TrainingTab, model?: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tab);
+    if (model) next.set('model', model);
+    else next.delete('model');
+    setSearchParams(next, { replace: true });
   };
 
   if (isLoading) {
@@ -184,7 +182,7 @@ const TrainingDetailPage: React.FC = () => {
         onDeleteClick={() => setTrainingDeleteOpen(true)}
       />
       {useOpen && <UseThisDialog title="Use this run" snippets={runSnippets(training)} onClose={() => setUseOpen(false)} />}
-      <TrainingDetailTabs value={detailTab} onChange={handleTabChange} />
+      <TrainingDetailTabs value={detailTab} onChange={(_event, tab) => showTab(tab)} showModels={hasStoredModels} />
       <SampleTour
         onDeleteSample={() => {
           setReturnToProject(true);
@@ -192,7 +190,7 @@ const TrainingDetailPage: React.FC = () => {
         }}
       />
       {/* Overview Tab */}
-      {detailTab === 0 && (
+      {detailTab === 'overview' && (
         <TrainingOverviewTab
           training={training}
           epochs={epochs}
@@ -204,7 +202,7 @@ const TrainingDetailPage: React.FC = () => {
         />
       )}
       {/* Epochs Tab */}
-      {detailTab === 1 && (
+      {detailTab === 'epochs' && (
         <TrainingEpochsTab
           epochs={epochs}
           uploading={uploading}
@@ -224,7 +222,7 @@ const TrainingDetailPage: React.FC = () => {
         />
       )}
       {/* Test Results Tab */}
-      {detailTab === 2 && (
+      {detailTab === 'evaluations' && (
         <TrainingEvaluationsTab
           allEvaluations={allEvaluations}
           evaluationsLoading={evaluationsLoading}
@@ -246,7 +244,7 @@ const TrainingDetailPage: React.FC = () => {
         />
       )}
       {/* Visualizations Tab */}
-      {detailTab === 3 && (
+      {detailTab === 'visualizations' && (
         <TrainingVisualizationsTab
           training_uuid={training.uuid}
           epochs={epochs}
@@ -255,14 +253,24 @@ const TrainingDetailPage: React.FC = () => {
           models={training.models}
         />
       )}
+      {/* The models the run keeps here, and what they produced */}
+      {detailTab === 'models' && training.models && (
+        <TrainingModelsTab
+          trainingId={training._id}
+          models={training.models}
+          selectedModelId={searchParams.get('model')}
+          onSelectModel={(model) => showTab('models', model)}
+          onShowTab={(tab) => showTab(tab)}
+        />
+      )}
       {/* System Info Tab */}
-      {detailTab === 4 && (
+      {detailTab === 'system-info' && (
         <TrainingSystemInfoTab
           epochs={epochs}
         />
       )}
       {/* Config Tab */}
-      {detailTab === 5 && (
+      {detailTab === 'config' && (
         <TrainingConfigTab
           config={config}
           configLoading={configLoading}
@@ -270,7 +278,7 @@ const TrainingDetailPage: React.FC = () => {
         />
       )}
       {/* Benchmarks Tab */}
-      {detailTab === 6 && (
+      {detailTab === 'benchmarks' && (
         <TrainingBenchmarksTab
           training_uuid={training.uuid}
           isAuthenticated={canWrite(id)}
@@ -279,7 +287,7 @@ const TrainingDetailPage: React.FC = () => {
       )}
       {/* Conclusions about this run, and comparative ones that cite it. Needs
           the project, since findings hang off one and access follows it. */}
-      {detailTab === 7 && project && (
+      {detailTab === 'analysis' && project && (
         <FindingsPanel
           projectId={project._id}
           trainingId={training._id}

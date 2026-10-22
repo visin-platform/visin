@@ -1,17 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { renderWithClient } from '../test/renderWithClient';
-import type { ModelOutputs } from '../types/modelOutputs';
+import { renderWithClient } from '../../test/renderWithClient';
+import type { ModelOutputs } from '../../types/modelOutputs';
 
-vi.mock('../services/modelOutputsService', () => ({ modelOutputsService: { get: vi.fn() } }));
-vi.mock('../services/projectService', () => ({ projectService: { getProjectById: vi.fn() } }));
+vi.mock('../../services/modelOutputsService', () => ({ modelOutputsService: { get: vi.fn() } }));
 
-import ModelOutputsPage from './ModelOutputsPage';
-import { modelOutputsService } from '../services/modelOutputsService';
-import { projectService } from '../services/projectService';
+import ModelOutputsPanel from './ModelOutputsPanel';
+import { modelOutputsService } from '../../services/modelOutputsService';
 
 const get = vi.mocked(modelOutputsService.get);
-const getProject = vi.mocked(projectService.getProjectById);
+const onShowTab = vi.fn();
 
 const outputs = (overrides: Partial<ModelOutputs> = {}): ModelOutputs => ({
   run: { id: 't1', uuid: 'u1', name: 'ISEAUTO CLFT Large', project: { id: 'p1', name: 'Team project' }, epoch: 99, epochUuid: 'e99' },
@@ -52,17 +50,12 @@ const outputs = (overrides: Partial<ModelOutputs> = {}): ModelOutputs => ({
   ...overrides
 });
 
-const renderPage = () =>
-  renderWithClient(<ModelOutputsPage />, { path: '/trainings/t1/models/m1', route: '/trainings/:id/models/:modelId' });
+const renderPage = () => renderWithClient(<ModelOutputsPanel trainingId="t1" modelId="m1" onShowTab={onShowTab} />);
 
-describe('ModelOutputsPage', () => {
+describe('ModelOutputsPanel', () => {
   beforeEach(() => {
     get.mockReset();
-    getProject.mockReset();
-    getProject.mockResolvedValue({
-      success: true,
-      data: { taxonomy: { metrics: [{ key: 'mean_iou', label: 'Mean IoU', format: 'percent', decimals: 3 }, { key: 'loss_ms', format: 'ms' }] } }
-    } as never);
+    onShowTab.mockReset();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -74,7 +67,7 @@ describe('ModelOutputsPage', () => {
 
     expect(screen.getByRole('link', { name: 'View frames' })).toHaveAttribute('href', '/visualizations?training=u1&view=outputs&epoch=99');
     expect(screen.getByRole('link', { name: 'Download weights (1.0 KB)' })).toHaveAttribute('href', 'http://localhost:4010/api/trainings/t1/models/m1/file');
-    expect(screen.getByText(/The checkpoint from epoch 99 of/)).toHaveTextContent('in Team project, and what it predicted on 3 frames.');
+    expect(screen.getByText(/The checkpoint from epoch 99/)).toHaveTextContent('The checkpoint from epoch 99, and what it predicted on 3 frames.');
 
     const checkpoint = within(screen.getByRole('region', { name: 'Checkpoint' }));
     expect(checkpoint.getByText('PyTorch (.pth)')).toBeInTheDocument();
@@ -105,21 +98,16 @@ describe('ModelOutputsPage', () => {
     expect(screen.getByText('In input-image coordinates. Resize class logits bilinearly.')).toBeInTheDocument();
   });
 
-  it('lists the epoch’s numbers and the tests of the checkpoint', async () => {
+  it('sends the epoch’s numbers to the Epochs tab and links the tests of the checkpoint', async () => {
     get.mockResolvedValue(outputs());
     renderPage();
-    const results = within(await screen.findByRole('table', { name: 'Epoch results' }));
-    expect(results.getByText('Validation')).toBeInTheDocument();
-    expect(results.getByText('val.mean_iou')).toBeInTheDocument();
-    // The project's taxonomy decides how a number reads once it has loaded.
-    expect(await results.findByText('81.2%')).toBeInTheDocument();
-    expect(results.getByText('12.5000 ms')).toBeInTheDocument();
-    expect(results.getByText('1.00e-5')).toBeInTheDocument();
-    expect(results.queryByText('note')).not.toBeInTheDocument();
-    expect(getProject).toHaveBeenCalledWith('p1');
-    expect(screen.getByText(/road-test@2 · .* · 150 samples/)).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Test without a suite'));
-    expect(screen.getAllByRole('link', { name: 'Open the evaluation' }).map((link) => link.getAttribute('href'))).toContain('/evaluations/ev2');
+    const scores = within(await screen.findByRole('region', { name: 'Scores' }));
+    expect(scores.getByText(/2 tests you can see scored this checkpoint/)).toBeInTheDocument();
+    expect(scores.getByRole('link', { name: 'road-test@2' })).toHaveAttribute('href', '/evaluations/ev1');
+    expect(scores.getByText(/· 150 samples/)).toBeInTheDocument();
+    expect(scores.getByRole('link', { name: 'Test without a suite' })).toHaveAttribute('href', '/evaluations/ev2');
+    fireEvent.click(scores.getByRole('button', { name: 'Epochs tab' }));
+    expect(onShowTab).toHaveBeenCalledWith('epochs');
   });
 
   it('shows the answer as JSON, to copy or download', async () => {
@@ -168,8 +156,7 @@ describe('ModelOutputsPage', () => {
     expect(await screen.findByText('Not stated')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View frames' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByText('No outputs uploaded yet')).toBeInTheDocument();
-    expect(screen.getByText('The epoch reported no numbers.')).toBeInTheDocument();
-    expect(screen.getByText('No test you can see scored this checkpoint.')).toBeInTheDocument();
+    expect(screen.getByText(/No test you can see scored this checkpoint./)).toBeInTheDocument();
     expect(screen.getByText(/The JSON lists the first 1 outputs/)).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'Model' })).getAllByText('Not recorded')).toHaveLength(2);
   });

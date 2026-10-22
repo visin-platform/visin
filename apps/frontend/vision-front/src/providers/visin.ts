@@ -53,9 +53,9 @@ export const FORMAT_LABELS: Record<StoredModelFormat, string> = { pth: 'PyTorch 
 export const storedModelFileUrl = (trainingId: string, modelId: string): string =>
   `${visionApiOrigin()}/api/trainings/${trainingId}/models/${modelId}/file`;
 
-/** The page that shows what a stored model produced on its frames, its scores and where it came from. */
+/** Where a stored model is shown, with what it produced and where it came from: the Models tab of its run. */
 export const storedModelOutputsPath = (trainingId: string, modelId: string): string =>
-  `/trainings/${trainingId}/models/${modelId}`;
+  `/trainings/${trainingId}?tab=models&model=${encodeURIComponent(modelId)}`;
 
 /**
  * The classes a run's masks index, from what its stored weights record (`train_classes`): those of the checkpoint at

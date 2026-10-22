@@ -1,11 +1,29 @@
 import { HUB } from '../providers/huggingFace';
-import { VISIN, storedCheckpointKey, storedModelLabel } from '../providers/visin';
+import { VISIN, storedCheckpointKey, storedModelBlock, storedModelLabel } from '../providers/visin';
 import type { RegistryModel } from '../types/modelRegistry';
 import type { HubModelReference, ModelReference, StoredModelReference } from '../types/training';
 import { shortRevision } from './hubLinks';
 
 export const isHubModel = (model: ModelReference): model is HubModelReference => model.provider === HUB;
 export const isStoredModel = (model: ModelReference): model is StoredModelReference => model.provider === VISIN;
+
+/** The stored models of a run, one group per checkpoint: a `.pth` and the ONNX export made from it go together. */
+export const storedCheckpoints = (models: ModelReference[]): StoredModelReference[][] => {
+  const groups = new Map<string, StoredModelReference[]>();
+  for (const model of models.filter(isStoredModel)) {
+    const key = storedCheckpointKey(model);
+    groups.set(key, [...(groups.get(key) ?? []), model]);
+  }
+  return [...groups.values()];
+};
+
+/**
+ * The format a checkpoint's outputs are described from: the `.pth` the export was made from when it can be served,
+ * else any format that can. None while every format is still being read, failed, or states no licence.
+ */
+export const servableModel = (checkpoint: StoredModelReference[]): StoredModelReference | undefined =>
+  checkpoint.find((model) => model.format === 'pth' && !storedModelBlock(model)) ??
+  checkpoint.find((model) => !storedModelBlock(model));
 
 /** A linked model as one line to a person: the repo and commit on the Hub, or the file this deployment keeps. */
 export const modelTitle = (model: ModelReference): string =>

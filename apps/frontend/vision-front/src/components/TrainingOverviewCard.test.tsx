@@ -145,7 +145,7 @@ describe('TrainingOverviewCard models Visin keeps', () => {
     expect(screen.getByText('my-run-epoch99.pth · epoch 99')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Download my-run-epoch99.pth (pth)' })).toHaveAttribute('href', 'http://localhost:4010/api/trainings/t1/models/m1/file');
     expect(screen.getByRole('link', { name: 'Download my-run-epoch99.onnx (onnx)' })).toHaveAttribute('href', 'http://localhost:4010/api/trainings/t1/models/m2/file');
-    expect(screen.getByRole('link', { name: 'View the outputs of my-run-epoch99.pth' })).toHaveAttribute('href', '/trainings/t1/models/m1');
+    expect(screen.getByRole('link', { name: 'View the outputs of my-run-epoch99.pth' })).toHaveAttribute('href', '/trainings/t1?tab=models&model=m1');
     expect(screen.getByText('Licence CC BY 4.0')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try it' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Model card' })).not.toBeInTheDocument();
