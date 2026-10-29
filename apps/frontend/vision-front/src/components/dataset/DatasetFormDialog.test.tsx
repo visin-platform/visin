@@ -158,13 +158,12 @@ describe('DatasetFormDialog', () => {
       expect(screen.getByText('Name the licence, or choose one from the list')).toBeInTheDocument();
       expect(onSubmit).not.toHaveBeenCalled();
 
-      await userEvent.type(screen.getByLabelText(/Licence name/), 'Acme research terms');
-      await userEvent.type(screen.getByLabelText('Link to the licence'), 'javascript:alert(1)');
+      fireEvent.change(screen.getByLabelText(/Licence name/), { target: { value: 'Acme research terms' } });
+      fireEvent.change(screen.getByLabelText('Link to the licence'), { target: { value: 'javascript:alert(1)' } });
       fireEvent.click(screen.getByRole('button', { name: 'Create and upload' }));
       expect(screen.getByText('The licence link must start with http:// or https://')).toBeInTheDocument();
 
-      await userEvent.clear(screen.getByLabelText('Link to the licence'));
-      await userEvent.type(screen.getByLabelText('Link to the licence'), 'https://acme.test/terms');
+      fireEvent.change(screen.getByLabelText('Link to the licence'), { target: { value: 'https://acme.test/terms' } });
       fireEvent.click(screen.getByRole('button', { name: 'Create and upload' }));
       expect(onSubmit).toHaveBeenLastCalledWith(
         expect.objectContaining({ license: { id: 'other', name: 'Acme research terms', url: 'https://acme.test/terms' } })
