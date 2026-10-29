@@ -1,4 +1,17 @@
 # Visin Changelog
+## [2.2.0](https://github.com/visin-platform/visin/compare/v2.1.0...v2.2.0) (2026-10-29)
+
+
+### Features
+
+* expand dataset, evaluation, and labeling workflows ([f32573d](https://github.com/visin-platform/visin/commit/f32573d04f77d7add0a678399b1cac784e9cb6eb))
+
+
+### Chores
+
+* **release:** @visin/backend-core 1.16.0 ([bc2e8a7](https://github.com/visin-platform/visin/commit/bc2e8a7157686be598fc1f366756bd9fe233cf9d))
+* **release:** @visin/frontend-core 1.20.0 ([6cf644a](https://github.com/visin-platform/visin/commit/6cf644a4dd74a9ceb5c7a5169151403daa8d7d77))
+
 ## [2.1.0](https://github.com/visin-platform/visin/compare/v2.0.0...v2.1.0) (2026-10-22)
 
 
