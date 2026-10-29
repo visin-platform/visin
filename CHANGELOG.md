@@ -1,4 +1,6 @@
 # Visin Changelog
+### [2.2.1](https://github.com/visin-platform/visin/compare/v2.2.0...v2.2.1) (2026-10-29)
+
 ## [2.2.0](https://github.com/visin-platform/visin/compare/v2.1.0...v2.2.0) (2026-10-29)
 
 
